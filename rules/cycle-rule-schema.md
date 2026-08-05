@@ -56,6 +56,7 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 | Cycle | OK | OK with caveats | Not OK — recoverable | Not OK — structural |
 |---|---|---|---|---|
 | `cycle-roadmap` (macro super-loop) | `MILESTONE_RELEASED` / `ROADMAP_COMPLETE` | `MILESTONE_IN_FLIGHT` (paused at release human-approval gate) | `MILESTONE_BLOCKED` (recoverable per milestone) | `ROADMAP_BLOCKED` (dependency wall across all eligible milestones) |
+| `cycle-backlog` (phase 0 · intake) | `ITEM_REGISTERED` | — | `ITEM_MERGED` (folded into an open item) | `ITEM_REJECTED` (out of ecosystem, or gate G5) |
 | `cycle-discover` | `SHIPPABLE` | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` | `INVALID` |
 | `cycle-plan` | `SHIPPABLE` | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` | `INVALID` |
 | `cycle-implement` | `IMPLEMENTATION_COMPLETE` (completion promise) | — | (halt-loop pauses for human) | — |
@@ -71,6 +72,7 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 ### Why each vocabulary differs
 
 - **roadmap** emits **macro-loop progression verdicts** at two granularities: per-milestone (`MILESTONE_RELEASED`, `MILESTONE_IN_FLIGHT`, `MILESTONE_BLOCKED`) and at the roadmap-as-a-whole level (`ROADMAP_COMPLETE` when every milestone is `[x]`, `ROADMAP_BLOCKED` when no milestone is eligible because every unchecked one is blocked by another unchecked one — a structural dependency wall). Unlike sub-cycles, `cycle-roadmap` has no "with caveats" band because the macro-loop's only OK states are atomic: a milestone either shipped (`[x]`) or it did not.
+- **backlog** emits an **intake disposition**, not a quality judgement: the item either entered the registry (`ITEM_REGISTERED`), was absorbed by one already there (`ITEM_MERGED`), or never belonged (`ITEM_REJECTED`). It has no "with caveats" band because registry membership is binary. Crucially, it has no *evidence* band either — intake accepts an unmeasured hypothesis on purpose, and `cycle-discover` is what converts it to `triaged` or `killed`. A verdict here says nothing about whether the work is worth doing; that judgement is downstream, and keeping the two separate is what lets a hunch be recorded without being endorsed.
 - **discover/plan** emit a **structural fitness verdict** on a document. `INVALID` means the document violates a hard cap (fabricated citation, missing Coverage Matrix); `NEEDS_REVISION` means the score is recoverable via `*-improve`.
 - **implement** does not emit a verdict — it emits a **completion promise** (`IMPLEMENTATION_COMPLETE`) consumed by downstream cycles. Halt-loop pauses on hard-gate failure rather than emitting a verdict.
 - **code-quality** emits a **graded quality verdict** keyed to a score cap (per `code-quality-golden-rule.md` § 1): `PASS`/`PASS_WITH_CAVEATS` proceed to `/review`; `FAIL_SOFT` may proceed only with an ADR dismissing each soft cap; `FAIL_HARD` blocks `/review` and loops back to `/implement`; `INVALID` means structural integrity is broken (golden rule missing/corrupt). The golden rule is the Source of Truth for the rubric — this matrix only lists the tokens.
