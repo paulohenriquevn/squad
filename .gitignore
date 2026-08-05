@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Test / lint / type / benchmark caches (generated at runtime)
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+.benchmarks/
+
+# Architecture-audit + dependency-graph artifacts (generated)
+architect-output/
+skills/**/scripts.svg
+
+# Marketing kit (local only, not versioned)
+docs/marketing/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local overrides
+settings.local.json
+*.local.md
+
+# Session artifacts (generated at runtime, consumer-specific)
+.active_plan
+.compaction-snapshots/
+.attestations/
+cross-validation-output/
+# Claude Code runtime dir of THIS repo acting as its own consumer
+# (the shipped config lives in settings.json / settings.plugin.json at the root)
+.claude/
+
+# Study material, kept local (not part of the shipped cycle)
+specs/
+
+# Nested repository with its own remote — never a submodule of the cycle
+codex-plugin-cc/
+
+# Generated knowledge-base content (scaffold dirs are tracked via .gitkeep)
+knowledge-base/grills/*.md
+knowledge-base/plans/*.md
+knowledge-base/implementations/**
+knowledge-base/reviews/*.md
+knowledge-base/releases/*.md
+knowledge-base/roadmap-runs/**
+knowledge-base/audits/*.md
+knowledge-base/adrs/*.md
+knowledge-base/dogfood/evidence/*.md
+knowledge-base/discoveries/plans/*.md
+knowledge-base/discoveries/blueprints/*.md
+knowledge-base/discoveries/snapshots/**
+knowledge-base/references/**
+knowledge-base/tools/**
+knowledge-base/judge-codex/**
+!knowledge-base/**/.gitkeep
+!knowledge-base/backlog.md
+
+# Agent run logs (consumer-specific)
+agents/**
+!agents/.gitkeep

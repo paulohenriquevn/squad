@@ -1,0 +1,46 @@
+[project]
+name = "cycle-ecosystem"
+version = "1.0.0"
+description = "Planning ecosystem for Claude Code — test and validation infrastructure"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pyyaml>=6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# importlib import mode lets duplicate test-module basenames (e.g. test_apply_fixes.py)
+# coexist across the 31 skill slices without ImportPathMismatchError / ModuleNotFoundError.
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--import-mode=importlib",
+]
+# Per-language detector markers used by skills/code-quality/tests/test_*_detector.py.
+# Registered here so --strict-markers does not error on them.
+markers = [
+    "go: tests for the Go code-quality detector",
+    "python: tests for the Python code-quality detector",
+    "rust: tests for the Rust code-quality detector",
+    "typescript: tests for the TypeScript code-quality detector",
+]
+
+# NOTE: the default `pytest` run uses testpaths=["tests"] (the root aggregate
+# suite). The 64 per-slice test files run in CI via scripts/run_slice_tests.sh,
+# one isolated process per slice — slices are import-isolated and ship colliding
+# module basenames, so a single wide process is unsound. See that script's header.
+[tool.coverage.run]
+source = ["scripts", "skills"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
