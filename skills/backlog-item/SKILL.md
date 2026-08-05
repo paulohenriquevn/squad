@@ -10,7 +10,7 @@ argument-hint: "{item-slug}"
 
 # `/backlog-item` — Register one unit of maintenance work
 
-Take a one-line description of something to improve, fix, verify, or evolve in the Theo ecosystem (e.g. *"trace explorer do theo-lens parece lento"*) and append it as the next `B<N+1>` item in `BACKLOG.md`, with domain routing, a suggested discover mode, and a verifiable Definition of Done.
+Take a one-line description of something to improve, fix, verify, or evolve in the Theo ecosystem (e.g. *"the theo-lens trace explorer feels slow"*) and append it as the next `B<N+1>` item in `BACKLOG.md`, with domain routing, a suggested discover mode, and a verifiable Definition of Done.
 
 The item this skill produces is **a hypothesis, not a commitment**. It carries `evidence: none-yet` by design. Proving it — or killing it — is `/discover`'s job.
 
@@ -64,7 +64,7 @@ A parse failure is surfaced verbatim so the human fixes the malformed registry b
 
 ### Step 1 — Resolve the slug
 
-Take `{item-slug}`. If absent, ask for a one-sentence description and derive a kebab-case slug (*"trace explorer parece lento"* → `theo-lens-trace-explorer-latency`).
+Take `{item-slug}`. If absent, ask for a one-sentence description and derive a kebab-case slug (*"trace explorer feels slow"* → `theo-lens-trace-explorer-latency`).
 
 Prefix the slug with the repo when the same problem shape recurs across repos (`theo-lens-…`, `theo-rag-…`). The registry spans 21 repos; a bare `latency` slug is unsearchable.
 
@@ -89,8 +89,8 @@ Skipping this step is a G2 violation. The single-registry decision only holds if
 Extract every `## B-(\d+)` from `BACKLOG.md`, take `max(N) + 1`, format as `B-{N:03d}`.
 
 ```
-Itens existentes: 27 (18 shipped, 4 planned, 3 triaged, 2 killed)
-Próximo id livre: B-028
+Existing items: 27 (18 shipped, 4 planned, 3 triaged, 2 killed)
+Next free id:   B-028
 ```
 
 Ids are monotonic and never reused — including the ids of killed items. No cap.
@@ -101,10 +101,10 @@ Same protocol as the Cycle grills: one question per turn, each with a recommende
 
 | # | Question | Why it must be answered |
 |---|---|---|
-| 1 | O que é isso, e **o que mudou no nosso sistema** para trazê-lo agora? | Feeds `why_now` and is the input to gate G5. "O que mudou" is the load-bearing half — an item with no local trigger is either prior-art envy or a hunch too vague to measure. |
-| 2 | Qual repo, e portanto qual domínio? | Feeds `domain` + `repo` (G1) and decides which specialist picks it up. Offer the routing table; if the answer names two domains, G3 fires and the item splits. |
-| 3 | Qual modo de discover parece certo — review, live-test, bug ou evolve? | Feeds `suggested_mode`. State explicitly to the user that this is **a suggestion DISCOVER may overrule**, so nobody treats their guess as a decision. |
-| 4 | Qual é a Definition of Done verificável (1-3 bullets)? | Feeds `dod` (G4). This is the criterion that closes the item. Reject bullets that restate the title or cannot fail. |
+| 1 | What is this, and **what changed in our system** to raise it now? | Feeds `why_now` and is the input to gate G5. "What changed" is the load-bearing half — an item with no local trigger is either prior-art envy or a hunch too vague to measure. |
+| 2 | Which repo, and therefore which domain? | Feeds `domain` + `repo` (G1) and decides which specialist picks it up. Offer the routing table; if the answer names two domains, G3 fires and the item splits. |
+| 3 | Which discover mode looks right — review, live-test, bug or evolve? | Feeds `suggested_mode`. State explicitly to the user that this is **a suggestion DISCOVER may overrule**, so nobody treats their guess as a decision. |
+| 4 | What is the verifiable Definition of Done (1-3 bullets)? | Feeds `dod` (G4). This is the criterion that closes the item. Reject bullets that restate the title or cannot fail. |
 
 **Note what is NOT asked: evidence.** Intake has no evidence gate. If the user offers a `file:line` or a trace id unprompted, record it — but never ask for it, and never let its absence block the item.
 
@@ -118,24 +118,24 @@ Read the Q1 answer. The item is **rejected** if the justification rests on what 
 
 | Rejected | Accepted |
 |---|---|
-| "O LangSmith tem waterfall de traces, a gente devia ter" | "O explorer não mostra a hierarquia de spans, então debugar um agente aninhado exige abrir 6 traces" |
-| "Todo mundo usa cache aqui" | "O endpoint faz 4 round-trips ao Postgres por request" |
-| "Vi num post que o padrão é X" | "Nosso handler duplica a lógica de auth em 3 lugares e já divergiram uma vez" |
+| "LangSmith has a trace waterfall, we should have one" | "The explorer does not show span hierarchy, so debugging a nested agent means opening 6 traces" |
+| "Everyone caches this" | "The endpoint makes 4 Postgres round-trips per request" |
+| "A blog post says the pattern is X" | "Our handler duplicates auth logic in 3 places and they diverged once" |
 
 On a hit, use `AskUserQuestion`:
 
 ```
-A justificativa deste item se apoia em como outro projeto resolve o problema:
+This item's justification rests on how another project solves the problem:
 
-  "{trecho}"
+  "{excerpt}"
 
-O Squad só aceita trabalho justificado por evidência do nosso próprio sistema
-(cycle-backlog § Hard gates, G5). Isso não proíbe conhecer a solução dos outros
-— proíbe que ela seja a razão.
+Squad only accepts work justified by evidence from our own system
+(cycle-backlog § Hard gates, G5). This does not forbid knowing how others solved
+it — it forbids that being the reason.
 
-  [ ] Reformular — existe um motivo local, deixa eu descrevê-lo
-  [ ] Registrar assim mesmo — o gate leu errado, a razão já é local
-  [ ] Cancelar — não há motivo local; isso não é um item
+  [ ] Reformulate — there is a local reason, let me describe it
+  [ ] Register anyway — the gate misread; the reason is already local
+  [ ] Cancel — there is no local reason; this is not an item
 ```
 
 Record the decision (`g5_reformulated` / `g5_false_positive` / `g5_rejected`) in the intake log. The keyword heuristic surfaces the question; the human decides. A false positive is a normal outcome, not a failure of the gate.
@@ -145,9 +145,9 @@ Record the decision (`g5_reformulated` / `g5_false_positive` / `g5_rejected`) in
 Only after Steps 2–5 pass. Three writes, in this order:
 
 1. **`BACKLOG.md`** — append one `## B-NNN` block per the schema in `cycle-backlog.md § Item schema`, with `status: raw`, `source: human`, `evidence: none-yet`, and the provenance line:
-   `> Registrado {{DATE}} por `/backlog-item` (slug: `{{SLUG}}`).`
+   `> Registered {{DATE}} by `/backlog-item` (slug: `{{SLUG}}`).`
    Append only. Never reorder, never renumber, never touch another block.
-2. **`CHANGELOG.md`** — one line under `[Unreleased] § Added`, attributed to the target repo per the umbrella convention: `**{repo}:** backlog B-NNN — {título} (#NNN)`.
+2. **`CHANGELOG.md`** — one line under `[Unreleased] § Added`, attributed to the target repo per the umbrella convention: `**{repo}:** backlog B-NNN — {title} (#NNN)`.
 3. **`knowledge-base/backlog/{slug}-intake.md`** — flip the log to `status: completed`.
 
 If the `BACKLOG.md` write fails, do not write the CHANGELOG entry. A changelog line for an item that does not exist is worse than no line.
@@ -155,14 +155,14 @@ If the `BACKLOG.md` write fails, do not write the CHANGELOG entry. A changelog l
 ### Step 7 — Report
 
 ```
-ITEM_REGISTERED  B-028 — {título}
-  domain: {domain} → especialista {domain}
+ITEM_REGISTERED  B-028 — {title}
+  domain: {domain} → specialist {domain}
   repo: {repo}
-  suggested_mode: {mode}  (sugestão — /discover pode reclassificar)
-  evidence: none-yet      (hipótese; /discover mede)
-  dod: {n} critérios
+  suggested_mode: {mode}  (suggestion — /discover may reclassify)
+  evidence: none-yet      (hypothesis; /discover measures)
+  dod: {n} criteria
 
-Próximo passo:  /discover --mode {mode} B-028
+Next step:  /discover --mode {mode} B-028
 ```
 
 For `ITEM_MERGED`, report the absorbing id and what was appended to it. For `ITEM_REJECTED`, report the gate that fired and what would make the item acceptable — a rejection that does not say how to fix it just gets re-filed verbatim tomorrow.

@@ -5,7 +5,7 @@
     {
       "id": 0,
       "name": "kills-the-item-when-falsification-is-met",
-      "prompt": "roda a medição do B-014. o plano diz que a hipótese morre se o endpoint fizer uma query só independente do número de spans",
+      "prompt": "run the measurement for B-014. the plan says the hypothesis dies if the endpoint issues a single query regardless of span count",
       "expected_output": "The measurement finds one query regardless of span count. The skill stops measuring, writes status: killed with a kill_reason naming what was measured and what it showed, emits ITEM_KILLED, and reports this as a successful outcome — not as a failed run.",
       "files": [],
       "assertions": [
@@ -20,7 +20,7 @@
     {
       "id": 1,
       "name": "refuses-to-kill-when-the-measurement-could-not-run",
-      "prompt": "roda a medição do B-030 em modo live-test contra o app-dev. (o ambiente está fora do ar / retornando 502 no momento)",
+      "prompt": "run the measurement for B-030 in live-test mode against app-dev. (the environment is down / returning 502 right now)",
       "expected_output": "The target is unreachable, so nothing was measured and nothing was disproved. The skill STOPS and asks the human. It must not record ITEM_KILLED, must not substitute a weaker measurement, and must not reason about what the measurement would probably have shown.",
       "files": [],
       "assertions": [
@@ -35,7 +35,7 @@
     {
       "id": 2,
       "name": "bug-mode-runs-the-failing-test",
-      "prompt": "executa a medição do B-022 (modo bug): o theo-cli retorna exit 0 quando um passo do deploy falha. o repro tá no plano",
+      "prompt": "run the measurement for B-022 (bug mode): theo-cli returns exit 0 when a deploy step fails. the repro is in the plan",
       "expected_output": "The skill writes the numbered repro AND a test that fails on the current state, then RUNS it and records the actual failure output. A test asserted to fail but never executed is fabricated evidence and caps the opportunity at 49.",
       "files": [],
       "assertions": [
@@ -48,7 +48,7 @@
     {
       "id": 3,
       "name": "live-test-names-the-environment-vs-product-uncertainty",
-      "prompt": "roda o live-test do B-018 contra o app-dev: a listagem de traces devolveu 500 numa carga de 30 dias",
+      "prompt": "run the live-test for B-018 against app-dev: the trace listing returned 500 on a 30-day window",
       "expected_output": "The opportunity records METHOD URL -> STATUS, console, timing — and explicitly names whether the 500 is believed to be an environment fault or a product defect, plus what would distinguish them. If it cannot yet tell, it says exactly that rather than picking the more interesting explanation.",
       "files": [],
       "assertions": [

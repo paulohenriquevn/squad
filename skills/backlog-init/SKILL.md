@@ -66,23 +66,23 @@ A repo on disk that fits **no** registered domain is a finding, not a rounding e
 Print the derived table and ask for confirmation before writing. The routing table decides which specialist owns which code for the life of the registry; a wrong mapping here is a wrong mapping in every item that follows.
 
 ```
-Domínio              Repos (verificados em disco)
+Domain               Repos (verified on disk)
 -------------------  ------------------------------------------
 engine-go            theo
 control-plane        theo-cloud · theo-traefik-mcp
 data-plane-ts        theo-memory · theo-rag · theo-lens · …
 …
-Excluídos            theo-itself (0 commits) · theo-workspace (clone aninhado)
+Excluded             theo-itself (0 commits) · theo-workspace (nested clone)
 ```
 
 ### Step 3 — Write `BACKLOG.md`
 
 Structure, in this order:
 
-1. **Header** — what the registry is, and the one-line rule that governs it: *ids são monotônicos e nunca renumerados*.
+1. **Header** — what the registry is, and the one-line rule that governs it: *ids are monotonic and never renumbered*.
 2. **How an item gets here** — the two producers (`/backlog-item` human, `/discover --sweep` measured), pointing at `cycle-backlog.md` for the schema rather than restating it. The registry is data; the contract lives in the rule.
 3. **Domain routing table** — as confirmed in Step 2, with the exclusions and their reasons.
-4. **`## Itens`** — empty, with the next free id declared as `B-001`.
+4. **`## Items`** — empty, with the next free id declared as `B-001`.
 
 Seed **no items**. An item nobody filed has no `why_now`, no DoD and no owner — it is a placeholder that will be inherited as though it were a decision.
 
@@ -91,8 +91,8 @@ Seed **no items**. An item nobody filed has no `why_now`, no DoD and no owner �
 One line under `[Unreleased] § Added`. Then report the table, the exclusions, and the next step:
 
 ```
-BACKLOG.md criado — 8 domínios, {n} repos roteados, {m} excluídos.
-Próximo passo:  /backlog-item {slug}   ou   /discover --sweep {domain}
+BACKLOG.md created — 8 domains, {n} repos routed, {m} excluded.
+Next step:  /backlog-item {slug}   or   /discover --sweep {domain}
 ```
 
 ## Out of scope (deliberately)
