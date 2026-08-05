@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Run M2 structural blueprint-confidence scoring.
+"""Run M2 structural opportunity-confidence scoring.
 
-Sibling of plan-confidence/scripts/run_structural.py — same architecture,
-different rubric and checkers (research_coverage / reference_citations /
-blueprint_completeness / structural_risk).
+Sibling of plan-confidence/scripts/run_structural.py — same architecture, different
+rubric and checkers (corner_coverage / evidence_pointers / opportunity_completeness /
+structural_risk).
+
+Replaces the ancestor `run_blueprint_score.py`.
 """
 from __future__ import annotations
 
@@ -17,10 +19,10 @@ from typing import Any
 # Allow sibling imports when invoked directly
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _rubric_loader import load_rubric  # noqa: E402
-from check_blueprint_completeness import check_blueprint_completeness  # noqa: E402
-from check_reference_citations import check_reference_citations  # noqa: E402
-from check_research_coverage import check_research_coverage  # noqa: E402
+from _rubric_loader import load_rubric  # noqa: E402,F401
+from check_corner_coverage import check_corner_coverage  # noqa: E402
+from check_evidence_pointers import check_evidence_pointers  # noqa: E402
+from check_opportunity_completeness import check_opportunity_completeness  # noqa: E402
 from check_spec_smells import check_spec_smells  # noqa: E402
 
 
@@ -36,34 +38,31 @@ def _find_project_root(start: Path) -> Path:
     return start.resolve().parent if start.is_file() else start.resolve()
 
 
-def _resolve_blueprint(arg: str) -> Path:
+def _resolve_opportunity(arg: str) -> Path:
     p = Path(arg)
     if p.exists() and p.suffix == ".md":
         return p.resolve()
-    candidates = [
-        Path(".claude/knowledge-base/discoveries/blueprints") / f"{arg}-blueprint.md",
-        Path(".claude/knowledge-base/discoveries/blueprints") / f"{arg}.md",
-    ]
-    for c in candidates:
+    base = Path(".claude/knowledge-base/discoveries/opportunities")
+    for c in (base / f"{arg}-opportunity.md", base / f"{arg}.md"):
         if c.exists():
             return c.resolve()
-    raise FileNotFoundError(f"Could not resolve blueprint: {arg}")
+    raise FileNotFoundError(f"Could not resolve opportunity: {arg}")
 
 
 def _resolve_rubric(arg: Path | None) -> Path:
     if arg and arg.exists():
         return arg
-    return SKILL_ROOT / "templates" / "rubric-blueprint.md"
+    return SKILL_ROOT / "templates" / "rubric-opportunity.md"
 
 
-def _resolve_thresholds(arg: Path | None, blueprint_path: Path) -> Path:
+def _resolve_thresholds(arg: Path | None, opportunity_path: Path) -> Path:
     if arg and arg.exists():
         return arg
-    project_root = _find_project_root(blueprint_path)
-    project_thresh = project_root / ".claude" / "rules" / "discover-blueprint-thresholds.txt"
+    project_root = _find_project_root(opportunity_path)
+    project_thresh = project_root / ".claude" / "rules" / "discover-opportunity-thresholds.txt"
     if project_thresh.exists():
         return project_thresh
-    return SKILL_ROOT / "templates" / "discover-blueprint-thresholds.example.txt"
+    return SKILL_ROOT / "templates" / "discover-opportunity-thresholds.example.txt"
 
 
 def _parse_thresholds(path: Path) -> dict[str, int]:
@@ -82,66 +81,59 @@ def _parse_thresholds(path: Path) -> dict[str, int]:
 
 
 def _verdict_for(score: float, bands: dict[str, int]) -> str:
-    sorted_bands = sorted(bands.items(), key=lambda kv: kv[1], reverse=True)
-    for name, threshold in sorted_bands:
+    for name, threshold in sorted(bands.items(), key=lambda kv: kv[1], reverse=True):
         if score >= threshold:
             return name
     return "INVALID"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run M2 structural blueprint-confidence scoring.")
-    parser.add_argument("blueprint", help="blueprint slug or .md path")
+    parser = argparse.ArgumentParser(description="Run M2 structural opportunity-confidence scoring.")
+    parser.add_argument("opportunity", help="opportunity slug or .md path")
     parser.add_argument("--rubric", type=Path, default=None)
     parser.add_argument("--thresholds", type=Path, default=None)
     parser.add_argument("--no-warn", action="store_true", help="suppress calibration warning")
     args = parser.parse_args()
 
     try:
-        blueprint_path = _resolve_blueprint(args.blueprint)
+        opportunity_path = _resolve_opportunity(args.opportunity)
     except FileNotFoundError as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         return 2
 
     rubric_path = _resolve_rubric(args.rubric)
-    thresholds_path = _resolve_thresholds(args.thresholds, blueprint_path)
-    bands = _parse_thresholds(thresholds_path)
+    bands = _parse_thresholds(_resolve_thresholds(args.thresholds, opportunity_path))
 
-    # Run all four checkers
-    coverage = check_research_coverage(blueprint_path)
-    citations = check_reference_citations(blueprint_path)
-    completeness = check_blueprint_completeness(blueprint_path)
-    smells = check_spec_smells(blueprint_path, rubric_path)
+    coverage = check_corner_coverage(opportunity_path)
+    evidence = check_evidence_pointers(opportunity_path)
+    completeness = check_opportunity_completeness(opportunity_path)
+    smells = check_spec_smells(opportunity_path, rubric_path)
 
-    # Compute per-dimension scores (0-100)
-    rc_score = 100.0 * coverage["corners_populated"] / coverage["corners_total"]
+    # Per-dimension scores (0-100)
+    cc_score = 100.0 * coverage["corners_populated"] / coverage["corners_total"]
 
-    if citations["total"] == 0:
-        # No citations at all — completeness check covers it; smell check too.
-        # Don't penalize via reference_citations dimension.
-        rcit_score = 100.0
-    else:
-        rcit_score = 100.0 * citations["verified"] / citations["total"]
+    # An opportunity with zero code pointers is not automatically weak: a `live-test`
+    # finding is carried by runtime observations, which are not disk-verifiable. The
+    # empty-corner and mode-contract gates are what catch a genuinely evidence-free
+    # opportunity, so this dimension does not double-penalise.
+    ep_score = 100.0 if evidence["total"] == 0 else 100.0 * evidence["verified"] / evidence["total"]
 
-    bc_score = 100.0 * completeness["found"] / completeness["total_required"]
+    oc_score = 100.0 * completeness["found"] / completeness["total_required"]
+    sr_score = max(0.0, 100.0 + smells.total_penalty)  # penalty is negative
 
-    re_score = max(0.0, 100.0 + smells.total_penalty)  # penalty is negative
-
-    # Weighted average per rubric
     weights = {
-        "research_coverage": 0.30,
-        "reference_citations": 0.30,
-        "blueprint_completeness": 0.25,
+        "corner_coverage": 0.30,
+        "evidence_pointers": 0.30,
+        "opportunity_completeness": 0.25,
         "structural_risk": 0.15,
     }
     weighted = (
-        weights["research_coverage"] * rc_score
-        + weights["reference_citations"] * rcit_score
-        + weights["blueprint_completeness"] * bc_score
-        + weights["structural_risk"] * re_score
+        weights["corner_coverage"] * cc_score
+        + weights["evidence_pointers"] * ep_score
+        + weights["opportunity_completeness"] * oc_score
+        + weights["structural_risk"] * sr_score
     )
 
-    # Hard caps
     hard_caps_triggered: list[str] = []
     cap_value: float = 100.0
 
@@ -149,42 +141,42 @@ def main() -> int:
         hard_caps_triggered.append(f"empty_corner_{empty}")
         cap_value = min(cap_value, 49.0)
 
-    if citations["fabricated"] > 0:
-        hard_caps_triggered.append("fabricated_citation")
+    if evidence["fabricated"] > 0:
+        hard_caps_triggered.append("fabricated_evidence")
         cap_value = min(cap_value, 49.0)
 
     if completeness["missing_mandatory"]:
         hard_caps_triggered.append("mandatory_section_missing")
         cap_value = min(cap_value, 70.0)
 
-    if completeness["adr_count"] < 1:
-        hard_caps_triggered.append("no_adrs")
+    # ADR is required only when the blast radius reaches beyond the opportunity's own
+    # repo. A repo-local fix carries no cap; a cross-repo change without a recorded
+    # decision does.
+    if completeness["adr_missing"]:
+        hard_caps_triggered.append("no_adr_on_cross_repo_change")
         cap_value = min(cap_value, 70.0)
 
-    # Soft caps (conservative bias)
     if smells.total_hits >= 20:
         hard_caps_triggered.append("soft_floor_smell_density_high")
         cap_value = min(cap_value, 89.0)
 
-    citation_density = citations["citation_density_per_200w"]
-    if 0 < citations["total"] and citation_density < 1.0:
-        hard_caps_triggered.append("soft_floor_citation_density_low")
+    if evidence["evidence_total"] > 0 and evidence["evidence_density_per_200w"] < 1.0:
+        hard_caps_triggered.append("soft_floor_evidence_density_low")
         cap_value = min(cap_value, 89.0)
 
     final_score = min(weighted, cap_value)
     verdict = _verdict_for(final_score, bands)
 
-    # Build reasons
     reasons = {
-        "research_coverage": {
+        "corner_coverage": {
             "contributors": coverage["contributors"],
             "detractors": coverage["detractors"],
         },
-        "reference_citations": {
-            "contributors": citations["contributors"],
-            "detractors": citations["detractors"],
+        "evidence_pointers": {
+            "contributors": evidence["contributors"],
+            "detractors": evidence["detractors"],
         },
-        "blueprint_completeness": {
+        "opportunity_completeness": {
             "contributors": completeness["contributors"],
             "detractors": completeness["detractors"],
         },
@@ -200,9 +192,9 @@ def main() -> int:
     }
 
     sub_reports: dict[str, Any] = {
-        "research_coverage": coverage,
-        "reference_citations": citations,
-        "blueprint_completeness": completeness,
+        "corner_coverage": coverage,
+        "evidence_pointers": evidence,
+        "opportunity_completeness": completeness,
         "structural_risk": {
             "total_hits": smells.total_hits,
             "by_category": smells.by_category,
@@ -210,21 +202,18 @@ def main() -> int:
         },
     }
 
-    slug = blueprint_path.stem.replace("-blueprint", "")
-
     out = {
-        "blueprint_slug": slug,
-        "blueprint_path": str(blueprint_path),
-        "blueprint_version": None,  # TODO: parse from H1 line
+        "opportunity_slug": opportunity_path.stem.replace("-opportunity", ""),
+        "opportunity_path": str(opportunity_path),
         "scored_at": datetime.now(timezone.utc).isoformat(),
-        "research_coverage_score": round(rc_score, 1),
-        "reference_citations_score": round(rcit_score, 1),
-        "blueprint_completeness_score": round(bc_score, 1),
-        "risco_estrutural_score": round(re_score, 1),
+        "corner_coverage_score": round(cc_score, 1),
+        "evidence_pointers_score": round(ep_score, 1),
+        "opportunity_completeness_score": round(oc_score, 1),
+        "structural_risk_score": round(sr_score, 1),
         "active_dimensions": [
-            "research_coverage",
-            "reference_citations",
-            "blueprint_completeness",
+            "corner_coverage",
+            "evidence_pointers",
+            "opportunity_completeness",
             "structural_risk",
         ],
         "weight_normalization_factor": 1.0,
@@ -245,7 +234,11 @@ def main() -> int:
     print(json.dumps(out, indent=2))
 
     if not args.no_warn and out["calibration"]["status"] == "PROVISIONAL_v1":
-        print("WARN: PROVISIONAL_v1 calibration — score bands are SOTA defaults, not yet calibrated against project holdout.", file=sys.stderr)
+        print(
+            "WARN: PROVISIONAL_v1 calibration — score bands are SOTA defaults, not yet "
+            "calibrated against project holdout.",
+            file=sys.stderr,
+        )
 
     if verdict == "INVALID":
         return 1

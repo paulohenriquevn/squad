@@ -85,6 +85,8 @@ skills/roadmap-init/templates/roadmap-template.md
 skills/roadmap-init/templates/references-catalog-template.md
 skills/roadmap-init/fixtures/good-roadmap-ai-gateway.md
 skills/roadmap-init/fixtures/bad-roadmap-vague-milestones.md
+skills/backlog-item/SKILL.md
+skills/backlog-init/SKILL.md
 skills/roadmap-feature/SKILL.md
 skills/roadmap-feature/templates/feature-amendment-template.md
 skills/roadmap-feature/fixtures/good-feature-amendment.md
@@ -161,6 +163,7 @@ rules/cycle-auto-plan.md
 rules/cycle-release.md
 rules/cycle-acceptance.md
 rules/cycle-implement.md
+rules/cycle-backlog.md
 rules/cycle-discover.md
 rules/cycle-plan.md
 rules/cycle-review.md
@@ -172,12 +175,14 @@ rules/plan-confidence-golden-rule.md
 # === Rules (golden rules + conventions + index) — rules-audit 2026-06-28 ===
 rules/code-quality-golden-rule.md
 rules/deps-audit-golden-rule.md
-rules/discover-blueprint-golden-rule.md
+rules/discover-opportunity-golden-rule.md
 rules/discover-plan-golden-rule.md
 rules/dogfood-golden-rule.md
 rules/analysis-golden-rule.md
 rules/error-handling.md
 rules/git-safety.md
+rules/live-target.txt
+rules/current-constraint.md
 rules/reference-provenance.md
 rules/knowledge-base-location.md
 rules/README.md
