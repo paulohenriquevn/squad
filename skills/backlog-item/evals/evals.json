@@ -1,19 +1,19 @@
 {
   "skill_name": "backlog-item",
-  "notes": "Intake is where two gates live that nothing downstream can recover from: G5 (a hunch justified by prior art must be refused) and the absence of an evidence gate (a hunch with no evidence must be ACCEPTED). Both are judgement calls the scripts cannot make, which is why they are evaluated here rather than in pytest.",
+  "notes": "Intake is where two gates live that nothing downstream can recover from: G5 (a hunch justified by prior art must be refused) and the absence of an evidence gate (a hunch with no evidence must be ACCEPTED). Both are judgement calls the scripts cannot make, which is why they are evaluated here rather than in pytest. Iteration 1 exposed a defect in eval-0 itself: its prompt collided with B-014, the fixture item that exists so eval-3 can test dedup. Both arms correctly merged, and the assertions — written for a NEW item — scored 0/7 on correct behaviour. Rewritten against theo-promptly, which no fixture item mentions.",
   "evals": [
     {
       "id": 0,
       "name": "accepts-an-unmeasured-hunch",
-      "prompt": "cara o trace explorer do theo-lens tá parecendo lento pra caramba quando eu abro a janela de 30 dias. não medi nada ainda, é só impressão mesmo, mas desde que mudaram o default do dashboard pra 30d tá insuportável. registra isso pra gente olhar depois",
-      "expected_output": "A B-NNN block appended to BACKLOG.md with domain: data-plane-ts, repo: theo-lens, evidence: none-yet, status: raw, and a verifiable dod. The skill must NOT ask the user for evidence, a file:line or a measurement — an unmeasured hunch is exactly what intake is for.",
+      "prompt": "cara, toda vez que eu edito um prompt no theo-promptly e salvo, demora uns 3 ou 4 segundos até a revisão nova aparecer resolvida na API. não medi nada, é impressão mesmo, mas incomoda. registra isso aí pra gente olhar depois",
+      "expected_output": "A B-NNN block appended to BACKLOG.md with domain: data-plane-ts, repo: theo-promptly, evidence: none-yet, status: raw, and a verifiable dod. The skill must NOT ask the user for evidence, a file:line or a measurement. theo-promptly appears in no existing item, so dedup must NOT fire — this eval measures intake, not merge.",
       "files": [],
       "assertions": [
         "A new B-NNN block was appended to BACKLOG.md",
         "The block carries evidence: none-yet",
         "The block carries status: raw",
-        "domain is data-plane-ts and repo is theo-lens",
-        "why_now records what changed in our system (the 30d default)",
+        "domain is data-plane-ts and repo is theo-promptly",
+        "why_now records the observation without inventing a trigger the user never gave",
         "The skill did NOT ask the user to provide evidence or a measurement before registering",
         "dod has at least one bullet that could fail (not a restatement of the title)"
       ]
