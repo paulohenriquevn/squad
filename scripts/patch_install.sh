@@ -119,6 +119,7 @@ skills/plan-confidence/tests/test_check_criterion_executability.py
 # === Halt-loop driven skills (consumption-cap removal session) ===
 skills/discover-execute/SKILL.md
 skills/discover-execute/prompts/execute-mode-prompt.md
+skills/discover-execute/templates/opportunity-template.md
 skills/discover-improve/SKILL.md
 skills/discover-improve/prompts/improvement-prompt.md
 skills/plan-improve/SKILL.md
