@@ -55,10 +55,6 @@ BACKUP_DIR="$ECO/.patch-backups/$(date +%Y%m%dT%H%M%S)"
 # Lines starting with `#` and empty lines are ignored.
 read -r -d '' MANIFEST <<'EOF' || true
 # === Brand-new skills (whole folders) ===
-skills/roadmap-review/SKILL.md
-skills/roadmap-review/scripts/check_roadmap_structure.py
-skills/roadmap-review/tests/conftest.py
-skills/roadmap-review/tests/test_check_roadmap_structure.py
 skills/acceptance/SKILL.md
 skills/acceptance/scripts/extract_acceptance_criteria.py
 skills/acceptance/scripts/compute_acceptance_verdict.py
@@ -80,15 +76,14 @@ skills/release/scripts/promote_unreleased.py
 skills/release/scripts/render_release_notes.py
 skills/release/tests/conftest.py
 skills/release/tests/test_flip_milestone_checkbox.py
-skills/roadmap-init/SKILL.md
-skills/roadmap-init/templates/roadmap-template.md
-skills/roadmap-init/templates/references-catalog-template.md
-skills/roadmap-init/fixtures/good-roadmap-ai-gateway.md
-skills/roadmap-init/fixtures/bad-roadmap-vague-milestones.md
-skills/roadmap-feature/SKILL.md
-skills/roadmap-feature/templates/feature-amendment-template.md
-skills/roadmap-feature/fixtures/good-feature-amendment.md
-skills/roadmap-feature/fixtures/bad-feature-amendment.md
+skills/backlog-item/SKILL.md
+skills/backlog-item/evals/evals.json
+skills/discover-plan/evals/evals.json
+skills/discover-execute/evals/evals.json
+skills/discover-edge-cases/evals/evals.json
+skills/backlog-init/SKILL.md
+skills/backlog-review/SKILL.md
+skills/backlog-review/scripts/check_backlog_structure.py
 
 # === New scripts inside existing skills ===
 skills/auto-plan/SKILL.md
@@ -117,12 +112,13 @@ skills/plan-confidence/tests/test_check_criterion_executability.py
 # === Halt-loop driven skills (consumption-cap removal session) ===
 skills/discover-execute/SKILL.md
 skills/discover-execute/prompts/execute-mode-prompt.md
+skills/discover-execute/templates/opportunity-template.md
 skills/discover-improve/SKILL.md
 skills/discover-improve/prompts/improvement-prompt.md
 skills/plan-improve/SKILL.md
 skills/plan-improve/prompts/improvement-prompt.md
 skills/to-plan/SKILL.md
-skills/discover-plan/templates/discovery-plan-template.md
+skills/discover-plan/templates/measurement-plan-template.md
 
 # === SOTA plan-template upgrade (2026-06-07) ===
 skills/to-plan/templates/plan-template.md
@@ -154,13 +150,26 @@ skills/plan-confidence/tests/test_golden_rule.py
 scripts/test_e2e_smoke.py
 CHANGELOG.md
 
+# === Squad domain specialists ===
+agents/README.md
+agents/engine-go.md
+agents/control-plane.md
+agents/data-plane-ts.md
+agents/theo-db.md
+agents/infra-terraform.md
+agents/contracts-auth.md
+agents/frontend-dashboard.md
+agents/platform-cli.md
+scripts/route_domain.py
+
 # === Rules (cycle definitions) ===
-rules/cycle-roadmap.md
 rules/cycle-rule-schema.md
 rules/cycle-auto-plan.md
 rules/cycle-release.md
 rules/cycle-acceptance.md
 rules/cycle-implement.md
+rules/cycle-backlog.md
+rules/cycle-maintenance.md
 rules/cycle-discover.md
 rules/cycle-plan.md
 rules/cycle-review.md
@@ -172,12 +181,14 @@ rules/plan-confidence-golden-rule.md
 # === Rules (golden rules + conventions + index) — rules-audit 2026-06-28 ===
 rules/code-quality-golden-rule.md
 rules/deps-audit-golden-rule.md
-rules/discover-blueprint-golden-rule.md
+rules/discover-opportunity-golden-rule.md
 rules/discover-plan-golden-rule.md
 rules/dogfood-golden-rule.md
 rules/analysis-golden-rule.md
 rules/error-handling.md
 rules/git-safety.md
+rules/live-target.txt
+rules/current-constraint.md
 rules/reference-provenance.md
 rules/knowledge-base-location.md
 rules/README.md
@@ -226,8 +237,6 @@ skills/plan-confidence/
 skills/plan-improve/
 skills/release/
 skills/review/
-skills/roadmap-feature/
-skills/roadmap-init/
 skills/skill-creator/
 skills/to-plan/
 EOF

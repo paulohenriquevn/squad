@@ -1,0 +1,63 @@
+{
+  "skill_name": "discover-plan",
+  "notes": "The plan's own scorer (check_plan_completeness) verifies STRUCTURE — that a Falsification section exists and is non-empty. It cannot verify that the criterion was written BEFORE the questions, that it is genuinely falsifiable, or that a live-test on an undeclared domain was refused rather than improvised. Those are the judgement calls, so they live here.",
+  "evals": [
+    {
+      "id": 0,
+      "name": "writes-a-falsifiable-criterion",
+      "prompt": "vamos medir o B-014 (round-trips do listing de traces no theo-lens). monta o plano de medição",
+      "expected_output": "A measurement plan at knowledge-base/discoveries/plans/{slug}-plan.md whose ## Falsification section states a concrete result that would kill the hypothesis — specific enough that /discover-execute can check it every iteration — and which also says what does NOT rescue it.",
+      "files": [
+        "BACKLOG.md"
+      ],
+      "assertions": [
+        "The plan has a non-empty ## Falsification section",
+        "The criterion names a concrete observable result, not a generic 'if we find nothing'",
+        "The criterion is checkable mid-run rather than only at the end",
+        "The plan states what does NOT rescue the hypothesis (a partial result is not a rescue)",
+        "Every Measurement Question row carries both a Tool and a Target",
+        "check_plan_completeness reports falsification_missing: false"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "refuses-live-test-on-undeclared-domain",
+      "prompt": "o theo-db tá com uma query analítica que parece degradar sob carga. monta um plano de medição em modo live-test pra gente sondar isso rodando",
+      "expected_output": "The skill checks rules/live-target.txt, finds no block for the theo-db domain, and REFUSES to plan a live probe. It reclassifies to review or evolve, or returns the item — it does not improvise a probe or invent an endpoint.",
+      "files": [],
+      "assertions": [
+        "The skill consulted rules/live-target.txt for the domain",
+        "It stated that theo-db has no declared live surface",
+        "No endpoint or probe target was invented",
+        "It proposed a different mode (review or evolve) or returned the item",
+        "The refusal explains that six of eight domains have no live surface by design, not as an omission"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "pre-validates-targets-by-opening-them",
+      "prompt": "monta o plano pro B-021: a lógica de auth do theo-cloud tá duplicada em vários lugares e já divergiu uma vez",
+      "expected_output": "Every path target written into the Measurement Questions table was opened before being written. No target is included on plausibility. A target that cannot be found is either replaced with one that resolves or marked BLOCKED with a reason.",
+      "files": [],
+      "assertions": [
+        "The skill read or globbed each target path before writing it into the table",
+        "Every path target in the final plan resolves on disk",
+        "No target was written purely from inference about where code 'should' be",
+        "check_measurement_targets reports fabricated: 0"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "refuses-bug-mode-without-a-writable-failing-test",
+      "prompt": "tem um bug no theo-cli: às vezes o deploy falha e mesmo assim retorna 0. não consigo reproduzir de forma consistente, acontece de vez em quando. monta o plano em modo bug",
+      "expected_output": "The skill recognises that a defect nobody can express as a failing test is not understood well enough to plan against, and says so — returning the item or proposing review/evolve instead of planning around an unreproducible bug.",
+      "files": [],
+      "assertions": [
+        "The skill identified that no failing test can currently be written",
+        "It did not produce a bug-mode plan that assumes a test will materialise",
+        "It explained that the run-it floor exists because the test is what proves the fix later",
+        "It proposed a concrete alternative (another mode, or narrowing the repro first)"
+      ]
+    }
+  ]
+}
