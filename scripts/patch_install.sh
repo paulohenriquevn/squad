@@ -125,7 +125,7 @@ skills/discover-improve/prompts/improvement-prompt.md
 skills/plan-improve/SKILL.md
 skills/plan-improve/prompts/improvement-prompt.md
 skills/to-plan/SKILL.md
-skills/discover-plan/templates/discovery-plan-template.md
+skills/discover-plan/templates/measurement-plan-template.md
 
 # === SOTA plan-template upgrade (2026-06-07) ===
 skills/to-plan/templates/plan-template.md
