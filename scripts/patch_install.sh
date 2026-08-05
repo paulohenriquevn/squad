@@ -77,6 +77,10 @@ skills/release/scripts/render_release_notes.py
 skills/release/tests/conftest.py
 skills/release/tests/test_flip_milestone_checkbox.py
 skills/backlog-item/SKILL.md
+skills/backlog-item/evals/evals.json
+skills/discover-plan/evals/evals.json
+skills/discover-execute/evals/evals.json
+skills/discover-edge-cases/evals/evals.json
 skills/backlog-init/SKILL.md
 skills/backlog-review/SKILL.md
 skills/backlog-review/scripts/check_backlog_structure.py
