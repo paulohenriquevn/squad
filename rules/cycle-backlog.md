@@ -161,6 +161,8 @@ An item registered in error is marked `status: killed` with a `kill_reason` — 
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Skill: `skills/backlog-item/SKILL.md`
+- Bootstrap (once, at adoption): `skills/backlog-init/SKILL.md`
+- Live environment declaration consumed by `/discover --mode live-test`: `rules/live-target.txt`
 - Downstream: `rules/cycle-discover.md` — measures the hypothesis and flips the item to `triaged` or `killed`
 - Then: `rules/cycle-plan.md` — consumes `triaged` items
 - Branching contract for the registry commit: `rules/git-safety.md`

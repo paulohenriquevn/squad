@@ -103,16 +103,19 @@ def test_skill_names_match_directory() -> None:
 
 
 def test_skill_count() -> None:
-    """Sanity check: we expect exactly 32 SKILL.md files.
+    """Sanity check: we expect exactly 34 SKILL.md files.
 
     Retired the in-cycle skill-distillation tail (skill-writer + skill-validator
     + skill-register, -3), adopted the standalone official skill-creator (+1),
     added the frontend-design utility skill (+1), the cycle-goal session-binding
     skill (+1), the acceptance cycle skill (+1), and the roadmap-review skill (+1):
     30 -> 28 -> 29 -> 30 -> 31 -> 32.
+
+    Squad: added the BACKLOG intake cycle — backlog-item (phase 0) and
+    backlog-init (one-time registry bootstrap): 32 -> 34.
     """
     files = _get_skill_files()
-    assert len(files) == 32, (
-        f"Expected 32 SKILL.md files, found {len(files)}. "
+    assert len(files) == 34, (
+        f"Expected 34 SKILL.md files, found {len(files)}. "
         f"Update this test if skills were added or removed."
     )
