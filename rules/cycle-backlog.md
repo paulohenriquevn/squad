@@ -58,18 +58,18 @@ One file, one schema, two entry paths. A sweep finding skips intake because it a
 Every item is one `## B-NNN` block. Ids are monotonic, never reused, never renumbered — a killed item keeps its number so the audit trail survives.
 
 ```markdown
-## B-014 — Reduzir p95 do trace explorer do theo-lens   [ ]
+## B-014 — Reduce the theo-lens trace explorer p95   [ ]
 
 domain: data-plane-ts
 repo: theo-lens
 suggested_mode: live-test
 source: human
 evidence: none-yet
-why_now: dashboard passou a carregar 30d de traces por padrão em 2026-07
+why_now: the dashboard started loading a 30d trace window by default in 2026-07
 status: raw
 dod:
-  - p95 do endpoint de listagem abaixo de 800ms com 30d de janela
-  - regressão coberta por teste que falha no estado atual
+  - listing endpoint p95 below 800ms with a 30d window
+  - regression covered by a test that fails on the current state
 ```
 
 | Field | Required | Notes |
@@ -142,7 +142,7 @@ There is no "with caveats" band: an item is either in the registry or it is not.
 | G4 | **Verifiable DoD** | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |
 | G5 | **No prior-art justification** | `why_now` justifies the item by what another project does rather than by something that changed in our system. This is the Squad signature rule (Unbreakable Rule: evidence is ours or it is not evidence). Reject and ask for the local reason. |
 
-G5 does not forbid *knowing* how others solved a problem — it forbids that knowledge from being the **justification** for the work. "Precisamos de cache porque o projeto X tem" is rejected. "Precisamos de cache porque o endpoint faz 4 round-trips por request" is accepted, whether or not project X inspired the look.
+G5 does not forbid *knowing* how others solved a problem — it forbids that knowledge from being the **justification** for the work. "We need caching because project X has it" is rejected. "We need caching because the endpoint makes 4 round-trips per request" is accepted, whether or not project X inspired the look.
 
 Intake deliberately has **no evidence gate**. Requiring evidence here would collapse BACKLOG into DISCOVER and lose the hunch.
 
@@ -152,8 +152,8 @@ Intake deliberately has **no evidence gate**. Requiring evidence here would coll
 - **Evidence theatre at intake.** Inventing a plausible `file:line` so the item "looks solid". `evidence: none-yet` is the honest and correct value for a hunch — DISCOVER fills it in or kills the item.
 - **Renumbering.** Reusing the id of a killed item, or resequencing after a purge. The number is the audit trail; a killed `B-007` stays `B-007` forever.
 - **Registering the sweep's output by hand.** Duplicates what `--sweep` already wrote, with weaker evidence.
-- **Multi-domain items.** "Melhorar observabilidade do ecossistema" is a program, not an item. It routes to nobody and closes never.
-- **`dod` that restates the title.** "DoD: o trace explorer estar mais rápido" is the title again, not a criterion.
+- **Multi-domain items.** "Improve ecosystem observability" is a program, not an item. It routes to nobody and closes never.
+- **`dod` that restates the title.** "DoD: the trace explorer being faster" is the title again, not a criterion.
 - **Treating `suggested_mode` as binding.** It is the filer's guess. Locking DISCOVER to it defeats the purpose of measuring.
 
 ## Output

@@ -5,7 +5,7 @@
     {
       "id": 0,
       "name": "accepts-an-unmeasured-hunch",
-      "prompt": "cara, toda vez que eu edito um prompt no theo-promptly e salvo, demora uns 3 ou 4 segundos até a revisão nova aparecer resolvida na API. não medi nada, é impressão mesmo, mas incomoda. registra isso aí pra gente olhar depois",
+      "prompt": "hey so every time i edit a prompt in theo-promptly and hit save, it takes like 3 or 4 seconds before the new revision shows up resolved in the API. haven't measured anything, it's just a feeling, but it's annoying. log that for us to look at later",
       "expected_output": "A B-NNN block appended to BACKLOG.md with domain: data-plane-ts, repo: theo-promptly, evidence: none-yet, status: raw, and a verifiable dod. The skill must NOT ask the user for evidence, a file:line or a measurement. theo-promptly appears in no existing item, so dedup must NOT fire — this eval measures intake, not merge.",
       "files": [],
       "assertions": [
@@ -21,7 +21,7 @@
     {
       "id": 1,
       "name": "refuses-prior-art-justification-gate-G5",
-      "prompt": "vi que o LangSmith tem um waterfall bonito de traces com hierarquia de span e tal. a gente devia ter isso no theo-lens também, fica muito melhor. abre um item aí",
+      "prompt": "saw that LangSmith has a nice trace waterfall with span hierarchy and all. we should have that in theo-lens too, looks way better. open an item for it",
       "expected_output": "Gate G5 fires. The skill surfaces that the justification rests on what another project does, and asks the user to reformulate with a local reason (or to confirm a false positive / cancel) via AskUserQuestion. It must NOT silently register the item with the prior-art justification as why_now.",
       "files": [],
       "assertions": [
@@ -35,7 +35,7 @@
     {
       "id": 2,
       "name": "splits-a-two-domain-item-gate-G3",
-      "prompt": "preciso arrumar o fluxo de auth: o dashboard não mostra erro nenhum quando o token expira (fica só uma tela branca) e a API do theo-cloud devolve 500 em vez de 401 nesse caso. abre um item pra isso",
+      "prompt": "need to fix the auth flow: the dashboard shows no error at all when the token expires (just a blank screen) and the theo-cloud API returns 500 instead of 401 in that case. open an item for it",
       "expected_output": "The skill recognises this spans two domains — frontend-dashboard (the blank screen) and control-plane (the wrong status code) — and splits it into two items rather than registering one that routes to nobody. Gate G3.",
       "files": [],
       "assertions": [
@@ -49,7 +49,7 @@
     {
       "id": 3,
       "name": "dedup-finds-the-existing-open-item",
-      "prompt": "abre um item pra reduzir os round-trips do endpoint de listagem de traces no theo-lens, tá fazendo uma query por span",
+      "prompt": "open an item to reduce the round-trips in the trace listing endpoint in theo-lens, it's doing one query per span",
       "expected_output": "The skill greps BACKLOG.md before writing. If an open item covering the same problem exists, verdict is ITEM_MERGED — no new id is allocated, the context is folded into the existing block, and the absorbing id is reported.",
       "files": [
         "BACKLOG.md"

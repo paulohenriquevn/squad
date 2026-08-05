@@ -5,7 +5,7 @@
     {
       "id": 0,
       "name": "unfalsifiable-hypothesis-is-always-must-fix",
-      "prompt": "revisa o plano de medição do B-025. a hipótese é 'o trace explorer poderia ter uma experiência melhor de navegação'",
+      "prompt": "review the measurement plan for B-025. the hypothesis is 'the trace explorer could have a better navigation experience'",
       "expected_output": "The skill recognises that no plausible result could refute this hypothesis and classifies it MUST FIX — not SHOULD TEST, not DOCUMENT. The verdict is MEASUREMENT PLAN NEEDS ADJUSTMENT, with a concrete reformulation suggested in one line.",
       "files": [],
       "assertions": [
@@ -19,7 +19,7 @@
     {
       "id": 1,
       "name": "flags-a-target-that-resolves-but-is-stale",
-      "prompt": "revisa esse plano: ele cita theo-lens/src/api/traces.ts:142 como alvo, mas esse arquivo passou por um refactor grande em julho",
+      "prompt": "review this plan: it cites theo-lens/src/api/traces.ts:142 as a target, but that file went through a big refactor in July",
       "expected_output": "The skill flags that a target can resolve and still be stale — the line now means something else. This is a Target-family finding, and the suggested fix is to re-anchor by symbol or re-open the file rather than trusting the line number.",
       "files": [],
       "assertions": [
@@ -32,7 +32,7 @@
     {
       "id": 2,
       "name": "does-not-widen-scope",
-      "prompt": "dá uma revisada nesse plano de medição do theo-rag antes de rodar",
+      "prompt": "give this theo-rag measurement plan a look before we run it",
       "expected_output": "Every finding is a checkpoint or a different tool — a fix of at most one line of plan change. The skill does not propose new questions, a wider investigation, or additional repos to look at. Scope creep is the anti-pattern this phase is most prone to.",
       "files": [],
       "assertions": [
@@ -45,7 +45,7 @@
     {
       "id": 3,
       "name": "mode-specific-checks-are-applied",
-      "prompt": "revisa o plano do B-031 — é modo review, sobre uma função do theo-contracts que parece nunca ser chamada",
+      "prompt": "review the plan for B-031 — it's review mode, about a theo-contracts function that seems never to be called",
       "expected_output": "For review mode the skill checks whether the plan will rule out that the code is dead, that the caller never existed, and that the shape is deliberate. For theo-contracts specifically, it flags that a local grep proves nothing — consumers live in other repos.",
       "files": [],
       "assertions": [

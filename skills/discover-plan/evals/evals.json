@@ -5,7 +5,7 @@
     {
       "id": 0,
       "name": "writes-a-falsifiable-criterion",
-      "prompt": "vamos medir o B-014 (round-trips do listing de traces no theo-lens). monta o plano de medição",
+      "prompt": "let's measure B-014 (round-trips in the theo-lens trace listing). put together the measurement plan",
       "expected_output": "A measurement plan at knowledge-base/discoveries/plans/{slug}-plan.md whose ## Falsification section states a concrete result that would kill the hypothesis — specific enough that /discover-execute can check it every iteration — and which also says what does NOT rescue it.",
       "files": [
         "BACKLOG.md"
@@ -22,7 +22,7 @@
     {
       "id": 1,
       "name": "refuses-live-test-on-undeclared-domain",
-      "prompt": "o theo-db tá com uma query analítica que parece degradar sob carga. monta um plano de medição em modo live-test pra gente sondar isso rodando",
+      "prompt": "theo-db has an analytical query that seems to degrade under load. put together a live-test measurement plan so we can probe it running",
       "expected_output": "The skill checks rules/live-target.txt, finds no block for the theo-db domain, and REFUSES to plan a live probe. It reclassifies to review or evolve, or returns the item — it does not improvise a probe or invent an endpoint.",
       "files": [],
       "assertions": [
@@ -36,7 +36,7 @@
     {
       "id": 2,
       "name": "pre-validates-targets-by-opening-them",
-      "prompt": "monta o plano pro B-021: a lógica de auth do theo-cloud tá duplicada em vários lugares e já divergiu uma vez",
+      "prompt": "put together the plan for B-021: the auth logic in theo-cloud is duplicated in several places and it diverged once already",
       "expected_output": "Every path target written into the Measurement Questions table was opened before being written. No target is included on plausibility. A target that cannot be found is either replaced with one that resolves or marked BLOCKED with a reason.",
       "files": [],
       "assertions": [
@@ -49,7 +49,7 @@
     {
       "id": 3,
       "name": "refuses-bug-mode-without-a-writable-failing-test",
-      "prompt": "tem um bug no theo-cli: às vezes o deploy falha e mesmo assim retorna 0. não consigo reproduzir de forma consistente, acontece de vez em quando. monta o plano em modo bug",
+      "prompt": "there's a bug in theo-cli: sometimes the deploy fails and it still returns 0. i can't reproduce it consistently, it happens now and then. put together the plan in bug mode",
       "expected_output": "The skill recognises that a defect nobody can express as a failing test is not understood well enough to plan against, and says so — returning the item or proposing review/evolve instead of planning around an unreproducible bug.",
       "files": [],
       "assertions": [
