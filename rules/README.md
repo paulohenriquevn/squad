@@ -15,7 +15,7 @@ Each `cycle-{name}.md` defines:
 
 | Contract | Cycle | Key Verdicts |
 |---|---|---|
-| `cycle-roadmap.md` | Macro super-loop | ROADMAP_COMPLETE |
+| `cycle-maintenance.md` | Macro super-loop | ROADMAP_COMPLETE |
 | `cycle-discover.md` | Prior art research | SHIPPABLE_WITH_CAVEATS |
 | `cycle-plan.md` | Planning | SHIPPABLE_WITH_CAVEATS |
 | `cycle-implement.md` | Implementation | IMPLEMENTATION_COMPLETE |

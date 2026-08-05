@@ -112,10 +112,12 @@ def test_skill_count() -> None:
     30 -> 28 -> 29 -> 30 -> 31 -> 32.
 
     Squad: added the BACKLOG intake cycle — backlog-item (phase 0) and
-    backlog-init (one-time registry bootstrap): 32 -> 34.
+    backlog-init (one-time registry bootstrap): 32 -> 34. Retired the three
+    roadmap-* skills (init/feature/review, -3) and added backlog-review (+1):
+    34 -> 32.
     """
     files = _get_skill_files()
-    assert len(files) == 34, (
-        f"Expected 34 SKILL.md files, found {len(files)}. "
+    assert len(files) == 32, (
+        f"Expected 32 SKILL.md files, found {len(files)}. "
         f"Update this test if skills were added or removed."
     )

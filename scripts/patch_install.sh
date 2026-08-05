@@ -55,10 +55,6 @@ BACKUP_DIR="$ECO/.patch-backups/$(date +%Y%m%dT%H%M%S)"
 # Lines starting with `#` and empty lines are ignored.
 read -r -d '' MANIFEST <<'EOF' || true
 # === Brand-new skills (whole folders) ===
-skills/roadmap-review/SKILL.md
-skills/roadmap-review/scripts/check_roadmap_structure.py
-skills/roadmap-review/tests/conftest.py
-skills/roadmap-review/tests/test_check_roadmap_structure.py
 skills/acceptance/SKILL.md
 skills/acceptance/scripts/extract_acceptance_criteria.py
 skills/acceptance/scripts/compute_acceptance_verdict.py
@@ -80,17 +76,10 @@ skills/release/scripts/promote_unreleased.py
 skills/release/scripts/render_release_notes.py
 skills/release/tests/conftest.py
 skills/release/tests/test_flip_milestone_checkbox.py
-skills/roadmap-init/SKILL.md
-skills/roadmap-init/templates/roadmap-template.md
-skills/roadmap-init/templates/references-catalog-template.md
-skills/roadmap-init/fixtures/good-roadmap-ai-gateway.md
-skills/roadmap-init/fixtures/bad-roadmap-vague-milestones.md
 skills/backlog-item/SKILL.md
 skills/backlog-init/SKILL.md
-skills/roadmap-feature/SKILL.md
-skills/roadmap-feature/templates/feature-amendment-template.md
-skills/roadmap-feature/fixtures/good-feature-amendment.md
-skills/roadmap-feature/fixtures/bad-feature-amendment.md
+skills/backlog-review/SKILL.md
+skills/backlog-review/scripts/check_backlog_structure.py
 
 # === New scripts inside existing skills ===
 skills/auto-plan/SKILL.md
@@ -170,13 +159,13 @@ agents/platform-cli.md
 scripts/route_domain.py
 
 # === Rules (cycle definitions) ===
-rules/cycle-roadmap.md
 rules/cycle-rule-schema.md
 rules/cycle-auto-plan.md
 rules/cycle-release.md
 rules/cycle-acceptance.md
 rules/cycle-implement.md
 rules/cycle-backlog.md
+rules/cycle-maintenance.md
 rules/cycle-discover.md
 rules/cycle-plan.md
 rules/cycle-review.md
@@ -244,8 +233,6 @@ skills/plan-confidence/
 skills/plan-improve/
 skills/release/
 skills/review/
-skills/roadmap-feature/
-skills/roadmap-init/
 skills/skill-creator/
 skills/to-plan/
 EOF

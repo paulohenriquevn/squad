@@ -30,8 +30,8 @@ Required frontmatter fields:
 | `discover-plan` | cycle-discover | Discovery plan creation |
 | `discover-execute` | cycle-discover | Execute discovery via halt-loop |
 | `discover-confidence` | cycle-discover | Score blueprint quality |
-| `roadmap-init` | cycle-roadmap | Bootstrap ROADMAP.md |
-| `roadmap-feature` | cycle-roadmap | Add milestone to existing roadmap |
+| `backlog-init` | cycle-roadmap | Bootstrap ROADMAP.md |
+| `backlog-item` | cycle-roadmap | Add milestone to existing roadmap |
 
 ## Utilities
 
