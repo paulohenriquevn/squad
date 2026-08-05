@@ -2,7 +2,7 @@
 name: discover-execute
 version: 0.2.0
 requires: [discover-plan-confidence]
-description: Executes a measurement plan via halt-loop (ralph-loop-style autonomous iteration) against OUR OWN code and runtime — never against another project's source. Routes by mode (review / live-test / bug / evolve), each with its own evidence contract, and produces an opportunity at knowledge-base/discoveries/opportunities/{slug}-opportunity.md. Has the authority to KILL the backlog item when the falsification criterion is met, which is a successful outcome rather than a failed run. Supports --sweep to measure a whole domain and register findings straight into BACKLOG.md.
+description: Run a measurement against OUR own code and runtime via halt-loop, routed by mode (review / live-test / bug / evolve), and produce an opportunity — or KILL the item when the falsification criterion is met. Use this whenever someone wants to find out whether a suspicion is real, to sweep a domain for findings nobody filed (--sweep), or to reproduce and prove a defect. Killing an item is a successful outcome, not a failed run.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
 argument-hint: "{plan-slug} | --sweep {domain}"
@@ -23,9 +23,8 @@ Reads an approved measurement plan, then drives a halt-loop investigation **agai
 
 This skill is **phase 4** of [`cycle-discover`](../../rules/cycle-discover.md). The cycle rule is the source of truth for the four modes and their evidence contracts, chain order, hard gates (G-E/G-M/G-L/G-C/G-K), stop conditions, anti-patterns and rollback. **Read `cycle-discover.md` before invoking this skill.** This SKILL.md retains phase-specific detail (halt-loop workflow, mode routing, post-promise checks).
 
-## When to Trigger
+## When NOT to invoke
 
-- After `/discover-plan-confidence {slug}` scored the measurement plan at `SHIPPABLE_WITH_CAVEATS` or better.
 - **Fast lane:** `--mode bug` where a failing test already exists — enter here directly, skipping phases 1–3. A test that fails on the current state is a stronger measurement plan than any document describing one, and it is verifiable by execution rather than by review. Unavailable when the repro is not yet a test: "I can reproduce it by hand" is a plan, not a measurement.
 - `--sweep {domain}` to measure a whole domain with no prior item.
 

@@ -2,7 +2,7 @@
 name: discover-plan
 version: 0.2.0
 requires: []
-description: Turn a raw B-NNN backlog item into a measurement plan saved at knowledge-base/discoveries/plans/{slug}-plan.md — what will be measured in OUR system, with which tool, against which target, and what result would kill the hypothesis. Never a study of how other projects solved it. Routes by mode (review / live-test / bug / evolve), pre-validates every target so downstream cannot fabricate evidence, and refuses live-test on a domain with no declared target.
+description: 'Turn a raw B-NNN item into a measurement plan: what will be measured in OUR system, with which tool, against which target, and what result would kill the hypothesis. Use this whenever someone wants to check whether a suspicion about our code or runtime is actually true, before writing any fix, and whenever an item needs to move from hunch to evidence. Never a study of how other projects solved it — prior art cannot be evidence here.'
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "B-NNN [--mode {review|live-test|bug|evolve}]"
@@ -16,7 +16,7 @@ Sibling of `/to-plan` — same backbone, different output. `to-plan` produces im
 
 The ancestor of this skill planned an investigation into *other people's* code. This one plans an investigation into ours. That is the whole difference, and it changes every step below.
 
-## When to Trigger
+## When NOT to invoke
 
 Invoke `/discover-plan B-NNN` when:
 

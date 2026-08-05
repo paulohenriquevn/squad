@@ -2,7 +2,7 @@
 name: backlog-init
 version: 0.1.0
 requires: []
-description: 'Create BACKLOG.md — the single maintenance registry for the whole Theo ecosystem — once, at the umbrella root. Verifies the repo inventory from disk (never from memory), builds the domain routing table from what actually has a .git, writes the registry skeleton with zero items, and records the creation in CHANGELOG.md. Sister skill of /backlog-item — same registry, opposite pre-condition: this one REFUSES if BACKLOG.md already exists. Deliberately seeds no items: an item nobody filed is an item nobody owns.'
+description: Create BACKLOG.md once, at the umbrella root, inventorying every repo FROM DISK and building the domain routing table. Use this the first time anyone tries to register maintenance work and no registry exists yet, when /backlog-item refuses because BACKLOG.md is missing, or when adopting Squad in a new workspace. Refuses if BACKLOG.md already exists.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 argument-hint: "(no arguments)"
@@ -18,12 +18,7 @@ Run once, at adoption. Every item after that arrives through `/backlog-item` (hu
 
 This skill bootstraps the artifact that [`cycle-backlog`](../../rules/cycle-backlog.md) governs. The cycle rule is the **source of truth** for the item schema, status transitions, domain routing, verdicts and gates. This skill only creates the empty registry those rules operate on — it never registers an item.
 
-## When to invoke
-
-Invoke `/backlog-init` when ALL of:
-
-- `BACKLOG.md` does NOT exist at the umbrella root.
-- You are at the umbrella root, not inside one of the governed repos (the registry spans all of them).
+## When NOT to invoke
 
 DO NOT invoke when:
 

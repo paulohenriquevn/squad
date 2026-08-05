@@ -2,7 +2,7 @@
 name: discover-plan-confidence
 version: 0.2.0
 requires: [discover-edge-cases]
-description: Score a measurement plan produced by /discover-plan for structural quality (M2 deterministic check). Sibling of /discover-confidence with a measurement-plan-shape rubric (corner coverage, measurement targets, plan completeness, smells). Enforces the falsification criterion — what result would kill the hypothesis, stated in advance — which replaced the ancestor's >=2 ADR requirement. Use after /discover-edge-cases, before /discover-execute.
+description: Score a measurement plan for structural quality (deterministic, zero LLM calls, under 5s). Use this after /discover-edge-cases and before /discover-execute, and whenever someone asks whether a plan is ready to run. Enforces the falsification criterion — what result would kill the hypothesis, stated in advance — plus Tool and Target on every question and targets that actually resolve.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "{measurement-plan-slug}"
@@ -17,7 +17,7 @@ Sibling of `/discover-confidence` — same architecture (Python deterministic + 
 **Hard caps:** see [`.claude/rules/discover-plan-golden-rule.md`](../../rules/discover-plan-golden-rule.md)
 **Thresholds (versioned):** [`.claude/rules/discover-plan-thresholds.txt`](../../rules/discover-plan-thresholds.txt)
 
-## When to Trigger
+## When NOT to invoke
 
 - After running `/discover-edge-cases {slug}` and the plan was bumped to v1.x with MUST FIX absorbed.
 - BEFORE running `/discover-execute {slug}` — a malformed plan poisons the entire downstream chain.

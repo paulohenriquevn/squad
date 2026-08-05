@@ -2,7 +2,7 @@
 name: discover-edge-cases
 version: 0.2.0
 requires: [discover-plan]
-description: Analyzes a measurement plan and identifies what could make the measurement LIE — a target that resolves but is stale, a method that observes the wrong thing, an environment fault read as a product defect, a hypothesis nothing could refute. Pragmatic — flags real risks without expanding the plan. Use after /discover-plan, before /discover-plan-confidence.
+description: Find what could make a measurement LIE — a target that resolves but is stale, a method that observes a proxy, an environment fault read as a product defect, a hypothesis nothing could refute. Use this after /discover-plan and before running any measurement, and whenever someone is about to trust a result that would be expensive to get wrong. An unfalsifiable hypothesis found here is always a blocker.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash
 argument-hint: "[plan-slug|plan-file-path]"

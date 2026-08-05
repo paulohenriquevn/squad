@@ -2,7 +2,7 @@
 name: backlog-review
 version: 0.1.0
 requires: []
-description: 'Review BACKLOG.md for the ways a maintenance registry rots — duplicate or renumbered ids, triaged items with no evidence, raw items that were measured and never advanced, killed items with no reason, repos that route to nobody, vague or absent DoD, stale raw items, and probable duplicates the intake dedup missed. Every finding declares whether it is deterministic or heuristic, and the verdict is derived from the findings rather than asserted. Read-only. Sister skill of /backlog-init and /backlog-item — same artifact, opposite posture.'
+description: Report what has rotted in BACKLOG.md — duplicate or renumbered ids, triaged items with no evidence, raw items that were measured and never advanced, killed items with no reason, repos that route to nobody, vague or missing DoD, stale items, probable duplicates. Use this whenever someone asks whether the backlog is trustworthy or messy, before running the maintenance loop, after a sweep registers a batch of findings, or periodically — a registry nobody reviews is a registry nobody trusts. Read-only.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash
 argument-hint: "[path to BACKLOG.md]"
@@ -18,7 +18,7 @@ A registry is not a document that decays visibly. Its failure mode is quiet: sta
 
 Companion to [`rules/cycle-backlog.md`](../../rules/cycle-backlog.md) (the registry and its intake) and [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md) (the loop that consumes it). Both are the source of truth for the schema, the status transitions and the gates. This skill only reports divergence from them.
 
-## When to invoke
+## When NOT to invoke
 
 - Before a `cycle-maintenance` run, so the loop does not select a broken item.
 - After a `--sweep` registers a batch of findings — bulk writes are where duplicates and missing fields arrive.

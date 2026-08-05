@@ -2,7 +2,7 @@
 name: discover-confidence
 version: 0.2.0
 requires: [discover-execute]
-description: Score an opportunity produced by /discover-execute for structural quality (M2 deterministic check). Mirrors /plan-confidence but with an opportunity-shape rubric (corner coverage, evidence pointers, completeness, smells). Verifies that every code pointer resolves AND that the cited line exists, counts runtime observations separately since they are not re-verifiable, and requires an ADR only when the blast radius reaches beyond the opportunity's own repo.
+description: Score an opportunity for structural quality (deterministic, zero LLM calls, under 5s). Use this after /discover-execute and before feeding anything to /to-plan, and whenever someone asks whether a finding is solid enough to act on. Verifies that every code pointer resolves AND that the cited line exists, counts runtime observations separately since they are not re-verifiable, and requires an ADR only when the change reaches beyond its own repo.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "{opportunity-slug}"
@@ -18,7 +18,7 @@ Sibling of `/plan-confidence` — same architecture (Python deterministic + soft
 **Hard caps:** `rules/discover-opportunity-golden-rule.md`
 **Thresholds (versioned):** `rules/discover-opportunity-thresholds.txt`
 
-## When to Trigger
+## When NOT to invoke
 
 - After `/discover-execute {slug}` emitted `OPPORTUNITY_COMPLETE` (or exhausted its loop).
 - After incorporating fixes from `/discover-improve`, BEFORE the opportunity feeds `/to-plan`.

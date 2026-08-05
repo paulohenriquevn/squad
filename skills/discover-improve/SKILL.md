@@ -2,7 +2,7 @@
 name: discover-improve
 version: 0.2.0
 requires: [discover-confidence]
-description: Iteratively lift an opportunity's discover-confidence score via a halt-loop — deterministic prose fixes in `## Recommendation` only, plus LLM-driven semantic fixes. Never rewrites the Evidence corner (that is the record of a measurement) and never annotates an unresolvable pointer (that would disarm the fabricated_evidence hard cap). Refuses outright when the score is capped by something only a re-measurement can fix.
+description: Lift a low-scoring opportunity toward its target verdict — improving how the finding is ARGUED, never what it CLAIMS. Use this when /discover-confidence returns NEEDS_REVISION and someone wants the artifact salvaged. Never rewrites the Evidence corner (that is the record of a measurement) and never annotates an unresolvable pointer (that would disarm the fabricated_evidence hard cap). Refuses outright when the score is capped by something only a re-measurement can fix.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
 argument-hint: "{opportunity-slug} [--target SHIPPABLE_WITH_CAVEATS]"
@@ -20,7 +20,7 @@ Sibling of `/plan-improve` — same architecture (ralph-loop halt-loop + determi
 
 This skill is **phase 6** of [`cycle-discover`](../../rules/cycle-discover.md), invoked when `/discover-confidence` returns `NEEDS_REVISION`. The cycle rule is the source of truth for chain order, hard gates, stop conditions and rollback. **Read `cycle-discover.md` before invoking this skill.**
 
-## When to Trigger
+## When NOT to invoke
 
 Invoke `/discover-improve {slug}` after `/discover-confidence` returned `NEEDS_REVISION` and the caps are ones this skill can actually close.
 

@@ -2,7 +2,7 @@
 name: backlog-item
 version: 0.1.0
 requires: []
-description: 'Register one unit of maintenance work against the Theo ecosystem as the next B<N+1> item in BACKLOG.md — cheaply, and before anyone has measured anything. Reads the existing backlog, detects the next free id, runs a mandatory dedup search, routes the item to one of the 8 registered domains, runs a 4-question focused grill (what/why-now, domain+repo, suggested mode, Definition of Done), enforces the no-prior-art gate (an item justified by "project X does it this way" is rejected), and appends one `## B<N+1> — [ ]` block plus a CHANGELOG entry. Phase 0 of the Squad chain: the item it produces is a HYPOTHESIS with evidence:none-yet, which /discover then proves or kills. Refuses if BACKLOG.md does not exist.'
+description: 'Register one unit of maintenance work in BACKLOG.md as the next B-NNN item. Use this whenever someone notices something worth fixing, improving, verifying or measuring in the Theo ecosystem — a slow endpoint, a suspicious code path, a flaky behaviour, a duplicated rule, a repo that feels wrong — even when they only mutter it in passing and never say "backlog" or "item". An unmeasured hunch is exactly what belongs here: intake requires no evidence, deliberately. Also use it before starting any maintenance work, so the work has an id, an owner and a Definition of Done.'
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 argument-hint: "{item-slug}"
@@ -26,13 +26,7 @@ This skill is **phase 0** of [`cycle-backlog`](../../rules/cycle-backlog.md). Th
 
 **Read `cycle-backlog.md` before invoking this skill.** This SKILL.md retains only the intake protocol below.
 
-## When to invoke
-
-Invoke `/backlog-item {item-slug}` when ALL of:
-
-- `BACKLOG.md` exists at the umbrella root.
-- There is ONE concrete thing to improve, fix, verify, or evolve.
-- It maps to exactly one registered domain.
+## When NOT to invoke
 
 DO NOT invoke when:
 
