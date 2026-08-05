@@ -99,18 +99,28 @@ raw ──/discover measures──┬──> triaged ──/to-plan──> plann
 
 `domain` is what assigns the item to a specialist. The registered set:
 
-| Domain | Repos |
-|---|---|
-| `engine-go` | `theo` |
-| `control-plane` | `theo-cloud`, `theo-traefik-mcp` |
-| `data-plane-ts` | `theo-memory`, `theo-rag`, `theo-lens`, `theo-trust`, `theo-skills`, `theo-promptly`, `theo-contextify` |
-| `theo-db` | `theo-db` |
-| `infra-terraform` | `theo-infra-modules`, `theo-infra-live` |
-| `contracts-auth` | `theo-contracts` |
-| `frontend-dashboard` | dashboard surface of `theo-cloud` |
-| `platform-cli` | `theo-cli`, `theokit-app`, `theo-storage`, `theo-gateway` |
+Verified on disk 2026-08-05 (`find -maxdepth 2 -name .git` + `git -C <repo> rev-list --count HEAD`), not copied from any inventory table.
 
-`theo-itself` (0 commits) and `theo-workspace` (nested clone anomaly) take no items.
+| Domain | Repos (present on disk) | Specialist |
+|---|---|---|
+| `engine-go` | `theo` | `agents/engine-go.md` |
+| `control-plane` | `theo-cloud`, `theo-traefik-mcp` | `agents/control-plane.md` |
+| `data-plane-ts` | `theo-memory`, `theo-rag`, `theo-lens`, `theo-trust`, `theo-skills`, `theo-promptly` | `agents/data-plane-ts.md` |
+| `theo-db` | `theo-db` | `agents/theo-db.md` |
+| `infra-terraform` | `theo-infra-modules`, `theo-infra-live` | `agents/infra-terraform.md` |
+| `contracts-auth` | `theo-contracts` | `agents/contracts-auth.md` |
+| `frontend-dashboard` | `theo-cloud/dashboard` | `agents/frontend-dashboard.md` |
+| `platform-cli` | `theo-cli`, `theo-storage` | `agents/platform-cli.md` |
+
+**One repo, two domains — resolved by path, not by judgement.** `theo-cloud` holds both the Go control plane and the TypeScript dashboard (`theo-cloud/dashboard/package.json`, verified on disk). The `repo` field therefore takes `theo-cloud` for the Go half and `theo-cloud/dashboard` for the UI half. Listing the bare repo under both domains would make routing depend on iteration order — the same item routing differently on different runs, which works until it does not and nothing changed. `scripts/route_domain.py` enforces the one-repo-one-domain invariant, and `tests/test_route_domain.py::test_no_repo_belongs_to_two_domains` is what caught the ambiguity.
+
+### Repos an inventory names but disk does not
+
+`theo-contextify`, `theo-gateway`, `theo-sandboox`, `theokit-app` and `theo-itself` appear in the umbrella's `CLAUDE.md` and have **no checkout** as of 2026-08-05. They are listed here rather than deleted so that the divergence stays visible: an item filed against one of them routes nowhere until the repo is actually cloned, and `/backlog-item` gate G1 refuses it.
+
+This is exactly why `skills/backlog-init/SKILL.md` mandates reading the inventory from disk. The umbrella's table claims it was "verified 2026-07-28" and states that a repo absent from it does not exist in the folder; a week later, five of its entries had no checkout. Documentation drifts, and a routing table that names a repo nobody has cloned sends work to a specialist who cannot open the code.
+
+`theo-workspace` (a nested clone of the umbrella itself) takes no items.
 
 ## Verdicts
 
