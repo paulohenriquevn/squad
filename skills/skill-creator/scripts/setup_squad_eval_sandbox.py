@@ -24,6 +24,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURE_BACKLOG = REPO / "skills" / "backlog-item" / "evals" / "fixtures" / "BACKLOG.md"
+# A governed repo with REAL code, so measurement evals have something to open, count and
+# cite. An eval whose target does not exist tests the agent's imagination, not the skill.
+FIXTURE_REPO = REPO / "skills" / "discover-execute" / "evals" / "fixtures" / "theo-lens"
 
 # What a Squad skill reads at runtime. Copied wholesale rather than cherry-picked: a
 # missing rule makes a skill fail in a way that looks like a skill defect.
@@ -79,6 +82,10 @@ def build(dest: Path, with_plan: str | None = None, baseline: bool = False) -> N
     # without a marker they resolve to somewhere outside the sandbox.
     (dest / ".git").mkdir()
 
+    if FIXTURE_REPO.is_dir():
+        shutil.copytree(FIXTURE_REPO, dest / "theo-lens",
+                        ignore=shutil.ignore_patterns("__pycache__", "node_modules"))
+
     if with_plan:
         _write_plan(dest, with_plan)
 
@@ -88,6 +95,8 @@ def build(dest: Path, with_plan: str | None = None, baseline: bool = False) -> N
         print("  baseline: no rules/, no skills/ — registry only")
     else:
         print(f"  rules: {len(list((dest / 'rules').glob('*')))} · agents: {len(list((dest / 'agents').glob('*.md')))}")
+    if (dest / "theo-lens").is_dir():
+        print("  governed repo: theo-lens (real N+1 in src/api/traces.ts)")
     if with_plan:
         print(f"  plan: knowledge-base/discoveries/plans/{with_plan}-plan.md")
 
@@ -115,14 +124,14 @@ def _write_plan(dest: Path, slug: str) -> None:
         "## Measurement Questions\n\n"
         "| # | Question | Corner | Tool | Target | Expected answer shape |\n"
         "|---|---|---|---|---|---|\n"
-        "| Q1 | Quantas queries o handler emite por request? | evidence | Read | `rules/` | contagem + file:line |\n"
-        "| Q2 | O que mais consome esse handler? | blast_radius | Grep | `agents/` | lista de chamadores |\n"
-        "| Q3 | Como saberemos que o fix funcionou? | verification | Read | `rules/` | critério pass/fail |\n\n"
+        "| Q1 | Quantas queries o handler emite por request? | evidence | Read | `theo-lens/src/api/traces.ts` | contagem + file:line |\n"
+        "| Q2 | O que mais consome esse handler? | blast_radius | Grep | `theo-lens/src/` | lista de chamadores |\n"
+        "| Q3 | Como saberemos que o fix funcionou? | verification | Read | `theo-lens/src/api/traces.ts` | critério pass/fail |\n\n"
         "<!-- DEFER-CORNER: constraint | current-constraint.md está undeclared -->\n\n"
         "## Halt-loop Checkpoints\n\n"
         "| Checkpoint | Assertion | Action if fails |\n"
         "|---|---|---|\n"
-        "| Antes de responder Qx | o alvo citado abre | marcar Qx BLOCKED |\n"
+        "| Antes de responder Qx | o alvo citado abre e a linha existe | marcar Qx BLOCKED |\n"
         "| Toda iteração | reler `## Falsification` — já foi satisfeito? | parar e matar o item |\n\n"
         "## Acceptance Criteria\n\n"
         "- [ ] Toda pergunta respondida ou BLOCKED com razão\n"
