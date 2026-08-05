@@ -1,6 +1,6 @@
 # Skills
 
-32 markdown-based skills that serve as entry-points for the Squad pipeline
+33 markdown-based skills that serve as entry-points for the Squad pipeline
 and utilities. Claude Code discovers these automatically via the `SKILL.md`
 frontmatter convention.
 
@@ -42,6 +42,7 @@ Required frontmatter fields:
 | `backlog-init` | Create BACKLOG.md once, inventorying repos from disk |
 | `backlog-review` | Report what has rotted in the registry (read-only) |
 | `ast-grep` | Structural search via tree-sitter |
+| `cap-theorem-specialist` | Analisa trade-offs CP/AP em arquiteturas distribuídas |
 | `deck` | Full presentation with diagrams |
 | `marp-slide` | Marp slides only |
 | `excalidraw` | Diagram JSON generation |
