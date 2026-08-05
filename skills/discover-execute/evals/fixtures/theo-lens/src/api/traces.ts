@@ -21,8 +21,12 @@ export interface ListTracesOptions {
 /**
  * Lists traces with their spans.
  *
- * Known shape: for each trace, and then for each span id, a separate round-trip. A
- * 200-span trace costs 200 queries plus one.
+ * Known shape: one query for the trace list, then one per trace for its span ids, then
+ * one per span. A single trace with 200 spans costs 202 queries (1 + 1 + 200).
+ *
+ * The arithmetic is spelled out because an eval run caught this docstring claiming 201 —
+ * it omitted the per-trace query below. A fixture whose comment misstates its own defect
+ * teaches the wrong number to whoever measures it.
  */
 export async function listTraces(db: Db, opts: ListTracesOptions): Promise<Trace[]> {
   const traces = await db.query<Trace>(

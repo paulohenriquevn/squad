@@ -87,15 +87,33 @@ The kill check runs every iteration, not at the end. Recognising early that the 
 After `<promise>OPPORTUNITY_COMPLETE</promise>`, run ONCE before reporting:
 
 ```bash
-# Re-verify every code pointer: the file exists AND the line is within it.
-grep -oE '\b(([A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,10}):[0-9]+' "{OPPORTUNITY_PATH}" \
-| sort -u | while IFS=: read -r path line; do
-    if [ ! -f "$path" ]; then
-      echo "FABRICATED (missing file): $path:$line"
-    elif [ "$line" -lt 1 ] || [ "$line" -gt "$(wc -l < "$path")" ]; then
-      echo "FABRICATED (line past EOF): $path:$line"
-    fi
-  done
+python3 - "{OPPORTUNITY_PATH}" <<'PY'
+# Re-verify every code pointer: the file exists, the line is within it, and the line is
+# PRINTED so you can confirm it says what the opportunity claims.
+#
+# Written in python3 rather than shell on purpose. The shell version used
+# `$(wc -l < "$path")` for the bounds check, and when `wc` was unavailable that expanded
+# to empty — every comparison failed and the check reported EVERY pointer as fabricated.
+# An eval run hit exactly that: 23 real pointers, 23 false FABRICATED. A check that
+# collapses to "everything is fake" when a tool is missing gets distrusted and then
+# ignored, which is worse than one that fails loudly.
+import re, sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+pat = re.compile(r"\b((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,10}):(\d+)")
+bad = 0
+for path, line in sorted(set(pat.findall(text))):
+    f, n = Path(path), int(line)
+    if not f.is_file():
+        print(f"FABRICATED (missing file): {path}:{n}"); bad += 1; continue
+    lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+    if not 1 <= n <= len(lines):
+        print(f"FABRICATED (line {n} past EOF, file has {len(lines)}): {path}"); bad += 1; continue
+    print(f"  ok {path}:{n} | {lines[n-1].strip()[:80]}")
+print(f"\n{bad} fabricated" if bad else "\nall pointers resolve")
+sys.exit(1 if bad else 0)
+PY
 ```
 
 Checking the line matters as much as checking the file. A pointer at line 400 of a 30-line file is evidence that moved, and the ancestor's check — which stripped the line suffix before testing the path — passed it as verified.

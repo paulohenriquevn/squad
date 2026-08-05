@@ -26,7 +26,7 @@ anti-pattern near the end of the same rule. The output contract naming
 `source: discover-{mode}` is at `rules/cycle-discover.md:150`.
 
 The checker that scores a finished opportunity is
-`skills/discover-confidence/scripts/check_corner_coverage.py:80` — it reads the
+`skills/discover-confidence/scripts/check_corner_coverage.py:78` — it reads the
 opportunity file and nothing else. `skills/discover-confidence/scripts/check_evidence_pointers.py:95`
 resolves pointers against the project root, again touching only the document.
 
