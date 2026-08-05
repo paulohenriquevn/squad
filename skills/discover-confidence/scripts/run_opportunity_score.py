@@ -59,9 +59,15 @@ def _resolve_thresholds(arg: Path | None, opportunity_path: Path) -> Path:
     if arg and arg.exists():
         return arg
     project_root = _find_project_root(opportunity_path)
-    project_thresh = project_root / ".claude" / "rules" / "discover-opportunity-thresholds.txt"
-    if project_thresh.exists():
-        return project_thresh
+    # Both layouts, deliberately: `rules/` is standalone, `.claude/rules/` is plugin.
+    # Checking only one made the project's own bands lose silently in the other, and a
+    # scorer grading against the wrong bands still prints a confident verdict.
+    for candidate in (
+        project_root / "rules" / "discover-opportunity-thresholds.txt",
+        project_root / ".claude" / "rules" / "discover-opportunity-thresholds.txt",
+    ):
+        if candidate.exists():
+            return candidate
     return SKILL_ROOT / "templates" / "discover-opportunity-thresholds.example.txt"
 
 

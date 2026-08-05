@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
-"""Run M2 structural discover-plan-confidence scoring.
+"""Run M2 structural measurement-plan-confidence scoring.
 
-Sibling of discover-confidence/scripts/run_blueprint_score.py — same architecture,
-different artifact (discovery PLAN, not blueprint) and different node-3 checker
-(check_plan_completeness instead of check_blueprint_completeness).
+Sibling of discover-confidence/scripts/run_opportunity_score.py — same architecture,
+different artifact (the MEASUREMENT PLAN, not the opportunity) and a different node-3
+checker (check_plan_completeness).
 
 Hard caps enforced (per discover-plan-golden-rule.md):
-  - empty_corner_{tests|deps|tools|techniques} (49)
-  - fabricated_citation (49)
+  - empty_corner_{evidence|constraint|blast_radius|verification} (49)
+  - fabricated_target (49)
   - mandatory_section_missing (70)
-  - insufficient_adrs (70)
+  - no_falsification_criterion (70)
   - question_budget_violated (70)
   - method_missing (70)
 
-Soft caps (per rubric-discover-plan.md):
+Soft caps:
   - soft_floor_smell_density_high (89)
-  - soft_floor_citation_density_low (89)
-
-Copy-with-attribution from sibling (2026-05-30) per D1 of the discover-plan-confidence plan.
+  - soft_floor_target_density_low (89)
 """
 from __future__ import annotations
 
@@ -33,8 +31,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from _rubric_loader import load_rubric  # noqa: E402
 from check_plan_completeness import check_plan_completeness  # noqa: E402
-from check_reference_citations import check_reference_citations  # noqa: E402
-from check_research_coverage import check_research_coverage  # noqa: E402
+from check_corner_coverage import check_corner_coverage  # noqa: E402
+from check_measurement_targets import check_measurement_targets  # noqa: E402
 from check_spec_smells import check_spec_smells  # noqa: E402
 
 
@@ -67,16 +65,22 @@ def _resolve_plan(arg: str) -> Path:
 def _resolve_rubric(arg: Path | None) -> Path:
     if arg and arg.exists():
         return arg
-    return SKILL_ROOT / "templates" / "rubric-discover-plan.md"
+    return SKILL_ROOT / "templates" / "rubric-measurement-plan.md"
 
 
 def _resolve_thresholds(arg: Path | None, plan_path: Path) -> Path:
     if arg and arg.exists():
         return arg
     project_root = _find_project_root(plan_path)
-    project_thresh = project_root / ".claude" / "rules" / "discover-plan-thresholds.txt"
-    if project_thresh.exists():
-        return project_thresh
+    # Both layouts, deliberately: `rules/` is standalone, `.claude/rules/` is plugin.
+    # Checking only one made the project's own bands lose silently in the other, and a
+    # scorer grading against the wrong bands still prints a confident verdict.
+    for candidate in (
+        project_root / "rules" / "discover-plan-thresholds.txt",
+        project_root / ".claude" / "rules" / "discover-plan-thresholds.txt",
+    ):
+        if candidate.exists():
+            return candidate
     return SKILL_ROOT / "templates" / "discover-plan-thresholds.example.txt"
 
 
@@ -122,18 +126,18 @@ def main() -> int:
     bands = _parse_thresholds(thresholds_path)
 
     # Run all four checkers
-    coverage = check_research_coverage(plan_path)
-    citations = check_reference_citations(plan_path)
+    coverage = check_corner_coverage(plan_path)
+    targets = check_measurement_targets(plan_path)
     completeness = check_plan_completeness(plan_path)
     smells = check_spec_smells(plan_path, rubric_path)
 
     # Compute per-dimension scores (0-100)
     rc_score = 100.0 * coverage["corners_populated"] / coverage["corners_total"]
 
-    if citations["total"] == 0:
+    if targets["total"] == 0:
         rcit_score = 100.0
     else:
-        rcit_score = 100.0 * citations["verified"] / citations["total"]
+        rcit_score = 100.0 * targets["verified"] / targets["total"]
 
     pc_score = 100.0 * completeness["found"] / completeness["total_required"]
 
@@ -141,14 +145,14 @@ def main() -> int:
 
     # Weighted average per rubric
     weights = {
-        "research_coverage": 0.30,
-        "reference_citations": 0.30,
+        "corner_coverage": 0.30,
+        "measurement_targets": 0.30,
         "plan_completeness": 0.25,
         "structural_risk": 0.15,
     }
     weighted = (
-        weights["research_coverage"] * rc_score
-        + weights["reference_citations"] * rcit_score
+        weights["corner_coverage"] * rc_score
+        + weights["measurement_targets"] * rcit_score
         + weights["plan_completeness"] * pc_score
         + weights["structural_risk"] * re_score
     )
@@ -163,8 +167,8 @@ def main() -> int:
         cap_value = min(cap_value, 49.0)
 
     # Node 2: reference_citations
-    if citations["fabricated"] > 0:
-        hard_caps_triggered.append("fabricated_citation")
+    if targets["fabricated"] > 0:
+        hard_caps_triggered.append("fabricated_target")
         cap_value = min(cap_value, 49.0)
 
     # Node 3: plan_completeness — bundles 4 sub-checks per check_plan_completeness module docstring
@@ -172,8 +176,8 @@ def main() -> int:
         hard_caps_triggered.append("mandatory_section_missing")
         cap_value = min(cap_value, 70.0)
 
-    if completeness["adr_count"] < 2:
-        hard_caps_triggered.append("insufficient_adrs")
+    if completeness["falsification_missing"]:
+        hard_caps_triggered.append("no_falsification_criterion")
         cap_value = min(cap_value, 70.0)
 
     if completeness["budget_violations"]:
@@ -189,9 +193,8 @@ def main() -> int:
         hard_caps_triggered.append("soft_floor_smell_density_high")
         cap_value = min(cap_value, 89.0)
 
-    citation_density = citations["citation_density_per_200w"]
-    if 0 < citations["total"] and citation_density < 1.0:
-        hard_caps_triggered.append("soft_floor_citation_density_low")
+    if targets["total"] + len(targets["live_targets"]) > 0 and targets["target_density_per_200w"] < 1.0:
+        hard_caps_triggered.append("soft_floor_target_density_low")
         cap_value = min(cap_value, 89.0)
 
     final_score = min(weighted, cap_value)
@@ -199,13 +202,13 @@ def main() -> int:
 
     # Build reasons
     reasons = {
-        "research_coverage": {
+        "corner_coverage": {
             "contributors": coverage["contributors"],
             "detractors": coverage["detractors"],
         },
-        "reference_citations": {
-            "contributors": citations["contributors"],
-            "detractors": citations["detractors"],
+        "measurement_targets": {
+            "contributors": targets["contributors"],
+            "detractors": targets["detractors"],
         },
         "plan_completeness": {
             "contributors": completeness["contributors"],
@@ -223,8 +226,8 @@ def main() -> int:
     }
 
     sub_reports: dict[str, Any] = {
-        "research_coverage": coverage,
-        "reference_citations": citations,
+        "corner_coverage": coverage,
+        "measurement_targets": targets,
         "plan_completeness": completeness,
         "structural_risk": {
             "total_hits": smells.total_hits,
@@ -240,13 +243,13 @@ def main() -> int:
         "plan_path": str(plan_path),
         "plan_version": None,  # TODO: parse from H1 line or "Version" tag
         "scored_at": datetime.now(timezone.utc).isoformat(),
-        "research_coverage_score": round(rc_score, 1),
-        "reference_citations_score": round(rcit_score, 1),
+        "corner_coverage_score": round(rc_score, 1),
+        "measurement_targets_score": round(rcit_score, 1),
         "plan_completeness_score": round(pc_score, 1),
-        "risco_estrutural_score": round(re_score, 1),
+        "structural_risk_score": round(re_score, 1),
         "active_dimensions": [
-            "research_coverage",
-            "reference_citations",
+            "corner_coverage",
+            "measurement_targets",
             "plan_completeness",
             "structural_risk",
         ],
