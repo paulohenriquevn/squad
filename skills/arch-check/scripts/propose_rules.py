@@ -44,13 +44,21 @@ _CODE_QUALITY_SCRIPTS = _SKILL_ROOT.parent / "code-quality"
 if str(_CODE_QUALITY_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_CODE_QUALITY_SCRIPTS))
 
-#: Directories that are never architectural units.
+#: Directories that are never architectural units when WALKING A FILESYSTEM. Used by the
+#: TypeScript path, which globs directories and cannot tell a source tree from a build output.
 _NOT_A_UNIT = frozenset(
     {
         "node_modules", "vendor", "target", "dist", "build", ".git", ".claude",
         "testdata", "__pycache__", "coverage", "docs", "examples", "scripts",
     }
 )
+
+#: The strict set, for Go. `go list` returns real packages only, so a directory it names IS one —
+#: and filtering those by NAME is how a legitimate package disappears. Measured on theo/api:
+#: `internal/services/build` is a Go package, and the broad list above silently deleted it,
+#: producing 14 violations against a component that no longer existed plus 21 ungoverned files.
+#: Only names that can never be a Go package of this module survive here.
+_NOT_A_GO_UNIT = frozenset({"node_modules", "vendor", "testdata"})
 
 _GO_LIST_TIMEOUT_SEC = 180
 
@@ -74,6 +82,12 @@ class Graph:
     #: repo and it has no cross-imports" from "we read nothing" — two states that look identical
     #: from the edge count alone, and only one of which permits a conclusion.
     units_seen: set[str] = field(default_factory=set)
+    #: Edges that exist ONLY in test files. Kept apart from `edges` so they never widen the
+    #: production allow-list — a test crossing a boundary is not a licence for production to.
+    test_edges: dict[tuple[str, str], int] = field(default_factory=dict)
+    #: Module directories, when the repo is a `go.work` workspace. Empty for a single-module repo.
+    #: go-arch-lint reads a project from its `go.mod`, so a workspace needs one config per module.
+    modules: list[str] = field(default_factory=list)
 
     def see(self, unit: str) -> None:
         """Record that the scan reached this unit, edges or not."""
@@ -248,6 +262,11 @@ def propose(graph: Graph) -> dict:
             "units": sorted(graph.units_seen),
             "total_edges": 0,
             "cycles": [],
+            # Every unit with an empty list: "imports nothing" is the claim, and it is the
+            # strongest allow-list there is. Omitting it here made the renderer refuse a repo
+            # whose boundaries were the cleanest of the five.
+            "allow_list": {unit: [] for unit in sorted(graph.units_seen)},
+            "test_only_edges": [],
             "candidates": [
                 {
                     "kind": "independence",
@@ -288,7 +307,17 @@ def propose(graph: Graph) -> dict:
         "units": sorted(graph.units),
         "total_edges": graph.total_edges,
         "cycles": [list(c) for c in cycles],
+        "modules": sorted(graph.modules),
         "allow_list": allow_list(graph),
+        # Edges that live only in test files, reported apart and never folded into the allow-list.
+        # Whoever adopts the config decides: exclude tests from the linter so the enforced set
+        # matches the measured one, or widen a rule deliberately. Silently widening is the one
+        # option this tool will not take for you.
+        "test_only_edges": sorted(
+            f"{source} -> {target}"
+            for (source, target), _ in graph.test_edges.items()
+            if target not in allow_list(graph).get(source, [])
+        ),
         "candidates": candidates,
         "not_proposed": (
             []
@@ -312,12 +341,73 @@ def propose(graph: Graph) -> dict:
 
 
 def go_graph(manifest_dir: Path) -> Graph:
-    """Build the unit graph from `go list -json ./...`.
+    """Build the unit graph from `go list -json ./...`, across every module of the repo.
 
     The Go toolchain resolves imports exactly, so this needs no third-party parser and cannot
     silently under-read the way a regex scan can.
+
+    A `go.work` repo needs each module walked separately: `go list ./...` at a workspace root
+    exits with *"directory prefix . does not contain modules listed in go.work"* and returns
+    nothing. `theo` is exactly this shape — eight modules, no `go.mod` at the root — and the first
+    version of this tool refused it, which meant the largest Go repo in the ecosystem was the one
+    it could not read.
+
+    Modules OUTSIDE the repo are dropped. `theo`'s workspace uses `../theo-contracts`, a sibling
+    repository with its own boundaries; folding its packages in here would produce rules for
+    `theo` about code `theo` does not own.
     """
     graph = Graph()
+    modules = _workspace_modules(manifest_dir)
+    if modules:
+        for module_dir in modules:
+            rel = module_dir.relative_to(manifest_dir.resolve()).as_posix()
+            graph.modules.append(rel)
+            _add_module(graph, module_dir, prefix=rel)
+        return graph
+    _add_module(graph, manifest_dir, prefix="")
+    return graph
+
+
+def _workspace_modules(repo: Path) -> list[Path]:
+    """Module directories a `go.work` declares, restricted to those inside the repo."""
+    if not (repo / "go.work").is_file():
+        return []
+    try:
+        result = subprocess.run(
+            ["go", "list", "-m", "-json"],
+            cwd=str(repo),
+            capture_output=True,
+            text=True,
+            timeout=_GO_LIST_TIMEOUT_SEC,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.SubprocessError, OSError):
+        return []
+    if result.returncode != 0:
+        return []
+
+    inside: list[Path] = []
+    for module in _iter_json_objects(result.stdout):
+        directory = str(module.get("Dir", ""))
+        if not directory:
+            continue
+        path = Path(directory).resolve()
+        try:
+            path.relative_to(repo.resolve())
+        except ValueError:
+            continue  # sibling repo pulled in by `use ../x`
+        inside.append(path)
+    return inside
+
+
+def _add_module(graph: Graph, manifest_dir: Path, *, prefix: str) -> None:
+    """Fold one module's package graph into `graph`, namespaced by its directory.
+
+    The prefix matters in a workspace: `api/internal/auth` and `pkg/internal/auth` are different
+    units, and merging them by their in-module path would invent edges between modules that never
+    import each other.
+    """
+    joined = (lambda unit: f"{prefix}/{unit}" if prefix and unit else unit)
     try:
         result = subprocess.run(
             ["go", "list", "-json", "./..."],
@@ -328,16 +418,16 @@ def go_graph(manifest_dir: Path) -> Graph:
             check=False,
         )
     except (FileNotFoundError, subprocess.SubprocessError, OSError):
-        return graph
+        return
     if result.returncode != 0 or not result.stdout.strip():
-        return graph
+        return
 
     module = ""
     packages = list(_iter_json_objects(result.stdout))
     for pkg in packages:
-        module = module or str(pkg.get("Module", {}).get("Path", ""))
+        module = module or str((pkg.get("Module") or {}).get("Path", ""))
     if not module:
-        return graph
+        return
 
     # Every package path the module actually ships, relative to the module root. This is what makes
     # "smallest prefix that is itself a package" answerable without probing the filesystem.
@@ -348,13 +438,22 @@ def go_graph(manifest_dir: Path) -> Graph:
     ) - {""}
 
     for pkg in packages:
-        source = _unit_of_import(str(pkg.get("ImportPath", "")), module, own)
+        source = joined(_unit_of_import(str(pkg.get("ImportPath", "")), module, own))
         graph.see(source)
+        # `Imports` is production only. Test imports are measured apart, in `test_edges`, because
+        # folding them in here would WIDEN the production allow-list: a test crossing a boundary
+        # would license production to cross it too, which is the softening this tool exists to
+        # refuse. Measured on theo-cloud: 49 of the violations against a production-derived
+        # allow-list came from `_test.go` files alone.
         for imported in pkg.get("Imports") or []:
-            target = _unit_of_import(str(imported), module, own)
+            target = joined(_unit_of_import(str(imported), module, own))
             if target:
                 graph.add(source, target)
-    return graph
+        for key in ("TestImports", "XTestImports"):
+            for imported in pkg.get(key) or []:
+                target = joined(_unit_of_import(str(imported), module, own))
+                if target and target != source:
+                    graph.test_edges[(source, target)] = graph.test_edges.get((source, target), 0) + 1
 
 
 def typescript_graph(manifest_dir: Path) -> Graph:
@@ -366,12 +465,18 @@ def typescript_graph(manifest_dir: Path) -> Graph:
     from scripts.check_symbol_fab import extract_imports_and_calls  # noqa: PLC0415
 
     graph = Graph()
+    sources = _ts_sources(manifest_dir)
+    # The TypeScript analogue of "smallest prefix that is itself a package": a directory holding
+    # source files directly implements; one holding only subdirectories groups. Without this, TS
+    # kept the coarse first-segment granularity that measurement rejected on the Go side, where
+    # collapsing `internal/`'s 28 subpackages into one unit hid every dependency between them.
+    owning = _ts_owning_dirs(sources, manifest_dir)
     for path in sorted(manifest_dir.rglob("*")):
         if path.suffix not in {".ts", ".tsx", ".mts"} or not path.is_file():
             continue
         if any(part in _NOT_A_UNIT for part in path.parts) or ".test." in path.name:
             continue
-        source = _unit_of_path(path, manifest_dir)
+        source = _unit_of_path(path, manifest_dir, owning)
         if not source:
             continue
         graph.see(source)
@@ -381,7 +486,7 @@ def typescript_graph(manifest_dir: Path) -> Graph:
                 continue
             resolved = (path.parent / module).resolve()
             try:
-                target = _unit_of_path(resolved, manifest_dir.resolve())
+                target = _unit_of_path(resolved, manifest_dir.resolve(), owning)
             except ValueError:
                 continue
             if target:
@@ -425,11 +530,14 @@ def _unit_of_import(import_path: str, module: str, packages: frozenset[str] = fr
         return ""
     rest = import_path[len(module) :].lstrip("/")
     if not rest:
-        return ""
+        # The package AT the module root — `main.go`, `tools.go`. Returning "" left it governed by
+        # no component at all: measured on theo, 22 files across three modules sat outside every
+        # rule while the config reported full coverage. `.` is what go-arch-lint accepts for it.
+        return "."
     # Every segment, not just the first. `dashboard/node_modules/flatted/golang/pkg/flatted` is a
     # Go file vendored inside a TypeScript app's node_modules; checking only the head let it
     # through and it became an architectural unit of theo-cloud.
-    if any(segment in _NOT_A_UNIT for segment in rest.split("/")):
+    if any(segment in _NOT_A_GO_UNIT for segment in rest.split("/")):
         return ""
     if not packages:
         return rest.split("/", 1)[0]
@@ -441,13 +549,49 @@ def _unit_of_import(import_path: str, module: str, packages: frozenset[str] = fr
     return rest
 
 
-def _unit_of_path(path: Path, root: Path) -> str:
+def _ts_sources(root: Path) -> list[Path]:
+    """Every TypeScript source under `root` that is not test, fixture or vendored."""
+    out: list[Path] = []
+    for path in root.rglob("*"):
+        if path.suffix not in {".ts", ".tsx", ".mts"} or not path.is_file():
+            continue
+        if any(part in _NOT_A_UNIT for part in path.parts) or ".test." in path.name:
+            continue
+        out.append(path)
+    return out
+
+
+def _ts_owning_dirs(sources: list[Path], root: Path) -> frozenset[str]:
+    """Directories that hold source files DIRECTLY — the ones that implement rather than group."""
+    dirs: set[str] = set()
+    for path in sources:
+        try:
+            rel = path.relative_to(root).parent
+        except ValueError:
+            continue
+        if rel != Path("."):
+            dirs.add(rel.as_posix())
+    return frozenset(dirs)
+
+
+def _unit_of_path(path: Path, root: Path, owning: frozenset[str] = frozenset()) -> str:
+    """Smallest prefix directory that holds sources of its own. Falls back to the first segment."""
     try:
         rel = path.relative_to(root)
     except ValueError:
         return ""
-    head = rel.parts[0] if rel.parts else ""
-    return "" if head in _NOT_A_UNIT or head == rel.name else head
+    parts = rel.parts[:-1]  # drop the filename
+    if not parts:
+        return ""
+    if any(part in _NOT_A_UNIT for part in parts):
+        return ""
+    if not owning:
+        return parts[0]
+    for depth in range(1, len(parts) + 1):
+        prefix = "/".join(parts[:depth])
+        if prefix in owning:
+            return prefix
+    return "/".join(parts)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -469,7 +613,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _detect(repo: Path) -> str | None:
-    if (repo / "go.mod").is_file():
+    if (repo / "go.mod").is_file() or (repo / "go.work").is_file():
         return "go"
     if (repo / "package.json").is_file():
         return "typescript"

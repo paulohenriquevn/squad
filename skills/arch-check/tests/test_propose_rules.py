@@ -163,8 +163,11 @@ class TestUnitResolution:
     def test_the_first_segment_under_the_module_is_the_unit(self) -> None:
         assert _unit_of_import("github.com/us/repo/internal/db", "github.com/us/repo") == "internal"
 
-    def test_the_module_root_itself_is_not_a_unit(self) -> None:
-        assert _unit_of_import("github.com/us/repo", "github.com/us/repo") == ""
+    def test_the_module_root_is_its_own_unit(self) -> None:
+        """This test used to assert `""`, pinning the defect: the package at the module root got
+        no unit, so no component covered it, so `main.go` and `tools.go` were governed by nothing
+        while the config reported full coverage. 22 files across three of theo's modules."""
+        assert _unit_of_import("github.com/us/repo", "github.com/us/repo") == "."
 
     def test_a_vendored_path_is_not_a_unit(self) -> None:
         assert _unit_of_import("github.com/us/repo/vendor/x", "github.com/us/repo") == ""
@@ -225,3 +228,33 @@ class TestUnitGranularity:
             )
             == ""
         )
+
+
+class TestGoStrictFilter:
+    """Filtering Go packages by NAME deletes legitimate ones."""
+
+    MOD = "github.com/us/repo"
+
+    def test_a_package_named_build_survives(self) -> None:
+        """`theo/api/internal/services/build` is a real Go package. The filesystem-walk filter
+        contains 'build', and applying it here deleted the package: 14 violations against a
+        component that no longer existed, plus 21 files governed by nothing."""
+        assert (
+            _unit_of_import(f"{self.MOD}/internal/services/build", self.MOD, frozenset({"internal/services/build"}))
+            == "internal/services/build"
+        )
+
+    def test_a_package_named_docs_or_scripts_survives(self) -> None:
+        for name in ("docs", "scripts", "dist", "examples"):
+            packages = frozenset({f"internal/{name}"})
+            assert _unit_of_import(f"{self.MOD}/internal/{name}", self.MOD, packages) == f"internal/{name}"
+
+    def test_vendor_and_node_modules_are_still_refused(self) -> None:
+        """The three that can never be a Go package of this module stay out."""
+        for name in ("vendor", "node_modules", "testdata"):
+            assert _unit_of_import(f"{self.MOD}/{name}/x", self.MOD, frozenset()) == ""
+
+    def test_the_module_root_package_is_a_unit(self) -> None:
+        """`main.go` at the module root belonged to no component: 22 files across three of theo's
+        modules sat outside every rule while the config reported full coverage."""
+        assert _unit_of_import(self.MOD, self.MOD, frozenset()) == "."
