@@ -133,6 +133,25 @@ def one_way_candidates(graph: Graph) -> list[Candidate]:
     return out
 
 
+def allow_list(graph: Graph) -> dict[str, list[str]]:
+    """What each unit imports today. Everything absent from its list is forbidden.
+
+    This is the rigorous form, and it is how go-arch-lint and layered-crate express boundaries
+    natively: a unit declares what it may depend on, and the linter forbids the rest. Enumerating
+    forbidden PAIRS instead is both weaker and unusable — theo-cloud has 27 units, which is 702
+    ordered pairs, and 302 of them never touch. A proposal of 302 rules is not adopted; it is
+    skimmed and dismissed, and the criterion this tool exists to serve dies with it.
+
+    Stating it as an allow-list also closes the gap the pairwise form leaves open: a NEW edge
+    between two units that happen to be unconnected today is refused by default, without anyone
+    having predicted the pair.
+    """
+    allowed: dict[str, set[str]] = {unit: set() for unit in graph.units_seen}
+    for (source, target) in graph.edges:
+        allowed.setdefault(source, set()).add(target)
+    return {unit: sorted(targets) for unit, targets in sorted(allowed.items())}
+
+
 def independent_pairs(graph: Graph) -> list[Candidate]:
     """Units that carry traffic elsewhere but never to each other.
 
@@ -144,7 +163,12 @@ def independent_pairs(graph: Graph) -> list[Candidate]:
     Restricted to units that participate in the graph at all. Two directories with no edges in any
     direction are not siblings, they are unrelated, and a rule between them would govern nothing.
     """
-    active = {u for edge in graph.edges for u in edge}
+    # Restricted to top-level units. At package granularity "internal/auth does not import
+    # internal/billing" is sparsity, not an invariant worth its own rule — and it scales as N^2.
+    # A pair of top-level surfaces is different: they are the architectural peers whose future
+    # coupling would actually mean something. The allow-list already forbids every unlisted edge,
+    # so nothing is lost by not enumerating the deep pairs; only the noise is.
+    active = {u for edge in graph.edges for u in edge if "/" not in u}
     out: list[Candidate] = []
     ordered = sorted(active)
     for i, left in enumerate(ordered):
@@ -264,6 +288,7 @@ def propose(graph: Graph) -> dict:
         "units": sorted(graph.units),
         "total_edges": graph.total_edges,
         "cycles": [list(c) for c in cycles],
+        "allow_list": allow_list(graph),
         "candidates": candidates,
         "not_proposed": (
             []
@@ -314,11 +339,19 @@ def go_graph(manifest_dir: Path) -> Graph:
     if not module:
         return graph
 
+    # Every package path the module actually ships, relative to the module root. This is what makes
+    # "smallest prefix that is itself a package" answerable without probing the filesystem.
+    own = frozenset(
+        str(pkg.get("ImportPath", ""))[len(module) :].lstrip("/")
+        for pkg in packages
+        if str(pkg.get("ImportPath", "")).startswith(module)
+    ) - {""}
+
     for pkg in packages:
-        source = _unit_of_import(str(pkg.get("ImportPath", "")), module)
+        source = _unit_of_import(str(pkg.get("ImportPath", "")), module, own)
         graph.see(source)
         for imported in pkg.get("Imports") or []:
-            target = _unit_of_import(str(imported), module)
+            target = _unit_of_import(str(imported), module, own)
             if target:
                 graph.add(source, target)
     return graph
@@ -372,15 +405,40 @@ def _iter_json_objects(stream: str):
             index += 1
 
 
-def _unit_of_import(import_path: str, module: str) -> str:
-    """First path segment under the module root. External imports are not units."""
+def _unit_of_import(import_path: str, module: str, packages: frozenset[str] = frozenset()) -> str:
+    """The smallest prefix of the path that is ITSELF a package. External imports are not units.
+
+    Taking the first segment was wrong, and measurably so. In theo-cloud, `internal/` holds 0 Go
+    files of its own and 28 subdirectories: it groups, it does not implement. Collapsing all 28
+    into one unit hid every dependency between them — `internal/auth -> internal/account` became
+    an invisible self-import — and left 44 packages matched by no component at all. The rules
+    governed 2 units of a 35-package module and reported success.
+
+    A directory with no sources of its own is a container. Descending past it is not a matter of
+    taste: `internal` is absent from the package list precisely because there is nothing there to
+    govern, and `internal/auth` is present because there is.
+
+    Falls back to the first segment when the package list is unavailable, which keeps the function
+    usable in tests that do not build one.
+    """
     if not import_path.startswith(module):
         return ""
     rest = import_path[len(module) :].lstrip("/")
     if not rest:
         return ""
-    head = rest.split("/", 1)[0]
-    return "" if head in _NOT_A_UNIT else head
+    # Every segment, not just the first. `dashboard/node_modules/flatted/golang/pkg/flatted` is a
+    # Go file vendored inside a TypeScript app's node_modules; checking only the head let it
+    # through and it became an architectural unit of theo-cloud.
+    if any(segment in _NOT_A_UNIT for segment in rest.split("/")):
+        return ""
+    if not packages:
+        return rest.split("/", 1)[0]
+    segments = rest.split("/")
+    for depth in range(1, len(segments) + 1):
+        prefix = "/".join(segments[:depth])
+        if prefix in packages:
+            return prefix
+    return rest
 
 
 def _unit_of_path(path: Path, root: Path) -> str:

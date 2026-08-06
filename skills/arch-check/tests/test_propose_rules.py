@@ -17,6 +17,7 @@ if str(_SCRIPTS) not in sys.path:
 
 from propose_rules import (  # noqa: E402
     Graph,
+    allow_list,
     _iter_json_objects,
     _unit_of_import,
     _unit_of_path,
@@ -56,11 +57,40 @@ class TestOneWayCandidates:
         assert one_way_candidates(_graph(("a", "a", 9))) == []
 
 
+class TestAllowList:
+    """The rigorous form: what each unit imports today, everything else forbidden."""
+
+    def test_each_unit_lists_what_it_actually_imports(self) -> None:
+        assert allow_list(_graph(("cmd", "internal/auth", 3))) == {
+            "cmd": ["internal/auth"],
+            "internal/auth": [],
+        }
+
+    def test_a_unit_that_imports_nothing_gets_an_empty_list_not_absence(self) -> None:
+        """Absent would read as unconstrained; empty says 'imports nothing', which is the claim."""
+        assert allow_list(_graph(("a", "b", 1)))["b"] == []
+
+    def test_it_scales_where_enumerating_pairs_does_not(self) -> None:
+        """theo-cloud has 27 units — 702 ordered pairs, 302 of which never touch. A proposal of
+        302 rules is skimmed and dismissed; 27 allow-lists is read."""
+        graph = Graph()
+        for i in range(27):
+            graph.see(f"u{i}")
+        graph.add("u0", "u1")
+        assert len(allow_list(graph)) == 27
+
+
 class TestIndependentPairs:
-    def test_two_participating_units_that_never_meet_are_siblings(self) -> None:
+    def test_two_participating_top_level_units_that_never_meet_are_siblings(self) -> None:
         graph = _graph(("tui", "agents", 3), ("exec", "agents", 2))
         pairs = {(c.source, c.target) for c in independent_pairs(graph)}
         assert ("exec", "tui") in pairs
+
+    def test_deep_units_are_not_proposed_as_siblings(self) -> None:
+        """Sparsity between packages is not an invariant, and it scales as N^2. The allow-list
+        already forbids the unlisted edge, so only the noise is lost."""
+        graph = _graph(("internal/auth", "internal/account", 2), ("internal/billing", "internal/account", 1))
+        assert independent_pairs(graph) == []
 
     def test_units_that_do_exchange_imports_are_not_siblings(self) -> None:
         graph = _graph(("tui", "exec", 1), ("exec", "agents", 2))
@@ -159,3 +189,39 @@ class TestGoListParsing:
 
     def test_an_empty_stream_yields_nothing(self) -> None:
         assert list(_iter_json_objects("")) == []
+
+
+class TestUnitGranularity:
+    """A directory with no sources of its own groups; it does not implement."""
+
+    PACKAGES = frozenset({"cmd", "internal/auth", "internal/account", "internal/auth/oauth"})
+    MOD = "github.com/us/repo"
+
+    def test_a_container_directory_is_descended_past(self) -> None:
+        """`internal/` holds 0 Go files and 28 subdirectories in theo-cloud. Collapsing them into
+        one unit hid every dependency between them and left 44 packages ungoverned."""
+        assert _unit_of_import(f"{self.MOD}/internal/auth", self.MOD, self.PACKAGES) == "internal/auth"
+
+    def test_a_real_package_at_the_top_stays_at_the_top(self) -> None:
+        assert _unit_of_import(f"{self.MOD}/cmd", self.MOD, self.PACKAGES) == "cmd"
+
+    def test_a_subpackage_collapses_into_its_owning_unit(self) -> None:
+        """`internal/auth/oauth` belongs to `internal/auth` — the smallest prefix that is a
+        package. Otherwise every leaf becomes its own architectural unit."""
+        assert (
+            _unit_of_import(f"{self.MOD}/internal/auth/oauth", self.MOD, self.PACKAGES)
+            == "internal/auth"
+        )
+
+    def test_without_a_package_list_it_falls_back_to_the_first_segment(self) -> None:
+        assert _unit_of_import(f"{self.MOD}/internal/auth", self.MOD) == "internal"
+
+    def test_node_modules_at_any_depth_is_not_a_unit(self) -> None:
+        """A Go file vendored inside a TypeScript app's node_modules became an architectural unit
+        of theo-cloud, because only the first segment was checked."""
+        assert (
+            _unit_of_import(
+                f"{self.MOD}/dashboard/node_modules/flatted/golang", self.MOD, self.PACKAGES
+            )
+            == ""
+        )
