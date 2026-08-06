@@ -36,6 +36,7 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "Is this operation CP or AP?" | auxiliary | `/cap-theorem-specialist` |
 | "The queue never drains / we OOM under load" | auxiliary | `/backpressure-specialist` |
 | "One slow service took the whole site down" | auxiliary | `/resilience-specialist` |
+| "Boundaries: does this repo have any, and do they still fire?" | auxiliary | `/arch-check` |
 
 ## Quick start
 
