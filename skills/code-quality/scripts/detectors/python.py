@@ -15,7 +15,11 @@ from scripts import _registry
 from scripts._shared import Finding, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_imports_and_calls
 
-from . import BaseDetector
+from . import BaseDetector, _arch
+
+_ARCH_TIMEOUT_SEC = 240
+#: import-linter reads the first of these it finds.
+_ARCH_CONFIGS = (".importlinter", "setup.cfg", "pyproject.toml", "tox.ini")
 
 _VULTURE_LINE_RE = re.compile(
     r"^(?P<path>[^:]+):(?P<line>\d+):\s+(?P<kind>\S+\s+\S+)\s+'(?P<symbol>[^']+)'.*\((?P<confidence>\d+)%\s+confidence\)"
@@ -163,3 +167,84 @@ class PythonDetector(BaseDetector):
             message=f"Vulture auditor unavailable: {reason}",
             allowlist_key="python|.|dead_code|auditor_unavailable_vulture",
         )
+
+    # ── D5 — architecture ───────────────────────────────────────────────────────────────────────
+
+    def detect_architecture_violations(self, manifest_dir: Path) -> list[Finding]:
+        """Run `lint-imports` against the contracts the project declares.
+
+        import-linter is the Python member of the ArchUnit family: the project writes contracts
+        (`forbidden`, `layers`, `independence`) in its own config, and the tool checks them
+        against the real import graph.
+
+        The meta-gate here is cheaper than in the other languages because import-linter already
+        does it: a contract naming a module that does not exist fails with
+        `ModuleNotFoundError`-style output rather than passing quietly. So D5 forwards the verdict
+        and does not re-derive it — the failure mode this detector exists to catch is one this
+        particular tool already refuses to have.
+        """
+        config = next((manifest_dir / name for name in _ARCH_CONFIGS if (manifest_dir / name).is_file()), None)
+        if config is None:
+            return [_arch.no_config("python", tool="import-linter", looked_for=list(_ARCH_CONFIGS))]
+
+        try:
+            raw = config.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            return [_arch.auditor_unavailable("python", tool="import-linter", reason=f"unreadable config: {e}")]
+        if "importlinter" not in raw:
+            return [
+                _arch.no_config(
+                    "python", tool="import-linter", looked_for=[f"an [importlinter] section in {config.name}"]
+                )
+            ]
+
+        try:
+            result = subprocess.run(
+                ["lint-imports", "--config", str(config)],
+                cwd=str(manifest_dir),
+                capture_output=True,
+                text=True,
+                timeout=_ARCH_TIMEOUT_SEC,
+                check=False,
+            )
+        except FileNotFoundError:
+            return [
+                _arch.auditor_unavailable(
+                    "python",
+                    tool="import-linter",
+                    reason="lint-imports not found (install via `pip install import-linter`)",
+                )
+            ]
+        except subprocess.TimeoutExpired:
+            return [
+                _arch.auditor_unavailable(
+                    "python", tool="import-linter", reason=f"timed out after {_ARCH_TIMEOUT_SEC}s"
+                )
+            ]
+        except (subprocess.SubprocessError, OSError) as e:
+            return [_arch.auditor_unavailable("python", tool="import-linter", reason=f"invocation failed: {e}")]
+
+        if result.returncode == 0:
+            return []
+
+        output = f"{result.stdout}\n{result.stderr}"
+        broken = [ln.strip() for ln in output.splitlines() if ln.strip().startswith("BROKEN")]
+        if not broken:
+            return [
+                _arch.auditor_unavailable(
+                    "python",
+                    tool="import-linter",
+                    reason=f"exit {result.returncode} without a BROKEN contract: {output.strip()[-300:]}",
+                )
+            ]
+        return [
+            _arch.violation(
+                "python",
+                tool="import-linter",
+                rule=line.replace("BROKEN", "").strip() or "contract",
+                file_path=config.name,
+                symbol_or_line="contract",
+                message="contract broken — see `lint-imports` output for the offending import chain",
+            )
+            for line in broken
+        ]

@@ -259,6 +259,16 @@ def main(argv: list[str] | None = None) -> int:
                 findings.append(d2_crash)
             findings.extend(d2_findings)
 
+        # D5 — architecture rules the REPO declared, plus the meta-gate that they can still fire.
+        # Runs against the manifest's directory for the same reason D1 does: the linters resolve
+        # their project from the cwd.
+        d5_findings, d5_crash = _safe_call(
+            "d5", detector.detect_architecture_violations, manifest_dir, language=language
+        )
+        if d5_crash:
+            findings.append(d5_crash)
+        findings.extend(d5_findings)
+
     # Apply allowlist (downgrade severities by 1 level when ACTIVE entry matches)
     findings = _apply_allowlist(findings, allowlist, repo_root)
 
@@ -355,7 +365,7 @@ def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: P
             rows.append(f"| `{f.file_path}` | `{f.symbol_or_line}` | {f.severity} | {msg} |")
         return "\n".join(rows)
 
-    by_detector: dict[str, list[Finding]] = {"d1_dead_code": [], "d2_symbol_fab": [], "d3_orphan_export": [], "d4_mutation": []}
+    by_detector: dict[str, list[Finding]] = {"d1_dead_code": [], "d2_symbol_fab": [], "d3_orphan_export": [], "d4_mutation": [], "d5_architecture": []}
     for f in findings:
         by_detector.setdefault(f.detector, []).append(f)
 
@@ -386,6 +396,10 @@ def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: P
 
 ### D4 — Mutation testing
 {_table(by_detector['d4_mutation'])}
+
+### D5 — architecture
+
+{_table(by_detector['d5_architecture'])}
 
 ## Related
 

@@ -243,6 +243,12 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
         def detect_orphan_exports(self, target: Path) -> list:
             return []
 
+        def detect_architecture_violations(self, target: Path) -> list:
+            # Present because the orchestrator resolves the attribute BEFORE `_safe_call` can
+            # guard it: a double that skips a contract method takes the whole run down with an
+            # AttributeError instead of the detector being skipped.
+            return []
+
     monkeypatch.setattr(
         "scripts.run_code_quality._build_detector", lambda _lang: _SpyDetector()
     )

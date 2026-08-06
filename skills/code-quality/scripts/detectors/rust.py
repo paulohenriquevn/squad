@@ -14,7 +14,10 @@ from scripts import _registry
 from scripts._shared import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_imports_and_calls
 
-from . import BaseDetector
+from . import BaseDetector, _arch
+
+_ARCH_TIMEOUT_SEC = 600
+_LAYERFILE = "Layerfile.toml"
 
 _RUST_MODULE_LOCAL_PREFIXES = ("crate::", "self::", "super::", "crate", "self", "super")
 
@@ -303,3 +306,122 @@ class RustDetector(BaseDetector):
             message=f"cargo-udeps auditor unavailable: {reason}",
             allowlist_key="rust|.|dead_code|auditor_unavailable_cargo-udeps",
         )
+
+    # ── D5 — architecture ───────────────────────────────────────────────────────────────────────
+
+    def detect_architecture_violations(self, manifest_dir: Path) -> list[Finding]:
+        """Run `layered-crate` against the crate's own `Layerfile.toml`.
+
+        ## Why the Rust answer is thinner than the Go and TypeScript ones
+
+        Rust has no maintained ArchUnit. Measured 2026-08-06: `cargo-archtest` and
+        `arch_test_core`, the two direct equivalents, were both last published on 2021-06-15.
+        `layered-crate` is alive (0.4.6, 2026-07-12, MIT) and purpose-built, so it is what D5
+        drives — but it verifies by COMPILING, splitting the crate into one temporary package per
+        layer and running `cargo check` on each. That makes it strictly stronger than an import
+        scan and strictly more fragile.
+
+        Measured against `theo-db`, the only Rust repo in the routing table, it did not run. Three
+        blockers, in the order they appeared:
+
+        1. `[lib]` declares `crate-type` but no `path` -> `failed to read lib.path from Cargo.toml`
+        2. the temporary package it generates collides inside the crate's own cargo workspace
+           (`two packages named theodb_rs`), and `workspace.exclude` did not clear it
+        3. never reached: the crate is a pgrx extension and cannot compile without Postgres 18.4
+           initialised, so per-layer `cargo check` needs the full extension toolchain
+
+        The first two are changes to a database's build configuration made to accommodate a
+        linter. That trade is the repo owner's to make, not Squad's — so D5 reports the blocker
+        with its measurement and does not fail the cycle over it.
+
+        ## Why the verdict is coarse
+
+        `layered-crate` emits human-readable text, not JSON. D5 cannot reliably separate a real
+        layer violation from a setup failure, so it classifies on known setup markers and says
+        which one it decided. Guessing silently would be worse than a coarse answer that admits
+        its own resolution.
+        """
+        config = manifest_dir / _LAYERFILE
+        if not config.is_file():
+            return [_arch.no_config("rust", tool="layered-crate", looked_for=[_LAYERFILE])]
+
+        try:
+            result = subprocess.run(
+                ["layered-crate"],
+                cwd=str(manifest_dir),
+                capture_output=True,
+                text=True,
+                timeout=_ARCH_TIMEOUT_SEC,
+                check=False,
+            )
+        except FileNotFoundError:
+            return [
+                _arch.auditor_unavailable(
+                    "rust",
+                    tool="layered-crate",
+                    reason="binary not found (install via `cargo install layered-crate`)",
+                )
+            ]
+        except subprocess.TimeoutExpired:
+            return [
+                _arch.auditor_unavailable(
+                    "rust", tool="layered-crate", reason=f"timed out after {_ARCH_TIMEOUT_SEC}s"
+                )
+            ]
+        except (subprocess.SubprocessError, OSError) as e:
+            return [
+                _arch.auditor_unavailable("rust", tool="layered-crate", reason=f"invocation failed: {e}")
+            ]
+
+        if result.returncode == 0:
+            return []
+
+        output = f"{result.stdout}\n{result.stderr}"
+        blocker = _setup_blocker(output)
+        if blocker is not None:
+            return [_arch.auditor_unavailable("rust", tool="layered-crate", reason=blocker)]
+
+        return [
+            _arch.violation(
+                "rust",
+                tool="layered-crate",
+                rule="layer-dependencies",
+                file_path=_LAYERFILE,
+                symbol_or_line="layers",
+                message=(
+                    "a layer imported one it does not declare a dependency on: "
+                    f"{_tail(output)}"
+                ),
+            )
+        ]
+
+
+#: Failures that mean layered-crate could not START, not that a layer boundary was crossed. Each
+#: string was observed against theo-db on 2026-08-06.
+_SETUP_MARKERS = {
+    "failed to read lib.path": (
+        "the crate's `[lib]` declares no `path`. layered-crate requires it; adding "
+        '`path = "src/lib.rs"` is the fix, and it is a change to the crate\'s build config'
+    ),
+    "two packages named": (
+        "the temporary package layered-crate generates collides with the crate inside its own "
+        "cargo workspace. Observed on theo-db even with the default temp dir under `target/`"
+    ),
+    "not found archfile": "no Layerfile.toml where layered-crate looked",
+    ".pgrx/config.toml": (
+        "the crate needs a pgrx-initialised Postgres to compile, and layered-crate verifies by "
+        "compiling. Running it here requires `cargo pgrx init`, which builds Postgres from source"
+    ),
+}
+
+
+def _setup_blocker(output: str) -> str | None:
+    for marker, explanation in _SETUP_MARKERS.items():
+        if marker in output:
+            return explanation
+    return None
+
+
+def _tail(output: str, limit: int = 300) -> str:
+    lines = [ln.strip() for ln in output.splitlines() if ln.strip()]
+    return " / ".join(lines[-3:])[:limit]

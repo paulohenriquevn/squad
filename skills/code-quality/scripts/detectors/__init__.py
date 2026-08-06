@@ -61,3 +61,26 @@ class BaseDetector:
         to v0.2 (graceful skip via INFO Finding per T4.3 ADR).
         """
         raise NotImplementedError
+
+    def detect_architecture_violations(self, manifest_dir: Path) -> list:
+        """Run D5 — declared architecture rules, plus the meta-gate on the rules themselves.
+
+        Wraps the language's architecture linter against the config the REPO
+        declares (`.dependency-cruiser.cjs` / `.go-arch-lint.yml` /
+        `Layerfile.toml`). Squad ships no layer model of its own: a rule
+        asserting an architecture nobody declared would report violations that
+        are evidence of nothing. A repo with no config emits INFO and is
+        skipped — the honest state, not a failure.
+
+        Beyond forwarding the tool's verdict, D5 asserts the rules are not
+        VACUOUS. Measured on 2026-08-06 against `theo-contracts`: a
+        `.go-arch-lint.yml` naming a directory that does not exist reports
+        `ArchHasWarnings: false` — green — while the invariant it encoded can
+        no longer fire. The same class was measured in usetheo-labs/agent-builder,
+        where dissolving `tui/lib` would have left rules written against the old
+        name matching nothing, and `npm run boundaries` reporting success.
+
+        A rule that cannot fail is worse than no rule: it transfers confidence
+        to a mechanism that stopped existing.
+        """
+        raise NotImplementedError
