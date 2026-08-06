@@ -33,6 +33,9 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "What has rotted in the registry?" | auxiliary | `/backlog-review` |
 | "Which specialist owns this repo?" | auxiliary | `python3 scripts/route_domain.py {repo}` |
 | "Just locate something in the code" | (no cycle) | Glob/Grep, or `/ast-grep` for structural queries |
+| "Is this operation CP or AP?" | auxiliary | `/cap-theorem-specialist` |
+| "The queue never drains / we OOM under load" | auxiliary | `/backpressure-specialist` |
+| "One slow service took the whole site down" | auxiliary | `/resilience-specialist` |
 
 ## Quick start
 
