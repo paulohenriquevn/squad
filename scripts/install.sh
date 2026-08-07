@@ -66,11 +66,21 @@ echo "    target: $ECO"
 
 # --- copy ecosystem code ---
 mkdir -p "$ECO"
-for item in skills rules hooks commands scripts agents; do
+for item in skills rules hooks commands scripts; do
   echo "==> Copying $item/"
   rm -rf "$ECO/$item"
   cp -r "$SRC_DIR/$item" "$ECO/$item"
 done
+
+# agents/ is copied FILE BY FILE, not wholesale. This repo dogfoods its own cycles, and
+# `/implement` and `/review` write their per-run agent definitions into subdirectories here
+# (`implement-slice-*/`, `review-*/`). Those are THIS repo's audit trail, not template content —
+# and `cp -r` shipped two of them, dated May 2026, into every consumer install. The header above
+# already promises to skip audit trails; this is what keeping that promise looks like.
+echo "==> Copying agents/ (specialists only — per-run artifacts stay behind)"
+rm -rf "$ECO/agents"
+mkdir -p "$ECO/agents"
+find "$SRC_DIR/agents" -maxdepth 1 -type f -name '*.md' -exec cp {} "$ECO/agents/" \;
 
 # Top-level docs and manifest
 for f in plugin.json HOW-TO-USE.md README.md .active_plan.example; do
@@ -130,12 +140,21 @@ fi
 
 
 # --- Validation ---
-echo "==> Validating install"
-python3 "$ECO/scripts/check_xrefs.py" --strict > /dev/null 2>&1 \
+# Run FROM THE TARGET. test_e2e_smoke.py resolves the ecosystem from the CWD, and the normal way
+# to invoke this script is `cd squad && bash scripts/install.sh <target>` — so it was validating
+# the source repo and printing OK for the installation it never opened. Measured: with a routed
+# specialist and a cycle rule deleted from a fresh install, it answered
+# `ecosystem: /home/paulo/Projetos/squad` / `ALL CHECKS PASSED` / exit 0. A check that cannot
+# fail is worse than no check: it puts a green line next to a broken install.
+#
+# check_xrefs.py resolves from its own path and caught the same corruption (exit 1). Two lines
+# printed the same word for two different amounts of verification.
+echo "==> Validating install (from the target, not from here)"
+( cd "$TARGET" && python3 .claude/scripts/check_xrefs.py --strict > /dev/null 2>&1 ) \
   && echo "    check_xrefs.py: OK" \
   || { echo "    check_xrefs.py: FAIL (re-run manually)"; }
 
-python3 "$ECO/scripts/test_e2e_smoke.py" > /dev/null 2>&1 \
+( cd "$TARGET" && python3 .claude/scripts/test_e2e_smoke.py > /dev/null 2>&1 ) \
   && echo "    test_e2e_smoke.py: OK" \
   || { echo "    test_e2e_smoke.py: FAIL (re-run manually)"; }
 
