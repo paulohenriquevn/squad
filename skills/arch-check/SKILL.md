@@ -72,9 +72,15 @@ python3 skills/arch-check/scripts/propose_rules.py <repo> [--language go|typescr
 ```
 
 Go builds its graph from `go list -json ./...` — the toolchain resolves imports exactly, so it
-cannot silently under-read. TypeScript uses the shared tree-sitter extractor and counts only
-relative imports: a bare specifier is a package, and treating `react` as a unit would invent
+cannot silently under-read. TypeScript counts relative imports, plus bare specifiers that name a
+package the repo's own `workspaces` declares: in a monorepo those **are** the cross-unit edges.
+Everything else bare is somebody else's code, and treating `react` as a unit would invent
 architecture out of the dependency list.
+
+Skipping bare specifiers wholesale was the first version, and it inverted the answer. Measured on
+`TheoCode`: 4 packages exchanging 80 imports read as 0 edges, and the proposer then offered
+`independence` — a rule forbidding all 80. `import('...')` is read too; 20 of those 80 exist only
+in that form, invisible to a reader of import *statements*.
 
 ---
 
@@ -92,6 +98,10 @@ the edge count alone:
   other)
 - **fewer than two units seen** → the parser did not run; nothing is proposed until the graph
   is real
+- **units seen, zero edges, but a specifier named a workspace package and did not resolve** →
+  edges exist and went unmeasured. This is the monorepo case above: 0 edges there means the
+  resolver failed, and reporting the catalogue's strongest rule off a graph with known holes in
+  it is the vacuous gate D5 exists to catch
 
 ---
 

@@ -34,6 +34,7 @@ than answering confidently about a codebase it never read.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -88,6 +89,10 @@ class Graph:
     #: Module directories, when the repo is a `go.work` workspace. Empty for a single-module repo.
     #: go-arch-lint reads a project from its `go.mod`, so a workspace needs one config per module.
     modules: list[str] = field(default_factory=list)
+    #: Bare specifiers that NAME a declared workspace package but which the resolver could not map
+    #: to a file. These are the edges we know exist and could not measure, and their presence is
+    #: what makes a zero-edge result untrustworthy rather than a finding — see `propose`.
+    unresolved_workspace: set[str] = field(default_factory=set)
 
     def see(self, unit: str) -> None:
         """Record that the scan reached this unit, edges or not."""
@@ -255,6 +260,27 @@ def propose(graph: Graph) -> dict:
                     "proposed until the graph is real."
                 ),
                 "units": sorted(graph.units_seen),
+                "candidates": [],
+            }
+        if graph.unresolved_workspace:
+            # Units were seen and the edge count is 0 — the exact fingerprint of `independence`,
+            # and here it would be a lie. Something named a workspace package of this repo and
+            # did not resolve, so at least those edges exist and went unmeasured. Reporting the
+            # strongest rule in the catalogue off a graph with known holes in it is precisely the
+            # vacuous gate D5 exists to catch.
+            unresolved = sorted(graph.unresolved_workspace)
+            return {
+                "status": "refused",
+                "reason": (
+                    f"{len(unresolved)} specifier(s) name a package this repo's `workspaces` "
+                    "declares, and none of them resolved to a file — so cross-package edges "
+                    "exist and were not measured. 0 edges here means the resolver failed, not "
+                    "that the units are independent. Fix the resolution (an `exports` map this "
+                    "reader does not understand, or a tsconfig `paths`-only monorepo) before "
+                    "anything is proposed."
+                ),
+                "units": sorted(graph.units_seen),
+                "unresolved_workspace_imports": unresolved,
                 "candidates": [],
             }
         return {
@@ -459,12 +485,15 @@ def _add_module(graph: Graph, manifest_dir: Path, *, prefix: str) -> None:
 def typescript_graph(manifest_dir: Path) -> Graph:
     """Build the unit graph from the repo's own source, via the shared tree-sitter extractor.
 
-    Only relative imports count. A bare specifier is a package, not a unit of this repo, and
-    treating `react` as a unit would invent architecture out of the dependency list.
+    Relative imports count, and so do bare specifiers that name a package this repo's own
+    `workspaces` field declares — in a monorepo those ARE the cross-unit edges. Every other bare
+    specifier is somebody else's code; treating `react` as a unit would invent architecture out
+    of the dependency list.
     """
     from scripts.check_symbol_fab import extract_imports_and_calls  # noqa: PLC0415
 
     graph = Graph()
+    workspace = _workspace_packages(manifest_dir)
     sources = _ts_sources(manifest_dir)
     # The TypeScript analogue of "smallest prefix that is itself a package": a directory holding
     # source files directly implements; one holding only subdirectories groups. Without this, TS
@@ -480,11 +509,14 @@ def typescript_graph(manifest_dir: Path) -> Graph:
         if not source:
             continue
         graph.see(source)
-        for symbol in extract_imports_and_calls(path, "typescript"):
-            module = getattr(symbol, "module", "") or ""
-            if not module.startswith("."):
+        static = [getattr(symbol, "module", "") or "" for symbol in extract_imports_and_calls(path, "typescript")]
+        for module in static + _dynamic_imports(path):
+            if module.startswith("."):
+                resolved = (path.parent / module).resolve()
+            else:
+                resolved = _workspace_import(module, workspace, graph)
+            if resolved is None:
                 continue
-            resolved = (path.parent / module).resolve()
             try:
                 target = _unit_of_path(resolved, manifest_dir.resolve(), owning)
             except ValueError:
@@ -492,6 +524,49 @@ def typescript_graph(manifest_dir: Path) -> Graph:
             if target:
                 graph.add(source, target)
     return graph
+
+
+#: `await import('...')`. The shared extractor reads import STATEMENTS; a dynamic import is a call
+#: expression and it does not see one. That is fine for D2, whose question is whether a symbol was
+#: fabricated, and wrong here, where the question is whether an edge exists. Measured on TheoCode:
+#: 17 of `cli -> agent`'s 23 crossings and 3 of `tui -> agent`'s are dynamic, so the static count
+#: alone under-reports by 20. Direction survived there — every dynamic import ran the same way as
+#: a static one — but a repo where a reverse edge exists ONLY dynamically would get a one-way rule
+#: proposed against it and go red on its first run, against this tool's whole criterion.
+#:
+#: A regex rather than a second parser pass: the target is a literal string inside a known call
+#: shape, and the failure mode is missing a match (under-reading, the safe direction), never
+#: inventing one. A computed specifier — `import(someVar)` — is unreadable by any static means and
+#: is missed by both.
+_DYNAMIC_IMPORT_RE = re.compile(r"""\bimport\s*\(\s*['"]([^'"]+)['"]""")
+
+
+def _dynamic_imports(path: Path) -> list[str]:
+    """Specifiers reached via `import('...')`, which the statement-level extractor cannot see."""
+    try:
+        return _DYNAMIC_IMPORT_RE.findall(path.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return []
+
+
+def _workspace_import(module: str, workspace: dict[str, Path], graph: Graph) -> Path | None:
+    """Resolve a bare specifier IF it names one of this repo's own workspace packages.
+
+    A specifier that names a workspace package and does not resolve is recorded rather than
+    dropped. That is the difference between "these units exchange nothing" and "we could not
+    read what they exchange", and `propose` is only allowed to conclude the first.
+    """
+    if not workspace:
+        return None
+    # `@scope/name/sub/path` — the package name is the longest declared prefix, since a scoped
+    # name contains a `/` itself and splitting on the first one would never match.
+    name = next((n for n in workspace if module == n or module.startswith(f"{n}/")), None)
+    if name is None:
+        return None
+    target = _export_target(workspace[name], module[len(name) :].lstrip("/"))
+    if target is None:
+        graph.unresolved_workspace.add(module)
+    return target
 
 
 def _iter_json_objects(stream: str):
@@ -559,6 +634,77 @@ def _ts_sources(root: Path) -> list[Path]:
             continue
         out.append(path)
     return out
+
+
+def _workspace_packages(root: Path) -> dict[str, Path]:
+    """`name -> package directory`, for every package the root `package.json` declares.
+
+    A monorepo's cross-package imports are BARE specifiers — `@theocode/agent`, not `../agent`.
+    Skipping them because "a bare specifier is a package" was true and catastrophic: on TheoCode
+    it measured 0 edges across 4 units that exchange 80 imports, and then proposed `independence`
+    — a rule forbidding every one of them. Adopting it would have been red on arrival, which is
+    the one thing this tool exists to make impossible.
+
+    `workspaces` is the declaration that separates `@theocode/agent` (a unit of this repo) from
+    `react` (somebody else's code). Without it there is nothing to distinguish them by, and
+    guessing from the `@scope/` prefix would invent architecture out of a naming convention.
+    """
+    manifest = root / "package.json"
+    if not manifest.is_file():
+        return {}
+    try:
+        declared = json.loads(manifest.read_text(encoding="utf-8")).get("workspaces") or []
+    except (json.JSONDecodeError, OSError):
+        return {}
+    # npm accepts both `["packages/*"]` and `{"packages": ["packages/*"]}`.
+    if isinstance(declared, dict):
+        declared = declared.get("packages") or []
+
+    out: dict[str, Path] = {}
+    for pattern in declared:
+        if not isinstance(pattern, str):
+            continue
+        for candidate in sorted(root.glob(pattern)):
+            if not candidate.is_dir() or any(part in _NOT_A_UNIT for part in candidate.parts):
+                continue
+            try:
+                name = json.loads((candidate / "package.json").read_text(encoding="utf-8")).get("name")
+            except (json.JSONDecodeError, OSError):
+                continue
+            if isinstance(name, str) and name:
+                out[name] = candidate
+    return out
+
+
+def _export_target(package_dir: Path, subpath: str) -> Path | None:
+    """The file a workspace package's `exports` map points a subpath at.
+
+    `exports` is the resolution contract — it is what makes `@theocode/shared/shutdown` mean
+    `packages/shared/src/shutdown.ts` at runtime. Reading it beats guessing a layout: `shared`
+    declares three subpath exports and NO `.` entry, so any convention like "the unit is
+    `<pkg>/src/index.ts`" would have resolved nothing for it.
+    """
+    try:
+        manifest = json.loads((package_dir / "package.json").read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    exports = manifest.get("exports")
+    key = "." if not subpath else f"./{subpath}"
+    target = None
+    if isinstance(exports, dict):
+        target = exports.get(key)
+        # Conditional exports: {"./x": {"import": "./src/x.ts"}}. Take the first string leaf —
+        # every condition of one subpath points into the same file tree, so they agree on a unit.
+        while isinstance(target, dict):
+            target = next((v for v in target.values() if isinstance(v, (str, dict))), None)
+    elif isinstance(exports, str) and key == ".":
+        target = exports
+    if not isinstance(target, str):
+        target = manifest.get("main") if key == "." else None
+    if not isinstance(target, str):
+        return None
+    return (package_dir / target).resolve()
 
 
 def _ts_owning_dirs(sources: list[Path], root: Path) -> frozenset[str]:

@@ -18,6 +18,10 @@ if str(_SCRIPTS) not in sys.path:
 from propose_rules import (  # noqa: E402
     Graph,
     allow_list,
+    _dynamic_imports,
+    _export_target,
+    _workspace_import,
+    _workspace_packages,
     _iter_json_objects,
     _unit_of_import,
     _unit_of_path,
@@ -258,3 +262,106 @@ class TestGoStrictFilter:
         """`main.go` at the module root belonged to no component: 22 files across three of theo's
         modules sat outside every rule while the config reported full coverage."""
         assert _unit_of_import(self.MOD, self.MOD, frozenset()) == "."
+
+
+class TestWorkspaceMonorepo:
+    """A monorepo's cross-unit edges are BARE specifiers, and skipping them inverted the answer.
+
+    Measured on TheoCode: 4 packages exchanging 80 imports were reported as 0 edges, and the
+    proposer then offered `independence` — a rule forbidding all 80. Every one of these tests
+    pins a step of that failure.
+    """
+
+    @staticmethod
+    def _repo(tmp_path: Path, *, workspaces=("packages/*",)) -> Path:
+        import json as _json
+
+        (tmp_path / "package.json").write_text(_json.dumps({"workspaces": list(workspaces)}))
+        for name, exports in (
+            ("agent", {".": "./src/index.ts", "./config": "./src/config/index.ts"}),
+            # `shared` declares NO `.` entry — a layout convention like "<pkg>/src/index.ts"
+            # would have resolved nothing for it. This is TheoCode's real shape.
+            ("shared", {"./shutdown": "./src/shutdown.ts"}),
+        ):
+            pkg = tmp_path / "packages" / name
+            (pkg / "src").mkdir(parents=True)
+            (pkg / "package.json").write_text(
+                _json.dumps({"name": f"@theocode/{name}", "exports": exports})
+            )
+        return tmp_path
+
+    def test_workspace_packages_are_read_from_the_root_manifest(self, tmp_path: Path) -> None:
+        found = _workspace_packages(self._repo(tmp_path))
+        assert set(found) == {"@theocode/agent", "@theocode/shared"}
+
+    def test_a_repo_declaring_no_workspaces_finds_none(self, tmp_path: Path) -> None:
+        """Without the declaration there is nothing separating `@theocode/agent` from `react`,
+        and guessing from the `@scope/` prefix would invent architecture from a naming habit."""
+        (tmp_path / "package.json").write_text('{"name": "solo"}')
+        assert _workspace_packages(tmp_path) == {}
+
+    def test_a_subpath_export_resolves_to_its_file(self, tmp_path: Path) -> None:
+        repo = self._repo(tmp_path)
+        target = _export_target(repo / "packages" / "shared", "shutdown")
+        assert target == (repo / "packages" / "shared" / "src" / "shutdown.ts").resolve()
+
+    def test_a_scoped_name_is_not_split_on_its_first_slash(self, tmp_path: Path) -> None:
+        """`@theocode/agent/config` splits into `@theocode/agent` + `config`. Splitting on the
+        first `/` yields `@theocode`, which matches no declared package, and the edge vanishes."""
+        repo = self._repo(tmp_path)
+        graph = Graph()
+        resolved = _workspace_import("@theocode/agent/config", _workspace_packages(repo), graph)
+        assert resolved == (repo / "packages" / "agent" / "src" / "config" / "index.ts").resolve()
+        assert graph.unresolved_workspace == set()
+
+    def test_a_third_party_specifier_stays_out(self, tmp_path: Path) -> None:
+        graph = Graph()
+        assert _workspace_import("react", _workspace_packages(self._repo(tmp_path)), graph) is None
+        assert graph.unresolved_workspace == set()
+
+    def test_an_unresolvable_workspace_specifier_is_recorded_not_dropped(self, tmp_path: Path) -> None:
+        """It names a package of this repo, so the edge EXISTS. Dropping it silently is what let
+        a zero-edge graph pass for independence."""
+        graph = Graph()
+        _workspace_import("@theocode/shared/nope", _workspace_packages(self._repo(tmp_path)), graph)
+        assert graph.unresolved_workspace == {"@theocode/shared/nope"}
+
+    def test_zero_edges_with_an_unresolved_specifier_is_refused(self) -> None:
+        """The fingerprint of `independence` and the fingerprint of a broken resolver are the
+        same edge count. Only one of them permits a conclusion."""
+        graph = Graph(units_seen={"a", "b", "c"}, unresolved_workspace={"@x/y"})
+        result = propose(graph)
+        assert result["status"] == "refused"
+        assert result["unresolved_workspace_imports"] == ["@x/y"]
+
+    def test_zero_edges_with_nothing_unresolved_is_still_independence(self) -> None:
+        """The refusal must not swallow the real finding. theo-contracts measured exactly this."""
+        assert propose(Graph(units_seen={"a", "b", "c"}))["status"] == "proposed"
+
+
+class TestDynamicImports:
+    """`await import('x')` is a call expression, so the statement-level extractor never sees it."""
+
+    def test_a_dynamic_import_is_read(self, tmp_path: Path) -> None:
+        """17 of TheoCode's 23 `cli -> agent` crossings are dynamic. Reading only static imports
+        under-reported that edge by 74%."""
+        f = tmp_path / "a.ts"
+        f.write_text("const { x } = await import('@theocode/agent/auth')\n")
+        assert _dynamic_imports(f) == ["@theocode/agent/auth"]
+
+    def test_a_relative_dynamic_import_is_read(self, tmp_path: Path) -> None:
+        f = tmp_path / "a.ts"
+        f.write_text("const m = await import(\"../shared/thing\")\n")
+        assert _dynamic_imports(f) == ["../shared/thing"]
+
+    def test_a_computed_specifier_is_missed_and_that_is_the_safe_direction(self, tmp_path: Path) -> None:
+        """`import(someVar)` is unreadable by any static means. Missing it under-reports an edge,
+        which at worst withholds a rule; inventing one would propose a false boundary."""
+        f = tmp_path / "a.ts"
+        f.write_text("const m = await import(modulePath)\n")
+        assert _dynamic_imports(f) == []
+
+    def test_the_word_import_in_a_statement_is_not_matched_as_a_call(self, tmp_path: Path) -> None:
+        f = tmp_path / "a.ts"
+        f.write_text("import { x } from '@theocode/agent'\n")
+        assert _dynamic_imports(f) == []
