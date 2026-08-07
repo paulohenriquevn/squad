@@ -64,6 +64,28 @@ echo "==> Installing Squad ecosystem"
 echo "    source: $SRC_DIR"
 echo "    target: $ECO"
 
+# --- snapshot what the project owns, before overwriting it ---
+# `rules/` and `agents/` are exactly where a project's own configuration lives: the routing
+# table, its domain specialists, and every gate the "Next steps" below tells you to edit
+# (code-quality-languages.txt, live-target.txt, acceptance-target.txt, the allow-lists).
+# `--force` overwrote all of it silently. Measured: a `typescript | ... | ENABLED` line and a
+# live-target block added to a fresh install were both gone after one re-run, with no message.
+#
+# In a repo that versions `.claude/` that is recoverable with `git restore`. TheoCode does not
+# version it — the kit is a maintainer's tool, not product code — so silent was also permanent.
+# The fix is not to merge (guessing which side of a config wins is how you get it wrong): it is
+# to make the overwrite recoverable and loud. For an upgrade that must NOT clobber, use
+# `patch_install.sh`, which copies a manifest and leaves agents/ and settings.json alone.
+BACKUP_DIR=""
+if [ -d "$ECO" ]; then
+  BACKUP_DIR="$ECO/.install-backups/$(date +%Y%m%dT%H%M%S)"
+  mkdir -p "$BACKUP_DIR"
+  for item in rules agents; do
+    [ -d "$ECO/$item" ] && cp -r "$ECO/$item" "$BACKUP_DIR/$item"
+  done
+  echo "==> Snapshot of the previous rules/ and agents/: $BACKUP_DIR"
+fi
+
 # --- copy ecosystem code ---
 mkdir -p "$ECO"
 for item in skills rules hooks commands scripts; do
@@ -138,6 +160,30 @@ fi
 # leave route_domain.py pointing at files that do not exist — the routing table would
 # resolve and the specialist behind it would be missing.
 
+
+# --- What the overwrite actually took ---
+# A snapshot nobody is told about is a snapshot nobody uses. Naming the files that CHANGED (not
+# every file, which would be noise) is what turns a silent clobber into a diff someone can act on.
+if [ -n "$BACKUP_DIR" ]; then
+  CLOBBERED=$(
+    cd "$BACKUP_DIR" && find . -type f | while read -r f; do
+      cmp -s "$f" "$ECO/${f#./}" || echo "  ${f#./}"
+    done
+  )
+  if [ -n "$CLOBBERED" ]; then
+    echo ""
+    # "or REMOVED" is not hedging: a specialist the source repo does not have — which is every
+    # specialist a consumer writes for its own domains — is not overwritten, it is deleted by the
+    # `rm -rf` above. Calling that "overwritten" would understate what just happened.
+    echo "==> These files were OVERWRITTEN or REMOVED (they differed from the source):"
+    echo "$CLOBBERED"
+    echo ""
+    echo "    Your previous copies: $BACKUP_DIR"
+    echo "    Nothing was merged — diff them and re-apply what is yours. Project config lives in"
+    echo "    rules/*.txt, the routing table in rules/cycle-backlog.md, and agents/*.md."
+    echo "    To upgrade WITHOUT clobbering next time, use patch_install.sh instead."
+  fi
+fi
 
 # --- Validation ---
 # Run FROM THE TARGET. test_e2e_smoke.py resolves the ecosystem from the CWD, and the normal way
