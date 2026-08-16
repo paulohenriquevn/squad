@@ -32,15 +32,19 @@ SRC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # --- args ---
 if [ $# -lt 1 ]; then
-  echo "Usage: bash scripts/install.sh <target-project-dir> [--force]" >&2
+  echo "Usage: bash scripts/install.sh <target-project-dir> [--force|--merge]" >&2
   exit 2
 fi
 
 TARGET="$1"
 FORCE=0
-if [ "${2:-}" = "--force" ]; then
-  FORCE=1
-fi
+MERGE=0
+case "${2:-}" in
+  --force) FORCE=1 ;;
+  --merge) MERGE=1 ;;
+  "") ;;
+  *) echo "ERROR: unknown flag ${2}. Expected --force or --merge." >&2; exit 2 ;;
+esac
 
 if [ ! -d "$TARGET" ]; then
   echo "ERROR: target is not a directory: $TARGET" >&2
@@ -55,8 +59,12 @@ if [ "$TARGET" = "$SRC_DIR" ]; then
   exit 2
 fi
 
-if [ -d "$ECO" ] && [ "$FORCE" -ne 1 ]; then
-  echo "ERROR: $ECO already exists. Use --force to overwrite (existing knowledge-base/ contents will be preserved if also present)." >&2
+if [ -d "$ECO" ] && [ "$FORCE" -ne 1 ] && [ "$MERGE" -ne 1 ]; then
+  echo "ERROR: $ECO already exists." >&2
+  echo "  --merge  add the kit's files, delete nothing. Use this when the target has a .claude/ of" >&2
+  echo "           its own (project skills, project agents) that must survive." >&2
+  echo "  --force  replace skills/rules/hooks/commands/scripts/agents wholesale. Snapshots first" >&2
+  echo "           and names what it overwrote, but anything the source does not have is DELETED." >&2
   exit 2
 fi
 
@@ -87,11 +95,22 @@ if [ -d "$ECO" ]; then
 fi
 
 # --- copy ecosystem code ---
+# Two modes, because a target with a `.claude/` of its own has no correct answer in one of them.
+# Measured on `theo-data-cells`: 598 files under `skills/` — 5 of the kit's, 10 the project wrote
+# (`architecture-debate-table`, `placement-algorithms`, `quota-isolation`, …) — plus 13 named
+# architect agents and their memory. The `rm -rf` below would have deleted every one of them, and
+# a snapshot in `.install-backups/` is a consolation prize, not a correct install.
 mkdir -p "$ECO"
 for item in skills rules hooks commands scripts; do
-  echo "==> Copying $item/"
-  rm -rf "$ECO/$item"
-  cp -r "$SRC_DIR/$item" "$ECO/$item"
+  if [ "$MERGE" -eq 1 ]; then
+    echo "==> Merging $item/ (adding, deleting nothing)"
+    mkdir -p "$ECO/$item"
+    cp -r "$SRC_DIR/$item/." "$ECO/$item/"
+  else
+    echo "==> Copying $item/"
+    rm -rf "$ECO/$item"
+    cp -r "$SRC_DIR/$item" "$ECO/$item"
+  fi
 done
 
 # agents/ is copied FILE BY FILE, not wholesale. This repo dogfoods its own cycles, and
@@ -100,7 +119,7 @@ done
 # and `cp -r` shipped two of them, dated May 2026, into every consumer install. The header above
 # already promises to skip audit trails; this is what keeping that promise looks like.
 echo "==> Copying agents/ (specialists only — per-run artifacts stay behind)"
-rm -rf "$ECO/agents"
+[ "$MERGE" -eq 1 ] || rm -rf "$ECO/agents"
 mkdir -p "$ECO/agents"
 find "$SRC_DIR/agents" -maxdepth 1 -type f -name '*.md' -exec cp {} "$ECO/agents/" \;
 
@@ -114,8 +133,16 @@ if [ ! -f "$SRC_DIR/settings.plugin.json" ]; then
   echo "ERROR: $SRC_DIR/settings.plugin.json missing — required for plugin install layout." >&2
   exit 1
 fi
-cp "$SRC_DIR/settings.plugin.json" "$ECO/settings.json"
-echo "==> settings.json written (plugin install variant)"
+if [ "$MERGE" -eq 1 ] && [ -f "$ECO/settings.json" ]; then
+  # It wires this project's hooks. Replacing it is the one thing a merge must never do — a
+  # settings.json is the most project-specific file in the tree, and losing it costs more than
+  # every skill combined.
+  cp "$SRC_DIR/settings.plugin.json" "$ECO/settings.json.kit-reference"
+  echo "==> settings.json KEPT (yours). The kit's is at settings.json.kit-reference — diff it in."
+else
+  cp "$SRC_DIR/settings.plugin.json" "$ECO/settings.json"
+  echo "==> settings.json written (plugin install variant)"
+fi
 
 # --- knowledge-base scaffold (empty, idempotent) ---
 # Mirrors the SEMANTIC structure of the source's knowledge-base/ — every
