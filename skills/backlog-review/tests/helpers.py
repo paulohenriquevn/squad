@@ -41,7 +41,20 @@ def item_block(
     )
 
 
-def write_backlog(tmp_path: Path, *blocks: str) -> Path:
+def write_backlog(tmp_path: Path, *blocks: str, index: bool = True) -> Path:
+    """A well-formed registry: the blocks, plus the index that summarises them.
+
+    The index is generated here rather than left out because a backlog WITHOUT one is now a
+    `index_stale` finding — so omitting it would add that finding to every fixture, and each
+    defect test would be asserting on its own defect plus one it never asked for. Tests that
+    want a stale or absent index pass `index=False` and say so.
+    """
     path = tmp_path / "BACKLOG.md"
-    path.write_text("# Backlog\n\n## Itens\n\n" + "".join(blocks), encoding="utf-8")
+    content = "# Backlog\n\n## Itens\n\n" + "".join(blocks)
+    if index:
+        from backlog_index import apply_index, render_index  # noqa: PLC0415
+        from check_backlog_structure import _parse_items  # noqa: PLC0415
+
+        content = apply_index(content, render_index(content, _parse_items(content)))
+    path.write_text(content, encoding="utf-8")
     return path
