@@ -22,12 +22,18 @@ def item_block(
     dod: list[str] | None = None,
     extra: str = "",
     registered: str | None = None,
+    # Adopted from `theo`, which grew it for its own `render_open_index` tests. Propagating the
+    # kit's copy over theirs dropped the parameter and broke two of their tests — a consumer that
+    # extended a shared fixture is ahead of the kit, not behind it, and the fix is to carry the
+    # extension upstream rather than to overwrite it back out. Default keeps every existing
+    # caller's output byte-identical.
+    checkbox: str = " ",
 ) -> str:
     bullets = dod if dod is not None else ["p95 do endpoint abaixo de 800ms com janela de 30d"]
     dod_block = "dod:\n" + "".join(f"  - {b}\n" for b in bullets) if bullets else "dod:\n"
     reg = f"\n> Registrado {registered} por `/backlog-item`.\n" if registered else ""
     return (
-        f"## {item_id} — {title}   [ ]\n"
+        f"## {item_id} — {title}   [{checkbox}]\n"
         f"{reg}\n"
         f"domain: {domain}\n"
         f"repo: {repo}\n"
