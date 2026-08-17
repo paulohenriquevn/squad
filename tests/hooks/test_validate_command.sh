@@ -321,7 +321,7 @@ for c in "rm -fr /etc" "rm -Rf /usr" "rm -f -r /var" "rm --recursive --force /et
 done
 
 # ---- F1/F8: recursive delete of a DEEP project path under /home (allowed) ----
-setup; rc=$(run_hook "rm -rf /home/paulo/Projetos/cycle/build"); assert_exit "F8: deep project path is allowed" 0 "$rc"; teardown
+setup; rc=$(run_hook "rm -rf /home/dev/Projetos/cycle/build"); assert_exit "F8: deep project path is allowed" 0 "$rc"; teardown
 
 # ---- F2: force-push with the flag not right after 'push' (blocked) ----
 setup; rc=$(run_hook "git push origin main --force"); assert_exit "F2: 'git push origin main --force' is blocked" 2 "$rc"; teardown
@@ -390,7 +390,7 @@ setup; rc=$(run_hook "rm -rf /tmp/deep/dir/sub/*"); assert_exit "F10: 'rm -rf /t
 setup; rc=$(run_hook "rm -rf build/artifacts/*"); assert_exit "F10: 'rm -rf build/artifacts/*' is allowed" 0 "$rc"; teardown
 # F10 regression: root glob and the bare roots must STAY blocked.
 setup; rc=$(run_hook "rm -rf /*"); assert_exit "F10: 'rm -rf /*' stays blocked" 2 "$rc"; teardown
-setup; rc=$(run_hook "rm -rf /home/paulo"); assert_exit "F10: 'rm -rf /home/<user>' stays blocked" 2 "$rc"; teardown
+setup; rc=$(run_hook "rm -rf /home/dev"); assert_exit "F10: 'rm -rf /home/<user>' stays blocked" 2 "$rc"; teardown
 setup; rc=$(run_hook "rm -rf /etc/foo"); assert_exit "F10: 'rm -rf /etc/foo' stays blocked" 2 "$rc"; teardown
 setup; rc=$(run_hook "rm -rf \\\$HOME"); assert_exit "F10: 'rm -rf \$HOME' stays blocked" 2 "$rc"; teardown
 
