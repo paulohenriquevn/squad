@@ -30,6 +30,7 @@ passes here. That question belongs to `check_test_obligations.py` and to
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -40,7 +41,7 @@ from typing import Any
 LANGUAGE_MANIFESTS: dict[str, tuple[str, ...]] = {
     "javascript": ("package.json",),
     "python": ("pyproject.toml", "setup.py", "setup.cfg"),
-    "go": ("go.mod",),
+    "go": ("go.mod", "go.work"),
     "rust": ("Cargo.toml",),
 }
 
@@ -136,10 +137,65 @@ def check_python_tests(project_root: Path) -> dict[str, Any]:
     }
 
 
+_GO_USE_BLOCK_RE = re.compile(r"^use\s*\((.*?)^\)", re.MULTILINE | re.DOTALL)
+_GO_USE_SINGLE_RE = re.compile(r"^use\s+(\S+)\s*$", re.MULTILINE)
+
+
+def go_workspace_modules(project_root: Path) -> list[str]:
+    """Modules a `go.work` lists, relative to the repo and inside it.
+
+    `go test ./...` at a workspace root fails with "directory prefix . does not
+    contain modules listed in go.work" — the kit already hit this shape in
+    /arch-check. Paths that leave the repo (`../theo-contracts`) belong to a
+    sibling repository with its own gates and are dropped, not audited from here.
+    """
+    work = project_root / "go.work"
+    if not work.is_file():
+        return []
+    text = work.read_text(encoding="utf-8")
+    raw: list[str] = []
+    for block in _GO_USE_BLOCK_RE.findall(text):
+        raw.extend(line.strip() for line in block.splitlines() if line.strip())
+    raw.extend(_GO_USE_SINGLE_RE.findall(text))
+
+    modules: list[str] = []
+    for entry in raw:
+        entry = entry.strip().strip('"')
+        if not entry or entry.startswith(".."):
+            continue
+        rel = entry[2:] if entry.startswith("./") else entry
+        if rel and (project_root / rel).is_dir() and rel not in modules:
+            modules.append(rel)
+    return modules
+
+
 def check_go_tests(project_root: Path) -> dict[str, Any]:
     name = "go tests"
     if "go" not in detect_languages(project_root):
         return {"name": name, "status": "SKIP", "reason": "no go.mod at the repo root"}
+    # A workspace root is not a module: run each module the go.work lists.
+    modules = go_workspace_modules(project_root) if not (project_root / "go.mod").is_file() else []
+    if modules:
+        failures = []
+        for module in modules:
+            outcome = run_command(["go", "test", "./..."], project_root / module, timeout=900)
+            text = f"{outcome.get('stderr_tail', '')}{outcome.get('error', '')}"
+            if outcome.get("exit_code") == 0:
+                continue
+            if _unavailable(text):
+                return {
+                    "name": name, "status": "FAIL", "runner": "go test",
+                    "code": "toolchain_unavailable",
+                    "reason": "go.work present but the go toolchain is unavailable — "
+                              "unverified is not verified",
+                }
+            failures.append({"module": module, "stderr_tail": outcome.get("stderr_tail", "")})
+        if failures:
+            return {"name": name, "status": "FAIL", "runner": "go test",
+                    "modules_tested": modules, "failed_modules": [f["module"] for f in failures],
+                    "stderr_tail": failures[0]["stderr_tail"]}
+        return {"name": name, "status": "PASS", "runner": "go test", "modules_tested": modules}
+
     result = run_command(["go", "test", "./..."], project_root, timeout=900)
     output = f"{result.get('stderr_tail', '')}{result.get('error', '')}"
     if result.get("exit_code") == 0:

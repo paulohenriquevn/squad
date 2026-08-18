@@ -522,3 +522,29 @@ def test_executable_tdd_shape_passes(fake_project: Path) -> None:
     ])
     rc, data = _run_validation("sharp", fake_project)
     assert _check(data, "tdd_shape")["status"] == "PASS"
+
+
+def test_go_workspace_is_detected_as_go(fake_project: Path) -> None:
+    """A Go workspace has `go.work` and no root `go.mod`.
+
+    Measured on `theo` while updating its install: the repo is Go, and
+    detect_languages returned [] — so test_execution would have SKIPped the
+    biggest Go repo in the ecosystem. The same silence the gate exists to break,
+    reintroduced by a manifest list that only knew `go.mod`.
+    """
+    from suite_runners import detect_languages
+    (fake_project / "go.work").write_text("go 1.22\n\nuse (\n\t./svc\n)\n", encoding="utf-8")
+    assert "go" in detect_languages(fake_project)
+
+
+def test_go_workspace_runs_each_module_not_the_root(fake_project: Path) -> None:
+    """`go test ./...` at a workspace root fails with 'directory prefix . does not
+    contain modules listed in go.work' — the kit already hit this in /arch-check."""
+    from suite_runners import go_workspace_modules
+    (fake_project / "go.work").write_text(
+        "go 1.22\n\nuse (\n\t./svc\n\t./tools\n\t../sibling-repo\n)\n", encoding="utf-8"
+    )
+    (fake_project / "svc").mkdir()
+    (fake_project / "tools").mkdir()
+    modules = go_workspace_modules(fake_project)
+    assert modules == ["svc", "tools"], modules  # '../sibling-repo' is another repo's problem
