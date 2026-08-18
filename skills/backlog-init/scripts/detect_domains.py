@@ -30,8 +30,17 @@ nomeado aqui, mas escrevê-lo é trabalho humano — um especialista sem conteú
 rotearia o item para um prompt vazio, e `route_domain.py` sai 3 quando o arquivo
 não existe, de propósito.
 
+DUAS FONTES, E A SEGUNDA MANDA
+------------------------------
+`--from-backlog` deriva dos pares (domain, repo) que os itens JÁ declaram. Use-a
+sempre que o registro existir: a topologia diz o que existe, não quem é dono.
+Medido no `theokit-sdk` — o registro separa `sdk-core`, `repo-platform`,
+`sdk-satellites`, `edge-cli-acp` e `memory-adapters`, cinco domínios que nenhum
+layout de diretório revela e que nenhum detector deveria adivinhar.
+
 Uso:
     python3 detect_domains.py                       # imprime a tabela proposta
+    python3 detect_domains.py --from-backlog BACKLOG.md
     python3 detect_domains.py --write rules/cycle-backlog.md
     python3 detect_domains.py --json
 
@@ -73,6 +82,15 @@ class Domain:
     name: str
     repos: list[str]
     agent: str
+    #: Repos que o registro cita e o disco não tem. Ficam NA tabela, nomeados —
+    #: apagá-los esconderia a divergência, e um item filed contra eles routes
+    #: para código que ninguém abre. Mesma decisão da seção "Repos an inventory
+    #: names but disk does not" que o `theo` mantém à mão.
+    missing_on_disk: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.missing_on_disk is None:
+            object.__setattr__(self, "missing_on_disk", [])
 
 
 def _is_repo(path: Path) -> bool:
@@ -143,6 +161,54 @@ def detect_domains(root: Path) -> list[Domain]:
                    agent=f"agents/{name}.md")]
 
 
+_ITEM_BLOCK_RE = re.compile(r"^##\s+(B-\d+)\s+—", re.MULTILINE)
+_FIELD_RE = re.compile(r"^(domain|repo):\s*`?([^`\n]+?)`?\s*$", re.MULTILINE)
+
+
+def domains_from_backlog(backlog_path: Path, root: Path) -> list[Domain]:
+    """Deriva a tabela dos pares (domain, repo) que os itens JÁ declaram.
+
+    A topologia diz o que existe; ela não diz a semântica de propriedade. Medido
+    no `theokit-sdk`: o registro separa `sdk-core`, `repo-platform`,
+    `sdk-satellites`, `edge-cli-acp` e `memory-adapters` — cinco domínios que
+    nenhum layout de diretório revela e que nenhum detector deveria adivinhar.
+    Os itens já carregam a resposta; isto apenas a lê.
+
+    Levanta ValueError quando um repo aparece em dois domínios: `route_domain`
+    exige um-repo-um-domínio, e uma tabela ambígua rotearia por ordem de
+    iteração — o mesmo item indo para lugares diferentes em execuções diferentes.
+    """
+    content = backlog_path.read_text(encoding="utf-8-sig")
+    blocks = list(_ITEM_BLOCK_RE.finditer(content))
+
+    by_domain: dict[str, list[str]] = {}
+    owner_of: dict[str, str] = {}
+    for i, match in enumerate(blocks):
+        start = match.end()
+        end = blocks[i + 1].start() if i + 1 < len(blocks) else len(content)
+        fields = dict(_FIELD_RE.findall(content[start:end]))
+        domain, repo = fields.get("domain"), fields.get("repo")
+        if not domain or not repo:
+            continue
+        if repo in owner_of and owner_of[repo] != domain:
+            raise ValueError(
+                f"`{repo}` is declared in two domains ({owner_of[repo]} and {domain}). "
+                "route_domain requires one repo, one domain — fix the items before deriving."
+            )
+        owner_of[repo] = domain
+        by_domain.setdefault(domain, [])
+        if repo not in by_domain[domain]:
+            by_domain[domain].append(repo)
+
+    domains: list[Domain] = []
+    for name in sorted(by_domain):
+        repos = sorted(by_domain[name])
+        missing = [r for r in repos if not (root / r).exists() and r != root.name]
+        domains.append(Domain(name=name, repos=repos, agent=f"agents/{name}.md",
+                              missing_on_disk=missing))
+    return domains
+
+
 def render_table(domains: list[Domain]) -> str:
     lines = [
         "## Domain routing",
@@ -176,12 +242,24 @@ def rewrite_routing_section(rule_path: Path, domains: list[Domain]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--from-backlog", type=Path, default=None,
+                        help="deriva dos pares (domain, repo) que os itens já declaram — "
+                             "use quando o registro existe: a semântica de propriedade está "
+                             "lá, e nenhum layout de diretório a revela")
     parser.add_argument("--write", type=Path, default=None,
                         help="caminho de rules/cycle-backlog.md a atualizar")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
-    domains = detect_domains(args.root)
+    try:
+        domains = (domains_from_backlog(args.from_backlog, args.root.resolve())
+                   if args.from_backlog else detect_domains(args.root))
+    except ValueError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
     if not domains:
         print("nenhum domínio derivável — o diretório não é repo nem tem manifesto",
               file=sys.stderr)
@@ -194,9 +272,17 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({
             "domains": [{"name": d.name, "repos": d.repos, "agent": d.agent} for d in domains],
             "specialists_missing": missing,
+            "repos_missing_on_disk": sorted(
+                {r for d in domains for r in d.missing_on_disk}),
         }, indent=2, ensure_ascii=False))
     else:
         print(render_table(domains))
+        absent = sorted({r for d in domains for r in d.missing_on_disk})
+        if absent:
+            print("Repos que o registro cita e o disco não tem "
+                  "(ficam na tabela, nomeados, para a divergência não sumir):")
+            for repo in absent:
+                print(f"  - {repo}")
         if missing:
             print("Especialistas que precisam ser escritos (route_domain sai 3 sem eles):")
             for agent in missing:

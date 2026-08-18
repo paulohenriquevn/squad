@@ -105,3 +105,87 @@ def test_render_names_the_specialist_files_that_must_exist(tmp_path: Path) -> No
     root = _repo(tmp_path, "theokit-sdk")
     table = render_table(detect_domains(root))
     assert "agents/theokit-sdk.md" in table
+
+
+# ---------------------------------------------------------------------------
+# Derivar do BACKLOG. A topologia dá o que EXISTE; ela não dá a SEMÂNTICA de
+# propriedade. Medido no theokit-sdk: o registro declara `sdk-core`,
+# `repo-platform`, `sdk-satellites`, `edge-cli-acp` e `memory-adapters` — cinco
+# domínios que nenhum layout de diretório revela, e que os itens já carregam.
+# ---------------------------------------------------------------------------
+
+from detect_domains import domains_from_backlog  # noqa: E402
+
+_BACKLOG = """# Backlog
+
+## B-001 — um   [ ]
+
+domain: sdk-core
+repo: packages/sdk
+status: triaged
+
+## B-002 — dois   [ ]
+
+domain: repo-platform
+repo: theokit-sdk
+status: triaged
+
+## B-003 — tres   [ ]
+
+domain: sdk-satellites
+repo: packages/sdk-pty
+status: raw
+
+## B-004 — quatro   [ ]
+
+domain: sdk-core
+repo: packages/sdk
+status: raw
+"""
+
+
+def test_domains_come_from_the_pairs_the_items_declare(tmp_path: Path) -> None:
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(_BACKLOG, encoding="utf-8")
+    root = _repo(tmp_path, "theokit-sdk")
+    (root / "packages" / "sdk").mkdir(parents=True)
+    (root / "packages" / "sdk-pty").mkdir(parents=True)
+
+    domains = domains_from_backlog(backlog, root)
+    assert [d.name for d in domains] == ["repo-platform", "sdk-core", "sdk-satellites"]
+    assert next(d for d in domains if d.name == "sdk-core").repos == ["packages/sdk"]
+    assert next(d for d in domains if d.name == "sdk-core").agent == "agents/sdk-core.md"
+
+
+def test_a_repo_the_items_cite_but_disk_does_not_have_is_surfaced(tmp_path: Path) -> None:
+    """Um repo que só existe no registro roteia para código que ninguém abre —
+    a mesma divergência que a tabela do theo documenta em vez de apagar."""
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(_BACKLOG, encoding="utf-8")
+    root = _repo(tmp_path, "theokit-sdk")
+    (root / "packages" / "sdk").mkdir(parents=True)  # sdk-pty NÃO existe
+
+    domains = domains_from_backlog(backlog, root)
+    satellites = next(d for d in domains if d.name == "sdk-satellites")
+    assert satellites.repos == ["packages/sdk-pty"]
+    assert satellites.missing_on_disk == ["packages/sdk-pty"]
+
+
+def test_one_repo_in_two_domains_is_refused(tmp_path: Path) -> None:
+    """O invariante que route_domain já exige: um repo, um domínio. Se o registro
+    contradiz isso, a tabela derivada rotearia por ordem de iteração."""
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(_BACKLOG + """
+## B-005 — cinco   [ ]
+
+domain: edge-cli-acp
+repo: packages/sdk
+status: raw
+""", encoding="utf-8")
+    root = _repo(tmp_path, "theokit-sdk")
+    (root / "packages" / "sdk").mkdir(parents=True)
+    (root / "packages" / "sdk-pty").mkdir(parents=True)
+
+    import pytest
+    with pytest.raises(ValueError, match="packages/sdk"):
+        domains_from_backlog(backlog, root)
