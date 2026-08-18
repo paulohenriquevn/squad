@@ -14,7 +14,7 @@ A backlog item is a **hypothesis with an owner and a closing criterion**. It is 
 
 Invoke `/backlog-item {slug}` when ALL of:
 
-- `BACKLOG.md` exists at the umbrella root (created once by `/backlog-init`).
+- `BACKLOG.md` exists at the root of the governed scope — the umbrella when repos live below it, the repository itself when it is autonomous (created once by `/backlog-init`).
 - There is one concrete thing to improve, fix, verify, or evolve in a repo that exists in the umbrella inventory.
 - It maps to exactly one registered domain (see § Domain routing). Work spanning two domains is two items.
 
@@ -192,7 +192,9 @@ index and the items to move together, so the gate is what keeps them honest.
 - `BACKLOG.md` at the umbrella root — the single registry, spanning all repos in the inventory.
 - `knowledge-base/backlog/{slug}-intake.md` — the intake grill log (one entry per answered question, with the G5 decision recorded).
 
-The registry lives at the umbrella root and not per-repo because a maintenance team asking "what is pending?" must have exactly one place to look. Per-repo backlogs re-create the orphaned-findings problem the single-registry rule exists to solve.
+The registry lives at the root of the governed SCOPE and not scattered below it, because a maintenance team asking "what is pending?" must have exactly one place to look. Per-directory backlogs inside one scope re-create the orphaned-findings problem the single-registry rule exists to solve.
+
+What this never meant is "an umbrella is required". An autonomous repository is its own scope and keeps its own registry — `theokit-sdk` holds 88 items about `theokit-sdk`, and asking it to file them in a parent directory that is nobody's repository would put the registry outside the thing it governs.
 
 ## Rollback
 

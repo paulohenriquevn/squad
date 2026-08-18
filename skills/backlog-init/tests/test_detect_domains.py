@@ -189,3 +189,49 @@ status: raw
     import pytest
     with pytest.raises(ValueError, match="packages/sdk"):
         domains_from_backlog(backlog, root)
+
+
+# ---------------------------------------------------------------------------
+# O escopo do registro. `backlog-init` Step 0.2 recusava rodar quando não havia
+# mais de um repo abaixo ("no umbrella detected — run at the workspace root"), o
+# que num projeto autônomo manda criar o BACKLOG na raiz do guarda-chuva, FORA
+# do projeto. O princípio ("um lugar para olhar") não exige guarda-chuva: exige
+# um registro por escopo governado.
+# ---------------------------------------------------------------------------
+
+from detect_domains import detect_scope  # noqa: E402
+
+
+def test_umbrella_scope_when_more_than_one_repo_lives_below(tmp_path: Path) -> None:
+    root = tmp_path / "framework"
+    root.mkdir()
+    _repo(root, "theokit-sdk")
+    _repo(root, "theokit-ui")
+    assert detect_scope(root) == "umbrella"
+
+
+def test_single_repo_scope_is_valid_not_an_error(tmp_path: Path) -> None:
+    """theokit-sdk: um repo, seu próprio ciclo, seu próprio registro."""
+    root = _repo(tmp_path, "theokit-sdk")
+    (root / "packages" / "sdk").mkdir(parents=True)
+    (root / "packages" / "sdk" / "package.json").write_text("{}", encoding="utf-8")
+    assert detect_scope(root) == "single-repo"
+
+
+def test_a_project_with_a_vendored_clone_is_still_single_repo(tmp_path: Path) -> None:
+    """O que decide é a raiz SER um repositório, não a contagem de `.git` abaixo.
+
+    A guarda antiga contava `find -maxdepth 2 -name .git` e exigia `> 1`, então um
+    projeto com um clone vendorizado dentro passava por guarda-chuva e o registro
+    dele ia para o diretório de cima.
+    """
+    root = _repo(tmp_path, "projeto")
+    _repo(root, "vendored-thing")
+    assert detect_scope(root) == "single-repo"
+
+
+def test_umbrella_is_a_directory_that_is_not_itself_a_repo(tmp_path: Path) -> None:
+    framework = tmp_path / "framework"
+    framework.mkdir()
+    _repo(framework, "um-repo-so")
+    assert detect_scope(framework) == "umbrella"

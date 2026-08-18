@@ -2,7 +2,7 @@
 name: backlog-init
 version: 0.1.0
 requires: []
-description: Create BACKLOG.md once, at the umbrella root, inventorying every repo FROM DISK and building the domain routing table. Use this the first time anyone tries to register maintenance work and no registry exists yet, when /backlog-item refuses because BACKLOG.md is missing, or when adopting Squad in a new workspace. Refuses if BACKLOG.md already exists.
+description: Create BACKLOG.md once, at the root of the governed scope — the umbrella when repos live below it, or the repository itself when it is autonomous — inventorying what is FROM DISK and deriving the domain routing table from THIS project. Use this the first time anyone tries to register maintenance work and no registry exists yet, when /backlog-item refuses because BACKLOG.md is missing, or when adopting Squad in a new workspace. Refuses if BACKLOG.md already exists.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 argument-hint: "(no arguments)"
@@ -15,6 +15,10 @@ Create `BACKLOG.md` at the umbrella root: the one place that answers *"what is p
 Run once, at adoption. Every item after that arrives through `/backlog-item` (human) or `/discover --sweep` (measured finding).
 
 ## Cycle contract
+
+**Two scopes, both valid.** `detect_scope` answers which one you are in: `umbrella` (the directory is not itself a repo and groups repos that are) or `single-repo` (the directory IS the repo). The previous pre-flight refused the second — *"no umbrella detected: run at the workspace root"* — which, in an autonomous project, means writing the registry into the parent directory, outside the project. Measured on `theokit-framework`: ten independent repos, each with its own cycle, and the kit pushed all ten registries into a directory that is nobody's repository.
+
+The principle the rule defends ("one question, one place to look") never required an umbrella. It requires **one registry per governed scope**, and an autonomous repo is a scope.
 
 This skill bootstraps the artifact that [`cycle-backlog`](../../rules/cycle-backlog.md) governs. The cycle rule is the **source of truth** for the item schema, status transitions, domain routing, verdicts and gates. This skill only creates the empty registry those rules operate on — it never registers an item.
 
@@ -34,9 +38,11 @@ DO NOT invoke when:
 # 0.1  BACKLOG.md must NOT exist (opposite of /backlog-item)
 test -f BACKLOG.md && { echo "FATAL: BACKLOG.md already exists — use /backlog-item"; exit 1; }
 
-# 0.2  must be at an umbrella root: more than one governed repo below us
-test "$(find . -maxdepth 2 -name .git -type d | wc -l)" -gt 1 || {
-  echo "FATAL: no umbrella detected — the registry spans repos, run at the workspace root"; exit 1; }
+# 0.2  determine the SCOPE of the registry — never refuse for lack of an umbrella
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)   # plugin vs standalone
+SCOPE=$(python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . --json \
+          | python3 -c 'import json,sys; print(json.load(sys.stdin)["scope"])')
+echo "scope: $SCOPE"   # umbrella | single-repo — both are valid registry roots
 
 # 0.3  CHANGELOG.md must exist (Unbreakable Rule 6)
 test -f CHANGELOG.md || { echo "FATAL: CHANGELOG.md missing"; exit 1; }

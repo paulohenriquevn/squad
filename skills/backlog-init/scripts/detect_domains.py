@@ -106,6 +106,28 @@ def _child_repos(root: Path) -> list[Path]:
     )
 
 
+def detect_scope(root: Path) -> str:
+    """`umbrella` quando há mais de um repositório governado abaixo; senão `single-repo`.
+
+    O `backlog-init` recusava rodar sem guarda-chuva — *"no umbrella detected: run
+    at the workspace root"* — o que, num projeto autônomo, manda criar o
+    `BACKLOG.md` na raiz do guarda-chuva, **fora do projeto**. Medido no
+    `theokit-framework`: dez repos independentes, cada um com seu ciclo, e o kit
+    empurrava o registro dos dez para um diretório que não é repositório de nada.
+
+    O princípio que a regra defende ("uma pergunta, um lugar para olhar") não
+    exige guarda-chuva: exige **um registro por escopo governado**. Um repo
+    autônomo é um escopo.
+    """
+    root = root.resolve()
+    # A raiz SER um repositório é o que decide: um projeto com um clone vendorizado
+    # abaixo continua sendo um projeto. Guarda-chuva é o diretório que não é
+    # repositório de nada e existe para agrupar os que são.
+    if _is_repo(root):
+        return "single-repo"
+    return "umbrella" if _child_repos(root) else "single-repo"
+
+
 def _go_workspace_members(root: Path) -> list[str]:
     work = root / "go.work"
     if not work.is_file():
@@ -271,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps({
             "domains": [{"name": d.name, "repos": d.repos, "agent": d.agent} for d in domains],
+            "scope": detect_scope(args.root),
             "specialists_missing": missing,
             "repos_missing_on_disk": sorted(
                 {r for d in domains for r in d.missing_on_disk}),
