@@ -68,7 +68,7 @@ When a commit closes a `## Phase N` of the plan, `skills/implement/scripts/mini_
 | `PHASE_REVIEW_PASS` | No HIGH or BLOCKER findings | Proceed to next phase |
 | `PHASE_REVIEW_NEEDS_FIX` | ≥ 1 HIGH/BLOCKER finding | Halt-loop emits BLOCKED with report path; surface to human; resume via § Step 4 "Resume after recovered blocker" only after fix |
 
-Aggregated checks: phase completeness, diff cohesion (declared scope vs modified files), wiring summary (pillar a non-negotiable across all phase symbols), delta-scoped code-quality (currently SKIP — full audit still runs at Step 5).
+Aggregated checks: phase completeness, diff cohesion (declared scope vs modified files), wiring summary (pillar a non-negotiable across all phase symbols), delta audit coverage — whether Step 5's audit will look at the phase's files at all (a language not `ENABLED` in `rules/code-quality-languages.txt` is audited by nobody). It replaced an unconditional SKIP: `cq_invoke` scores a whole plan, not a file subset, so no delta-scoped audit was ever running behind that line.
 
 Skipping mini review on phase boundary is a documented anti-pattern: design problems compound across phases, and each skipped boundary lets defects propagate into the next phase where they become harder to localize. Plans without `## Phase N` headers cause Step 4.7 to SKIP gracefully (no phases → no boundaries).
 

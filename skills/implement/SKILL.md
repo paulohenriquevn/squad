@@ -238,7 +238,7 @@ The orchestrator aggregates four checks:
 | `diff_cohesion` | Files modified in phase N appear in each task's `#### Files to edit` declaration |
 | `wiring_summary` | `check_wiring.py` PASS for every symbol resolvable from phase files (pillar a non-negotiable) |
 | `checkpoint_consistency` | every phase task referenced by a real commit (`T{N.M}` in the message) is recorded `committed` in `.progress` — catches a finished task whose checkpoint update was skipped |
-| `code_quality_delta` | `/code-quality` on the phase's file delta (today: SKIP — delta-scoped CQ not implemented; full audit still runs at Step 5) |
+| `delta_audit_coverage` | Whether Step 5's `/code-quality` audit will cover this phase's files at all — a modified file whose language is not `ENABLED` in `rules/code-quality-languages.txt` is seen by no detector, here or there (MEDIUM). Replaces the unconditional SKIP that used to sit here: `cq_invoke` scores a whole plan, not a file subset, so a delta-scoped audit was never running — and a status line reading `SKIP` looked like a check that had. |
 
 **Verdict (severity-aggregated using `/review` vocabulary):**
 
