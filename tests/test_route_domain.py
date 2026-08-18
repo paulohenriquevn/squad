@@ -187,3 +187,21 @@ def test_a_domain_whose_specialist_exists_still_routes(tmp_path) -> None:
         encoding="utf-8",
     )
     assert route_main(["some-repo", "--rule", str(tmp_path / "rules" / "cycle-backlog.md")]) == 0
+
+
+def test_item_repo_field_accepts_a_monorepo_path(tmp_path: Path) -> None:
+    """`repo: packages/sdk` num arquivo de item tem de chegar inteiro ao roteador.
+
+    A tabela sempre aceitou caminho (`theo-cloud/dashboard`, documentado como "um
+    repo, dois domínios — resolvido por caminho"), mas o extrator do ITEM parava
+    na barra e devolvia `packages`. O roteamento então falhava por um repo que
+    ninguém escreveu. Descoberto ao derivar a tabela do `theokit-sdk`, onde 68 dos
+    88 itens citam `packages/sdk`.
+    """
+    item = tmp_path / "item.md"
+    item.write_text("## B-001 — algo\n\nrepo: packages/sdk\nstatus: raw\n", encoding="utf-8")
+    from route_domain import ITEM_REPO_RE
+
+    match = ITEM_REPO_RE.search(item.read_text(encoding="utf-8"))
+    assert match is not None
+    assert match.group(1) == "packages/sdk"

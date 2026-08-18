@@ -97,7 +97,9 @@ raw ──/discover measures──┬──> triaged ──/to-plan──> plann
 
 ## Domain routing
 
-`domain` is what assigns the item to a specialist. The registered set:
+`domain` is what assigns the item to a specialist. **This table is derived from the project it lives in** — `skills/backlog-init/scripts/detect_domains.py` reads the topology from disk and emits it. What follows is THIS repository's instance (the `theo` ecosystem), not a set every consumer must fit into.
+
+A consumer that keeps this table inherits a map of repos it does not have, and gate G1 then refuses every item it files — correctly, since it genuinely cannot tell who owns the work. Measured on `theokit-sdk` (2026-08-18): 88 items with measured `file:line` evidence, all `BLOCKER/unroutable_repo`. Re-derive with `--write` when adopting the kit.
 
 Verified on disk 2026-08-05 (`find -maxdepth 2 -name .git` + `git -C <repo> rev-list --count HEAD`), not copied from any inventory table.
 

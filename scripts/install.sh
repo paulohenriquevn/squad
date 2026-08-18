@@ -240,18 +240,24 @@ Next steps for the target project:
   1. (optional) Add a CLAUDE.md at the project root pointing to .claude/ and
      listing project-specific stack/conventions. Hooks read it on SessionStart.
 
-  2. Configure project-specific gates (defaults are no-op until set):
+  2. Derive the domain routing table FOR THIS PROJECT (it ships with the source
+     ecosystem's, and gate G1 refuses every item until this runs):
+       python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \
+         --write .claude/rules/cycle-backlog.md
+     Then write the specialist file(s) it names under .claude/agents/.
+
+  3. Configure project-specific gates (defaults are no-op until set):
        .claude/rules/code-quality-languages.txt    # uncomment languages you ship
        .claude/rules/discover-web-allowlist.txt    # domains for /discover-execute
        .claude/rules/code-quality-thresholds.txt   # per-project overrides
        .claude/rules/deps-audit-allowlist.txt      # CVE exemptions (with sunset)
 
-  3. Verify ralph-loop plugin is installed (required by /implement, /discover-execute,
+  4. Verify ralph-loop plugin is installed (required by /implement, /discover-execute,
      /plan-improve):
        jq '.enabledPlugins' ~/.claude/settings.json | grep ralph-loop
 
-  4. Open the project in Claude Code. The settings.json wires hooks; skills/
+  5. Open the project in Claude Code. The settings.json wires hooks; skills/
      and commands/ are auto-discovered.
 
-  5. First run: /to-plan "{one-sentence feature}"  OR  /grill-me {topic}
+  6. First run: /to-plan "{one-sentence feature}"  OR  /grill-me {topic}
 EOF

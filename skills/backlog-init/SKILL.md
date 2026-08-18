@@ -52,14 +52,25 @@ for d in */; do
 done
 ```
 
-Then classify each repo into one of the 8 domains in `cycle-backlog.md § Domain routing`.
+Then derive the routing table FROM THIS PROJECT:
+
+```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)   # plugin vs standalone
+python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . --json
+```
+
+The rule is the repository as the unit of ownership: an umbrella of checked-out repos gets one domain per repo; a single repo gets ONE domain named after it, with each monorepo package listed as a path-addressed entry (`packages/sdk`) — the form the routing table already supports.
+
+Do NOT classify the target's repos into the 8 domains that ship in `cycle-backlog.md`. Those are the `theo` ecosystem's, and they are there as that project's own instance of this table, not as a set every consumer must fit into. Measured on `theokit-sdk` (2026-08-18): 88 items carrying measured `file:line` evidence, every one of them `BLOCKER/unroutable_repo`, because `packages/sdk` cannot exist in another ecosystem's map.
 
 Two classes get **excluded from routing**, and the registry says so out loud rather than omitting them silently:
 
 - **Zero-commit repos** — nothing to maintain yet.
 - **Nested clones of the umbrella itself** — not a product; working in one duplicates the same repository into two checkouts that diverge in silence.
 
-A repo on disk that fits **no** registered domain is a finding, not a rounding error: surface it with `AskUserQuestion` and let the human either map it to an existing domain or declare it out of scope. Do not invent a ninth domain unprompted, and do not quietly drop it — a repo absent from the routing table can never receive an item.
+A repo on disk that the detector did not reach is a finding, not a rounding error: surface it with `AskUserQuestion` and let the human either fold it into a derived domain or declare it out of scope. Never quietly drop it — a repo absent from the routing table can never receive an item.
+
+The specialist file is NOT derived. `detect_domains.py` names `agents/<domain>.md`, and writing it is human work: `route_domain.py` exits 3 when the table names an agent that is not on disk, so a generated table with no specialist trades one blocker for another.
 
 ### Step 2 — Confirm the routing table
 
