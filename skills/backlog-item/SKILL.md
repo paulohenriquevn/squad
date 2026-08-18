@@ -71,7 +71,8 @@ Prefix the slug with the repo when the same problem shape recurs across repos (`
 ### Step 2 — Gates G1 + G2, executados (MANDATORY)
 
 ```bash
-python3 skills/backlog-item/scripts/check_intake_gates.py \
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)   # plugin vs standalone
+python3 "$ECO/skills/backlog-item/scripts/check_intake_gates.py" \
   --backlog BACKLOG.md \
   --repo {repo} \
   --term "{noun1}" --term "{noun2}"
