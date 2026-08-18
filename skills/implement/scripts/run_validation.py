@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from diff_symbols import added_symbols_from_shas, shas_from_progress
+from coverage_gate import evaluate as coverage_evaluate
 from suite_runners import (
     check_go_tests,
     check_python_tests,
@@ -140,37 +141,23 @@ def check_npm_lint(project_root: Path) -> dict[str, Any]:
 
 
 def check_coverage(project_root: Path) -> dict[str, Any]:
-    """Run `npm run test:coverage` and gate on exit code.
+    """Run the coverage command when there is one, then READ the report.
 
-    IMPORTANT HONESTY NOTE: this gate ONLY enforces that the coverage command
-    exits successfully. It does NOT parse coverage reports (lcov, json-summary)
-    to verify the ≥ 90% changed-files / 100% critical-paths thresholds promised
-    in SKILL.md. The threshold parsing depends on:
-      - the project shipping a coverage reporter (lcov-reporter, json-summary)
-      - knowing which files are "changed" vs "critical path" (requires plan metadata)
-    Both deferred until the project has a working `src/` to instrument.
-    Until then, the threshold claim is honored by the test runner's own
-    `--coverage --coverage-threshold` flag (if configured); this gate only
-    asserts the command ran. Cycle-implement.md soft gate "Coverage < 100% on
-    critical path" is currently advisory, not enforced here.
+    The verdict lives in coverage_gate.py; this function only decides whether a
+    coverage command exists and runs it. Before that split, the check returned
+    PASS on the command's exit code and never opened a report — see that
+    module's docstring.
     """
-    if not _has_package_json(project_root):
-        return {"name": "coverage", "status": "SKIP", "reason": "package.json absent — pre-code phase"}
-    if not _has_npm_script(project_root, "test:coverage"):
-        return {"name": "coverage", "status": "SKIP", "reason": "no 'test:coverage' script in package.json"}
-    result = _run_command(["npm", "run", "test:coverage", "--silent"], project_root, timeout=600)
-    if result.get("exit_code") == 0:
-        return {
-            "name": "npm run test:coverage",
-            "status": "PASS",
-            "note": "Exit-code gate only — coverage thresholds NOT parsed by this script (see docstring).",
-        }
-    return {
-        "name": "npm run test:coverage",
-        "status": "FAIL",
-        "exit_code": result.get("exit_code"),
-        "stderr_tail": result.get("stderr_tail", result.get("error", "")),
-    }
+    command_ran = False
+    command_failed = False
+    if _has_package_json(project_root) and _has_npm_script(project_root, "test:coverage"):
+        result = _run_command(["npm", "run", "test:coverage", "--silent"], project_root, timeout=600)
+        command_ran = True
+        command_failed = result.get("exit_code") != 0
+
+    return coverage_evaluate(
+        project_root, command_ran=command_ran, command_failed=command_failed
+    )
 
 
 def _read_progress(project_root: Path, slug: str) -> dict[str, Any] | None:

@@ -365,3 +365,78 @@ def test_no_manifest_at_all_still_skips_gracefully(fake_project: Path) -> None:
     gate = _check(data, "test_execution")
     assert gate["status"] == "SKIP"
     assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# Coverage gate. It used to run `npm run test:coverage` and call exit 0 a PASS
+# without ever reading a coverage report — a gate named after a number it never
+# looked at.
+# ---------------------------------------------------------------------------
+
+def _coverage_project(root: Path, script: str = "true") -> None:
+    (root / "package.json").write_text(
+        json.dumps({"name": "fake", "scripts": {"test:coverage": script}}), encoding="utf-8"
+    )
+
+
+def test_coverage_reads_the_json_summary_and_passes_above_threshold(fake_project: Path) -> None:
+    _coverage_project(fake_project)
+    summary = fake_project / "coverage" / "coverage-summary.json"
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    summary.write_text(json.dumps({"total": {"lines": {"pct": 95.5}}}), encoding="utf-8")
+    rc, data = _run_validation("test-slug", fake_project)
+    check = _check(data, "coverage")
+    assert check["status"] == "PASS"
+    assert check["coverage_pct"] == 95.5
+
+
+def test_coverage_below_threshold_fails(fake_project: Path) -> None:
+    """The whole point of the gate: a measured number under the floor blocks."""
+    _coverage_project(fake_project)
+    summary = fake_project / "coverage" / "coverage-summary.json"
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    summary.write_text(json.dumps({"total": {"lines": {"pct": 41.0}}}), encoding="utf-8")
+    rc, data = _run_validation("test-slug", fake_project)
+    assert rc == 1
+    check = _check(data, "coverage")
+    assert check["status"] == "FAIL"
+    assert check["coverage_pct"] == 41.0
+
+
+def test_coverage_without_a_parseable_report_is_not_a_pass(fake_project: Path) -> None:
+    """Exit 0 with no report means the threshold was never verified — WARN, not PASS."""
+    _coverage_project(fake_project)
+    rc, data = _run_validation("test-slug", fake_project)
+    check = _check(data, "coverage")
+    assert check["status"] == "WARN"
+    assert "not verified" in check["reason"].lower()
+
+
+def test_coverage_reads_cobertura_xml(fake_project: Path) -> None:
+    """coverage.py / Cobertura XML is the Python-side artifact."""
+    _coverage_project(fake_project)
+    (fake_project / "coverage.xml").write_text(
+        '<?xml version="1.0" ?><coverage line-rate="0.873"></coverage>', encoding="utf-8"
+    )
+    rc, data = _run_validation("test-slug", fake_project)
+    check = _check(data, "coverage")
+    assert check["status"] == "PASS"
+    assert check["coverage_pct"] == 87.3
+
+
+def test_coverage_threshold_comes_from_the_project_rules_file(fake_project: Path) -> None:
+    """A project may raise the floor; the report says where the number came from."""
+    _coverage_project(fake_project)
+    rules_dir = fake_project / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "code-quality-thresholds.txt").write_text(
+        "coverage.min_percent = 90\n", encoding="utf-8"
+    )
+    summary = fake_project / "coverage" / "coverage-summary.json"
+    summary.parent.mkdir(parents=True, exist_ok=True)
+    summary.write_text(json.dumps({"total": {"lines": {"pct": 85.0}}}), encoding="utf-8")
+    rc, data = _run_validation("test-slug", fake_project)
+    check = _check(data, "coverage")
+    assert check["status"] == "FAIL"
+    assert check["threshold"] == 90
+    assert check["threshold_source"] == "project"
