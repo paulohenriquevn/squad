@@ -299,3 +299,69 @@ def test_checkpoint_gate_catches_a_skipped_task_in_the_standalone_layout(tmp_pat
     result = check_checkpoint_consistency_gate(root, "s")
     assert result["status"] == "FAIL"
     assert [f["code"] for f in result["findings"]] == ["plan_task_absent_from_progress"]
+
+
+# ---------------------------------------------------------------------------
+# Test-execution gate (multi-language). The npm-only checks answered SKIP on a
+# Python/Go/Rust repo, overall became PARTIAL and PARTIAL exits 0 — so
+# VALIDATION_GATE_PASSED could be emitted without a single test having run.
+# ---------------------------------------------------------------------------
+
+def _check(data: dict, name: str) -> dict:
+    return next(c for c in data["checks"] if c.get("name") == name)
+
+
+def test_python_manifest_with_passing_tests_runs_the_suite(fake_project: Path) -> None:
+    """A Python project's tests actually execute — not SKIP for lack of package.json."""
+    (fake_project / "pyproject.toml").write_text("[project]\nname='fake'\n", encoding="utf-8")
+    (fake_project / "tests" / "test_ok.py").write_text(
+        "def test_ok():\n    assert True\n", encoding="utf-8"
+    )
+    rc, data = _run_validation("test-slug", fake_project)
+    suite = _check(data, "python tests")
+    assert suite["status"] == "PASS", suite
+    assert _check(data, "test_execution")["status"] == "PASS"
+
+
+def test_python_failing_tests_fail_the_validation(fake_project: Path) -> None:
+    """A red Python suite blocks the gate exactly like a red npm suite does."""
+    (fake_project / "pyproject.toml").write_text("[project]\nname='fake'\n", encoding="utf-8")
+    (fake_project / "tests" / "test_red.py").write_text(
+        "def test_red():\n    assert False\n", encoding="utf-8"
+    )
+    rc, data = _run_validation("test-slug", fake_project)
+    assert rc == 1
+    assert data["overall_status"] == "FAIL"
+    assert _check(data, "python tests")["status"] == "FAIL"
+
+
+def test_manifest_present_but_no_suite_ran_is_a_fail(fake_project: Path) -> None:
+    """The load-bearing case: a language manifest exists and nothing executed.
+
+    SKIP here is indistinguishable from 'legitimately nothing to check', which is
+    how a green validation could mean no test ever ran. It must FAIL instead.
+    """
+    (fake_project / "pyproject.toml").write_text("[project]\nname='fake'\n", encoding="utf-8")
+    rc, data = _run_validation("test-slug", fake_project)
+    assert rc == 1
+    gate = _check(data, "test_execution")
+    assert gate["status"] == "FAIL"
+    assert "python" in gate["languages_detected"]
+
+
+def test_package_json_without_test_script_is_a_fail(fake_project: Path) -> None:
+    """A JS project that cannot run tests at all is not a pass."""
+    (fake_project / "package.json").write_text(
+        json.dumps({"name": "fake", "scripts": {"lint": "true"}}), encoding="utf-8"
+    )
+    rc, data = _run_validation("test-slug", fake_project)
+    assert rc == 1
+    assert _check(data, "test_execution")["status"] == "FAIL"
+
+
+def test_no_manifest_at_all_still_skips_gracefully(fake_project: Path) -> None:
+    """Pre-code phase is a legitimate SKIP — the gate must not punish an empty repo."""
+    rc, data = _run_validation("test-slug", fake_project)
+    gate = _check(data, "test_execution")
+    assert gate["status"] == "SKIP"
+    assert rc == 0

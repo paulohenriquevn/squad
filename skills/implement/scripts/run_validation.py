@@ -2,7 +2,12 @@
 """Final validation gate for /implement halt-loop.
 
 Runs (and gates on):
-  - npm test         (skip if package.json absent — pre-code phase)
+  - the test suite of every language whose manifest is at the repo root:
+    npm test (package.json), pytest/unittest (pyproject.toml/setup.py),
+    go test (go.mod), cargo test (Cargo.toml) — see suite_runners.py
+  - test_execution — FAILs when a manifest exists and NO suite executed. Before
+    this gate, a non-npm repo skipped every executive check, landed on PARTIAL,
+    and PARTIAL exits 0: the completion promise could be emitted with no test run.
   - npm run typecheck
   - npm run lint
   - npm run test:coverage (≥ 90% on changed files; 100% on critical paths)
@@ -33,6 +38,14 @@ from pathlib import Path
 from typing import Any
 
 from diff_symbols import added_symbols_from_shas, shas_from_progress
+from suite_runners import (
+    check_go_tests,
+    check_python_tests,
+    check_rust_tests,
+    check_test_execution,
+    detect_languages,
+    run_command,
+)
 from wiring_recheck import recheck_pillar_a
 
 
@@ -63,23 +76,8 @@ def _has_npm_script(project_root: Path, script: str) -> bool:
 
 
 def _run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any]:
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        return {
-            "exit_code": result.returncode,
-            "stdout_tail": result.stdout[-500:] if result.stdout else "",
-            "stderr_tail": result.stderr[-500:] if result.stderr else "",
-        }
-    except subprocess.TimeoutExpired:
-        return {"exit_code": -1, "error": f"timeout after {timeout}s"}
-    except FileNotFoundError as exc:
-        return {"exit_code": -1, "error": f"command not found: {exc}"}
+    """Kept as the in-module name; the single implementation lives in suite_runners."""
+    return run_command(cmd, cwd, timeout)
 
 
 def check_npm_test(project_root: Path) -> dict[str, Any]:
@@ -534,10 +532,21 @@ def main() -> int:
 
     project_root = args.project_root if args.project_root else _find_project_root(Path.cwd())
 
+    # Every language whose suite the gate knows how to run. The npm check stays
+    # first for report stability; test_execution consolidates all of them and is
+    # what turns "nothing ran" into a FAIL instead of a silent PARTIAL.
+    suite_checks = [
+        check_npm_test(project_root),
+        check_python_tests(project_root),
+        check_go_tests(project_root),
+        check_rust_tests(project_root),
+    ]
+
     checks = [
         check_progress_schema_gate(project_root, args.slug),
         check_checkpoint_consistency_gate(project_root, args.slug),
-        check_npm_test(project_root),
+        *suite_checks,
+        check_test_execution(project_root, suite_checks),
         check_npm_typecheck(project_root),
         check_npm_lint(project_root),
         check_coverage(project_root),
