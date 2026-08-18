@@ -136,11 +136,13 @@ There is no "with caveats" band: an item is either in the registry or it is not.
 
 | # | Gate | Blocks on |
 |---|---|---|
-| G1 | **Domain + repo resolve** | `domain` not in the registered set, or `repo` not in the umbrella inventory. An item nobody owns is an item nobody does. |
-| G2 | **Dedup search ran** | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
+| G1 | **Domain + repo resolve** (executado por `skills/backlog-item/scripts/check_intake_gates.py`, que delega a `scripts/route_domain.py`) | `domain` not in the registered set, or `repo` not in the umbrella inventory. An item nobody owns is an item nobody does. |
+| G2 | **Dedup search ran** (mesmo script; rodá-lo É a evidência) | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
 | G3 | **Single domain** | The description spans two domains. Split it; one item, one specialist. |
 | G4 | **Verifiable DoD** | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |
 | G5 | **No prior-art justification** | `why_now` justifies the item by what another project does rather than by something that changed in our system. This is the Squad signature rule (Unbreakable Rule: evidence is ours or it is not evidence). Reject and ask for the local reason. |
+
+G1 e G2 são mecanizáveis e passaram a ser mecanizados; G3, G4 e G5 são julgamento e seguem conversacionais, cobertos pela bateria de evals da skill — automatizá-los produziria vereditos sobre linguagem que nenhuma medição sustenta.
 
 G5 does not forbid *knowing* how others solved a problem — it forbids that knowledge from being the **justification** for the work. "We need caching because project X has it" is rejected. "We need caching because the endpoint makes 4 round-trips per request" is accepted, whether or not project X inspired the look.
 
