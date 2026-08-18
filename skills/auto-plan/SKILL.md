@@ -147,7 +147,7 @@ Skill(/plan-confidence {topic-slug})         # re-score
 
 `inject_must_fix.py` parses the `## MUST FIX` section of the edge-case report and appends each item as a sub-task (or ADR-deferred note) into the plan. The user does NOT have to absorb them manually. `/plan-confidence` is re-run after injection to validate the augmented plan.
 
-`inject_milestone_id.py` writes the `milestone_id: M<N>` field into the plan's YAML frontmatter (per `cycle-roadmap § Plan metadata contract`). In ad-hoc mode this script is skipped — the plan frontmatter carries no `milestone_id` and `cycle-release` will skip the checkbox flip with WARN.
+`inject_milestone_id.py` writes the `milestone_id: M<N>` field into the plan's YAML frontmatter (the field `cycle-acceptance`'s flip phase reads — consumed by `skills/release/scripts/flip_milestone_checkbox.py`). In ad-hoc mode this script is skipped — the plan frontmatter carries no `milestone_id` and `cycle-release` will skip the checkbox flip with WARN.
 
 #### Phase A — Attest (always, post-plan)
 
