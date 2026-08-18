@@ -175,6 +175,7 @@ Skill(/review {topic-slug})
 ```
 
 - review verdict = `READY_TO_MERGE` → proceed to Phase Rel (unless `--no-release`).
+- review verdict = `READY_TO_MERGE_WITH_FOLLOWUPS` → proceed to Phase Rel, and carry the registered followups into the release PR description. The verdict already proves every HIGH is owned (`consolidate_findings.py` fails closed otherwise), so re-litigating it here would only re-open a question the gate answered.
 - review verdict = `NEEDS_FIXES` → loop once back to `/implement` for targeted fixes, then re-run `/review`. After 1 loop attempt, halt with `BLOCKED`.
 - review verdict = `NEEDS_DEEPER` → halt; loop back to `/to-plan` requires fresh human decision.
 
