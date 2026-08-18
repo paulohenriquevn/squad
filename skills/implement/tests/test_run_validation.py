@@ -440,3 +440,85 @@ def test_coverage_threshold_comes_from_the_project_rules_file(fake_project: Path
     assert check["status"] == "FAIL"
     assert check["threshold"] == 90
     assert check["threshold_source"] == "project"
+
+
+# ---------------------------------------------------------------------------
+# Gates the agent ran on its own honour. check_tdd_shape.py and mini_review.py
+# were invoked from SKILL.md prose only; the final gate never asked whether
+# either had run, so skipping them left no trace.
+# ---------------------------------------------------------------------------
+
+_PHASED_PLAN = """# Plan
+
+## Phase 1 — foundation
+
+### T1.1 — first
+#### TDD
+assert add(1, 2) == 3
+"""
+
+
+def _write_plan(project_root: Path, slug: str, body: str) -> None:
+    plans = project_root / "knowledge-base" / "plans"
+    plans.mkdir(parents=True, exist_ok=True)
+    (plans / f"{slug}-plan.md").write_text(body, encoding="utf-8")
+
+
+def _write_standalone_progress(project_root: Path, slug: str, tasks: list[dict]) -> None:
+    impl = project_root / "knowledge-base" / "implementations"
+    impl.mkdir(parents=True, exist_ok=True)
+    (impl / f".progress-{slug}.json").write_text(
+        json.dumps({"slug": slug, "tasks": tasks}), encoding="utf-8"
+    )
+
+
+def test_skipped_phase_boundary_review_is_caught_by_the_final_gate(fake_project: Path) -> None:
+    """A fully committed phase with no mini-review report must FAIL the validation."""
+    _write_plan(fake_project, "phased", _PHASED_PLAN)
+    _write_standalone_progress(fake_project, "phased", [
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "abc", "files": ["src/a.py"]},
+    ])
+    rc, data = _run_validation("phased", fake_project)
+    gate = _check(data, "phase_review")
+    assert gate["status"] == "FAIL"
+    assert gate["phases_closed"] == ["1"]
+
+
+def test_phase_boundary_review_present_passes(fake_project: Path) -> None:
+    _write_plan(fake_project, "phased", _PHASED_PLAN)
+    _write_standalone_progress(fake_project, "phased", [
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "abc", "files": ["src/a.py"]},
+    ])
+    reviews = fake_project / "knowledge-base" / "mini-reviews"
+    reviews.mkdir(parents=True, exist_ok=True)
+    (reviews / "phased-phase1-review-2026-08-18.md").write_text("ok", encoding="utf-8")
+    rc, data = _run_validation("phased", fake_project)
+    assert _check(data, "phase_review")["status"] == "PASS"
+
+
+def test_plan_task_without_an_executable_tdd_shape_fails(fake_project: Path) -> None:
+    """The Step 2 pre-loop gate is re-asserted at the end: a prose-only TDD block
+    means the halt-loop should never have started."""
+    _write_plan(fake_project, "vague", """# Plan
+
+### T1.1 — do the thing
+#### TDD
+We should test that it works well.
+""")
+    _write_standalone_progress(fake_project, "vague", [
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "abc", "files": ["src/a.py"]},
+    ])
+    rc, data = _run_validation("vague", fake_project)
+    assert rc == 1
+    gate = _check(data, "tdd_shape")
+    assert gate["status"] == "FAIL"
+    assert gate["tasks_without_shape"] == ["T1.1"]
+
+
+def test_executable_tdd_shape_passes(fake_project: Path) -> None:
+    _write_plan(fake_project, "sharp", _PHASED_PLAN)
+    _write_standalone_progress(fake_project, "sharp", [
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "abc", "files": ["src/a.py"]},
+    ])
+    rc, data = _run_validation("sharp", fake_project)
+    assert _check(data, "tdd_shape")["status"] == "PASS"

@@ -463,6 +463,68 @@ def check_checkpoint_consistency_gate(project_root: Path, slug: str) -> dict[str
     }
 
 
+def check_tdd_shape_gate(project_root: Path, slug: str) -> dict[str, Any]:
+    """Re-assert the Step 2 pre-loop gate at the end of the run.
+
+    `check_tdd_shape.py` was invoked from SKILL.md prose only. Nothing downstream
+    ever asked whether it had run, so a halt-loop driven from a prose-only plan
+    left no trace — the exact gap `rules/cycle-implement.md § Hard gates
+    (pre-loop, at Step 2)` describes as blocking.
+    """
+    plan = _find_plan(project_root, slug)
+    if plan is None:
+        return {"name": "tdd_shape", "status": "SKIP",
+                "reason": f"plan not found for slug '{slug}' — cannot audit TDD shapes"}
+    from check_tdd_shape import check_tdd_shape
+
+    report = check_tdd_shape(plan)
+    if report.total_tasks == 0:
+        return {"name": "tdd_shape", "status": "SKIP",
+                "reason": "the plan declares no `### T{n}.{m}` task blocks"}
+    without = [t.task_id for t in report.tasks if not t.has_executable_shape]
+    return {
+        "name": "tdd_shape",
+        "status": "FAIL" if without else "PASS",
+        "total_tasks": report.total_tasks,
+        "tasks_with_shape": report.tasks_with_shape,
+        "tasks_without_shape": without,
+        "findings": [
+            {"severity": "HIGH", "code": "tdd_shape_missing",
+             "message": f"{tid}: no executable RED-test shape (assertion / GWT / test_fn) "
+                        "— the halt-loop should have been BLOCKED at Step 2."}
+            for tid in without
+        ],
+    }
+
+
+def check_phase_review_gate(project_root: Path, slug: str) -> dict[str, Any]:
+    """Did the Step 4.7 mini review actually run at every phase boundary it closed?"""
+    plan = _find_plan(project_root, slug)
+    if plan is None:
+        return {"name": "phase_review", "status": "SKIP",
+                "reason": f"plan not found for slug '{slug}' — cannot audit phase boundaries"}
+    progress = _read_progress(project_root, slug)
+    if progress is None:
+        return {"name": "phase_review", "status": "SKIP",
+                "reason": "no progress checkpoint — implement may not have run"}
+    from check_phase_review import check_phase_review
+
+    review_dirs = [
+        project_root / ".claude" / "knowledge-base" / "mini-reviews",
+        project_root / "knowledge-base" / "mini-reviews",
+    ]
+    report = check_phase_review(plan, progress, slug, review_dirs)
+    return {
+        "name": "phase_review",
+        "status": report.status,
+        "phases_declared": report.phases_declared,
+        "phases_closed": report.phases_closed,
+        "phases_reviewed": report.phases_reviewed,
+        "findings": [{"severity": f.severity, "code": f.code, "message": f.message}
+                     for f in report.findings],
+    }
+
+
 def check_acceptance_criteria_gate(project_root: Path, slug: str) -> dict[str, Any]:
     """Enforce the plan's AC/DoD obligations that run_validation does not otherwise
     cover (file-size budget, CHANGELOG-updated) and surface the non-mechanizable
@@ -538,6 +600,8 @@ def main() -> int:
         check_npm_lint(project_root),
         check_coverage(project_root),
         wiring_summary(project_root, args.slug),
+        check_tdd_shape_gate(project_root, args.slug),
+        check_phase_review_gate(project_root, args.slug),
         check_acceptance_criteria_gate(project_root, args.slug),
         check_test_obligations_gate(project_root, args.slug),
         check_patterns_advisory(project_root, args.slug),
