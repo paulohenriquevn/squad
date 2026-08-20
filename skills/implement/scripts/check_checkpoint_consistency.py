@@ -142,6 +142,28 @@ def check_checkpoint_consistency(
                 "exists in the repository. The checkpoint points at a fabricated or "
                 "stale SHA."))
 
+    # B-041 — `committed` means "has a commit", and every reader takes it to mean "done".
+    #
+    # b020's T1.4 is `committed` against 0346d73, whose own body reports "load 28.09 -> 1 failed /
+    # load 30.18 -> 2 failed" and says "Not three greens, and reported as such" — against a DoD of
+    # three consecutive green runs. Both directions above PASS there, because the sha is real and
+    # the commit is real. Nothing reads the acceptance criteria.
+    #
+    # This does not read them either, and that is deliberate. Grading prose is what B-036 measured
+    # the cost of: reading a measurement as a limit invented an obligation no author wrote. What a
+    # gate CAN see is that a claim was made with no evidence attached — which is exactly what the
+    # reader auditing b020 needed and did not have.
+    #
+    # INFO, never blocking. Ten checkpoints predate the field and nine are unremarkable; a gate that
+    # turns the whole audit trail red in one step gets disabled (B-039 D3), and a docs task or a
+    # rename legitimately has no measurement to cite.
+    for tid in sorted(committed_ids):
+        if not str(by_id[tid].get("dod_evidence") or "").strip():
+            findings.append(Finding(
+                "INFO", "committed_without_dod_evidence",
+                f"Task {tid} is 'committed' with no `dod_evidence`. That records a commit, not that "
+                "its acceptance criteria hold — add a pointer to the measurement that closed it."))
+
     referenced = _task_ids_in_git_history(repo_root, plan_task_ids)
 
     # Inventory: every task the PLAN declares must be accounted for in the checkpoint.

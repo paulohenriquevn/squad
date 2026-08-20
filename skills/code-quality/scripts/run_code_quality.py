@@ -314,17 +314,22 @@ def _emit_and_exit(
 ) -> int:
     verdict, stable_ids = compute_verdict(findings)
 
-    # B-092 — an audit that ran zero detectors is not a clean audit. Before this
-    # check, an empty/misconfigured `code-quality-languages.txt` (or a config
-    # whose every ENABLED language was skipped for a missing manifest) produced
-    # `findings == []`, and `compute_verdict([])` silently reports PASS. That PASS
-    # is consumed as a HARD gate by `cycle-review.md` (admits on PASS /
-    # PASS_WITH_CAVEATS) and by `skills/implement/scripts/run_validation.py`
-    # (fails on FAIL_HARD / INVALID) — both were reading a constant. Measured
-    # 2026-08-18: `languages_audited: []` returned in under a second with
-    # `verdict: PASS`. Force INVALID so an empty audit can never again read as
-    # a clean one — the same score cap the golden rule already uses for
-    # structural integrity failures (§ 1).
+    # B-084 / B-092 — an audit that ran zero detectors is not a clean audit.
+    #
+    # Before this check, an empty or misconfigured `code-quality-languages.txt` — or a config whose
+    # every ENABLED language was skipped for a missing manifest — produced `findings == []`, and
+    # `compute_verdict([])` reports PASS. That PASS is consumed as a HARD gate by `cycle-review.md`
+    # (which admits on PASS / PASS_WITH_CAVEATS) and by `skills/implement/scripts/run_validation.py`
+    # (which fails on FAIL_HARD / INVALID). Both were reading a constant.
+    #
+    # This is the umbrella defect B-084 names, in the gate that surfaced it: the gate reports on the
+    # set it managed to see, and nothing verified that set was the right one — or, here, that it was
+    # non-empty at all.
+    #
+    # It does NOT close B-060. That item is "audits TypeScript only, so 220 Python files pass a gate
+    # that never looked at them": the gate looked at SOMETHING, just not at Python. This fires only
+    # when it looked at nothing. B-060's fix is enabling `python` in the languages file; this guard
+    # is what stops that configuration regressing silently to a PASS afterwards.
     if verdict == "PASS" and not languages_audited:
         verdict = "INVALID"
         stable_ids = list(stable_ids)

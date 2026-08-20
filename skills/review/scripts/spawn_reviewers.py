@@ -337,7 +337,18 @@ def main() -> int:
     findings_dir.mkdir(parents=True, exist_ok=True)
     (findings_dir / ".gitkeep").touch(exist_ok=True)
 
+    # B-030 — record the state of the tree the agents are about to read, so the consolidator can
+    # tell whether it moved while they read it. Recorded, never enforced: this is the detector
+    # beside the isolation, because isolation that silently stops working looks like isolation.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from consolidate_findings import record_tree_state  # noqa: PLC0415
+
+    tree_state = record_tree_state(Path.cwd(), findings_dir)
+
     output = {
+        # None when this is not a readable git repo — an honest absence, and the consolidator
+        # treats a missing record as "nothing to compare", never as contamination.
+        "tree_state_recorded": tree_state is not None,
         "plan": str(args.plan),
         "slug": args.slug,
         "date": date_str,

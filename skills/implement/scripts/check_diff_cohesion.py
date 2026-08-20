@@ -167,16 +167,32 @@ def check_diff_cohesion(
 
     findings: list[Finding] = []
 
-    # Scope-drift detection requires a non-empty declared scope to compare against.
-    # When declared is empty, only emit the MEDIUM (no_declared_scope) — we cannot
-    # distinguish "drift" from "everything is undeclared" in that state.
+    # B-038 — a phase that declared NOTHING used to get the verdict a fully-declared phase gets.
+    #
+    # The old comment here said: "we cannot distinguish drift from everything-is-undeclared in that
+    # state." True, and the wrong conclusion. Not being able to distinguish them is precisely the
+    # condition under which a check must REFUSE TO ANSWER — "cannot check" is not "checked, and
+    # fine". `cycle-acceptance.md` draws the same line between NOT_VALIDATED and ACCEPTED, and
+    # `coverage_gate.py` reports WARN rather than PASS for a report it could not parse.
+    #
+    # Measured cost of the old behaviour: the b033 phase-2 mini review of 2026-08-18 reported
+    # declared_files 0, modified_files 14, drift_files 0 — verdict PHASE_REVIEW_PASS. The same check
+    # flagged four files on b025 phase 1, one on phase 3, two on b020 and one on b034, correctly and
+    # each needing a fix. So declaring some files bought scrutiny and declaring none bought a pass.
+    #
+    # HIGH only when the phase actually MODIFIED something: a phase that declared nothing and changed
+    # nothing is a documentation phase, there is nothing that could have drifted, and failing it
+    # would teach people to declare a file they did not touch — the workaround that kills gates.
     if not declared:
+        sample = ", ".join(sorted(modified)[:5])
         findings.append(Finding(
-            severity="MEDIUM",
+            severity="HIGH" if modified else "MEDIUM",
             code="no_declared_scope",
             message=(
-                f"Phase {phase} tasks did not declare `#### Files to edit` sections. "
-                "Cannot compare against declared scope; scope-drift detection skipped."
+                f"Phase {phase} tasks did not declare `#### Files to edit` sections, so scope drift "
+                f"CANNOT be checked for the {len(modified)} file(s) it modified"
+                + (f" (first 5: {sample})" if modified else "")
+                + ". Declare them, or record why they are out of scope."
             ),
         ))
         drift: set[str] = set()

@@ -64,12 +64,24 @@ If any HARD check fails, refuse with the missing piece surfaced honestly.
 ### Step 2 — Detect current version and compute next
 
 ```bash
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+CURRENT=$(python3 skills/release/scripts/detect_current_version.py)
 NEXT_VERSION=$(python3 skills/release/scripts/compute_next_version.py \
-  --current "$LAST_TAG" \
+  --current "$CURRENT" \
   --bump "${ARGUMENTS:-auto}" \
   --changelog CHANGELOG.md)
 ```
+
+**Not `git describe` (B-043).** That walks the ANCESTRY of HEAD, and in this branching model
+(`rules/git-safety.md` § 1) a release tag is created on the merge commit that lands on `main`, so it
+is never an ancestor of `workspace`. Measured on this repository: `git describe --tags --abbrev=0`
+returned `v0.52.1` while npm served `0.64.0` — **twelve versions stale, structurally**, not because
+a fetch was forgotten. A release cut from that base computes a version BELOW the published one, and
+the stop condition in § Stop conditions ("tag already exists for the computed version") cannot fire,
+because that version was never tagged.
+
+`detect_current_version.py` takes the maximum of the highest semver tag and the manifest version:
+each alone has a measured failure mode — 13 of 43 published versions have no tag at all (B-050), and
+the manifest lags a tag between the release commit and the merge.
 
 If `compute_next_version.py` returns `AMBIGUOUS`, AskUserQuestion ONCE (major / minor / patch) and re-run with the chosen value.
 
@@ -89,10 +101,39 @@ This script:
 2. Leaves a fresh empty `## [Unreleased]` at the top.
 3. Preserves Keep-a-Changelog category ordering (`Added` → `Changed` → `Deprecated` → `Removed` → `Fixed` → `Security`).
 
+### Step 3.5 — Write the version into every site that carries it
+
+```bash
+CURRENT_VERSION=$(python3 skills/release/scripts/detect_current_version.py --quiet)
+python3 skills/release/scripts/bump_version.py \
+  --root . \
+  --from "$CURRENT_VERSION" \
+  --to "$NEXT_VERSION"
+```
+
+**A non-zero exit BLOCKS the release. It is not a warning.** The script writes the declared sites
+(`package.json`, `src/index.ts`) and refuses in three cases, each of which means the tree is not in
+the state this release assumes:
+
+| Exit | Meaning |
+|---|---|
+| 2 | a declared site is missing, has no version, or carries something other than `$CURRENT_VERSION` |
+| 1 | a tracked file carries the old version and is NOT a declared site — it is NAMED and left alone |
+| 0 | every site written; the sites it wrote are listed |
+
+Exit 1 is the one worth reading. A version string in a test fixture or a documented install example
+is not a site, and rewriting it blindly is a corruption no gate would catch — so the script reports
+it and stops, and a human decides whether it belongs in `SITES` or in `IGNORED`.
+
+This step exists because B-059 measured the cost of the alternative: cutting 0.63.0, two of three
+files were bumped by hand and `npm publish` aborted in `prepublishOnly` with
+`expected '0.62.0' to be '0.63.0'` — after the tag had been cut and pushed. `v0.63.0` still points
+at a commit whose exported constant is wrong.
+
 ### Step 4 — Commit the release prep on workspace, then promote to develop
 
 ```bash
-git add CHANGELOG.md
+git add CHANGELOG.md package.json src/index.ts
 git commit -m "chore(release): ${NEXT_VERSION}"
 git push origin workspace
 
@@ -261,5 +302,5 @@ This skill is `phase 1` (only phase) of `cycle-release`. The cycle rule SoT is `
 - Upstream cycle: [`rules/cycle-review.md`](../../rules/cycle-review.md) — consumes `READY_TO_MERGE` verdict
 - Conventions: [`rules/public-copy.md`](../../rules/public-copy.md) — release notes lint
 - Hooks enforced: `hooks/validate-command.sh` (git safety + Co-Authored-By block), `hooks/stop-validation.sh` (CHANGELOG hard gate)
-- Scripts: `scripts/compute_next_version.py`, `scripts/promote_unreleased.py`, `scripts/render_release_notes.py`, `scripts/changelog_section_nonempty.py`, `scripts/flip_milestone_checkbox.py` (Step 7.5 — pending implementation, see Task #20)
+- Scripts: `scripts/compute_next_version.py`, `scripts/bump_version.py`, `scripts/promote_unreleased.py`, `scripts/render_release_notes.py`, `scripts/changelog_section_nonempty.py`, `scripts/flip_milestone_checkbox.py` (Step 7.5 — pending implementation, see Task #20)
 - Macro super-loop: [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md) — defines the single-flip invariant + the roadmap-runs file contract that Step 7.5 satisfies
