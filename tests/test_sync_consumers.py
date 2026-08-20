@@ -123,3 +123,16 @@ def test_a_rule_the_target_already_has_is_never_reported(tmp_path: Path) -> None
     (eco / "rules" / "live-target.txt").write_text("CONFIG DO PROJETO", encoding="utf-8")
 
     assert missing_rule_dependencies(kit, eco, ["skills/x/SKILL.md"]) == []
+
+
+# ---------------------------------------------------------------------------
+# Grill kit-domain-agents-install, decisão 5: agente de domínio é do PROJETO.
+# Nenhuma das duas direções faz sentido — nem o kit empurrar, nem colher.
+# ---------------------------------------------------------------------------
+
+def test_agents_are_not_in_the_sync_scope() -> None:
+    """Sem isto, o kit empurra os oito especialistas do `theo` de volta a cada sync,
+    desfazendo a limpeza que o consumidor fez."""
+    from sync_consumers import delta_prefixes
+    assert "agents/" not in delta_prefixes()
+    assert "skills/" in delta_prefixes()

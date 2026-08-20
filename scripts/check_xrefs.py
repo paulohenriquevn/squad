@@ -109,6 +109,9 @@ BACKTICK_PATH_RE = re.compile(r"`(\.?[a-zA-Z0-9_./\-]+\.(?:md|py|sh|json|txt|yml
 CYCLE_REF_RE = re.compile(r"`?cycle-([a-z]+)`?")
 # Trechos entre crases — onde uma citação a um cycle é uma referência, não prosa.
 BACKTICK_SPAN_RE = re.compile(r"`([^`\n]+)`")
+# Mantido em sincronia com detect_domains.UNREVIEWED_MARKER — duplicar a string é
+# aceitável aqui: importar cross-slice acoplaria o validador a uma skill.
+UNREVIEWED_MARKER = "<!-- POR PREENCHER: só um humano sabe isto -->"
 # `cycle-<nome>` dentro de um trecho de código, com o sufixo .md opcional.
 CYCLE_NAME_RE = re.compile(r"\bcycle-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)")
 SKILL_REF_RE = re.compile(r"`?(?:\.claude/)?skills/([a-z0-9\-]+)/SKILL\.md`?")
@@ -397,6 +400,30 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     for skill_md in (ecosystem_dir / "skills").rglob("SKILL.md"):
         if skill_md.is_file():
             _scan_for_cycle_refs(skill_md)
+
+    # Check 9: especialista DERIVADO que ninguém revisou.
+    # `detect_domains.py` gera um esqueleto para que a rota deixe de ser BROKEN, com as
+    # seções de julgamento (comandos, achados reais, falsos positivos, invariantes)
+    # vazias e marcadas. Um esqueleto silencioso é pior que rota quebrada: a rota
+    # quebrada avisa, e ele parece um especialista pronto. WARN enquanto o marcador
+    # existir — some sozinho quando alguém preencher.
+    agents_dir = ecosystem_dir / "agents"
+    if agents_dir.is_dir():
+        for agent_md in sorted(agents_dir.glob("*.md")):
+            try:
+                body = agent_md.read_text(encoding="utf-8-sig")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if UNREVIEWED_MARKER not in body:
+                continue
+            pending = body.count(UNREVIEWED_MARKER)
+            findings.append({
+                "severity": "WARN",
+                "check": "specialist_unreviewed",
+                "agent": agent_md.stem,
+                "message": f"agents/{agent_md.name} é um esqueleto derivado com {pending} "
+                           "seção(ões) por preencher — o roteamento funciona, o julgamento não",
+            })
 
     # Check 4: orphan skills (not in any cycle, not auxiliary)
     skills_in_cycles: set[str] = set()

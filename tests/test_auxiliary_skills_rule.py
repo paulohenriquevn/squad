@@ -73,3 +73,46 @@ def test_a_declared_skill_that_does_not_exist_is_not_an_error(tmp_path: Path) ->
                declared=["collapse-detection-specialist", "ja-removida"])
     assert not _warns_about(eco, "ja-removida")
     assert not _warns_about(eco, "collapse-detection-specialist")
+
+
+# ---------------------------------------------------------------------------
+# Grill kit-domain-agents-install, decisão 2: o esqueleto derivado é WARN
+# enquanto ninguém o revisou. Sem isso ele vira "especialista que ninguém
+# completou" com aparência de cobertura — o defeito que o D5 persegue.
+# ---------------------------------------------------------------------------
+
+def _eco_with_agent(root: Path, body: str) -> Path:
+    eco = _eco(root, skills=[], declared=None)
+    (eco / "agents").mkdir(parents=True, exist_ok=True)
+    (eco / "agents" / "meu-dominio.md").write_text(body, encoding="utf-8")
+    return eco
+
+
+def test_an_unreviewed_skeleton_is_warned_about(tmp_path: Path) -> None:
+    eco = _eco_with_agent(tmp_path, """---
+name: meu-dominio
+derived: true
+reviewed_by_human: false
+---
+
+# meu-dominio
+
+## Invariantes
+
+<!-- POR PREENCHER: só um humano sabe isto -->
+""")
+    assert _warns_about(eco, "meu-dominio"), "um esqueleto silencioso parece um especialista pronto"
+
+
+def test_a_filled_specialist_is_not_warned_about(tmp_path: Path) -> None:
+    eco = _eco_with_agent(tmp_path, """---
+name: meu-dominio
+---
+
+# meu-dominio
+
+## Invariantes
+
+O índice e o disco não divergem.
+""")
+    assert not _warns_about(eco, "meu-dominio")

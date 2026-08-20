@@ -39,12 +39,16 @@ fi
 TARGET="$1"
 FORCE=0
 MERGE=0
-case "${2:-}" in
-  --force) FORCE=1 ;;
-  --merge) MERGE=1 ;;
-  "") ;;
-  *) echo "ERROR: unknown flag ${2}. Expected --force or --merge." >&2; exit 2 ;;
-esac
+WITH_DOMAIN_AGENTS=0
+for arg in "${@:2}"; do
+  case "$arg" in
+    --force) FORCE=1 ;;
+    --merge) MERGE=1 ;;
+    --with-domain-agents) WITH_DOMAIN_AGENTS=1 ;;
+    "") ;;
+    *) echo "ERROR: unknown flag ${arg}. Expected --force, --merge or --with-domain-agents." >&2; exit 2 ;;
+  esac
+done
 
 if [ ! -d "$TARGET" ]; then
   echo "ERROR: target is not a directory: $TARGET" >&2
@@ -106,6 +110,22 @@ for item in skills rules hooks commands scripts; do
     echo "==> Merging $item/ (adding, deleting nothing)"
     mkdir -p "$ECO/$item"
     if [ "$item" = "rules" ]; then
+      # A tabela de roteamento é configuração do projeto e mora num `.md` do kit.
+      # Guardá-la antes de copiar e reinjetá-la depois: medido no `speculative`, a
+      # reinstalação restaurou a tabela do ecossistema de origem por cima da derivada
+      # e `route_domain <projeto>` foi de exit 0 para exit 1 — o projeto deixou de
+      # rotear itens sobre si mesmo. O resto de cycle-backlog.md é contrato do kit.
+      ROUTING_KEEP=""
+      if [ -f "$ECO/rules/cycle-backlog.md" ]; then
+        ROUTING_KEEP="$(mktemp)"
+        python3 - "$ECO/rules/cycle-backlog.md" "$ROUTING_KEEP" <<'PYEOF'
+import re, sys
+src, out = sys.argv[1], sys.argv[2]
+body = open(src, encoding="utf-8-sig").read()
+m = re.search(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", body, re.MULTILINE | re.DOTALL)
+open(out, "w", encoding="utf-8").write(m.group(0) if m else "")
+PYEOF
+      fi
       # `rules/*.txt` é a CONFIGURAÇÃO do projeto — linguagens habilitadas, alvo
       # vivo, allowlists, skills auxiliares declaradas. Copiar o template por cima
       # apaga ajuste local em silêncio: medido no `speculative`, onde a declaração
@@ -124,6 +144,19 @@ for item in skills rules hooks commands scripts; do
         esac
         cp "$f" "$ECO/rules/$base"
       done
+      if [ -n "$ROUTING_KEEP" ] && [ -s "$ROUTING_KEEP" ]; then
+        python3 - "$ECO/rules/cycle-backlog.md" "$ROUTING_KEEP" <<'PYEOF'
+import re, sys
+target, keep = sys.argv[1], sys.argv[2]
+body = open(target, encoding="utf-8-sig").read()
+section = open(keep, encoding="utf-8").read()
+patched = re.sub(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", lambda _: section,
+                 body, count=1, flags=re.MULTILINE | re.DOTALL)
+open(target, "w", encoding="utf-8").write(patched)
+PYEOF
+        echo "    kept (yours): rules/cycle-backlog.md § Domain routing"
+        rm -f "$ROUTING_KEEP"
+      fi
     else
       cp -r "$SRC_DIR/$item/." "$ECO/$item/"
     fi
@@ -139,10 +172,32 @@ done
 # (`implement-slice-*/`, `review-*/`). Those are THIS repo's audit trail, not template content —
 # and `cp -r` shipped two of them, dated May 2026, into every consumer install. The header above
 # already promises to skip audit trails; this is what keeping that promise looks like.
-echo "==> Copying agents/ (specialists only — per-run artifacts stay behind)"
-[ "$MERGE" -eq 1 ] || rm -rf "$ECO/agents"
+# Os oito especialistas em agents/*.md descrevem os repos do ecossistema `theo`:
+# `engine-go` cobre `theo`, `data-plane-ts` cobre seis produtos TypeScript. Num
+# consumidor que não é aquele ecossistema, são arquivos sobre repositórios que não
+# existem ali. Medido em 2026-08-20 sobre 41 instalações: 19 já viviam sem eles e
+# nada quebrou, 11 escrevem os seus, e a tabela de roteamento passou a ser DERIVADA
+# do projeto — o acoplamento que os justificava deixou de existir.
+#
+# O README continua vindo sempre: ele descreve o MECANISMO de roteamento, não um
+# domínio. `--with-domain-agents` traz os oito, para os repos do ecossistema `theo`
+# que ainda dependem do kit para recebê-los (`theo-rag` não os versiona).
+# `agents/` NUNCA é apagado, em modo nenhum. Aqui moram os especialistas que o projeto
+# escreveu — e `rm -rf` no modo não-merge levava todos junto. Nada no kit justifica
+# destruir o especialista de domínio de um consumidor: ele descreve o repositório dele,
+# não é cópia de nada nosso, e não existe em lugar nenhum além dali.
 mkdir -p "$ECO/agents"
-find "$SRC_DIR/agents" -maxdepth 1 -type f -name '*.md' -exec cp {} "$ECO/agents/" \;
+if [ -f "$ECO/agents/README.md" ]; then
+  # Depois que alguém o adapta, este README lista os agentes DO PROJETO.
+  echo "    kept (yours): agents/README.md"
+elif [ -f "$SRC_DIR/agents/README.md" ]; then
+  echo "==> Copying agents/README.md (the routing mechanism)"
+  cp "$SRC_DIR/agents/README.md" "$ECO/agents/README.md"
+fi
+if [ "$WITH_DOMAIN_AGENTS" -eq 1 ]; then
+  echo "==> Copying agents/*.md (domain specialists — --with-domain-agents)"
+  find "$SRC_DIR/agents" -maxdepth 1 -type f -name '*.md' -exec cp {} "$ECO/agents/" \;
+fi
 
 # Top-level docs and manifest
 for f in plugin.json HOW-TO-USE.md README.md .active_plan.example; do
@@ -261,9 +316,13 @@ MANIFEST="$ECO/.kit-manifest.txt"
   for f in "$SRC_DIR"/rules/*; do
     [ -f "$f" ] && echo "rules/$(basename "$f")"
   done
-  for f in "$SRC_DIR"/agents/*.md; do
-    [ -f "$f" ] && echo "agents/$(basename "$f")"
-  done
+  if [ "$WITH_DOMAIN_AGENTS" -eq 1 ]; then
+    for f in "$SRC_DIR"/agents/*.md; do
+      [ -f "$f" ] && echo "agents/$(basename "$f")"
+    done
+  else
+    [ -f "$SRC_DIR/agents/README.md" ] && echo "agents/README.md"
+  fi
 } > "$MANIFEST"
 echo "==> Manifest written: $(grep -vc '^#' "$MANIFEST") paths from the kit"
 
