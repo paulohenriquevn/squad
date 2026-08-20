@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import enum
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,6 +52,9 @@ class Drift(enum.Enum):
     INSTALL_AHEAD = "install_ahead"
     KIT_AHEAD = "kit_ahead"
     DIVERGED = "diverged"
+    #: O install carrega um conteúdo que o kit JÁ TEVE. Está atrasado, não modificado —
+    #: e um `git checkout` do kit resolve sem perder nada.
+    STALE = "stale"
 
 
 def _lines(path: Path) -> set[str]:
@@ -58,15 +62,51 @@ def _lines(path: Path) -> set[str]:
     return {line for line in text.split("\n") if line.strip()}
 
 
-def classify_file(install_file: Path, kit_file: Path) -> Drift:
+def _historical_contents(kit_root: Path, rel: str) -> set[str]:
+    """Todo conteúdo que este caminho já teve no histórico do kit.
+
+    Sem esta pergunta, um consumidor instalado de uma versão antiga aparece como
+    trabalho local em cada arquivo que o kit evoluiu desde então. Medido no
+    `theokit-tui`: 11 arquivos reportados como "precisam de um humano", dos quais 4
+    eram apenas versões antigas do kit — `install.sh`, `check_xrefs.py`,
+    `code-quality-golden-rule.md` e `code-quality-allowlist.txt`. A lição já estava
+    no `sync_consumers` (231 falsos `local-change` viraram 119) e não estava aqui.
+    """
+    try:
+        revisions = subprocess.run(
+            ["git", "-C", str(kit_root), "rev-list", "--all", "--", rel],
+            capture_output=True, text=True, timeout=60,
+        ).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    contents: set[str] = set()
+    for revision in revisions:
+        blob = subprocess.run(
+            ["git", "-C", str(kit_root), "show", f"{revision}:{rel}"],
+            capture_output=True, text=True,
+        )
+        if blob.returncode == 0:
+            contents.add(blob.stdout)
+    return contents
+
+
+def classify_file(install_file: Path, kit_file: Path,
+                  kit_root: Path | None = None, rel: str | None = None) -> Drift:
     """Which side, if either, holds lines the other lacks."""
     a, b = _lines(install_file), _lines(kit_file)
     install_only, kit_only = a - b, b - a
     if not install_only and not kit_only:
         return Drift.IDENTICAL
-    if install_only and kit_only:
-        return Drift.DIVERGED
-    return Drift.INSTALL_AHEAD if install_only else Drift.KIT_AHEAD
+    verdict = Drift.DIVERGED if (install_only and kit_only) else (
+        Drift.INSTALL_AHEAD if install_only else Drift.KIT_AHEAD)
+    if verdict in (Drift.DIVERGED, Drift.INSTALL_AHEAD) and kit_root is not None and rel:
+        try:
+            body = install_file.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            return verdict
+        if body in _historical_contents(kit_root, rel):
+            return Drift.STALE
+    return verdict
 
 
 # Directories a consumer generates for itself. They are that project's artifacts, not kit code,
@@ -156,7 +196,7 @@ def scan(install_root: Path, kit_root: Path) -> DriftReport:
         _kit_dirs=frozenset(str(Path(rel).parent) for rel in resolved_kit),
     )
     for rel in sorted(set(install) & set(resolved_kit)):
-        verdict = classify_file(install[rel], resolved_kit[rel])
+        verdict = classify_file(install[rel], resolved_kit[rel], kit_root, rel)
         report.counts[verdict] += 1
         report.by_class[verdict].append(rel)
     return report
@@ -177,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
 
     report = scan(args.install, args.kit)
 
-    for verdict in (Drift.DIVERGED, Drift.INSTALL_AHEAD, Drift.KIT_AHEAD):
+    for verdict in (Drift.DIVERGED, Drift.INSTALL_AHEAD, Drift.STALE, Drift.KIT_AHEAD):
         files = report.by_class[verdict]
         if files:
             print(f"{verdict.value}: {len(files)}")
