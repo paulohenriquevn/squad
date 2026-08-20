@@ -105,7 +105,28 @@ for item in skills rules hooks commands scripts; do
   if [ "$MERGE" -eq 1 ]; then
     echo "==> Merging $item/ (adding, deleting nothing)"
     mkdir -p "$ECO/$item"
-    cp -r "$SRC_DIR/$item/." "$ECO/$item/"
+    if [ "$item" = "rules" ]; then
+      # `rules/*.txt` é a CONFIGURAÇÃO do projeto — linguagens habilitadas, alvo
+      # vivo, allowlists, skills auxiliares declaradas. Copiar o template por cima
+      # apaga ajuste local em silêncio: medido no `speculative`, onde a declaração
+      # das 9 skills do projeto morreu na reinstalação seguinte. Os `.md` continuam
+      # sendo atualizados — são o contrato normativo, e o kit é dono deles.
+      for f in "$SRC_DIR/rules"/*; do
+        [ -f "$f" ] || continue
+        base="$(basename "$f")"
+        case "$base" in
+          *.txt)
+            if [ -f "$ECO/rules/$base" ]; then
+              echo "    kept (yours): rules/$base"
+              continue
+            fi
+            ;;
+        esac
+        cp "$f" "$ECO/rules/$base"
+      done
+    else
+      cp -r "$SRC_DIR/$item/." "$ECO/$item/"
+    fi
   else
     echo "==> Copying $item/"
     rm -rf "$ECO/$item"
@@ -222,6 +243,30 @@ fi
 #
 # check_xrefs.py resolves from its own path and caught the same corruption (exit 1). Two lines
 # printed the same word for two different amounts of verification.
+# --- manifesto: o que veio do kit ------------------------------------------
+# Um consumidor com auditor próprio precisa distinguir o que ele escreveu do que
+# foi instalado. Medido no `speculative`: seu `scripts/audit.py` percorre
+# `.claude/skills/*/SKILL.md` exigindo a spec Agent Skills; com o kit instalado
+# ele passou de APROVADO a REPROVADO, auditando 37 skills que não são do projeto
+# contra o padrão das 9 que são. Sem manifesto, a única saída seria adivinhar por
+# nome. As skills do PROJETO nunca entram aqui — a lista sai da árvore do kit.
+MANIFEST="$ECO/.kit-manifest.txt"
+{
+  echo "# Escrito por scripts/install.sh — o que ESTE kit trouxe para .claude/."
+  echo "# Um caminho por linha, relativo a .claude/. Tudo que não está aqui é do projeto."
+  echo "# Regenerado a cada instalação; não edite à mão."
+  for d in "$SRC_DIR"/skills/*/; do
+    [ -f "$d/SKILL.md" ] && echo "skills/$(basename "$d")"
+  done
+  for f in "$SRC_DIR"/rules/*; do
+    [ -f "$f" ] && echo "rules/$(basename "$f")"
+  done
+  for f in "$SRC_DIR"/agents/*.md; do
+    [ -f "$f" ] && echo "agents/$(basename "$f")"
+  done
+} > "$MANIFEST"
+echo "==> Manifest written: $(grep -vc '^#' "$MANIFEST") paths from the kit"
+
 echo "==> Validating install (from the target, not from here)"
 ( cd "$TARGET" && python3 .claude/scripts/check_xrefs.py --strict > /dev/null 2>&1 ) \
   && echo "    check_xrefs.py: OK" \

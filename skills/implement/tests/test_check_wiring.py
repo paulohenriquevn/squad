@@ -161,3 +161,56 @@ def test_a_project_that_is_not_a_git_repository_still_counts_callers(fake_projec
         "export function caller() { return targetSymbol(1); }\n", encoding="utf-8"
     )
     assert _caller_count("targetSymbol", fake_project) >= 1
+
+
+def test_a_caller_inside_a_nested_CLONE_is_not_counted(git_project: Path) -> None:
+    """B-104 — found by reviewing B-081's fix, which this case defeats.
+
+    `git worktree list` is authoritative for worktrees and knows nothing about a CLONE: a clone is
+    a separate repository, so it is absent from the register B-081's fix consults. Measured on
+    theokit-tui with `git clone --local . ./nested-clone`: pillar (a) went 5 -> 10 and all three
+    sampled callers were inside the clone — the exact symptom B-081 exists to prevent, through a
+    door its fix does not close.
+
+    The signal that covers both is git's own layout convention: a checkout carries a `.git` entry
+    at its root — a FILE for a linked worktree, a DIRECTORY for a clone. Either way, a directory
+    holding one is a different checkout and its files are not this project's callers.
+    """
+    before = _caller_count("targetSymbol", git_project)
+    subprocess.run(
+        ["git", "clone", "-q", "--local", "--no-hardlinks", ".", "vendored-copy"],
+        cwd=git_project, check=True, capture_output=True,
+    )
+
+    assert _caller_count("targetSymbol", git_project) == before
+
+
+def test_the_walk_does_not_descend_into_node_modules_or_into_a_checkout(git_project: Path) -> None:
+    """B-104 review — the prune is correctness-adjacent, and it was measured, not assumed.
+
+    A plain `rglob(".git")` over the real project took 1080 ms, and `_grep_symbol` runs twice per
+    wiring check: a slice with ten symbols paid twenty seconds to directory-walking. Pruned, the
+    same walk takes 13 ms. A gate slow enough to notice is a gate people find reasons to skip.
+
+    This asserts the SHAPE the speed comes from rather than a duration — a timing assertion is a
+    flaky test on a loaded machine, which is the defect B-058 spent this session on.
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from check_wiring import _nested_worktree_paths  # noqa: PLC0415
+
+    # A dependency that vendors its own repository, and a checkout below another checkout.
+    (git_project / "node_modules" / "dep").mkdir(parents=True)
+    (git_project / "node_modules" / "dep" / ".git").mkdir()
+    subprocess.run(
+        ["git", "clone", "-q", "--local", "--no-hardlinks", ".", "outer-copy"],
+        cwd=git_project, check=True, capture_output=True,
+    )
+    (git_project / "outer-copy" / "inner").mkdir(parents=True, exist_ok=True)
+    (git_project / "outer-copy" / "inner" / ".git").mkdir()
+
+    found = {p.name for p in _nested_worktree_paths(git_project)}
+
+    assert "outer-copy" in found, "the nested checkout itself must be found"
+    assert "dep" not in found, "node_modules is never descended into"
+    assert "inner" not in found, "a checkout inside a checkout adds nothing — the outer one covers it"

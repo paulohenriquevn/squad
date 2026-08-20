@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -95,9 +96,18 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
 
     WHY GIT AND NOT A NAME. The first fix excluded the directory `.claude`, which is where this
     project's agent worktrees land. That closes the case it was written for and no other:
-    `--exclude-dir` matches a NAME, and a checkout can be called anything. `git worktree list`
-    is the register git keeps of its own working trees, so it answers wherever the copy is and
-    whatever it is called.
+    `--exclude-dir` matches a NAME, and a checkout can be called anything.
+
+    B-104 — AND `git worktree list` ALONE IS NOT ENOUGH EITHER, which a review of this very fix
+    measured. That register knows about linked WORKTREES and nothing about a CLONE, because a
+    clone is a separate repository. `git clone --local . ./nested-clone` took pillar (a) from 5
+    back to 10 with every sampled caller inside the clone — B-081's symptom exactly, through a
+    door B-081's fix does not close.
+
+    So the signal is git's own LAYOUT convention rather than its worktree register: a checkout
+    carries a `.git` entry at its root — a FILE for a linked worktree (measured: 88 bytes pointing
+    into the parent), a DIRECTORY for a clone. One test covers both, and covers any future kind of
+    checkout for the same reason git itself recognises them.
 
     WHY NOT `git check-ignore`. It was the item's own first suggestion, and the measurement
     refuted it: a worktree created at the repository root is not ignored, so an ignore-based
@@ -107,25 +117,35 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
     over-counting is the defect being fixed, but a gate that raises where it used to answer is a
     worse trade.
     """
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(project_root), "worktree", "list", "--porcelain"],
-            capture_output=True, text=True, timeout=30,
-        )
-    except (subprocess.SubprocessError, FileNotFoundError, OSError):
-        return []
-    if result.returncode != 0:
+    root = project_root.resolve()
+    if not (root / ".git").exists():
+        # Not a checkout at all — nothing to be nested inside it, and nothing to compare against.
         return []
 
-    root = project_root.resolve()
+    # PRUNED, and the pruning is not an optimisation detail — it was measured. A plain
+    # `rglob(".git")` over this project took 1080 ms, and `_grep_symbol` runs twice per wiring
+    # check, so a slice with ten symbols paid twenty seconds to directory-walking alone. A gate
+    # slow enough to notice is a gate people find reasons to skip.
+    #
+    # Two prunes, each with a reason rather than a guess:
+    #   - a directory that IS a checkout is not descended into. A checkout inside a checkout is
+    #     already excluded by the outer one, so the subtree carries no further information.
+    #   - `node_modules` and `.git` internals are skipped. Dependencies vendor their own
+    #     repositories, and `_grep_symbol` already excludes both from its RESULTS, so anything
+    #     found there could never have been counted.
     nested: list[Path] = []
-    for line in result.stdout.splitlines():
-        if not line.startswith("worktree "):
-            continue
-        candidate = Path(line[len("worktree "):].strip()).resolve()
-        # The main checkout is listed too, and it is the thing being measured.
-        if candidate != root and candidate.is_relative_to(root):
-            nested.append(candidate)
+    skip = {"node_modules", ".git"}
+    try:
+        for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+            here = Path(dirpath)
+            if ".git" in dirnames or ".git" in filenames:
+                if here != root:
+                    nested.append(here)
+                    dirnames[:] = []          # a checkout's insides are not this project's
+                    continue
+            dirnames[:] = [d for d in dirnames if d not in skip]
+    except OSError:
+        return []
     return nested
 
 
