@@ -6,7 +6,7 @@ Source of Truth for the intake cycle. Skills consume this; do not duplicate cont
 
 Register **one unit of maintenance work** against the Theo ecosystem, cheaply and before anyone has measured anything. Outputs a numbered item in `BACKLOG.md` — never a plan, never code, never evidence.
 
-This is phase 0 of the Squad chain. It exists because the downstream cycle (`cycle-discover`) demands measured evidence for everything it accepts, and that demand, applied at intake, would silence the most valuable signal a maintenance team has: the hunch. *"The theo-lens trace explorer feels slow"* is a legitimate thing to record and an illegitimate thing to plan against. BACKLOG separates the two — it takes the hunch, and hands DISCOVER the job of proving or killing it.
+This is phase 0 of the Squad chain. It exists because the downstream cycle (`cycle-discover`) demands measured evidence for everything it accepts, and that demand, applied at intake, would silence the most valuable signal a maintenance team has: the hunch. *"the trace explorer feels slow"* is a legitimate thing to record and an illegitimate thing to plan against. BACKLOG separates the two — it takes the hunch, and hands DISCOVER the job of proving or killing it.
 
 A backlog item is a **hypothesis with an owner and a closing criterion**. It is not a commitment.
 
@@ -58,10 +58,10 @@ One file, one schema, two entry paths. A sweep finding skips intake because it a
 Every item is one `## B-NNN` block. Ids are monotonic, never reused, never renumbered — a killed item keeps its number so the audit trail survives.
 
 ```markdown
-## B-014 — Reduce the theo-lens trace explorer p95   [ ]
+## B-014 — Reduce the trace explorer p95   [ ]
 
-domain: data-plane-ts
-repo: theo-lens
+domain: <a domain from THIS project's routing table>
+repo: <a repo from it>
 suggested_mode: live-test
 source: human
 evidence: none-yet

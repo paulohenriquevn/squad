@@ -205,3 +205,34 @@ def test_merge_preserves_the_derived_routing_table(tmp_path: Path) -> None:
     assert "`meu-dominio`" in body, "a tabela derivada foi sobrescrita"
     assert "engine-go" not in body, "a tabela do outro ecossistema voltou"
     assert "## Hard gates" in body, "o resto da regra tem de vir atualizado do kit"
+
+
+# ---------------------------------------------------------------------------
+# O kit distribuía a configuração DELE como se fosse do consumidor. Medido no
+# `speculative`: nasceu com `python | pyproject.toml | ENABLED` (o squad é
+# Python; o alvo não tem pyproject) e com o alvo vivo do ecossistema `theo`
+# (`https://app-dev.usetheo.dev`). São 41 instalações nessa condição.
+# ---------------------------------------------------------------------------
+
+def _active_lines(path: Path) -> list[str]:
+    return [l for l in path.read_text(encoding="utf-8").splitlines()
+            if l.strip() and not l.lstrip().startswith("#")]
+
+
+def test_project_specific_config_is_installed_as_a_blank_template(tmp_path: Path) -> None:
+    target = tmp_path / "consumidor"
+    _install(target)
+    rules = target / ".claude" / "rules"
+    assert _active_lines(rules / "code-quality-languages.txt") == [], \
+        "o consumidor nasceria com a linguagem do KIT habilitada"
+    assert _active_lines(rules / "live-target.txt") == [], \
+        "o consumidor nasceria sondando o serviço de outro ecossistema"
+
+
+def test_universal_defaults_are_still_shipped(tmp_path: Path) -> None:
+    """Os thresholds são defaults do kit (`YOUR_ADR_REF` é placeholder), não
+    calibração local — esvaziá-los deixaria o gate sem banda nenhuma."""
+    target = tmp_path / "consumidor"
+    _install(target)
+    body = (target / ".claude" / "rules" / "plan-confidence-thresholds.txt").read_text()
+    assert "SHIPPABLE|90" in body

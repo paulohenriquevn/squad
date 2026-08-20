@@ -142,7 +142,15 @@ PYEOF
             fi
             ;;
         esac
-        cp "$f" "$ECO/rules/$base"
+        # Config específica do projeto nasce em branco: o kit distribuía a SUA
+        # (Python habilitado, alvo vivo do ecossistema de origem) como se fosse do
+        # consumidor. Os thresholds NÃO têm template — são defaults universais, e
+        # esvaziá-los deixaria o gate sem banda nenhuma.
+        if [ -f "$SRC_DIR/rules/templates/$base" ]; then
+          cp "$SRC_DIR/rules/templates/$base" "$ECO/rules/$base"
+        else
+          cp "$f" "$ECO/rules/$base"
+        fi
       done
       if [ -n "$ROUTING_KEEP" ] && [ -s "$ROUTING_KEEP" ]; then
         python3 - "$ECO/rules/cycle-backlog.md" "$ROUTING_KEEP" <<'PYEOF'
@@ -164,8 +172,21 @@ PYEOF
     echo "==> Copying $item/"
     rm -rf "$ECO/$item"
     cp -r "$SRC_DIR/$item" "$ECO/$item"
+    if [ "$item" = "rules" ]; then
+      # Mesmo numa instalação limpa: a config específica do projeto nasce em branco.
+      # Sem isto, o ramo não-merge copiava a configuração do kit (Python habilitado,
+      # alvo vivo do ecossistema de origem) e o consumidor nascia com ela.
+      for tpl in "$SRC_DIR"/rules/templates/*; do
+        [ -f "$tpl" ] || continue
+        cp "$tpl" "$ECO/rules/$(basename "$tpl")"
+      done
+    fi
   fi
 done
+
+# `rules/templates/` é insumo do instalador, não regra. Deixá-lo no consumidor faria
+# o check_xrefs varrer arquivos que não governam nada.
+rm -rf "$ECO/rules/templates"
 
 # agents/ is copied FILE BY FILE, not wholesale. This repo dogfoods its own cycles, and
 # `/implement` and `/review` write their per-run agent definitions into subdirectories here

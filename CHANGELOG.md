@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`check_record_scope.py` — um registro de review que não diz o que revisou não pode ser conferido depois.** Depois que o `phase_coverage.py` (B-105) mediu `review` em 52% e `code-quality` em 27%, o passo óbvio era DERIVAR os registros, como a metade de `release` foi derivada — o grafo de commits sabe qual tag contém qual commit, e 41 de 41 itens resolveram assim. Não funciona aqui, e a medição diz por quê: **2 de 48** arquivos de review declaram o range revisado, **3 de 16** auditorias mencionam escopo. Os achados de um review são julgamentos feitos numa sessão; se o arquivo não nomeia os itens nem o range, nada recupera isso depois.
+
+  Então isso fecha a porta para a frente em vez de retroagir. Adivinhar o que 46 registros antigos cobriram fabricaria exatamente a cobertura que o check existe para tornar verificável.
+
+  É o defeito do B-084 um nível acima — aquele fechou "um gate que inspecionou zero e um que inspecionou tudo emitem o mesmo veredito", o B-102 acrescentou "…e não diz o que deixou de fora", e aqui: **um review que cobriu sete itens e um que cobriu um só são indistinguíveis pelo arquivo.**
+
+  O que ele se recusa a inferir é o nome do arquivo: `b086-findings.yml` parece declarar B-086, e um review de fatia cobrindo sete itens teria exatamente a mesma cara. Um range declarado (`head_reviewed`) é reportado e nunca substitui a lista — range diz o que foi LIDO, os itens dizem para quê.
+
+  **A mutação achou um buraco nos meus próprios testes, não no código:** trocar a leitura da declaração por "qualquer B-NNN em qualquer lugar" passou nos sete testes iniciais, porque nenhum deles tinha um B-NNN fora da declaração. Registros de review são cheios de prosa referenciando outros itens ("mesma família que B-084", "supersedes B-050"); um checker que contasse isso reportaria cobertura que não houve — a leitura errada que o item existe para impedir, chegando pelo checker construído para impedi-la. Oitavo teste adicionado, mutante morre (theokit-tui B-108)
+
 - **ADR 0012 decide quais fases devem deixar registro, e a medição derrubou parte dele.** O `phase_coverage.py` respondeu "quais artefatos existem por item" e imediatamente levantou a pergunta que ele não podia responder: um artefato ausente é dívida, ou a métrica está perguntando errado? O ADR separou em três classes — `plan` e `review` por item e obrigatórios; `code-quality` por slice (o `cq_invoke` audita uma ÁRVORE, não um item); `release` por versão; `discover` satisfeito pelo bloco `evidence:` do próprio item, porque `cycle-discover.md` tem duas portas de entrada e só uma escreve arquivo de oportunidade.
 
   **Medido depois de escrito, e só uma coluna se moveu:** `discover` 60% -> 98%, e `plan` 82%, `code-quality` 26%, `review` 52%, `release` 50% ficaram exatamente onde estavam. O raciocínio do ADR chamava `release` e `code-quality` de "erro de categoria da métrica" — estava errado, e o instrumento disse: o scan já casa por CONTEÚDO, então um registro de release que nomeia dez itens cobre os dez. **50% e 26% são dívida real, não artefato.** O ADR registra a própria premissa refutada em vez de editá-la em silêncio.
