@@ -146,14 +146,51 @@ def test_slug_resolution_not_found(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_cli_standalone_mode_pass_when_no_manifests(tmp_path: Path, capsys) -> None:
+def test_cli_standalone_mode_is_invalid_when_nothing_was_audited(
+    tmp_path: Path, capsys
+) -> None:
+    """B-084 / B-092 — an audit that ran zero detectors is not a clean audit.
+
+    This test was named `..._pass_when_no_manifests` and asserted `verdict == "PASS"`. That is the
+    fourth form of a false oracle: its NAME described the defect as if it were the feature, and it
+    would have argued against the fix — anyone applying the guard sees this go red and reads it as
+    "the fix is wrong".
+
+    `_write_rules` enables four languages in a `tmp_path` that contains none of their manifests, so
+    every one is skipped and `languages_audited` is empty. The old assertion made "looked at
+    nothing" indistinguishable from "looked and found nothing", which is precisely what the gate
+    consumers cannot tell apart: `cycle-review.md` admits on PASS, and `run_validation.py` fails
+    only on FAIL_HARD / INVALID.
+    """
     _write_rules(tmp_path)
     exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
     captured = capsys.readouterr()
-    assert exit_code == 0
+    assert exit_code != 0
     data = json.loads(captured.out)
-    assert data["verdict"] == "PASS"
+    assert data["verdict"] == "INVALID"
+    assert "no_languages_audited" in data["hard_caps_triggered"]
+    assert data["languages_audited"] == []
     assert data["mode"] == "standalone"
+
+
+def test_cli_a_real_audit_still_passes(tmp_path: Path, capsys) -> None:
+    """The other half of the guard's contract: it must not turn a real clean audit INVALID.
+
+    Without this, the guard could be tightened into "always INVALID" and nothing would notice —
+    the same negative-space omission `does_not_refuse_ordinary_text` covers for B-086's predicate.
+    """
+    _write_rules(tmp_path)
+    (tmp_path / "package.json").write_text('{"name": "demo", "version": "0.0.0"}')
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "index.ts").write_text("export const x = 1;\n")
+
+    exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+
+    assert data["languages_audited"] != []
+    assert "no_languages_audited" not in data["hard_caps_triggered"]
+    assert exit_code == 0
 
 
 def test_cli_no_network_emits_info_finding(tmp_path: Path, capsys) -> None:
@@ -183,7 +220,10 @@ def test_cli_plan_bound_mode_writes_markdown_report(tmp_path: Path, capsys) -> N
     plan = tmp_path / ".claude" / "knowledge-base" / "plans" / "demo-plan.md"
     plan.write_text("# demo\n")
     exit_code = main(["demo", "--repo-root", str(tmp_path), "--no-network"])
-    assert exit_code == 0
+    # B-092 — these fixtures enable four languages and provide no manifests, so the audit
+    # runs zero detectors and the verdict is now INVALID. This test is about the MARKDOWN
+    # report, not the verdict, so it asserts the report rather than the exit code.
+    assert exit_code != 0
     audit_dir = tmp_path / ".claude" / "knowledge-base" / "audits"
     audit_files = list(audit_dir.glob("demo-code-quality-*.md"))
     assert len(audit_files) == 1, f"Expected audit Markdown file; got {audit_files}"
@@ -197,7 +237,10 @@ def test_cli_no_audit_write_skips_markdown(tmp_path: Path, capsys) -> None:
     exit_code = main(
         ["demo", "--repo-root", str(tmp_path), "--no-network", "--no-audit-write"]
     )
-    assert exit_code == 0
+    # B-092 — these fixtures enable four languages and provide no manifests, so the audit
+    # runs zero detectors and the verdict is now INVALID. This test is about the MARKDOWN
+    # report, not the verdict, so it asserts the report rather than the exit code.
+    assert exit_code != 0
     audit_dir = tmp_path / ".claude" / "knowledge-base" / "audits"
     assert not audit_dir.exists() or not list(audit_dir.glob("*.md"))
 
