@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **ADR 0012 decide quais fases devem deixar registro, e a medição derrubou parte dele.** O `phase_coverage.py` respondeu "quais artefatos existem por item" e imediatamente levantou a pergunta que ele não podia responder: um artefato ausente é dívida, ou a métrica está perguntando errado? O ADR separou em três classes — `plan` e `review` por item e obrigatórios; `code-quality` por slice (o `cq_invoke` audita uma ÁRVORE, não um item); `release` por versão; `discover` satisfeito pelo bloco `evidence:` do próprio item, porque `cycle-discover.md` tem duas portas de entrada e só uma escreve arquivo de oportunidade.
+
+  **Medido depois de escrito, e só uma coluna se moveu:** `discover` 60% -> 98%, e `plan` 82%, `code-quality` 26%, `review` 52%, `release` 50% ficaram exatamente onde estavam. O raciocínio do ADR chamava `release` e `code-quality` de "erro de categoria da métrica" — estava errado, e o instrumento disse: o scan já casa por CONTEÚDO, então um registro de release que nomeia dez itens cobre os dez. **50% e 26% são dívida real, não artefato.** O ADR registra a própria premissa refutada em vez de editá-la em silêncio.
+
+  A ferramenta imprime as duas colunas por padrão e não tem flag para desligar: **uma porcentagem que sobe porque a métrica foi corrigida não é progresso**, e um relatório que pode ser rodado sem o número de controle é um relatório que será (theokit-tui B-105)
+
 - **`phase_coverage.py` — quais fases do ciclo deixaram registro, item a item.** Um gate de parada e eu passamos quatro rodadas afirmando coisas opostas sobre se todo item tinha passado por todas as fases do loop. **Nenhum dos dois tinha medido**, e quem repetia a afirmação mais forte era eu. O `BACKLOG.md` registra o STATUS de um item e nada sobre quais fases o produziram, então "o loop rodou" era infalsificável.
 
   Medido: `discover` 61%, `plan` 82%, `code-quality` **15%**, `review` 53%, `release` 47% — e **11 de 96** itens com registro das cinco. Dos dez itens trabalhados na própria sessão que discutia isso: **0 de 10**.
