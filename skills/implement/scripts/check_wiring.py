@@ -95,9 +95,18 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
 
     WHY GIT AND NOT A NAME. The first fix excluded the directory `.claude`, which is where this
     project's agent worktrees land. That closes the case it was written for and no other:
-    `--exclude-dir` matches a NAME, and a checkout can be called anything. `git worktree list`
-    is the register git keeps of its own working trees, so it answers wherever the copy is and
-    whatever it is called.
+    `--exclude-dir` matches a NAME, and a checkout can be called anything.
+
+    B-104 — AND `git worktree list` ALONE IS NOT ENOUGH EITHER, which a review of this very fix
+    measured. That register knows about linked WORKTREES and nothing about a CLONE, because a
+    clone is a separate repository. `git clone --local . ./nested-clone` took pillar (a) from 5
+    back to 10 with every sampled caller inside the clone — B-081's symptom exactly, through a
+    door B-081's fix does not close.
+
+    So the signal is git's own LAYOUT convention rather than its worktree register: a checkout
+    carries a `.git` entry at its root — a FILE for a linked worktree (measured: 88 bytes pointing
+    into the parent), a DIRECTORY for a clone. One test covers both, and covers any future kind of
+    checkout for the same reason git itself recognises them.
 
     WHY NOT `git check-ignore`. It was the item's own first suggestion, and the measurement
     refuted it: a worktree created at the repository root is not ignored, so an ignore-based
@@ -107,25 +116,20 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
     over-counting is the defect being fixed, but a gate that raises where it used to answer is a
     worse trade.
     """
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(project_root), "worktree", "list", "--porcelain"],
-            capture_output=True, text=True, timeout=30,
-        )
-    except (subprocess.SubprocessError, FileNotFoundError, OSError):
-        return []
-    if result.returncode != 0:
+    root = project_root.resolve()
+    if not (root / ".git").exists():
+        # Not a checkout at all — nothing to be nested inside it, and nothing to compare against.
         return []
 
-    root = project_root.resolve()
     nested: list[Path] = []
-    for line in result.stdout.splitlines():
-        if not line.startswith("worktree "):
-            continue
-        candidate = Path(line[len("worktree "):].strip()).resolve()
-        # The main checkout is listed too, and it is the thing being measured.
-        if candidate != root and candidate.is_relative_to(root):
-            nested.append(candidate)
+    try:
+        for dot_git in root.rglob(".git"):
+            checkout = dot_git.parent
+            # The root itself is the thing being measured, not a copy of it.
+            if checkout != root:
+                nested.append(checkout)
+    except OSError:
+        return []
     return nested
 
 

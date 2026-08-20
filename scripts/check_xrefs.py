@@ -60,6 +60,34 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "backlog-init", "backlog-review", "cycle-goal", "plan-help", "quality-init", "skill-creator", "frontend-design", "cap-theorem-specialist", "backpressure-specialist", "resilience-specialist", "arch-check"}
 
 
+def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:
+    """Skills que o PROJETO declara como auxiliares, em `rules/auxiliary-skills.txt`.
+
+    `AUXILIARY_SKILLS` acima é a lista do kit. Um consumidor com skills de domínio
+    próprias só tinha uma saída: editar esta constante — e uma edição no corpo do
+    validador é o que a próxima sincronização do kit sobrescreve. O `theo` fez
+    exatamente isso, e a edição só sobreviveu porque alguém comparou arquivo a
+    arquivo antes de copiar.
+
+    Medido no `speculative` (2026-08-20): 9 skills próprias, 18 WARN — 100% dos
+    avisos do checker — e como `install.sh` invoca com `--strict`, a instalação
+    inteira era reportada como falha por causa do desenho do consumidor.
+
+    Formato: um nome por linha; `#` comenta. Nome que não existe em disco é
+    ignorado em silêncio de propósito: a lista é declaração de intenção, não
+    inventário, e uma skill removida do projeto não deve quebrar o validador.
+    """
+    rule = ecosystem_dir / "rules" / "auxiliary-skills.txt"
+    if not rule.is_file():
+        return set()
+    declared: set[str] = set()
+    for raw_line in rule.read_text(encoding="utf-8-sig").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if line:
+            declared.add(line)
+    return declared
+
+
 def _is_auto_generated(skill: str) -> bool:
     """Skills the cycles THEMSELVES write, not phases anyone maintains.
 
@@ -217,6 +245,10 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 })
 
     # Check 2: each SKILL.md points to an existing cycle
+    # A isenção vale para os DOIS checks. O docstring de `_is_auto_generated` registra
+    # por quê: a primeira versão isentou só `no_orphan_skills` e deixou este cobrando —
+    # meia isenção, que trocou 26 WARN por 3 e parecia um fix.
+    project_auxiliary = _declared_auxiliary_skills(ecosystem_dir)
     skill_to_cycle: dict[str, str | None] = {}
     for skill in existing_skills:
         skill_md = ecosystem_dir / "skills" / skill / "SKILL.md"
@@ -224,7 +256,8 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
         cycle_ref = _extract_cycle_contract_ref(content)
         skill_to_cycle[skill] = cycle_ref
 
-        if cycle_ref is None and skill not in AUXILIARY_SKILLS and not _is_auto_generated(skill):
+        if (cycle_ref is None and skill not in AUXILIARY_SKILLS
+                and skill not in project_auxiliary and not _is_auto_generated(skill)):
             findings.append({
                 "severity": "WARN",
                 "check": "skill_has_cycle_contract",
@@ -379,7 +412,8 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # Medido em 2026-08-03: os tres consumidores monitorados falharam exatamente assim
     # depois de rodarem review, com 26 WARN e nenhum defeito real.
     auto_generated = {s for s in existing_skills if _is_auto_generated(s)}
-    orphan_skills = existing_skills - skills_in_cycles - AUXILIARY_SKILLS - auto_generated
+    orphan_skills = (existing_skills - skills_in_cycles - AUXILIARY_SKILLS
+                     - project_auxiliary - auto_generated)
     for skill in sorted(orphan_skills):
         findings.append({
             "severity": "WARN",

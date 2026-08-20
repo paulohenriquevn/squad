@@ -1,0 +1,14 @@
+# Skills DESTE projeto que não são fase de nenhum cycle.
+#
+# `check_xrefs.py` avisa quando uma skill não é referenciada por cycle-*.md nem
+# declara `## Cycle contract`. Para as skills do próprio kit isso é um defeito
+# real; para um especialista de domínio que o projeto escreveu e invoca sob
+# demanda, é o desenho — e o aviso, repetido, ensina a ignorar o validador.
+#
+# Antes deste arquivo a única saída era editar a constante AUXILIARY_SKILLS
+# dentro do check_xrefs.py, e uma edição no corpo do validador é exatamente o
+# que a próxima sincronização do kit sobrescreve.
+#
+# Formato: um nome de diretório de skill por linha; `#` comenta.
+# Um nome que não existe em disco é ignorado: isto é declaração de intenção,
+# não inventário.

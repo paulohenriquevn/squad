@@ -161,3 +161,25 @@ def test_a_project_that_is_not_a_git_repository_still_counts_callers(fake_projec
         "export function caller() { return targetSymbol(1); }\n", encoding="utf-8"
     )
     assert _caller_count("targetSymbol", fake_project) >= 1
+
+
+def test_a_caller_inside_a_nested_CLONE_is_not_counted(git_project: Path) -> None:
+    """B-104 — found by reviewing B-081's fix, which this case defeats.
+
+    `git worktree list` is authoritative for worktrees and knows nothing about a CLONE: a clone is
+    a separate repository, so it is absent from the register B-081's fix consults. Measured on
+    theokit-tui with `git clone --local . ./nested-clone`: pillar (a) went 5 -> 10 and all three
+    sampled callers were inside the clone — the exact symptom B-081 exists to prevent, through a
+    door its fix does not close.
+
+    The signal that covers both is git's own layout convention: a checkout carries a `.git` entry
+    at its root — a FILE for a linked worktree, a DIRECTORY for a clone. Either way, a directory
+    holding one is a different checkout and its files are not this project's callers.
+    """
+    before = _caller_count("targetSymbol", git_project)
+    subprocess.run(
+        ["git", "clone", "-q", "--local", "--no-hardlinks", ".", "vendored-copy"],
+        cwd=git_project, check=True, capture_output=True,
+    )
+
+    assert _caller_count("targetSymbol", git_project) == before
