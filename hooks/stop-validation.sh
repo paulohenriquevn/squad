@@ -138,8 +138,40 @@ if [ -f "CHANGELOG.md" ]; then
   CODE_CHANGED=$(echo "$ALL_FILES" \
     | grep -E '\.(go|py|ts|tsx|js|jsx|rs|java|kt|rb|cs)$' \
     | grep -vE '(_test|\.test|\.spec)\.[a-z]+$' \
+    | grep -vE '(^|/)(tests?|spec|__tests__|testdata|fixtures)/' \
+    | grep -vE '(^|/)[a-z0-9.-]+\.config\.[a-z]+$' \
     | grep -vE '(^|/)(node_modules|vendor|dist|build|target|\.venv|__pycache__)/' \
     || true)
+
+  # Colhido do `theokit-tui`, onde esta correção viveu semanas dentro de um `.claude/`
+  # gitignored (2026-08-20). Uma mudança SÓ de comentário não tem NADA a anunciar a um
+  # consumidor, e a Regra 6 manda escrever para o consumidor. Exigir entrada por ela
+  # convida aos dois piores desfechos: uma linha fabricada poluindo o contrato público,
+  # ou o override — e recorrer ao override para satisfazer uma pergunta que o gate não
+  # devia ter feito é como um gate deixa de ser lido.
+  #
+  # CONSERVADOR POR CONSTRUÇÃO, e esse é o desenho inteiro: só remove linhas que são
+  # inequivocamente comentário ou branco, então QUALQUER linha alterada carregando código
+  # deixa o arquivo em `CODE_CHANGED`. Falso negativo sobre mudança real é impossível;
+  # falso positivo (um commit de docs ainda pedir entrada) é apenas inconveniente. A
+  # assimetria é deliberada — a falha que este gate existe para impedir é uma mudança de
+  # comportamento silenciosa, não um commit de documentação barulhento.
+  #
+  # `scripts/` NÃO entra na lista de exclusão acima, embora entre na do `theokit-tui`:
+  # lá é ferramental de build, e aqui é produção — o kit é feito de scripts.
+  if [ -n "$CODE_CHANGED" ]; then
+    SUBSTANTIVE=""
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      [ -f "$f" ] || { SUBSTANTIVE="$SUBSTANTIVE$f"$'\n'; continue; }
+      body=$(git diff HEAD~1 -- "$f" 2>/dev/null | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
+        | sed -E 's/^[+-]//' | sed -E 's,^[[:space:]]*(//|\*|/\*|\*/|#).*$,,' \
+        | grep -vE '^[[:space:]]*$' || true)
+      [ -n "$body" ] && SUBSTANTIVE="$SUBSTANTIVE$f"$'\n'
+    done <<< "$CODE_CHANGED"
+    CODE_CHANGED=$(echo "$SUBSTANTIVE" | grep -v '^$' || true)
+  fi
+
   if [ -n "$CODE_CHANGED" ] && ! echo "$ALL_FILES" | grep -qE '^CHANGELOG\.md$'; then
     msg="CHANGELOG.md not updated despite production source changes (Inquebrável Rule 6; cycle-review BLOCKER). Add an entry to [Unreleased] before stopping. Override with STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg with the rationale documented separately."
     if [ "$WARN_ONLY" = "1" ]; then

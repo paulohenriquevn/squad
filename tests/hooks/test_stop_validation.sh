@@ -102,6 +102,53 @@ rc=$(run_hook)
 assert_exit "source changed with CHANGELOG update => exit 0" 0 "$rc"
 teardown
 
+# ---- Comment-only change to source => exit 0 (colhido do theokit-tui) ----
+# Uma mudança só de comentário não tem NADA a anunciar a um consumidor, e a Regra 6 manda
+# escrever para o consumidor. Exigir entrada por ela convida aos dois piores desfechos: uma
+# linha fabricada poluindo o contrato público, ou o override — e recorrer ao override para
+# satisfazer uma pergunta que o gate não devia ter feito é como um gate deixa de ser lido.
+setup
+printf 'print("hello")\n' > "$TMPDIR_TEST/app.py"
+printf '# Changelog\n\n## [Unreleased]\n### Added\n- app.py\n' > "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" add app.py CHANGELOG.md
+git -C "$TMPDIR_TEST" commit -m "base" --quiet
+printf '# explica o porque\nprint("hello")\n' > "$TMPDIR_TEST/app.py"
+git -C "$TMPDIR_TEST" add app.py
+git -C "$TMPDIR_TEST" commit -m "comment only" --quiet
+rc=$(run_hook)
+assert_exit "comment-only change without CHANGELOG => exit 0" 0 "$rc"
+teardown
+
+# ---- Code change disguised among comments => exit 2 (conservador por construção) ----
+# O teste tira apenas linhas inequivocamente comentário ou branco, então QUALQUER linha
+# alterada carregando código deixa o arquivo em CODE_CHANGED. Falso negativo sobre mudança
+# real é impossível; falso positivo é apenas inconveniente. A assimetria é deliberada.
+setup
+printf 'print("hello")\n' > "$TMPDIR_TEST/app.py"
+printf '# Changelog\n\n## [Unreleased]\n### Added\n- app.py\n' > "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" add app.py CHANGELOG.md
+git -C "$TMPDIR_TEST" commit -m "base" --quiet
+printf '# um comentario\nprint("tchau")\n' > "$TMPDIR_TEST/app.py"
+git -C "$TMPDIR_TEST" add app.py
+git -C "$TMPDIR_TEST" commit -m "code plus comment" --quiet
+rc=$(run_hook)
+assert_exit "code change among comments still demands CHANGELOG => exit 2" 2 "$rc"
+teardown
+
+# ---- Test-only change => exit 0 ----
+setup
+printf 'print("hello")\n' > "$TMPDIR_TEST/app.py"
+printf '# Changelog\n\n## [Unreleased]\n### Added\n- app.py\n' > "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" add app.py CHANGELOG.md
+git -C "$TMPDIR_TEST" commit -m "base" --quiet
+mkdir -p "$TMPDIR_TEST/tests"
+printf 'def test_x():\n    assert True\n' > "$TMPDIR_TEST/tests/test_x.py"
+git -C "$TMPDIR_TEST" add tests/test_x.py
+git -C "$TMPDIR_TEST" commit -m "add test" --quiet
+rc=$(run_hook)
+assert_exit "test-only change => exit 0" 0 "$rc"
+teardown
+
 # ---- Secret file .env committed => exit 2 (blocked) ----
 setup
 echo "SECRET=foo" > "$TMPDIR_TEST/.env"

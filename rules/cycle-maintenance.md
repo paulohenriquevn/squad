@@ -76,6 +76,7 @@ LOOP BACK to SELECT
 |---|---|---|
 | `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT |
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
+| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it | Loop back to SELECT. **A terminal state, not a failure** |
 | `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move |
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it |
@@ -91,7 +92,39 @@ There is no verdict for "the ecosystem is done".
 
 Neither rule outranks a human saying "do this one". The ranking exists so the loop can run unattended, not to override judgement.
 
+## `ITEM_VERIFIED_LOCAL` — when the work is real and no release can carry it
+
+Some items fix files the repository does not track. In a plugin install that is typically
+everything under `.claude/` — the kit's own `skills/`, `hooks/` and `scripts/`, plus the
+`rules/` the project owns there. A fix in one of those is implementable, testable and
+verifiable, and `cycle-release` cuts a tag from committed history, so **there is nothing for
+a tag to point at**.
+
+Without this state such an item has no honest end. `ITEM_SHIPPED` is false — nothing shipped.
+Leaving it `planned` forever is worse, because the registry then reports finished work as
+outstanding, and a registry that misreports is the rot this whole loop exists to prevent.
+
+**The test is mechanical, not rhetorical.** An item qualifies when
+
+```bash
+git check-ignore -q <every file the fix changed>
+```
+
+succeeds for ALL of them. If any changed file IS tracked, the item is not in this state — it
+has a release, and it must take it. This matters because the state is otherwise a tempting
+place to retire work that simply has not been released yet.
+
+**What it is not.** It is not "done". The fix helps that checkout and no other, including
+sibling repositories running the same install. The followup that ends it is carrying the fix
+to the kit's own repository, where a release can reach every consumer.
+
+Colhido do `theokit-tui`, onde o estado foi criado e medido (2026-08-20). Ali treze itens
+pagavam esse custo ao mesmo tempo, e a regra que o define vivia sob `.claude/` — de modo que
+o item que a escreveu terminou no próprio estado que inventou.
+
 ## Anti-patterns
+
+- **Calling an item `shipped` because the fix works.** If nothing was released, nothing shipped. `ITEM_VERIFIED_LOCAL` exists precisely so that the honest answer is available.
 
 - **Treating `BACKLOG_EMPTY` as completion.** It means nobody has looked recently. Sweep.
 - **Two items in flight.** Two loops editing `BACKLOG.md` collide on `B-NNN` allocation, and the ids are the audit trail.

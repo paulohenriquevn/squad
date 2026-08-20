@@ -76,6 +76,29 @@ When the user does not pass `{bump-level}` explicitly:
 
 If the rule cannot pick deterministically, the chain pauses and the human chooses.
 
+### Why a `Changed`-only release pauses, and stays pausing
+
+A `[Unreleased]` carrying only `### Changed` — *"mudamos como algo já publicado se comporta, sem
+acrescentar nem remover"* — não casa com nenhuma das três regras acima. É uma forma **ordinária**
+de release, não exótica, e bate na pausa toda vez. Medido no `theokit-tui` em 2026-08-18:
+`compute_next_version.py --current 0.61.0 --bump auto` → `AMBIGUOUS`.
+
+**Não é derivado, e isso é uma decisão em vez de uma lacuna.** Sob 0.x — onde `public-copy.md § 3`
+mantém o pacote até haver evidência de produção sustentada — uma quebra é **minor** e uma mudança
+compatível é **patch**. Então `Changed` mapeia para qualquer um dos dois, dependendo de um fato que
+a seção não contém:
+
+> **A pergunta: isto muda um comportamento de que alguém que chama depende?**
+
+Chutar `minor` transforma toda entrada reescrita em sinal de incompatibilidade. Chutar `patch`
+subestima uma quebra real — exatamente a falha que o semver existe para impedir, entregue em
+silêncio a quem está num range com caret. Inferir da prosa da entrada é o mesmo chute com um regex
+mais longo, e a mesma origem mediu como uma variação de formatação (`**BREAKING:`) derrota esse
+tipo de casamento neste mesmo script.
+
+A pausa fica, e **carrega a pergunta** em vez de um chute. Colhido do `theokit-tui`, onde o
+raciocínio foi escrito e medido.
+
 ## Hard gates
 
 - **PR approval gate (LOCKED)** — the merge step ALWAYS waits for a human-approved PR. Auto-merging into `main` violates Unbreakable Rule 4.
