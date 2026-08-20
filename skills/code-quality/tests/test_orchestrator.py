@@ -303,3 +303,102 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
         f"detector was pointed at {seen[0]}, not at the manifest's directory "
         f"{manifest.parent} — cargo-udeps would fail to find Cargo.toml"
     )
+
+
+def _write_python_only_rules(tmp_path: Path) -> Path:
+    """Rules enabling ONLY python — the shape B-060 is about."""
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "code-quality-languages.txt").write_text("python | pyproject.toml | ENABLED |\n")
+    (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
+    (rules / "code-quality-allowlist.txt").write_text("")
+    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    return tmp_path
+
+
+def test_a_python_defect_is_not_reported_as_PASS(tmp_path: Path, capsys) -> None:
+    """B-060 bullet 3 — a Python-only change carrying a deliberate defect must not come back PASS.
+
+    The item is that this repository is 227 tracked `.py` files and
+    `rules/code-quality-languages.txt` enabled NOTHING, so `/code-quality` audited nothing here.
+    Measured 2026-08-20 before enabling python:
+
+        verdict: INVALID   languages_audited: []   hard_caps: ['no_languages_audited']
+
+    (INVALID rather than PASS only because B-092's guard exists. Before it, the same run said PASS.)
+
+    Enabling python is the fix; this test is what stops it being silently un-fixed. It plants a
+    symbol that does not exist and asserts the audit does NOT grade it clean.
+    """
+    _write_python_only_rules(tmp_path)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "0.0.0"\n')
+    pkg = tmp_path / "demo"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    # THE DEFECT IS AN UNUSED IMPORT, and arriving at that took two wrong fixtures, both of which
+    # are worth recording because each names a real limit of the python arm.
+    #
+    #   1. `from demo.does_not_exist import x` — SKIPPED. D2 validates the TOP-LEVEL module against
+    #      PyPI (`detectors/python.py:86`), so it asks "is there a distribution called `demo`",
+    #      not "does that symbol exist in this tree". A local package is invisible to it.
+    #
+    #   2. an exported function nobody calls — ALSO SKIPPED, and this one is a finding rather than
+    #      a fixture mistake. `vulture` scores an unused function at 60% confidence and the
+    #      configured floor is `vulture.min_confidence = 80`. Measured across a probe file:
+    #
+    #          min-confidence 0/60  ->  7 findings
+    #          min-confidence 80    ->  1 finding   (unused import 'os', 90%)
+    #          min-confidence 100   ->  0
+    #
+    #      At 80, dead FUNCTIONS, CLASSES, ATTRIBUTES and VARIABLES are all invisible. Only unused
+    #      imports survive. That is recorded on B-060 as its own finding: the threshold makes D1
+    #      nearly blind to the category it exists to catch.
+    #
+    # So the planted defect is what the configuration can actually see. A test that planted
+    # something the gate cannot detect would fail for a reason that has nothing to do with whether
+    # python is audited — which is the only thing this test is about.
+    (pkg / "orphan.py").write_text("import os\n\n\ndef used() -> int:\n    return 1\n")
+
+    exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
+    data = json.loads(capsys.readouterr().out)
+
+    # The load-bearing assertion: python was actually audited. Without it the rest passes vacuously
+    # on a run that inspected nothing — which is the exact failure this item describes.
+    assert data["languages_audited"] == ["python"]
+    assert data["verdict"] != "PASS"
+    assert exit_code != 0
+
+
+def test_python_disabled_makes_the_same_tree_report_nothing_audited(
+    tmp_path: Path, capsys
+) -> None:
+    """The negative-space half, and the one that gives the test above its meaning.
+
+    Same tree, same defect, python NOT enabled. If this also came back with
+    `languages_audited == ["python"]` the assertion above would be testing the fixture rather than
+    the configuration.
+
+    It reports INVALID / `no_languages_audited` — which is B-092's guard, and is what a
+    not-audited run looked like BEFORE that guard turned it from PASS into a refusal.
+    """
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "code-quality-languages.txt").write_text("# nothing enabled\n")
+    (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
+    (rules / "code-quality-allowlist.txt").write_text("")
+    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "0.0.0"\n')
+    pkg = tmp_path / "demo"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "broken.py").write_text("from demo.does_not_exist import missing_symbol\n")
+
+    exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
+    data = json.loads(capsys.readouterr().out)
+
+    assert data["languages_audited"] == []
+    assert data["verdict"] == "INVALID"
+    assert "no_languages_audited" in data["hard_caps_triggered"]
+    assert exit_code != 0

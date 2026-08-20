@@ -30,3 +30,21 @@
 # kotlin     | build.gradle.kts    | ENABLED  |
 # ruby       | Gemfile             | ENABLED  |
 # csharp     | *.csproj            | ENABLED  |
+
+# ---------------------------------------------------------------------------------------------
+# ENABLED FOR THIS REPOSITORY (B-060)
+#
+# The kit is 227 tracked `.py` files and a `pyproject.toml` at the root, and until this line the
+# file below the examples was EMPTY — so `/code-quality` audited nothing at all here. Measured
+# 2026-08-20, before the change:
+#
+#     verdict: INVALID   languages_audited: []   hard_caps: ['no_languages_audited']
+#
+# That verdict is itself new: before B-092's guard the same run reported PASS, which is how a gate
+# that inspected nothing became indistinguishable from one that inspected everything and found it
+# clean. The INVALID above is the guard working, not a regression.
+#
+# Only python is enabled. There is no `package.json`, `Cargo.toml` or `go.mod` at the root of this
+# repository, and declaring a language whose manifest does not exist makes the detector report
+# itself unavailable — a soft cap that would turn every run amber for a language nobody uses here.
+python     | pyproject.toml      | ENABLED  | 227 tracked .py files; the kit is a Python codebase.
