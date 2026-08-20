@@ -95,13 +95,12 @@ Every opportunity populates four corners. An empty corner caps the score.
 |---|---|
 | **Evidence** | The measurement, in the mode's contract above. Pointers must resolve. |
 | **Constraint relation** | Does this **explore**, **subordinate**, **elevate** the declared constraint — or is it **local optimisation**? Cites `rules/current-constraint.md`. |
-| **Blast radius** | What else across the ecosystem touches this. A change in `theo-contracts` reaches everything downstream; a change in `theokit-app` reaches nothing. |
+| **Blast radius** | What else this reaches. In a multi-repo ecosystem: the repos downstream of the one being changed. In a single repository: the modules — or, in a documentation repo, the documents — that cite what is being corrected. |
 | **Verification** | How we will know the fix worked — tied to the item's `dod` — and where the limit plausibly moves next. |
 
 **The Constraint relation corner is advisory and may be answered `unknown`.** We do not instrument flow across the ecosystem, and a corner that demanded a constraint claim against data that does not exist would be answered by assertion — the exact defect G5 refuses at intake. `unknown` is honest and complete; it neither weakens the opportunity nor creates debt. See `rules/current-constraint.md` for why this is a lens rather than a gate.
 
-The **Blast radius** corner is the one that earns its place in this ecosystem specifically. The repos form a dependency graph with `theo-contracts` at the stable base, and a maintenance change is dangerous in proportion to how far up that graph it sits.
-
+The **Blast radius** corner is the one whose shape depends most on the project. Where the repos form a dependency graph, it is measured across repositories, and a change at the root of that graph is a different proposition from one at a leaf. Where the project is a single repository, the same question is asked of modules or documents. What does not change is the demand: name what is reached, do not assert that nothing is.
 ## Verdicts
 
 | Verdict | Meaning | Downstream |

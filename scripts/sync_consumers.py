@@ -117,13 +117,23 @@ def _read(path: Path) -> str | None:
         return None
 
 
+def delta_prefixes() -> tuple[str, ...]:
+    """O que o kit é dono e portanto pode empurrar.
+
+    `agents/` saiu (grill kit-domain-agents-install, decisão 5): um especialista de
+    domínio descreve o projeto, não o kit. Enquanto esteve aqui, cada sincronização
+    reinstalava os oito do ecossistema `theo` num consumidor que acabara de removê-los.
+    """
+    return ("rules/", "skills/", "scripts/", "hooks/", "commands/")
+
+
 def delta_files(repo: Path, base: str) -> list[str]:
     """Arquivos alterados de `base` até HEAD que o install leva para o consumidor."""
     result = subprocess.run(
         ["git", "-C", str(repo), "diff", "--name-only", f"{base}..HEAD"],
         capture_output=True, text=True, check=True,
     )
-    prefixes = ("rules/", "skills/", "scripts/", "hooks/", "commands/", "agents/")
+    prefixes = delta_prefixes()
     return sorted(
         line for line in result.stdout.splitlines()
         if line.startswith(prefixes) and (repo / line).is_file()

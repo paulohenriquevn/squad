@@ -231,6 +231,98 @@ def domains_from_backlog(backlog_path: Path, root: Path) -> list[Domain]:
     return domains
 
 
+#: Marca que a seção precisa de um humano. O `check_xrefs` reporta WARN enquanto ela
+#: estiver no arquivo — um esqueleto que se parece com um especialista pronto é pior
+#: que rota quebrada, porque a rota quebrada pelo menos avisa.
+UNREVIEWED_MARKER = "<!-- POR PREENCHER: só um humano sabe isto -->"
+
+
+def render_specialist(domain: Domain, root: Path) -> str:
+    """Esqueleto de `agents/<domínio>.md` com o que foi MEDIDO, e nada além.
+
+    Existe porque derivar a tabela sem resolver o especialista troca um defeito por
+    outro: `route_domain` responde `BROKEN ROUTE — the table names an owner who does
+    not exist`. Medido em 2026-08-20: 11 consumidores já estavam nesse estado.
+
+    O que entra: nome do domínio, repos que ele cobre, linguagens cujo manifesto está
+    em disco. O que NÃO entra: invariantes, o que é um achado real, falsos positivos —
+    as três coisas que fazem um especialista valer alguma coisa e que nenhuma medição
+    produz. Elas ficam presentes e vazias, marcadas, porque um arquivo sem elas parece
+    completo.
+    """
+    try:
+        import sys as _sys
+        _impl = Path(__file__).resolve().parents[2] / "implement" / "scripts"
+        if str(_impl) not in _sys.path:
+            _sys.path.insert(0, str(_impl))
+        from suite_runners import detect_languages  # noqa: PLC0415
+        languages = detect_languages(root) or []
+    except Exception:  # noqa: BLE001 — a detecção é um extra; sem ela o esqueleto ainda serve
+        languages = []
+
+    repos = "\n".join(f"| `{r}` |" for r in domain.repos)
+    langs = ", ".join(f"`{l}`" for l in languages) if languages else (
+        "nenhum manifesto de linguagem na raiz — os gates por linguagem respondem SKIP, "
+        "e isso descreve o repositório em vez de ser configuração pendente")
+
+    return f"""---
+name: {domain.name}
+description: Domain specialist for `{domain.name}`. DERIVADO automaticamente por detect_domains.py e AINDA NÃO REVISADO — as seções de julgamento estão vazias.
+tools: Read, Grep, Glob, Bash
+derived: true
+reviewed_by_human: false
+---
+
+# {domain.name} — esqueleto derivado
+
+> **Este arquivo foi gerado, não escrito.** Ele existe para que o roteamento funcione
+> (`route_domain` sai 3 quando a tabela nomeia um especialista ausente) e para que o
+> débito fique visível. Enquanto os marcadores abaixo existirem, `check_xrefs` reporta
+> WARN. Remova cada marcador ao preencher a seção — e remova `reviewed_by_human: false`
+> quando o arquivo descrever o domínio de verdade.
+
+## Cobertura (medida em disco)
+
+| Repo |
+|---|
+{repos}
+
+**Linguagens detectadas:** {langs}
+
+## Comandos
+
+{UNREVIEWED_MARKER}
+
+Os comandos que este domínio usa de fato, **verificados executando** — não copiados de
+um README. Ex.: `python3 scripts/audit.py`, `pnpm test`, `go test ./...`.
+
+## O que é um achado real aqui
+
+{UNREVIEWED_MARKER}
+
+As formas que um defeito toma neste domínio. Um especialista que não sabe distinguir
+achado de ruído devolve ruído com autoridade.
+
+## Falsos positivos que este domínio gera
+
+{UNREVIEWED_MARKER}
+
+O que parece defeito e não é. Sem esta seção, cada varredura re-descobre os mesmos
+não-problemas.
+
+## Invariantes
+
+{UNREVIEWED_MARKER}
+
+O que nunca pode deixar de valer aqui.
+
+## Cycle contract
+
+Destino de roteamento do domínio `{domain.name}` (`rules/cycle-backlog.md § Domain
+routing`, derivada por `skills/backlog-init/scripts/detect_domains.py`).
+"""
+
+
 def render_table(domains: list[Domain]) -> str:
     lines = [
         "## Domain routing",

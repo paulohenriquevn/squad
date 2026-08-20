@@ -73,6 +73,21 @@ def classify_file(install_file: Path, kit_file: Path) -> Drift:
 # and reporting them would bury the signal under 38 rows of noise (measured on theokit-tui).
 _CONSUMER_LOCAL = ("__pycache__", ".pytest_cache", ".benchmarks", "knowledge-base")
 
+#: Arquivos que pertencem ao PROJETO mesmo vivendo num diretório que o kit também tem.
+#: `agents/<domínio>.md` descreve o repositório do consumidor — colhê-lo para o kit é o
+#: oposto do que ele é (grill kit-domain-agents-install, decisão 5). O `README.md` fica
+#: no escopo: descreve o mecanismo de roteamento, não um domínio.
+def _is_consumer_owned(rel: str) -> bool:
+    parts = Path(rel).parts
+    return len(parts) == 2 and parts[0] == "agents" and parts[1] != "README.md"
+
+
+#: O consumidor recebe `settings.plugin.json` COMO `settings.json` — o `settings.json`
+#: do kit é o de desenvolvimento, com outros caminhos de hook. Comparar os dois acusa
+#: DIVERGED em toda instalação, para sempre. Medido no `speculative`: idênticos como
+#: JSON, reportados como divergentes.
+_INSTALL_TO_KIT_ALIAS = {"settings.json": "settings.plugin.json"}
+
 
 def _relevant(root: Path) -> dict[str, Path]:
     found: dict[str, Path] = {}
@@ -81,6 +96,8 @@ def _relevant(root: Path) -> dict[str, Path]:
             continue
         rel = path.relative_to(root)
         if any(part in _CONSUMER_LOCAL for part in rel.parts):
+            continue
+        if _is_consumer_owned(str(rel)):
             continue
         found[str(rel)] = path
     return found
@@ -123,15 +140,23 @@ class DriftReport:
 
 def scan(install_root: Path, kit_root: Path) -> DriftReport:
     install, kit = _relevant(install_root), _relevant(kit_root)
+    # O consumidor recebe `settings.plugin.json` COMO `settings.json`; comparar com o
+    # `settings.json` do kit (o de desenvolvimento) acusa DIVERGED em toda instalação.
+    resolved_kit = dict(kit)
+    for install_name, kit_name in _INSTALL_TO_KIT_ALIAS.items():
+        if install_name in install and kit_name in kit:
+            resolved_kit[install_name] = kit[kit_name]
+            resolved_kit.pop(kit_name, None)
+
     report = DriftReport(
         counts={d: 0 for d in Drift},
         by_class={d: [] for d in Drift},
-        only_in_install=sorted(set(install) - set(kit)),
-        only_in_kit=sorted(set(kit) - set(install)),
-        _kit_dirs=frozenset(str(Path(rel).parent) for rel in kit),
+        only_in_install=sorted(set(install) - set(resolved_kit)),
+        only_in_kit=sorted(set(resolved_kit) - set(install)),
+        _kit_dirs=frozenset(str(Path(rel).parent) for rel in resolved_kit),
     )
-    for rel in sorted(set(install) & set(kit)):
-        verdict = classify_file(install[rel], kit[rel])
+    for rel in sorted(set(install) & set(resolved_kit)):
+        verdict = classify_file(install[rel], resolved_kit[rel])
         report.counts[verdict] += 1
         report.by_class[verdict].append(rel)
     return report

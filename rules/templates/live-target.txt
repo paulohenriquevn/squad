@@ -1,0 +1,48 @@
+# Nenhum alvo vivo declarado.
+#
+# O kit distribuía aqui o alvo do ecossistema de origem (`https://app-dev.usetheo.dev`,
+# domínios `frontend-dashboard` e `control-plane`). Num outro projeto isso é pior que
+# vazio: `/discover --mode live` e `/acceptance` sondariam o produto de outra pessoa e
+# chamariam o resultado de evidência deste projeto. Declare o alvo DESTE sistema.
+
+# Where /discover --mode live-test exercises the ecosystem — PER-PROJECT, edit this.
+#
+# This is the DEV environment the Squad probes to produce runtime evidence. It is
+# deliberately NOT the same declaration as `acceptance-target.txt`:
+#
+#   acceptance-target.txt  → the RELEASED delivery, exercised by /acceptance to
+#                            decide whether a shipped thing actually works.
+#   live-target.txt (here) → the DEV environment, probed by /discover --mode
+#                            live-test to find things worth fixing.
+#
+# Collapsing them would point /acceptance at dev and let a milestone be declared
+# validated against an environment nobody ships. Keep them separate.
+#
+# Format: `key = value`, one per line. `#` starts a comment. Blocks are per-domain;
+# a domain with no block has no live surface, and /discover --mode live-test
+# REFUSES on it rather than inventing one.
+#
+# domain      (required) one of the 8 registered domains (rules/cycle-backlog.md)
+# kind        (required) one of: web | api | cli | cluster
+# target      (required) how to reach it — URL, endpoint, or command
+# auth        (optional) NAME of the credential needed. NEVER the value. If a run
+#             needs one and it is absent, ASK THE HUMAN — do not skip the probe,
+#             do not fabricate the observation, do not record a finding as if the
+#             surface had been exercised.
+# notes       (optional) anything a prober must know before touching it
+#
+# --- this ecosystem -------------------------------------------------------
+
+
+
+# Domains with NO live surface declared — /discover --mode live-test refuses on
+# these, by design. Use --mode review, bug, or evolve instead:
+#
+#   engine-go · theo-db · infra-terraform · contracts-auth · data-plane-ts ·
+#   platform-cli
+#
+# Their absence is a statement, not an omission: a Go library, a Postgres
+# extension and a Terraform module have no running surface a browser can probe.
+# Declaring a block for one of them because "live-test sounds thorough" produces
+# theatre, not evidence. If a data-plane service later gets a deployed endpoint
+# worth probing, add its block here — and only then.

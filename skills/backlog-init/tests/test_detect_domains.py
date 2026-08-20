@@ -235,3 +235,62 @@ def test_umbrella_is_a_directory_that_is_not_itself_a_repo(tmp_path: Path) -> No
     framework.mkdir()
     _repo(framework, "um-repo-so")
     assert detect_scope(framework) == "umbrella"
+
+
+# ---------------------------------------------------------------------------
+# Grill kit-domain-agents-install, decisão 2: derivar a tabela sem resolver o
+# especialista troca "tabela de outro ecossistema" por "tabela que aponta para
+# ninguém" — `route_domain` responde BROKEN ROUTE. O esqueleto sai do que foi
+# MEDIDO, e declara de si mesmo que não foi revisado.
+# ---------------------------------------------------------------------------
+
+from detect_domains import UNREVIEWED_MARKER, render_specialist  # noqa: E402
+
+
+def test_the_skeleton_declares_that_nobody_reviewed_it(tmp_path: Path) -> None:
+    root = _repo(tmp_path, "meu-projeto")
+    domain = detect_domains(root)[0]
+    body = render_specialist(domain, root)
+    assert "derived: true" in body
+    assert "reviewed_by_human: false" in body
+    assert UNREVIEWED_MARKER in body, "o débito tem de ficar visível, não silencioso"
+
+
+def test_the_skeleton_carries_only_measured_facts(tmp_path: Path) -> None:
+    """Nome, repos e linguagens detectadas. Nada de invariantes inventados."""
+    root = _repo(tmp_path, "meu-projeto")
+    (root / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+    body = render_specialist(detect_domains(root)[0], root)
+    assert "`meu-projeto`" in body
+    assert "python" in body
+
+
+def test_the_judgement_sections_exist_and_are_empty(tmp_path: Path) -> None:
+    """As seções que exigem julgamento humano ficam presentes e vazias: um
+    especialista sem elas parece completo, e é aí que ele engana."""
+    root = _repo(tmp_path, "meu-projeto")
+    body = render_specialist(detect_domains(root)[0], root)
+    for section in ("Invariantes", "O que é um achado real aqui", "Falsos positivos"):
+        assert section in body, section
+    assert body.count(UNREVIEWED_MARKER) >= 3, "um marcador por seção de julgamento"
+
+
+def test_a_skeleton_is_routable(tmp_path: Path) -> None:
+    """O ponto de existir: a rota deixa de ser BROKEN."""
+    import subprocess, sys
+    root = _repo(tmp_path, "meu-projeto")
+    (root / ".claude" / "rules").mkdir(parents=True)
+    (root / ".claude" / "agents").mkdir(parents=True)
+    rule = root / ".claude" / "rules" / "cycle-backlog.md"
+    rule.write_text("# x\n\n## Domain routing\n\n| D | R | S |\n|---|---|---|\n| `velho` | `outro` | `agents/velho.md` |\n", encoding="utf-8")
+    domains = detect_domains(root)
+    rewrite_routing_section(rule, domains)
+    (root / ".claude" / "agents" / "meu-projeto.md").write_text(
+        render_specialist(domains[0], root), encoding="utf-8")
+
+    out = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().parents[3] / "scripts" / "route_domain.py"),
+         "meu-projeto", "--rule", str(rule)],
+        capture_output=True, text=True,
+    )
+    assert out.returncode == 0, out.stdout + out.stderr
