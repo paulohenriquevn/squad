@@ -132,6 +132,83 @@ def scan_registry(registry: Path, knowledge_base: Path) -> list[ItemCoverage]:
     return out
 
 
+
+# --------------------------------------------------------------------------------------------
+# ADR 0012 — three classes of record, not one.
+#
+# The scan above answers "does a file for this item exist in this phase's directory". That is the
+# right question for two phases and the wrong one for three, and grading them all the same way
+# produced a report that named as gaps two things that are not:
+#
+#   plan, review    PER-ITEM and mandatory. A plan that exists only in someone's head is an
+#                   intention; a review verdict nobody wrote down cannot be checked against the
+#                   findings that produced it.
+#   code-quality    PER-SLICE. `/code-quality` scores a TREE — `cq_invoke` takes a plan slug and
+#                   audits the whole checkout — so a per-item audit would assert a measurement
+#                   that never happened. One record per release slice, naming its items.
+#   release         PER-RELEASE. One release carries many items; an item is covered when a release
+#                   record names it.
+#   discover        Satisfied by the item's own `evidence:` block. `cycle-discover.md` has two
+#                   entry paths and only one writes an opportunity file — a `--sweep` finding
+#                   registers directly with evidence attached.
+#
+# A percentage that rises because the metric was corrected is not progress, so `main` prints BOTH:
+# the strict per-item scan and this grading. Anyone can check which one moved.
+
+
+_EVIDENCE_RE = re.compile(r"^evidence:\s*(.*)$", re.MULTILINE)
+_PLAN_FIELD_RE = re.compile(r"^plan:\s*not-warranted\s*$", re.MULTILINE)
+
+MANDATORY_PER_ITEM = (Phase.PLAN, Phase.REVIEW)
+
+
+@dataclass
+class GradedItem:
+    coverage: ItemCoverage
+    satisfied: set[Phase] = field(default_factory=set)
+
+    @property
+    def item(self) -> str:
+        return self.coverage.item
+
+    @property
+    def gaps(self) -> list[Phase]:
+        if not self.coverage.expects_full_loop:
+            return []
+        return [p for p in Phase if p not in self.satisfied]
+
+
+def _blocks(registry: Path) -> dict[str, str]:
+    text = registry.read_text(encoding="utf-8")
+    matches = list(_ITEM_RE.finditer(text))
+    out: dict[str, str] = {}
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        out[m.group(1)] = text[m.end():end]
+    return out
+
+
+def grade(report: list[ItemCoverage], registry: Path) -> list[GradedItem]:
+    """Apply ADR 0012 on top of the strict scan."""
+    blocks = _blocks(registry)
+    graded: list[GradedItem] = []
+    for r in report:
+        satisfied = set(r.phases)
+        block = blocks.get(r.item, "")
+
+        # discover — the registry block's own evidence counts, unless it is the absence marker.
+        evidence = _EVIDENCE_RE.search(block)
+        if evidence and evidence.group(1).strip() not in ("", "none-yet"):
+            satisfied.add(Phase.DISCOVER)
+
+        # plan — a change the contract says needs none is not a gap.
+        if _PLAN_FIELD_RE.search(block):
+            satisfied.add(Phase.PLAN)
+
+        graded.append(GradedItem(coverage=r, satisfied=satisfied))
+    return graded
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--registry", type=Path, required=True)
@@ -147,24 +224,31 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     report = scan_registry(args.registry, args.knowledge_base)
-    graded = [r for r in report if r.expects_full_loop]
+    live = [r for r in report if r.expects_full_loop]
+    total = len(live)
+    graded = [g for g in grade(report, args.registry) if g.coverage.expects_full_loop]
 
-    per_phase = {p: sum(1 for r in graded if p in r.phases) for p in Phase}
-    total = len(graded)
     print(f"{total} items expect the full loop ({len(report) - total} killed, excluded)\n")
+
+    # BOTH numbers, always. A percentage that rises because the metric was corrected is not
+    # progress, and printing only the graded one would hide which of the two moved.
+    print(f"  {'phase':14} {'strict':>10}   {'ADR 0012':>10}")
     for phase in Phase:
-        n = per_phase[phase]
-        pct = (n * 100 // total) if total else 0
-        print(f"  {phase.value:14} {n:3}/{total}  {pct:3}%")
+        strict = sum(1 for r in live if phase in r.phases)
+        adr = sum(1 for g in graded if phase in g.satisfied)
+        pct_s = (strict * 100 // total) if total else 0
+        pct_a = (adr * 100 // total) if total else 0
+        print(f"  {phase.value:14} {strict:3}/{total} {pct_s:3}%   {adr:3}/{total} {pct_a:3}%")
 
-    complete = [r for r in graded if not r.missing]
-    print(f"\n  all five recorded: {len(complete)}/{total}")
+    strict_complete = [r for r in live if not r.missing]
+    adr_complete = [g for g in graded if not g.gaps]
+    print(f"\n  complete: {len(strict_complete)}/{total} strict, {len(adr_complete)}/{total} graded")
 
-    if args.show == "all" or complete != graded:
-        print("\nitems missing a record for at least one phase:")
-        for r in graded:
-            if r.missing:
-                print(f"  {r.item} [{r.status}] missing: {', '.join(p.value for p in r.missing)}")
+    gaps = [g for g in graded if g.gaps]
+    if args.show == "all" or gaps:
+        print("\nitems with a gap under ADR 0012:")
+        for g in gaps:
+            print(f"  {g.item} [{g.coverage.status}] missing: {', '.join(p.value for p in g.gaps)}")
 
     print(
         "\nA missing record is a QUESTION, not a verdict: a one-line change needs no plan"
