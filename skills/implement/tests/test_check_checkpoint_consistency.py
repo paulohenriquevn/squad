@@ -69,7 +69,8 @@ def test_task_committed_in_git_but_not_in_progress_is_high(tmp_path: Path) -> No
     sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
     _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")  # committed in git
     progress = {"tasks": [
-        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1},
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
+             "dod_evidence": "the suite is green"},
         # T1.2 MISSING from the checkpoint
     ]}
     report = check_checkpoint_consistency(progress, repo, ["T1.1", "T1.2"])
@@ -85,7 +86,8 @@ def test_task_present_but_not_committed_status_is_flagged(tmp_path: Path) -> Non
     sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
     _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")
     progress = {"tasks": [
-        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1},
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
+             "dod_evidence": "the suite is green"},
         {"id": "T1.2", "phase": "1", "status": "green"},  # stale: committed in git, not here
     ]}
     report = check_checkpoint_consistency(progress, repo, ["T1.1", "T1.2"])
@@ -100,8 +102,10 @@ def test_consistent_checkpoint_has_no_findings(tmp_path: Path) -> None:
     sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
     sha2 = _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")
     progress = {"tasks": [
-        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1},
-        {"id": "T1.2", "phase": "1", "status": "committed", "commit_sha": sha2},
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
+             "dod_evidence": "the suite is green"},
+        {"id": "T1.2", "phase": "1", "status": "committed", "commit_sha": sha2,
+         "dod_evidence": "the suite is green"},
     ]}
     report = check_checkpoint_consistency(progress, repo, ["T1.1", "T1.2"])
     assert report.findings == ()
@@ -113,15 +117,100 @@ def test_not_yet_committed_task_is_not_flagged(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
     progress = {"tasks": [
-        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1},
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
+             "dod_evidence": "the suite is green"},
         {"id": "T1.3", "phase": "1", "status": "pending"},
     ]}
     report = check_checkpoint_consistency(progress, repo, ["T1.1", "T1.3"])
     assert report.findings == ()
 
 
-def test_empty_progress_no_commits_is_pass(tmp_path: Path) -> None:
+def test_empty_progress_against_a_non_empty_plan_fails(tmp_path: Path) -> None:
+    """This test used to assert PASS, and that assertion WAS the bypass.
+
+    A plan declaring T1.1 with an empty checkpoint is not a neutral state: both call sites run
+    after the work was supposed to happen — `mini_review` at a phase boundary (that phase's
+    tasks must be done) and `run_validation` at the final gate (all of them must be). There is
+    no invocation where "the plan declares work and the checkpoint accounts for none of it" is
+    a pass, so PASS here encoded exactly the omission the gate exists to catch.
+
+    Measured before the fix: a plan with T1.1/T1.2/T1.3 and a checkpoint holding the first two
+    exited 0 on both this gate and `check_phase_completeness`, while the same T1.3 recorded as
+    `pending` was caught HIGH. Omission was cheaper than admission.
+    """
     repo = _repo(tmp_path)
     _commit(repo, "README.md", "# hi\n", "docs: init")  # unrelated, no task id
     report = check_checkpoint_consistency({"tasks": []}, repo, ["T1.1"])
-    assert report.status == "PASS"
+    assert report.status == "FAIL"
+    assert [f.code for f in report.findings] == ["plan_task_absent_from_progress"]
+
+
+def test_an_empty_plan_still_passes(tmp_path: Path) -> None:
+    """The refusal must not swallow the genuinely-empty case: no declared tasks, nothing owed."""
+    repo = _repo(tmp_path)
+    _commit(repo, "README.md", "# hi\n", "docs: init")
+    assert check_checkpoint_consistency({"tasks": []}, repo, []).status == "PASS"
+
+
+def test_a_task_absent_from_the_checkpoint_is_reported_once(tmp_path: Path) -> None:
+    """The inventory check defers to the backward check when the task IS in git.
+
+    "Committed but unrecorded" is strictly more informative than "absent", and reporting both
+    would double-count one problem — inflating the finding count, which is how a report stops
+    being read.
+    """
+    repo = _repo(tmp_path)
+    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
+    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")
+    progress = {"tasks": [{"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
+             "dod_evidence": "the suite is green"}]}
+
+    # T1.2 is in git but not in the checkpoint; T1.3 is in neither.
+    report = check_checkpoint_consistency(progress, repo, ["T1.1", "T1.2", "T1.3"])
+    codes = sorted(f.code for f in report.findings if f.severity != "INFO")
+    assert codes == ["plan_task_absent_from_progress", "task_committed_in_git_not_in_progress"]
+    absent = [f for f in report.findings if f.code == "plan_task_absent_from_progress"]
+    assert "T1.3" in absent[0].message and "T1.2" not in absent[0].message
+
+
+# B-041 — `committed` silently means "done".
+#
+# b020's T1.4 is marked `committed` against 0346d73, and that commit's own body reports
+#     load  4.54 -> 1571 passed / load 28.09 -> 1 failed / load 30.18 -> 2 failed
+# and says plainly "Not three greens, and reported as such". T1.4's DoD requires three consecutive
+# green runs. The COMMIT is honest; the checkpoint is not, because `committed` is the only
+# vocabulary it has for "this task has a commit".
+#
+# Both directions of the existing cross-check pass there — the sha is real and the commit is real —
+# because nothing reads the task's acceptance criteria. The gate added here does NOT read them
+# either: grading prose is what B-036 measured the cost of. It reports that a claim was made with no
+# evidence attached, which is what the reader auditing b020 needed and did not have.
+
+
+def test_a_committed_task_without_dod_evidence_is_reported(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    sha = _commit(repo, "a.txt", "one", "T1.1 — do the thing")
+    progress = {"slug": "s", "tasks": [
+        {"id": "T1.1", "phase": 1, "status": "committed", "commit_sha": sha},
+    ]}
+
+    report = check_checkpoint_consistency(progress, repo, ["T1.1"])
+
+    finding = next(f for f in report.findings if f.code == "committed_without_dod_evidence")
+    # INFO, never blocking: ten checkpoints predate the field and nine are unremarkable. A gate that
+    # turns the whole audit trail red in one step gets disabled — B-039's lesson, one item over.
+    assert finding.severity == "INFO"
+    assert report.has_high_or_blocker is False
+
+
+def test_a_committed_task_with_dod_evidence_is_not_reported(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    sha = _commit(repo, "a.txt", "one", "T1.1 — do the thing")
+    progress = {"slug": "s", "tasks": [
+        {"id": "T1.1", "phase": 1, "status": "committed", "commit_sha": sha,
+         "dod_evidence": "five consecutive green runs at loads 11.46-31.07"},
+    ]}
+
+    report = check_checkpoint_consistency(progress, repo, ["T1.1"])
+
+    assert not any(f.code == "committed_without_dod_evidence" for f in report.findings)

@@ -59,7 +59,7 @@ A finding flagged as hard cap MAY only be downgraded via:
 
 | Property | Rule |
 |---|---|
-| Entry format | `IDENTIFIER | FILE:LINE | SUNSET (YYYY-MM-DD) | RATIONALE` |
+| Entry format | `ECOSYSTEM \| FILE-PATH \| FINDING-TYPE \| SYMBOL-OR-LINE \| REASON \| SUNSET (YYYY-MM-DD)` — six fields; FINDING-TYPE is the DETECTOR family (`dead_code`, `symbol_fab`, `orphan_export`, `mutation_low`, `architecture`), not a § 2 identifier. Amended by ADR 0011 (#343): this row documented a four-field shape `load_allowlist` never accepted, so following it raised `allowlist_malformed_entry` — a HARD finding, strictly worse than adding nothing. |
 | Sunset window | ≤ 90 days from entry creation date |
 | Downgrade | ONE severity level (HARD → SOFT_CAP, SOFT_CAP → SOFT_FLOOR) |
 | Expired entry | IGNORED — finding re-fires at full severity; entry listed under "Allowlist hits — expired" in the audit report |

@@ -142,8 +142,57 @@ def check_checkpoint_consistency(
                 "exists in the repository. The checkpoint points at a fabricated or "
                 "stale SHA."))
 
-    # Backward: every plan task referenced by a real commit must be committed here.
+    # B-041 — `committed` means "has a commit", and every reader takes it to mean "done".
+    #
+    # b020's T1.4 is `committed` against 0346d73, whose own body reports "load 28.09 -> 1 failed /
+    # load 30.18 -> 2 failed" and says "Not three greens, and reported as such" — against a DoD of
+    # three consecutive green runs. Both directions above PASS there, because the sha is real and
+    # the commit is real. Nothing reads the acceptance criteria.
+    #
+    # This does not read them either, and that is deliberate. Grading prose is what B-036 measured
+    # the cost of: reading a measurement as a limit invented an obligation no author wrote. What a
+    # gate CAN see is that a claim was made with no evidence attached — which is exactly what the
+    # reader auditing b020 needed and did not have.
+    #
+    # INFO, never blocking. Ten checkpoints predate the field and nine are unremarkable; a gate that
+    # turns the whole audit trail red in one step gets disabled (B-039 D3), and a docs task or a
+    # rename legitimately has no measurement to cite.
+    for tid in sorted(committed_ids):
+        if not str(by_id[tid].get("dod_evidence") or "").strip():
+            findings.append(Finding(
+                "INFO", "committed_without_dod_evidence",
+                f"Task {tid} is 'committed' with no `dod_evidence`. That records a commit, not that "
+                "its acceptance criteria hold — add a pointer to the measurement that closed it."))
+
     referenced = _task_ids_in_git_history(repo_root, plan_task_ids)
+
+    # Inventory: every task the PLAN declares must be accounted for in the checkpoint.
+    #
+    # Neither of the other two directions can see an omission. The forward check reads the
+    # checkpoint's own entries. The backward one skips any id with no commit (`if tid not in
+    # referenced: continue`) — and a task nobody implemented has no commit. And
+    # `check_phase_completeness` does not close it either: it builds the phase's task list
+    # FROM the checkpoint, so the checkpoint judged itself. Measured: a plan declaring T1.1,
+    # T1.2, T1.3 with T1.3 never implemented passed both gates with exit 0, while the same
+    # task recorded as `pending` was caught HIGH. Omitting a task was cheaper than admitting
+    # it — the wrong incentive for the one artefact nothing forces the loop to write.
+    #
+    # The scope is the CALLER's: `run_validation` passes every plan id (final gate — all of
+    # them must exist by then), `mini_review` passes only `T{phase}.*` (a boundary must not
+    # fail over tasks belonging to phases not started yet).
+    #
+    # Ids present in git are left to the backward check below: "committed but unrecorded" is
+    # strictly more informative than "absent", and reporting both would double-count one
+    # problem — inflating the finding count, which is how a report stops being read.
+    for tid in plan_task_ids:
+        if tid not in by_id and tid not in referenced:
+            findings.append(Finding(
+                "HIGH", "plan_task_absent_from_progress",
+                f"Task {tid} is declared by the plan but has NO entry in the checkpoint — "
+                "not committed, not pending, not blocked — and no commit references it. "
+                "The plan is the contract: this task was skipped, not completed."))
+
+    # Backward: every plan task referenced by a real commit must be committed here.
     for tid in plan_task_ids:
         if tid not in referenced:
             continue

@@ -27,6 +27,7 @@ A development squad that keeps the **Theo ecosystem** healthy: eight domain spec
 - [Quick start](#quick-start)
 - [The four discover modes](#the-four-discover-modes)
 - [Project structure](#project-structure)
+- [Advisory skills](#advisory-skills)
 - [Unbreakable principles](#unbreakable-principles)
 - [Relationship to Cycle](#relationship-to-cycle)
 - [Status](#status) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [License](#license)
@@ -53,6 +54,7 @@ Squad addresses each with a phase, a gate, or a specialist who knows the differe
 - **Pointers are verified, line included.** A cited `file:line` that does not resolve — missing file, or a line past the end of one — caps the artifact at INVALID.
 - **One registry, two producers.** `BACKLOG.md` is the single answer to "what is pending?". Humans file items; sweeps register findings with evidence attached. Orphaned findings have nowhere to hide.
 - **Eight specialists who know the terrain.** Each carries build commands verified on disk, the domain's invariants, and the false positives that domain generates.
+- **A boundary that stopped working does not pass silently.** Every architecture linter goes green when a rule names a directory that moved — measured in this ecosystem on `theo-contracts` and `agent-builder`. `/arch-check` and the D5 detector report it; nothing else does.
 - **Guardrails at runtime.** Claude Code hooks enforce git safety (no `--force`, no direct-to-`main`), TDD discipline, CHANGELOG hygiene and honest public copy while you work.
 
 ## How it works
@@ -155,6 +157,19 @@ squad/
 ```
 
 Rules are the contract; a SKILL.md carries only phase-specific detail and points back at its rule.
+
+## Advisory skills
+
+Beyond the pipeline phases, the bundle ships skills that answer architecture questions rather than driving a cycle. They are auxiliary — bound to no `cycle-*.md`, invoked on demand:
+
+| Skill | Answers |
+|---|---|
+| `cap-theorem-specialist` | Consistency vs availability during a network partition; CP/AP classification of an operation |
+| `backpressure-specialist` | A producer outrunning a consumer: buffers, drop policies, flow control |
+| `resilience-specialist` | Timeouts, retries, circuit breakers, bulkheads, load shedding, degradation, recovery |
+| `arch-check` | Whether a repo has architecture boundaries, whether they can still fire, and which ones it already obeys |
+
+Each refuses the shortcut its field is prone to — classifying a product as CP or AP without its configuration, recommending an unbounded buffer, or retrying a non-idempotent operation without protection.
 
 ## Unbreakable principles
 

@@ -6,18 +6,28 @@
 # (HARD → SOFT_CAP, SOFT_CAP → SOFT_FLOOR). Expired entries (today > SUNSET)
 # are IGNORED — the underlying finding re-fires at full severity.
 #
-# Format (one entry per line):
-#   IDENTIFIER | FILE:LINE | SUNSET (YYYY-MM-DD) | RATIONALE
+# Format (one entry per line) — SIX pipe-separated fields, in this order:
+#   ECOSYSTEM | FILE-PATH | FINDING-TYPE | SYMBOL-OR-LINE | REASON | SUNSET (YYYY-MM-DD)
 #
 # Where:
-#   IDENTIFIER  — stable identifier from `code-quality-golden-rule.md § 2`
-#                 (e.g., dead_code_unallowlisted_python, symbol_fabrication_typescript)
-#   FILE:LINE   — absolute file path within the project + line number where the
-#                 finding fires (e.g., src/legacy/foo.py:42)
-#   SUNSET      — date in ISO format (YYYY-MM-DD). MUST be ≤ 90 days from entry.
-#   RATIONALE   — free-form justification (recommended; not enforced by parser).
+#   ECOSYSTEM     — the language, as `load_allowlist` validates it (python, typescript, rust, go).
+#   FILE-PATH     — path within the project where the finding fires (e.g., src/legacy/foo.py).
+#   FINDING-TYPE  — one of: dead_code | symbol_fab | orphan_export | mutation_low | architecture.
+#                   These are the DETECTOR families (D1..D5), NOT the stable identifiers from
+#                   `code-quality-golden-rule.md § 2`.
+#   SYMBOL-OR-LINE— the symbol name the finding names, or the line number.
+#   REASON        — free-form justification.
+#   SUNSET        — ISO date. MUST be ≤ 90 days from entry. Past it, the finding re-fires at full
+#                   severity and the entry is reported as expired.
 #
 # Lines starting with `#` and blank lines are skipped.
+#
+# #343 — this header used to document a FOUR-field format
+# (`IDENTIFIER | FILE:LINE | SUNSET | RATIONALE`) that `load_allowlist` has never accepted. Writing
+# an entry the way the file itself described raised `ValueError`, which the orchestrator turns into
+# an `allowlist_malformed_entry` HARD finding — so following the documentation produced a WORSE
+# outcome (FAIL_HARD, cap 49) than adding nothing at all. The parser is the source of truth here
+# because it is the thing that runs; the prose is what was wrong.
 # Whitespace around `|` is tolerated.
 #
 # Adding/modifying entries:

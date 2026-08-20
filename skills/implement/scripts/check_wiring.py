@@ -84,6 +84,51 @@ def _is_definition_only(path: Path, symbol: str) -> bool:
     return occurrence_lines.issubset(definition_lines)
 
 
+def _nested_worktree_paths(project_root: Path) -> list[Path]:
+    """Checkouts of THIS repository that git reports living inside `project_root`.
+
+    B-081 — a duplicate checkout is not a second caller. `git worktree add` puts a complete copy
+    of the tree somewhere, and if that somewhere is inside the repository, every file in it
+    answers a `grep -r` twice. Measured on theokit-tui: pillar (a) reported 10 callers for
+    `SlashMenuList` with two nested checkouts present against 5 without, and all three sampled
+    "callers" were inside the copy.
+
+    WHY GIT AND NOT A NAME. The first fix excluded the directory `.claude`, which is where this
+    project's agent worktrees land. That closes the case it was written for and no other:
+    `--exclude-dir` matches a NAME, and a checkout can be called anything. `git worktree list`
+    is the register git keeps of its own working trees, so it answers wherever the copy is and
+    whatever it is called.
+
+    WHY NOT `git check-ignore`. It was the item's own first suggestion, and the measurement
+    refuted it: a worktree created at the repository root is not ignored, so an ignore-based
+    filter returned the inflated count unchanged.
+
+    Returns [] when git is unavailable or `project_root` is not a repository. That is deliberate:
+    over-counting is the defect being fixed, but a gate that raises where it used to answer is a
+    worse trade.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project_root), "worktree", "list", "--porcelain"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        return []
+    if result.returncode != 0:
+        return []
+
+    root = project_root.resolve()
+    nested: list[Path] = []
+    for line in result.stdout.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        candidate = Path(line[len("worktree "):].strip()).resolve()
+        # The main checkout is listed too, and it is the thing being measured.
+        if candidate != root and candidate.is_relative_to(root):
+            nested.append(candidate)
+    return nested
+
+
 def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], exclude_dirs: list[str]) -> list[Path]:
     """Find files containing the symbol as a whole word. Returns [] if grep is unavailable."""
     # `-E` for ERE so `\b` word boundaries are honored. The symbol is escaped so a name
@@ -101,7 +146,19 @@ def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], excl
         return []
     if result.returncode > 1:  # 0 = match, 1 = no match, >1 = real error
         return []
-    return [Path(p) for p in result.stdout.strip().splitlines() if p]
+    found = [Path(p) for p in result.stdout.strip().splitlines() if p]
+
+    # B-081 — drop anything inside a duplicate checkout. Filtered HERE rather than passed to
+    # `--exclude-dir` because that flag matches a directory name in older GNU grep and a path
+    # suffix in newer ones; handing it an absolute path is a no-op on some versions, which is
+    # this defect's own shape — a filter that looks applied and is not.
+    nested = _nested_worktree_paths(project_root)
+    if not nested:
+        return found
+    return [
+        f for f in found
+        if not any(f.resolve().is_relative_to(w) for w in nested)
+    ]
 
 
 def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, Any]:
@@ -115,7 +172,14 @@ def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, A
         project_root,
         symbol,
         include_globs=["*.ts", "*.tsx", "*.js", "*.mjs", "*.py"],
-        exclude_dirs=["node_modules", ".git", "dist", "build", "tests", "test", "__tests__", "spec"],
+        # B-081 — `.claude/worktrees/agent-<id>/` holds FULL checkouts of this same repo
+        # (the Agent tool's `isolation: "worktree"` mode creates them inside the tree). Without
+        # this, one nested worktree makes every file match twice and pillar (a) — the
+        # non-negotiable one — can PASS on a symbol whose only "caller" is a stale duplicate.
+        # Measured 2026-08-19: 10 callers reported for `SlashMenuList`, ~half the same files seen
+        # twice. `.claude/` is an installed plugin, never project source, so excluding it whole is
+        # correct and not merely a worktree workaround.
+        exclude_dirs=["node_modules", ".git", ".claude", "dist", "build", "tests", "test", "__tests__", "spec"],
     )
     # Exclude files with "test" / "spec" / "fixture" / "mock" in basename
     production_files = [
@@ -205,7 +269,7 @@ def check_pillar_b_integration_test(project_root: Path, symbol: str, deferral_pa
             idir,
             symbol,
             include_globs=["*.ts", "*.tsx", "*.js", "*.mjs", "*.py"],
-            exclude_dirs=["node_modules", ".git"],
+            exclude_dirs=["node_modules", ".git", ".claude"],  # B-081 — see pillar (a)
         ))
 
     if test_matches:

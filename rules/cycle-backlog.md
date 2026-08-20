@@ -14,7 +14,7 @@ A backlog item is a **hypothesis with an owner and a closing criterion**. It is 
 
 Invoke `/backlog-item {slug}` when ALL of:
 
-- `BACKLOG.md` exists at the umbrella root (created once by `/backlog-init`).
+- `BACKLOG.md` exists at the root of the governed scope — the umbrella when repos live below it, the repository itself when it is autonomous (created once by `/backlog-init`).
 - There is one concrete thing to improve, fix, verify, or evolve in a repo that exists in the umbrella inventory.
 - It maps to exactly one registered domain (see § Domain routing). Work spanning two domains is two items.
 
@@ -97,7 +97,9 @@ raw ──/discover measures──┬──> triaged ──/to-plan──> plann
 
 ## Domain routing
 
-`domain` is what assigns the item to a specialist. The registered set:
+`domain` is what assigns the item to a specialist. **This table is derived from the project it lives in** — `skills/backlog-init/scripts/detect_domains.py` reads the topology from disk and emits it. What follows is THIS repository's instance (the `theo` ecosystem), not a set every consumer must fit into.
+
+A consumer that keeps this table inherits a map of repos it does not have, and gate G1 then refuses every item it files — correctly, since it genuinely cannot tell who owns the work. Measured on `theokit-sdk` (2026-08-18): 88 items with measured `file:line` evidence, all `BLOCKER/unroutable_repo`. Re-derive with `--write` when adopting the kit.
 
 Verified on disk 2026-08-05 (`find -maxdepth 2 -name .git` + `git -C <repo> rev-list --count HEAD`), not copied from any inventory table.
 
@@ -136,11 +138,13 @@ There is no "with caveats" band: an item is either in the registry or it is not.
 
 | # | Gate | Blocks on |
 |---|---|---|
-| G1 | **Domain + repo resolve** | `domain` not in the registered set, or `repo` not in the umbrella inventory. An item nobody owns is an item nobody does. |
-| G2 | **Dedup search ran** | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
+| G1 | **Domain + repo resolve** (executado por `skills/backlog-item/scripts/check_intake_gates.py`, que delega a `scripts/route_domain.py`) | `domain` not in the registered set, or `repo` not in the umbrella inventory. An item nobody owns is an item nobody does. |
+| G2 | **Dedup search ran** (mesmo script; rodá-lo É a evidência) | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
 | G3 | **Single domain** | The description spans two domains. Split it; one item, one specialist. |
 | G4 | **Verifiable DoD** | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |
 | G5 | **No prior-art justification** | `why_now` justifies the item by what another project does rather than by something that changed in our system. This is the Squad signature rule (Unbreakable Rule: evidence is ours or it is not evidence). Reject and ask for the local reason. |
+
+G1 e G2 são mecanizáveis e passaram a ser mecanizados; G3, G4 e G5 são julgamento e seguem conversacionais, cobertos pela bateria de evals da skill — automatizá-los produziria vereditos sobre linguagem que nenhuma medição sustenta.
 
 G5 does not forbid *knowing* how others solved a problem — it forbids that knowledge from being the **justification** for the work. "We need caching because project X has it" is rejected. "We need caching because the endpoint makes 4 round-trips per request" is accepted, whether or not project X inspired the look.
 
@@ -156,12 +160,41 @@ Intake deliberately has **no evidence gate**. Requiring evidence here would coll
 - **`dod` that restates the title.** "DoD: the trace explorer being faster" is the title again, not a criterion.
 - **Treating `suggested_mode` as binding.** It is the filer's guess. Locking DISCOVER to it defeats the purpose of measuring.
 
+## The index that opens the registry
+
+`BACKLOG.md` MUST carry an `## Index` section immediately before the item blocks, listing **every**
+item — one row each, linked to its own detail block — grouped into three buckets:
+
+| Bucket | Statuses | The question it answers |
+|---|---|---|
+| **Open** | `raw`, `triaged` | registered, measured or not, but nothing is being built |
+| **In flight** | `planned` | a plan exists; work is under way |
+| **Closed** | `shipped`, `killed` | the chain ended — and `killed` is a *successful* ending |
+
+`triaged` sits under **Open** deliberately. Measurement has run, but no plan exists, so nothing is
+in flight; folding it into the in-flight count would make that number answer a different question
+than the one people ask of it.
+
+**The index is generated, never written.** `skills/backlog-review/scripts/backlog_index.py --write`
+derives it from the blocks; `--check` exits 1 when it has drifted. `check_backlog_structure.py`
+reports `index_stale` (major) when the file's index does not match the one the generator would
+produce, and treats **absent as stale** — otherwise a registry opts out of the check by never
+having the section, which is how the four registries in this ecosystem reached 592 items with
+zero index rows.
+
+This is not ceremony. A summary that disagrees with the items below it is worse than no summary:
+a reader stops at the summary, so a wrong one reports absence where evidence exists — the same
+failure `rules/knowledge-base-location.md` records for a split knowledge-base. Nothing forces the
+index and the items to move together, so the gate is what keeps them honest.
+
 ## Output
 
 - `BACKLOG.md` at the umbrella root — the single registry, spanning all repos in the inventory.
 - `knowledge-base/backlog/{slug}-intake.md` — the intake grill log (one entry per answered question, with the G5 decision recorded).
 
-The registry lives at the umbrella root and not per-repo because a maintenance team asking "what is pending?" must have exactly one place to look. Per-repo backlogs re-create the orphaned-findings problem the single-registry rule exists to solve.
+The registry lives at the root of the governed SCOPE and not scattered below it, because a maintenance team asking "what is pending?" must have exactly one place to look. Per-directory backlogs inside one scope re-create the orphaned-findings problem the single-registry rule exists to solve.
+
+What this never meant is "an umbrella is required". An autonomous repository is its own scope and keeps its own registry — `theokit-sdk` holds 88 items about `theokit-sdk`, and asking it to file them in a parent directory that is nobody's repository would put the registry outside the thing it governs.
 
 ## Rollback
 

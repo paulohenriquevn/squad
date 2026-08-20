@@ -34,7 +34,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Headers whose checkbox body holds acceptance obligations.
 _SECTION_RE = re.compile(
@@ -45,7 +45,35 @@ _ANY_HEADER_RE = re.compile(r"^#{1,6}\s", re.MULTILINE)
 _CHECKBOX_RE = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s*(.+?)\s*$", re.MULTILINE)
 _FILE_SIZE_LIMIT_RE = re.compile(r"(\d{2,5})\s*lines", re.IGNORECASE)
 
-_DEFAULT_FILE_SIZE_LIMIT = 500
+# B-036 — the budget is a complexity proxy for CODE, and it was being applied to every file a slice
+# touched. `CHANGELOG.md` is touched by every slice (Unbreakable Rule 6 requires the entry) and its
+# released sections may never be rewritten, so it can only grow: 519 lines when B-036 was filed,
+# 589 one session later. The budget could never be met again, by any slice, for obeying a different
+# rule — and a gate nobody can satisfy is one people learn to read past.
+#
+# The exemption is by KIND, not by an allowlist of filenames, because an allowlist reproduces the
+# problem for the next append-only document (`BACKLOG.md`, `ROADMAP.md`, an ADR) and depends on
+# somebody remembering. An extension set is a list too — of KINDS, not INSTANCES: a new `.md` file
+# is exempt the day it is created and a new `.ts` file is budgeted the same day, with nobody
+# editing this script.
+_SOURCE_SUFFIXES = frozenset({
+    ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs",
+    ".py", ".go", ".rs", ".java", ".rb", ".c", ".h", ".cc", ".cpp", ".hpp",
+    ".sh", ".bash", ".zsh", ".sql",
+})
+# Build files carry no extension and are unambiguously source: they are executed, they accumulate
+# logic, and length there is exactly the complexity the budget is about. Matched by NAME because
+# they have no suffix to match on — the one place where a name list is the only available test.
+_SOURCE_NAMES = frozenset({"Makefile", "GNUmakefile", "Dockerfile", "Justfile", "Rakefile"})
+
+
+def _is_source(rel: str) -> bool:
+    """Whether the budget is about this file at all.
+
+    A long changelog is the rule being followed; a long module is the defect the budget looks for.
+    """
+    path = PurePosixPath(rel)
+    return path.suffix.lower() in _SOURCE_SUFFIXES or path.name in _SOURCE_NAMES
 
 # Categories run_validation / CQ / wiring already enforce — tagged, not re-checked.
 _COVERED_ELSEWHERE = {
@@ -64,6 +92,12 @@ _NEEDS_EVIDENCE = {"backward_compat", "other"}
 class Criterion:
     text: str
     category: str
+    # B-036 — the declared budget, read ONCE at parse time. It used to be re-extracted later by a
+    # second pass over the same regex, which left a "no number found" branch that could not run:
+    # a criterion only reaches category `file_size` by matching this very regex. A mutant flipping
+    # that branch's value was killed by NOTHING, because nothing can reach it. Carrying the number
+    # on the criterion removes the unreachable path instead of testing around it.
+    limit: int | None = None
 
 
 @dataclass(frozen=True)
@@ -111,7 +145,15 @@ def categorize(text: str) -> str:
         return "backward_compat"
     if "metric" in t or "counter" in t:
         return "runtime_metric"
-    if "line" in t or "size" in t:
+    # B-036 — a budget, not merely the WORD. `_categorise` used to return `file_size` for any text
+    # containing "line" or "size", so B-022's "the widest-line delta between the old and new
+    # snapshot is recorded" — a measurement, promising a number — armed a size gate over that whole
+    # slice. Reading a measurement as a limit invents an obligation the author never wrote.
+    #
+    # The consequence is a stricter contract on the plan author: a budget must now be stated in the
+    # `<= N lines` shape to be enforced. That is the right direction — an enforced budget nobody
+    # declared is the defect being fixed here.
+    if _FILE_SIZE_LIMIT_RE.search(t) and ("line" in t or "size" in t):
         return "file_size"
     if "test" in t:
         return "test"
@@ -127,7 +169,15 @@ def parse_criteria(plan_path: Path) -> list[Criterion]:
         body = content[start: nxt.start() if nxt else len(content)]
         for box in _CHECKBOX_RE.finditer(body):
             text = box.group(1).strip()
-            criteria.append(Criterion(text=text, category=categorize(text)))
+            category = categorize(text)
+            limit_match = (
+                _FILE_SIZE_LIMIT_RE.search(text) if category == "file_size" else None
+            )
+            criteria.append(Criterion(
+                text=text,
+                category=category,
+                limit=int(limit_match.group(1)) if limit_match else None,
+            ))
     return criteria
 
 
@@ -150,15 +200,6 @@ def _changed_files(repo_root: Path, shas: list[str]) -> list[str]:
     return seen
 
 
-def _file_size_limit(criteria: list[Criterion]) -> int:
-    for c in criteria:
-        if c.category == "file_size":
-            m = _FILE_SIZE_LIMIT_RE.search(c.text)
-            if m:
-                return int(m.group(1))
-    return _DEFAULT_FILE_SIZE_LIMIT
-
-
 def check_acceptance_criteria(
     plan_path: Path,
     repo_root: Path | None = None,
@@ -177,9 +218,17 @@ def check_acceptance_criteria(
     changed = _changed_files(repo_root, shas) if repo_root is not None else []
 
     # --- file_size budget (mechanizable, NOT covered by run_validation) ----------
-    if by_category.get("file_size") and repo_root is not None and changed:
-        limit = _file_size_limit(criteria)
+    # B-036 — the declared budget IS the condition. There used to be two: a `file_size` category
+    # check and a separate lookup that re-ran the same regex, leaving a "no number found" branch
+    # nothing could reach. Measured: mutating that branch was killed by ZERO tests, twice, because
+    # a criterion only reaches the category by matching the regex the lookup then re-ran. One
+    # expression removes the unreachable path rather than testing around it — and mutating THIS
+    # default to a number is caught, by `test_a_budget_the_plan_never_declared_is_not_enforced`.
+    limit = next((c.limit for c in criteria if c.limit is not None), None)
+    if limit is not None and repo_root is not None and changed:
         for rel in changed:
+            if not _is_source(rel):
+                continue
             path = repo_root / rel
             if not path.is_file():
                 continue
@@ -191,8 +240,8 @@ def check_acceptance_criteria(
                 findings.append(Finding(
                     severity="HIGH",
                     code="file_size_exceeded",
-                    message=f"`{rel}` has {loc} lines, exceeding the plan's "
-                            f"<= {limit}-line acceptance criterion.",
+                    message=f"`{rel}` has {loc} lines, exceeding the <= {limit}-line "
+                            f"budget this plan declares in its acceptance criteria.",
                 ))
 
     # --- CHANGELOG updated (mechanizable) ----------------------------------------

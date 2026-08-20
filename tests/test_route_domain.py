@@ -146,3 +146,62 @@ def test_path_scoped_repo_routes(table: dict) -> None:
     result = route("theo-cloud/dashboard", table)
     assert result is not None, "the path-scoped dashboard identifier did not route"
     assert result[0] == "frontend-dashboard"
+
+
+def test_a_domain_naming_a_missing_specialist_exits_3(tmp_path, capsys) -> None:
+    """The invariant moved from this file into the tool, and this pins that it moved.
+
+    It lived only here, and `install.sh` does not copy `tests/` — so in every consumer repo the
+    guard was absent. Measured while installing into TheoCode: a second three-column table inside
+    `## Domain routing` parses as routing, inventing domains whose specialist files were never
+    written, and `route_domain.py` answered `routed: true` / `agent: null` with exit 0.
+    """
+    from route_domain import main as route_main
+
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "agents").mkdir()
+    (tmp_path / "rules" / "cycle-backlog.md").write_text(
+        "## Domain routing\n\n"
+        "| Domain | Repos | Specialist |\n|---|---|---|\n"
+        "| `ghost` | `some-repo` | `agents/ghost.md` |\n\n"
+        "## Verdicts\n",
+        encoding="utf-8",
+    )
+    code = route_main(["some-repo", "--rule", str(tmp_path / "rules" / "cycle-backlog.md")])
+    assert code == 3
+    assert "BROKEN ROUTE" in capsys.readouterr().out
+
+
+def test_a_domain_whose_specialist_exists_still_routes(tmp_path) -> None:
+    """The refusal must not swallow the normal case."""
+    from route_domain import main as route_main
+
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "agents").mkdir()
+    (tmp_path / "agents" / "real.md").write_text("# real\n", encoding="utf-8")
+    (tmp_path / "rules" / "cycle-backlog.md").write_text(
+        "## Domain routing\n\n"
+        "| Domain | Repos | Specialist |\n|---|---|---|\n"
+        "| `real` | `some-repo` | `agents/real.md` |\n\n"
+        "## Verdicts\n",
+        encoding="utf-8",
+    )
+    assert route_main(["some-repo", "--rule", str(tmp_path / "rules" / "cycle-backlog.md")]) == 0
+
+
+def test_item_repo_field_accepts_a_monorepo_path(tmp_path: Path) -> None:
+    """`repo: packages/sdk` num arquivo de item tem de chegar inteiro ao roteador.
+
+    A tabela sempre aceitou caminho (`theo-cloud/dashboard`, documentado como "um
+    repo, dois domínios — resolvido por caminho"), mas o extrator do ITEM parava
+    na barra e devolvia `packages`. O roteamento então falhava por um repo que
+    ninguém escreveu. Descoberto ao derivar a tabela do `theokit-sdk`, onde 68 dos
+    88 itens citam `packages/sdk`.
+    """
+    item = tmp_path / "item.md"
+    item.write_text("## B-001 — algo\n\nrepo: packages/sdk\nstatus: raw\n", encoding="utf-8")
+    from route_domain import ITEM_REPO_RE
+
+    match = ITEM_REPO_RE.search(item.read_text(encoding="utf-8"))
+    assert match is not None
+    assert match.group(1) == "packages/sdk"

@@ -34,9 +34,12 @@ markers = [
 ]
 
 # NOTE: the default `pytest` run uses testpaths=["tests"] (the root aggregate
-# suite). The 64 per-slice test files run in CI via scripts/run_slice_tests.sh,
-# one isolated process per slice — slices are import-isolated and ship colliding
-# module basenames, so a single wide process is unsound. See that script's header.
+# suite). The per-slice test files run in CI via scripts/run_slice_tests.sh
+# (.github/workflows/ci.yml), one isolated process per slice — slices are
+# import-isolated and ship colliding module basenames, so a single wide process
+# is unsound. See that script's header. The count is deliberately not repeated
+# here: it said 64 while the tree held 80, and a number nothing recomputes is a
+# claim that rots.
 [tool.coverage.run]
 source = ["scripts", "skills"]
 omit = ["*/tests/*", "*/__pycache__/*"]
