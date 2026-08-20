@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **`phase_coverage.py` — quais fases do ciclo deixaram registro, item a item.** Um gate de parada e eu passamos quatro rodadas afirmando coisas opostas sobre se todo item tinha passado por todas as fases do loop. **Nenhum dos dois tinha medido**, e quem repetia a afirmação mais forte era eu. O `BACKLOG.md` registra o STATUS de um item e nada sobre quais fases o produziram, então "o loop rodou" era infalsificável.
+
+  Medido: `discover` 61%, `plan` 82%, `code-quality` **15%**, `review` 53%, `release` 47% — e **11 de 96** itens com registro das cinco. Dos dez itens trabalhados na própria sessão que discutia isso: **0 de 10**.
+
+  O que ele NÃO diz é o achado, não uma ressalva sobre ele: mede se a fase deixou REGISTRO onde o contrato dela manda, não se a fase rodou. No caso da minha própria sessão, `code-quality` marcava 0/10 enquanto eu havia rodado `pnpm gates`, `run_slice_tests.sh`, `check_xrefs`, `test_e2e_smoke` e uma rodada de mutação por correção em todos os dez. O gate rodou; `cycle-code-quality.md` diz que a saída dele é `knowledge-base/audits/{slug}-code-quality.md`, e eu não escrevi nenhuma. Ou seja: o ecossistema não conseguia distinguir "a fase foi pulada" de "a fase rodou e não deixou nada" — o defeito do B-084 um nível acima.
+
+  Dois comportamentos que os testes fixam porque errá-los tornaria o relatório pior que nada: um item `killed` termina em DISCOVER por desenho (`cycle-discover.md` chama matar um item de resultado BEM-SUCEDIDO), então as fases ausentes dele são excluídas em vez de contadas como dívida; e `b010-` não é satisfeito por `b100-...`, armadilha em que um `startswith` cai em silêncio. `IMPLEMENT` não é medido de propósito — a evidência dele é o histórico de commits, e uma varredura de diretório fingindo o contrário reportaria ausência para todo item (theokit-tui B-105)
+
 ### Fixed
 - **O gate de wiring contava um checkout duplicado como callers de produção, e nem `.claude` nem o registro de worktrees fechavam o caso.** A entrada anterior deste CHANGELOG descreve a exclusão de `.claude` — ela vale e continua no `exclude_dirs`, mas `--exclude-dir` casa um NOME, e uma cópia do repositório pode chamar-se qualquer coisa. Medido no `theokit-tui`, símbolo `SlashMenuList`: árvore limpa **5 callers**; com uma worktree em `.claude/worktrees/` ainda 5 (a exclusão por nome funcionando); com uma worktree de nome arbitrário na raiz, **10** — e os três callers amostrados todos dentro da cópia, nenhum em `src/`. O pilar (a) é o não-negociável, então um símbolo cujo único "caller" morasse ali passaria num gate desenhado para provar que ele está ligado à produção.
 
