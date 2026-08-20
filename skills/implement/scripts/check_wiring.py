@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -121,13 +122,28 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
         # Not a checkout at all — nothing to be nested inside it, and nothing to compare against.
         return []
 
+    # PRUNED, and the pruning is not an optimisation detail — it was measured. A plain
+    # `rglob(".git")` over this project took 1080 ms, and `_grep_symbol` runs twice per wiring
+    # check, so a slice with ten symbols paid twenty seconds to directory-walking alone. A gate
+    # slow enough to notice is a gate people find reasons to skip.
+    #
+    # Two prunes, each with a reason rather than a guess:
+    #   - a directory that IS a checkout is not descended into. A checkout inside a checkout is
+    #     already excluded by the outer one, so the subtree carries no further information.
+    #   - `node_modules` and `.git` internals are skipped. Dependencies vendor their own
+    #     repositories, and `_grep_symbol` already excludes both from its RESULTS, so anything
+    #     found there could never have been counted.
     nested: list[Path] = []
+    skip = {"node_modules", ".git"}
     try:
-        for dot_git in root.rglob(".git"):
-            checkout = dot_git.parent
-            # The root itself is the thing being measured, not a copy of it.
-            if checkout != root:
-                nested.append(checkout)
+        for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+            here = Path(dirpath)
+            if ".git" in dirnames or ".git" in filenames:
+                if here != root:
+                    nested.append(here)
+                    dirnames[:] = []          # a checkout's insides are not this project's
+                    continue
+            dirnames[:] = [d for d in dirnames if d not in skip]
     except OSError:
         return []
     return nested

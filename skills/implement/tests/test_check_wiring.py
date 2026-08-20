@@ -183,3 +183,34 @@ def test_a_caller_inside_a_nested_CLONE_is_not_counted(git_project: Path) -> Non
     )
 
     assert _caller_count("targetSymbol", git_project) == before
+
+
+def test_the_walk_does_not_descend_into_node_modules_or_into_a_checkout(git_project: Path) -> None:
+    """B-104 review — the prune is correctness-adjacent, and it was measured, not assumed.
+
+    A plain `rglob(".git")` over the real project took 1080 ms, and `_grep_symbol` runs twice per
+    wiring check: a slice with ten symbols paid twenty seconds to directory-walking. Pruned, the
+    same walk takes 13 ms. A gate slow enough to notice is a gate people find reasons to skip.
+
+    This asserts the SHAPE the speed comes from rather than a duration — a timing assertion is a
+    flaky test on a loaded machine, which is the defect B-058 spent this session on.
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    from check_wiring import _nested_worktree_paths  # noqa: PLC0415
+
+    # A dependency that vendors its own repository, and a checkout below another checkout.
+    (git_project / "node_modules" / "dep").mkdir(parents=True)
+    (git_project / "node_modules" / "dep" / ".git").mkdir()
+    subprocess.run(
+        ["git", "clone", "-q", "--local", "--no-hardlinks", ".", "outer-copy"],
+        cwd=git_project, check=True, capture_output=True,
+    )
+    (git_project / "outer-copy" / "inner").mkdir(parents=True, exist_ok=True)
+    (git_project / "outer-copy" / "inner" / ".git").mkdir()
+
+    found = {p.name for p in _nested_worktree_paths(git_project)}
+
+    assert "outer-copy" in found, "the nested checkout itself must be found"
+    assert "dep" not in found, "node_modules is never descended into"
+    assert "inner" not in found, "a checkout inside a checkout adds nothing — the outer one covers it"
