@@ -313,6 +313,24 @@ def _emit_and_exit(
     languages_skipped: dict[str, str] | None = None,
 ) -> int:
     verdict, stable_ids = compute_verdict(findings)
+
+    # B-092 — an audit that ran zero detectors is not a clean audit. Before this
+    # check, an empty/misconfigured `code-quality-languages.txt` (or a config
+    # whose every ENABLED language was skipped for a missing manifest) produced
+    # `findings == []`, and `compute_verdict([])` silently reports PASS. That PASS
+    # is consumed as a HARD gate by `cycle-review.md` (admits on PASS /
+    # PASS_WITH_CAVEATS) and by `skills/implement/scripts/run_validation.py`
+    # (fails on FAIL_HARD / INVALID) — both were reading a constant. Measured
+    # 2026-08-18: `languages_audited: []` returned in under a second with
+    # `verdict: PASS`. Force INVALID so an empty audit can never again read as
+    # a clean one — the same score cap the golden rule already uses for
+    # structural integrity failures (§ 1).
+    if verdict == "PASS" and not languages_audited:
+        verdict = "INVALID"
+        stable_ids = list(stable_ids)
+        if "no_languages_audited" not in stable_ids:
+            stable_ids.append("no_languages_audited")
+
     summary = emit_json_summary(findings, verdict, stable_ids)
     summary["languages_audited"] = languages_audited or []
     summary["languages_skipped"] = list((languages_skipped or {}).keys())

@@ -115,7 +115,14 @@ def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, A
         project_root,
         symbol,
         include_globs=["*.ts", "*.tsx", "*.js", "*.mjs", "*.py"],
-        exclude_dirs=["node_modules", ".git", "dist", "build", "tests", "test", "__tests__", "spec"],
+        # B-081 — `.claude/worktrees/agent-<id>/` holds FULL checkouts of this same repo
+        # (the Agent tool's `isolation: "worktree"` mode creates them inside the tree). Without
+        # this, one nested worktree makes every file match twice and pillar (a) — the
+        # non-negotiable one — can PASS on a symbol whose only "caller" is a stale duplicate.
+        # Measured 2026-08-19: 10 callers reported for `SlashMenuList`, ~half the same files seen
+        # twice. `.claude/` is an installed plugin, never project source, so excluding it whole is
+        # correct and not merely a worktree workaround.
+        exclude_dirs=["node_modules", ".git", ".claude", "dist", "build", "tests", "test", "__tests__", "spec"],
     )
     # Exclude files with "test" / "spec" / "fixture" / "mock" in basename
     production_files = [
@@ -205,7 +212,7 @@ def check_pillar_b_integration_test(project_root: Path, symbol: str, deferral_pa
             idir,
             symbol,
             include_globs=["*.ts", "*.tsx", "*.js", "*.mjs", "*.py"],
-            exclude_dirs=["node_modules", ".git"],
+            exclude_dirs=["node_modules", ".git", ".claude"],  # B-081 — see pillar (a)
         ))
 
     if test_matches:
