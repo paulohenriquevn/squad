@@ -237,6 +237,106 @@ assert_exit "non-code file change without CHANGELOG => exit 0" 0 "$rc"
 teardown
 
 # ---------------------------------------------------------------------------
+# Projeto SEM CHANGELOG.md — o gate não pode sumir em silêncio
+# ---------------------------------------------------------------------------
+# `if [ -f "CHANGELOG.md" ]` desativava a Regra 6 inteira quando o arquivo não
+# existia. Um projeto adotante que nunca o criou nunca descobria que o kit
+# esperava um: disciplina prometida na documentação, ausente na prática.
+#
+# ADVISORY e não BLOCKER — criar o arquivo é decisão do consumidor, e travar
+# toda sessão de um repo recém-adotado faria da instalação uma parede. O que o
+# teste exige é que o silêncio acabe, não que a sessão pare.
+
+run_hook_capture() {
+  (cd "$TMPDIR_TEST" && bash "$HOOK") 2>&1 || true
+}
+
+# ---- código muda, sem CHANGELOG.md => avisa, mas não bloqueia ----
+setup
+rm -f "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
+echo "package main" > "$TMPDIR_TEST/app.go"
+git -C "$TMPDIR_TEST" add app.go >/dev/null 2>&1
+rc=$(run_hook)
+assert_exit "sem CHANGELOG.md: mudança de código NÃO bloqueia" 0 "$rc"
+out=$(run_hook_capture)
+TOTAL=$((TOTAL + 1))
+if echo "$out" | grep -q "No CHANGELOG.md in this project"; then
+  echo "  PASS  sem CHANGELOG.md: emite advisory nomeando o gap"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL  sem CHANGELOG.md: advisory ausente (o gate sumiu em silêncio)"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+teardown
+
+# ---- sem CHANGELOG.md e sem mudança de código => silêncio é correto ----
+setup
+rm -f "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
+echo "# doc" > "$TMPDIR_TEST/NOTES.md"
+git -C "$TMPDIR_TEST" add NOTES.md >/dev/null 2>&1
+out=$(run_hook_capture)
+TOTAL=$((TOTAL + 1))
+if echo "$out" | grep -q "No CHANGELOG.md in this project"; then
+  echo "  FAIL  sem código mudado: advisory não deveria disparar (ruído)"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+else
+  echo "  PASS  sem código mudado: nenhum advisory (silêncio correto)"
+  PASS_COUNT=$((PASS_COUNT + 1))
+fi
+teardown
+
+# ---------------------------------------------------------------------------
+# O kit instalado sob .claude/ é dependência, não fonte do consumidor
+# ---------------------------------------------------------------------------
+# Medido num projeto adotante recém-instalado: a primeira sessão emitia 107
+# linhas de aviso sobre arquivos DO KIT (`.claude/skills/**/*.py`) contra UM
+# achado real no código do usuário. Auditar a própria dependência é o jeito
+# canônico de ensinar alguém a ignorar o gate.
+#
+# O filtro é `^\.claude/`, e vale nos dois layouts sem precisar detectar qual:
+# em plugin-install o kit mora em `.claude/` e é excluído; em standalone o
+# repositório do kit tem os arquivos em `skills/`, que seguem auditados.
+
+# ---- arquivo do kit sob .claude/ não gera aviso ----
+setup
+rm -f "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
+mkdir -p "$TMPDIR_TEST/.claude/skills/foo/scripts"
+echo "def f(): pass" > "$TMPDIR_TEST/.claude/skills/foo/scripts/thing.py"
+git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
+out=$(run_hook_capture)
+TOTAL=$((TOTAL + 1))
+if echo "$out" | grep -q '\.claude/'; then
+  echo "  FAIL  arquivo do kit sob .claude/ apareceu num aviso (audita a dependência)"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+else
+  echo "  PASS  arquivo do kit sob .claude/ não gera aviso"
+  PASS_COUNT=$((PASS_COUNT + 1))
+fi
+teardown
+
+# ---- regressão: código do usuário FORA de .claude/ segue auditado ----
+setup
+rm -f "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
+mkdir -p "$TMPDIR_TEST/.claude/skills/foo/scripts" "$TMPDIR_TEST/src"
+echo "def f(): pass" > "$TMPDIR_TEST/.claude/skills/foo/scripts/thing.py"
+echo "def g(): pass" > "$TMPDIR_TEST/src/mine.py"
+git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
+out=$(run_hook_capture)
+TOTAL=$((TOTAL + 1))
+if echo "$out" | grep -q 'src/mine.py'; then
+  echo "  PASS  regressão: código do usuário fora de .claude/ segue auditado"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL  regressão: o filtro cegou o gate para o código do usuário"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+teardown
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

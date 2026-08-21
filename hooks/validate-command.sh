@@ -157,19 +157,53 @@ strip_quoted() {
 
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
 CMD_UNQUOTED=$(strip_quoted "$CMD")
-INLINE_MAIN=no
-if echo "$CMD_UNQUOTED" | grep -qE 'git[[:space:]]+switch[[:space:]]+(-[cC][[:space:]]+)?main([[:space:]]|$)' \
-   || echo "$CMD_UNQUOTED" | grep -qE 'git[[:space:]]+checkout[[:space:]]+(-b[[:space:]]+)?main([[:space:]]|$)'; then
-  INLINE_MAIN=yes
+
+# --- F12: which branch IS the trunk here ---
+# Este guard casava `[ "$BRANCH" = "main" ]` e mais nada. Um projeto adotante
+# cujo trunk é `master` instalava o kit, lia que a Regra 4 estava protegida, e
+# não estava — medido num projeto descartável: em `master` o commit passava
+# (exit 0), em `main` bloqueava. Promete e não entrega, calado: o pior formato.
+#
+# `main` e `master` são o piso fixo (a esmagadora maioria dos repos). Um trunk
+# de nome próprio — `trunk`, `release` — é lido de `refs/remotes/origin/HEAD`,
+# que é o que o remoto declara como default. Sem remoto, o piso vale sozinho.
+#
+# Sobre-proteger é o lado seguro do erro: bloquear um commit que poderia passar
+# custa uma troca de branch; o inverso custa a garantia inteira, sem avisar.
+TRUNKS="main master"
+# `|| true` é obrigatório: sem remoto, `git symbolic-ref` sai 128, e sob
+# `set -euo pipefail` a atribuição herda esse status e aborta o hook inteiro —
+# falha aberta, que deixaria passar TODO comando em qualquer repo sem origin.
+DEFAULT_REMOTE_BRANCH=$( { git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true; } | sed 's|^origin/||')
+if [ -n "$DEFAULT_REMOTE_BRANCH" ] && [ "$DEFAULT_REMOTE_BRANCH" != "workspace" ] && [ "$DEFAULT_REMOTE_BRANCH" != "develop" ]; then
+  case " $TRUNKS " in
+    *" $DEFAULT_REMOTE_BRANCH "*) : ;;
+    *) TRUNKS="$TRUNKS $DEFAULT_REMOTE_BRANCH" ;;
+  esac
 fi
 
-if [ "$BRANCH" = "main" ] || [ "$INLINE_MAIN" = "yes" ]; then
+ON_TRUNK=no
+INLINE_MAIN=no
+for _trunk in $TRUNKS; do
+  # `if`, não `[ ... ] && ...`: sob `set -e` a forma curta aborta o hook quando
+  # o teste é falso, porque é o último comando do corpo do loop.
+  if [ "$BRANCH" = "$_trunk" ]; then ON_TRUNK=yes; fi
+  if echo "$CMD_UNQUOTED" | grep -qE "git[[:space:]]+switch[[:space:]]+(-[cC][[:space:]]+)?${_trunk}([[:space:]]|$)" \
+     || echo "$CMD_UNQUOTED" | grep -qE "git[[:space:]]+checkout[[:space:]]+(-b[[:space:]]+)?${_trunk}([[:space:]]|$)"; then
+    INLINE_MAIN=yes
+  fi
+done
+
+if [ "$ON_TRUNK" = "yes" ] || [ "$INLINE_MAIN" = "yes" ]; then
   if echo "$CMD_UNQUOTED" | grep -qE 'git[[:space:]]+commit([[:space:]]|$)'; then
-    echo "BLOCKED: never commit directly to main (Inquebrável Rule 4). Work on 'develop' (single-trunk)." >&2
+    # NÃO mandar para `develop`: G1, 10 linhas abaixo, bloqueia commit lá também.
+    # A mensagem antiga dizia "Work on 'develop' (single-trunk)" — conselho que
+    # rende um segundo BLOCKED e nenhuma indicação de onde o trabalho nasce.
+    echo "BLOCKED: never commit directly to the trunk '${BRANCH}' (Inquebrável Rule 4). Work is born on 'workspace' (workspace → develop → trunk); develop integrates, it never originates." >&2
     exit 2
   fi
   if echo "$CMD_UNQUOTED" | grep -qE 'git[[:space:]]+(merge|rebase|reset|cherry-pick)([[:space:]]|$)'; then
-    echo "BLOCKED: never mutate 'main' directly (Inquebrável Rule 4). main receives release merges only, via a develop→main PR. Switch to 'workspace' first." >&2
+    echo "BLOCKED: never mutate the trunk '${BRANCH}' directly (Inquebrável Rule 4). It receives release merges only, via a develop→trunk PR. Switch to 'workspace' first." >&2
     exit 2
   fi
 fi

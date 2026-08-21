@@ -34,7 +34,20 @@ UNSTAGED=$(git diff --name-only 2>/dev/null || true)
 STAGED=$(git diff --cached --name-only 2>/dev/null || true)
 LAST_COMMIT=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
 
-ALL_FILES=$(echo -e "${UNSTAGED}\n${STAGED}\n${LAST_COMMIT}" | sort -u | grep -v '^$' || true)
+# `.claude/` é o kit INSTALADO — dependência do projeto, não fonte dele.
+# Medido num adotante recém-instalado: a primeira sessão emitia 107 linhas de
+# aviso sobre `.claude/skills/**/*.py` contra UM achado real no código do
+# usuário. Auditar a própria dependência é o jeito canônico de ensinar alguém a
+# ignorar o gate — e um gate ignorado não protege nada.
+#
+# O filtro serve os dois layouts sem precisar distinguir qual: em plugin-install
+# o kit vive sob `.claude/` e sai; em standalone o repositório do kit tem seus
+# arquivos em `skills/`, `hooks/`, `scripts/`, que seguem auditados normalmente.
+ALL_FILES=$(echo -e "${UNSTAGED}\n${STAGED}\n${LAST_COMMIT}" \
+  | sort -u \
+  | grep -v '^$' \
+  | grep -v '^\.claude/' \
+  || true)
 
 WARNINGS=()
 BLOCKERS=()
@@ -179,6 +192,25 @@ if [ -f "CHANGELOG.md" ]; then
     else
       BLOCKERS+=("$msg")
     fi
+  fi
+else
+  # Sem CHANGELOG.md o gate inteiro sumia em silêncio. Um projeto adotante que
+  # nunca criou o arquivo nunca descobria que o kit esperava um — a disciplina
+  # da Regra 6 era prometida na documentação e não existia na prática, que é o
+  # mesmo formato de falha do trunk `master` (promete e não entrega, calado).
+  #
+  # ADVISORY, não BLOCKER, e a distinção é deliberada: criar o arquivo é decisão
+  # do consumidor, e bloquear toda sessão de um repo recém-adotado até que ele
+  # exista transformaria a primeira instalação numa parede. Avisar uma vez por
+  # sessão em que código mudou é o suficiente para deixar de ser silêncio.
+  CODE_CHANGED_NO_LOG=$(echo "$ALL_FILES" \
+    | grep -E '\.(go|py|ts|tsx|js|jsx|rs|java|kt|rb|cs)$' \
+    | grep -vE '(_test|\.test|\.spec)\.[a-z]+$' \
+    | grep -vE '(^|/)(tests?|spec|__tests__|testdata|fixtures)/' \
+    | grep -vE '(^|/)(node_modules|vendor|dist|build|target|\.venv|__pycache__)/' \
+    || true)
+  if [ -n "$CODE_CHANGED_NO_LOG" ]; then
+    WARNINGS+=("No CHANGELOG.md in this project, so the Rule 6 gate cannot run — production source changed and nothing recorded it. Create CHANGELOG.md with an [Unreleased] section (Keep a Changelog format) to activate the gate, or leave it absent deliberately if this repo does not ship to consumers.")
   fi
 fi
 

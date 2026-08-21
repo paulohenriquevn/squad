@@ -6,6 +6,104 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **A proteção de trunk valia só para quem chama a branch de `main`.** O guard casava `[ "$BRANCH" = "main" ]` e mais nada. Um projeto adotante cujo trunk é `master` instalava o kit, lia na documentação que a Regra 4 estava protegida, e não estava. Medido num projeto descartável: em `master` o `git commit` passava (exit 0); em `main` bloqueava.
+
+  Promete e não entrega, em silêncio — o pior formato, porque a garantia só é testada quando já falhou. Agora `main` e `master` são piso fixo e o trunk de nome próprio (`trunk`, `release`) sai de `refs/remotes/origin/HEAD`. Sobre-proteger é o lado seguro do erro: bloquear um commit que poderia passar custa uma troca de branch; o inverso custa a garantia inteira.
+
+  **A primeira tentativa de correção era ela própria um fail-open:** sem remoto, `git symbolic-ref` sai 128, e sob `set -euo pipefail` a atribuição herdava esse status e abortava o hook — deixando passar TODO comando em qualquer repo sem `origin`. Os seis testes `F12` pegaram (revisão de agnosticismo)
+
+- **O Stop hook auditava o próprio kit dentro do projeto adotante.** `ALL_FILES` varria `.claude/**`, que é o kit INSTALADO — dependência, não fonte. Medido numa instalação nova: a primeira sessão emitia **107 linhas** de aviso sobre `.claude/skills/**/*.py` contra **um** achado real no código do usuário.
+
+  Auditar a própria dependência é o jeito canônico de ensinar alguém a ignorar o gate, e um gate ignorado não protege nada. O filtro `^\.claude/` serve os dois layouts sem precisar distinguir: em plugin-install o kit sai; em standalone os arquivos vivem em `skills/`, `hooks/`, `scripts/` e seguem auditados. Medido depois: 107 → 0 (revisão de agnosticismo)
+
+- **Sem `CHANGELOG.md`, o gate da Regra 6 sumia em silêncio.** `if [ -f "CHANGELOG.md" ]` desativava a checagem inteira quando o arquivo não existia — então um projeto que nunca o criou nunca descobria que o kit esperava um. Disciplina prometida na documentação, ausente na prática.
+
+  Agora emite ADVISORY quando código de produção mudou e não há CHANGELOG. Advisory e não BLOCKER de propósito: criar o arquivo é decisão do consumidor, e travar toda sessão de um repo recém-adotado faria da instalação uma parede. O objetivo é acabar com o silêncio, não parar a sessão (revisão de agnosticismo)
+
+- **A mensagem de bloqueio no trunk mandava para onde o próprio hook bloqueia.** Dizia *"Work on 'develop' (single-trunk)"*; o G1, dez linhas abaixo, bloqueia commit em `develop` — *"develop INTEGRATES work, it never ORIGINATES it"*. Quem seguisse o conselho tomava um segundo BLOCKED sem nenhuma indicação de onde o trabalho nasce. Agora aponta `workspace` e nomeia o trunk real em vez de dizer "main" (revisão de agnosticismo)
+
+- **O docstring do `install.sh` descrevia o oposto do que o script faz.** Dizia *"agents/ ships the 8 domain specialists, copied from source"*; o comportamento real copia só o `README.md`, e os oito especialistas do ecossistema `theo` ficam atrás de `--with-domain-agents`. O comportamento estava certo — a documentação é que mentia, e no sentido que faz um adotante esperar receber um mapa de repos que não são dele (revisão de agnosticismo)
+
+- **A mensagem de erro do `cycle-goal` mandava rodar uma skill aposentada.** Sem `ROADMAP.md`, `compose_goal_condition.py` imprimia *"run /roadmap-init first"* — skill retirada junto com a cycle-roadmap. E `rules/cycle-acceptance.md § The ROADMAP.md contract` registra que o arquivo é escrito à mão e **nenhuma** skill o gera, `/backlog-init` inclusive, que cria outro registro em outro eixo.
+
+  Um remédio impresso na falha que não existe é pior que nenhum: manda procurar em vez de resolver. A mensagem agora aponta o contrato e a forma de header exigida.
+
+  Duas irmãs no mesmo arquivo: o BLOCK de tamanho dizia que o cap de 4000 é *"the cap /goal enforces"* — contradizendo o docstring do próprio módulo, que registra que o cap deixou de valer quando a skill passou a armar o próprio `Stop` hook, e é mantido só como limite de legibilidade. Agora diz o que é. E o `requires` do `cycle-goal` errava nas duas direções: declarava `to-plan` e omitia `grill-me`, `discover-plan` e `plan-confidence` — que o condition template embute como string literal (revisão de coerência das skills)
+
+- **Nada garantia que os comandos citados na condição de término existem.** `compose_goal_condition.py` embute sete nomes de skill no texto da condição, cada um ao lado do artefato que deve produzir; renomeie qualquer um e a condição continua compondo, armando e se lendo como autoritativa. O `check_xrefs.py` não cobre: o Check 7 varre `skills/**/*.py` atrás de `rules/*.md`, nunca de `/skill-name`.
+
+  `tests/test_goal_condition_names_real_skills.py` fecha os dois níveis. O primeiro isenta menção histórica a primitiva de CLI (`goal` é o assunto de uma seção inteira da skill); o segundo não isenta nada, porque varre só o que chega a um `print` — ali um comando não é referência, é instrução. Foi esse teste que achou os dois defeitos acima. Varredura da mesma classe nos demais scripts: limpa (revisão de coerência das skills)
+
+- **O `/auto-plan` pulava um gate do cycle que ele diz orquestrar.** A `Phase D` encadeava `/discover-plan` → `/discover-edge-cases` → `/discover-execute`, sem `/discover-plan-confidence` no meio — que é a fase 3 de `cycle-discover`, tem hard gate próprio (*sem alvo fabricado; critério de falsificação não-vazio*) e é declarada por `/discover-execute` no seu `requires`.
+
+  O que se perde ao pular: a medição roda contra um plano que nada validou, e o resultado chega **com aparência limpa**. É o modo de falha que o `/discover-edge-cases` existe para nomear — uma medição que não pode falhar, acreditada justamente porque rodou sem erro.
+
+  O `requires` do `/auto-plan` declarava 6 skills e o corpo invocava 15. As duas metades agora batem, com as 16 declaradas (revisão de coerência das skills)
+
+- **`check_xrefs.py` truncava todo cycle com dois hífens.** `CYCLE_REF_RE` era `` `?cycle-([a-z]+)`? `` e `[a-z]+` não casa hífen: `cycle-code-quality` era lido como `cycle-code`, `cycle-auto-plan` como `cycle-auto`, `cycle-judge-codex` como `cycle-judge`. Três dos doze cycle rules — um quarto do inventário.
+
+  O validador então acusava como ausente um arquivo que estava lá. Pior modo de falha possível para um gate: a leitura natural do FAIL é *"o validador está quebrado"*, e é assim que se ensina um time a ignorá-lo.
+
+  Ficou escondido porque `_extract_cycle_contract_ref` retorna no PRIMEIRO match, e as skills que citavam esses cycles mencionavam antes um de nome simples. Só apareceu quando `code-quality` ganhou um `## Cycle contract` citando `cycle-code-quality` sozinho. `tests/test_check_xrefs_multi_hyphen_cycle.py` cobre os três nomes, e checa que a mensagem de erro carrega o nome completo em vez do prefixo (revisão de coerência das skills)
+
+- **`/edge-case-plan` e `/discover-edge-cases` não podiam executar o próprio `Step 5`.** Ambas mandam salvar o relatório em `knowledge-base/reviews/` e criar o diretório se ausente; ambas declaravam `allowed-tools: Read Glob Grep Bash`, sem `Write`. Toda skill irmã que salva relatório (`review`, `analysis`, `deps-audit`, `discover-confidence`) declara.
+
+  Parece over-application do *"does NOT edit the plan"* — correto, e a razão de `Edit` seguir de fora — para *"não escreve nada"*. As duas agora declaram `Write`, e o texto diz para que serve: o próprio relatório, nada mais (revisão de coerência das skills)
+
+- **O `marp-slide` mandava usar ícones que não existem, pelo caminho errado.** Apontava para `../../.claude/skills/excalidraw/references/icons/` e citava `brain.svg`, `anthropic.svg` e `python.svg`. O diretório não é distribuído — a própria `excalidraw/SKILL.md` tem uma seção declarando isso e explicando por quê. A skill irmã cometia o defeito que a vizinha documentou.
+
+  O caminho errava duas vezes: passava por `.claude/`, que só existe em modo plugin, e era relativo ao `SKILL.md` quando o Marp resolve imagem a partir do **deck**, que pode morar em qualquer profundidade. Um `../../` literal copiado dali falha como caixa de imagem quebrada na tela, diante da plateia, não no build. Agora o caminho é o placeholder `<icons>`, com a definição ao lado (revisão de coerência das skills)
+
+- **O gate de CVE do `cycle-plan` era o único que nada aplicava, e a regra não dizia.** A tabela `## Phase contracts` listava `deps-audit` com hard gate *"no critical CVE on a planned dependency"* ao lado de quatro gates mecanizados — mas `/plan-confidence` não lê o relatório de dependências, porque conectá-lo EXTENDE o gate e `plan-confidence-golden-rule.md` põe extensão atrás de um ADR. A `skills/deps-audit/SKILL.md` era a honesta: já registrava o wiring como não-entregue.
+
+  Um gate listado entre quatro automáticos se lê como automático, e um gate que se acredita automático é um gate que ninguém roda. A regra agora cede para a skill e declara o gate como humano (revisão de coerência das skills)
+
+- **Quatro skills de pipeline não tinham `## Cycle contract`, e duas se contradiziam sobre `/discover`.** `code-quality`, `deps-audit`, `plan-confidence` e `discover-plan-confidence` são fase documentada em `rules/cycle-*.md` e eram as únicas sem a seção que todas as irmãs têm — o validador não pegava porque só valida a seção **quando presente**. As duas últimas já tinham o texto, solto dentro de `## When to Trigger`.
+
+  No mesmo eixo: `plan-help` e `HOW-TO-USE` afirmam que `/discover` não existe, enquanto `cycle-backlog.md`, `current-constraint.md` e `backlog-item/SKILL.md` o usavam como se existisse. Passam a nomear `cycle-discover` (o cycle) ou `/discover-execute` (a fase que escreve a oportunidade). O `plan-help` também dizia *"cinco skills"* dez linhas acima da própria tabela de seis, e o `release/SKILL.md` tinha `## Cycle contract` duplicado — duas fontes para a declaração cuja função é apontar uma só (revisão de coerência das skills)
+
+- **O `/release` ainda flipava o checkbox que `cycle-acceptance` tinha tomado dele.** `rules/cycle-release.md` dizia, em três lugares, que o flip havia MUDADO para `cycle-acceptance` — e o `Step 7.5` do `skills/release/SKILL.md` continuava implementando o flip, com invariante de flip único próprio e três anti-patterns sobre como flipar. A skill contradizia a regra que a governa.
+
+  O que isso custava é exatamente o que a criação do `cycle-acceptance` quis impedir: o caminho do release não passa por veredito de aceitação nenhum, então `[x]` voltava a significar *"publicamos"* em vez de *"publicamos e vimos funcionar"*. O `Step 7.5` agora só lê o `milestone_id` e nomeia o handoff.
+
+  **O rastro de auditoria estava mentindo junto:** `flip_milestone_checkbox.py` escrevia `"Checkbox flipped to [x] by cycle-release"` no arquivo de roadmap-run — sendo que quem o invoca é `cycle-acceptance`. Num sistema cuja tese é evidência, um registro que atribui o ato a quem não o praticou é pior que registro nenhum (revisão de coerência das skills)
+
+- **`ROADMAP.md` não tinha produtor, e o `cycle-goal` mandava rodar a skill errada.** Na aposentadoria das skills de roadmap (`93393e0`), um `sed` mecânico trocou `roadmap-init` por `backlog-init` em 15 referências — inclusive no texto do link `"creates ROADMAP.md and its milestones"`, que ficou apontando para uma skill que cria `BACKLOG.md`. Registros diferentes, eixos diferentes.
+
+  Consequência: a precondição de `cycle-goal`, `acceptance` e do modo roadmap-driven do `auto-plan` não tinha como ser satisfeita, e o remédio impresso na falha (`run /backlog-init first`) levava a lugar nenhum.
+
+  `rules/cycle-acceptance.md` ganha `§ The ROADMAP.md contract`, que registra os três fatos que ninguém tinha escrito: o arquivo é escrito à mão e nenhuma skill o gera; o header é `###` e por quê; e os dois registros coexistem de propósito
+
+- **A documentação mandava escrever `## M<N>` e os três scripts casam `###`.** `compose_goal_condition.py`, `extract_acceptance_criteria.py` e `flip_milestone_checkbox.py` concordam entre si em `###`; `skills/release/SKILL.md` e `rules/cycle-release.md` diziam `##`. Quem escrevesse o ROADMAP seguindo a doc caía no branch benigno do script — `WARN … not found — skipping flip`, `exit 0`. O milestone nunca fecha e nada diz por quê
+
+- **`/discover` não existe e era o comando anunciado em 18 lugares.** README, HOW-TO-USE, quatro regras, `live-target.txt` e duas skills documentavam `/discover --mode X B-NNN` e `/discover --sweep` como a interface pública — inclusive na tabela *"que comando eu rodo"*, que é o primeiro lugar onde alguém procura. As entradas reais são `/discover-plan B-NNN --mode X` e `/discover-execute --sweep {domain}`
+
+- **`check_evidence_citations.py` procurava oportunidades num diretório aposentado.** O scanner lia `knowledge-base/discoveries/blueprints/`; `/discover-execute` escreve em `opportunities/` desde a renomeação. Um plano citando uma seção real e resolvível era reportado como `fabricated_citation` — que hard-capa o plano em 49.
+
+  **A suíte passou o tempo todo porque todo teste montava a fixture no mesmo diretório morto que o scanner lia.** O teste não protegia o comportamento; protegia o bug. Agora ambos os caminhos são varridos (o atual primeiro), a forma `Opportunity §X` é aceita além da legada `Blueprint §X`, e três testes cobrem o caso real — incluindo um que garante que a correção não cegou o detector
+
+- **`check_xrefs.py` não conseguia distinguir uma skill chamada `cycle-algo` de uma referência a um cycle.** `skills/cycle-goal/` é skill, não fase — mas o Check 2 extraía o primeiro token `cycle-X` do SKILL.md inteiro quando não havia seção `## Cycle contract`. Efeito prático: o `plan-help`, cuja função é LISTAR comandos, não podia mencionar `/cycle-goal` sem derrubar o validador para FAIL.
+
+  O bug ficou latente enquanto a documentação omitia o comando — a omissão escondia o defeito, e corrigir a omissão o revelou. Um `cycle-X` cujo X nomeia uma skill existente agora é lido como a skill; quem de fato pertence a um cycle declara `## Cycle contract`, que é casado primeiro. Três testes, incluindo o que garante que um cycle genuinamente ausente continua sendo pego
+
+- **`skills/excalidraw/references/` era declarado fonte da verdade e nunca existiu.** O `SKILL.md` mandava ler `references/color-palette.md` *antes de gerar qualquer diagrama* e o passo 2 do `/deck` dependia do mesmo arquivo. O diretório nunca esteve no git: a skill foi vendorizada sem ele.
+
+  `color-palette.md` e `element-templates.md` foram escritos, ancorados na superfície GitHub-dark que o próprio `SKILL.md` declara (`#0d1117` / `#58a6ff` / `#c9d1d9`), a mesma do `template-tech.md` do `/marp-slide` — diagrama e slide sem emenda visível. A biblioteca de ícones **não** foi fabricada: são ~176 SVGs e três scripts que não vieram, e o `SKILL.md` agora diz isso na cara, com o comando de instalação e o que fazer sem ela. Uma skill que manda ler um arquivo inexistente falha em silêncio — você procura, não acha, e inventa uma cor
+
+- **`/acceptance B-NNN` no HOW-TO-USE.** O `argument-hint` da skill é `M<N>`; `B-NNN` é o outro registro
+
+### Changed
+- **`plan-help` reescrito — omitia 11 das 36 skills e descrevia errado 3 das que listava.** Chamava `/backlog-init` de *"Bootstrap ROADMAP.md"* e `/backlog-item` de *"Add milestone"* (são `BACKLOG.md` e itens `B-NNN`), usava *"blueprint"* onde as `discover-*` v0.2.0 dizem *opportunity*, e o Fluxo C — rotulado *"Unknown prior art — need research first"* — contradizia frontalmente a description do `discover-plan`: *"prior art cannot be evidence here"*.
+
+  Numa skill de ajuda o drift é pior que em qualquer outra: é o mapa que alguém lê justamente por não conhecer o terreno. A nova versão instrui a listar `skills/*/SKILL.md` em disco e **declarar explicitamente** qualquer skill ausente das tabelas
+
+- **`ACCEPTANCE` entrou na cadeia anunciada.** `plugin.json`, README, HOW-TO-USE, `rules/README.md` e `rules/cycle-auto-plan.md` terminavam o pipeline em `RELEASE`, enquanto `cycle-goal` define como ÚNICO critério de parada um `/acceptance` verde. O `auto-plan` agora tem a fase, seu gate e suas condições de parada
+
+- **`cycle-goal` citava cinco verdicts que não existem em lugar nenhum.** `MILESTONE_RELEASED`, `MILESTONE_IN_FLIGHT`, `ROADMAP_COMPLETE`, `ROADMAP_BLOCKED` e `MILESTONE_BLOCKED` eram do `cycle-roadmap` aposentado; os do `cycle-maintenance` são `BACKLOG_EMPTY` / `ITEM_UNROUTABLE` / `ITEM_KILLED`. A description também descrevia o mecanismo antigo — `/goal` embutido e seu teto de 4000 chars — que o corpo da própria skill chama de beco sem saída há tempos. O teto permanece no compositor, agora justificado pelo que ele de fato é: um limite de legibilidade, não um limite da CLI
+
+- **`skills/README.md`: dizia 35 skills, são 36, e a tabela omitia 7.** `acceptance`, `analysis`, `arch-check`, `cycle-goal`, `frontend-design`, `plan-help` e `quality-init`. Somado ao `plan-help`, `cycle-goal`, `analysis` e `quality-init` tinham **zero menções** em qualquer porta de entrada: existiam em disco, passavam nos validadores e eram inalcançáveis por qualquer caminho de descoberta
+
 ### Added
 - **`check_record_scope.py` — um registro de review que não diz o que revisou não pode ser conferido depois.** Depois que o `phase_coverage.py` (B-105) mediu `review` em 52% e `code-quality` em 27%, o passo óbvio era DERIVAR os registros, como a metade de `release` foi derivada — o grafo de commits sabe qual tag contém qual commit, e 41 de 41 itens resolveram assim. Não funciona aqui, e a medição diz por quê: **2 de 48** arquivos de review declaram o range revisado, **3 de 16** auditorias mencionam escopo. Os achados de um review são julgamentos feitos numa sessão; se o arquivo não nomeia os itens nem o range, nada recupera isso depois.
 
