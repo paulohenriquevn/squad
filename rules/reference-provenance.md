@@ -32,7 +32,7 @@ git history. The intended path from study to code is:
 
 ```
 read the zone → understand → write your own version
-              → record the finding in knowledge-base/discoveries/blueprints/, citing the source
+              → record the finding in knowledge-base/discoveries/opportunities/, citing the source
 ```
 
 ## § 4 — Limits, stated honestly
@@ -55,7 +55,7 @@ read the zone → understand → write your own version
 - Copying a zone file "just to adapt it later" — adaptation of a copy is still a
   derivative work. Write it yourself.
 - Recording provenance by pasting the zone path into a commit message. Put the
-  source and licence in `CHANGELOG.md` and the blueprint instead.
+  source and licence in `CHANGELOG.md` and the opportunity instead.
 - Dismissing a layer-3 WARN without opening the match. It is advisory precisely so
   a human decides; ignoring it defeats the layer.
 - Using `.references-bootstrap` for anything but the initial population of the zone,

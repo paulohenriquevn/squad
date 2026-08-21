@@ -1,10 +1,11 @@
 ---
 name: auto-plan
 version: 0.1.0
-requires: [to-plan, implement, code-quality, review, release]
-description: End-to-end autonomous orchestrator for cycle-discover + cycle-plan + cycle-implement + cycle-code-quality + cycle-review + cycle-release. Single entry-point chains the whole pipeline from idea to a release PR awaiting human approval. Default is full-pipeline; --plan-only retains the legacy discover+plan behavior. Depth (none/light/full) is derived deterministically from a confidence score against repo state — no interactive prompts. MUST-FIX items from /edge-case-plan are auto-injected into the plan before /plan-confidence re-scores. Inspired by planning-with-files v2.43.0 autonomy + composes Claude Code primitives (/plan-goal, /plan-loop) absorbed 2026-05-26.
+requires: [discover-plan, discover-edge-cases, discover-plan-confidence, discover-execute, discover-confidence, discover-improve, to-plan, edge-case-plan, deps-audit, plan-confidence, plan-improve, implement, code-quality, review, release, acceptance]
+description: End-to-end autonomous orchestrator for cycle-discover + cycle-plan + cycle-implement + cycle-code-quality + cycle-review + cycle-release + cycle-acceptance. Single entry-point chains the whole pipeline from idea to a released, accepted milestone — pausing at the one manual gate, human approval of the release PR. Default is full-pipeline; --plan-only retains the legacy discover+plan behavior. Depth (none/light/full) is derived deterministically from a confidence score against repo state — no interactive prompts. MUST-FIX items from /edge-case-plan are auto-injected into the plan before /plan-confidence re-scores. Inspired by planning-with-files v2.43.0 autonomy + composes Claude Code primitives (/plan-goal, /plan-loop) absorbed 2026-05-26.
 user-invocable: true
 allowed-tools: Read Write Edit Bash Glob Grep Skill
+argument-hint: "[M<N> | B-NNN | {topic-slug}] [--plan-only] [--depth=none|light|full] [--no-release] [--bump=patch|minor|major]"
 ---
 
 # `/auto-plan` — Autonomous cycle orchestrator (full pipeline)
@@ -48,9 +49,10 @@ Do NOT invoke when:
 
 1. If no arg AND `ROADMAP.md` exists → roadmap-driven mode: select next eligible milestone (see Step 0).
 2. If arg matches `^M[0-8]$` AND `ROADMAP.md` exists → roadmap-driven mode targeting that milestone.
-3. Otherwise → ad-hoc mode with the arg as free-form slug. Emit `INFO ad-hoc: no milestone_id will be persisted; release will skip checkbox flip`.
+3. If arg matches `^B-\d{3}$` → backlog-driven mode: read that item from `BACKLOG.md` and use its statement + Definition of Done as the topic. This is the form `cycle-maintenance` delegates.
+4. Otherwise → ad-hoc mode with the arg as free-form slug. Emit `INFO ad-hoc: no milestone_id will be persisted; the chain ends at RELEASED with no acceptance phase`.
 
-If no arg AND `ROADMAP.md` is MISSING → refuse with `BLOCKED backlog-init-required: run /backlog-init {project-slug} first, or invoke /auto-plan {topic-slug} for ad-hoc work`.
+If no arg AND `ROADMAP.md` is MISSING → refuse with `BLOCKED roadmap-required: ROADMAP.md is hand-authored — no skill generates it (see rules/cycle-acceptance.md § The ROADMAP.md contract). Invoke /auto-plan B-NNN for backlog work, or /auto-plan {topic-slug} for ad-hoc work`.
 
 ## Process
 
@@ -112,12 +114,21 @@ Based on chosen depth + mode (full-pipeline OR `--plan-only`):
 ```
 Skill(/discover-plan {topic-slug})
 Skill(/discover-edge-cases {topic-slug})
+Skill(/discover-plan-confidence {topic-slug})   # plan-gate — INVALID returns to /discover-plan
 Skill(/discover-execute {topic-slug})       # ralph-loop halt-loop
 Skill(/discover-confidence {topic-slug})
 # If verdict < SHIPPABLE_WITH_CAVEATS:
 Skill(/discover-improve {topic-slug})       # ralph-loop halt-loop
 Skill(/discover-confidence {topic-slug})    # re-score
 ```
+
+`/discover-plan-confidence` is **not optional**. It is phase 3 of `cycle-discover` and the gate that
+refuses a fabricated target or an empty falsification criterion *before* a measurement runs on it —
+`/discover-execute` declares it as its `requires` for exactly that reason. Skipping it lets the
+chain measure against a plan nothing validated, and the result arrives looking clean.
+
+If `/discover-plan-confidence` returns `INVALID` → return to `/discover-plan` for a rewrite; do NOT
+proceed to `/discover-execute`.
 
 For `light` depth: instruct `/discover-plan` to target 2-3 questions per project (narrower scope), so the discovery loop converges on fewer questions.
 
@@ -147,7 +158,7 @@ Skill(/plan-confidence {topic-slug})         # re-score
 
 `inject_must_fix.py` parses the `## MUST FIX` section of the edge-case report and appends each item as a sub-task (or ADR-deferred note) into the plan. The user does NOT have to absorb them manually. `/plan-confidence` is re-run after injection to validate the augmented plan.
 
-`inject_milestone_id.py` writes the `milestone_id: M<N>` field into the plan's YAML frontmatter (the field `cycle-acceptance`'s flip phase reads — consumed by `skills/release/scripts/flip_milestone_checkbox.py`). In ad-hoc mode this script is skipped — the plan frontmatter carries no `milestone_id` and `cycle-release` will skip the checkbox flip with WARN.
+`inject_milestone_id.py` writes the `milestone_id: M<N>` field into the plan's YAML frontmatter (the field `cycle-acceptance`'s flip phase reads — consumed by `skills/release/scripts/flip_milestone_checkbox.py`, which is housed in the release slice but invoked only from acceptance). In ad-hoc mode this script is skipped — the plan frontmatter carries no `milestone_id`, so the chain ends at `RELEASED` and no acceptance phase runs.
 
 #### Phase A — Attest (always, post-plan)
 
@@ -207,19 +218,24 @@ Implement phase:    {SKIP | IMPLEMENTATION_COMPLETE | BLOCKED}
 Code-quality:       {SKIP | PASS | PASS_WITH_CAVEATS | FAIL_SOFT | FAIL_HARD | INVALID}
 Review phase:       {SKIP | READY_TO_MERGE | NEEDS_FIXES | NEEDS_DEEPER}
 Release phase:      {SKIP | RELEASED | PR_OPEN_AWAITING_APPROVAL}
+Acceptance phase:   {SKIP (no milestone_id) | ACCEPTED | ACCEPTED_WITH_CAVEATS | REJECTED | NOT_VALIDATED}
 
 Final plan: knowledge-base/plans/{slug}-plan.md
 Implementation: knowledge-base/implementations/{slug}-implementation.md
 Code-quality audit: knowledge-base/audits/{slug}-code-quality-*.md
 Review: knowledge-base/reviews/{slug}-review-*.md
 Release: knowledge-base/releases/v{version}-release.md (if released)
+Acceptance: knowledge-base/acceptance/{milestone-id}-acceptance-*.md (if a milestone was accepted)
 Attestation hash: {sha256}
 
 Next step:
   - plan-only       → /implement {slug} when ready
   - full + no-release → manual /release when ready
   - PR_OPEN_AWAITING_APPROVAL → approve the PR on GitHub
-  - RELEASED        → start a new cycle
+  - RELEASED + milestone_id   → /acceptance {milestone-id} (the checkbox flips there)
+  - RELEASED, no milestone_id → start a new cycle
+  - ACCEPTED*       → milestone closed; start a new cycle
+  - REJECTED | NOT_VALIDATED  → the release stands, the milestone does not; fix and re-accept
 ```
 
 If any phase blocked → honest report listing what blocked + recommended human action.
@@ -265,7 +281,8 @@ This skill is `phase 0` of the super-cycle that orchestrates `cycle-discover` + 
 - `rules/cycle-implement.md` — implement sub-cycle
 - `rules/cycle-code-quality.md` — code-quality sub-cycle
 - `rules/cycle-review.md` — review sub-cycle
-- `rules/cycle-release.md` — release sub-cycle (performs the post-merge ROADMAP.md checkbox flip)
+- `rules/cycle-release.md` — release sub-cycle (cuts the tag; does NOT flip the ROADMAP.md checkbox)
+- `rules/cycle-acceptance.md` — acceptance sub-cycle (exercises the RELEASED delivery and owns the checkbox flip)
 - `commands/plan-goal.md` + `plan-loop.md` — Claude Code primitive composition (alternative autonomy mechanism)
 - `scripts/attest-plan.sh` — attestation post-plan
 - `skills/auto-plan/scripts/select_next_milestone.py` — Step 0 milestone selector (roadmap-driven mode)

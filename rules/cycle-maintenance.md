@@ -23,7 +23,7 @@ So the empty state is `BACKLOG_EMPTY`, and it is a **prompt to sweep**, not a te
 Do NOT trigger when:
 
 - `BACKLOG.md` is missing — run `/backlog-init` first.
-- Every item is `shipped` or `killed` — emit `BACKLOG_EMPTY` and recommend `/discover --sweep {domain}`.
+- Every item is `shipped` or `killed` — emit `BACKLOG_EMPTY` and recommend `/discover-execute --sweep {domain}`.
 - The human is mid-item on something else. One item in flight at a time; concurrency here means two loops editing the same registry.
 
 ## Chain
@@ -47,7 +47,7 @@ LOCK item:
      ↓ record knowledge-base/maintenance-runs/{B-NNN}-{date}.md (status: in_progress)
      ↓
 DELEGATE:
-     ↓ status raw     → /discover --mode {suggested_mode} B-NNN
+     ↓ status raw     → /discover-plan B-NNN --mode {suggested_mode}, then the chain
      ↓                  ├── opportunity → status triaged → continue below
      ↓                  └── ITEM_KILLED → status killed → LOOP BACK to SELECT
      ↓ status triaged → /auto-plan B-NNN
@@ -80,7 +80,7 @@ LOOP BACK to SELECT
 | `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move |
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it |
-| `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover --sweep {domain}`.** Not a finish line |
+| `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover-execute --sweep {domain}`.** Not a finish line |
 
 There is no verdict for "the ecosystem is done".
 

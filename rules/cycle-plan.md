@@ -49,8 +49,17 @@ Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requiremen
 | grill-me (opt.) | topic slug | grill log + verdict in knowledge-base/grills/{slug}-grill.md | every recommended answer offered; ≤ 15 questions; verdict declared |
 | to-plan | feature description (+ grill output if Phase 0 ran) | plan with Goal, Tasks, Risks, Test Plan, Open Questions | Coverage Matrix present (every Goal claim mapped to ≥ 1 task) |
 | edge-case-plan | plan | annotated plan with MUST-FIX | every MUST-FIX has owner + acceptance criterion |
-| deps-audit | plan | dependency report with CVE status | no critical CVE on a planned dependency |
+| deps-audit | plan | dependency report with CVE status | no critical CVE on a planned dependency — **human-enforced, see below** |
 | plan-confidence | plan | score + verdict | INVALID returns to /to-plan |
+
+**The `deps-audit` gate is the one gate in this cycle nothing mechanizes.** Every other hard gate
+above is checked by a script that can fail the phase. This one is not: `/plan-confidence` does not
+read the dependency report, because wiring it in would EXTEND the gate, and `plan-confidence-golden-rule.md`
+§ When this rule may change puts an extension behind an ADR. Until that ADR exists, the gate holds
+only if a human invokes `/deps-audit {slug}` and honors the verdict by hand.
+
+Stating it is the point. A gate listed beside four mechanized ones reads as mechanized, and a gate
+believed to be automatic is one nobody runs.
 
 ## Halt-loop contract (/plan-improve only)
 

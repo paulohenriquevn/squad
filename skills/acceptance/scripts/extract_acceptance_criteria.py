@@ -29,7 +29,8 @@ import re
 import sys
 from pathlib import Path
 
-#: Same header shape cycle-release flips and cycle-goal validates.
+#: Same header shape the flip script matches and cycle-goal validates.
+#: Normative source: `rules/cycle-acceptance.md` § The ROADMAP.md contract.
 _HEADER_RE = re.compile(
     r"^###\s+(M\d+)\s+[—\-]{1,2}\s+\[([ x])\]\s+(.+?)$",
     re.MULTILINE,

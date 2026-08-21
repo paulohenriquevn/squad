@@ -124,7 +124,7 @@ Based on the verdict:
 |---|---|
 | `READY_FOR_PLAN` | `/to-plan {topic-slug}` — the plan reads `knowledge-base/grills/{slug}-grill.md` as primary context |
 | `NEEDS_SPLIT` | Suggest 2-3 sub-topics; re-run `/grill-me {sub-topic}` on each |
-| `NEEDS_DISCOVERY` | `/discover-plan {topic-slug}` first; return to `/grill-me` after the blueprint lands |
+| `NEEDS_DISCOVERY` | `/discover-plan {topic-slug}` first; return to `/grill-me` after the opportunity lands |
 
 ## Anti-patterns
 

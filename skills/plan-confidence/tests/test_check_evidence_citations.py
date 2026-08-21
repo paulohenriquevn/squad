@@ -19,17 +19,31 @@ def _write_plan(tmp_path: Path, body: str) -> Path:
     return plan
 
 
-def _make_project_root(tmp_path: Path, *, rules: dict[str, str] | None = None, blueprints: dict[str, str] | None = None) -> Path:
-    """Create a fake project root with rules/ and knowledge-base/discoveries/blueprints/."""
+def _make_project_root(
+    tmp_path: Path,
+    *,
+    rules: dict[str, str] | None = None,
+    blueprints: dict[str, str] | None = None,
+    opportunities: dict[str, str] | None = None,
+) -> Path:
+    """Create a fake project root with rules/ and knowledge-base/discoveries/.
+
+    `opportunities` is the path `/discover-execute` actually writes to; `blueprints`
+    is the ancestor's directory, kept because plans predating the rename still cite it.
+    """
     root = tmp_path / "project"
     (root / "rules").mkdir(parents=True)
     (root / "knowledge-base" / "discoveries" / "blueprints").mkdir(parents=True)
+    (root / "knowledge-base" / "discoveries" / "opportunities").mkdir(parents=True)
     if rules:
         for name, content in rules.items():
             (root / "rules" / name).write_text(content, encoding="utf-8")
     if blueprints:
         for name, content in blueprints.items():
             (root / "knowledge-base" / "discoveries" / "blueprints" / name).write_text(content, encoding="utf-8")
+    if opportunities:
+        for name, content in opportunities.items():
+            (root / "knowledge-base" / "discoveries" / "opportunities" / name).write_text(content, encoding="utf-8")
     return root
 
 
@@ -239,9 +253,70 @@ def test_flags_blueprint_ref_when_no_blueprints_dir(tmp_path: Path) -> None:
     report = check_evidence_citations(plan, project_root)
     blueprint_unresolved = [c for c in report.unresolved_citations if c.kind == "blueprint"]
     assert blueprint_unresolved
-    assert any("no blueprints exist" in c.reason for c in blueprint_unresolved), (
-        f"reason should mention missing blueprints dir; got {blueprint_unresolved}"
+    assert any("no opportunities exist" in c.reason for c in blueprint_unresolved), (
+        f"reason should name the directory that is actually missing; got {blueprint_unresolved}"
     )
+
+
+# ---------- Opportunity refs (the post-rename artifact the pipeline really writes) ----------
+
+
+def test_resolves_opportunity_ref_against_opportunities_dir(tmp_path: Path) -> None:
+    """The regression this suite missed for a whole rename.
+
+    `/discover-execute` writes `knowledge-base/discoveries/opportunities/`. The scanner
+    read `blueprints/` — the ancestor's directory, which nothing writes to any more — so
+    a plan citing a real, resolvable section was reported as a fabricated citation, and
+    `fabricated_citation` hard-caps the plan at 49. The suite passed throughout, because
+    every test built the fixture in the same dead directory the scanner read.
+    """
+    project_root = _make_project_root(
+        tmp_path,
+        opportunities={
+            "loaders-opportunity.md": "# Loaders\n\n## Q1 — Which parsers?\nContent.\n",
+        },
+    )
+    plan = _write_plan(
+        tmp_path,
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Opportunity §Q1 para contexto.\n",
+    )
+    report = check_evidence_citations(plan, project_root)
+    unresolved = [c for c in report.unresolved_citations if c.kind == "blueprint"]
+    assert unresolved == [], f"Opportunity §Q1 should resolve against opportunities/; got {unresolved}"
+
+
+def test_legacy_blueprint_ref_still_resolves_against_opportunities_dir(tmp_path: Path) -> None:
+    """A plan written before the rename keeps resolving — the fix is additive."""
+    project_root = _make_project_root(
+        tmp_path,
+        opportunities={
+            "loaders-opportunity.md": "# Loaders\n\n## Q1 — Which parsers?\nContent.\n",
+        },
+    )
+    plan = _write_plan(
+        tmp_path,
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Blueprint §Q1 para contexto.\n",
+    )
+    report = check_evidence_citations(plan, project_root)
+    assert [c for c in report.unresolved_citations if c.kind == "blueprint"] == []
+
+
+def test_opportunity_ref_with_absent_section_is_still_flagged(tmp_path: Path) -> None:
+    """The fix must not blind the detector: a missing section is still fabricated."""
+    project_root = _make_project_root(
+        tmp_path,
+        opportunities={
+            "loaders-opportunity.md": "# Loaders\n\n## Q1 — Which parsers?\nContent.\n",
+        },
+    )
+    plan = _write_plan(
+        tmp_path,
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Opportunity §Q99 que nao existe.\n",
+    )
+    report = check_evidence_citations(plan, project_root)
+    unresolved = [c for c in report.unresolved_citations if c.kind == "blueprint"]
+    assert unresolved
+    assert any("Q99" in c.raw_text for c in unresolved)
 
 
 # ---------- Whole-prose scope (added after judge-codex iter 3 flagged full_prose_scope_not_directly_proven_by_tests) ----------

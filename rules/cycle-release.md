@@ -121,10 +121,8 @@ raciocínio foi escrito e medido.
 - Producing a release without a corresponding `cycle-review` audit. Released artifacts must be traceable to a `READY_TO_MERGE` verdict.
 - Skipping the GitHub release creation step. Downstream consumers (changelogs, dependency updates) read GitHub releases, not local tags.
 - Cutting a release while `cycle-code-quality` reports unaddressed `FAIL_HARD` findings. The review gate already enforces this; never bypass.
-- **Fuzzy-matching the milestone for the checkbox flip.** Plan declares `milestone_id: M3` → flip M3, never M4 even if names look similar. Slot is the literal `## M<N>` header.
-- **Flipping multiple checkboxes from one release.** Each release maps to exactly one milestone via plan `milestone_id`. Bundling milestones into one release corrupts traceability — split releases instead.
-- **Flipping a checkbox without writing the roadmap-runs file.** The flip must be auditable: which release, which SHA, when.
-- **Blocking the release if `milestone_id` is missing.** Ad-hoc work (hotfixes, off-roadmap fixes) is by design — emit WARN, continue as RELEASED, skip the flip.
+- **Flipping the ROADMAP checkbox from this cycle.** It moved to `cycle-acceptance` (see § Post-merge ROADMAP.md checkbox flip). The flip anti-patterns themselves — fuzzy matching, multi-flip, flipping without a roadmap-runs entry — live there, with the flip.
+- **Blocking the release if `milestone_id` is missing.** Ad-hoc work (hotfixes, off-roadmap fixes) is by design — emit INFO, continue as RELEASED, skip the acceptance handoff.
 
 ## Output
 
@@ -132,8 +130,8 @@ raciocínio foi escrito e medido.
 - `[Unreleased]` empty (until the next change lands).
 - `git tag v{version}` annotated, pushed.
 - GitHub release published.
-- `ROADMAP.md` edited: `## M<N> — [ ]` → `[x]` when the plan declared `milestone_id` (skipped with WARN otherwise).
-- `knowledge-base/roadmap-runs/{milestone-id}-{date}.md` appended with `status: completed`, `checkbox_flipped_at`, `flip_commit_sha` (only when the flip ran).
+- `ROADMAP.md` — **untouched.** The `[ ]` → `[x]` flip is `cycle-acceptance`'s output, not this cycle's.
+- A named handoff: `/acceptance M<N>` when the plan declared `milestone_id` (skipped with INFO otherwise).
 
 ## Cross-references
 

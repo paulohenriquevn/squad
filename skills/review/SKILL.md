@@ -297,7 +297,7 @@ Per `cycle-review.md § Stop conditions`:
 - Reuses: `.claude/skills/implement/scripts/run_validation.py` (quality gates), `.claude/skills/implement/scripts/check_wiring.py` (wiring re-validation)
 - Generated audit trail: `.claude/agents/review-{slug}-{date}/`
 - Final reports: `.claude/knowledge-base/reviews/{slug}-review-{date}.md`
-- Project rules consumed: `architecture.md`, `testing.md`, `public-copy.md`, `discover-blueprint-golden-rule.md` (if review touches docs/blueprints)
+- Project rules consumed: `architecture.md`, `testing.md`, `public-copy.md`, `discover-plan-golden-rule.md` and `discover-opportunity-golden-rule.md` (if the review touches discovery artifacts)
 
 ## Match to the work
 

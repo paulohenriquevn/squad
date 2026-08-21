@@ -12,7 +12,7 @@ argument-hint: "(no arguments)"
 
 Create `BACKLOG.md` at the umbrella root: the one place that answers *"what is pending anywhere in the Theo ecosystem?"*
 
-Run once, at adoption. Every item after that arrives through `/backlog-item` (human) or `/discover --sweep` (measured finding).
+Run once, at adoption. Every item after that arrives through `/backlog-item` (human) or `/discover-execute --sweep` (measured finding).
 
 ## Cycle contract
 
@@ -97,7 +97,7 @@ Excluded             theo-itself (0 commits) · theo-workspace (nested clone)
 Structure, in this order:
 
 1. **Header** — what the registry is, and the one-line rule that governs it: *ids are monotonic and never renumbered*.
-2. **How an item gets here** — the two producers (`/backlog-item` human, `/discover --sweep` measured), pointing at `cycle-backlog.md` for the schema rather than restating it. The registry is data; the contract lives in the rule.
+2. **How an item gets here** — the two producers (`/backlog-item` human, `/discover-execute --sweep` measured), pointing at `cycle-backlog.md` for the schema rather than restating it. The registry is data; the contract lives in the rule.
 3. **Domain routing table** — as confirmed in Step 2, with the exclusions and their reasons.
 4. **`## Index`** — the three-bucket summary (`cycle-backlog.md § The index that opens the
    registry`). Do **not** hand-write it; run it, even on an empty registry:
@@ -119,7 +119,7 @@ One line under `[Unreleased] § Added`. Then report the table, the exclusions, a
 
 ```
 BACKLOG.md created — 8 domains, {n} repos routed, {m} excluded.
-Next step:  /backlog-item {slug}   or   /discover --sweep {domain}
+Next step:  /backlog-item {slug}   or   /discover-execute --sweep {domain}
 ```
 
 ## Out of scope (deliberately)
@@ -138,5 +138,5 @@ Next step:  /backlog-item {slug}   or   /discover --sweep {domain}
 
 - Cycle rule (source of truth): [`rules/cycle-backlog.md`](../../rules/cycle-backlog.md)
 - Sister skill, opposite pre-condition: [`skills/backlog-item/SKILL.md`](../backlog-item/SKILL.md)
-- Live environment declaration used by `/discover --mode live-test`: [`rules/live-target.txt`](../../rules/live-target.txt)
+- Live environment declaration used by `/discover-execute (live-test mode)`: [`rules/live-target.txt`](../../rules/live-target.txt)
 - Branching contract for the registry commit: [`rules/git-safety.md`](../../rules/git-safety.md)

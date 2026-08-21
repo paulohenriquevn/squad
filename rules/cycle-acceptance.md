@@ -12,6 +12,47 @@ That placement is the whole design. Before this cycle existed, `cycle-release` f
 
 The cycle produces an **acceptance record** per milestone, and a **verdict** that `cycle-maintenance` consumes.
 
+## The ROADMAP.md contract
+
+This cycle reads `ROADMAP.md` and is the only cycle that writes to it. Three facts about that file
+are load-bearing, and none of them were written down before:
+
+**1. It is hand-authored. No skill generates it.** The skill that used to — `/roadmap-init` — was
+retired together with the cycle-roadmap rule (unbackticked on purpose: it is history, not a
+reference) when `cycle-maintenance` replaced it. `/backlog-init`
+is *not* its successor: it creates `BACKLOG.md`, a different registry on a different axis
+(`B-NNN` maintenance items, not `M<N>` milestones). Anything claiming otherwise is a stale redirect
+from that retirement; treat it as a bug and fix it.
+
+**2. The header shape is normative, and it is `###`.** Three scripts parse it and all three agree:
+
+| Script | Slice | Role |
+|---|---|---|
+| `compose_goal_condition.py` | `cycle-goal` | validates the requested milestones |
+| `extract_acceptance_criteria.py` | this cycle | reads the Definition-of-done bullets |
+| `flip_milestone_checkbox.py` | housed in `release`, invoked here | performs the flip |
+
+```markdown
+### M<N> — [ ] Milestone name
+
+**Objective:** one line.
+
+**Depends on:** M<K>          (omit when there is none)
+
+**Definition of done (all must hold):**
+- one user-visible promise per bullet, exercisable against the released delivery
+```
+
+A `##` header does not match. The flip script treats a non-match as the benign case — `WARN … not
+found — skipping flip`, `exit 0` — so a milestone written at the wrong level **never closes, and
+never says why**. That silence is the reason this section exists.
+
+**3. Two registries, one pipeline.** `BACKLOG.md`/`B-NNN` answers *what should we look at next*;
+`ROADMAP.md`/`M<N>` answers *what did we promise a user*. An item can exist in one, the other, or
+both. Only a milestone has a checkbox, so only a milestone reaches this cycle — a `B-NNN` released
+without a milestone ends at `RELEASED`, which is correct and not a gap.
+
+
 ## Pre-conditions
 
 - `cycle-release` emitted `RELEASED` for the milestone — tag cut, GitHub release published.
@@ -77,7 +118,7 @@ When a criterion cannot be exercised with any available instrument, its status i
 | exercise | criteria + target | one result per criterion, each with evidence | every criterion has a recorded status; `passed` requires at least one evidence artifact |
 | record | results + defects | `knowledge-base/acceptance/{milestone}-{date}.md` + `evidence/` | evidence files exist at the cited paths |
 | verdict | `criteria.json` + `evidence.json` | verdict token | computed by `compute_acceptance_verdict.py`; never asserted by the agent |
-| flip | verdict ∈ {`ACCEPTED`, `ACCEPTED_WITH_CAVEATS`} | `ROADMAP.md` `[ ]` → `[x]` + roadmap-runs updated | single-flip invariant (§ Hard gates, abaixo); no flip on `REJECTED` or `NOT_VALIDATED` |
+| flip | verdict ∈ {`ACCEPTED`, `ACCEPTED_WITH_CAVEATS`} | `ROADMAP.md` `[ ]` → `[x]` + roadmap-runs updated | single-flip invariant (§ Hard gates, below); no flip on `REJECTED` or `NOT_VALIDATED` |
 
 ## Verdicts
 

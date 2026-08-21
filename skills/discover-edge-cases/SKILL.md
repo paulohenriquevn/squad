@@ -4,7 +4,7 @@ version: 0.2.0
 requires: [discover-plan]
 description: Find what could make a measurement LIE — a target that resolves but is stale, a method that observes a proxy, an environment fault read as a product defect, a hypothesis nothing could refute. Use this after /discover-plan and before running any measurement, and whenever someone is about to trust a result that would be expensive to get wrong. An unfalsifiable hypothesis found here is always a blocker.
 user-invocable: true
-allowed-tools: Read Glob Grep Bash
+allowed-tools: Read Glob Grep Bash Write
 argument-hint: "[plan-slug|plan-file-path]"
 ---
 
@@ -129,6 +129,9 @@ knowledge-base/reviews/{plan-slug}-edge-cases-{YYYY-MM-DD}.md
 ```
 
 Create `reviews/` if absent. The report is the audit trail before `/discover-execute` runs.
+
+`Write` is in `allowed-tools` for **this file only**. `Edit` is deliberately absent: the skill
+creates its own report and touches nothing else.
 
 **This skill does NOT edit the plan.** The human reads the report and bumps the plan, absorbing each MUST FIX. Then `/discover-plan-confidence` scores the revised plan.
 

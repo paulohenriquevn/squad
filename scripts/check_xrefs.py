@@ -106,7 +106,11 @@ def _is_auto_generated(skill: str) -> bool:
 # Patterns to detect file references in markdown
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 BACKTICK_PATH_RE = re.compile(r"`(\.?[a-zA-Z0-9_./\-]+\.(?:md|py|sh|json|txt|yml|yaml))`")
-CYCLE_REF_RE = re.compile(r"`?cycle-([a-z]+)`?")
+# `[a-z]+(?:-[a-z]+)*` e não `[a-z]+`: três dos doze cycle rules do kit são
+# multi-hífen (cycle-code-quality, cycle-auto-plan, cycle-judge-codex), e um
+# grupo sem hífen os truncava para cycle-code / cycle-auto / cycle-judge — nomes
+# que não existem. O validador então acusava como ausente um arquivo presente.
+CYCLE_REF_RE = re.compile(r"`?cycle-([a-z]+(?:-[a-z]+)*)`?")
 # Trechos entre crases — onde uma citação a um cycle é uma referência, não prosa.
 BACKTICK_SPAN_RE = re.compile(r"`([^`\n]+)`")
 # Mantido em sincronia com detect_domains.UNREVIEWED_MARKER — duplicar a string é
@@ -207,12 +211,32 @@ def _extract_cycle_phases(cycle_rule_content: str) -> set[str]:
     return skills
 
 
-def _extract_cycle_contract_ref(skill_md_content: str) -> str | None:
-    """Find `cycle-{name}` referenced in a SKILL.md's Cycle contract section."""
+def _extract_cycle_contract_ref(
+    skill_md_content: str, skill_names: set[str] | None = None
+) -> str | None:
+    """Find `cycle-{name}` referenced in a SKILL.md's Cycle contract section.
+
+    `skill_names` disambiguates a namespace collision: a SKILL directory may itself
+    be named with the cycle- prefix (skills/cycle-goal/ is the one in this kit), and
+    then every mention of that command in prose looks exactly like a reference to a
+    cycle rule file that was never meant to exist. Names are written unbackticked
+    throughout this docstring precisely because backticks are what the sibling
+    `rules_reference_resolves` check reads as a real path. Left unhandled the collision
+    produced a FAIL the moment any document listed the command — which is how a
+    validator teaches people to ignore it.
+
+    A `cycle-X` token where `X` names an existing skill is therefore read as the skill,
+    never as a cycle rule. A skill that genuinely belongs to a cycle says so in a
+    `## Cycle contract` section, which is matched first and is unambiguous.
+    """
     contract_match = re.search(r"## Cycle contract.*?(?=^##\s+|\Z)", skill_md_content, re.MULTILINE | re.DOTALL)
     body = contract_match.group(0) if contract_match else skill_md_content
-    cycle_match = CYCLE_REF_RE.search(body)
-    return cycle_match.group(1) if cycle_match else None
+    for cycle_match in CYCLE_REF_RE.finditer(body):
+        name = cycle_match.group(1)
+        if skill_names and f"cycle-{name}" in skill_names:
+            continue
+        return name
+    return None
 
 
 def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
@@ -256,7 +280,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     for skill in existing_skills:
         skill_md = ecosystem_dir / "skills" / skill / "SKILL.md"
         content = skill_md.read_text(encoding="utf-8-sig")
-        cycle_ref = _extract_cycle_contract_ref(content)
+        cycle_ref = _extract_cycle_contract_ref(content, existing_skills)
         skill_to_cycle[skill] = cycle_ref
 
         if (cycle_ref is None and skill not in AUXILIARY_SKILLS

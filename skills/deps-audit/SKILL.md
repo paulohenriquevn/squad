@@ -28,6 +28,12 @@ Audit project dependencies for known vulnerabilities AND outdated versions. Mult
 
 ---
 
+## Cycle contract
+
+This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md), between `/edge-case-plan` (phase 2) and `/plan-confidence` (phase 4). The cycle rule is the **source of truth** for chain order, gates, verdicts and anti-patterns. **Read `cycle-plan.md` before invoking.** This SKILL.md retains phase-specific detail (scanner routing, severity rubric, report shape).
+
+**Its gate is human-enforced, not mechanized.** `/plan-confidence` does not read this audit's verdict — wiring it in would EXTEND the gate, which `plan-confidence-golden-rule.md` § When this rule may change puts behind an ADR. So the CVE gate holds only if a human invokes this skill and honors its verdict. See § Downstream wiring required.
+
 ## Trigger conditions
 
 Invoke this skill when:

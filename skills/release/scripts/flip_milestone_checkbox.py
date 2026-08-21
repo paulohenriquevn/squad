@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Flip a milestone checkbox `[ ]` → `[x]` in ROADMAP.md after a successful release.
+"""Flip a milestone checkbox `[ ]` → `[x]` in ROADMAP.md after a green acceptance run.
 
-Step 7.5 of cycle-release. Closes the cycle-roadmap super-loop.
+The `flip` phase of **cycle-acceptance**, which is the only caller. The file lives in
+the release slice because that is where the flip used to happen (`cycle-release § 7.5`)
+and one implementation of an invariant IS the invariant — moving it would have meant
+two. Nothing in `/release` invokes it.
 
-Hard invariant (per cycle-roadmap § Hard gates): exactly ONE checkbox flips
-per release. If the diff would produce more than one `[ ]` → `[x]` transition,
-the script ABORTS without writing anything.
+Hard invariant (per `rules/cycle-acceptance.md` § Hard gates): exactly ONE checkbox
+flips per accepted milestone. If the diff would produce more than one `[ ]` → `[x]`
+transition, the script ABORTS without writing anything.
 
 Idempotent: if the milestone is already `[x]`, exit 0 with INFO. If the
 milestone is missing entirely, exit 0 with WARN — the release itself is not
@@ -116,7 +119,7 @@ def _append_roadmap_run(
             f"flip_commit_sha: {flip_sha or ''}\n"
             "---\n\n"
             f"# Milestone {milestone_id} — completion record\n\n"
-            f"Checkbox flipped to [x] by cycle-release on {iso_ts}.\n",
+            f"Checkbox flipped to [x] by cycle-acceptance on {iso_ts}.\n",
             encoding="utf-8",
         )
     else:

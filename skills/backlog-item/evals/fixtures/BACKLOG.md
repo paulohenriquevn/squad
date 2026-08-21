@@ -9,7 +9,7 @@ Ids are monotonic and **never renumbered** — a killed item keeps its number fo
 ## How an item gets here
 
 Two producers, one schema: `/backlog-item` (the human door, a hypothesis with no evidence)
-and `/discover --sweep` (a measured finding, evidence already attached). The schema contract
+and `/discover-execute --sweep` (a measured finding, evidence already attached). The schema contract
 lives in `rules/cycle-backlog.md`; this file is data.
 
 ## Domain routing

@@ -4,7 +4,7 @@ version: 0.1.0
 requires: [to-plan]
 description: Analyzes an implementation plan and identifies unforeseen edge cases. Pragmatic — flags real risks without complicating the design. Use after /to-plan or when reviewing any plan in knowledge-base/plans/.
 user-invocable: true
-allowed-tools: Read Glob Grep Bash
+allowed-tools: Read Glob Grep Bash Write
 argument-hint: "[plan-slug|plan-file-path]"
 ---
 
@@ -111,6 +111,9 @@ knowledge-base/reviews/{plan-slug}-edge-cases-{YYYY-MM-DD}.md
 ```
 
 Create the `reviews/` directory if it does not yet exist. The report serves as the audit trail for `/plan-confidence` (which does NOT auto-cross-reference edge case reports in M2 — that is the M4 jury layer).
+
+`Write` is in `allowed-tools` for **this file only**. `Edit` is deliberately absent: the skill
+creates its own report and touches nothing else.
 
 **Who absorbs the MUST FIX items into the plan:** this skill does NOT edit `{slug}-plan.md`. The human user (or a future cycle-plan wrapper) reads the report and revises the plan from v1.0 to v1.1, incorporating each MUST FIX as a sub-task or ADR. Then `/plan-confidence` is re-run to validate.
 

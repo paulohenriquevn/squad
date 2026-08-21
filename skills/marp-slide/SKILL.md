@@ -129,15 +129,29 @@ When diagrams are created with the `/excalidraw` skill:
 
 #### Icons in slides
 
-For inline semantic icons (next to titles, in bullets, in tables), use the curated library at `../../.claude/skills/excalidraw/references/icons/`. Three approaches:
+**The icon library is NOT bundled with this installation.** `skills/excalidraw/references/icons/`
+does not exist here — see [`excalidraw/SKILL.md` § Icon Library](../excalidraw/SKILL.md) for why,
+and for the one-command install that creates it. Everything below assumes you ran that install; if
+you did not, skip to **Working without the library**.
+
+Saying so is the point. A slide that references an SVG path which does not resolve renders a
+broken-image box in the deck — and the failure surfaces in front of an audience, not at build time.
+
+Three approaches, once the library is present:
 
 **Approach A: Image reference (simplest, works without `html: true`)**
 
+Write `<icons>` for `skills/excalidraw/references/icons/`, expressed **relative to the slide `.md`**
+— Marp resolves image paths from the deck, not from this skill, and a deck can live anywhere. The
+placeholder is deliberate: a literal `../../…` copied from here is wrong the moment your deck sits
+at a different depth, and it fails as a broken-image box on screen rather than at build time.
+
 ```markdown
-![w:32 h:32](../../.claude/skills/excalidraw/references/icons/lucide/brain.svg)
+![w:32 h:32](<icons>/lucide/brain.svg)
 ```
 
-Icons are already recolored to the Theo palette. To use a different color, copy the SVG and edit the `stroke` (Lucide/Tabler) or `fill` (Simple Icons/Phosphor) attribute.
+Icons are already recolored to the Theo palette. To use a different color, copy the SVG and edit
+the `stroke` (Lucide/Tabler) or `fill` (Simple Icons/Phosphor) attribute.
 
 **Approach B: Inline SVG with `currentColor` (requires `html: true`)**
 
@@ -162,8 +176,15 @@ Paste the SVG body (paths only) from `_raw/<name>.svg` so `currentColor` is pres
 For "Powered by ..." or "Integrates with ..." style slides, reference Simple Icons directly:
 
 ```markdown
-![h:64](../../.claude/skills/excalidraw/references/icons/simple-icons/anthropic.svg) ![h:64](../../.claude/skills/excalidraw/references/icons/simple-icons/python.svg)
+![h:64](<icons>/simple-icons/anthropic.svg) ![h:64](<icons>/simple-icons/python.svg)
 ```
+
+#### Working without the library (the default here)
+
+Same discipline as [`excalidraw`](../excalidraw/SKILL.md): prefer a **labelled shape or plain text**
+over a glyph. At slide scale a word reading `Postgres` beats a database icon, and it never needs a
+legend. Where a glyph genuinely carries meaning a word cannot, inline it via Approach B — pasting
+SVG paths needs no library on disk.
 
 #### When to use icons in slides
 

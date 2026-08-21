@@ -1,4 +1,4 @@
-# Cycle: AUTO-PLAN (sub-cycle of cycle-roadmap)
+# Cycle: AUTO-PLAN (sub-cycle of cycle-maintenance)
 
 Source of Truth for the end-to-end autonomous orchestrator. Sits **below** `cycle-maintenance` in the cycle hierarchy: `cycle-maintenance` selects the next milestone and delegates one full `cycle-auto-plan` run per milestone.
 
@@ -8,8 +8,9 @@ Chain DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE au
 
 Two invocation modes coexist:
 
-- **Roadmap-driven** (`/auto-plan M<N>` OR `/auto-plan` without arg): reads `ROADMAP.md`, takes the milestone objective + DoD as the input topic, persists `milestone_id` in the resulting plan frontmatter so `cycle-release` can flip the checkbox post-merge.
-- **Ad-hoc** (`/auto-plan {topic-slug}`): legacy mode for work outside the roadmap (hotfixes, exploratory). The plan does NOT carry `milestone_id` — `cycle-release` skips the checkbox flip with a WARN.
+- **Backlog-driven** (`/auto-plan B-NNN`): the form `cycle-maintenance` delegates. Takes the item's statement + Definition of Done as the input topic. When the item is bound to a milestone, the plan carries `milestone_id` so `cycle-acceptance` can find it after release.
+- **Roadmap-driven** (`/auto-plan M<N>` OR `/auto-plan` without arg): reads `ROADMAP.md`, takes the milestone objective + DoD as the input topic, persists `milestone_id` in the resulting plan frontmatter so `cycle-acceptance` knows which checkbox its verdict governs.
+- **Ad-hoc** (`/auto-plan {topic-slug}`): work outside both registries (hotfixes, exploratory). The plan carries no `milestone_id` — the chain ends at `RELEASED`, with no acceptance phase to run.
 
 ## Pre-conditions
 
@@ -30,17 +31,20 @@ Default roadmap-driven (`/auto-plan` or `/auto-plan M<N>`):
 ```
 /auto-plan M<N>
      ↓ READ ROADMAP — extract milestone objective + DoD; derive slug; record milestone_id
-     ↓ DISCOVER     (full chain, if no prior blueprint)
+     ↓ DISCOVER     (full chain, if no prior opportunity)
      ↓ PLAN         (full chain — auto-injects MUST-FIX from edge-case-plan into the plan)
-     ↓                — plan frontmatter carries milestone_id: M<N> (contract with cycle-roadmap)
+     ↓                — plan frontmatter carries milestone_id: M<N> (contract with cycle-acceptance)
      ↓ gate:         only proceed if /plan-confidence ≥ SHIPPABLE_WITH_CAVEATS
      ↓ IMPLEMENT    (halt-loop until IMPLEMENTATION_COMPLETE)
      ↓ CODE-QUALITY (audit; gate proceeds only when PASS / PASS_WITH_CAVEATS)
      ↓ REVIEW       (5-7 specialist agents)
      ↓ gate:         only proceed if /review ∈ {READY_TO_MERGE, READY_TO_MERGE_WITH_FOLLOWUPS}
      ↓ RELEASE      (opens develop→main PR with semver tag; PAUSES for human approval)
-     ↓                — post-merge: cycle-release flips ROADMAP.md M<N> [ ] → [x]
-     ↓ verdict:      RELEASED OR PR_OPEN_AWAITING_APPROVAL
+     ↓                — cycle-release does NOT flip the checkbox
+     ↓ ACCEPTANCE   (/acceptance M<N> — exercises the RELEASED delivery against the DoD)
+     ↓                — ACCEPTED | ACCEPTED_WITH_CAVEATS → flips ROADMAP.md M<N> [ ] → [x]
+     ↓ verdict:      ACCEPTED OR ACCEPTED_WITH_CAVEATS OR REJECTED
+     ↓                OR PR_OPEN_AWAITING_APPROVAL (chain paused at the human gate)
 ```
 
 Ad-hoc (`/auto-plan {topic-slug}` with arbitrary slug):
@@ -49,7 +53,7 @@ Ad-hoc (`/auto-plan {topic-slug}` with arbitrary slug):
 /auto-plan {topic-slug}
      ↓ (same chain as above)
      ↓ plan frontmatter carries NO milestone_id (this work is off-roadmap)
-     ↓ post-merge: cycle-release SKIPS the checkbox flip with WARN
+     ↓ no milestone_id → no acceptance phase; the chain ends at the release
      ↓ verdict:      RELEASED OR PR_OPEN_AWAITING_APPROVAL
 ```
 
@@ -64,12 +68,13 @@ Ad-hoc (`/auto-plan {topic-slug}` with arbitrary slug):
 
 ## Confidence gates between phases
 
-- Before PLAN starts: discovery blueprint exists OR user explicitly confirms no prior art needed (deterministic; pre-recorded via `--no-discover`).
+- Before PLAN starts: a discovery opportunity exists OR the user explicitly confirms no measurement is needed (deterministic; pre-recorded via `--no-discover`).
 - Before IMPLEMENT starts: plan-confidence verdict ≥ SHIPPABLE_WITH_CAVEATS.
 - Before CODE-QUALITY starts: implementation emitted `IMPLEMENTATION_COMPLETE`.
 - Before REVIEW starts: code-quality verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`}.
 - Before RELEASE starts: review verdict ∈ {`READY_TO_MERGE`, `READY_TO_MERGE_WITH_FOLLOWUPS`}. The second is not a softening: it is only reachable when zero BLOCKER remain and every HIGH is a *registered* followup, which `consolidate_findings.py` verifies against the plan's `## Followups` before emitting it.
 - Final manual gate: human approves the release PR. Auto-merge is forbidden (Unbreakable Rule 4).
+- Before ACCEPTANCE starts: `cycle-release` emitted `RELEASED` AND the plan carries a `milestone_id`. No `milestone_id` → the chain ends at `RELEASED`; there is no milestone to accept.
 
 Any gate failure → pause + surface the blocking finding. The orchestrator does NOT loop indefinitely; after 1 fix-and-retry attempt at the same gate, it halts with `BLOCKED` and asks the human.
 
@@ -77,6 +82,8 @@ Any gate failure → pause + surface the blocking finding. The orchestrator does
 
 - Any cycle's stop condition fires.
 - A hard gate failure that the orchestrator cannot resolve autonomously (e.g., merge conflict, missing credential).
+- `cycle-acceptance` returns `ACCEPTED` or `ACCEPTED_WITH_CAVEATS` — the milestone is done and its checkbox flipped.
+- `cycle-acceptance` returns `REJECTED` or `NOT_VALIDATED` — halt and surface. The release stands; the milestone does not.
 
 ## Anti-patterns
 
@@ -92,6 +99,6 @@ For most features, running cycles manually with human review between them produc
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Orchestrator skill: `skills/auto-plan/SKILL.md`
-- Upstream macro super-loop: `rules/cycle-maintenance.md` — selects the next milestone, delegates one full `cycle-auto-plan` run per milestone
-- Chained cycles: `rules/cycle-discover.md`, `rules/cycle-plan.md`, `rules/cycle-implement.md`, `rules/cycle-code-quality.md`, `rules/cycle-review.md`, `rules/cycle-release.md`
+- Upstream macro super-loop: `rules/cycle-maintenance.md` — selects the next `B-NNN` item and delegates one full `cycle-auto-plan` run per item
+- Chained cycles: `rules/cycle-discover.md`, `rules/cycle-plan.md`, `rules/cycle-implement.md`, `rules/cycle-code-quality.md`, `rules/cycle-review.md`, `rules/cycle-release.md`, `rules/cycle-acceptance.md`
 - Conventions: `rules/loop-engine-convention.md`

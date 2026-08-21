@@ -9,7 +9,7 @@
 **A plan is INVALID and CANNOT produce a SHIPPABLE verdict when:**
 
 1. Coverage Matrix < 100% (gaps not mapped to tasks)
-2. At least one fabricated citation (rule file, blueprint section, intra-plan ADR, or Unbreakable Rule referenced in prose does not resolve) — *M3 v0.1 active (rule files, blueprints, intra-plan ADRs, Unbreakable Rules 1..13). M3 v0.2 (code-file refs `src/foo.py:42`) deferred.*
+2. At least one fabricated citation (rule file, opportunity section, intra-plan ADR, or Unbreakable Rule referenced in prose does not resolve) — *M3 v0.1 active (rule files, opportunities, intra-plan ADRs, Unbreakable Rules 1..13). M3 v0.2 (code-file refs `src/foo.py:42`) deferred.* The citation form is `Opportunity §X`; the ancestor's `Blueprint §X` remains accepted so plans predating the rename keep resolving.
 3. An applicable `*-patterns` skill is silently ignored — one whose frontmatter `description:` shares a keyword with the plan's title/Goal, yet is neither cited in the plan body nor overridden by an ADR that names it.
 
 This is NOT a guideline. It is a constraint enforced by the skill itself.
