@@ -402,3 +402,64 @@ def test_python_disabled_makes_the_same_tree_report_nothing_audited(
     assert data["verdict"] == "INVALID"
     assert "no_languages_audited" in data["hard_caps_triggered"]
     assert exit_code != 0
+
+
+# --------------------------------------------------------------------------
+# B-020 — the no-languages guard must look at the TREE, not only at its own list
+# --------------------------------------------------------------------------
+
+
+def test_a_repo_with_no_manifests_at_all_is_still_INVALID_by_deliberate_policy(
+    tmp_path: Path, capsys
+) -> None:
+    """Pinned as a DISAGREEMENT, not as agreement.
+
+    A consumer's backlog (theokit-plugins B-020) asks that "a genuinely pre-code repo with no
+    manifest still passes". This kit decided the other way, with reasoning recorded beside the
+    guard: `cycle-review` admits on PASS, so a run that looked at nothing must not report a clean
+    audit — even when there was nothing to look at.
+
+    The two positions are both defensible and they conflict. Overriding a kit-wide policy on the
+    strength of one consumer's item would be the wrong way to settle it, so the current behaviour is
+    pinned here and the disagreement is filed instead. If the policy changes, this test is the thing
+    that says it changed on purpose.
+    """
+    _write_rules(tmp_path)  # four languages enabled; the tree has none of their manifests
+    exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
+    data = json.loads(capsys.readouterr().out)
+
+    assert exit_code != 0, data
+    assert data["verdict"] == "INVALID"
+    assert "no_languages_audited" in data["hard_caps_triggered"]
+
+
+def test_a_manifest_nobody_audited_fails_even_when_another_language_was(
+    tmp_path: Path, capsys
+) -> None:
+    """The second half of B-020's DoD, which the previous guard deferred by its own admission.
+
+    A repository that audits TypeScript while holding an unaudited `pyproject.toml` passed: the
+    guard only fired when `languages_audited` was EMPTY, so "looked at something, just not at that"
+    was indistinguishable from a clean run. The gate reported on the set it managed to see, and
+    nothing verified that set was the right one.
+    """
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "code-quality-languages.txt").write_text(
+        "python | pyproject.toml | DISABLED | deliberately off\n"
+        "typescript | package.json | ENABLED |\n"
+    )
+    (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
+    (rules / "code-quality-allowlist.txt").write_text("")
+    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    # Both manifests exist; only one language is enabled.
+    (tmp_path / "package.json").write_text('{"name":"fx","version":"0.0.0"}')
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "fx"\n')
+
+    exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+
+    assert exit_code != 0, data
+    assert "unaudited_manifest_present" in data["hard_caps_triggered"], data

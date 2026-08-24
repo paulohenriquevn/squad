@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **O gate reportava sobre o conjunto que conseguiu ver, e nada verificava se era o conjunto certo.** Um repositório que auditava TypeScript com um `pyproject.toml` não auditado passava: `languages_audited` não estava vazio, então o guard existente não disparava. "Olhou para alguma coisa, só não para aquela" era indistinguível de uma execução limpa — e `cycle-review` admite no PASS.
+
+  A pergunta que faltava não é "auditei alguma coisa?" e sim "havia algo para auditar que eu não auditei?". Ela é respondida olhando para a ÁRVORE, não para a lista do próprio gate: cada linguagem que a configuração conhece carrega seu marcador de manifesto, então um marcador presente para uma linguagem que ninguém auditou é um arquivo que o gate pulou enquanto o relatório dizia PASS. Novo id estável: `unaudited_manifest_present`.
+
+  O guard anterior (`no_languages_audited`) continua como estava. Uma divergência com um consumidor sobre o caso pré-código — repositório sem manifesto nenhum — está fixada em teste como divergência, não resolvida unilateralmente.
 - **Os dois gates de ponteiro reprovavam citações corretas.** `CODE_POINTER_RE` abria com `\b` e uma classe que excluía `@` e o ponto inicial, então casava um SUFIXO de um caminho real e produzia outro caminho — que não existe. Uma citação sob `node_modules/@escopo/...` era truncada no `@`; uma sob um diretório dotfile perdia o ponto. Ambas viravam `fabricated_evidence`, o único cap irrecuperável do ciclo, disparado contra evidência correta.
 
   E `PATH_TARGET_RE` lia qualquer token com barra como caminho de repositório: `theokit/server/plugins` — um subpath specifier npm real — falhava `Path.exists()` e virava `fabricated_target`. O irmão com escopo `@theokit/sdk/server/auth` passava, mas **por acidente**: o `@` estava fora da classe, então o regex nunca o via. Duas formas da mesma coisa, tratadas de modo oposto, sem que ninguém tivesse decidido isso.
