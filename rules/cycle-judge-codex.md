@@ -14,7 +14,7 @@ This cycle is delivered by an external plugin — `judge-codex-plugin-cc` (https
 
 - Codex CLI installed (`npm install -g @openai/codex`) and authenticated (`codex login`).
 - judge-codex plugin installed in Claude Code (`/plugin marketplace add usetheodev/judge-codex-plugin-cc` then `/plugin install judge-codex@judge-codex`).
-- At least one `plan` cycle artifact persisted (blueprint, plan, implementation log, or review report).
+- At least one `plan` cycle artifact persisted (opportunity, plan, implementation log, or review report).
 
 Do NOT invoke when:
 - Codex CLI is missing — run `/judge-codex:setup` first.
@@ -24,7 +24,7 @@ Do NOT invoke when:
 ## Chain
 
 ```
-/judge-codex:discover       <slug>   (after cycle-discover produces a blueprint)
+/judge-codex:discover       <slug>   (after cycle-discover produces an opportunity)
      ↓
 /judge-codex:plan           <slug>   (after cycle-plan produces a plan;
      ↓                                typically also after /plan-confidence)
@@ -42,7 +42,7 @@ Each stage is **idempotent** and **independent** — running `plan` later does n
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| `:discover` | blueprint at `knowledge-base/discoveries/blueprints/{slug}-blueprint.md` | `knowledge-base/judge-codex/{slug}-discover-judge-{date}.json` | ≥2-source evidence rule enforced; `fabricated_citation` caps to INVALID |
+| `:discover` | opportunity at `knowledge-base/discoveries/opportunities/{slug}-opportunity.md` | `knowledge-base/judge-codex/{slug}-discover-judge-{date}.json` | ≥2-source evidence rule enforced; `fabricated_citation` caps to INVALID |
 | `:plan` | plan at `knowledge-base/plans/{slug}-plan.md` + optional plan-confidence output | `knowledge-base/judge-codex/{slug}-plan-judge-{date}.json` | semantic completeness above `plan-confidence` M3 structural check; Goal SMART; Risks; fabricated citations beyond Evidence-block scope |
 | `:implementation` | implementation log + `git log` of slice commits | `knowledge-base/judge-codex/{slug}-implementation-judge-{date}.json` | wiring triad pillar (a) caller present; TDD RED commit precedes GREEN; no symbol fabrication |
 | `:final` | consolidated review report + raw agent finding files | `knowledge-base/judge-codex/{slug}-final-judge-{date}.json` | review-of-review: aggregator did not silently drop agent files; verdict consistent with findings |
@@ -78,7 +78,7 @@ This is the entire point of having an orthogonal jury: agreement = high confiden
 
 The plugin's per-stage hard caps mirror the canonical golden rules:
 
-- `:discover` consults `rules/discover-plan-golden-rule.md` — the blueprint contract of this ecosystem. (The plugin's own docs name a `discover-blueprint-golden-rule.md`, which exists in other installs and never existed here.)
+- `:discover` consults `rules/discover-plan-golden-rule.md` — the measurement-plan contract of this ecosystem. (The plugin's own docs name a `discover-blueprint-golden-rule.md`, which exists in other installs and never existed here.)
 - `:plan` consults `rules/plan-confidence-golden-rule.md` (and the **unbreakable** `feedback_never_single_source_evidence` rule that is currently encoded in memory; will be promoted to a hard-cap detector in a follow-up slice).
 - `:implementation` consults `rules/cycle-implement.md` + `rules/code-quality-golden-rule.md`.
 - `:final` consults `rules/cycle-review.md`.

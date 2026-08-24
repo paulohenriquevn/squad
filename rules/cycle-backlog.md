@@ -21,7 +21,7 @@ Invoke `/backlog-item {slug}` when ALL of:
 Do NOT trigger BACKLOG for:
 
 - Work already in flight. Grep `BACKLOG.md` first — the dedup gate is mandatory, not advisory.
-- A finding the sweep already produced. `/discover --sweep` registers its own items with evidence attached; re-registering them by hand creates the duplicate the single-registry rule exists to prevent.
+- A finding the sweep already produced. `/discover-execute --sweep` registers its own items with evidence attached; re-registering them by hand creates the duplicate the single-registry rule exists to prevent.
 - "Project X does it this way." That is not an item. See § Hard gates, G5.
 - A question about how our own code works. Read the code.
 
@@ -30,7 +30,7 @@ Do NOT trigger BACKLOG for:
 ```
 /backlog-item {slug}                         ← phase 0 · INTAKE (human, cheap, hypothesis)
      ↓ (produces: B-NNN in BACKLOG.md · status: raw · evidence: none-yet)
-/discover --mode {review|live-test|bug|evolve} B-NNN
+/discover-plan B-NNN --mode {review|live-test|bug|evolve}
      ↓ (measures against OUR code/runtime)
      ├── evidence found  → status: triaged · evidence: <pointer>  → /to-plan
      └── nothing found   → status: killed   · kill_reason: <why>  → chain ends here
@@ -39,7 +39,7 @@ Do NOT trigger BACKLOG for:
 The second producer writes into the same registry without passing through this cycle:
 
 ```
-/discover --mode {review|live-test} --sweep {domain}     ← no prior item
+/discover-execute --sweep {domain}     ← no prior item
      ↓ (registers findings directly)
 B-NNN · source: discover-review · evidence: <file:line> · status: triaged
 ```
@@ -51,7 +51,7 @@ One file, one schema, two entry paths. A sweep finding skips intake because it a
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
 | intake | one-sentence description + slug | `B-NNN` block in `BACKLOG.md`, status `raw` | G1–G5 all pass |
-| (handoff) | `B-NNN` | item claimed by `/discover` | item is `raw` and unclaimed |
+| (handoff) | `B-NNN` | item claimed by `cycle-discover` | item is `raw` and unclaimed |
 
 ## Item schema
 
@@ -89,7 +89,7 @@ dod:
 ### Status transitions
 
 ```
-raw ──/discover measures──┬──> triaged ──/to-plan──> planned ──/release──> shipped
+raw ──/discover-execute measures──┬──> triaged ──/to-plan──> planned ──/release──> shipped
                           └──> killed (kill_reason mandatory)
 ```
 
@@ -128,7 +128,7 @@ This is exactly why `skills/backlog-init/SKILL.md` mandates reading the inventor
 
 | Verdict | Meaning | Downstream action |
 |---|---|---|
-| `ITEM_REGISTERED` | Item written to `BACKLOG.md` as `raw` | Available for `/discover` |
+| `ITEM_REGISTERED` | Item written to `BACKLOG.md` as `raw` | Available for `cycle-discover` |
 | `ITEM_MERGED` | Dedup gate matched an open item; the new context was folded into it | No new id; the existing `B-NNN` proceeds |
 | `ITEM_REJECTED` | Outside the ecosystem, or G5 refused it | Nothing written; the reason is surfaced to the human |
 
@@ -205,7 +205,7 @@ An item registered in error is marked `status: killed` with a `kill_reason` — 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Skill: `skills/backlog-item/SKILL.md`
 - Bootstrap (once, at adoption): `skills/backlog-init/SKILL.md`
-- Live environment declaration consumed by `/discover --mode live-test`: `rules/live-target.txt`
+- Live environment declaration consumed by `/discover-execute (live-test mode)`: `rules/live-target.txt`
 - Downstream: `rules/cycle-discover.md` — measures the hypothesis and flips the item to `triaged` or `killed`
 - Then: `rules/cycle-plan.md` — consumes `triaged` items
 - Branching contract for the registry commit: `rules/git-safety.md`

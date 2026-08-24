@@ -395,6 +395,60 @@ setup; rc=$(run_hook "rm -rf /etc/foo"); assert_exit "F10: 'rm -rf /etc/foo' sta
 setup; rc=$(run_hook "rm -rf \\\$HOME"); assert_exit "F10: 'rm -rf \$HOME' stays blocked" 2 "$rc"; teardown
 
 # ---------------------------------------------------------------------------
+# F12: trunk protection must follow the repo's trunk, not the literal name `main`
+# ---------------------------------------------------------------------------
+# A projeto adotante cujo trunk é `master` instalava o kit, lia que a Regra 4
+# estava protegida, e não estava: o guard casava `[ "$BRANCH" = "main" ]` e mais
+# nada. Medido num projeto descartável — em `master` o commit passava (exit 0),
+# em `main` bloqueava. É o pior formato de falha: promete e não entrega, calado.
+#
+# `master` cobre a maioria; um trunk de nome próprio (`trunk`, `release`) é lido
+# de `origin/HEAD`. Sobre-proteger é o lado seguro do erro: bloquear um commit
+# que poderia passar custa uma troca de branch, e o inverso custa a garantia.
+
+# ---- commit on master (blocked, like main) ----
+setup
+git -C "$TMPDIR_TEST" branch -m master --quiet 2>/dev/null || git -C "$TMPDIR_TEST" checkout -b master --quiet
+rc=$(run_hook "git commit -m 'bad commit'")
+assert_exit "F12: commit on 'master' is blocked" 2 "$rc"
+teardown
+
+# ---- mutations on master (blocked, like main) ----
+setup
+git -C "$TMPDIR_TEST" branch -m master --quiet 2>/dev/null || git -C "$TMPDIR_TEST" checkout -b master --quiet
+rc=$(run_hook "git rebase HEAD~1")
+assert_exit "F12: rebase on 'master' is blocked" 2 "$rc"
+teardown
+
+# ---- inline switch to master then commit (blocked) ----
+setup
+rc=$(run_hook "git switch master && git commit -m x")
+assert_exit "F12: inline 'switch master && commit' is blocked" 2 "$rc"
+teardown
+
+# ---- the remote's default branch is protected even under a custom name ----
+setup
+git -C "$TMPDIR_TEST" checkout -b trunk --quiet
+git -C "$TMPDIR_TEST" remote add origin "$TMPDIR_TEST" 2>/dev/null || true
+git -C "$TMPDIR_TEST" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk 2>/dev/null || true
+rc=$(run_hook "git commit -m 'bad commit'")
+assert_exit "F12: commit on the remote's default branch ('trunk') is blocked" 2 "$rc"
+teardown
+
+# ---- regression: workspace stays writable ----
+setup
+rc=$(run_hook "git commit -m 'good commit'")
+assert_exit "F12 regression: commit on 'workspace' still allowed" 0 "$rc"
+teardown
+
+# ---- regression: a feature branch is not a trunk ----
+setup
+git -C "$TMPDIR_TEST" checkout -b fix/some-bug --quiet
+rc=$(run_hook "git commit -m 'fine'")
+assert_exit "F12 regression: commit on a feature branch still allowed" 0 "$rc"
+teardown
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

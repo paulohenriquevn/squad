@@ -205,3 +205,53 @@ def test_item_repo_field_accepts_a_monorepo_path(tmp_path: Path) -> None:
     match = ITEM_REPO_RE.search(item.read_text(encoding="utf-8"))
     assert match is not None
     assert match.group(1) == "packages/sdk"
+
+
+def _table_with(rows: str, tmp_path: Path) -> Path:
+    """A minimal rule file carrying only a `## Domain routing` section."""
+    rule = tmp_path / "cycle-backlog.md"
+    rule.write_text(
+        "# Cycle: BACKLOG\n\n## Domain routing\n\n"
+        "| Domain | Packages | Specialist |\n|---|---|---|\n" + rows,
+        encoding="utf-8",
+    )
+    return rule
+
+
+def test_a_repo_in_two_domains_is_refused_by_the_parser(tmp_path: Path) -> None:
+    """The one-repo-one-domain invariant belongs to the TOOL, not to this suite.
+
+    `test_no_repo_belongs_to_two_domains` above asserts it for THIS repository's table, and
+    that is all it can do: it hard-codes `RULE = PROJECT_ROOT / "rules" / "cycle-backlog.md"`
+    and `len(table) == 8`. Every consumer install carries its own table with its own domain
+    count, and `install.sh` does not copy `tests/` — so in a consumer repo the invariant was
+    asserted by nobody, exactly as the exit-3 guard was before it moved into the tool.
+
+    Measured in the theokit-plugins install on 2026-08-24: 11 packages across 4 domains, and
+    nothing anywhere checks that none of them appears twice. A repo in two rows makes routing
+    depend on dict iteration order — the same item routing differently on different runs.
+
+    So the parser refuses it, which is what makes the guarantee travel with the tool.
+    """
+    rule = _table_with(
+        "| `alpha` | `pkg-one`, `pkg-two` | `agents/alpha.md` |\n"
+        "| `beta` | `pkg-two` | `agents/beta.md` |\n",
+        tmp_path,
+    )
+
+    with pytest.raises(ValueError, match=r"pkg-two.*(alpha|beta)"):
+        parse_routing_table(rule)
+
+
+def test_the_same_repo_twice_in_ONE_domain_is_not_a_duplicate(tmp_path: Path) -> None:
+    """Two mentions in one row route identically, so nothing is ambiguous.
+
+    Without this, the guard could be written as a naive count and would reject a table that
+    is merely repetitive — turning a cosmetic edit into a broken install.
+    """
+    rule = _table_with(
+        "| `alpha` | `pkg-one`, `pkg-one` | `agents/alpha.md` |\n",
+        tmp_path,
+    )
+
+    assert parse_routing_table(rule)["alpha"]["repos"].count("pkg-one") == 2

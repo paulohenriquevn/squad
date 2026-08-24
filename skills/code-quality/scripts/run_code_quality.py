@@ -274,7 +274,8 @@ def main(argv: list[str] | None = None) -> int:
 
     return _emit_and_exit(findings, args, repo_root, plan_path,
                           languages_audited=languages_audited,
-                          languages_skipped=languages_skipped)
+                          languages_skipped=languages_skipped,
+                          cfg=cfg)
 
 
 def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path) -> list[Finding]:
@@ -311,6 +312,10 @@ def _emit_and_exit(
     plan_path: Path | None,
     languages_audited: list[str] | None = None,
     languages_skipped: dict[str, str] | None = None,
+    # The language table, so the guard below can ask what is on disk rather than what the gate
+    # happened to look at. Optional so existing callers keep working; absent means the tree cannot
+    # be consulted, and the guard falls back to the narrower "audited nothing at all" question.
+    cfg: dict | None = None,
 ) -> int:
     verdict, stable_ids = compute_verdict(findings)
 
@@ -330,11 +335,54 @@ def _emit_and_exit(
     # that never looked at them": the gate looked at SOMETHING, just not at Python. This fires only
     # when it looked at nothing. B-060's fix is enabling `python` in the languages file; this guard
     # is what stops that configuration regressing silently to a PASS afterwards.
+    # Two different questions, and the gate needs both.
+    #
+    # "Did I audit anything?" — a run with an empty `languages_audited` cannot distinguish "looked
+    # at nothing" from "looked and found nothing", and `cycle-review` admits on PASS. That guard is
+    # unchanged.
     if verdict == "PASS" and not languages_audited:
         verdict = "INVALID"
         stable_ids = list(stable_ids)
         if "no_languages_audited" not in stable_ids:
             stable_ids.append("no_languages_audited")
+
+    # "Was there anything to audit that I did not?" — the one the first question cannot reach. A
+    # repository that audits TypeScript while holding an unaudited `pyproject.toml` had a non-empty
+    # `languages_audited`, so it passed: "looked at something, just not at that" was
+    # indistinguishable from a clean run. The gate reported on the set it managed to see, and
+    # nothing verified that set was the right one.
+    #
+    # Answered by looking at the TREE rather than at the gate's own list: every language the config
+    # knows carries its manifest marker, so a marker present for a language nobody audited is a file
+    # the gate skipped while the report says PASS.
+    if verdict == "PASS" and cfg:
+        unaudited = sorted(
+            lang
+            for lang, meta in cfg.items()
+            if lang not in (languages_audited or []) and (repo_root / meta["manifest"]).exists()
+        )
+        if unaudited:
+            verdict = "INVALID"
+            stable_ids = list(stable_ids)
+            if "unaudited_manifest_present" not in stable_ids:
+                stable_ids.append("unaudited_manifest_present")
+            findings = list(findings) + [
+                Finding(
+                    detector="orchestrator",
+                    language=lang,
+                    severity="HARD",
+                    file_path=cfg[lang]["manifest"],
+                    symbol_or_line="-",
+                    message=(
+                        f"{cfg[lang]['manifest']} is present but {lang} was not audited "
+                        f"({(languages_skipped or {}).get(lang, 'not enabled')}). A PASS here would "
+                        "report on the set the gate managed to see, with nothing verifying that set "
+                        "was the right one."
+                    ),
+                    allowlist_key=f"unaudited_manifest_present|{cfg[lang]['manifest']}|-|{lang}",
+                )
+                for lang in unaudited
+            ]
 
     summary = emit_json_summary(findings, verdict, stable_ids)
     summary["languages_audited"] = languages_audited or []

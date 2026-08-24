@@ -4,7 +4,7 @@ Scans a plan's `#### Evidence` blocks (and prose surrounding them) for citations
 of the following kinds, and flags ones that do not resolve:
 
   - rule            — `name.md` or `name.md §X`
-  - blueprint       — `Blueprint §X`
+  - opportunity     — `Opportunity §X` (legacy `Blueprint §X` still accepted)
   - adr             — `D{n}` or `ADR D{n}` (intra-plan ADR)
   - unbreakable_rule — `Unbreakable Rule {n}` (n must be in 1..13)
 
@@ -35,8 +35,11 @@ _RULE_REF_RE = re.compile(
 )
 
 # Blueprint refs: `Blueprint §Q1` or `Blueprint §"Cross-cutting"`.
+# `Opportunity §X` is the current form. `Blueprint §X` is the ancestor's name for the
+# same artifact (see rules/cycle-discover.md § the rename) and stays accepted so plans
+# written before the rename keep resolving.
 _BLUEPRINT_REF_RE = re.compile(
-    r"Blueprint\s*§\s*(?:\"([^\"]+)\"|([A-Za-z0-9][^\s,.;)\"`]*))"
+    r"(?:Opportunity|Blueprint)\s*§\s*(?:\"([^\"]+)\"|([A-Za-z0-9][^\s,.;)\"`]*))"
 )
 
 # ADR refs: `ADR D8` OR standalone `D8` followed by word boundary (skip dates like 2026-06-04).
@@ -241,13 +244,21 @@ def _scan_blueprint_refs(
     prose: str, line_index: list[int], project_root: Path
 ) -> list[tuple[Citation, bool]]:
     out: list[tuple[Citation, bool]] = []
-    blueprints_dir = project_root / "knowledge-base" / "discoveries" / "blueprints"
+    # `/discover-execute` writes to `opportunities/`. This scanner read `blueprints/`
+    # — the ancestor's directory, which nothing has written to since the rename — so
+    # every `Opportunity §X` citation in a real plan resolved against an empty set and
+    # was reported fabricated. Both are searched: the current path first, the legacy
+    # one after, so plans predating the rename keep resolving.
+    discoveries = project_root / "knowledge-base" / "discoveries"
     available = []
-    if blueprints_dir.exists():
+    for sub in ("opportunities", "blueprints"):
+        d = discoveries / sub
+        if not d.exists():
+            continue
         try:
-            available = [p for p in blueprints_dir.iterdir() if p.is_file() and p.suffix == ".md"]
+            available.extend(p for p in d.iterdir() if p.is_file() and p.suffix == ".md")
         except OSError:
-            available = []
+            continue
     for m in _BLUEPRINT_REF_RE.finditer(prose):
         section = m.group(1) or m.group(2)
         raw = m.group(0)
@@ -259,7 +270,7 @@ def _scan_blueprint_refs(
                         kind="blueprint",
                         raw_text=raw,
                         location_line=line_no,
-                        reason="no blueprints exist in knowledge-base/discoveries/blueprints/",
+                        reason="no opportunities exist in knowledge-base/discoveries/opportunities/",
                     ),
                     False,
                 )
@@ -275,7 +286,7 @@ def _scan_blueprint_refs(
                         kind="blueprint",
                         raw_text=raw,
                         location_line=line_no,
-                        reason=f"section §{section!r} not found in any blueprint",
+                        reason=f"section §{section!r} not found in any opportunity",
                     ),
                     False,
                 )

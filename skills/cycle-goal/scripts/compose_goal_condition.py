@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
-"""Compose the termination condition handed to Claude Code's built-in `/goal`.
+"""Compose the termination condition the `cycle-goal` Stop hook operates under.
 
-`/goal` is NOT a system prompt: it registers a session-scoped Stop hook whose
-text a small fast model evaluates against the TRANSCRIPT every time the agent
-tries to stop. Two consequences drive this script:
+The condition is read into the session as the operating contract. It is NOT
+what decides whether the session may stop — `check_goal_met.py` decides that,
+by reading the filesystem (the acceptance record's `verdict:` line and the
+`ROADMAP.md` checkbox). That split is the whole point: a transcript evaluator
+can be satisfied by a confident sentence; a checkbox cannot.
 
-  1. The text has a hard 4000-character cap enforced by the CLI. A condition
-     that overflows is a silent behavioural change, so the cap is checked here
-     and violating it is a BLOCK, never a truncation.
-  2. The condition must name artifacts an outside reader can verify in the
-     transcript. Vague conditions ("the milestone is done") let the evaluator
-     accept an asserted result — exactly the bypass the CYCLE process exists
-     to prevent.
+Two consequences drive this script:
 
-Milestone headers are matched with the SAME shape `cycle-release` uses to flip
-them (`### M<N> — [ ] Name`). Reading leniently while the writer is strict is
-how roadmaps drift, so a milestone written at another header level is an error
-with a precise message, not a silent pass.
+  1. The text is capped at 4000 characters. The number is inherited from
+     the retired `goal` CLI cap (written without a slash on purpose: it is
+     history, not a command anyone can run), which no longer applies now that
+     the skill arms its own
+     `Stop` hook — it is kept as a readability bound, because an operating
+     contract nobody reads governs nothing. Violating it is a BLOCK, never a
+     truncation.
+  2. The condition must name artifacts an outside reader can verify. Vague
+     conditions ("the milestone is done") invite an asserted result — exactly
+     the bypass the CYCLE process exists to prevent.
+
+Milestone headers are matched with the SAME shape `cycle-acceptance` uses to
+flip them (`### M<N> — [ ] Name`), the contract recorded in
+`rules/cycle-acceptance.md § The ROADMAP.md contract`. Reading leniently while
+the writer is strict is how roadmaps drift, so a milestone written at another
+header level is an error with a precise message, not a silent pass.
 
 Usage:
     python3 compose_goal_condition.py --roadmap ROADMAP.md M2 M3
@@ -34,7 +42,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Hard cap the CLI enforces on a `/goal` condition (observed as `Jdr=4000`).
+#: Readability bound on the composed condition. Originally the CLI's hard cap on a
+#: `/goal` condition (observed as `Jdr=4000`); the skill now arms its own `Stop` hook,
+#: so nothing external enforces it. Kept deliberately — an operating contract nobody
+#: reads governs nothing. See `SKILL.md` § Why not `/goal`.
 GOAL_CHAR_CAP = 4000
 
 #: Same header shape `skills/release/scripts/flip_milestone_checkbox.py` flips.
@@ -105,7 +116,7 @@ def _reject_wrong_header_level(text: str, requested: list[str]) -> None:
         if match.group(2) in requested:
             raise GateViolation(
                 f"{match.group(2)} is written as `{match.group(1)} {match.group(2)} — [...]` "
-                f"but cycle-release only flips `### {match.group(2)} — [ ] Name`. "
+                f"but cycle-acceptance only flips `### {match.group(2)} — [ ] Name`. "
                 "Normalize the header to level 3 or the checkbox will never flip."
             )
 
@@ -200,7 +211,16 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.roadmap.exists():
-        print(f"file not found: {args.roadmap} — run /roadmap-init first.", file=sys.stderr)
+        # NÃO sugerir um comando aqui: ROADMAP.md é escrito à mão e nenhuma skill
+        # o gera. A mensagem antiga mandava rodar `roadmap-init`, aposentada junto
+        # com a cycle-roadmap — remédio impresso na falha que leva a lugar nenhum.
+        # `backlog-init` também não serve: cria BACKLOG.md, outro registro.
+        print(
+            f"file not found: {args.roadmap} — it is hand-authored and no skill "
+            "generates it. See rules/cycle-acceptance.md § The ROADMAP.md contract "
+            "for the required milestone header shape.",
+            file=sys.stderr,
+        )
         return 2
 
     text = args.roadmap.read_text(encoding="utf-8")
@@ -223,7 +243,8 @@ def main() -> int:
     if len(condition) > GOAL_CHAR_CAP:
         print(
             f"BLOCKED cycle-goal: condition is {len(condition)} chars, over the "
-            f"{GOAL_CHAR_CAP}-char cap /goal enforces. Split the run into fewer milestones.",
+            f"{GOAL_CHAR_CAP}-char readability cap this skill enforces on itself. "
+            "Split the run into fewer milestones.",
             file=sys.stderr,
         )
         return 1

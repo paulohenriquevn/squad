@@ -28,7 +28,7 @@ done
 
 #### Patterns skill discovery (when a domain "patterns" skill exists)
 
-Skills whose name ends with `-patterns` encapsulate Patterns + Recommendations + Cross-cutting Comparisons distilled from research investigations (typically a `/discover-execute` blueprint). Author them on demand with the standalone `/skill-creator`. If any exist in `skills/`, treat them as load-bearing project patterns.
+Skills whose name ends with `-patterns` encapsulate Patterns + Recommendations + Cross-cutting Comparisons distilled from research investigations (typically a `/discover-execute` opportunity). Author them on demand with the standalone `/skill-creator`. If any exist in `skills/`, treat them as load-bearing project patterns.
 
 **How to consume a patterns skill in /to-plan:**
 
@@ -97,7 +97,7 @@ grep -E '^## ' rules/architecture.md  # quick section index
 #    Read the relevant module README / package-level docstring; list 3-7 terms with one-line definitions.
 
 # 5. Discover prior art ALREADY available in this repo
-ls knowledge-base/discoveries/blueprints/ 2>/dev/null   # blueprints from /discover-execute runs
+ls knowledge-base/discoveries/opportunities/ 2>/dev/null   # opportunities from /discover-execute runs
 ls skills/*-patterns/ 2>/dev/null                       # domain patterns skills (authored via /skill-creator)
 ls knowledge-base/references/ 2>/dev/null               # cloned reference projects (read-only)
 ```
@@ -107,7 +107,7 @@ The captured output feeds the `## Baseline Context` table directly. **If a row i
 Honesty gates that apply to Step 1:
 
 - If you cannot identify the public callers of a symbol the plan modifies, STOP and ask the user — do not guess. Half the bugs caught in `/review` start with "we did not know X also called this."
-- If `knowledge-base/discoveries/blueprints/` is empty for the topic AND no `*-patterns` skill matches, the `## Prior Art & Related Work` section must say "(none identified — first-of-its-kind in this codebase)" — `/edge-case-plan` will challenge that.
+- If `knowledge-base/discoveries/opportunities/` is empty for the topic AND no `*-patterns` skill matches, the `## Prior Art & Related Work` section must say "(none identified — first-of-its-kind in this codebase)" — `/edge-case-plan` will challenge that.
 
 ### Step 2 — Architecture Snapshot (BEFORE) — OPTIONAL
 
@@ -169,7 +169,7 @@ These rules are NON-NEGOTIABLE for every plan produced by this skill:
 
 12. **Baseline Context section is mandatory** — `## Baseline Context` is populated from the Step 1 evidence (file table with LoC + git sha, callers list, glossary, architecture boundaries). Fabricated rows cap the plan at INVALID. A junior reads this section to understand "what exists today" without reading the codebase.
 
-13. **Prior Art & Related Work section is mandatory** — `## Prior Art & Related Work` cites internal blueprints, patterns skills, reference projects, OR external literature. "(none identified)" is acceptable but `/edge-case-plan` will challenge it.
+13. **Prior Art & Related Work section is mandatory** — `## Prior Art & Related Work` cites internal opportunities, patterns skills, reference projects, OR external literature. "(none identified)" is acceptable but `/edge-case-plan` will challenge it.
 
 14. **Drawbacks & Risks section is mandatory** — `## Drawbacks & Risks` has ≥ 2 entries with severity + mitigation + owner. No plan is risk-free; missing or under-populated section caps the plan at 70 (SHIPPABLE_WITH_CAVEATS at best).
 

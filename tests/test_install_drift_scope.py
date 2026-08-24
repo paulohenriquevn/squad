@@ -61,3 +61,55 @@ def test_settings_json_is_compared_against_the_plugin_variant(tmp_path: Path) ->
     (install / "settings.json").write_text('{"hooks": "plugin"}\n', encoding="utf-8")
     out = _run(install, kit)
     assert "settings.json" not in out.replace("settings.plugin.json", ""), out
+
+
+# ---------------------------------------------------------------------------
+# Defasagem não é alteração — a lição que ficou no sync_consumers e não aqui.
+# Medido no `theokit-tui`: o detector reportou 11 arquivos "que precisam de um
+# humano"; 5 eram trabalho real e 4 eram versões ANTIGAS do próprio kit
+# (`install.sh`, `check_xrefs.py`, `code-quality-golden-rule.md`,
+# `code-quality-allowlist.txt`). Um detector que acusa 11 quando são 5 ensina a
+# ser ignorado, que é a razão declarada de ele existir.
+# ---------------------------------------------------------------------------
+
+_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@t", "PATH": "/usr/bin:/bin"}
+
+
+def _kit_repo_with_history(tmp_path: Path) -> tuple[Path, str, str]:
+    """Um kit git com duas versões do mesmo arquivo."""
+    kit = tmp_path / "kit"
+    (kit / "rules").mkdir(parents=True)
+    env = {**_ENV, "HOME": str(kit)}
+    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
+                                    capture_output=True, text=True, env=env)
+    run("init", "-q")
+    velho = "linha A\nlinha ANTIGA\n"
+    (kit / "rules" / "x.md").write_text(velho, encoding="utf-8")
+    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")
+    novo = "linha A\nlinha NOVA\n"
+    (kit / "rules" / "x.md").write_text(novo, encoding="utf-8")
+    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")
+    return kit, velho, novo
+
+
+def test_an_old_kit_version_is_reported_as_stale_not_as_local_work(tmp_path: Path) -> None:
+    kit, velho, _novo = _kit_repo_with_history(tmp_path)
+    install = tmp_path / "install"
+    (install / "rules").mkdir(parents=True)
+    (install / "rules" / "x.md").write_text(velho, encoding="utf-8")
+
+    out = _run(install, kit)
+    assert "stale" in out.lower(), out
+    assert "diverged: 1" not in out, "defasagem não é divergência que precisa de humano"
+
+
+def test_genuinely_local_work_is_still_flagged(tmp_path: Path) -> None:
+    """O que nunca foi do kit continua exigindo um humano — é o ponto do detector."""
+    kit, _velho, novo = _kit_repo_with_history(tmp_path)
+    install = tmp_path / "install"
+    (install / "rules").mkdir(parents=True)
+    (install / "rules" / "x.md").write_text(novo + "correcao que so existe aqui\n", encoding="utf-8")
+
+    out = _run(install, kit)
+    assert "install_ahead: 1" in out or "diverged: 1" in out, out

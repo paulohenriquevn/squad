@@ -30,6 +30,12 @@ Audit project code for dead symbols, fabricated APIs, cross-package orphan expor
 
 ---
 
+## Cycle contract
+
+This skill is **the only phase** of [`cycle-code-quality`](../../rules/cycle-code-quality.md). The cycle rule is the **source of truth** for pre-conditions, hard gates, verdicts, stop conditions, anti-patterns and rollback. **Read `cycle-code-quality.md` before invoking.** This SKILL.md retains phase-specific detail (detector modes, per-language enablement, report shape).
+
+Upstream is [`cycle-implement`](../../rules/cycle-implement.md) (runs after its halt-loop closes); downstream is [`cycle-review`](../../rules/cycle-review.md), which consumes this audit's verdict.
+
 ## Trigger conditions
 
 Invoke this skill when:

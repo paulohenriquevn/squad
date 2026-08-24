@@ -21,6 +21,8 @@ Scores a plan produced by `/to-plan` against the M2 structural rubric. Determini
 - After running `/edge-case-plan {slug}` and incorporating MUST FIX items, BEFORE implementation.
 - User explicitly invokes `/plan-confidence {plan-slug}`.
 
+## Cycle contract
+
 This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the source of truth for chain order, hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (the scoring rubric, hard caps, output schema, exit codes).
 
 ## Architecture compliance check (always runs)
@@ -128,4 +130,4 @@ If a previous `/edge-case-plan {slug}` produced MUST FIX items, the current plan
 - Rubric: `templates/rubric-v1.md`
 - Schema: `templates/score-report.schema.json`
 - Defaults (fallback when project rules missing): `defaults/`
-- Sibling skill: `/discover-confidence` (same architecture, scores blueprints instead of plans)
+- Sibling skill: `/discover-confidence` (same architecture, scores opportunities instead of plans)

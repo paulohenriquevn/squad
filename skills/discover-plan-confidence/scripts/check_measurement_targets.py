@@ -27,7 +27,11 @@ from typing import Any
 TARGETS_HEADER_RE = re.compile(r"^##\s+Measurement\s+Questions\s*$", re.MULTILINE | re.IGNORECASE)
 # Backticked path: `theo-lens/src/` or `theo-lens/src/trace.ts`. Requires a slash so
 # that prose words in backticks are not mistaken for targets.
-PATH_TARGET_RE = re.compile(r"`((?:\.?[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_.\-]*)`")
+# `@` belongs inside a target, not outside it. The previous class excluded it, so a scoped npm
+# specifier like `@theokit/sdk/server/auth` never matched at all — and passed the gate by ACCIDENT
+# while its unscoped sibling `theokit/server/plugins` was scored `fabricated_target`. Two shapes of
+# the same thing, treated oppositely, for no reason anyone chose.
+PATH_TARGET_RE = re.compile(r"`((?:@?\.?[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_.\-]*)`")
 URL_TARGET_RE = re.compile(r"https?://[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-/]*)?")
 BLOCKED_MARKER_RE = re.compile(r"<!--\s*BLOCKED:.*?-->", re.IGNORECASE | re.DOTALL)
 WORD_RE = re.compile(r"\b\w+\b")
@@ -40,6 +44,47 @@ def _find_project_root(start: Path) -> Path:
             return current
         current = current.parent
     return start.resolve().parent if start.is_file() else start.resolve()
+
+
+def _resolves_as_module(project_root: Path, target: str) -> bool:
+    """Does `target` name an installed npm module rather than a repo path?
+
+    `theokit/server/plugins` and `@theokit/sdk/server/auth` are module SPECIFIERS: they resolve
+    through `node_modules`, not through the repo tree, and they have no extension. Resolving them
+    against the project root fails, which used to fire `fabricated_target` — a hard cap — on a
+    citation that was correct.
+
+    The distinction is made by RESOLUTION, deliberately, and never by a list of known package
+    names: a list needs maintaining, is wrong the moment a consumer adds a dependency, and would
+    bake one repository's packages into a kit that others install.
+
+    Only the package part is resolved, not the subpath. A subpath is declared by the package's own
+    `exports` map, which this checker has no business parsing — and a plan citing a real package
+    with a wrong subpath is a different mistake than citing a package that does not exist.
+
+    pnpm is why the store is walked: it nests the real package under
+    `node_modules/.pnpm/<name>@<version>/node_modules/<name>`, so a top-level-only check misses
+    every package in a pnpm workspace — which is all of them.
+    """
+    parts = target.strip("/").split("/")
+    if not parts:
+        return False
+    package = "/".join(parts[:2]) if parts[0].startswith("@") and len(parts) > 1 else parts[0]
+
+    current = project_root.resolve()
+    while True:
+        modules = current / "node_modules"
+        if modules.is_dir():
+            if (modules / package).exists():
+                return True
+            store = modules / ".pnpm"
+            if store.is_dir():
+                for entry in store.iterdir():
+                    if (entry / "node_modules" / package).exists():
+                        return True
+        if current == current.parent:
+            return False
+        current = current.parent
 
 
 def _declared_live_targets(project_root: Path) -> set[str]:
@@ -83,7 +128,7 @@ def check_measurement_targets(plan_path: Path) -> dict[str, Any]:
         if _is_explicitly_blocked(raw, match.end()):
             blocked.add(target)
             continue
-        if (project_root / target).exists():
+        if (project_root / target).exists() or _resolves_as_module(project_root, target):
             verified.add(target)
         else:
             fabricated[target] = "path_not_found"

@@ -117,3 +117,45 @@ def test_no_evidence_at_all(rooted: Path) -> None:
     assert report["total"] == 0
     assert report["fabricated"] == 0
     assert report["evidence_total"] == 0
+
+
+# --- B-017: the regex truncates real paths into paths that do not exist -----------------
+#
+# `CODE_POINTER_RE` opened with `\b` and a class excluding `@` and a leading `.`, so a pointer
+# under a scoped `node_modules` path restarted the match after the `@`, and one under a dotfile
+# directory lost its dot. Both produced a DIFFERENT path — one that does not exist — and the
+# checker reported `fabricated_evidence` about correct evidence. That is the cycle's single
+# unrecoverable cap, fired at the wrong target.
+
+
+def test_a_pointer_under_a_scoped_node_modules_path_is_captured_whole(rooted: Path) -> None:
+    target = rooted / "packages" / "auth-github" / "node_modules" / "@theokit" / "sdk" / "index.d.ts"
+    target.parent.mkdir(parents=True)
+    target.write_text("\n".join(f"line {i}" for i in range(1, 30)), encoding="utf-8")
+
+    body = "See `packages/auth-github/node_modules/@theokit/sdk/index.d.ts:14` for the type."
+    report = check_evidence_pointers(_opportunity(rooted, body))
+
+    assert report["fabricated"] == 0, report["fabricated_pointers"]
+    assert report["verified"] == 1
+
+
+def test_a_pointer_under_a_dotfile_directory_keeps_its_leading_dot(rooted: Path) -> None:
+    target = rooted / ".github" / "workflows" / "ci.yml"
+    target.parent.mkdir(parents=True)
+    target.write_text("\n".join(f"line {i}" for i in range(1, 200)), encoding="utf-8")
+
+    report = check_evidence_pointers(_opportunity(rooted, "See `.github/workflows/ci.yml:120`."))
+
+    assert report["fabricated"] == 0, report["fabricated_pointers"]
+    assert report["verified"] == 1
+
+
+def test_a_fabricated_path_still_fails_after_the_widening(rooted: Path) -> None:
+    # The other direction, and the one that matters most: widening a regex trades a false
+    # positive for a false negative unless the negative case is pinned. `fabricated_evidence`
+    # must keep firing on invention.
+    body = "See `.github/workflows/nope.yml:1` and `packages/@scope/absent/thing.ts:1`."
+    report = check_evidence_pointers(_opportunity(rooted, body))
+
+    assert report["fabricated"] == 2, report["fabricated_pointers"]

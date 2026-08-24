@@ -91,7 +91,7 @@ Six modules, each producing quantitative evidence. Modules run in order A1→A6.
 
 When running inside the `cycle-maintenance` super-loop, the verdict shapes milestone M\<N+1\>: `ON_TRACK` / `ON_TRACK_WITH_RISKS` → roadmap selects the next milestone (risk mitigations injected into `/to-plan` for the latter); `COURSE_CORRECTION_NEEDED` → roadmap inserts a corrective milestone before the next feature milestone; `FUNDAMENTAL_RETHINK` → roadmap pauses for a human redesign/pivot decision.
 
-The analysis report is persisted at `knowledge-base/audits/` and referenced by the next milestone's `/to-plan` as prior art (same as `/discover` blueprints).
+The analysis report is persisted at `knowledge-base/audits/` and referenced by the next milestone's `/to-plan` as prior art (same as a cycle-discover opportunity).
 
 ## Hard gates
 

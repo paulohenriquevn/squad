@@ -14,7 +14,7 @@ The rename from **blueprint** to **opportunity** is deliberate. A blueprint is a
 
 ## Pre-conditions
 
-Invoke `/discover --mode {review|live-test|bug|evolve}` when EITHER:
+Invoke the chain below — entered at `/discover-plan B-NNN --mode {review|live-test|bug|evolve}` — when EITHER:
 
 - A `B-NNN` item in `BACKLOG.md` has `status: raw` and is unclaimed, OR
 - You are sweeping a domain for findings nobody has filed (`--sweep {domain}`).
@@ -29,9 +29,7 @@ Do NOT trigger DISCOVER for:
 ## Chain
 
 ```
-/discover --mode {mode} B-NNN            (or: --sweep {domain})
-     ↓
-/discover-plan {slug}
+/discover-plan B-NNN --mode {mode}       (sweeps enter at /discover-execute --sweep {domain})
      ↓ (what will be measured, where, with which tool — the measurement plan)
 /discover-edge-cases {slug}
      ↓ (what could make this measurement LIE — absorbed as MUST-FIX)

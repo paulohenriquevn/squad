@@ -11,14 +11,33 @@ Compatible with any coding agent that supports skills. For agents that read from
 - **Built-in visual validation.** A Playwright-based render pipeline lets the agent see its own output, catch layout issues (overlapping text, misaligned arrows, unbalanced spacing), and fix them in a loop before delivering.
 - **Brand-customizable.** All colors and brand styles live in a single file (`references/color-palette.md`). Swap it out and every diagram follows your palette.
 
+## Provenance
+
+Vendored from [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill).
+Two deltas from upstream, both deliberate:
+
+- **`references/icons/` is not included.** The curated icon library and its three helper scripts
+  were not vendored. `SKILL.md` § Icon Library says so plainly and gives the install command —
+  it does not pretend the directory is there.
+- **`references/color-palette.md` and `references/element-templates.md` were rewritten** for this
+  project's GitHub-dark surface, so a diagram matches `/marp-slide`'s `template-tech.md` with no
+  visible seam.
+
+Upstream carries no `LICENSE` file. Before redistributing this directory, confirm the terms with
+the author — the rest of this repository is MIT, and this skill is not covered by that grant.
+
 ## Installation
 
 Clone or download this repo, then copy it into your project's `.claude/skills/` directory:
 
 ```bash
 git clone https://github.com/coleam00/excalidraw-diagram-skill.git
-cp -r excalidraw-diagram-skill .claude/skills/excalidraw-diagram
+cp -r excalidraw-diagram-skill .claude/skills/excalidraw
 ```
+
+> **Directory name matters.** This skill is installed as `excalidraw/`, not
+> `excalidraw-diagram/` — `SKILL.md`, `/deck` and `/marp-slide` all resolve
+> `references/color-palette.md` relative to `skills/excalidraw/`.
 
 ## Setup
 

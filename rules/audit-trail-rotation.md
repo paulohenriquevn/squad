@@ -33,7 +33,7 @@ How to retire generated artifacts so the repository stays navigable.
 ## What NEVER rotates
 
 - `knowledge-base/plans/{slug}-plan.md` — kept indefinitely; the canonical record of "what we agreed to build".
-- `knowledge-base/discoveries/blueprints/` — kept indefinitely; institutional knowledge.
+- `knowledge-base/discoveries/opportunities/` — kept indefinitely; institutional knowledge.
 - `knowledge-base/adrs/` — kept indefinitely; architectural decisions.
 - `CHANGELOG.md` — kept indefinitely (it's the public contract).
 

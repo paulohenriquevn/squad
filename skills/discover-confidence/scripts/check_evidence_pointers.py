@@ -27,8 +27,19 @@ from typing import Any
 
 # `dir/file.ext:LINE` (optionally `:COL`). Requires a slash and an extension so that
 # prose like "step 3:12" or "Ratio 4:1" is not mistaken for a pointer.
+# `@` and a leading `.` are part of a path, not boundaries around one.
+#
+# The previous pattern opened with `\b` and a class excluding both, so it matched a SUFFIX of a
+# real path and produced a different path that does not exist:
+#
+#   packages/x/node_modules/@scope/pkg/index.d.ts:14  ->  scope/pkg/index.d.ts     (restarted at @)
+#   .github/workflows/ci.yml:120                      ->  github/workflows/ci.yml  (dot dropped)
+#
+# Both were then reported `fabricated_evidence` — the cycle's one unrecoverable cap — against
+# correct citations. The lookbehind replaces `\b` so the match cannot start mid-path: a pointer
+# begins at a boundary that is not itself a path character.
 CODE_POINTER_RE = re.compile(
-    r"\b((?:[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_.\-]+\.[A-Za-z0-9]{1,10}):(\d+)(?::\d+)?\b"
+    r"(?<![A-Za-z0-9_.\-/@])((?:@?[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_.\-]+\.[A-Za-z0-9]{1,10}):(\d+)(?::\d+)?\b"
 )
 # `GET https://host/path -> 200`
 RUNTIME_OBS_RE = re.compile(

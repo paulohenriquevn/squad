@@ -1,18 +1,18 @@
-# Where /discover --mode live-test exercises the ecosystem — PER-PROJECT, edit this.
+# Where /discover-execute exercises the ecosystem in live-test mode — PER-PROJECT, edit this.
 #
 # This is the DEV environment the Squad probes to produce runtime evidence. It is
 # deliberately NOT the same declaration as `acceptance-target.txt`:
 #
 #   acceptance-target.txt  → the RELEASED delivery, exercised by /acceptance to
 #                            decide whether a shipped thing actually works.
-#   live-target.txt (here) → the DEV environment, probed by /discover --mode
-#                            live-test to find things worth fixing.
+#   live-target.txt (here) → the DEV environment, probed by /discover-execute in
+#                            live-test mode to find things worth fixing.
 #
 # Collapsing them would point /acceptance at dev and let a milestone be declared
 # validated against an environment nobody ships. Keep them separate.
 #
 # Format: `key = value`, one per line. `#` starts a comment. Blocks are per-domain;
-# a domain with no block has no live surface, and /discover --mode live-test
+# a domain with no block has no live surface, and /discover-execute in live-test mode
 # REFUSES on it rather than inventing one.
 #
 # domain      (required) one of the 8 registered domains (rules/cycle-backlog.md)
@@ -41,7 +41,7 @@ notes = Same deployed surface as the dashboard; the control-plane finding is the
         where the evidence points (network/server behaviour vs rendered UI), not
         by which URL was opened.
 
-# Domains with NO live surface declared — /discover --mode live-test refuses on
+# Domains with NO live surface declared — /discover-execute (live-test mode) refuses on
 # these, by design. Use --mode review, bug, or evolve instead:
 #
 #   engine-go · theo-db · infra-terraform · contracts-auth · data-plane-ts ·

@@ -491,7 +491,7 @@ Settings: `fontSize: 16`, `fontFamily: 3`, `textAlign: "center"`, `verticalAlign
   "source": "https://excalidraw.com",
   "elements": [...],
   "appState": {
-    "viewBackgroundColor": "#ffffff",
+    "viewBackgroundColor": "#0d1117",
     "gridSize": 20
   },
   "files": {}
@@ -504,53 +504,55 @@ See `references/element-templates.md` for copy-paste JSON templates for each ele
 
 ---
 
-## Icon Library
+## Icon Library (optional add-on — NOT bundled)
 
-For semantic icons (AI, memory, flow, brand logos), use the curated icon library at `references/icons/`. **Do not hand-draw what already exists in the library** — a Lucide `brain` SVG is more consistent and legible than 8 hand-placed paths.
+**Read this before looking for `references/icons/`: that directory is not part of this
+installation.** The upstream skill ships a curated library (~110 Lucide line icons, ~17 Tabler,
+~34 Simple Icons brand logos, ~15 Phosphor duotone) plus three helpers —
+`icon_to_excalidraw.py`, `download_icons.py`, `apply_theo_palette.py`. This copy was vendored
+without them.
 
-### Available icons
+Saying so is the point. A skill that instructs you to read a file that does not exist fails
+silently: you go looking, find nothing, and quietly invent a color or a shape instead — which is
+exactly the drift the palette exists to prevent.
 
-- `lucide/` — ~110 line icons (MIT, 24×24, 2px stroke). Default choice for UI concepts, AI, flow, storage, actions.
-- `tabler/` — ~17 line icons (MIT). Complement when Lucide misses a specific technical concept.
-- `simple-icons/` — ~34 brand logos (CC0). GitHub, Anthropic, Claude, Python, Docker, etc. Trademarks belong to their owners — editorial use only.
-- `phosphor-duotone/` — ~15 hero icons (MIT, two-tone). Use **sparingly** for hero elements in infographics; never for routine UI.
+### Working without the library (the default here)
 
-Browse the full curated list in `references/icons/curated_icons.txt`.
+Hand-draw the icon, and keep it cheap:
 
-### Inserting an icon into your diagram
+- **Prefer a labelled shape over an icon.** A rectangle reading `Postgres` is more legible at
+  slide scale than a database glyph, and it never needs a legend.
+- If a glyph genuinely carries meaning a word cannot, draw it from 3-6 primitives at 32px minimum
+  and color it from the element's semantic category in
+  [`color-palette.md`](color-palette.md) — never a color of its own.
+- Embed an SVG directly when you have one: add it to the scene's `files` object as a data URI and
+  reference it from an `image` element. That is what the missing helper automated; nothing stops
+  you doing it by hand.
 
-Run the helper, then merge the output into your scene:
+### Installing the library
 
 ```bash
-cd .claude/skills/excalidraw/references/icons
+git clone https://github.com/coleam00/excalidraw-diagram-skill /tmp/exc
+cp -r /tmp/exc/references/icons skills/excalidraw/references/
+```
+
+Once present, `references/icons/README.md` and `references/icons/curated_icons.txt` describe the
+workflow, and the helper becomes available:
+
+```bash
+cd skills/excalidraw/references/icons
 python3 icon_to_excalidraw.py lucide/brain --x 200 --y 150 --size 64
 ```
 
-The output JSON has two keys:
-- `element` — push into your `elements` array
-- `file` — add to your `files` object (keyed by `file["id"]`)
+Its output has two keys: `element` (push into `elements`) and `file` (add to `files`, keyed by
+`file["id"]`). Override the category default with `--color "#fbbf24"`.
 
-Override color when the default category doesn't fit:
-```bash
-python3 icon_to_excalidraw.py lucide/database --color "#fbbf24"
-```
+### When NOT to use an icon (holds either way)
 
-### Adding a new icon to the library
-
-If you need an icon that's not in `curated_icons.txt`:
-1. Append a line: `<lib>/<icon-name> <category>` (categories in `theo_palette_map.json`)
-2. `python3 download_icons.py`
-3. `python3 apply_theo_palette.py`
-
-Always prefer Lucide first; fall back to Tabler only if Lucide misses the concept.
-
-### When NOT to use an icon
-
-- As decoration. If removing the icon doesn't change the meaning of the section, remove it.
-- For labels that already have a clear shape (a `database` shape doesn't need a `database` icon next to it — redundant).
-- Inside small containers (<60×60px) where the icon won't be legible. Size icons at least 32px in the rendered output.
-
-See `references/icons/README.md` for the full workflow.
+- As decoration. If removing the icon does not change the meaning of the section, remove it.
+- For labels that already have a clear shape — a `database` shape does not need a `database` icon
+  beside it. Redundant encoding is noise.
+- Inside containers under 60x60px, where it will not be legible. Size icons at least 32px rendered.
 
 ---
 

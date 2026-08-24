@@ -3,7 +3,7 @@
 A pipeline for taking a maintenance item from **hunch → measurement → plan → code → merge**, with Claude Code as the active agent at every phase. Each phase has hard gates, anti-patterns, rollback and an audit trail documented in `rules/cycle-*.md`.
 
 ```
-BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE
+BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ACCEPTANCE
    ↓          ↓         ↓        ↓            ↓           ↓        ↓
  B-NNN     measures   plans/   commits +   dead-code/   gate    develop→main
  (hunch)   OUR code            tests       fabrication/ tighter  PR + semver
@@ -14,14 +14,16 @@ BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELE
 
 Each arrow is an **unbreakable chain** — you do not skip a phase, and you do not advance past an INVALID verdict. Unlike a roadmap pipeline, this one has no end state: `cycle-maintenance` loops for as long as the ecosystem is maintained.
 
+**Two registries, two axes.** `BACKLOG.md` holds `B-NNN` items — *what should we look at next* — and is created by `/backlog-init`. `ROADMAP.md` holds `M<N>` milestones — *what did we promise a user* — and is **hand-authored; no skill generates it** (see [`rules/cycle-acceptance.md`](rules/cycle-acceptance.md) § The ROADMAP.md contract). Only a milestone has a checkbox, so only a milestone reaches ACCEPTANCE. A `B-NNN` released without a milestone ends at `RELEASED`, and that is correct.
+
 ## Which phase, when
 
 | Question | Cycle | Entry point |
 |---|---|---|
 | "First time — there is no registry yet" | (one-shot bootstrap) | `/backlog-init` |
 | "I noticed something worth looking at" | `cycle-backlog` | `/backlog-item {slug}` |
-| "Is this hunch real?" | `cycle-discover` | `/discover --mode {review\|live-test\|bug\|evolve} B-NNN` |
-| "Sweep a domain for things nobody filed" | `cycle-discover` | `/discover --sweep {domain}` |
+| "Is this hunch real?" | `cycle-discover` | `/discover-plan B-NNN --mode {review\|live-test\|bug\|evolve}`, then the chain |
+| "Sweep a domain for things nobody filed" | `cycle-discover` | `/discover-execute --sweep {domain}` |
 | "Advance the next item end-to-end autonomously" | `cycle-maintenance` → `cycle-auto-plan` | `/auto-plan` (no arg) or `/auto-plan B-NNN` |
 | "The measurement holds — design the fix" | `cycle-plan` | `/to-plan B-NNN` |
 | "Requirements are still vague" | `cycle-plan` phase 0 | `/grill-me {slug}` |
@@ -29,7 +31,8 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "Audit dead code + fabricated APIs post-implement" | `cycle-code-quality` | `/code-quality` |
 | "Review before merge" | `cycle-review` | `/review {plan-slug}` |
 | "Cut a release (develop → main + tag)" | `cycle-release` | `/release [bump-level]` |
-| "Check the released thing works for its user" | `cycle-acceptance` | `/acceptance B-NNN` |
+| "Check the released thing works for its user" | `cycle-acceptance` | `/acceptance M<N>` (milestones only — see below) |
+| "Hold the session to the process until acceptance is green" | `cycle-acceptance` | `/cycle-goal M<N> [M<N> ...]` |
 | "What has rotted in the registry?" | auxiliary | `/backlog-review` |
 | "Which specialist owns this repo?" | auxiliary | `python3 scripts/route_domain.py {repo}` |
 | "Just locate something in the code" | (no cycle) | Glob/Grep, or `/ast-grep` for structural queries |
@@ -37,6 +40,10 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "The queue never drains / we OOM under load" | auxiliary | `/backpressure-specialist` |
 | "One slow service took the whole site down" | auxiliary | `/resilience-specialist` |
 | "Boundaries: does this repo have any, and do they still fire?" | auxiliary | `/arch-check` |
+| "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-analysis` | `/analysis [plan-slug]` |
+| "Block code smells automatically on every Write/Edit" | (setup, once) | `/quality-init TARGET` |
+| "Can we call this production-ready?" | auxiliary | `/dogfood audit` |
+| "What commands exist?" | auxiliary | `/plan-help` |
 
 ## Quick start
 
@@ -61,10 +68,18 @@ Four questions, one per turn: what changed in **our** system; which repo and the
 ### 3. Measure
 
 ```bash
-/discover --mode live-test B-014
+/discover-plan B-014 --mode live-test   # what will be measured, and what would kill it
+/discover-edge-cases B-014              # what could make the measurement lie
+/discover-plan-confidence B-014         # is the plan ready to run?
+/discover-execute B-014                 # run it
+/discover-confidence B-014              # is the finding solid enough to act on?
 ```
 
-Runs `discover-plan → edge-cases → plan-confidence → execute → confidence`, measuring against our code or runtime. Two legitimate endings:
+There is no single `/discover` command — the chain is the five skills above, plus
+`/discover-improve` when a score comes back `NEEDS_REVISION`. Each has its own gate. Referred to as
+a whole, it is the cycle: `cycle-discover`. `/auto-plan` runs them for you; invoke them by hand when
+you want to stop between gates.
+Measuring against our code or runtime. Two legitimate endings:
 
 - **Opportunity** → the item becomes `triaged` with its evidence attached.
 - **`ITEM_KILLED`** → the falsification criterion was met. The item closes with a `kill_reason` and the chain ends. **This is success** — the run stopped work that would have been justified by a hunch.
@@ -148,7 +163,7 @@ Read the caps. `fabricated_evidence` and `empty_corner_evidence` mean re-measure
 
 ### "The backlog is empty. Are we done?"
 
-No. `BACKLOG_EMPTY` means nobody has looked recently. Run `/discover --sweep {domain}`. There is no `MAINTENANCE_COMPLETE`: a backlog is not a scope.
+No. `BACKLOG_EMPTY` means nobody has looked recently. Run `/discover-execute --sweep {domain}`. There is no `MAINTENANCE_COMPLETE`: a backlog is not a scope.
 
 ### "How do I adapt this to another ecosystem?"
 

@@ -15,7 +15,9 @@
 #   5. Creates empty scaffold under target/.claude/knowledge-base/
 #      (plans, implementations, reviews, audits, discoveries/{plans,opportunities,snapshots},
 #      adrs, grills, dogfood, judge-codex, backlog, maintenance-runs, tools).
-#      agents/ ships the 8 domain specialists, copied from source.
+#      agents/ receives ONLY README.md (the routing mechanism). The 8 domain
+#      specialists describe the `theo` ecosystem's repos and are NOT copied —
+#      pass --with-domain-agents to opt into them. agents/ is never deleted.
 #   6. Skips the source repo's history: caches, artifact dirs, audit trails,
 #      CHANGELOG.md, .git/, .compaction-snapshots/, .attestations/.
 #   7. Prints next steps.

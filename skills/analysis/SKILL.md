@@ -377,12 +377,12 @@ The verdict is not advisory — it prescribes a concrete next step in the cycle 
 | Verdict | `feedback_action` | What Claude Code does next |
 |---|---|---|
 | `ON_TRACK` | `proceed` | Report archived as baseline. Next milestone proceeds normally via `cycle-maintenance`. |
-| `ON_TRACK_WITH_RISKS` | `inject_risk_tasks` | Report includes specific risk mitigation tasks. These MUST be injected as requirements in the next `/to-plan`. The report is cited as prior art (same as a `/discover` blueprint). |
+| `ON_TRACK_WITH_RISKS` | `inject_risk_tasks` | Report includes specific risk mitigation tasks. These MUST be injected as requirements in the next `/to-plan`. The report is cited as prior art (same as a cycle-discover opportunity). |
 | `COURSE_CORRECTION_NEEDED` | `corrective_plan` | Before any new feature work: run `/to-plan` scoped to the falsified hypotheses. The analysis report becomes the "problem statement" input. Then `/implement` the corrections, re-release, re-run `/analysis`. |
 | `FUNDAMENTAL_RETHINK` | `redesign` | Run `/discover-plan` to investigate alternatives. Write ADR documenting empirical evidence of why the current approach fails. Then `/to-plan` for the redesigned architecture. `cycle-maintenance` pauses until the human decides. |
 | `INVALID` | `stop` | Surface to human. Fix config/golden-rule before proceeding. |
 
-The analysis report at `knowledge-base/audits/` is referenced by the next iteration's `/to-plan` as **prior art** — the same way `/discover` blueprints feed planning.
+The analysis report at `knowledge-base/audits/` is referenced by the next iteration's `/to-plan` as **prior art** — the same way cycle-discover opportunities feed planning.
 
 ---
 

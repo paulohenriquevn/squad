@@ -1,4 +1,10 @@
-# Skills DESTE projeto que não são fase de nenhum cycle.
+# Skills DO PROJETO CONSUMIDOR que não são fase de nenhum cycle.
+#
+# Este arquivo chega vazio de propósito: as skills auxiliares DO KIT vivem na
+# constante `AUXILIARY_SKILLS`, dentro do `check_xrefs.py`, e continuam lá —
+# são inventário do kit, versionadas junto com ele. O que este arquivo adiciona
+# é a extensão: um projeto que escreveu suas próprias skills de domínio declara
+# aqui, sem tocar no corpo do validador.
 #
 # `check_xrefs.py` avisa quando uma skill não é referenciada por cycle-*.md nem
 # declara `## Cycle contract`. Para as skills do próprio kit isso é um defeito

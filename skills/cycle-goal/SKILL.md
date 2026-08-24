@@ -1,8 +1,8 @@
 ---
 name: cycle-goal
 version: 0.1.0
-requires: [auto-plan, to-plan, implement, code-quality, review, release, acceptance]
-description: 'Turn one or more ROADMAP.md milestones into an active session goal. Validates the requested M<N> ids against ROADMAP.md (exists, still open, dependency order honoured), composes a termination condition whose single stop criterion is a green /acceptance run (ACCEPTED or ACCEPTED_WITH_CAVEATS) and which names the artifact each cycle phase must produce on the way there, and hands it to Claude Code''s built-in /goal — which registers a session-scoped Stop hook so the agent cannot stop until the condition is evaluated as met. Milestones run sequentially, one in flight at a time, per the single-flip invariant. Use AFTER /backlog-init or /backlog-item have created the milestones and BEFORE driving them with /auto-plan. Refuses on unknown, already-released, or dependency-blocked milestones, and on a condition over /goal''s 4000-char cap.'
+requires: [auto-plan, acceptance, grill-me, discover-plan, to-plan, plan-confidence, implement, code-quality, review, release]
+description: 'Turn one or more ROADMAP.md milestones into an active session goal. Validates the requested M<N> ids against ROADMAP.md (exists, still open, dependency order honoured), composes a termination condition whose single stop criterion is a green /acceptance run (ACCEPTED or ACCEPTED_WITH_CAVEATS) and which names the artifact each cycle phase must produce on the way there, then arms a session-scoped Stop hook of type command that reads the FILESYSTEM — the acceptance record''s verdict line and the ROADMAP.md checkbox — so a confident sentence cannot satisfy it. Milestones run sequentially, one in flight at a time, per the single-flip invariant. Use AFTER the milestones exist in a hand-authored ROADMAP.md and BEFORE driving them with /auto-plan. Refuses on unknown, already-released, or dependency-blocked milestones, and on an over-long condition. Note: /backlog-init does NOT write ROADMAP.md — it writes BACKLOG.md, a different registry.'
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit
 argument-hint: "M<N> [M<N> ...]"
@@ -10,13 +10,18 @@ argument-hint: "M<N> [M<N> ...]"
 
 # `/cycle-goal` — Bind a session to one or more roadmap milestones
 
-`/backlog-init` writes the milestones. `/auto-plan` executes one. Between them sits a gap: nothing holds the session to the process. The agent can stop early, declare a phase done without its artifact, or drift into a second milestone before the first shipped.
+Someone writes the milestones into `ROADMAP.md` by hand. `/auto-plan` executes one. Between them sits a gap: nothing holds the session to the process. The agent can stop early, declare a phase done without its artifact, or drift into a second milestone before the first shipped.
 
 This skill closes that gap. It hands Claude Code's built-in `/goal` a condition that only a genuinely finished milestone can satisfy.
 
 ## Cycle contract
 
-This skill is the entry gate of [`cycle-maintenance`](../../rules/cycle-maintenance.md) — the macro super-loop. That rule is the **source of truth** for milestone selection, the single-flip invariant, dependency respect, the roadmap-run audit file, and the verdicts (`MILESTONE_RELEASED`, `MILESTONE_IN_FLIGHT`, `ROADMAP_COMPLETE`, `ROADMAP_BLOCKED`, `MILESTONE_BLOCKED`). **Read it before invoking.** This skill sets the termination condition; [`cycle-auto-plan`](../../rules/cycle-auto-plan.md) does the executing.
+This skill is not a phase of any cycle — it is a session-scoped binding placed *around* one. Two rules are its sources of truth, and both should be read before invoking:
+
+- [`cycle-acceptance`](../../rules/cycle-acceptance.md) — owns the milestone contract this skill validates against: the `ROADMAP.md` header shape, the single-flip invariant, and the `ACCEPTED` / `ACCEPTED_WITH_CAVEATS` verdicts that are this skill's only stop criterion.
+- [`cycle-auto-plan`](../../rules/cycle-auto-plan.md) — does the executing, one milestone per run.
+
+The macro super-loop [`cycle-maintenance`](../../rules/cycle-maintenance.md) is a **different axis**: it selects `B-NNN` items from `BACKLOG.md`, not `M<N>` milestones, and its verdicts are `BACKLOG_EMPTY` / `ITEM_UNROUTABLE` / `ITEM_KILLED`. The milestone verdicts this section used to cite — `MILESTONE_RELEASED`, `ROADMAP_COMPLETE`, `ROADMAP_BLOCKED` — belonged to the retired cycle-roadmap rule (unbackticked on purpose: it is history, not a reference) and no longer exist anywhere. Do not look for them.
 
 ## When to invoke
 
@@ -28,7 +33,7 @@ This skill is the entry gate of [`cycle-maintenance`](../../rules/cycle-maintena
 
 Do NOT invoke when:
 
-- `ROADMAP.md` is missing — run `/backlog-init` first.
+- `ROADMAP.md` is missing — write it by hand first (see § The ROADMAP.md contract). No skill generates it; `/backlog-init` creates `BACKLOG.md`, which is a different registry on a different axis.
 - The milestone is already `[x]` — a goal over finished work is met before any work happens.
 - A dependency of the requested milestone is neither released nor part of the same call — resolve the wall first.
 - A goal is already active — clear it first (`install_goal_hook.py --clear`).
@@ -45,6 +50,13 @@ These are stated inside the composed condition itself, not merely here — the S
 
 The other six phases are in the condition as the honest path to that verdict — an acceptance run reached by skipping `/review` is not the same fact — but the terminator is one and only one thing.
 
+**Why `requires` lists ten skills when this one invokes two.** It invokes `/auto-plan` and gates on
+`/acceptance`; everything else it *names*. `compose_goal_condition.py` bakes `/grill-me`,
+`/discover-plan`, `/plan-confidence`, `/implement`, `/code-quality`, `/review` and `/acceptance`
+into the composed condition as literal strings, each beside the artifact it must produce. Rename any
+of them and the condition still composes, still arms, and still reads as authoritative — while
+naming a command that no longer exists. That is a dependency, so it is declared as one.
+
 ## Why this does not use `/goal`
 
 The first version of this skill printed a `/goal` command for the user to paste. That was a dead end, and the reason is worth stating so nobody re-litigates it:
@@ -53,7 +65,9 @@ The first version of this skill printed a `/goal` command for the user to paste.
 - **The settings route is closed.** `type: "prompt"` hooks — what `/goal` registers internally — are only valid on `PreToolUse`, `PostToolUse` and `PermissionRequest`. Never on `Stop`.
 - **And `/goal` judges the transcript.** A small model reads what was *said*. A confident sentence can satisfy it, which is precisely the failure mode this cycle exists to prevent.
 
-So the skill arms a **`Stop` hook of type `command`** instead, and that is an upgrade rather than a consolation prize: the gate reads the **filesystem** — the acceptance record's `verdict:` line and the `ROADMAP.md` checkbox. An assertion cannot forge either. No 4000-char cap applies, and no human paste is needed.
+So the skill arms a **`Stop` hook of type `command`** instead, and that is an upgrade rather than a consolation prize: the gate reads the **filesystem** — the acceptance record's `verdict:` line and the `ROADMAP.md` checkbox. An assertion cannot forge either, and no human paste is needed.
+
+One inheritance from the abandoned route survives on purpose: the composer still refuses a condition over 4000 characters. That number came from `/goal`'s CLI cap and no longer binds anything — it is kept as a **readability bound**, because an operating contract nobody reads governs nothing. Raising it is allowed; deleting the check is not.
 
 The composed condition text is still produced: it goes into the session as the operating contract, where the persona and the process discipline belong.
 
@@ -65,7 +79,7 @@ The composed condition text is still produced: it goes into the session as the o
 python3 skills/cycle-goal/scripts/compose_goal_condition.py --roadmap ROADMAP.md M2 M3
 ```
 
-The script is the deterministic gate. It parses `ROADMAP.md` with the same header shape `cycle-release` flips (`### M<N> — [ ] Name`), then refuses on: unknown id, already-`[x]` milestone, duplicate id, invalid id format, dependency wall, duplicated header, wrong header level, and condition over the cap. On success it prints the condition to stdout and exits 0; every refusal exits 1 with a `BLOCKED cycle-goal:` line naming the cause.
+The script is the deterministic gate. It parses `ROADMAP.md` with the same header shape `cycle-acceptance` flips (`### M<N> — [ ] Name`), then refuses on: unknown id, already-`[x]` milestone, duplicate id, invalid id format, dependency wall, duplicated header, wrong header level, and condition over the cap. On success it prints the condition to stdout and exits 0; every refusal exits 1 with a `BLOCKED cycle-goal:` line naming the cause.
 
 Milestones are normalized to ascending order — never parallel. If the caller's order differed, the script says so on stderr rather than reordering silently.
 
@@ -145,16 +159,17 @@ The fourth phase is the one most process descriptions omit. It is not optional h
 ## What this skill does NOT do
 
 - Does not execute any cycle phase — `/auto-plan M<N>` does that.
-- Does not edit `ROADMAP.md`. The checkbox flip belongs to `cycle-release`.
+- Does not edit `ROADMAP.md`. The checkbox flip belongs to `cycle-acceptance`, on a green verdict only.
 - Does not create plans, branches, commits or PRs.
 - Does not clear an existing goal for you — that is `/goal clear`, a deliberate human act.
 - Does not evaluate whether the condition was met. The CLI's evaluator owns that.
 
 ## Related
 
-- [`skills/backlog-init/SKILL.md`](../backlog-init/SKILL.md) — creates `ROADMAP.md` and its milestones
-- [`skills/backlog-item/SKILL.md`](../backlog-item/SKILL.md) — appends a milestone to an existing roadmap
+- [`skills/acceptance/SKILL.md`](../acceptance/SKILL.md) — produces the verdict this skill's stop criterion reads, and flips the checkbox
 - [`skills/auto-plan/SKILL.md`](../auto-plan/SKILL.md) — executes one milestone end-to-end
+- [`skills/backlog-init/SKILL.md`](../backlog-init/SKILL.md) — creates `BACKLOG.md` (the `B-NNN` registry, **not** `ROADMAP.md`)
+- [`skills/backlog-item/SKILL.md`](../backlog-item/SKILL.md) — registers one `B-NNN` maintenance item (**not** a milestone)
 - `commands/plan-goal.md` — the sibling bridge that derives a `/goal` condition from an active plan instead of a milestone
 - `commands/plan-loop.md` — cadence primitive that pairs with a goal
 - `rules/git-safety.md` — the `workspace → develop → main` flow the release phase obeys

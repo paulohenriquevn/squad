@@ -12,7 +12,7 @@ argument-hint: "{item-slug}"
 
 Take a one-line description of something to improve, fix, verify, or evolve in the Theo ecosystem (e.g. *"the theo-lens trace explorer feels slow"*) and append it as the next `B<N+1>` item in `BACKLOG.md`, with domain routing, a suggested discover mode, and a verifiable Definition of Done.
 
-The item this skill produces is **a hypothesis, not a commitment**. It carries `evidence: none-yet` by design. Proving it — or killing it — is `/discover`'s job.
+The item this skill produces is **a hypothesis, not a commitment**. It carries `evidence: none-yet` by design. Proving it — or killing it — is `cycle-discover`'s job.
 
 ## Cycle contract
 
@@ -166,11 +166,11 @@ If the `BACKLOG.md` write fails, do not write the CHANGELOG entry. A changelog l
 ITEM_REGISTERED  B-028 — {title}
   domain: {domain} → specialist {domain}
   repo: {repo}
-  suggested_mode: {mode}  (suggestion — /discover may reclassify)
-  evidence: none-yet      (hypothesis; /discover measures)
+  suggested_mode: {mode}  (suggestion — /discover-plan may reclassify)
+  evidence: none-yet      (hypothesis; /discover-execute measures)
   dod: {n} criteria
 
-Next step:  /discover --mode {mode} B-028
+Next step:  /discover-plan B-028 --mode {mode}
 ```
 
 For `ITEM_MERGED`, report the absorbing id and what was appended to it. For `ITEM_REJECTED`, report the gate that fired and what would make the item acceptable — a rejection that does not say how to fix it just gets re-filed verbatim tomorrow.

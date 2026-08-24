@@ -23,7 +23,9 @@ Sibling of `/discover-confidence` — same architecture (Python deterministic + 
 - BEFORE running `/discover-execute {slug}` — a malformed plan poisons the entire downstream chain.
 - User explicitly invokes `/discover-plan-confidence {slug}`.
 
-This skill is the **plan-gate** of [`cycle-discover`](../../rules/cycle-discover.md). The cycle rule is the source of truth for chain order, hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (rubric, hard caps, output schema, exit codes).
+## Cycle contract
+
+This skill is **phase 3** — the plan-gate — of [`cycle-discover`](../../rules/cycle-discover.md), sitting between `/discover-edge-cases` (phase 2) and `/discover-execute` (phase 4). The cycle rule is the source of truth for chain order, hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (rubric, hard caps, output schema, exit codes).
 
 ## What this skill checks (M2 active dimensions)
 
@@ -87,11 +89,11 @@ When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_acti
 1. **NEVER add a `--skip-checks` / `--force` flag.** Per `discover-plan-golden-rule.md § What it requires`, no bypass mechanism exists.
 2. **NEVER silently lower hard caps.** Any change to the rubric requires an ADR signed by the project owner.
 3. **NEVER edit the plan during scoring.** This skill is read-only on the plan; mutations belong to `/discover-improve` (when it exists).
-4. **NEVER recommend skipping `/discover-execute` after this verdict ≥ SHIPPABLE_WITH_CAVEATS.** The verdict only proves the plan is STRUCTURALLY sound; the execute phase produces the actual blueprint.
+4. **NEVER recommend skipping `/discover-execute` after this verdict ≥ SHIPPABLE_WITH_CAVEATS.** The verdict only proves the plan is STRUCTURALLY sound; the execute phase produces the actual opportunity.
 
 ## Related
 
-- Sibling: [`/discover-confidence`](../discover-confidence/SKILL.md) — same shape for blueprints.
+- Sibling: [`/discover-confidence`](../discover-confidence/SKILL.md) — same shape for opportunities.
 - Sibling: [`/plan-confidence`](../plan-confidence/SKILL.md) — same shape for implementation plans.
 - Upstream: [`/discover-plan`](../discover-plan/SKILL.md), [`/discover-edge-cases`](../discover-edge-cases/SKILL.md).
 - Downstream: [`/discover-execute`](../discover-execute/SKILL.md) (runs when verdict ≥ SHIPPABLE_WITH_CAVEATS).

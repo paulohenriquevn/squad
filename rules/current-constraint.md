@@ -4,11 +4,11 @@ What currently limits the ecosystem's ability to ship value. Declared by a human
 
 ## What this is for
 
-A maintenance squad's characteristic failure is **local optimization**: shipping ten well-evidenced micro-evolutions into a stage that was never the limit, and mistaking the activity for throughput. This file exists so that `/discover` can ask *"where does this sit in the flow?"* while writing an opportunity — and so that the answer comes from a declaration someone made on the record, rather than from whatever the agent finds convenient in the moment.
+A maintenance squad's characteristic failure is **local optimization**: shipping ten well-evidenced micro-evolutions into a stage that was never the limit, and mistaking the activity for throughput. This file exists so that `/discover-execute` can ask *"where does this sit in the flow?"* while writing an opportunity — and so that the answer comes from a declaration someone made on the record, rather than from whatever the agent finds convenient in the moment.
 
 ## What this is NOT
 
-**It is not a gate.** No item is blocked, deprioritized or rejected for failing to touch the constraint. `/discover` reads this file, states the relation in the opportunity's *Constraint relation* corner, and moves on.
+**It is not a gate.** No item is blocked, deprioritized or rejected for failing to touch the constraint. `/discover-execute` reads this file, states the relation in the opportunity's *Constraint relation* corner, and moves on.
 
 The reason is measurement, and it is worth being blunt about: **we do not currently instrument flow across the ecosystem.** There is no per-stage lead time, no wait time, no WIP series, no cumulative flow diagram over the 21 repos. A hard gate asking *"does this touch the constraint?"* against data that does not exist would be answered by assertion — and an assertion dressed as a measurement is precisely what gate G5 of `cycle-backlog.md` exists to refuse. Building it into this corner would reproduce, one file over, the defect the system was designed to prevent.
 
@@ -48,13 +48,13 @@ kind        = physical | policy | external
 
 **`status = undeclared`.**
 
-Nothing is declared yet, and the system works without it: `/discover` writes `Constraint relation: unknown — no constraint declared` and produces a complete, valid opportunity. Declaring one sharpens prioritisation; not declaring one costs nothing but that sharpening.
+Nothing is declared yet, and the system works without it: `/discover-execute` writes `Constraint relation: unknown — no constraint declared` and produces a complete, valid opportunity. Declaring one sharpens prioritisation; not declaring one costs nothing but that sharpening.
 
 ## Anti-patterns
 
 - **Declaring a constraint to make the corner look filled.** `unknown` is the honest answer until someone actually decides. A fabricated declaration is worse than none: every opportunity after it inherits the fabrication as context.
 - **Naming a team as the constraint.** Constraints are stages, policies, capacities and dependencies. "The backend team" is a stage described by its people, and describing it that way turns a flow problem into a performance conversation.
-- **Letting the declaration outlive its `review_on`.** An expired declaration is stale context that reads as current. `/discover` surfaces the expiry rather than trusting the value.
+- **Letting the declaration outlive its `review_on`.** An expired declaration is stale context that reads as current. `/discover-execute` surfaces the expiry rather than trusting the value.
 - **Turning this into a gate.** The moment an item is refused for not touching the constraint, the corner starts being answered strategically instead of honestly.
 
 ## Cross-references

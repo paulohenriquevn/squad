@@ -23,6 +23,7 @@ Each `cycle-{name}.md` defines:
 | `cycle-code-quality.md` | Code quality audit | PASS, PASS_WITH_CAVEATS, FAIL_SOFT, FAIL_HARD, INVALID |
 | `cycle-review.md` | Multi-agent review | READY_TO_MERGE, NEEDS_FIXES, NEEDS_DEEPER |
 | `cycle-release.md` | Release cut | RELEASED, PR_OPEN_AWAITING_APPROVAL |
+| `cycle-acceptance.md` | End-user validation of the released delivery; owns the milestone flip | ACCEPTED, ACCEPTED_WITH_CAVEATS, REJECTED, NOT_VALIDATED |
 | `cycle-analysis.md` | Trajectory analysis (opt-in, post-release) | ON_TRACK, COURSE_CORRECTION_NEEDED |
 | `cycle-judge-codex.md` | External Codex jury (optional plugin) | SHIPPABLE, READY_TO_MERGE |
 | `cycle-auto-plan.md` | Auto-orchestrator | Delegates to sub-cycles |

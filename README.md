@@ -49,7 +49,7 @@ Squad addresses each with a phase, a gate, or a specialist who knows the differe
 ## What you get
 
 - **A hunch is registerable, and cheap.** `/backlog-item` takes an unmeasured hypothesis — no evidence required, on purpose. Demanding proof at intake silences the cheapest signal a maintenance team has.
-- **Measurement decides, not conviction.** `/discover` runs against *our* code and runtime in one of four modes, and has the authority to **kill** the item. A run that finds nothing protected the plan cycle from a hunch.
+- **Measurement decides, not conviction.** The DISCOVER chain (`/discover-plan` → `/discover-edge-cases` → `/discover-plan-confidence` → `/discover-execute` → `/discover-confidence`) runs against *our* code and runtime in one of four modes, and has the authority to **kill** the item. A run that finds nothing protected the plan cycle from a hunch.
 - **Prior art can never be evidence.** Gate G5 rejects "project X does it this way" as a justification. Knowing how others solved it is fine; it is simply not a measurement of our system.
 - **Pointers are verified, line included.** A cited `file:line` that does not resolve — missing file, or a line past the end of one — caps the artifact at INVALID.
 - **One registry, two producers.** `BACKLOG.md` is the single answer to "what is pending?". Humans file items; sweeps register findings with evidence attached. Orphaned findings have nowhere to hide.
@@ -67,7 +67,7 @@ Squad addresses each with a phase, a gate, or a specialist who knows the differe
                              │ B-NNN · status: raw
                              ▼
         ┌──────────────────────────────────────────────┐
-        │  DISCOVER · /discover --mode {…}             │
+        │  DISCOVER · /discover-plan B-NNN --mode {…}  │
         │  measures OUR code / OUR runtime             │
         ├──────────────────────┬───────────────────────┤
         │  evidence found      │  nothing found        │
@@ -80,6 +80,13 @@ Squad addresses each with a phase, a gate, or a specialist who knows the differe
         │  → RELEASE          (TDD, gates, jury)       │
         └────────────────────┬─────────────────────────┘
                              │ RELEASED
+                             ▼
+        ┌──────────────────────────────────────────────┐
+        │  ACCEPTANCE · /acceptance M<N>               │
+        │  exercises the RELEASED delivery as a user   │
+        │  meets it — the only gate that flips [ ]→[x] │
+        └────────────────────┬─────────────────────────┘
+                             │ ACCEPTED
                              ▼
                    status: shipped ──→ back to SELECT
 ```
@@ -105,6 +112,21 @@ Routing is deterministic (`scripts/route_domain.py`) and reads its table from `r
 
 **Requirements:** Python 3.10+, `git`, Claude Code, and the `ralph-loop` plugin for halt-loop phases.
 
+**What the kit assumes about your repo.** These are not configurable, so check them before adopting:
+
+| Assumption | Why it matters |
+|---|---|
+| Branching `workspace → develop → trunk` | `hooks/validate-command.sh` blocks commits on the trunk and on `develop`. The trunk is detected — `main`, `master`, or whatever `origin/HEAD` points at — so a repo on `master` is protected too |
+| `gh` CLI, authenticated | `/release` opens the develop→trunk PR through it |
+| `CHANGELOG.md`, Keep a Changelog format | The Rule 6 gate activates when the file exists; without it the Stop hook says so rather than passing silently |
+| Go, Python, TypeScript or Rust | Only these have `code-quality` detectors. Other stacks run the rest of the pipeline fine |
+
+**Adopting it in another project is a bootstrap, not just an install.** The kit ships *this*
+ecosystem's domain routing table, and gate G1 refuses every item until you replace it — measured on
+`theokit-sdk`: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
+`scripts/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
+names. The installer prints the sequence.
+
 ```bash
 # 1. Create the registry, once (inventories repos FROM DISK, never from a table)
 /backlog-init
@@ -113,7 +135,11 @@ Routing is deterministic (`scripts/route_domain.py`) and reads its table from `r
 /backlog-item theo-lens-trace-latency
 
 # 3. Measure it. This may kill the item, and that is a good day
-/discover --mode live-test B-014
+/discover-plan B-014 --mode live-test   # what will be measured, and what would kill it
+/discover-edge-cases B-014              # what could make the measurement lie
+/discover-plan-confidence B-014         # is the plan ready to run?
+/discover-execute B-014                 # run it — may emit ITEM_KILLED
+/discover-confidence B-014              # is the finding solid enough to act on?
 
 # 4. If it survived, run the chain
 /auto-plan B-014
@@ -122,7 +148,7 @@ Routing is deterministic (`scripts/route_domain.py`) and reads its table from `r
 Sweep a whole domain instead of filing by hand:
 
 ```bash
-/discover --sweep data-plane-ts        # findings land in BACKLOG.md with evidence attached
+/discover-execute --sweep data-plane-ts   # findings land in BACKLOG.md with evidence attached
 /backlog-review                        # what has rotted in the registry
 ```
 

@@ -161,7 +161,7 @@ Deck has ONE set of orchestration checks. Slide-quality and diagram-quality chec
 | 4 | Diagram filenames match their slide order (`01-`, `02-`, ...) |
 | 5 | All diagrams use 1280x720 frame |
 | 6 | All diagrams were rendered and visually validated per `/excalidraw` Render & Validate loop |
-| 7 | Color palette is consistent across all diagrams (from `/excalidraw` `references/color-palette.md`) |
+| 7 | Color palette is consistent across all diagrams (from `skills/excalidraw/references/color-palette.md`) |
 | 8 | If the deck mentions production status of the project, `/dogfood` was invoked and returned `EVIDENCE_SUFFICIENT` or `EVIDENCE_WITH_CAVEATS` |
 
 ### Downstream checks (delegated)

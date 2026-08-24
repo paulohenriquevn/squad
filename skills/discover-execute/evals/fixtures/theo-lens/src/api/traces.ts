@@ -2,7 +2,7 @@
  * Trace listing endpoint — eval fixture.
  *
  * This file carries a REAL N+1: `listTraces` issues one query per span, in a loop. It is
- * here so `/discover --mode review` has something to actually measure instead of a
+ * here so `/discover-execute` in review mode has something to actually measure instead of a
  * hypothetical. A measurement eval whose target does not exist tests the agent's
  * imagination, not the skill.
  *
