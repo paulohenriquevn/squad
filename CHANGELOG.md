@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Os dois gates de ponteiro reprovavam citações corretas.** `CODE_POINTER_RE` abria com `\b` e uma classe que excluía `@` e o ponto inicial, então casava um SUFIXO de um caminho real e produzia outro caminho — que não existe. Uma citação sob `node_modules/@escopo/...` era truncada no `@`; uma sob um diretório dotfile perdia o ponto. Ambas viravam `fabricated_evidence`, o único cap irrecuperável do ciclo, disparado contra evidência correta.
+
+  E `PATH_TARGET_RE` lia qualquer token com barra como caminho de repositório: `theokit/server/plugins` — um subpath specifier npm real — falhava `Path.exists()` e virava `fabricated_target`. O irmão com escopo `@theokit/sdk/server/auth` passava, mas **por acidente**: o `@` estava fora da classe, então o regex nunca o via. Duas formas da mesma coisa, tratadas de modo oposto, sem que ninguém tivesse decidido isso.
+
+  Agora o token é capturado inteiro e classificado por **resolução**, nunca por lista de nomes conhecidos: existe em disco → caminho; resolve como módulo (inclusive na store do pnpm, que aninha o pacote dois níveis abaixo) → specifier; nenhum dos dois → fabricado. O cap continua armado — um caminho inventado e um pacote não instalado seguem reprovando, e há teste para cada direção.
+
+  O contorno em uso era uma coincidência de fraseado (escrever o specifier como aparece no código-fonte, com aspas, que o regex não casa). Não ocorreria ao próximo autor, e nada marcava o plano como tendo contornado um gate.
 - **A proteção de trunk valia só para quem chama a branch de `main`.** O guard casava `[ "$BRANCH" = "main" ]` e mais nada. Um projeto adotante cujo trunk é `master` instalava o kit, lia na documentação que a Regra 4 estava protegida, e não estava. Medido num projeto descartável: em `master` o `git commit` passava (exit 0); em `main` bloqueava.
 
   Promete e não entrega, em silêncio — o pior formato, porque a garantia só é testada quando já falhou. Agora `main` e `master` são piso fixo e o trunk de nome próprio (`trunk`, `release`) sai de `refs/remotes/origin/HEAD`. Sobre-proteger é o lado seguro do erro: bloquear um commit que poderia passar custa uma troca de branch; o inverso custa a garantia inteira.

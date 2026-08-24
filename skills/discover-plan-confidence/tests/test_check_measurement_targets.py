@@ -101,3 +101,67 @@ def test_backticked_prose_is_not_a_target(rooted: Path) -> None:
     report = check_measurement_targets(_plan(rooted, "Method is `SKIP` for this question."))
     assert report["total"] == 0
     assert report["fabricated"] == 0
+
+
+# --- B-017: an npm module specifier is not a repo path ---------------------------------
+#
+# `PATH_TARGET_RE` matched any backticked token containing a slash and resolved it against the
+# repo root. `theokit/server/plugins` is a real npm subpath specifier — it has no extension and
+# lives under node_modules — so it failed `Path.exists()` and fired `fabricated_target`, a HARD
+# CAP that drops the plan to 49 and INVALID.
+#
+# Scoped specifiers passed, but by ACCIDENT: `@` was outside the first character class, so the
+# regex never saw them. That is not the gate handling scopes; it is the gate never looking.
+#
+# The distinction is made by RESOLUTION, never by a list of known package names: a list needs
+# maintaining, is wrong the moment a consumer adds a dependency, and would encode one repository's
+# packages into a kit that others install.
+
+
+def _install(root: Path, *specifiers: str) -> None:
+    """Create node_modules entries the way a real install lays them out."""
+    for spec in specifiers:
+        (root / "node_modules" / spec).mkdir(parents=True, exist_ok=True)
+
+
+def test_an_unscoped_module_specifier_is_not_fabricated(rooted: Path) -> None:
+    _install(rooted, "theokit")
+
+    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+
+    assert report["fabricated"] == 0, report["fabricated_targets"]
+
+
+def test_a_scoped_module_specifier_is_recognised_rather_than_skipped(rooted: Path) -> None:
+    # It must now be SEEN and classified, not merely absent from the match set.
+    _install(rooted, "@theokit/sdk")
+
+    report = check_measurement_targets(_plan(rooted, "Read `@theokit/sdk/server/auth` for the type."))
+
+    assert report["fabricated"] == 0, report["fabricated_targets"]
+
+
+def test_a_package_that_exists_only_in_the_pnpm_store_resolves(rooted: Path) -> None:
+    # pnpm nests the real package two levels down. A top-level-only check misses every one of them,
+    # which in this workspace is all of them.
+    (rooted / "node_modules" / ".pnpm" / "theokit@0.48.8" / "node_modules" / "theokit").mkdir(
+        parents=True
+    )
+
+    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+
+    assert report["fabricated"] == 0, report["fabricated_targets"]
+
+
+def test_a_specifier_for_a_package_that_is_not_installed_is_still_fabricated(rooted: Path) -> None:
+    # The cap stays armed. A plan naming a dependency the tree does not have points at nothing,
+    # and saying so is the correct answer rather than a false positive.
+    report = check_measurement_targets(_plan(rooted, "Read `absent-package/server/thing` for it."))
+
+    assert report["fabricated"] == 1, report["fabricated_targets"]
+
+
+def test_a_tree_without_node_modules_reports_a_miss_rather_than_raising(rooted: Path) -> None:
+    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+
+    assert report["fabricated"] == 1, report["fabricated_targets"]
