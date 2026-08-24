@@ -90,6 +90,31 @@ def parse_routing_table(rule_path: Path) -> dict[str, dict[str, Any]]:
 
     if not table:
         raise ValueError(f"{rule_path}: '## Domain routing' parsed to zero rows")
+
+    # One repo, one domain — enforced HERE rather than in tests/, for the same reason exit 3
+    # moved into the tool (see the module docstring). `install.sh` does not copy `tests/`, so a
+    # check that lives only there is absent in every consumer install, which is where the tables
+    # people actually edit live. `tests/test_route_domain.py::test_no_repo_belongs_to_two_domains`
+    # asserts this for THIS repository's table and can only ever do that: it hard-codes the rule
+    # path and the domain count.
+    #
+    # A repo in two rows makes `route()` depend on dict iteration order — the same item routing to
+    # a different specialist on a different run, with nothing having changed. That is worse than
+    # an unroutable item, because it looks like it worked.
+    #
+    # Repetition WITHIN one row is not a duplicate: both mentions route identically, so nothing is
+    # ambiguous. Rejecting it would turn a cosmetic edit into a broken install.
+    seen: dict[str, str] = {}
+    for domain, entry in table.items():
+        for repo in dict.fromkeys(entry["repos"]):
+            if repo in seen:
+                raise ValueError(
+                    f"{rule_path}: `{repo}` is routed by two domains, `{seen[repo]}` and "
+                    f"`{domain}` — routing would depend on dict iteration order. "
+                    f"One repo belongs to exactly one domain."
+                )
+            seen[repo] = domain
+
     return table
 
 
