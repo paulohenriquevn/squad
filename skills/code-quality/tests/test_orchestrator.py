@@ -412,17 +412,23 @@ def test_python_disabled_makes_the_same_tree_report_nothing_audited(
 def test_a_repo_with_no_manifests_at_all_is_still_INVALID_by_deliberate_policy(
     tmp_path: Path, capsys
 ) -> None:
-    """Pinned as a DISAGREEMENT, not as agreement.
+    """Pinned as a DECISION — see ADR-0013.
 
-    A consumer's backlog (theokit-plugins B-020) asks that "a genuinely pre-code repo with no
-    manifest still passes". This kit decided the other way, with reasoning recorded beside the
-    guard: `cycle-review` admits on PASS, so a run that looked at nothing must not report a clean
-    audit — even when there was nothing to look at.
+    A consumer's backlog (theokit-plugins B-020) asked that "a genuinely pre-code repo with no
+    manifest still passes". This kit holds the opposite: `cycle-review` admits on PASS, so a run
+    that looked at nothing must not report a clean audit — even when there was nothing to look at.
 
-    The two positions are both defensible and they conflict. Overriding a kit-wide policy on the
-    strength of one consumer's item would be the wrong way to settle it, so the current behaviour is
-    pinned here and the disagreement is filed instead. If the policy changes, this test is the thing
-    that says it changed on purpose.
+    Both positions were defensible, so the disagreement was pinned here rather than settled by one
+    consumer's item, and filed as theokit-plugins B-035. The kit owner decided on 2026-08-24:
+    INVALID stays.
+
+    The deciding evidence was not about pre-code repositories. One maintenance run in that same
+    consumer found SIX gates reporting success for work they had not done — two live, three already
+    repaired one at a time by three different reviewers, and a sixth in a file that had already been
+    fixed once. Returning PASS here would be this kit committing the defect its consumers keep
+    finding in themselves, and unlike theirs it would propagate to every install.
+
+    If this test ever changes, ADR-0013 is the thing that has to change with it.
     """
     _write_rules(tmp_path)  # four languages enabled; the tree has none of their manifests
     exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
