@@ -68,7 +68,7 @@ Every mode measures **our** system. They differ in what counts as a measurement.
 
 **`live-test` refuses on a domain with no block in `rules/live-target.txt`.** Six of the eight domains have none, by design — a Go library, a Postgres extension and a Terraform module have no surface a browser can probe. Refusing is correct; improvising a probe to look thorough produces theatre.
 
-`live-test` carries one obligation the others do not: **name the uncertainty between environment and product.** `app-dev.usetheo.dev` is a dev environment, and dev environments break for reasons that have nothing to do with the code. An opportunity that cannot yet distinguish the two says so, in those words, rather than picking the more interesting explanation.
+`live-test` carries one obligation the others do not: **name the uncertainty between environment and product.** Whatever `rules/live-target.txt` declares is a dev environment, and dev environments break for reasons that have nothing to do with the code. An opportunity that cannot yet distinguish the two says so, in those words, rather than picking the more interesting explanation.
 
 ### Mode is reclassifiable
 
@@ -140,7 +140,7 @@ Two phases drive autonomous halt-loops via `ralph-loop:ralph-loop`, following th
 - **Discovery that turns into implementation.** The output is a document. An opportunity that already contains the patch has pre-empted the plan cycle and skipped its gates.
 - **Fabricated evidence.** A plausible `file:line` nobody opened; a status code nobody requested; a test asserted to fail but never executed. This is the cycle's cardinal sin — everything downstream treats it as measured fact.
 - **Prior art smuggled in as evidence.** "Project X does it this way" is not a measurement of our system. It may be true, useful, and the reason someone had the idea — it is still not evidence, and it cannot fill the Evidence corner.
-- **Reporting a dev-environment fault as a product defect.** `app-dev.usetheo.dev` breaks for its own reasons. Name the uncertainty instead of resolving it toward the more interesting answer.
+- **Reporting a dev-environment fault as a product defect.** The declared live target breaks for its own reasons. Name the uncertainty instead of resolving it toward the more interesting answer.
 - **Refusing to kill.** Sunk cost after a long measurement makes a weak finding look shippable. A run that kills an item did its job; a run that ships a hunch it failed to confirm did the opposite.
 - **Filling Constraint relation with a confident claim nobody measured.** `unknown` is the honest default while `current-constraint.md` is undeclared.
 - **Improvising a live probe on a domain with no declared target.** Produces the appearance of runtime evidence with none of the substance.

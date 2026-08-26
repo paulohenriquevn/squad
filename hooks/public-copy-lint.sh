@@ -76,7 +76,7 @@ WARNINGS=()
 
 # --- 1. Pre-release honesty ---
 if echo "$CONTENT" | grep -qiE 'production[[:space:]]?-?[[:space:]]?(ready|grade)'; then
-  WARNINGS+=("'production-ready' or 'production-grade' in public copy. Until you have sustained measured evidence, prefer 'designed for' / 'targeted at' framings ($ECO/rules/public-copy.md).")
+  WARNINGS+=("'production-ready' or 'production-grade' in public copy. Until you have sustained measured evidence, prefer 'designed for' / 'targeted at' framings ($KIT_DIR/rules/public-copy.md).")
 fi
 
 if echo "$CONTENT" | grep -qiE '\bbattle[[:space:]]?-?[[:space:]]?tested\b'; then
@@ -128,7 +128,7 @@ if [ ${#WARNINGS[@]} -gt 0 ]; then
     echo "  [WARN] $w"
     echo ""
   done
-  echo "Reference: $ECO/rules/public-copy.md."
+  echo "Reference: $KIT_DIR/rules/public-copy.md."
 fi
 
 exit 0

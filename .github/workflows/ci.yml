@@ -30,8 +30,14 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install --upgrade pip pytest pyyaml
 
-      - name: Cross-reference validator
-        run: python3 scripts/check_xrefs.py
+      # `--strict` NÃO é cosmético: sem ele um achado WARN é impresso e o
+      # processo sai 0 — a saída traz a linha do WARN e, logo abaixo,
+      # `Overall: PASS`. `scripts/install.sh` sempre chamou com `--strict`, o
+      # workflow chamava sem, e o mesmo commit produzia `check_xrefs.py: FAIL`
+      # na instalação e verde no CI. Um gate que olha, vê e aprova é pior que
+      # um gate ausente: ele produz confiança onde não há verificação.
+      - name: Cross-reference validator (strict)
+        run: python3 scripts/check_xrefs.py --strict
 
       - name: Skill frontmatter validator
         run: python3 scripts/validate_skill_frontmatter.py

@@ -208,7 +208,7 @@ if [ -n "$SRC_CHANGED" ]; then
     for f in "${MISSING_TESTS[@]}"; do
       msg+="\n    - $f"
     done
-    msg+="\n  See $ECO/rules/testing.md for the project's test pairing convention."
+    msg+="\n  See $KIT_DIR/rules/testing.md for the project's test pairing convention."
     WARNINGS+=("$msg")
   fi
 fi
@@ -340,7 +340,7 @@ fi
 if echo "$ALL_FILES" | grep -qE '(^|/)README\.md$'; then
   README_DIFF=$(git diff -- '*README.md' 2>/dev/null || true)
   if echo "$README_DIFF" | grep -qiE '^\+.*\bproduction[[:space:]]?-?[[:space:]]?(ready|grade)\b'; then
-    WARNINGS+=("README.md introduces a 'production-ready' claim. Until v1.0 with measured evidence, prefer 'designed for' or 'targeted at' framings ($ECO/rules/public-copy.md).")
+    WARNINGS+=("README.md introduces a 'production-ready' claim. Until v1.0 with measured evidence, prefer 'designed for' or 'targeted at' framings ($KIT_DIR/rules/public-copy.md).")
   fi
   if echo "$README_DIFF" | grep -qiE '^\+.*\b(99\.9|99\.95|99\.99)[[:space:]]?%[[:space:]]?(uptime|sla)'; then
     WARNINGS+=("README.md introduces a specific SLA/uptime number. Per the honesty rule, specific SLAs require sustained production measurement. Remove or qualify with 'target SLO' / 'designed to support'.")

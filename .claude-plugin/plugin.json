@@ -21,5 +21,5 @@
       "ralph-loop"
     ]
   },
-  "_comment_": "Derived from the Cycle plugin (MIT). Cycle is greenfield and stack-agnostic: its DISCOVER studies how OTHER projects solved a problem, and it forbids looking at your own code. Squad inverts that — it maintains a running ecosystem, so DISCOVER measures OUR code and runtime, and prior art can never be evidence. This repository is dual-mode: (1) standalone — open the directory directly in Claude Code; settings.json + hooks/* + skills/* + rules/* + agents/* work as-is; (2) plugin — install via marketplace. Both modes share the same source."
+  "_comment_": "Manifesto do PLUGIN NATIVO. O Claude Code procura o manifesto aqui, em .claude-plugin/plugin.json — enquanto ele existia apenas na raiz, o mecanismo nativo não reconhecia o kit e a única instalação possível era a cópia feita por scripts/install.sh. Neste modo o CÓDIGO do kit vive fora do projeto, sob $CLAUDE_PLUGIN_ROOT, e o projeto guarda apenas os DADOS do ciclo (knowledge-base/, rules/*.txt, agents/*.md). É essa separação que impede o agente do consumidor de editar o kit. Os hooks são declarados em hooks/hooks.json. Para a instalação por cópia, que segue suportada, ver settings.plugin.json."
 }

@@ -1,7 +1,7 @@
 # Nenhum alvo vivo declarado.
 #
-# O kit distribuía aqui o alvo do ecossistema de origem (`https://app-dev.usetheo.dev`,
-# domínios `frontend-dashboard` e `control-plane`). Num outro projeto isso é pior que
+# O kit distribuía aqui o alvo vivo do ecossistema em que foi escrito — uma URL de
+# ambiente dev e dois domínios concretos. Num outro projeto isso é pior que
 # vazio: `/discover-execute (live-test mode)` e `/acceptance` sondariam o produto de outra pessoa e
 # chamariam o resultado de evidência deste projeto. Declare o alvo DESTE sistema.
 

@@ -5,14 +5,14 @@
 **Maintain a running ecosystem on measurements, not hunches.**
 
 [![Status](https://img.shields.io/badge/status-alpha-orange)](CHANGELOG.md)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](plugin.json)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](.claude-plugin/plugin.json)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](pyproject.toml)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](https://code.claude.com/docs/en/)
 
-A development squad that keeps the **Theo ecosystem** healthy: eight domain specialists and a pipeline that carries a maintenance item from **hunch → measurement → plan → code → merge**. Every item starts as a hypothesis. Nothing reaches a plan until somebody measured it — and finding nothing is a successful outcome.
+A development squad that keeps the **Theo ecosystem** healthy: domain specialists you derive from your own repositories, and a pipeline that carries a maintenance item from **hunch → measurement → plan → code → merge**. Every item starts as a hypothesis. Nothing reaches a plan until somebody measured it — and finding nothing is a successful outcome.
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [The specialists](#the-eight-specialists) · [Contributing](CONTRIBUTING.md)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [The specialists](#the-specialists) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -23,7 +23,7 @@ A development squad that keeps the **Theo ecosystem** healthy: eight domain spec
 - [Why this exists](#why-this-exists)
 - [What you get](#what-you-get)
 - [How it works](#how-it-works)
-- [The eight specialists](#the-eight-specialists)
+- [The specialists](#the-specialists)
 - [Quick start](#quick-start)
 - [The four discover modes](#the-four-discover-modes)
 - [Project structure](#project-structure)
@@ -93,7 +93,16 @@ Squad addresses each with a phase, a gate, or a specialist who knows the differe
 
 The macro loop (`cycle-maintenance`) selects the next item — measured before unmeasured, then oldest first — routes it to a specialist, and delegates. **It never reports "complete".** A backlog is not a scope; an empty one means nobody has looked recently, so the empty state is a prompt to sweep.
 
-## The eight specialists
+## The specialists
+
+**You derive yours; the table below is this repository's.** A specialist file
+describes repositories that exist in *one* ecosystem, so the kit ships the
+routing MECHANISM (`agents/README.md`) and leaves the map empty — a consumer
+that inherits someone else's table has gate G1 refuse every item it files, which
+was measured on an adopter in 2026-08-18: 88 items with real `file:line`
+evidence, all `unroutable_repo`. Run `detect_domains.py --write` and write the
+files it names. What follows is the `theo` ecosystem's instance, kept here
+because a concrete example says more than a schema.
 
 | Specialist | Repos | Knows |
 |---|---|---|
@@ -106,7 +115,7 @@ The macro loop (`cycle-maintenance`) selects the next item — measured before u
 | `frontend-dashboard` | `theo-cloud/dashboard` | Environment vs product — the only domain with a live target |
 | `platform-cli` | `theo-cli`, `theo-storage` | `npm`, not `pnpm`; consumers are scripts, not importers |
 
-Routing is deterministic (`scripts/route_domain.py`) and reads its table from `rules/cycle-backlog.md` — one table, one truth. See [`agents/README.md`](agents/README.md).
+Routing is deterministic (`scripts/route_domain.py`) and reads its table from `rules/cycle-backlog.md` — one table, one truth. `agents/README.md` is the one file in `agents/` the kit versions and always installs; the specialists themselves are opt-in (`install.sh --with-domain-agents`). See [`agents/README.md`](agents/README.md).
 
 ## Quick start
 
@@ -169,7 +178,7 @@ Each mode defines what counts as a measurement. Evidence from one does not satis
 
 ```
 squad/
-├── agents/          ← the 8 domain specialists + README
+├── agents/          ← README (the routing mechanism) + the specialists you derive
 ├── rules/           ← contracts. cycle-*.md are the source of truth
 │   ├── cycle-backlog.md      ← the registry, intake, domain routing
 │   ├── cycle-discover.md     ← the four modes, evidence contracts, gates

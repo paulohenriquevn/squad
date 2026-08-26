@@ -129,8 +129,8 @@ PROGRESS_FILE="$ECO/knowledge-base/progress/${PLAN_SLUG}-progress.md"
 Progress log: $PROGRESS_FILE (Read its tail for recent state)."
 
 # Rules pointer (already a pointer; kept).
-RULES_COUNT=$(ls -1 "$ECO"/rules/*.md 2>/dev/null | wc -l | tr -d ' ')
+RULES_COUNT=$(ls -1 "$KIT_DIR"/rules/*.md 2>/dev/null | wc -l | tr -d ' ')
 [ "$RULES_COUNT" -gt 0 ] && CTX="$CTX
-Rules: $ECO/rules/ ($RULES_COUNT files) — Read before architectural decisions."
+Rules: $KIT_DIR/rules/ ($RULES_COUNT files) — Read before architectural decisions."
 
 emit_context "$CTX"
