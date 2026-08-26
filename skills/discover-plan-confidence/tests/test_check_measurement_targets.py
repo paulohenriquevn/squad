@@ -3,9 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import check_measurement_targets as cmt
+import pytest
 from check_measurement_targets import check_measurement_targets
 
 

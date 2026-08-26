@@ -245,7 +245,7 @@ PYEOF
     fi
   else
     echo "==> Copying $item/"
-    rm -rf "$ECO/$item"
+    rm -rf "${ECO:?}/$item"
     copy_tree "$SRC_DIR/$item" "$ECO/$item"
     if [ "$item" = "rules" ]; then
       # Mesmo numa instalação limpa: a config específica do projeto nasce em branco.
@@ -436,13 +436,17 @@ MANIFEST="$ECO/.kit-manifest.txt"
 echo "==> Manifest written: $(grep -vc '^#' "$MANIFEST") paths from the kit"
 
 echo "==> Validating install (from the target, not from here)"
-( cd "$TARGET" && python3 .claude/scripts/check_xrefs.py --strict > /dev/null 2>&1 ) \
-  && echo "    check_xrefs.py: OK" \
-  || { echo "    check_xrefs.py: FAIL (re-run manually)"; }
+if (cd "$TARGET" && python3 .claude/scripts/check_xrefs.py --strict > /dev/null 2>&1); then
+  echo "    check_xrefs.py: OK"
+else
+  echo "    check_xrefs.py: FAIL (re-run manually)"
+fi
 
-( cd "$TARGET" && python3 .claude/scripts/test_e2e_smoke.py > /dev/null 2>&1 ) \
-  && echo "    test_e2e_smoke.py: OK" \
-  || { echo "    test_e2e_smoke.py: FAIL (re-run manually)"; }
+if (cd "$TARGET" && python3 .claude/scripts/test_e2e_smoke.py > /dev/null 2>&1); then
+  echo "    test_e2e_smoke.py: OK"
+else
+  echo "    test_e2e_smoke.py: FAIL (re-run manually)"
+fi
 
 # Os dois validadores acima importam módulos do alvo, e o interpretador escreve
 # `__pycache__` ao fazê-lo. Sem isto, o passo que confirma a instalação é o que

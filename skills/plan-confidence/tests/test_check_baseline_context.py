@@ -4,9 +4,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
-
 from check_baseline_context import check_baseline_context  # noqa: E402
 
 

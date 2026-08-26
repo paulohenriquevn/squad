@@ -14,7 +14,6 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 import pytest  # noqa: E402
-
 from emit_config import _component, go_arch_lint, split_by_module  # noqa: E402
 
 _PROPOSAL = {

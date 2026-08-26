@@ -56,7 +56,7 @@ def test_cli_runs_against_real_file(roadmap_pre_flip: Path, tmp_path: Path) -> N
     """End-to-end via CLI; --commit OFF (no git side effect)."""
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
     runs_dir = tmp_path / "roadmap-runs"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [
             "python3", str(script),
             "--roadmap", str(roadmap_pre_flip),
@@ -87,7 +87,7 @@ def test_cli_returncode_1_on_multi_flip(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         ["python3", str(script), "--roadmap", str(bad_roadmap), "--milestone-id", "M2", "--version", "0.1.0"],
         capture_output=True,
         text=True,
@@ -98,7 +98,7 @@ def test_cli_returncode_1_on_multi_flip(tmp_path: Path) -> None:
 
 def test_cli_returncode_2_on_invalid_milestone_id(roadmap_pre_flip: Path) -> None:
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         ["python3", str(script), "--roadmap", str(roadmap_pre_flip), "--milestone-id", "not-valid", "--version", "0.1.0"],
         capture_output=True,
         text=True,

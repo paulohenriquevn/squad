@@ -21,7 +21,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path for shared module imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ecosystem_utils import find_ecosystem_dir  # noqa: E402
+from ecosystem_utils import find_ecosystem_dir
 
 REQUIRED_FIELDS = {"name", "description", "user-invocable"}
 OPTIONAL_FIELDS = {"version", "requires", "allowed-tools", "argument-hint", "paths"}

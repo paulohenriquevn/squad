@@ -5,8 +5,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
-
 from check_coverage_matrix import check_coverage_matrix  # noqa: E402
 from check_spec_smells import check_spec_smells  # noqa: E402
 from run_structural import run_structural  # noqa: E402

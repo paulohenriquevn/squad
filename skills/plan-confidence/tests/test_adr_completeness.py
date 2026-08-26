@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from check_adr_completeness import check_adr_completeness  # noqa: E402
 
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,14 +30,26 @@ from typing import Any
 # Allow sibling imports when invoked directly
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _rubric_loader import load_rubric  # noqa: E402
-from check_plan_completeness import check_plan_completeness  # noqa: E402
-from check_corner_coverage import check_corner_coverage  # noqa: E402
-from check_measurement_targets import check_measurement_targets  # noqa: E402
-from check_spec_smells import check_spec_smells  # noqa: E402
-
+from check_corner_coverage import check_corner_coverage
+from check_measurement_targets import check_measurement_targets
+from check_plan_completeness import check_plan_completeness
+from check_spec_smells import check_spec_smells
 
 SKILL_ROOT = Path(__file__).parent.parent
+
+
+def _plan_version(text: str) -> str:
+    """Return an explicitly declared version, or the honest unversioned sentinel."""
+    patterns = (
+        r"(?mi)^version:\s*['\"]?([^'\"\s]+)",
+        r"(?mi)^\*\*Version:\*\*\s*`?([^`\s]+)",
+        r"(?mi)^#\s+.+?\s+v(\d+(?:\.\d+){1,2})\s*$",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+    return "unversioned"
 
 
 def _find_project_root(start: Path) -> Path:
@@ -124,6 +137,7 @@ def main() -> int:
     rubric_path = _resolve_rubric(args.rubric)
     thresholds_path = _resolve_thresholds(args.thresholds, plan_path)
     bands = _parse_thresholds(thresholds_path)
+    text = plan_path.read_text(encoding="utf-8-sig")
 
     # Run all four checkers
     coverage = check_corner_coverage(plan_path)
@@ -241,7 +255,7 @@ def main() -> int:
     out = {
         "plan_slug": slug,
         "plan_path": str(plan_path),
-        "plan_version": None,  # TODO: parse from H1 line or "Version" tag
+        "plan_version": _plan_version(text),
         "scored_at": datetime.now(timezone.utc).isoformat(),
         "corner_coverage_score": round(rc_score, 1),
         "measurement_targets_score": round(rcit_score, 1),

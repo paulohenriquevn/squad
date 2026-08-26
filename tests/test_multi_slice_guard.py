@@ -30,7 +30,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def _run(*paths: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return subprocess.run(  # noqa: PLW1510
         [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "--collect-only", "-q", *paths],
         cwd=REPO_ROOT,
         capture_output=True,

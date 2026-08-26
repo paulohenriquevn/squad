@@ -58,7 +58,7 @@ def _percentile(values: list[int | float], pct: int) -> int:
     sorted_vals = sorted(values)
     idx = math.ceil(len(sorted_vals) * pct / 100) - 1
     idx = max(0, min(idx, len(sorted_vals) - 1))
-    return int(math.ceil(sorted_vals[idx]))
+    return math.ceil(sorted_vals[idx])
 
 
 # ── Stage 6: calibrate_thresholds ────────────────────────────────────

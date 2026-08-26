@@ -4,14 +4,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from check_tdd_shape import (
     _has_assertion_shape,
     _has_gwt_shape,
     _has_test_fn_shape,
     check_tdd_shape,
 )
-
 
 # ---------- axis-level unit tests ----------------------------------------
 
@@ -157,7 +155,7 @@ def test_cli_exit_code_0_when_all_pass(tmp_path: Path) -> None:
     plan_body = "### T1.1 — Foo\n\n#### TDD\nRED: test_foo_returns_true\n"
     plan = _write_plan(tmp_path, plan_body)
     script = Path(__file__).parent.parent / "scripts" / "check_tdd_shape.py"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         ["python3", str(script), "--plan", str(plan), "--json"],
         capture_output=True, text=True,
     )
@@ -170,7 +168,7 @@ def test_cli_exit_code_1_when_blocked(tmp_path: Path) -> None:
     plan_body = "### T1.1 — Foo\n\n#### Objective\nDo it.\n"
     plan = _write_plan(tmp_path, plan_body)
     script = Path(__file__).parent.parent / "scripts" / "check_tdd_shape.py"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         ["python3", str(script), "--plan", str(plan), "--json"],
         capture_output=True, text=True,
     )

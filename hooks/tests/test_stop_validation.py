@@ -68,7 +68,7 @@ class HookRun:
 
 def run_hook(repo: Path) -> HookRun:
     return HookRun(
-        subprocess.run(
+        subprocess.run(  # noqa: PLW1510
             ["bash", str(HOOK)],
             cwd=repo,
             capture_output=True,

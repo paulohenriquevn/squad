@@ -25,7 +25,7 @@ Do NOT trigger when:
 
 ```
 /release {bump-level?}
-     ↓ detect last semver tag (git describe --tags --abbrev=0; fall back to v0.0.0)
+     ↓ detect highest semver tag + stack manifest versions; refuse when no source exists
      ↓ determine next version (bump-level OR auto-derive from CHANGELOG sections)
      ↓ rewrite CHANGELOG: move [Unreleased] body under [{next-version}] - {date}
      ↓ commit "chore(release): {next-version}" on workspace
@@ -41,7 +41,7 @@ Do NOT trigger when:
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| detect-version | last semver tag | parsed semver tuple | tag matches `v?\d+\.\d+\.\d+` OR fall back to v0.0.0 |
+| detect-version | semver tags + supported stack manifests | parsed semver tuple | at least one trustworthy source exists; cross-major disagreement refuses |
 | bump | parsed version + bump-level | next version string | bump-level ∈ {patch, minor, major} OR derivable from CHANGELOG |
 | changelog-rewrite | CHANGELOG.md | CHANGELOG with [Unreleased] empty and a new versioned section | [Unreleased] had ≥ 1 entry before the rewrite |
 | pr-open | release branch state | PR URL | `gh pr create` exit 0; PR body = release notes |

@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from check_opportunity_completeness import check_opportunity_completeness  # noqa: E402
+from check_opportunity_completeness import check_opportunity_completeness
 
 
 def _opportunity(tmp_path: Path, name: str, *, repo: str = "theo-lens", blast: str, adrs: str = "") -> Path:

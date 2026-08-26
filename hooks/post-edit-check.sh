@@ -24,7 +24,10 @@ if [ -z "$FILE_PATH" ]; then
 fi
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-cd "$PROJECT_DIR"
+cd "$PROJECT_DIR" || {
+  echo "post-edit-check: cannot enter project directory: $PROJECT_DIR" >&2
+  exit 1
+}
 
 ABS_FILE_PATH="$FILE_PATH"
 case "$FILE_PATH" in

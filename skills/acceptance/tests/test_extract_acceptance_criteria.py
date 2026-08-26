@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from extract_acceptance_criteria import GateViolation, extract
 
 

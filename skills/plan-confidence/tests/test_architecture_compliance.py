@@ -4,8 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-
 from check_architecture_compliance import (  # noqa: E402
     ComplianceReport,
     check_architecture_compliance,

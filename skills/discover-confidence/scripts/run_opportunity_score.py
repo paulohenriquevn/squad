@@ -19,12 +19,11 @@ from typing import Any
 # Allow sibling imports when invoked directly
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _rubric_loader import load_rubric  # noqa: E402,F401
-from check_corner_coverage import check_corner_coverage  # noqa: E402
-from check_evidence_pointers import check_evidence_pointers  # noqa: E402
-from check_opportunity_completeness import check_opportunity_completeness  # noqa: E402
-from check_spec_smells import check_spec_smells  # noqa: E402
-
+from _rubric_loader import load_rubric  # noqa: F401
+from check_corner_coverage import check_corner_coverage
+from check_evidence_pointers import check_evidence_pointers
+from check_opportunity_completeness import check_opportunity_completeness
+from check_spec_smells import check_spec_smells
 
 SKILL_ROOT = Path(__file__).parent.parent
 

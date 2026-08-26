@@ -18,7 +18,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 CORNERS = [
     ("evidence", r"##\s+Corner\s+1\s*(?:—|-)\s*Evidence"),
     ("constraint", r"##\s+Corner\s+2\s*(?:—|-)\s*Constraint\s+Relation"),

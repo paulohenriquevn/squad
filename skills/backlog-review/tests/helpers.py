@@ -58,8 +58,8 @@ def write_backlog(tmp_path: Path, *blocks: str, index: bool = True) -> Path:
     path = tmp_path / "BACKLOG.md"
     content = "# Backlog\n\n## Itens\n\n" + "".join(blocks)
     if index:
-        from backlog_index import apply_index, render_index  # noqa: PLC0415
-        from check_backlog_structure import _parse_items  # noqa: PLC0415
+        from backlog_index import apply_index, render_index
+        from check_backlog_structure import _parse_items
 
         content = apply_index(content, render_index(content, _parse_items(content)))
     path.write_text(content, encoding="utf-8")

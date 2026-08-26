@@ -137,3 +137,49 @@ def test_the_changelog_carrying_every_version_is_not_a_stray(tmp_path: Path) -> 
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"## [{OLD}]" in (root / "CHANGELOG.md").read_text(encoding="utf-8")
+
+
+def _manifest_repo(tmp_path: Path, filename: str, content: str) -> Path:
+    root = tmp_path / filename.replace(".", "-")
+    root.mkdir()
+    (root / filename).write_text(content, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    return root
+
+
+def test_python_project_version_is_rewritten(tmp_path: Path) -> None:
+    root = _manifest_repo(
+        tmp_path,
+        "pyproject.toml",
+        f'[project]\nname = "demo"\nversion = "{OLD}"\n',
+    )
+
+    result = _run(root)
+
+    assert result.returncode == 0, result.stderr
+    assert f'version = "{NEW}"' in (root / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_rust_package_version_is_rewritten_without_touching_dependencies(tmp_path: Path) -> None:
+    root = _manifest_repo(
+        tmp_path,
+        "Cargo.toml",
+        f'[package]\nname = "demo"\nversion = "{OLD}"\n\n[dependencies]\nother = "{OLD}"\n',
+    )
+
+    result = _run(root)
+
+    content = (root / "Cargo.toml").read_text(encoding="utf-8")
+    assert result.returncode == 0, result.stderr
+    assert f'version = "{NEW}"' in content
+    assert f'other = "{OLD}"' in content
+
+
+def test_go_module_is_explicitly_tag_only(tmp_path: Path) -> None:
+    root = _manifest_repo(tmp_path, "go.mod", "module example.com/demo\n\ngo 1.22\n")
+
+    result = _run(root)
+
+    assert result.returncode == 0, result.stderr
+    assert "tag-only Go module" in result.stdout

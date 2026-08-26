@@ -20,7 +20,7 @@ def _run(slug: str, project_root: Path, extra: list[str] | None = None) -> tuple
     ]
     if extra:
         cmd.extend(extra)
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: PLW1510
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:

@@ -4,9 +4,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
-
 from check_drawbacks_section import check_drawbacks_section  # noqa: E402
 
 

@@ -10,12 +10,10 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
-
-
 from check_coverage_matrix import check_coverage_matrix  # noqa: E402
 from check_spec_smells import check_spec_smells  # noqa: E402
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 from run_structural import (  # noqa: E402
     SOTA_WEIGHTS,
     renormalize_weights,

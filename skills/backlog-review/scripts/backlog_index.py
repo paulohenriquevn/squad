@@ -114,9 +114,9 @@ def render_index(content: str, items: list[Item]) -> str:
     if unknown:
         ids = ", ".join(i.item_id for i in unknown)
         out += [
-            f"> **{len(unknown)} item(s) carry a status this index does not know**: {ids}. "
+            (f"> **{len(unknown)} item(s) carry a status this index does not know**: {ids}. "
             "They are counted in the total and listed nowhere else — a status outside the "
-            "declared set means the contract moved and this table did not follow it.",
+            "declared set means the contract moved and this table did not follow it."),
             "",
         ]
     for b in BUCKET_ORDER:

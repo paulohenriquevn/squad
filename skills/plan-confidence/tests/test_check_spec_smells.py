@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from check_spec_smells import (  # noqa: E402
     check_spec_smells,
 )

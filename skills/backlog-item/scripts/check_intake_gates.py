@@ -40,6 +40,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+
 #: Uma definição do formato do bloco, importada de quem já a mantém. Um segundo
 #: regex aqui divergiria em silêncio, e os dois discordariam sobre o que o
 #: registro contém — o defeito exato que o índice do backlog existe para expor.
@@ -50,7 +51,7 @@ def _load_block_re() -> Any:
     ):
         if (base / "check_backlog_structure.py").is_file():
             sys.path.insert(0, str(base))
-            from check_backlog_structure import BLOCK_RE  # noqa: PLC0415
+            from check_backlog_structure import BLOCK_RE
 
             return BLOCK_RE
     raise FileNotFoundError(
@@ -82,7 +83,7 @@ def _route(repo: str, project_root: Path) -> dict[str, Any]:
     else:
         return {"routed": False, "error": "route_domain.py não encontrado"}
 
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(script), repo, "--json"],
         capture_output=True, text=True,
     )

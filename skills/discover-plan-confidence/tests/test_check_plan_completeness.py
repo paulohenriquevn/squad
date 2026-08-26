@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from check_plan_completeness import MIN_QUESTIONS, check_plan_completeness
 
 

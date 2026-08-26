@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from check_install_drift import Drift, classify_file, scan  # noqa: E402
+from check_install_drift import Drift, classify_file, scan
 
 
 def _write(p: Path, body: str) -> Path:

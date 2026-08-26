@@ -144,24 +144,15 @@ def _has_observable_verb(text: str) -> bool:
     """
     if not any(ch.isalpha() for ch in text):
         return False
-    for pattern in VAGUE_VERB_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
-            return False
-    return True
+    return all(not re.search(pattern, text, re.IGNORECASE) for pattern in VAGUE_VERB_PATTERNS)
 
 
 def _has_measurable_object(text: str) -> bool:
-    for pattern in MEASURABLE_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
-            return True
-    return False
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in MEASURABLE_PATTERNS)
 
 
 def _has_oracle(text: str) -> bool:
-    for pattern in ORACLE_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
-            return True
-    return False
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in ORACLE_PATTERNS)
 
 
 def _extract_criteria(content: str) -> list[str]:

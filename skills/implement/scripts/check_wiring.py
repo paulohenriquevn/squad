@@ -26,7 +26,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 PRODUCTION_DIR_NAMES = ("src", "lib", "packages")
 TEST_DIR_NAMES = ("test", "tests", "__tests__", "spec")
 INTEGRATION_DIR_NAMES = ("integration", "e2e")
@@ -138,11 +137,10 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
     try:
         for dirpath, dirnames, filenames in os.walk(root, topdown=True):
             here = Path(dirpath)
-            if ".git" in dirnames or ".git" in filenames:
-                if here != root:
-                    nested.append(here)
-                    dirnames[:] = []          # a checkout's insides are not this project's
-                    continue
+            if (".git" in dirnames or ".git" in filenames) and here != root:
+                nested.append(here)
+                dirnames[:] = []          # a checkout's insides are not this project's
+                continue
             dirnames[:] = [d for d in dirnames if d not in skip]
     except OSError:
         return []
@@ -161,7 +159,7 @@ def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], excl
         cmd.extend(["--exclude-dir", exc])
     cmd.extend([pattern, str(project_root)])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)  # noqa: PLW1510
     except (subprocess.SubprocessError, FileNotFoundError):
         return []
     if result.returncode > 1:  # 0 = match, 1 = no match, >1 = real error

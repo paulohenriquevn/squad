@@ -35,7 +35,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROW_RE = re.compile(r"^\|\s*`([a-z0-9-]+)`\s*\|(.+?)\|(.+?)\|\s*$", re.MULTILINE)
 # `/` is allowed so a repo split across domains can be addressed by path
 # (`theo-cloud/dashboard`). Without it that row parsed to an EMPTY repo list and the

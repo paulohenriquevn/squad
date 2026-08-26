@@ -6,10 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).parent.parent / "scripts" / "run_validation.py"
 
-from run_validation import wiring_summary  # noqa: E402 — conftest puts scripts/ on sys.path
+from run_validation import (  # noqa: E402
+    wiring_summary,
+)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -87,7 +88,7 @@ def test_wiring_summary_na_when_nothing_verifiable(tmp_path: Path) -> None:
 
 
 def _run_validation(slug: str, project_root: Path) -> tuple[int, dict]:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(SCRIPT), slug, "--project-root", str(project_root), "--no-write-report"],
         capture_output=True,
         text=True,
@@ -121,7 +122,7 @@ def test_with_package_json_and_passing_scripts(fake_project: Path) -> None:
         }),
         encoding="utf-8",
     )
-    rc, data = _run_validation("test-slug", fake_project)
+    _rc, data = _run_validation("test-slug", fake_project)
     # No FAILs expected; PASS or SKIP only
     fails = [c for c in data["checks"] if c.get("status") == "FAIL"]
     assert len(fails) == 0
@@ -317,7 +318,7 @@ def test_python_manifest_with_passing_tests_runs_the_suite(fake_project: Path) -
     (fake_project / "tests" / "test_ok.py").write_text(
         "def test_ok():\n    assert True\n", encoding="utf-8"
     )
-    rc, data = _run_validation("test-slug", fake_project)
+    _rc, data = _run_validation("test-slug", fake_project)
     suite = _check(data, "python tests")
     assert suite["status"] == "PASS", suite
     assert _check(data, "test_execution")["status"] == "PASS"
@@ -384,7 +385,7 @@ def test_coverage_reads_the_json_summary_and_passes_above_threshold(fake_project
     summary = fake_project / "coverage" / "coverage-summary.json"
     summary.parent.mkdir(parents=True, exist_ok=True)
     summary.write_text(json.dumps({"total": {"lines": {"pct": 95.5}}}), encoding="utf-8")
-    rc, data = _run_validation("test-slug", fake_project)
+    _rc, data = _run_validation("test-slug", fake_project)
     check = _check(data, "coverage")
     assert check["status"] == "PASS"
     assert check["coverage_pct"] == 95.5
@@ -406,7 +407,7 @@ def test_coverage_below_threshold_fails(fake_project: Path) -> None:
 def test_coverage_without_a_parseable_report_is_not_a_pass(fake_project: Path) -> None:
     """Exit 0 with no report means the threshold was never verified — WARN, not PASS."""
     _coverage_project(fake_project)
-    rc, data = _run_validation("test-slug", fake_project)
+    _rc, data = _run_validation("test-slug", fake_project)
     check = _check(data, "coverage")
     assert check["status"] == "WARN"
     assert "not verified" in check["reason"].lower()
@@ -418,7 +419,7 @@ def test_coverage_reads_cobertura_xml(fake_project: Path) -> None:
     (fake_project / "coverage.xml").write_text(
         '<?xml version="1.0" ?><coverage line-rate="0.873"></coverage>', encoding="utf-8"
     )
-    rc, data = _run_validation("test-slug", fake_project)
+    _rc, data = _run_validation("test-slug", fake_project)
     check = _check(data, "coverage")
     assert check["status"] == "PASS"
     assert check["coverage_pct"] == 87.3
@@ -435,7 +436,7 @@ def test_coverage_threshold_comes_from_the_project_rules_file(fake_project: Path
     summary = fake_project / "coverage" / "coverage-summary.json"
     summary.parent.mkdir(parents=True, exist_ok=True)
     summary.write_text(json.dumps({"total": {"lines": {"pct": 85.0}}}), encoding="utf-8")
-    rc, data = _run_validation("test-slug", fake_project)
+    _rc, data = _run_validation("test-slug", fake_project)
     check = _check(data, "coverage")
     assert check["status"] == "FAIL"
     assert check["threshold"] == 90
@@ -478,7 +479,7 @@ def test_skipped_phase_boundary_review_is_caught_by_the_final_gate(fake_project:
     _write_standalone_progress(fake_project, "phased", [
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "abc", "files": ["src/a.py"]},
     ])
-    rc, data = _run_validation("phased", fake_project)
+    _rc, data = _run_validation("phased", fake_project)
     gate = _check(data, "phase_review")
     assert gate["status"] == "FAIL"
     assert gate["phases_closed"] == ["1"]
@@ -492,7 +493,7 @@ def test_phase_boundary_review_present_passes(fake_project: Path) -> None:
     reviews = fake_project / "knowledge-base" / "mini-reviews"
     reviews.mkdir(parents=True, exist_ok=True)
     (reviews / "phased-phase1-review-2026-08-18.md").write_text("ok", encoding="utf-8")
-    rc, data = _run_validation("phased", fake_project)
+    _rc, data = _run_validation("phased", fake_project)
     assert _check(data, "phase_review")["status"] == "PASS"
 
 
@@ -520,7 +521,7 @@ def test_executable_tdd_shape_passes(fake_project: Path) -> None:
     _write_standalone_progress(fake_project, "sharp", [
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "abc", "files": ["src/a.py"]},
     ])
-    rc, data = _run_validation("sharp", fake_project)
+    _rc, data = _run_validation("sharp", fake_project)
     assert _check(data, "tdd_shape")["status"] == "PASS"
 
 

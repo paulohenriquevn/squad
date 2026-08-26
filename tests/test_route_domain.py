@@ -11,7 +11,6 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 from route_domain import parse_routing_table, route  # noqa: E402
 
-
 RULE = PROJECT_ROOT / "rules" / "cycle-backlog.md"
 
 

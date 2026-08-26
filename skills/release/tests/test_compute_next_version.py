@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from compute_next_version import (  # noqa: E402
+from compute_next_version import (
     bump_version,
     derive_bump,
     level_under_zerover,

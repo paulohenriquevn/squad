@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from check_corner_coverage import CORNERS, check_corner_coverage, _has_defer_corner_marker
+from check_corner_coverage import (
+    CORNERS,
+    _has_defer_corner_marker,
+    check_corner_coverage,
+)
 
 
 def test_good_plan_covers_all_corners(good_measurement_plan: Path) -> None:

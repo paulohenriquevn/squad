@@ -9,9 +9,9 @@ Per plan v1.3 § T0.4 TDD section (19 RED tests).
 from __future__ import annotations
 
 import json
+import re
 import threading
 from datetime import date
-import re
 from pathlib import Path
 
 import pytest

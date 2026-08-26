@@ -28,7 +28,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest pyyaml
+        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff
 
       # `--strict` NÃO é cosmético: sem ele um achado WARN é impresso e o
       # processo sai 0 — a saída traz a linha do WARN e, logo abaixo,
@@ -42,5 +42,45 @@ jobs:
       - name: Skill frontmatter validator
         run: python3 scripts/validate_skill_frontmatter.py
 
+      - name: Generated settings are synchronized
+        run: python3 scripts/generate-plugin-settings.py --check
+
+      - name: End-to-end smoke
+        run: python3 scripts/test_e2e_smoke.py
+
+      - name: Python static analysis
+        run: ruff check scripts skills hooks tests conftest.py
+
       - name: Root suite + every skill slice (isolated processes)
         run: bash scripts/run_slice_tests.sh
+
+      - name: Root coverage baseline
+        run: python -m pytest tests -q --cov=scripts --cov-report=term --cov-fail-under=40
+
+  compatibility:
+    name: Python ${{ matrix.python-version }} compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip pytest pyyaml
+      - name: Full compatibility suite
+        run: bash scripts/run_slice_tests.sh
+
+  shell:
+    name: Shell contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Shell static analysis
+        run: shellcheck -x -P hooks --severity=warning hooks/*.sh hooks/lib/*.sh scripts/*.sh tests/hooks/*.sh
+      - name: Hook behavior suites
+        run: for test_file in tests/hooks/test_*.sh; do bash "$test_file"; done

@@ -85,7 +85,7 @@ def test_no_script_defaults_to_the_standalone_layout() -> None:
     for path in files:
         for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
             stripped = line.strip()
-            if stripped.startswith("#") or stripped.startswith('"'):
+            if stripped.startswith(("#", '"')):
                 continue
             # Any `Path("knowledge-base…)` literal, not only an argparse default. A first pass
             # matched `default=` and `or` alone, and a mutant that hid the same literal in a
@@ -120,9 +120,9 @@ def test_an_explicit_output_dir_still_wins(tmp_path: Path) -> None:
 
     result = subprocess.run(
         [sys.executable, "-c",
-         "import sys; sys.path.insert(0, sys.argv[1]);"
+         ("import sys; sys.path.insert(0, sys.argv[1]);"
          "from _layout import default_mini_reviews_dir as d;"
-         "print(d(__import__('pathlib').Path(sys.argv[2])))",
+         "print(d(__import__('pathlib').Path(sys.argv[2])))"),
          str(SCRIPTS), str(root)],
         capture_output=True, text=True, check=False,
     )

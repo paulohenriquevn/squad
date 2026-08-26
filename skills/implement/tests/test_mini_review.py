@@ -4,9 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 from mini_review import _compute_verdict, run_mini_review
-
 
 # ---------- verdict aggregation ----------------------------------------
 
@@ -73,7 +71,7 @@ def test_e2e_clean_phase_passes(tmp_path: Path) -> None:
     plan = _write_plan(tmp_path, plan_body)
     output_dir = tmp_path / "mini-reviews"
 
-    verdict, max_sev, report_path = run_mini_review(
+    verdict, _max_sev, report_path = run_mini_review(
         slug="foo",
         plan_path=plan,
         progress_path=progress,
@@ -101,7 +99,7 @@ def test_e2e_scope_drift_triggers_needs_fix(tmp_path: Path) -> None:
     plan = _write_plan(tmp_path, plan_body)
     output_dir = tmp_path / "mini-reviews"
 
-    verdict, max_sev, report_path = run_mini_review(
+    verdict, _max_sev, report_path = run_mini_review(
         slug="foo", plan_path=plan, progress_path=progress, phase="1",
         project_root=tmp_path, output_dir=output_dir,
     )

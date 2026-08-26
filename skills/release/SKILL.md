@@ -79,9 +79,11 @@ a fetch was forgotten. A release cut from that base computes a version BELOW the
 the stop condition in § Stop conditions ("tag already exists for the computed version") cannot fire,
 because that version was never tagged.
 
-`detect_current_version.py` takes the maximum of the highest semver tag and the manifest version:
-each alone has a measured failure mode — 13 of 43 published versions have no tag at all (B-050), and
-the manifest lags a tag between the release commit and the merge.
+`detect_current_version.py` takes the maximum of the highest semver tag and every version-bearing
+manifest it recognizes: `package.json`, `[project].version` in `pyproject.toml`, and
+`[package].version` in `Cargo.toml`. Go modules are tag-only because `go.mod` has no project version.
+Each source alone has a measured failure mode — published versions may have no tag, while a manifest
+can lag a tag between the release commit and the merge.
 
 If `compute_next_version.py` returns `AMBIGUOUS`, AskUserQuestion ONCE (major / minor / patch) and re-run with the chosen value.
 
@@ -112,8 +114,9 @@ python3 skills/release/scripts/bump_version.py \
 ```
 
 **A non-zero exit BLOCKS the release. It is not a warning.** The script writes the declared sites
-(`package.json`, `src/index.ts`) and refuses in three cases, each of which means the tree is not in
-the state this release assumes:
+(`package.json`, `pyproject.toml`, `Cargo.toml`, plus an optional `src/index.ts` runtime mirror) and
+refuses in three cases. A Go module with no version-bearing manifest is explicitly reported as
+tag-only rather than treated as an empty successful rewrite:
 
 | Exit | Meaning |
 |---|---|

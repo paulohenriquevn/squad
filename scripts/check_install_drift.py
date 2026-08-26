@@ -73,7 +73,7 @@ def _historical_contents(kit_root: Path, rel: str) -> set[str]:
     no `sync_consumers` (231 falsos `local-change` viraram 119) e não estava aqui.
     """
     try:
-        revisions = subprocess.run(
+        revisions = subprocess.run(  # noqa: PLW1510
             ["git", "-C", str(kit_root), "rev-list", "--all", "--", rel],
             capture_output=True, text=True, timeout=60,
         ).stdout.split()
@@ -81,7 +81,7 @@ def _historical_contents(kit_root: Path, rel: str) -> set[str]:
         return set()
     contents: set[str] = set()
     for revision in revisions:
-        blob = subprocess.run(
+        blob = subprocess.run(  # noqa: PLW1510
             ["git", "-C", str(kit_root), "show", f"{revision}:{rel}"],
             capture_output=True, text=True,
         )

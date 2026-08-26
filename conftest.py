@@ -70,7 +70,7 @@ def _slices_named_by(args: list[str]) -> set[str]:
     return slices
 
 
-def pytest_configure(config) -> None:  # noqa: ANN001
+def pytest_configure(config) -> None:
     """Fail fast when the invocation spans more than one slice.
 
     In `configure`, which is before collection — and therefore before a shadowed module can raise

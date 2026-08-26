@@ -4,16 +4,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-
 from check_criterion_executability import (  # noqa: E402
-    CriterionScore,
     _has_measurable_object,
     _has_observable_verb,
     _has_oracle,
     check_criterion_executability,
 )
-
 
 # ---------- axis-level unit tests ----------------------------------------
 

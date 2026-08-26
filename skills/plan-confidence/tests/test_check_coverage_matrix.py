@@ -4,8 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-
 from check_coverage_matrix import (  # noqa: E402
     CoverageReport,
     check_coverage_matrix,

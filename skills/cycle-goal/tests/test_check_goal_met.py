@@ -12,7 +12,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from check_goal_met import evaluate
 
 SCRIPT = Path(__file__).parent.parent / "scripts" / "check_goal_met.py"

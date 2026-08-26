@@ -17,11 +17,9 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from run_validation import check_project_gates  # noqa: E402
+from run_validation import check_project_gates
 
 
 def _project(tmp_path: Path, scripts: dict[str, str]) -> Path:

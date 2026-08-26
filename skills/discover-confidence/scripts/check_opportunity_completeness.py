@@ -20,7 +20,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 # Each entry: (display name, regex matching the header)
 MANDATORY_SECTIONS = [
     ("Header", r"^#\s+Opportunity:"),

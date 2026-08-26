@@ -74,7 +74,7 @@ def broken_kit(versioned_kit: Path, tmp_path: Path) -> Path:
 def test_ci_xref_step_rejects_a_broken_reference(broken_kit: Path):
     """O comando de cross-reference do CI, executado sobre uma árvore quebrada, precisa falhar."""
     run = _step_running("check_xrefs.py")["run"].strip()
-    proc = subprocess.run(run, shell=True, cwd=broken_kit, capture_output=True, text=True)
+    proc = subprocess.run(run, shell=True, cwd=broken_kit, capture_output=True, text=True)  # noqa: PLW1510
     assert proc.returncode != 0, (
         "O passo de cross-reference do CI aprovou uma referência quebrada.\n"
         f"comando: {run}\n"
@@ -85,7 +85,7 @@ def test_ci_xref_step_rejects_a_broken_reference(broken_kit: Path):
 def test_ci_xref_step_accepts_the_healthy_kit(versioned_kit: Path):
     """E precisa aprovar a árvore íntegra — senão o teste acima passaria por acidente."""
     run = _step_running("check_xrefs.py")["run"].strip()
-    proc = subprocess.run(run, shell=True, cwd=versioned_kit, capture_output=True, text=True)
+    proc = subprocess.run(run, shell=True, cwd=versioned_kit, capture_output=True, text=True)  # noqa: PLW1510
     assert proc.returncode == 0, (
         f"O CI reprova o kit íntegro:\n{proc.stdout}\n{proc.stderr}"
     )

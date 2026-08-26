@@ -6,8 +6,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 SCRIPT = Path(__file__).parent.parent / "scripts" / "apply_fixes.py"
 
 
@@ -15,7 +13,7 @@ def _run(opportunity: Path, dry_run: bool = False) -> tuple[int, dict]:
     args = [sys.executable, str(SCRIPT), str(opportunity), "--json"]
     if dry_run:
         args.append("--dry-run")
-    result = subprocess.run(args, capture_output=True, text=True)
+    result = subprocess.run(args, capture_output=True, text=True)  # noqa: PLW1510
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -146,7 +144,7 @@ def test_resolvable_pointer_produces_no_finding(tmp_path: Path) -> None:
 
 def test_dry_run_writes_nothing(smelly_opportunity: Path) -> None:
     before = smelly_opportunity.read_text(encoding="utf-8-sig")
-    rc, data = _run(smelly_opportunity, dry_run=True)
+    _rc, data = _run(smelly_opportunity, dry_run=True)
     assert data["dry_run"] is True
     assert data["weak_imperatives_fixed"] >= 2
     assert smelly_opportunity.read_text(encoding="utf-8-sig") == before
@@ -155,7 +153,7 @@ def test_dry_run_writes_nothing(smelly_opportunity: Path) -> None:
 def test_idempotent(smelly_opportunity: Path) -> None:
     _run(smelly_opportunity)
     first = smelly_opportunity.read_text(encoding="utf-8-sig")
-    rc, data = _run(smelly_opportunity)
+    _rc, data = _run(smelly_opportunity)
     assert smelly_opportunity.read_text(encoding="utf-8-sig") == first
     assert data["weak_imperatives_fixed"] == 0
     assert data["loopholes_stripped"] == 0
@@ -166,6 +164,6 @@ def test_no_recommendation_section_is_harmless(tmp_path: Path) -> None:
     path = tmp_path / "opp.md"
     path.write_text("# Opportunity: Test\n\n## Context\n\nWe should do things if possible.\n", encoding="utf-8")
     before = path.read_text(encoding="utf-8")
-    rc, data = _run(path)
+    _rc, data = _run(path)
     assert data["weak_imperatives_fixed"] == 0
     assert path.read_text(encoding="utf-8") == before

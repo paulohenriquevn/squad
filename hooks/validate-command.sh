@@ -53,7 +53,10 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 HAS_GIT=no;  case "$COMMAND" in *git*) HAS_GIT=yes ;; esac
 HAS_RM=no;   case "$COMMAND" in *rm*)  HAS_RM=yes ;; esac
 HAS_ZONE=no; case "$COMMAND" in *knowledge-base/*) HAS_ZONE=yes ;; esac
-HAS_PKG=no;  case "$COMMAND" in *pip*|*poetry*|*uv*|*npm*|*pnpm*|*yarn*|*cargo*|*go*) HAS_PKG=yes ;; esac
+HAS_PKG=no
+for pkg_marker in pip poetry uv npm pnpm yarn cargo go; do
+  case "$COMMAND" in *"$pkg_marker"*) HAS_PKG=yes; break ;; esac
+done
 
 # F3: strip leading git global options so `git <globals> <subcommand>` can never
 # bypass the subcommand guards. Globals normalized: -C DIR, -c K=V,

@@ -86,10 +86,10 @@ def evaluate(milestones: list[str], roadmap_text: str, acceptance_dir: Path) -> 
     # roadmap e os artefatos moravam num repo irmão.
     if not acceptance_dir.exists():
         return [
-            f"MISCONFIGURED: {acceptance_dir} does not exist, so no acceptance record can "
+            (f"MISCONFIGURED: {acceptance_dir} does not exist, so no acceptance record can "
             "ever be found there and this gate would block forever for a false reason. "
             "Re-arm with --acceptance-dir pointing at the repo that holds the cycle "
-            "artifacts, or clear the goal."
+            "artifacts, or clear the goal.")
         ]
 
     for milestone_id in milestones:

@@ -53,7 +53,7 @@ def _add_zone_file(repo: Path, relative: str, content: str) -> None:
 
 
 def _run(repo: Path, *extra: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
+    return subprocess.run(  # noqa: PLW1510
         [sys.executable, str(SCRIPT), "--repo", str(repo), *extra],
         capture_output=True,
         text=True,

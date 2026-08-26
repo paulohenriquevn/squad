@@ -3,10 +3,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import check_evidence_pointers as cep
-from check_evidence_pointers import check_evidence_pointers  # noqa: E402
+import pytest
+from check_evidence_pointers import check_evidence_pointers
 
 
 @pytest.fixture

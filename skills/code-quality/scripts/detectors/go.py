@@ -2,7 +2,7 @@
 
 T1.4 implementation: detect_dead_code via deadcode subprocess.
 T2.5 implementation: detect_symbol_fabrication via tree-sitter + Go proxy.
-Other methods still stubs (T3.1) — T4.3 ADR DEFER for mutation.
+D3 and deferred mutation testing report explicit capability caps.
 """
 from __future__ import annotations
 
@@ -147,11 +147,11 @@ class GoDetector(BaseDetector):
         return None
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        raise NotImplementedError("T3.1: cross-package wiring detector not yet implemented")
+        return self.unavailable("d3", "orphan_export", "cross-package wiring is not configured")
 
     def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
         # T4.3 — DEFERRED to v0.2 (evaluate go-mutesting vs gremlins first)
-        raise NotImplementedError("T4.3: Go mutation testing DEFERRED to v0.2 (graceful skip)")
+        return self.unavailable("d4", "mutation_low", "Go mutation testing is deferred")
 
     # ------------------------------------------------------------------
 

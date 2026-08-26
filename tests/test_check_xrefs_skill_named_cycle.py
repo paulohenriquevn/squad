@@ -42,7 +42,7 @@ def _make_ecosystem(root: Path) -> Path:
 
 
 def _run(eco: Path) -> tuple[int, dict]:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(_SCRIPT), "--ecosystem-dir", str(eco), "--json"],
         capture_output=True, text=True,
     )

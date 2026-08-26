@@ -24,7 +24,6 @@ import re
 import sys
 from pathlib import Path
 
-
 EDGE_CASE_KEYWORDS = (
     "empty",
     "null",

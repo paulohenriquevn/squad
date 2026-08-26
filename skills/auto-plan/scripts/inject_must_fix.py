@@ -39,7 +39,6 @@ import re
 import sys
 from pathlib import Path
 
-
 HEADING = "## Absorbed MUST-FIX items (from /edge-case-plan)"
 
 ENTRY_RE = re.compile(

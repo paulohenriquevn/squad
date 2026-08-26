@@ -42,8 +42,6 @@ import re
 import subprocess
 from pathlib import Path
 
-import pytest
-
 REPO = Path(__file__).resolve().parents[1]
 MANIFEST = REPO / ".claude-plugin" / "plugin.json"
 HOOKS_JSON = REPO / "hooks" / "hooks.json"
@@ -152,7 +150,7 @@ def _resolve(project_dir: Path, env: dict | None = None) -> tuple[str, str, str]
     full_env.pop("CLAUDE_PLUGIN_ROOT", None)
     if env:
         full_env.update(env)
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: PLW1510
         ["bash", "-c", script], capture_output=True, text=True, env=full_env
     )
     kit = eco = ""

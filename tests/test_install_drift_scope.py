@@ -35,7 +35,7 @@ def _trees(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def _run(install: Path, kit: Path) -> str:
-    return subprocess.run(
+    return subprocess.run(  # noqa: PLW1510
         [sys.executable, str(_SCRIPT), "--install", str(install), "--kit", str(kit)],
         capture_output=True, text=True,
     ).stdout
@@ -81,15 +81,16 @@ def _kit_repo_with_history(tmp_path: Path) -> tuple[Path, str, str]:
     kit = tmp_path / "kit"
     (kit / "rules").mkdir(parents=True)
     env = {**_ENV, "HOME": str(kit)}
-    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
-                                    capture_output=True, text=True, env=env)
+    def run(*a):
+        return subprocess.run(["git", "-C", str(kit), *a], check=True,
+                                        capture_output=True, text=True, env=env)
     run("init", "-q")
     velho = "linha A\nlinha ANTIGA\n"
     (kit / "rules" / "x.md").write_text(velho, encoding="utf-8")
-    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")
+    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")  # noqa: E702
     novo = "linha A\nlinha NOVA\n"
     (kit / "rules" / "x.md").write_text(novo, encoding="utf-8")
-    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")
+    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")  # noqa: E702
     return kit, velho, novo
 
 

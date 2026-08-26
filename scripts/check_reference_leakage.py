@@ -86,8 +86,7 @@ def is_candidate(path: Path) -> bool:
 
 def in_zone(rel: str) -> bool:
     rel = rel.lstrip("./")
-    if rel.startswith(".claude/"):
-        rel = rel[len(".claude/") :]
+    rel = rel.removeprefix(".claude/")
     return any(rel.startswith(z + "/") for z in ZONE_DIRS)
 
 

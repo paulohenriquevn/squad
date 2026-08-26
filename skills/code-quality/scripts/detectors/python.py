@@ -2,7 +2,7 @@
 
 T1.1 implementation: detect_dead_code via vulture subprocess.
 T2.2 implementation: detect_symbol_fabrication via tree-sitter + PyPI lookup.
-Other methods still stubs (T3.1 / T4.1).
+D3/D4 report explicit capability caps until their external runners are integrated.
 """
 from __future__ import annotations
 
@@ -116,12 +116,10 @@ class PythonDetector(BaseDetector):
         return findings
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        # T3.1 — shared cross-package wiring (delegates to check_wiring_cross_package.py)
-        raise NotImplementedError("T3.1: cross-package wiring detector not yet implemented")
+        return self.unavailable("d3", "orphan_export", "cross-package wiring is not configured")
 
     def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
-        # T4.1 — mutmut wrapper (mutmut 3.x — CLI revalidation note in plan)
-        raise NotImplementedError("T4.1: mutmut wrapper not yet implemented")
+        return self.unavailable("d4", "mutation_low", "mutmut integration is not configured")
 
     # ------------------------------------------------------------------
     # internal helpers

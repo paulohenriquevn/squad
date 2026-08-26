@@ -47,6 +47,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from _layout import default_mini_reviews_dir
 from check_checkpoint_consistency import (
     check_checkpoint_consistency,
     plan_task_ids_from_text,
@@ -55,9 +56,6 @@ from check_diff_cohesion import check_diff_cohesion
 from check_phase_completeness import check_phase_completeness
 from diff_symbols import added_symbols_from_shas, shas_from_progress
 from wiring_recheck import recheck_pillar_a
-
-from _layout import default_mini_reviews_dir
-
 
 SEVERITY_RANK = {"INFO": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3, "BLOCKER": 4}
 

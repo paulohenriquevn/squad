@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from phase_coverage import Phase, coverage_for_item, grade, scan_registry  # noqa: E402
+from phase_coverage import Phase, coverage_for_item, grade, scan_registry
 
 
 def _kb(tmp_path: Path) -> Path:

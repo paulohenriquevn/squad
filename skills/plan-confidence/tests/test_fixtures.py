@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from run_structural import run_structural  # noqa: E402
 
 SKILL_ROOT = Path(__file__).parent.parent

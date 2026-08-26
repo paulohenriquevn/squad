@@ -2,7 +2,7 @@
 
 ## Scope
 
-The Cycle ecosystem includes **runtime hooks** (`hooks/*.sh`) that execute shell
+The Squad ecosystem includes **runtime hooks** (`hooks/*.sh`) that execute shell
 commands in the user's environment. A vulnerability in hook logic (e.g., command
 injection via crafted branch names, regex bypass in `validate-command.sh`) could
 affect any project using this plugin.
@@ -11,8 +11,8 @@ affect any project using this plugin.
 
 | Version | Supported |
 |---------|-----------|
-| 1.x     | Yes       |
-| < 1.0   | Best-effort |
+| 0.1.x (current alpha) | Yes |
+| Older than 0.1 | No |
 
 ## Reporting a Vulnerability
 
@@ -41,5 +41,5 @@ affect any project using this plugin.
 
 - Hook regex patterns are heuristic-based — edge cases in command parsing may
   exist. If you find a bypass, report it as a vulnerability.
-- Hooks rely on `jq` for JSON parsing of tool input. A malformed JSON payload
-  could cause silent failures (mitigated by `set -e`).
+- Hooks rely on `jq` for JSON parsing of tool input. Malformed input is rejected or produces an
+  explicit no-op according to each hook's contract; regression tests cover both outcomes.

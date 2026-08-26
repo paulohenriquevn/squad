@@ -29,13 +29,15 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path for shared module imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ecosystem_utils import resolve_ecosystem_dir as _resolve_ecosystem_dir  # noqa: E402
+from ecosystem_utils import (
+    resolve_ecosystem_dir as _resolve_ecosystem_dir,
+)
 
 
 def run(cmd: list[str], cwd: Path) -> str:
     """Run a command, return stdout, swallow errors."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             cmd,
             cwd=cwd,
             capture_output=True,
@@ -121,7 +123,7 @@ def main() -> int:
         text = active_plan.read_text()
         # Show version + goal section
         for line in text.splitlines()[:10]:
-            if line.startswith("# Plan:") or line.startswith("> **Version") or line.startswith("## Goal"):
+            if line.startswith(("# Plan:", "> **Version", "## Goal")):
                 print(f"  {line}")
         # Find goal text
         in_goal = False

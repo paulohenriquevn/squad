@@ -215,7 +215,7 @@ def test_merge_preserves_the_derived_routing_table(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def _active_lines(path: Path) -> list[str]:
-    return [l for l in path.read_text(encoding="utf-8").splitlines()
+    return [l for l in path.read_text(encoding="utf-8").splitlines()  # noqa: E741
             if l.strip() and not l.lstrip().startswith("#")]
 
 

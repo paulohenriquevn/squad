@@ -34,7 +34,6 @@ from typing import Any
 
 from check_corner_coverage import CORNERS, _has_defer_corner_marker
 
-
 MIN_QUESTIONS = 3
 MAX_QUESTIONS = 10
 MAX_PER_CORNER = 3

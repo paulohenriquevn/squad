@@ -2,7 +2,7 @@
 
 T1.2 implementation: detect_dead_code via knip subprocess.
 T2.3 implementation: detect_symbol_fabrication via tree-sitter + npm lookup.
-Other methods still stubs (T3.1 / T4.2).
+D3/D4 report explicit capability caps until their external runners are integrated.
 """
 from __future__ import annotations
 
@@ -293,10 +293,10 @@ class TypescriptDetector(BaseDetector):
         return findings
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        raise NotImplementedError("T3.1: cross-package wiring detector not yet implemented")
+        return self.unavailable("d3", "orphan_export", "cross-package wiring is not configured")
 
     def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
-        raise NotImplementedError("T4.2: stryker wrapper not yet implemented")
+        return self.unavailable("d4", "mutation_low", "Stryker integration is not configured")
 
     # ------------------------------------------------------------------
     # internal helpers

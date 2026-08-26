@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from check_record_scope import ScopeVerdict, check_record  # noqa: E402
+from check_record_scope import ScopeVerdict, check_record
 
 
 def _write(tmp_path: Path, name: str, body: str) -> Path:

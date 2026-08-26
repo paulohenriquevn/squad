@@ -51,7 +51,7 @@ def _run(file_path: str, project: Path, plugin_root: Path | None = None) -> int:
     env.pop("CLAUDE_PLUGIN_ROOT", None)
     if plugin_root is not None:
         env["CLAUDE_PLUGIN_ROOT"] = str(plugin_root)
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: PLW1510
         ["bash", str(HOOK)], input=payload, capture_output=True, text=True, env=env
     )
     return proc.returncode

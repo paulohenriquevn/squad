@@ -52,7 +52,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 # `dir/file.ext:LINE` — same shape the confidence checker resolves.
 CODE_POINTER_RE = re.compile(
     r"\b((?:[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_.\-]+\.[A-Za-z0-9]{1,10}):(\d+)(?::\d+)?\b"

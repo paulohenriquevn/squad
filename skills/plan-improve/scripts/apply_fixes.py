@@ -299,7 +299,7 @@ def fix_tdd_template(plan_path: Path, dry_run: bool = False) -> FixReport:
         insert_at = end
         for j in range(start + 1, end):
             stripped = lines[j].lstrip()
-            if stripped.startswith("#### Acceptance Criteria") or stripped.startswith("#### DoD"):
+            if stripped.startswith(("#### Acceptance Criteria", "#### DoD")):
                 insert_at = j
                 break
         report.changes_proposed += 1

@@ -6,7 +6,6 @@ these tests focus on the ways a run could dishonestly earn an ACCEPTED.
 from __future__ import annotations
 
 import pytest
-
 from compute_acceptance_verdict import (
     ACCEPTED,
     ACCEPTED_WITH_CAVEATS,

@@ -69,7 +69,7 @@ def recheck_pillar_a(project_root: Path, symbols: set[str]) -> PillarARecheck:
 def _run_one(project_root: Path, symbol: str) -> dict | None:
     """Return the pillar (a) payload from check_wiring.py for one symbol, or None."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             ["python3", str(_CHECK_WIRING), "--symbol", symbol,
              "--project-root", str(project_root)],
             capture_output=True, text=True, timeout=30,

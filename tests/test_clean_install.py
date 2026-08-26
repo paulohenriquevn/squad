@@ -36,7 +36,7 @@ CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 def installed(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory):
     """Instalação real, a partir do kit versionado, num alvo vazio."""
     target = tmp_path_factory.mktemp("consumer")
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: PLW1510
         ["bash", str(versioned_kit / "scripts" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
@@ -57,7 +57,7 @@ def test_strict_xrefs_passes_on_a_fresh_install(installed):
     `Overall: PASS` com exit 0 (ver `test_ci_contract.py`).
     """
     target, _ = installed
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: PLW1510
         ["python3", str(target / ".claude" / "scripts" / "check_xrefs.py"), "--strict"],
         cwd=target,
         capture_output=True,
@@ -113,7 +113,7 @@ def test_no_tool_cache_reaches_the_consumer(versioned_kit, tmp_path):
 
     target = tmp_path / "consumer"
     target.mkdir()
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: PLW1510
         ["bash", str(dirty / "scripts" / "install.sh"), str(target)],
         capture_output=True,
         text=True,

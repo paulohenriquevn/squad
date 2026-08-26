@@ -433,7 +433,8 @@ def _add_module(graph: Graph, manifest_dir: Path, *, prefix: str) -> None:
     units, and merging them by their in-module path would invent edges between modules that never
     import each other.
     """
-    joined = (lambda unit: f"{prefix}/{unit}" if prefix and unit else unit)
+    def joined(unit):
+        return (f"{prefix}/{unit}" if prefix and unit else unit)
     try:
         result = subprocess.run(
             ["go", "list", "-json", "./..."],
@@ -490,7 +491,7 @@ def typescript_graph(manifest_dir: Path) -> Graph:
     specifier is somebody else's code; treating `react` as a unit would invent architecture out
     of the dependency list.
     """
-    from scripts.check_symbol_fab import extract_imports_and_calls  # noqa: PLC0415
+    from scripts.check_symbol_fab import extract_imports_and_calls
 
     graph = Graph()
     workspace = _workspace_packages(manifest_dir)

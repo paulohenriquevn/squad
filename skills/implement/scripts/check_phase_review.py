@@ -39,9 +39,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from check_phase_completeness import PHASE_HEADER_RE, _plan_task_ids_in_phase
-
 from _layout import default_mini_reviews_dir
+from check_phase_completeness import PHASE_HEADER_RE, _plan_task_ids_in_phase
 
 
 @dataclass(frozen=True)

@@ -416,7 +416,7 @@ def test_followups_registered_with_the_mandated_id_format_are_recognised(tmp_pat
     plan = tmp_path / "plan.md"
     plan.write_text(PLAN_REGISTERING_ALL, encoding="utf-8")
 
-    code, payload = _run_with_plan(findings, tmp_path / "report.md", plan)
+    _code, payload = _run_with_plan(findings, tmp_path / "report.md", plan)
 
     assert payload.get("verdict") == "READY_TO_MERGE_WITH_FOLLOWUPS", payload
     assert not payload.get("unregistered_high")
@@ -433,7 +433,7 @@ def test_registration_is_case_insensitive(tmp_path: Path) -> None:
         PLAN_REGISTERING_ALL.replace("F-arch-1", "f-ARCH-1"), encoding="utf-8"
     )
 
-    code, payload = _run_with_plan(findings, tmp_path / "report.md", plan)
+    _code, payload = _run_with_plan(findings, tmp_path / "report.md", plan)
 
     assert payload.get("verdict") == "READY_TO_MERGE_WITH_FOLLOWUPS", payload
 
@@ -464,7 +464,7 @@ def _repo_with_state(tmp_path: Path, dirty_after: bool) -> tuple[Path, Path]:
     (findings / "architecture.yml").write_text(VALID, encoding="utf-8")
 
     sys.path.insert(0, str(SCRIPT.parent))
-    from consolidate_findings import record_tree_state  # noqa: PLC0415
+    from consolidate_findings import record_tree_state
     record_tree_state(repo, findings)
 
     if dirty_after:
@@ -502,7 +502,7 @@ def test_a_tree_that_moved_during_the_run_is_reported(tmp_path: Path) -> None:
     # The B-025 shape: the tree the agents were reading changed while they read it.
     repo, findings = _repo_with_state(tmp_path, dirty_after=True)
 
-    code, payload = _run_in_repo(findings, tmp_path / "report.md", repo)
+    _code, payload = _run_in_repo(findings, tmp_path / "report.md", repo)
 
     assert payload.get("tree_contaminated") is True
     report = (tmp_path / "report.md").read_text(encoding="utf-8")
@@ -542,7 +542,10 @@ def test_the_agents_own_findings_do_not_count_as_contamination(tmp_path: Path) -
                    cwd=repo, check=True, capture_output=True, env=env)
 
     sys.path.insert(0, str(SCRIPT.parent))
-    from consolidate_findings import check_tree_contamination, record_tree_state  # noqa: PLC0415
+    from consolidate_findings import (
+        check_tree_contamination,
+        record_tree_state,
+    )
 
     findings = repo / "review" / "findings"   # INSIDE the repo, and not ignored
     record_tree_state(repo, findings)
@@ -574,7 +577,10 @@ def test_a_sibling_sharing_the_findings_prefix_is_still_reported(tmp_path: Path)
     # behaviour (probe files at the repo root).
     repo, _env = _seeded_repo(tmp_path)
     sys.path.insert(0, str(SCRIPT.parent))
-    from consolidate_findings import check_tree_contamination, record_tree_state  # noqa: PLC0415
+    from consolidate_findings import (
+        check_tree_contamination,
+        record_tree_state,
+    )
 
     findings = repo / "review" / "findings"
     record_tree_state(repo, findings)
@@ -591,7 +597,10 @@ def test_a_rename_with_one_end_outside_the_findings_dir_is_reported(tmp_path: Pa
     # let an agent hide a real mutation by moving the file it touched.
     repo, env = _seeded_repo(tmp_path)
     sys.path.insert(0, str(SCRIPT.parent))
-    from consolidate_findings import check_tree_contamination, record_tree_state  # noqa: PLC0415
+    from consolidate_findings import (
+        check_tree_contamination,
+        record_tree_state,
+    )
 
     findings = repo / "review" / "findings"
     record_tree_state(repo, findings)

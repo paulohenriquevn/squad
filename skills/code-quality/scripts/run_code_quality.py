@@ -105,9 +105,26 @@ def _safe_call(label: str, func, *args, language: str = "") -> tuple[list[Findin
     """Wrap a detector call; on any exception emit a detector_crash Finding."""
     try:
         return list(func(*args)), None
-    except NotImplementedError:
-        # Methods explicitly DEFERRED (T3.1, T4.1-T4.3) — return empty.
-        return [], None
+    except NotImplementedError as error:
+        # A detector that did not run is not a clean detector.  Returning an empty list here used
+        # to turn missing D3/D4 implementations into evidence of absence.  Keep the orchestrator
+        # isolated, but make the unavailable audit visible and verdict-capping.
+        finding_type = {
+            "d3": "orphan_export",
+            "d4": "mutation_low",
+        }.get(label, "dead_code")
+        unavailable = Finding(
+            detector=f"{label}_unavailable",
+            language=language or "unknown",
+            severity="SOFT_CAP",
+            file_path=".",
+            symbol_or_line=label,
+            message=f"auditor unavailable: {error}",
+            allowlist_key=(
+                f"{language or 'unknown'}|.|{finding_type}|auditor_unavailable_{label}"
+            ),
+        )
+        return [unavailable], None
     except Exception as e:  # noqa: BLE001 — orchestrator isolation
         tb = traceback.format_exc(limit=3).strip().replace("\n", " | ")
         crash = Finding(
@@ -237,6 +254,25 @@ def main(argv: list[str] | None = None) -> int:
             findings.append(d1_crash)
         findings.extend(d1_findings)
 
+        # D3 — exported symbols/packages that are not wired into a consumer.  An unavailable
+        # implementation must remain a SOFT_CAP rather than disappearing from the report.
+        d3_findings, d3_crash = _safe_call(
+            "d3", detector.detect_orphan_exports, manifest_dir, language=language
+        )
+        if d3_crash:
+            findings.append(d3_crash)
+        findings.extend(d3_findings)
+
+        # D4 — mutation score on the language's source set.  Detectors may report that their
+        # external mutation runner is unavailable; that is an auditable result, not a PASS.
+        critical_paths = _enumerate_source_files(manifest_dir, language)
+        d4_findings, d4_crash = _safe_call(
+            "d4", detector.detect_mutation_score, critical_paths, language=language
+        )
+        if d4_crash:
+            findings.append(d4_crash)
+        findings.extend(d4_findings)
+
         # D2 — symbol fabrication (skip when --no-network per EC-25)
         if args.no_network:
             findings.append(
@@ -340,7 +376,7 @@ def _emit_and_exit(
     # "Did I audit anything?" — a run with an empty `languages_audited` cannot distinguish "looked
     # at nothing" from "looked and found nothing", and `cycle-review` admits on PASS. That guard is
     # unchanged.
-    if verdict == "PASS" and not languages_audited:
+    if verdict not in ("FAIL_HARD", "INVALID") and not languages_audited:
         verdict = "INVALID"
         stable_ids = list(stable_ids)
         if "no_languages_audited" not in stable_ids:
@@ -355,7 +391,7 @@ def _emit_and_exit(
     # Answered by looking at the TREE rather than at the gate's own list: every language the config
     # knows carries its manifest marker, so a marker present for a language nobody audited is a file
     # the gate skipped while the report says PASS.
-    if verdict == "PASS" and cfg:
+    if verdict not in ("FAIL_HARD", "INVALID") and cfg:
         unaudited = sorted(
             lang
             for lang, meta in cfg.items()

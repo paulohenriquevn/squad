@@ -24,7 +24,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 # `dir/file.ext:LINE` (optionally `:COL`). Requires a slash and an extension so that
 # prose like "step 3:12" or "Ratio 4:1" is not mistaken for a pointer.
 # `@` and a leading `.` are part of a path, not boundaries around one.

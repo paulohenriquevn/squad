@@ -12,13 +12,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 SCRIPT = Path(__file__).parent.parent / "scripts" / "detect_domain.py"
 
 
 def _run(plan: Path) -> tuple[int, dict]:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(SCRIPT), "--plan", str(plan)],
         capture_output=True,
         text=True,

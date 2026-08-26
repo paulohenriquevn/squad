@@ -39,7 +39,7 @@ def _make_ecosystem(root: Path) -> Path:
 
 
 def _run(eco: Path) -> tuple[int, dict]:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(_SCRIPT), "--ecosystem-dir", str(eco), "--json"],
         capture_output=True, text=True,
     )
@@ -91,12 +91,12 @@ def test_a_cycle_that_exists_as_a_skill_is_not_a_broken_reference(tmp_path: Path
         "\n## Cross-references\n\n- `skills/implement/SKILL.md`\n",
         encoding="utf-8",
     )
-    rc, data = _run(eco)
+    _rc, data = _run(eco)
     assert _checks(data, "cycle_reference_resolves") == []
 
 
 def test_clean_ecosystem_still_passes(tmp_path: Path) -> None:
     eco = _make_ecosystem(tmp_path)
-    rc, data = _run(eco)
+    _rc, data = _run(eco)
     assert _checks(data, "cycle_reference_resolves") == []
     assert _checks(data, "rules_reference_resolves") == []

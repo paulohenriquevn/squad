@@ -22,7 +22,6 @@ sys.path.insert(0, str(PROJECT_ROOT / "skills" / "skill-creator" / "scripts"))
 
 from grade_squad_backlog_item import BASE_IDS, _blocks, _field, grade  # noqa: E402
 
-
 BASE_BACKLOG = """# Backlog
 
 ## Itens

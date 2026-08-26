@@ -36,7 +36,7 @@ from pathlib import Path
 # Ensure scripts/ is on sys.path for shared module imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ecosystem_utils import find_ecosystem_dir  # noqa: E402
+from ecosystem_utils import find_ecosystem_dir
 
 
 def _find_ecosystem_dir() -> Path:
@@ -66,7 +66,7 @@ def check_shell_syntax(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     sh_files.extend((ecosystem_dir / "skills").rglob("*.sh"))
     sh_files.extend((ecosystem_dir / "scripts").glob("*.sh"))
     for sh in sh_files:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             ["bash", "-n", str(sh)],
             capture_output=True,
             text=True,
@@ -93,7 +93,7 @@ def check_xrefs(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     validator = ecosystem_dir / "scripts" / "check_xrefs.py"
     if not validator.exists():
         return True, ["  check_xrefs.py not installed — skipping"]
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(validator), "--ecosystem-dir", str(ecosystem_dir)],
         capture_output=True,
         text=True,
@@ -188,7 +188,7 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 
         # 2. detect_domain
         detect = review_skill / "scripts" / "detect_domain.py"
-        r1 = subprocess.run(
+        r1 = subprocess.run(  # noqa: PLW1510
             [sys.executable, str(detect), "--plan", str(plan)],
             capture_output=True, text=True,
         )
@@ -208,7 +208,7 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         tmp_skills = tmp / "skills"
         tmp_skills.mkdir(parents=True, exist_ok=True)
         spawn = review_skill / "scripts" / "spawn_reviewers.py"
-        r2 = subprocess.run(
+        r2 = subprocess.run(  # noqa: PLW1510
             [sys.executable, str(spawn),
              "--plan", str(plan),
              "--slug", "smoke",
@@ -233,7 +233,7 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         # 5. consolidate_findings
         report = tmp / "report.md"
         consolidate = review_skill / "scripts" / "consolidate_findings.py"
-        r3 = subprocess.run(
+        r3 = subprocess.run(  # noqa: PLW1510
             [sys.executable, str(consolidate),
              "--findings-dir", str(findings_dir),
              "--output", str(report),
@@ -274,7 +274,7 @@ def main() -> int:
     for name, check in checks:
         try:
             ok, issues = check(ecosystem_dir)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             ok, issues = False, [f"  exception: {exc}"]
         if ok:
             print(f"✓ {name}")

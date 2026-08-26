@@ -18,7 +18,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 CORNERS = ("evidence", "constraint", "blast_radius", "verification")
 
 QUESTIONS_HEADER_RE = re.compile(

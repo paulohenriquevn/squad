@@ -18,11 +18,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
 
 TEMPLATES = {
     "architecture": "agent-architecture-reviewer.md",
@@ -341,7 +339,7 @@ def main() -> int:
     # tell whether it moved while they read it. Recorded, never enforced: this is the detector
     # beside the isolation, because isolation that silently stops working looks like isolation.
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from consolidate_findings import record_tree_state  # noqa: PLC0415
+    from consolidate_findings import record_tree_state
 
     tree_state = record_tree_state(Path.cwd(), findings_dir)
 

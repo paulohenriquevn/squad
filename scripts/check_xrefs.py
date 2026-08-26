@@ -132,7 +132,7 @@ RULES_REF_RE = re.compile(
 )
 
 
-from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl, is_ecosystem_layout as _is_ecosystem_layout  # noqa: E402
+from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl  # noqa: E402
 
 
 def _find_ecosystem_dir(start: Path) -> Path | None:
@@ -334,7 +334,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 candidates_to_try.append(Path(ref))
             else:
                 # Strip a leading .claude/ if present (plugin-style citation)
-                normalized = ref[len(".claude/"):] if ref.startswith(".claude/") else ref
+                normalized = ref.removeprefix(".claude/")
                 candidates_to_try.append(ecosystem_dir / normalized)
                 # If path starts with a skill name (e.g., plan-confidence/templates/...), try skills/
                 first_segment = normalized.split("/", 1)[0]
@@ -479,9 +479,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
         severity_counts[f["severity"]] += 1
 
     overall = "PASS"
-    if severity_counts.get("FAIL", 0) > 0:
-        overall = "FAIL"
-    elif severity_counts.get("WARN", 0) > 0 and strict:
+    if severity_counts.get("FAIL", 0) > 0 or severity_counts.get("WARN", 0) > 0 and strict:
         overall = "FAIL"
 
     return {
@@ -499,7 +497,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
 
 def _render_summary(result: dict[str, Any]) -> str:
     lines = [
-        f"=== Cross-reference validator ===",
+        "=== Cross-reference validator ===",
         f"Ecosystem dir: {result['ecosystem_dir']}",
         f"Skills total: {result['skills_total']}",
         f"Cycle rules: {result['cycle_rules']}",

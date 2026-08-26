@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from sync_consumers import Action, classify  # noqa: E402
+from sync_consumers import Action, classify
 
 
 def test_absent_target_is_new() -> None:

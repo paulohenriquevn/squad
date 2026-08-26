@@ -21,7 +21,6 @@ import shutil
 import sys
 from pathlib import Path
 
-
 REPO = Path(__file__).resolve().parents[3]
 FIXTURE_BACKLOG = REPO / "skills" / "backlog-item" / "evals" / "fixtures" / "BACKLOG.md"
 # A governed repo with REAL code, so measurement evals have something to open, count and

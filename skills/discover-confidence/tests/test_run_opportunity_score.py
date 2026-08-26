@@ -12,7 +12,7 @@ SCRIPT = Path(__file__).parent.parent / "scripts" / "run_opportunity_score.py"
 
 
 def _run(opportunity_path: Path, project_root: Path) -> tuple[int, dict]:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(SCRIPT), str(opportunity_path), "--no-warn"],
         capture_output=True,
         text=True,
@@ -125,6 +125,6 @@ def test_cross_repo_without_adr_is_capped(staged) -> None:
         "populated corner section.\n\n"
         "## Recommendation\n\n- Do X\n",
     )
-    rc, data = _run(path, path.parents[4])
+    _rc, data = _run(path, path.parents[4])
     assert "no_adr_on_cross_repo_change" in data["hard_caps_triggered"]
     assert data["final_score_after_caps"] <= 70.0

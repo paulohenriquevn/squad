@@ -4,7 +4,11 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from check_acceptance_criteria import categorize, check_acceptance_criteria, parse_criteria
+from check_acceptance_criteria import (
+    categorize,
+    check_acceptance_criteria,
+    parse_criteria,
+)
 
 PLAN = """# Plan: X
 

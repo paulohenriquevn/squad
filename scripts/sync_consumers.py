@@ -78,13 +78,13 @@ def historical_versions(repo: Path, rel: str) -> set[str]:
     medido: 231 falsos LOCAL_CHANGE em 40 consumidores, `install.sh` em quase
     todos. Distinguir atrasado de modificado é o que permite atualizar sem medo.
     """
-    revisions = subprocess.run(
+    revisions = subprocess.run(  # noqa: PLW1510
         ["git", "-C", str(repo), "rev-list", "--all", "--", rel],
         capture_output=True, text=True,
     ).stdout.split()
     contents: set[str] = set()
     for revision in revisions:
-        blob = subprocess.run(
+        blob = subprocess.run(  # noqa: PLW1510
             ["git", "-C", str(repo), "show", f"{revision}:{rel}"],
             capture_output=True, text=True,
         )
@@ -103,7 +103,7 @@ def classify_with_history(*, source: str, base: str | None, target: str | None,
 
 
 def _git_show(repo: Path, sha: str, rel: str) -> str | None:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         ["git", "-C", str(repo), "show", f"{sha}:{rel}"],
         capture_output=True, text=True,
     )

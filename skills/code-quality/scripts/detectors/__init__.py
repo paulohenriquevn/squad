@@ -4,12 +4,14 @@ The `BaseDetector` abstract class defines the per-language detection surface.
 Each language adapter (python.py, typescript.py, rust.py, go.py) subclasses
 this base and implements the four detection methods.
 
-Stubs in v0.1 raise `NotImplementedError`; tasks T1.1-T1.4, T2.2-T2.5, T3.1,
-T4.1-T4.3 progressively fill the implementations.
+Concrete adapters whose external auditor is unavailable return an explicit verdict-capping
+Finding; missing work is never represented as an empty successful result.
 """
 from __future__ import annotations
 
 from pathlib import Path
+
+from scripts._shared import Finding
 
 
 class BaseDetector:
@@ -28,6 +30,20 @@ class BaseDetector:
 
     language: str = ""
     manifest_marker: str = ""
+
+    def unavailable(self, detector: str, finding_type: str, message: str) -> list[Finding]:
+        """Represent a detector capability that could not run without failing open."""
+        return [
+            Finding(
+                detector=f"{detector}_unavailable",
+                language=self.language,
+                severity="SOFT_CAP",
+                file_path=".",
+                symbol_or_line=detector,
+                message=f"auditor unavailable: {message}",
+                allowlist_key=f"{self.language}|.|{finding_type}|auditor_unavailable_{detector}",
+            )
+        ]
 
     def detect_dead_code(self, manifest_dir: Path) -> list:
         """Run D1 — language-specific dead code detector.

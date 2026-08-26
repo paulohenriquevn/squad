@@ -17,14 +17,14 @@ if str(_SCRIPTS) not in sys.path:
 
 from propose_rules import (  # noqa: E402
     Graph,
-    allow_list,
     _dynamic_imports,
     _export_target,
-    _workspace_import,
-    _workspace_packages,
     _iter_json_objects,
     _unit_of_import,
     _unit_of_path,
+    _workspace_import,
+    _workspace_packages,
+    allow_list,
     find_cycles,
     independent_pairs,
     one_way_candidates,

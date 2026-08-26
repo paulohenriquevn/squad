@@ -42,11 +42,10 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-
 BLOCK_RE = re.compile(r"^##\s+(B-\d+)\s+—\s+(.+?)\s*(?:\[( |x)\])?\s*$", re.MULTILINE)
 FIELD_RE = re.compile(r"^([a-z_]+):\s*(.*)$", re.MULTILINE)
 DOD_BULLET_RE = re.compile(r"^\s*-\s+(.+)$", re.MULTILINE)
-REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4}-\d{2}-\d{2})", re.I)
+REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 
 REQUIRED_FIELDS = ("domain", "repo", "suggested_mode", "source", "evidence", "why_now", "status")
 LEGAL_STATUS = {"raw", "triaged", "planned", "shipped", "killed"}
@@ -158,7 +157,10 @@ def _known_repos(backlog_dir: Path) -> set[str] | None:
     if str(tooling) not in sys.path:
         sys.path.insert(0, str(tooling))
     try:
-        from route_domain import _routing_table_path, parse_routing_table  # noqa: PLC0415
+        from route_domain import (
+            _routing_table_path,
+            parse_routing_table,
+        )
     except ImportError:
         # The routing tool is genuinely unavailable — report inability, never a violation.
         return None
@@ -281,7 +283,7 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     # wrong. That is strictly worse than having no index, because a reader stops at the summary.
     # Imported here rather than at module scope: `backlog_index` imports this module for the item
     # parser, and a top-level import in both directions is a cycle.
-    from backlog_index import index_is_current  # noqa: PLC0415
+    from backlog_index import index_is_current
 
     index_current, _ = index_is_current(content)
     if not index_current:

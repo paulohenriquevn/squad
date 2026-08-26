@@ -277,7 +277,8 @@ def test_the_judgement_sections_exist_and_are_empty(tmp_path: Path) -> None:
 
 def test_a_skeleton_is_routable(tmp_path: Path) -> None:
     """O ponto de existir: a rota deixa de ser BROKEN."""
-    import subprocess, sys
+    import subprocess
+    import sys
     root = _repo(tmp_path, "meu-projeto")
     (root / ".claude" / "rules").mkdir(parents=True)
     (root / ".claude" / "agents").mkdir(parents=True)
@@ -288,7 +289,7 @@ def test_a_skeleton_is_routable(tmp_path: Path) -> None:
     (root / ".claude" / "agents" / "meu-projeto.md").write_text(
         render_specialist(domains[0], root), encoding="utf-8")
 
-    out = subprocess.run(
+    out = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(Path(__file__).resolve().parents[3] / "scripts" / "route_domain.py"),
          "meu-projeto", "--rule", str(rule)],
         capture_output=True, text=True,

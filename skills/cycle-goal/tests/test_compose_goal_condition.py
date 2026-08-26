@@ -5,7 +5,6 @@ Each test names the behaviour it protects, not the function it calls.
 from __future__ import annotations
 
 import pytest
-
 from compose_goal_condition import (
     GOAL_CHAR_CAP,
     GateViolation,

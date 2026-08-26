@@ -60,7 +60,7 @@ ORIGIN_MARKERS = (
 @pytest.fixture(scope="module")
 def installed_rules(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
     target = tmp_path_factory.mktemp("consumer")
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: PLW1510
         ["bash", str(versioned_kit / "scripts" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
@@ -91,7 +91,7 @@ def test_routing_table_still_tells_the_consumer_what_to_do(installed_rules: Path
     contrário o consumidor encontra um vazio sem saber que é ele quem o preenche.
     """
     body = (installed_rules / "cycle-backlog.md").read_text(encoding="utf-8")
-    section = re.search(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", body, re.M | re.S)
+    section = re.search(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", body, re.MULTILINE | re.DOTALL)
     assert section, "a seção `## Domain routing` sumiu do arquivo entregue"
     assert "detect_domains.py" in section.group(0), (
         "a seção não nomeia o script que deriva a tabela para o projeto"

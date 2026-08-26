@@ -39,16 +39,15 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import subprocess
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
-
 
 SEVERITY_ORDER = ["BLOCKER", "HIGH", "MEDIUM", "LOW", "INFO"]
 # Back-compat alias map for findings emitted by agents using legacy tokens.
@@ -291,9 +290,9 @@ def _render_markdown(
         md += [
             "## ⚠ Working tree contaminated during this review",
             "",
-            f"The tree moved while the agents were reading it ({changed} differ from the state "
+            (f"The tree moved while the agents were reading it ({changed} differ from the state "
             "recorded when they were spawned). Findings below may cite code no reviewer saw, or "
-            "miss code that was there. Re-derive any citation before acting on it.",
+            "miss code that was there. Re-derive any citation before acting on it."),
             "",
         ]
 

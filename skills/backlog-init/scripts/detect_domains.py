@@ -145,7 +145,7 @@ def _go_workspace_members(root: Path) -> list[str]:
         # gates próprios — o `go.work` do `theo` lista `../theo-contracts`.
         if not entry or entry.startswith(".."):
             continue
-        rel = entry[2:] if entry.startswith("./") else entry
+        rel = entry.removeprefix("./")
         if rel and (root / rel).is_dir() and rel not in members:
             members.append(rel)
     return members
@@ -255,13 +255,13 @@ def render_specialist(domain: Domain, root: Path) -> str:
         _impl = Path(__file__).resolve().parents[2] / "implement" / "scripts"
         if str(_impl) not in _sys.path:
             _sys.path.insert(0, str(_impl))
-        from suite_runners import detect_languages  # noqa: PLC0415
+        from suite_runners import detect_languages
         languages = detect_languages(root) or []
     except Exception:  # noqa: BLE001 — a detecção é um extra; sem ela o esqueleto ainda serve
         languages = []
 
     repos = "\n".join(f"| `{r}` |" for r in domain.repos)
-    langs = ", ".join(f"`{l}`" for l in languages) if languages else (
+    langs = ", ".join(f"`{l}`" for l in languages) if languages else (  # noqa: E741
         "nenhum manifesto de linguagem na raiz — os gates por linguagem respondem SKIP, "
         "e isso descreve o repositório em vez de ser configuração pendente")
 

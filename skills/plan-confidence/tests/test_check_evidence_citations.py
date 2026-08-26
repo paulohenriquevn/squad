@@ -4,8 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-
 from check_evidence_citations import (  # noqa: E402
     Citation,
     EvidenceReport,

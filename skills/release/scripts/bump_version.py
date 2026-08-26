@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Write the version into every declared site, and name every occurrence it did not touch.
+"""Write the version into every stack-specific site, and name every occurrence it did not touch.
 
-B-059 — the version lives in `package.json` and in `src/index.ts` as an exported constant, and a
-human keeps them in step. The export-surface contract test catches a divergence, and it did: cutting
+B-059 — a version can live in a stack manifest and in a runtime constant, and a human otherwise
+keeps them in step. The export-surface contract test catches a divergence, and it did: cutting
 0.63.0, two of three files were bumped and `npm publish` aborted in `prepublishOnly` with
 `expected '0.62.0' to be '0.63.0'` — AFTER the tag was cut and pushed. `v0.63.0` still points at a
 commit whose exported constant is wrong.
@@ -36,8 +36,18 @@ class Site:
     description: str
 
 
-SITES: tuple[Site, ...] = (
+KNOWN_SITES: tuple[Site, ...] = (
     Site("package.json", r'"version":\s*"([^"]+)"', "the manifest npm publishes"),
+    Site(
+        "pyproject.toml",
+        r'(?ms)^\[project\]\s*$.*?^version\s*=\s*["\']([^"\']+)["\']',
+        "the Python project manifest",
+    ),
+    Site(
+        "Cargo.toml",
+        r'(?ms)^\[package\]\s*$.*?^version\s*=\s*["\']([^"\']+)["\']',
+        "the Rust package manifest",
+    ),
     Site(
         "src/index.ts",
         r'export const VERSION = "([^"]+)"',
@@ -60,9 +70,22 @@ def _tracked_files(root: Path) -> list[str]:
     return [line for line in proc.stdout.splitlines() if line]
 
 
-def _strays(root: Path, old: str) -> list[str]:
+def _sites_for(root: Path) -> tuple[Site, ...]:
+    sites: list[Site] = []
+    for site in KNOWN_SITES:
+        target = root / site.path
+        if not target.is_file():
+            continue
+        content = target.read_text(encoding="utf-8")
+        if site.path == "src/index.ts" and re.search(site.pattern, content) is None:
+            continue
+        sites.append(site)
+    return tuple(sites)
+
+
+def _strays(root: Path, old: str, sites: tuple[Site, ...]) -> list[str]:
     """Tracked files carrying `old` that are neither a declared site nor deliberately ignored."""
-    declared = {s.path for s in SITES}
+    declared = {s.path for s in sites}
     found: list[str] = []
     for rel in _tracked_files(root):
         if rel in declared or rel in IGNORED:
@@ -89,8 +112,16 @@ def main() -> int:
 
     # Read and verify EVERY site before writing ANY of them. A half-applied bump is the state this
     # script exists to prevent, and it would be the state it left behind on a mid-loop failure.
+    sites = _sites_for(root)
+    if not sites and not (root / "go.mod").exists():
+        print(
+            "refused: no supported version site found and repository is not a tag-only Go module",
+            file=sys.stderr,
+        )
+        return 2
+
     planned: list[tuple[Site, str]] = []
-    for site in SITES:
+    for site in sites:
         target = root / site.path
         if not target.is_file():
             print(f"refused: {site.path} does not exist ({site.description})", file=sys.stderr)
@@ -110,13 +141,13 @@ def main() -> int:
         start, end = match.span(1)
         planned.append((site, content[:start] + new + content[end:]))
 
-    strays = _strays(root, old)
+    strays = _strays(root, old, sites)
     if strays:
         print(
             f"refused: {len(strays)} tracked file(s) carry {old!r} and are not declared sites.\n"
             "  They are NOT rewritten — a version string in a fixture or a documented example is "
             "not a site, and replacing it blindly is a corruption no gate would catch.\n"
-            "  Add each to SITES if it is one, or to IGNORED if it is not:",
+            "  Add each to KNOWN_SITES if it is one, or to IGNORED if it is not:",
             file=sys.stderr,
         )
         for rel in strays:
@@ -127,7 +158,8 @@ def main() -> int:
         (root / site.path).write_text(rewritten, encoding="utf-8")
         print(f"{site.path}: {old} -> {new}  ({site.description})")
 
-    print(f"{len(planned)} site(s) at {new}")
+    suffix = " (tag-only Go module)" if not planned else ""
+    print(f"{len(planned)} site(s) at {new}{suffix}")
     return 0
 
 

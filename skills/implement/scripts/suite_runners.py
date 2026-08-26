@@ -49,7 +49,7 @@ LANGUAGE_MANIFESTS: dict[str, tuple[str, ...]] = {
 def run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any]:
     """Run a command, never raise. Shared by every check in the gate."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             cmd,
             cwd=str(cwd),
             capture_output=True,
@@ -163,7 +163,7 @@ def go_workspace_modules(project_root: Path) -> list[str]:
         entry = entry.strip().strip('"')
         if not entry or entry.startswith(".."):
             continue
-        rel = entry[2:] if entry.startswith("./") else entry
+        rel = entry.removeprefix("./")
         if rel and (project_root / rel).is_dir() and rel not in modules:
             modules.append(rel)
     return modules

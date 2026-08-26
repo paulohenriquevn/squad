@@ -73,7 +73,7 @@ esac
 #
 # Tudo o mais sob a árvore é CONTRATO do kit.
 case "$REL" in
-  rules/*.txt|agents/*|agents/**|knowledge-base/*|knowledge-base/**|settings.json|.kit-manifest.txt|.install-backups/*)
+  rules/*.txt|agents/*|knowledge-base/*|settings.json|.kit-manifest.txt|.install-backups/*)
     exit 0
     ;;
 esac

@@ -31,20 +31,18 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from diff_symbols import added_symbols_from_shas, shas_from_progress
 from coverage_gate import evaluate as coverage_evaluate
+from diff_symbols import added_symbols_from_shas, shas_from_progress
 from suite_runners import (
     check_go_tests,
     check_python_tests,
     check_rust_tests,
     check_test_execution,
-    detect_languages,
     run_command,
 )
 from wiring_recheck import recheck_pillar_a

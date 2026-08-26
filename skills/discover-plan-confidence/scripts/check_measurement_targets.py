@@ -23,7 +23,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 TARGETS_HEADER_RE = re.compile(r"^##\s+Measurement\s+Questions\s*$", re.MULTILINE | re.IGNORECASE)
 # Backticked path: `theo-lens/src/` or `theo-lens/src/trace.ts`. Requires a slash so
 # that prose words in backticks are not mistaken for targets.

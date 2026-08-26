@@ -5,14 +5,12 @@ import re
 import sys
 from pathlib import Path
 
-import pytest
-
 # Ensure scripts/ is importable
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from ecosystem_utils import find_ecosystem_dir
+from ecosystem_utils import find_ecosystem_dir  # noqa: E402
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
@@ -59,20 +57,20 @@ def _skill_data() -> list[tuple[Path, dict[str, str]]]:
 def test_all_skills_have_name() -> None:
     """Every SKILL.md must have a name: field in its frontmatter."""
     missing = [str(p) for p, fm in _skill_data() if "name" not in fm]
-    assert not missing, f"SKILL.md files missing 'name:' frontmatter:\n" + "\n".join(missing)
+    assert not missing, "SKILL.md files missing 'name:' frontmatter:\n" + "\n".join(missing)
 
 
 def test_all_skills_have_description() -> None:
     """Every SKILL.md must have a description: field in its frontmatter."""
     missing = [str(p) for p, fm in _skill_data() if "description" not in fm]
-    assert not missing, f"SKILL.md files missing 'description:' frontmatter:\n" + "\n".join(missing)
+    assert not missing, "SKILL.md files missing 'description:' frontmatter:\n" + "\n".join(missing)
 
 
 def test_all_skills_have_user_invocable() -> None:
     """Every SKILL.md must have a user-invocable: field in its frontmatter."""
     missing = [str(p) for p, fm in _skill_data() if "user-invocable" not in fm]
     assert not missing, (
-        f"SKILL.md files missing 'user-invocable:' frontmatter:\n" + "\n".join(missing)
+        "SKILL.md files missing 'user-invocable:' frontmatter:\n" + "\n".join(missing)
     )
 
 

@@ -7,7 +7,6 @@ threshold calibration logic, hook generation, settings.json merge.
 
 from __future__ import annotations
 
-import json
 import textwrap
 from pathlib import Path
 
@@ -15,13 +14,12 @@ import pytest
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
-from init_quality_gates import (
+from init_quality_gates import (  # noqa: E402
     FLOOR_COMPLEXITY,
     FLOOR_FILE_LINES,
     FLOOR_FUNCTION_LINES,
     FLOOR_NESTING_DEPTH,
     FLOOR_PARAMETERS,
-    ThresholdCalibration,
     _measure_python_metrics,
     _percentile,
     calibrate_thresholds,
@@ -31,9 +29,8 @@ from init_quality_gates import (
     detect_test_dirs,
     validate_target,
 )
-from lib.path_safety import confine, confine_or_none
-from lib.yaml_safe import merge_hook_into_settings, read_json, write_json
-
+from lib.path_safety import confine, confine_or_none  # noqa: E402
+from lib.yaml_safe import merge_hook_into_settings, read_json, write_json  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -176,17 +173,17 @@ class TestValidateTarget:
 class TestDetectLanguages:
     def test_detects_python(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        names = [l.name for l in languages]
+        names = [l.name for l in languages]  # noqa: E741
         assert "python" in names
 
     def test_file_counts(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        python = [l for l in languages if l.name == "python"][0]
+        python = next(l for l in languages if l.name == "python")  # noqa: E741
         assert python.file_count >= 2  # main.py + processor.py (+ test_main.py)
 
     def test_loc_positive(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        python = [l for l in languages if l.name == "python"][0]
+        python = next(l for l in languages if l.name == "python")  # noqa: E741
         assert python.loc > 0
 
     def test_empty_project(self, tmp_empty: Path) -> None:

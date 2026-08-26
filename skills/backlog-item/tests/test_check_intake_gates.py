@@ -51,7 +51,7 @@ def _run(backlog: Path, repo: str, terms: list[str]) -> tuple[int, dict]:
     ]
     for term in terms:
         args.extend(["--term", term])
-    result = subprocess.run(args, capture_output=True, text=True)
+    result = subprocess.run(args, capture_output=True, text=True)  # noqa: PLW1510
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -73,7 +73,7 @@ def test_unknown_repo_is_refused_by_g1(tmp_path: Path) -> None:
 
 
 def test_known_repo_routes_and_names_the_specialist(tmp_path: Path) -> None:
-    rc, data = _run(_backlog(tmp_path), "theo-rag", ["nada-casa-aqui"])
+    _rc, data = _run(_backlog(tmp_path), "theo-rag", ["nada-casa-aqui"])
     assert data["g1"]["routed"] is True
     assert data["g1"]["domain"]
     assert data["g1"]["agent"]
@@ -98,13 +98,13 @@ def test_open_item_hit_recommends_merge(tmp_path: Path) -> None:
 
 
 def test_shipped_item_hit_recommends_regression_link(tmp_path: Path) -> None:
-    rc, data = _run(_backlog(tmp_path), "theo-lens", ["traces"])
+    _rc, data = _run(_backlog(tmp_path), "theo-lens", ["traces"])
     candidate = next(c for c in data["g2"]["candidates"] if c["id"] == "B-008")
     assert candidate["recommended_action"] == "regression_of"
 
 
 def test_killed_item_hit_recommends_supersedes(tmp_path: Path) -> None:
-    rc, data = _run(_backlog(tmp_path), "theo-lens", ["cache"])
+    _rc, data = _run(_backlog(tmp_path), "theo-lens", ["cache"])
     candidate = next(c for c in data["g2"]["candidates"] if c["id"] == "B-009")
     assert candidate["recommended_action"] == "supersedes"
 
@@ -112,11 +112,11 @@ def test_killed_item_hit_recommends_supersedes(tmp_path: Path) -> None:
 def test_the_repo_name_itself_is_always_a_search_term(tmp_path: Path) -> None:
     """A skill manda buscar os substantivos MAIS o repo; deixar isso a cargo de
     quem chama é como o repo saía da busca sem ninguém notar."""
-    rc, data = _run(_backlog(tmp_path), "theo-lens", [])
+    _rc, data = _run(_backlog(tmp_path), "theo-lens", [])
     assert "theo-lens" in data["g2"]["terms"]
     assert data["g2"]["candidates"], data
 
 
 def test_missing_backlog_fails_loudly(tmp_path: Path) -> None:
-    rc, data = _run(tmp_path / "nao-existe.md", "theo-lens", ["x"])
+    rc, _data = _run(tmp_path / "nao-existe.md", "theo-lens", ["x"])
     assert rc == 2

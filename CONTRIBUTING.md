@@ -1,6 +1,6 @@
-# Contributing to Cycle
+# Contributing to Squad
 
-Thanks for your interest in improving Cycle. This project is built with its own
+Thanks for your interest in improving Squad. This project is built with its own
 6+1 pipeline, so contributing means using the same discipline the tool enforces.
 Read [`HOW-TO-USE.md`](HOW-TO-USE.md) for the full operational guide; this file is
 the short checklist.
@@ -21,7 +21,7 @@ the short checklist.
 ## Before you open a change
 
 1. **Pick the lightest entry point** that fits the work — see
-   [Match the cycle to the shape of the work](README.md#match-the-cycle-to-the-shape-of-the-work).
+   [How it works](README.md#how-it-works).
    A one-line fix needs no cycle; a multi-branch feature should run
    `/to-plan → /implement → /code-quality → /review`.
 2. **Test-first (TDD).** Write the failing test before the code. Every bug fix

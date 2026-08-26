@@ -2,7 +2,7 @@
 
 T1.3 implementation: detect_dead_code via cargo-udeps subprocess.
 T2.4 implementation: detect_symbol_fabrication via tree-sitter + crates.io.
-Other methods still stubs (T3.1) — T4.3 ADR DEFER for mutation.
+D3 and deferred mutation testing report explicit capability caps.
 """
 from __future__ import annotations
 
@@ -267,11 +267,11 @@ class RustDetector(BaseDetector):
         return findings
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        raise NotImplementedError("T3.1: cross-package wiring detector not yet implemented")
+        return self.unavailable("d3", "orphan_export", "cross-package wiring is not configured")
 
     def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
         # T4.3 — DEFERRED to v0.2 (evaluate cargo-mutants vs gremlins first)
-        raise NotImplementedError("T4.3: Rust mutation testing DEFERRED to v0.2 (graceful skip)")
+        return self.unavailable("d4", "mutation_low", "Rust mutation testing is deferred")
 
     # ------------------------------------------------------------------
 

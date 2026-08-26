@@ -44,7 +44,7 @@ def _eco(root: Path, *, skills: list[str], declared: list[str] | None) -> Path:
 
 def _warns_about(eco: Path, skill: str) -> bool:
     """Há algum aviso sobre ESTA skill? (o fixture mínimo gera outros, irrelevantes aqui)"""
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(_SCRIPT), "--ecosystem-dir", str(eco), "--json"],
         capture_output=True, text=True,
     )

@@ -10,6 +10,7 @@ from scripts._shared import Finding, compute_verdict
 from scripts.run_code_quality import (
     _enumerate_source_files,
     _resolve_plan_path,
+    _safe_call,
     main,
 )
 
@@ -102,6 +103,22 @@ def test_verdict_smallest_cap_wins() -> None:
     assert verdict == "FAIL_HARD"
 
 
+def test_unimplemented_detector_is_visible_and_caps_the_verdict() -> None:
+    """An unavailable audit must never be converted into an empty successful result."""
+
+    def unavailable() -> list[Finding]:
+        raise NotImplementedError("runner is not installed")
+
+    findings, crash = _safe_call("d4", unavailable, language="python")
+
+    assert crash is None
+    assert len(findings) == 1
+    assert findings[0].severity == "SOFT_CAP"
+    assert findings[0].detector == "d4_unavailable"
+    assert "runner is not installed" in findings[0].message
+    assert compute_verdict(findings)[0] == "FAIL_SOFT"
+
+
 # --------------------------------------------------------------------------
 # T5.1 — slug resolution (EC-6)
 # --------------------------------------------------------------------------
@@ -173,7 +190,7 @@ def test_cli_standalone_mode_is_invalid_when_nothing_was_audited(
     assert data["mode"] == "standalone"
 
 
-def test_cli_a_real_audit_still_passes(tmp_path: Path, capsys) -> None:
+def test_cli_a_real_audit_reports_unavailable_deferred_detectors(tmp_path: Path, capsys) -> None:
     """The other half of the guard's contract: it must not turn a real clean audit INVALID.
 
     Without this, the guard could be tightened into "always INVALID" and nothing would notice —
@@ -191,6 +208,11 @@ def test_cli_a_real_audit_still_passes(tmp_path: Path, capsys) -> None:
     assert data["languages_audited"] != []
     assert "no_languages_audited" not in data["hard_caps_triggered"]
     assert exit_code == 0
+    assert data["verdict"] == "FAIL_SOFT"
+    assert set(data["findings_by_detector"]) >= {
+        "d3_unavailable",
+        "d4_unavailable",
+    }
 
 
 def test_cli_no_network_emits_info_finding(tmp_path: Path, capsys) -> None:
@@ -200,9 +222,9 @@ def test_cli_no_network_emits_info_finding(tmp_path: Path, capsys) -> None:
     exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    # Verdict should still be PASS (vulture finds no Python files in tmp_path)
+    # The explicit no-network INFO is retained, while unavailable D3/D4 cap the verdict.
     data = json.loads(captured.out)
-    assert data["verdict"] in ("PASS", "PASS_WITH_CAVEATS")  # Vulture may emit auditor_unavailable
+    assert data["verdict"] == "FAIL_SOFT"
 
 
 def test_cli_malformed_allowlist_emits_hard(tmp_path: Path, capsys) -> None:
@@ -284,6 +306,9 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
             return []
 
         def detect_orphan_exports(self, target: Path) -> list:
+            return []
+
+        def detect_mutation_score(self, critical_paths: list[Path]) -> list:
             return []
 
         def detect_architecture_violations(self, target: Path) -> list:

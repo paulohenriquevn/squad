@@ -3,8 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
-from apply_fixes import (  # noqa: E402
+from apply_fixes import (
     FixReport,
     apply_all_fixes,
     fix_loopholes,

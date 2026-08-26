@@ -49,7 +49,7 @@ def grade(run_dir: Path, eval_id: int) -> list[dict]:
     blocks = _blocks(backlog)
     new_ids = sorted(set(blocks) - BASE_IDS)
     new_block = blocks[new_ids[0]] if new_ids else ""
-    combined = (backlog + "\n" + transcript).lower()
+    (backlog + "\n" + transcript).lower()
 
     def r(text: str, passed: bool | None, evidence: str) -> dict:
         return {
@@ -82,10 +82,10 @@ def grade(run_dir: Path, eval_id: int) -> list[dict]:
         langsmith_in_registry = "langsmith" in backlog.lower()
         return [
             r("The skill flagged that the justification rests on another project",
-              "langsmith" in transcript.lower() and bool(re.search(r"g5|prior[- ]art|outro projeto|another project", transcript, re.I)),
-              f"transcript mentions G5/prior-art: {bool(re.search(r'g5|prior.art', transcript, re.I))}"),
+              "langsmith" in transcript.lower() and bool(re.search(r"g5|prior[- ]art|outro projeto|another project", transcript, re.IGNORECASE)),
+              f"transcript mentions G5/prior-art: {bool(re.search(r'g5|prior.art', transcript, re.IGNORECASE))}"),
             r("The user was offered a choice rather than a flat refusal",
-              bool(re.search(r"reformul|false positive|falso positivo|cancel", transcript, re.I)),
+              bool(re.search(r"reformul|false positive|falso positivo|cancel", transcript, re.IGNORECASE)),
               "looked for reformulate/false-positive/cancel options"),
             r("No B-NNN block carries the LangSmith comparison as why_now",
               not langsmith_in_registry,
@@ -97,13 +97,13 @@ def grade(run_dir: Path, eval_id: int) -> list[dict]:
         ]
 
     if eval_id == 2:  # G3 — two domains must split
-        fd = [b for b in blocks.values() if _field(b, "domain") == "frontend-dashboard" and b not in BASE_IDS]
+        [b for b in blocks.values() if _field(b, "domain") == "frontend-dashboard" and b not in BASE_IDS]
         new_blocks = [blocks[i] for i in new_ids]
         domains = {_field(b, "domain") for b in new_blocks}
         repos = {_field(b, "repo") for b in new_blocks}
         return [
             r("The skill identified that the request spans two domains",
-              bool(re.search(r"dois dom|two domain|G3|split", transcript, re.I)),
+              bool(re.search(r"dois dom|two domain|G3|split", transcript, re.IGNORECASE)),
               f"new items: {len(new_ids)}"),
             r("The split was proposed as two items, not registered as one",
               len(new_ids) == 2, f"new ids: {new_ids}"),
@@ -120,7 +120,7 @@ def grade(run_dir: Path, eval_id: int) -> list[dict]:
     if eval_id == 3:  # dedup — B-014 already covers it
         return [
             r("The skill searched BACKLOG.md before allocating an id",
-              bool(re.search(r"grep|search|dedup|busqu|busca|procur", transcript, re.I)),
+              bool(re.search(r"grep|search|dedup|busqu|busca|procur", transcript, re.IGNORECASE)),
               "looked for a search step in the transcript"),
             r("The existing open item about the same problem was found",
               "B-014" in transcript, f"'B-014' in transcript: {'B-014' in transcript}"),

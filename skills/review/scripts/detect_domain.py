@@ -20,12 +20,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
-
 
 # Domain dictionary — agnostic keyword sets per domain
 DOMAINS: dict[str, list[str]] = {
@@ -110,7 +108,7 @@ def _read_plan(plan_path: Path) -> str:
 
 def _git_diff_filenames(project_root: Path, diff_base: str) -> list[str]:
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             ["git", "-C", str(project_root), "diff", "--name-only", f"{diff_base}..HEAD"],
             capture_output=True,
             text=True,

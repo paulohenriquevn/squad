@@ -27,7 +27,7 @@ from tempfile import mkdtemp
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from detect_current_version import detect_current_version  # noqa: E402
+from detect_current_version import detect_current_version
 
 
 def _repo(tags: list[str], manifest_version: str | None) -> Path:
@@ -65,7 +65,7 @@ def _repo(tags: list[str], manifest_version: str | None) -> Path:
 def test_the_base_ignores_ancestry() -> None:
     # The defect itself: tags exist, none is reachable from HEAD.
     root = _repo(["v0.60.0", "v0.64.0"], "0.64.0")
-    described = subprocess.run(
+    described = subprocess.run(  # noqa: PLW1510
         ["git", "describe", "--tags", "--abbrev=0"],
         cwd=root, capture_output=True, text=True,
     )
@@ -97,6 +97,23 @@ def test_versions_compare_numerically_not_lexically() -> None:
 def test_a_repository_with_no_tags_falls_back_to_the_manifest() -> None:
     root = _repo([], "0.64.0")
     assert detect_current_version(root) == "0.64.0"
+
+
+def test_python_manifest_is_a_version_source() -> None:
+    root = _repo([], None)
+    (root / "pyproject.toml").write_text(
+        '[build-system]\nrequires = []\n\n[project]\nname = "demo"\nversion = "2.3.4"\n',
+        encoding="utf-8",
+    )
+    assert detect_current_version(root) == "2.3.4"
+
+
+def test_rust_manifest_is_a_version_source() -> None:
+    root = _repo([], None)
+    (root / "Cargo.toml").write_text(
+        '[package]\nname = "demo"\nversion = "3.4.5"\n', encoding="utf-8"
+    )
+    assert detect_current_version(root) == "3.4.5"
 
 
 def test_a_major_disagreement_is_refused_rather_than_maximised() -> None:

@@ -117,7 +117,7 @@ def smoke_test_tools(
     # Lizard is optional (multi-language support)
     lizard_available = False
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             ["python3", "-c", "import lizard; print(lizard.version)"],
             capture_output=True, text=True, timeout=10,
         )
@@ -130,8 +130,8 @@ def smoke_test_tools(
         if not allow_missing:
             _log(msg, verbose)
             print(
-                f"lizard not installed. Install with: python3 -m pip install lizard\n"
-                f"Or re-run with --allow-missing-tools to continue without multi-language analysis.",
+                "lizard not installed. Install with: python3 -m pip install lizard\n"
+                "Or re-run with --allow-missing-tools to continue without multi-language analysis.",
                 file=sys.stderr,
             )
             raise SystemExit(2)
@@ -155,7 +155,7 @@ def validate_round_trip(hooks_dir: str, verbose: bool = False) -> bool:
     })
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             ["python3", str(hook_script)],
             input=synthetic_event,
             capture_output=True,

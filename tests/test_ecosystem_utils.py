@@ -11,8 +11,11 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from ecosystem_utils import find_ecosystem_dir, is_ecosystem_layout, resolve_ecosystem_dir
-
+from ecosystem_utils import (  # noqa: E402
+    find_ecosystem_dir,
+    is_ecosystem_layout,
+    resolve_ecosystem_dir,
+)
 
 # ---------------------------------------------------------------------------
 # is_ecosystem_layout
