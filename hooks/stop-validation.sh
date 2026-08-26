@@ -3,10 +3,11 @@
 #
 # Behavior:
 #   1. TDD gate (warn-first): for every changed production source file, warn
-#      if no sibling test file is detected in the same directory (heuristic;
-#      supports common *_test.* / *.test.* / *.spec.* / test_*.* naming).
+#      if no test is detected beside it OR in the owning package's test tree
+#      (heuristic; supports common *_test.* / *.test.* / *.spec.* / test_*.*).
 #   2. CHANGELOG discipline (HARD GATE — Inquebrável Rule 6 + cycle-review BLOCKER):
-#      if production source changed but CHANGELOG.md did not, BLOCK.
+#      if production source changed and neither a CHANGELOG.md (root or package)
+#      nor a .changeset/*.md entry did, BLOCK.
 #   3. Secret leak (HARD GATE — cycle-review BLOCKER): if newly tracked files
 #      match secret patterns (.env / credentials* / *.pem / *.key), BLOCK.
 #   4. Pre-release honesty (warn-first): if README.md was modified, scan for
@@ -28,11 +29,42 @@ set -uo pipefail
 source "$(dirname "$0")/lib/detect-layout.sh"
 
 # ----------------------------------------------------------------------------
-# Collect ALL modified files (unstaged + staged + last commit)
+# Collect ALL modified files
+# (unstaged + staged + untracked-but-not-ignored + the last commit when unpushed)
 # ----------------------------------------------------------------------------
 UNSTAGED=$(git diff --name-only 2>/dev/null || true)
 STAGED=$(git diff --cached --name-only 2>/dev/null || true)
-LAST_COMMIT=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
+
+# New files nobody staged yet. `git diff` reports tracked modifications only, so
+# without this a brand-new file is invisible to every gate below — and the two
+# artifacts these gates most want to see are always new: a .changeset entry, and
+# a test file for source that never had one. --exclude-standard honours
+# .gitignore, so build output and local scratch stay out.
+UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+
+# --- Defect 1: an already-published commit is not this session's work ---------
+# The last commit counts only when it has NOT reached the upstream yet.
+#
+# It is in the set at all because a session that commits and then stops leaves
+# nothing in the working tree — dropping it entirely would let exactly that
+# session skip the gate. But a commit already on the remote was graded when it
+# was made, and re-grading it means a session that changed nothing inherits its
+# verdict: a read-only session then cannot end without either fabricating a
+# CHANGELOG entry or reaching for STOP_VALIDATION_WARN_ONLY=1, and an override
+# used to answer a question the gate should not have asked is how a gate stops
+# being read. Measured on `theokit` 2026-08-26: a session that wrote nothing
+# blocked nine times on the previous commit's `.ts` file.
+#
+# No upstream means no way to tell published from local, so stay strict.
+LAST_COMMIT=""
+if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+  AHEAD=$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
+  if [ "${AHEAD:-0}" -gt 0 ]; then
+    LAST_COMMIT=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
+  fi
+else
+  LAST_COMMIT=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
+fi
 
 # `.claude/` é o kit INSTALADO — dependência do projeto, não fonte dele.
 # Medido num adotante recém-instalado: a primeira sessão emitia 107 linhas de
@@ -43,7 +75,7 @@ LAST_COMMIT=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
 # O filtro serve os dois layouts sem precisar distinguir qual: em plugin-install
 # o kit vive sob `.claude/` e sai; em standalone o repositório do kit tem seus
 # arquivos em `skills/`, `hooks/`, `scripts/`, que seguem auditados normalmente.
-ALL_FILES=$(echo -e "${UNSTAGED}\n${STAGED}\n${LAST_COMMIT}" \
+ALL_FILES=$(echo -e "${UNSTAGED}\n${STAGED}\n${UNTRACKED}\n${LAST_COMMIT}" \
   | sort -u \
   | grep -v '^$' \
   | grep -v '^\.claude/' \
@@ -131,6 +163,43 @@ if [ -n "$SRC_CHANGED" ]; then
       continue
     fi
 
+    # Fallback: a test named after this file, anywhere in the OWNING unit's test
+    # tree. Sibling-only lookup assumes tests sit next to the source, which is
+    # idiomatic in Go and false for most of the JS/TS and Python world — the
+    # adopters this kit serves keep them in packages/<p>/tests/unit/ and
+    # tests/unit/. Reporting those files as untested is the noise that gets a
+    # warn-first gate ignored, and a warn nobody reads protects nothing.
+    #
+    # The owning unit is the nearest ancestor holding a manifest, so the search
+    # stays inside one package instead of scanning a whole monorepo. Bounded by
+    # -maxdepth, and prunes the usual heavy trees, to keep the hook fast.
+    #
+    # LIMIT, stated rather than hidden: this matches on the SOURCE FILE'S NAME.
+    # A test named for the behaviour it protects — which rules/testing.md § 3
+    # actually asks for — will not be found, and the file is reported. Widening
+    # this to grep for the module inside test bodies would trade a false warn for
+    # a false silence, which is the worse of the two.
+    unit_dir="$pkg_dir"
+    while [ "$unit_dir" != "." ] && [ "$unit_dir" != "/" ]; do
+      if [ -f "${unit_dir}/package.json" ] || [ -f "${unit_dir}/go.mod" ] || \
+         [ -f "${unit_dir}/pyproject.toml" ] || [ -f "${unit_dir}/Cargo.toml" ]; then
+        break
+      fi
+      unit_dir=$(dirname "$unit_dir")
+    done
+
+    if [ -d "$unit_dir" ]; then
+      found=$(find "$unit_dir" -maxdepth 6 \
+          \( -name node_modules -o -name dist -o -name build -o -name target \) -prune -o \
+          \( -name "${base_no_ext}_test.${ext}" -o -name "${base_no_ext}.test.${ext}" \
+             -o -name "${base_no_ext}.spec.${ext}" -o -name "test_${base_no_ext}.${ext}" \
+             -o -name "${base_no_ext}.test.tsx" -o -name "${base_no_ext}.spec.tsx" \
+          \) -print -quit 2>/dev/null || true)
+      if [ -n "$found" ]; then
+        continue
+      fi
+    fi
+
     MISSING_TESTS+=("$src_file")
   done <<< "$SRC_CHANGED"
 
@@ -165,7 +234,8 @@ if [ -f "CHANGELOG.md" ]; then
   #
   # CONSERVADOR POR CONSTRUÇÃO, e esse é o desenho inteiro: só remove linhas que são
   # inequivocamente comentário ou branco, então QUALQUER linha alterada carregando código
-  # deixa o arquivo em `CODE_CHANGED`. Falso negativo sobre mudança real é impossível;
+  # deixa o arquivo em `CODE_CHANGED`. Falso negativo sobre mudança real é impossível
+  # ENQUANTO o diff lido for o certo — corrigido 2026-08-26, quando não era;
   # falso positivo (um commit de docs ainda pedir entrada) é apenas inconveniente. A
   # assimetria é deliberada — a falha que este gate existe para impedir é uma mudança de
   # comportamento silenciosa, não um commit de documentação barulhento.
@@ -177,7 +247,26 @@ if [ -f "CHANGELOG.md" ]; then
     while IFS= read -r f; do
       [ -z "$f" ] && continue
       [ -f "$f" ] || { SUBSTANTIVE="$SUBSTANTIVE$f"$'\n'; continue; }
-      body=$(git diff HEAD~1 -- "$f" 2>/dev/null | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
+      # Which diff to read depends on how the file reached the set, and getting
+      # this wrong inverts the filter's safety direction.
+      #
+      # `git diff HEAD~1 -- <path>` is empty for a file with no prior version —
+      # a new module, an untracked file, a repo one commit deep — which reads
+      # EXACTLY like "the diff carried only comments". Treating the two alike
+      # let an entire new file skip the gate; measured 2026-08-26, a fresh
+      # `src/payments.ts` with four lines of real code exited 0.
+      #
+      # So: prefer the working-tree diff against HEAD, fall back to the last
+      # commit's, and when the file is new read its whole content — every line
+      # of a new file IS the change. An unobtainable diff now counts as
+      # substantive rather than as silence, which is the conservative direction
+      # this filter was always documented to take.
+      raw=$(git diff HEAD -- "$f" 2>/dev/null || true)
+      [ -z "$raw" ] && raw=$(git diff HEAD~1 -- "$f" 2>/dev/null || true)
+      if [ -z "$raw" ]; then
+        raw=$(sed -E 's/^/+/' "$f" 2>/dev/null || true)
+      fi
+      body=$(echo "$raw" | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
         | sed -E 's/^[+-]//' | sed -E 's,^[[:space:]]*(//|\*|/\*|\*/|#).*$,,' \
         | grep -vE '^[[:space:]]*$' || true)
       [ -n "$body" ] && SUBSTANTIVE="$SUBSTANTIVE$f"$'\n'
@@ -185,7 +274,19 @@ if [ -f "CHANGELOG.md" ]; then
     CODE_CHANGED=$(echo "$SUBSTANTIVE" | grep -v '^$' || true)
   fi
 
-  if [ -n "$CODE_CHANGED" ] && ! echo "$ALL_FILES" | grep -qE '^CHANGELOG\.md$'; then
+  # --- Defect 2: the root CHANGELOG.md is not the only form of the record ----
+  # A monorepo publishing several packages records per-package changes in that
+  # package's own CHANGELOG.md, or in a .changeset/*.md entry, which is what
+  # BECOMES that changelog at version time. Accepting only the root file reports
+  # "undocumented" over work that is documented — measured on `theokit`, whose
+  # six packages all publish through .changeset/ and whose root file says so.
+  #
+  # .changeset/README.md and config.json ship with the tool and record nothing.
+  CHANGELOG_TOUCHED=$(echo "$ALL_FILES" \
+    | grep -E '(^|/)CHANGELOG\.md$|^\.changeset/[^/]+\.md$' \
+    | grep -vE '^\.changeset/README\.md$' \
+    || true)
+  if [ -n "$CODE_CHANGED" ] && [ -z "$CHANGELOG_TOUCHED" ]; then
     msg="CHANGELOG.md not updated despite production source changes (Inquebrável Rule 6; cycle-review BLOCKER). Add an entry to [Unreleased] before stopping. Override with STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg with the rationale documented separately."
     if [ "$WARN_ONLY" = "1" ]; then
       WARNINGS+=("$msg")
