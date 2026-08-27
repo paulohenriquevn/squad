@@ -228,3 +228,47 @@ def test_reinstalling_never_empties_the_derived_routing_table(
         f"{mode} replaced the consumer's derived table with the empty template — "
         "the project can no longer route items about its own repository"
     )
+
+
+@pytest.mark.parametrize("mode", ["--force", "--merge"])
+def test_reinstalling_never_overwrites_the_projects_own_config(
+    versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory, mode: str
+) -> None:
+    """`rules/*.txt` is the project's configuration and must survive every mode.
+
+    The installer states the rule inside its `--merge` branch: *"`rules/*.txt` is
+    the project's CONFIGURATION — enabled languages, live target, allowlists,
+    declared auxiliary skills. Copying the template over it erases local tuning
+    in silence: measured on `speculative`, where the declaration of the project's
+    9 skills died on the next reinstall."*
+
+    That `continue` guarding the consumer's file was written in the merge branch
+    only. The non-merge path does `rm -rf rules/` and copies the templates over
+    the top, so `--force` — the flag a reinstall uses — erases exactly what the
+    comment says must not be erased. Same shape as the routing-table defect
+    above, in the same file, for the same reason: the rule was implemented once,
+    on one of the two paths.
+
+    Measured while reinstalling the kit across 19 consumers: four npm projects
+    lost `deny: Read(**/.env*)` and their `vitest`/`tsc` allowances, and the
+    languages they had enabled came back as the empty template.
+    """
+    target = tmp_path_factory.mktemp(f"config{mode.strip('-')}")
+    subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
+    install = [str(versioned_kit / "scripts" / "install.sh"), str(target)]
+    subprocess.run(["bash", *install], capture_output=True, check=True)
+
+    # A marker the template cannot contain. `typescript` was the first choice and
+    # it appears in the template as a commented example, so the assertion passed
+    # against a file that had just been overwritten.
+    marker = "zz-project-tuned-language"
+    config = target / ".claude" / "rules" / "code-quality-languages.txt"
+    assert marker not in config.read_text(encoding="utf-8")
+    config.write_text(config.read_text(encoding="utf-8") + f"{marker}\n", encoding="utf-8")
+
+    subprocess.run(["bash", *install, mode], capture_output=True, check=True)
+
+    assert marker in config.read_text(encoding="utf-8"), (
+        f"{mode} overwrote rules/code-quality-languages.txt with the empty template — "
+        "the project's enabled languages died on a reinstall"
+    )

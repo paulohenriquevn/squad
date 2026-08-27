@@ -266,6 +266,19 @@ for item in skills rules hooks commands scripts; do
     fi
   else
     echo "==> Copying $item/"
+    # `rules/*.txt` is the project's configuration, and this branch is about to
+    # `rm -rf` the directory holding it. The merge branch guards it with a
+    # `continue`; this one did not, so `--force` — the flag a reinstall uses —
+    # erased what that guard exists to protect. Measured while reinstalling the
+    # kit across 19 consumers: four npm projects lost `deny: Read(**/.env*)`
+    # along with their enabled languages, and the loss was silent.
+    CONFIG_KEEP=""
+    if [ "$item" = "rules" ] && [ -d "$ECO/rules" ]; then
+      CONFIG_KEEP="$(mktemp -d)"
+      for f in "$ECO/rules"/*.txt; do
+        [ -f "$f" ] && cp "$f" "$CONFIG_KEEP/"
+      done
+    fi
     rm -rf "${ECO:?}/$item"
     copy_tree "$SRC_DIR/$item" "$ECO/$item"
     if [ "$item" = "rules" ]; then
@@ -278,6 +291,15 @@ for item in skills rules hooks commands scripts; do
         [ "$(basename "$tpl")" = "domain-routing.md" ] && continue
         cp "$tpl" "$ECO/rules/$(basename "$tpl")"
       done
+      # Back on top of the template: the consumer's tuning outranks the blank.
+      if [ -n "$CONFIG_KEEP" ]; then
+        for f in "$CONFIG_KEEP"/*.txt; do
+          [ -f "$f" ] || continue
+          cp "$f" "$ECO/rules/$(basename "$f")"
+          echo "    kept (yours): rules/$(basename "$f")"
+        done
+        rm -rf "$CONFIG_KEEP"
+      fi
     fi
   fi
 done
