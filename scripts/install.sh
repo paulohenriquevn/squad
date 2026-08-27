@@ -352,7 +352,6 @@ KB_DIRS=(
   "acceptance/evidence"         # screenshots, console/network dumps, transcripts
   "maintenance-runs"            # per-item macro-loop audit trail
   "backlog"                     # /backlog-item intake logs
-  "adrs"                        # MADR 3.0 ADRs
   "grills"                      # /grill-me Q&A logs
   "dogfood"                     # /dogfood anchor manifest
   "dogfood/evidence"            # /dogfood evidence files
@@ -360,7 +359,6 @@ KB_DIRS=(
   "tools"                       # read-only docs of tools the project depends on (consumer populates)
   "discoveries"                 # /discover-* root
   "discoveries/plans"           # /discover-plan outputs
-  "discoveries/opportunities"   # /discover-execute outputs
   "discoveries/snapshots"       # hash-verified snapshots cited by opportunities
   "progress"                    # per-slug progress.md (read by hooks + session-catchup)
   "sop-runs"                    # /sop-run output — what one machine did following them

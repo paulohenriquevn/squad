@@ -38,11 +38,23 @@ KB_DIRS = (".claude/knowledge-base", "knowledge-base")
 #: and migrates the moment it runs.
 WIKI_DIRS = (".claude/wiki", "wiki")
 
-#: What moved into the bundle, and nothing else. `sop-runs/`, `audits/`,
-#: `reviews/` and the rest of the dated trail stay in the knowledge-base: a
-#: record of one execution on one day is not a concept that evolves, and OKF's
-#: own fields (`status`, `stale_after`, `verified`) mean nothing for one.
-DURABLE_LEAVES = frozenset({"sops", "decisions", "references", "opportunities"})
+#: What moved into the bundle, mapped to where the old root actually kept it.
+#:
+#: The mapping is not decoration: two of the four were RENAMED by the migration
+#: — `adrs/` became `decisions/`, and `discoveries/opportunities/` flattened to
+#: `opportunities/`. A fallback that looked for the new name under the old root
+#: would find nothing, and it would fail precisely for the consumers that most
+#: need it: the ones whose files still sit under the old names.
+#:
+#: Everything absent from this map stays in the knowledge-base. A record of one
+#: execution on one day is not a concept that evolves, and OKF's own fields
+#: (`status`, `stale_after`, `verified`) mean nothing for one.
+DURABLE_LEAVES: dict[str, str] = {
+    "sops": "sops",
+    "decisions": "adrs",
+    "references": "references",
+    "opportunities": "discoveries/opportunities",
+}
 
 
 def knowledge_base_dir(project_root: Path, leaf: str) -> Path | None:
@@ -80,10 +92,12 @@ def resolve_knowledge_dir(project_root: Path, leaf: str) -> Path | None:
     the split exists to prevent.
     """
     project_root = Path(project_root)
-    if leaf in DURABLE_LEAVES:
+    legacy = DURABLE_LEAVES.get(leaf)
+    if legacy is not None:
         found = wiki_dir(project_root, leaf)
         if found is not None:
             return found
+        return knowledge_base_dir(project_root, legacy)
     return knowledge_base_dir(project_root, leaf)
 
 

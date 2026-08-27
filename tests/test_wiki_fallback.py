@@ -111,6 +111,37 @@ def test_every_durable_leaf_resolves_to_the_bundle(tmp_path: Path, leaf: str) ->
     assert resolve_knowledge_dir(tmp_path, leaf) == tmp_path / "wiki" / leaf
 
 
+@pytest.mark.parametrize(
+    ("leaf", "legacy"),
+    [
+        ("sops", "sops"),
+        ("decisions", "adrs"),                              # renamed by the migration
+        ("references", "references"),
+        ("opportunities", "discoveries/opportunities"),     # nested, and never at the leaf's own name
+    ],
+)
+def test_the_fallback_knows_where_the_old_root_actually_kept_it(
+    tmp_path: Path, leaf: str, legacy: str
+) -> None:
+    """A fallback that looks for the NEW name under the OLD root finds nothing.
+
+    Two of the four moved as part of this migration: `adrs/` became `decisions/`
+    and `discoveries/opportunities/` flattened to `opportunities/`. Resolving
+    `knowledge-base/<new-name>` would miss both — the consumers that most need
+    the fallback are precisely the ones whose files sit under the old names.
+    """
+    (tmp_path / "knowledge-base" / legacy).mkdir(parents=True)
+
+    assert resolve_knowledge_dir(tmp_path, leaf) == tmp_path / "knowledge-base" / legacy
+
+
+def test_the_bundle_still_wins_over_a_legacy_path(tmp_path: Path) -> None:
+    (tmp_path / "wiki" / "decisions").mkdir(parents=True)
+    (tmp_path / "knowledge-base" / "adrs").mkdir(parents=True)
+
+    assert resolve_knowledge_dir(tmp_path, "decisions") == tmp_path / "wiki" / "decisions"
+
+
 def test_this_repository_resolves_its_sops_to_the_bundle() -> None:
     """The kit itself migrated, so its own SOPs must come from `wiki/`."""
     resolved = resolve_knowledge_dir(REPO_ROOT, "sops")
