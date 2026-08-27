@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from detect_domains import (  # noqa: E402
+    Domain,
     detect_domains,
     render_table,
     rewrite_routing_section,
@@ -385,3 +386,24 @@ def test_write_replaces_rows_and_keeps_the_header(tmp_path: Path) -> None:
     assert "Derived by detect_domains.py" in body, "header kept"
     assert "stale" not in body, "old rows replaced"
     assert "svc-a" in body
+
+
+def test_the_empty_placeholder_does_not_survive_into_the_header(tmp_path: Path) -> None:
+    """Writing rows over an empty file must not leave the placeholder above them.
+
+    `render_rows([])` emits `# (no domain yet — run …)`. On the next write that
+    line is a comment, so the header-preserving logic keeps it — and the file
+    ends up saying there is no domain directly above the domains. It does not
+    accumulate (measured: 2 → 2 → 2), so this is cosmetic rather than a data
+    defect, but a file that contradicts itself in its own first screen is the
+    kind of thing a reader stops trusting.
+    """
+    routing = tmp_path / "domain-routing.txt"
+    write_routing_table(routing, [])
+    assert "no domain yet" in routing.read_text(encoding="utf-8")
+
+    write_routing_table(routing, [Domain(name="api", repos=["svc-a"], agent="agents/api.md")])
+
+    body = routing.read_text(encoding="utf-8")
+    assert "no domain yet" not in body, "the placeholder outlived the emptiness it described"
+    assert "api | svc-a | agents/api.md" in body

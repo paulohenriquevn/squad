@@ -408,6 +408,12 @@ def write_routing_table(path: Path, domains: list[Domain]) -> None:
             stripped = line.strip()
             if stripped and not stripped.startswith("#"):
                 break
+            # The empty-file placeholder is data pretending to be a comment: it
+            # says there is no domain, and on the next write it would sit
+            # directly above the domains. Keeping it makes the file contradict
+            # itself in its first screen.
+            if "no domain yet" in stripped:
+                continue
             kept.append(line)
         header = "\n".join(kept).rstrip("\n")
     if not header.strip():

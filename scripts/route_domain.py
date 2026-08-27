@@ -274,6 +274,27 @@ def main(argv: list[str] | None = None) -> int:
             print(f"BROKEN ROUTE: `{repo}` routes to domain `{domain}`, whose specialist is")
             print(f"{'  ' + agent if agent else '  not declared at all'} — and that file is not on disk.")
             print("The table names an owner who does not exist. Fix the table or write the specialist.")
+            # Say what goes in the file. The kit deliberately does NOT generate
+            # it — `agents/README.md` requires build commands *that were
+            # checked*, and its closing line notes that a derived skeleton
+            # "routes correctly and judges nothing, which reads as a specialist
+            # that is ready". But declining to fabricate the invariants is not
+            # the same as declining to say what an invariant is, and a message
+            # that names only the absence leaves the reader at a dead end.
+            if agent:
+                repos = table.get(domain, {}).get("repos", [])
+                print()
+                print(f"What `{agent}` has to carry (agents/README.md § What each agent is")
+                print("required to carry):")
+                print("  1. Repos verified on disk — with their commit counts, not an inventory")
+                print("  2. Build commands THAT WERE RUN, with the manifest that proves them")
+                print("  3. The domain's invariants — what is never done here, and why")
+                print("  4. The shape of a real finding, and this domain's false positives")
+                print("  5. Blast radius — what a change here typically reaches")
+                print()
+                print(f"Already derived for `{domain}`: {', '.join(repos) or '(no repo listed)'}")
+                print("The rest is reading and judgement — 3 and 4 are the file's whole value,")
+                print("and a plausible guess at them is worse than an empty file.")
         return 3
 
     payload = {"repo": repo, "routed": True, "domain": domain, "agent": agent}

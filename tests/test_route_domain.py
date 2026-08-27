@@ -433,3 +433,33 @@ def test_rows_the_parser_skipped_are_countable(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert count_candidate_rows(rule.read_text(encoding="utf-8")) == 2
+
+
+def test_a_broken_route_says_what_goes_in_the_missing_file(tmp_path, capsys) -> None:
+    """Exit 3 must be a starting point, not a dead end.
+
+    The message said the specialist file was absent and stopped there. Refusing
+    to GENERATE it is right — `agents/README.md` requires build commands *that
+    were checked*, and its closing line says a derived skeleton "routes correctly
+    and judges nothing, which reads as a specialist that is ready". A generator
+    would produce a plausible list, which is the fabricated-mechanism defect in
+    new clothes.
+
+    But refusing to fabricate the invariants is not the same as refusing to say
+    what an invariant IS. The person hitting exit 3 has to open the file next;
+    telling them the five requirements and the repos already known costs nothing
+    and is the difference between a gate and a dead end.
+    """
+    from route_domain import main as route_main
+
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "agents").mkdir()
+    (tmp_path / "rules" / "domain-routing.txt").write_text(
+        "api | svc-a, svc-b | agents/api.md\n", encoding="utf-8")
+
+    assert route_main(["svc-a", "--rule", str(tmp_path / "rules" / "domain-routing.txt")]) == 3
+
+    out = capsys.readouterr().out
+    assert "invariants" in out.lower(), "must name what the file has to carry"
+    assert "svc-a" in out and "svc-b" in out, "must hand over the repos already derived"
+    assert "agents/README.md" in out, "must point at the contract rather than restate it whole"
