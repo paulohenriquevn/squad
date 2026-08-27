@@ -113,19 +113,24 @@ def merge_verdict_into_plan_confidence(
         out["verdict"] = "INVALID"
     elif cq_verdict == "FAIL_SOFT":
         soft_caps = list(cq_summary.get("soft_caps_triggered", []))
-        undismissed = [c for c in soft_caps if c not in (dismissed_soft_caps or set())]
+        dismissed = dismissed_soft_caps or set()
+        undismissed = [c for c in soft_caps if c not in dismissed]
+        # BOTH lists, always. They used to be mutually exclusive, and a consumer
+        # on the full-dismissal path could not tell whether the absent
+        # `undismissed_soft_caps` meant "none" or "not emitted here". An empty
+        # list answers that; an absent key asks it.
+        out["undismissed_soft_caps"] = undismissed
+        out["dismissed_soft_caps"] = sorted(c for c in soft_caps if c in dismissed)
         if undismissed or not soft_caps:
             # An empty soft-cap list means there is nothing identifiable to
             # dismiss, so the demotion stands: waiving a cap nobody can name is
             # waiving the gate itself.
-            out["undismissed_soft_caps"] = undismissed
             if current in ("SHIPPABLE", "SHIPPABLE_WITH_CAVEATS"):
                 out["verdict"] = "NON_SHIPPABLE"
         elif current == "SHIPPABLE":
             # Every cap carries an ADR. The plan proceeds WITH CAVEATS, never
             # clean: the caveats are real and were justified, not removed.
             out["verdict"] = "SHIPPABLE_WITH_CAVEATS"
-            out["dismissed_soft_caps"] = sorted(dismissed_soft_caps or set())
     elif cq_verdict == "PASS_WITH_CAVEATS":
         if current == "SHIPPABLE":
             out["verdict"] = "SHIPPABLE_WITH_CAVEATS"

@@ -253,3 +253,28 @@ def test_fail_soft_without_any_adr_demotes_as_before() -> None:
     cq = {"verdict": "FAIL_SOFT", "score_cap": 70, "soft_caps_triggered": ["soft_cap_a"]}
     cq_invoke.merge_verdict_into_plan_confidence(out, cq)
     assert out["verdict"] == "NON_SHIPPABLE"
+
+
+def test_both_cap_lists_are_always_emitted_on_fail_soft() -> None:
+    """`dismissed_soft_caps` and `undismissed_soft_caps` both appear, always.
+
+    They used to be mutually exclusive: a full dismissal emitted only the first,
+    a total refusal only the second. The consumer that hit the full-dismissal
+    case could not tell whether the missing key meant "nothing undismissed" or
+    "the field is not emitted here" — and said so. If the person who read the
+    implementation cannot distinguish design from omission from the output, no
+    one can.
+
+    An empty list answers the question; an absent key asks one.
+    """
+    cq = {"verdict": "FAIL_SOFT", "score_cap": 70, "soft_caps_triggered": ["soft_cap_x"]}
+
+    full = {"verdict": "SHIPPABLE", "final_score_after_caps": 91.6}
+    cq_invoke.merge_verdict_into_plan_confidence(full, cq, dismissed_soft_caps={"soft_cap_x"})
+    assert full["dismissed_soft_caps"] == ["soft_cap_x"]
+    assert full["undismissed_soft_caps"] == [], "an empty list, not an absent key"
+
+    none = {"verdict": "SHIPPABLE", "final_score_after_caps": 91.6}
+    cq_invoke.merge_verdict_into_plan_confidence(none, cq)
+    assert none["undismissed_soft_caps"] == ["soft_cap_x"]
+    assert none["dismissed_soft_caps"] == []
