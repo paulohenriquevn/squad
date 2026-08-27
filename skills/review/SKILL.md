@@ -270,6 +270,71 @@ findings:
     ...
 ```
 
+### Closing a finding on a re-review
+
+A re-review that verified a fix marks the finding `status: CLOSED` and **leaves
+the severity alone**:
+
+```yaml
+  - id: F-dom-1
+    severity: BLOCKER          # stays BLOCKER — it was one
+    status: CLOSED             # what the re-review established
+    file: .github/workflows/ci.yml
+    summary: node -e trips SC2016 and fails workflow-lint
+    evidence: |
+      Re-verified against the same digest-pinned image: ACTIONLINT_EXIT=0,
+      0 bytes of output. Appending a genuine SC2016 still fires, so the
+      suppression is command-scoped rather than block-wide.
+    recommended_action: none — fixed in <sha>
+```
+
+`consolidate_findings.py` scores the verdict from **open** findings only, so a
+closed BLOCKER no longer forces `NEEDS_FIXES`. The finding stays in the report
+under its own section, with its original severity and the agent that closed it:
+the audit trail survives, and the verdict describes the code as it stands rather
+than as it stood at the first read.
+
+Only these three ways exist to move past a BLOCKER, and two of them are
+forbidden:
+
+| Action | Verdict | Allowed |
+|---|---|---|
+| Fix it, re-verify, mark `status: CLOSED` | passes | **yes** |
+| Lower its severity | passes | no — demoting a failure to let it through, the first anti-pattern `rules/cycle-review.md` names |
+| Delete the finding | passes | no — erases the audit trail of a real defect |
+
+**Absence of the field keeps the old behaviour.** Every findings file written
+before this omits `status`, and reinterpreting them would silently rescore every
+past review.
+
+**Why this section exists.** The mechanism shipped and the contract never
+mentioned it. A consumer session hit a re-verified BLOCKER, grepped the
+consolidator for `outcome` — the field name the harness's own `ReportFindings`
+tool uses — found nothing, and concluded the capability was missing. It was
+about to re-run four review agents at roughly 200k tokens each to work around
+something that already worked. A mechanism nobody can find is worth what an
+absent one is worth.
+
+## Do not edit the tree between the spawn and the consolidation
+
+The agents read the working tree while they run. Applying fixes during that
+window means each agent reviewed a different tree, and the findings no longer
+describe one state of the code.
+
+`consolidate_findings.py` detects it — it records HEAD plus a digest of
+`git status --porcelain` at spawn time, re-reads both at consolidation, and
+emits `tree_contaminated` in the JSON plus a `## ⚠ Working tree contaminated
+during this review` section in the report. So the run is not silently wrong.
+
+But detection is the remedy, not the cure: the agents have already spent their
+budget on a tree that moved. Measured on a real run — four reviewers, two of them
+noticed independently, reported *"TREE MOVED MID-REVIEW"* and re-measured against
+the new HEAD rather than inferring. That was their judgement, not the process's,
+and the next set of agents may simply report against a tree nobody has any more.
+
+Fix after the consolidation, then re-review. Marking the resulting findings
+`status: CLOSED` is what makes the second pass cheap.
+
 ## Inviolable rules
 
 - The skill NEVER modifies code on `workspace` — only writes review reports

@@ -44,6 +44,10 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 
   Use it instead of stretching `READY_TO_MERGE` (which would call acknowledged debt a clean green) and instead of `NEEDS_FIXES` (which would claim the blocking work is unfinished when it is demonstrably closed). The milestone is still gated by `cycle-acceptance`, so this verdict never softens what a `[x]` claims — it only stops forcing a false binary at the review boundary.
 - `NEEDS_FIXES` — BLOCKER or > 2 HIGH findings. Return to `/implement` (or open targeted fix tasks).
+
+  **A BLOCKER that was fixed and re-verified is CLOSED, not deleted.** The re-review marks the finding `status: CLOSED` and leaves the severity as it was; `skills/review/scripts/consolidate_findings.py` scores the verdict from OPEN findings only, so the halt lifts while the finding stays in the report under its original severity, naming the agent that closed it. Lowering the severity or deleting the entry reaches the same verdict by destroying the record — both are anti-patterns below. Shape in `skills/review/SKILL.md` § *Closing a finding on a re-review*.
+
+  The mechanism shipped and this contract never mentioned it, which cost a consumer a re-run of four review agents to work around a capability that already worked: it grepped the consolidator for `outcome` — the field name the harness's `ReportFindings` tool uses — found nothing, and concluded the field did not exist. A mechanism nobody can find is worth what an absent one is worth.
 - `NEEDS_DEEPER` — review surfaced systemic issues that exceed targeted fixes. Return to `/to-plan` for a re-scoping pass.
 
 ## Hard gates (BLOCKER-level)
