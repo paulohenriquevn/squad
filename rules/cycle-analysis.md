@@ -97,6 +97,8 @@ The analysis report is persisted at `knowledge-base/audits/` and referenced by t
 
 | Gate | Trigger | Source |
 |---|---|---|
+> **None of the six caps below is computed.** Measured 2026-08-27: `skills/analysis/` ships a `SKILL.md` and no scripts at all, so the verdict here is named by the agent that wrote the report rather than derived from it — the shape `/acceptance` exists to refuse (*"the verdict is computed, never asserted"*). The sibling kit closed this with a `compute_analysis_verdict.py`; this one has not. Every row is therefore _(not mechanized: no script in this repository reads the golden rule and emits a verdict)_ until that script lands.
+
 | Golden rule missing | `analysis-golden-rule.md` not found or unparseable | § 5.1 of golden rule |
 | Config not enabled | `analysis-config.txt` missing or `enabled ≠ true` | § 5.2 of golden rule |
 | No benchmarks for profile | `engine`/`api` profile with empty `benchmark_dir` | § 5.3 of golden rule |

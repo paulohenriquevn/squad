@@ -451,10 +451,41 @@ def _emit_and_exit(
         _write_markdown_report(findings, summary, audit_path, args.slug)
         summary["report_path"] = str(audit_path.relative_to(repo_root))
 
+    # The phase leaves an event, not only a file. A missing audit cannot say
+    # whether the gate was skipped or ran and wrote nothing; an absent event can.
+    _emit_phase_end(
+        repo_root,
+        slug=args.slug or "",
+        verdict=verdict,
+        languages=languages_audited or [],
+        findings=len(findings),
+    )
+
     # Exit code
     if verdict in ("FAIL_HARD", "INVALID"):
         return 1
     return 0
+
+
+def _emit_phase_end(repo_root: Path, *, slug: str, verdict: str, **extra: object) -> None:
+    """Record the phase transition, and never let the bookkeeping fail the gate.
+
+    The importer resolves `scripts/` against THIS FILE rather than the audited
+    repository: in a plugin install the kit lives under `.claude/` while the
+    audited tree is the project, and resolving against the target would find
+    nothing. `ImportError` is caught on its own — a bare `except Exception` here
+    would swallow a real bug in the emitter into a silence indistinguishable from
+    a phase that never ran, which is the defect the stream exists to remove.
+    """
+    tooling = Path(__file__).resolve().parents[3] / "scripts"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_end
+    except ImportError as error:  # emitter genuinely unavailable
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_end(repo_root, cycle="code-quality", slug=slug, verdict=verdict, **extra)
 
 
 def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: Path, slug: str) -> None:

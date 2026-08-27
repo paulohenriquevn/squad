@@ -45,6 +45,14 @@ jobs:
       - name: Skill frontmatter validator
         run: python3 scripts/validate_skill_frontmatter.py
 
+      # Every declared hard gate names what computes it. Measured before this
+      # gate existed: 59 gates, 11 naming a script. The other 48 were mostly
+      # enforced and said so nowhere, which reads to a reader exactly like a
+      # gate nobody runs. Without this step the annotation decays the moment a
+      # rule gains a line.
+      - name: Every hard gate names its mechanism
+        run: python3 scripts/check_gate_mechanisms.py
+
       - name: Generated settings are synchronized
         run: python3 scripts/generate-plugin-settings.py --check
 

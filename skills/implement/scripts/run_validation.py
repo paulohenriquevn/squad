@@ -717,7 +717,32 @@ def main() -> int:
         md_path.write_text(md, encoding="utf-8")
         print(f"\nReport saved: {md_path}", file=sys.stderr)
 
+    # `PARTIAL` is the interesting one to have in the stream: it exits 0, so a
+    # reader of exit codes alone cannot tell a full pass from a run where gates
+    # SKIPped for want of a manifest.
+    _emit_phase_end(project_root, cycle="implement", slug=args.slug, verdict=overall)
+
     return 0 if overall in ("PASS", "PARTIAL") else 1
+
+
+def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict) -> None:
+    """Record the phase transition; never let bookkeeping fail the gate.
+
+    `scripts/` resolves against THIS FILE, not the validated project: in a plugin
+    install the kit lives under `.claude/` while the project is elsewhere.
+    `ImportError` is caught alone — a bare `except Exception` would swallow a
+    real emitter bug into a silence indistinguishable from a phase that never
+    ran, which is the defect the stream exists to remove.
+    """
+    tooling = Path(__file__).resolve().parents[3] / "scripts"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_end
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_end(project_root, cycle=cycle, slug=slug, verdict=verdict)
 
 
 if __name__ == "__main__":

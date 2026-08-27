@@ -53,11 +53,11 @@ A task is **not** complete until all three are present:
 
 ## Hard gates (per iteration)
 
-- Parsimony ladder walked before GREEN-phase code is written (`rules/parsimony-ladder.md`) — guardrail items (tests/validation/error-handling/security/accessibility) never sacrificed.
-- Test suite green before commit.
-- Linter clean (project-specific — see `rules/code-quality-languages.txt`).
-- No new symbols left dangling (every new function/class has a caller or a test exercising it).
-- CHANGELOG `[Unreleased]` updated (Unbreakable Rule 6).
+- Parsimony ladder walked before GREEN-phase code is written (`rules/parsimony-ladder.md`) — guardrail items (tests/validation/error-handling/security/accessibility) never sacrificed. `userpromptsubmit-inject.sh` re-injects the ladder every turn — _(not mechanized: injecting a deliberation prompt is not checking that the deliberation happened; nothing reads the resulting code and decides which rung it stopped at)_
+- Test suite green before commit — `suite_runners.py`, via `run_validation.py` after the halt-loop, and `ci.yml` on every push. _(not mechanized at the point of action: no hook runs the suite before a commit lands, so "before commit" is honoured by discipline and caught afterwards)_
+- Linter clean (project-specific — see `rules/code-quality-languages.txt`) — `post-edit-check.sh` on every edit, scoped to the edited file, and `run_code_quality.py` over the tree at Step 5.
+- No new symbols left dangling (every new function/class has a caller or a test exercising it) — `check_wiring.py`, whose pillar (a) is the non-negotiable one.
+- CHANGELOG `[Unreleased]` updated (Unbreakable Rule 6) — `stop-validation.sh`.
 
 ## Hard gates (per phase boundary — Step 4.7 mini review)
 
@@ -86,9 +86,9 @@ Skipping mini review on phase boundary is a documented anti-pattern: design prob
 
 - **Phase-review gate — Step 4.7 actually ran.** `check_phase_review.py` requires the mini-review report (`{slug}-phase{N}-review-*.md`) for every `## Phase N` whose tasks are all `committed`. This section already called skipping the mini review a documented anti-pattern; until this gate existed, nothing could tell a skipped boundary from a reviewed one, which is the same self-report problem the wiring recheck solves by re-deriving the evidence.
 
-- **Acceptance-criteria gate** — enforces the plan's mechanizable AC/DoD that the command gates miss (file-size budget per changed file, CHANGELOG-updated) and surfaces non-mechanizable criteria (backward-compat) for human evidence instead of accepting a self-ticked box.
-- **Test-obligation gate** — declared concurrency tests / failure scenarios must have at least one matching test in the tree; total absence when the plan promised them is a FAIL (a generic green suite never exercised them).
-- **`/code-quality` verdict ∉ {FAIL_HARD, INVALID}** — invoked internally by the script. FAIL_SOFT and PASS_WITH_CAVEATS surface as WARN in the report but do not block. Override only with `--no-code-quality` (pre-code phase or CQ not installed).
+- **Acceptance-criteria gate** — `check_acceptance_criteria.py` enforces the plan's mechanizable AC/DoD that the command gates miss (file-size budget per changed file, CHANGELOG-updated) and surfaces non-mechanizable criteria (backward-compat) for human evidence instead of accepting a self-ticked box.
+- **Test-obligation gate** — `check_test_obligations.py`. Declared concurrency tests / failure scenarios must have at least one matching test in the tree; total absence when the plan promised them is a FAIL (a generic green suite never exercised them).
+- **`/code-quality` verdict ∉ {FAIL_HARD, INVALID}** — `cq_invoke.py`, called internally by `run_validation.py`. FAIL_SOFT and PASS_WITH_CAVEATS surface as WARN in the report but do not block. Override only with `--no-code-quality` (pre-code phase or CQ not installed).
 
 Exit codes: `0` = `PASS` or `PARTIAL` (proceed); `1` = `FAIL` (trigger validation halt-loop — see below); `2` = invocation error (escalate to human).
 

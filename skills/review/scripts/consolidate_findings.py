@@ -704,11 +704,42 @@ def main() -> int:
     }
     print(json.dumps(summary, indent=2))
 
+    # The root comes from the findings directory, not from cwd: the install
+    # smoke exercises this script against a tmpdir plan while cwd is the
+    # adopter's repository, and cwd would file a review event there for a review
+    # that never happened.
+    _emit_phase_end(
+        args.findings_dir, cycle="review", slug=args.slug or "", verdict=verdict,
+        findings=len(deduped),
+    )
+
     if verdict == "NEEDS_FIXES":
         return 1
     if verdict == "NEEDS_DEEPER":
         return 3
     return 0
+
+
+def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:
+    """Record the phase transition; never let bookkeeping fail the phase.
+
+    `scripts/` resolves against THIS FILE, not the audited project: in a plugin
+    install the kit lives under `.claude/` while the project is elsewhere.
+    `ImportError` is caught alone — a bare `except Exception` would swallow a
+    real emitter bug into a silence indistinguishable from a phase that never
+    ran, which is the defect the stream exists to remove.
+    """
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "scripts"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_end, project_root_for
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_end(project_root_for(project_root), cycle=cycle, slug=slug,
+                   verdict=verdict, **extra)
 
 
 if __name__ == "__main__":

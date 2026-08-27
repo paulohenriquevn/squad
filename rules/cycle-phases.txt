@@ -1,0 +1,50 @@
+# The declared phase plan — the pipeline's `meta.phases`.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# The chain BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW →
+# RELEASE → ACCEPTANCE was written in prose across a README, a plugin manifest
+# and eleven rule files. Prose in four places is four places to drift, and
+# nothing could be asked "did this run follow the chain?" because there was no
+# single artifact stating what the chain IS.
+#
+# This is that artifact. `scripts/check_phase_drift.py` reads it and confronts
+# it with `knowledge-base/cycle-events.jsonl` — what was DECLARED against what
+# actually EMITTED.
+#
+# THE DEFECT THIS PAIR CLOSES, IN BOTH DIRECTIONS
+# -----------------------------------------------
+# Measured 2026-08-27 in `deer-workflow` (studied, not adopted): a Workflow
+# whose `meta.phases` declares `Plan` and `Execute`, runs `Plan` and
+# `Undeclared`, and never enters `Execute`, exits 0 with no warning. The same
+# event stream carries the published plan and the execution contradicting it,
+# and nothing compares them. Their generator SKILL asks the agent to check it,
+# at item 3 of a 15-item list.
+#
+# Emitting events without this comparison buys a prettier log of the same drift.
+# The comparison is the point.
+#
+# FORMAT
+# ------
+#   PHASE | REQUIREMENT | NOTE
+#
+# Order is positional: the first data line is the first phase. `#` starts a
+# comment.
+#
+# REQUIREMENT is one of:
+#   required     — a completed run must have emitted this phase
+#   conditional  — legitimately absent depending on the item (see NOTE)
+#
+# `conditional` is not a soft `required`. An item killed in DISCOVER never
+# reaches PLAN, and `cycle-discover.md` calls killing an item a SUCCESSFUL
+# outcome — reporting those absences as debt would teach the reader to ignore
+# the report, which is how a gate stops being read.
+
+backlog       | required    | /backlog-item registers the item; the entry point for every unit of maintenance
+discover      | required    | /discover-execute measures it; the phase that turns a hunch into evidence or kills it
+plan          | conditional | absent when discover killed the item — cycle-discover.md § ITEM_KILLED
+implement     | conditional | absent for a killed item, and for an item whose fix is documentation only
+code-quality  | conditional | absent when implement never ran; invoked internally by run_validation.py otherwise
+review        | conditional | absent when implement never ran
+release       | conditional | absent until a version cuts; several items ship in one release
+acceptance    | conditional | absent until the milestone the item belongs to is validated

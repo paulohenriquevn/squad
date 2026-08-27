@@ -76,12 +76,14 @@ This is the entire point of having an orthogonal jury: agreement = high confiden
 
 ## Hard gates
 
-The plugin's per-stage hard caps mirror the canonical golden rules:
+The plugin's per-stage hard caps mirror the canonical golden rules. **None of the four rows below is enforced from this repository** — `judge-codex` is an installed plugin, not a slice of this kit, so what follows records which contract each of its stages is pointed at, and the caps live in the plugin's own agents. _(not mechanized: the enforcement belongs to a third-party plugin; this kit can state the wiring and cannot verify it)_ The rule files named here do exist — `check_xrefs.py` fails the build when one of them stops existing, which is the half this repository can actually guarantee.
 
-- `:discover` consults `rules/discover-plan-golden-rule.md` — the measurement-plan contract of this ecosystem. (The plugin's own docs name a `discover-blueprint-golden-rule.md`, which exists in other installs and never existed here.)
-- `:plan` consults `rules/plan-confidence-golden-rule.md` (and the **unbreakable** `feedback_never_single_source_evidence` rule that is currently encoded in memory; will be promoted to a hard-cap detector in a follow-up slice).
-- `:implementation` consults `rules/cycle-implement.md` + `rules/code-quality-golden-rule.md`.
-- `:final` consults `rules/cycle-review.md`.
+| Stage | Contract it is pointed at | Note |
+|---|---|---|
+| `:discover` | `rules/discover-plan-golden-rule.md` | the measurement-plan contract of this ecosystem. The plugin's own docs name a `discover-blueprint-golden-rule.md`, which exists in other installs and never existed here. |
+| `:plan` | `rules/plan-confidence-golden-rule.md` | plus the **unbreakable** `feedback_never_single_source_evidence` rule, currently encoded in memory; to be promoted to a hard-cap detector in a follow-up slice. |
+| `:implementation` | `rules/cycle-implement.md` + `rules/code-quality-golden-rule.md` | |
+| `:final` | `rules/cycle-review.md` | |
 
 A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** until either the underlying issue is fixed OR an explicit ADR dismisses it with a sunset window.
 

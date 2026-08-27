@@ -115,11 +115,11 @@ The **Blast radius** corner is the one whose shape depends most on the project. 
 
 | # | Gate | Blocks on |
 |---|---|---|
-| G-E | **Evidence pointers resolve** | A cited `file:line` that does not exist, a URL never actually fetched, a trace id never observed, a test asserted to fail but never run. Fabricated evidence is the one unrecoverable defect in this cycle: everything downstream trusts it. |
-| G-M | **Mode contract satisfied** | The mode's mandatory evidence is incomplete — most often `bug` without a failing test. |
-| G-L | **Live target declared** | `--mode live-test` on a domain with no block in `rules/live-target.txt`. |
-| G-C | **Corners populated** | Any of the four corners empty. `unknown` populates Constraint relation; it is an answer, not a blank. |
-| G-K | **Kill is reasoned** | `ITEM_KILLED` without a `kill_reason` naming what was measured and what it showed. An unexplained kill is indistinguishable from an abandoned run. |
+| G-E | **Evidence pointers resolve** (`check_evidence_pointers.py`) | A cited `file:line` that does not exist, a URL never actually fetched, a trace id never observed, a test asserted to fail but never run. Fabricated evidence is the one unrecoverable defect in this cycle: everything downstream trusts it. |
+| G-M | **Mode contract satisfied** (`check_opportunity_completeness.py`) | The mode's mandatory evidence is incomplete — most often `bug` without a failing test. |
+| G-L | **Live target declared** (`check_measurement_targets.py`, at plan time) | `--mode live-test` on a domain with no block in `rules/live-target.txt`. |
+| G-C | **Corners populated** (`check_corner_coverage.py`) | Any of the four corners empty. `unknown` populates Constraint relation; it is an answer, not a blank. |
+| G-K | **Kill is reasoned** _(not mechanized: measured 2026-08-27, no script reads `kill_reason`; the token and the reason are written by the run that decided to kill, and nothing confronts them)_ | `ITEM_KILLED` without a `kill_reason` naming what was measured and what it showed. An unexplained kill is indistinguishable from an abandoned run. |
 
 ## Stop conditions
 

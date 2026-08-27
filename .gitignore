@@ -67,6 +67,10 @@ knowledge-base/discoveries/snapshots/**
 knowledge-base/references/**
 knowledge-base/tools/**
 knowledge-base/judge-codex/**
+# The phase-transition stream. Per-session and per-machine by nature: what this
+# repository's cycles did here says nothing to whoever clones it, and committing
+# it would put one machine's run history in everyone's diff.
+knowledge-base/cycle-events.jsonl
 !knowledge-base/**/.gitkeep
 !knowledge-base/backlog.md
 

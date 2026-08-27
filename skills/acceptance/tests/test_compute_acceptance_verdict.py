@@ -137,3 +137,44 @@ class TestMalformedInput:
     ) -> None:
         with pytest.raises(MalformedEvidence, match="severity 'catastrophic'"):
             compute(criteria_m2, passing_results, [{"severity": "catastrophic", "summary": "x"}])
+
+
+# ---------------------------------------------------------------------------
+# main() — exercised, because the tests that only call compute() missed a bug
+# ---------------------------------------------------------------------------
+
+def test_main_emits_a_phase_event_and_does_not_crash(tmp_path, monkeypatch):
+    """`main()` had no test at all, and instrumenting it introduced an
+    `AttributeError` on an argparse field that did not exist. Every assertion in
+    this file called `compute()` directly, so the whole entry point was
+    unexercised — a suite green over a script that could not start.
+    """
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path as _Path
+
+    script = _Path(__file__).resolve().parents[1] / "scripts" / "compute_acceptance_verdict.py"
+    criteria = tmp_path / "criteria.json"
+    evidence = tmp_path / "evidence.json"
+    criteria.write_text(json.dumps({"criteria": [{"id": "C1", "text": "it works"}]}), encoding="utf-8")
+    evidence.write_text(json.dumps({
+        "results": [{"id": "C1", "status": "passed", "evidence": "HTTP 200 at /health"}],
+        "defects": [],
+    }), encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(script), "--criteria", str(criteria),
+         "--evidence", str(evidence), "--milestone", "M7"],
+        capture_output=True, text=True, cwd=str(tmp_path), check=False,
+    )
+
+    assert "Traceback" not in result.stderr, result.stderr
+    events = (tmp_path / ".claude" / "knowledge-base" / "cycle-events.jsonl")
+    assert events.is_file(), "the phase left no event"
+    event = json.loads(events.read_text(encoding="utf-8").splitlines()[-1])
+    assert event["cycle"] == "acceptance"
+    assert event["slug"] == "M7"
+    assert event["verdict"] == result.stdout.strip(), (
+        "the event must carry the verdict the script printed, not a second opinion"
+    )

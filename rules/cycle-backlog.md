@@ -134,10 +134,10 @@ There is no "with caveats" band: an item is either in the registry or it is not.
 | # | Gate | Blocks on |
 |---|---|---|
 | G1 | **Domain + repo resolve** (run by `skills/backlog-item/scripts/check_intake_gates.py`, which delegates to `scripts/route_domain.py`) | `domain` not in the registered set, or `repo` not in the umbrella inventory. An item nobody owns is an item nobody does. |
-| G2 | **Dedup search ran** (same script; running it IS the evidence) | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
-| G3 | **Single domain** | The description spans two domains. Split it; one item, one specialist. |
-| G4 | **Verifiable DoD** | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |
-| G5 | **No prior-art justification** | `why_now` justifies the item by what another project does rather than by something that changed in our system. This is the Squad signature rule (Unbreakable Rule: evidence is ours or it is not evidence). Reject and ask for the local reason. |
+| G2 | **Dedup search ran** (`check_intake_gates.py`; running it IS the evidence) | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
+| G3 | **Single domain** _(not mechanized: judgement, by decision — deciding that a description spans two domains is not something a regex settles, and the evals cover it instead)_ | The description spans two domains. Split it; one item, one specialist. |
+| G4 | **Verifiable DoD** _(not mechanized: judgement, by decision — `check_criterion_executability.py` does the equivalent one phase later, against a plan; at intake an item is a hypothesis and a strict falsifiability check would silence the hunch)_ | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |
+| G5 | **No prior-art justification** _(not mechanized: judgement, by decision — the keyword heuristic raises the question and the human decides; automating the refusal would reject an item that merely mentions another project)_ | `why_now` justifies the item by what another project does rather than by something that changed in our system. This is the Squad signature rule (Unbreakable Rule: evidence is ours or it is not evidence). Reject and ask for the local reason. |
 
 G1 and G2 are mechanizable and are now mechanized; G3, G4 and G5 are judgement and stay conversational, covered by the skill's eval battery — automating them would produce verdicts about language, not about the work.
 

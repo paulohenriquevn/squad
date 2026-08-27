@@ -102,12 +102,12 @@ where the reasoning was written down and measured.
 
 ## Hard gates
 
-- **PR approval gate (LOCKED)** — the merge step ALWAYS waits for a human-approved PR. Auto-merging into `main` violates Unbreakable Rule 4.
-- **No direct commits to `main`** — even from this skill. Every change reaches `main` via the PR opened above.
-- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`.
-- **CHANGELOG must have content** — refuse if `[Unreleased]` is empty after stripping headers.
+- **PR approval gate (LOCKED)** — _(not mechanized: branch protection on the remote is what makes the PR mandatory, and the kit cannot configure another project's remote; a repo without it keeps the local guarantee that work originated on `workspace` and loses this one)_ The merge step ALWAYS waits for a human-approved PR. Auto-merging into `main` violates Unbreakable Rule 4.
+- **No direct commits to `main`** — `validate-command.sh`, which resolves the real trunk rather than matching the literal name. Even from this skill: Every change reaches `main` via the PR opened above.
+- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. _(not mechanized: nothing inspects the tag object's type or the branch it was cut from; `validate-command.sh` blocks the commit paths, not the tag)_
+- **CHANGELOG must have content** — `changelog_section_nonempty.py` refuses if `[Unreleased]` is empty after stripping headers.
 - **Single-flip invariant** — owned by [`cycle-acceptance § Hard gates`](cycle-acceptance.md), which is where the flip moved (see § Post-merge ROADMAP.md checkbox flip). This cycle no longer flips anything; the clause stays as a pointer so nobody re-adds a flip here.
-- **No silent flip** — the roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.
+- **No silent flip** — `flip_milestone_checkbox.py --commit`, which writes the run-file and aborts the whole operation (restoring the checkbox) when the commit fails. The roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.
 
 ## Stop conditions
 

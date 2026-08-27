@@ -48,11 +48,24 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 
 ## Hard gates (BLOCKER-level)
 
-- Failing tests on the working branch.
-- New secrets committed (any pattern matching `.env`, `credentials*`, `*.pem`, `*.key`).
-- Direct commit to `main` (Unbreakable Rule 4).
-- Co-Authored-By trailer in any commit on this branch (user policy).
-- `CHANGELOG.md` not updated despite production source changes (Unbreakable Rule 6).
+Four of the five run in hooks that fire whether or not `/review` is invoked, and
+for a long time this list said so about none of them. A mechanized gate whose
+rule names no mechanism reads exactly like a gate nobody enforces — so it gets
+re-run by hand, or quietly ignored. The mechanism is now part of the line.
+
+- Failing tests on the working branch — `suite_runners.py`, invoked upstream by
+  `run_validation.py` at the end of `/implement`, and again by `ci.yml` on every
+  push. **No hook executes the suite**, so a branch that never ran `/implement`
+  reaches `/review` with this gate resting on CI alone.
+- New secrets committed (any pattern matching `.env`, `credentials*`, `*.pem`,
+  `*.key`) — `stop-validation.sh`.
+- Direct commit to `main` (Unbreakable Rule 4) — `validate-command.sh`, which
+  resolves the real trunk instead of matching the literal `main`.
+- Co-Authored-By trailer in any commit on this branch (user policy) —
+  `validate-command.sh`.
+- `CHANGELOG.md` not updated despite production source changes (Unbreakable
+  Rule 6) — `stop-validation.sh`, which accepts a package `CHANGELOG.md` or a
+  `.changeset/` entry as the record.
 
 ## Output
 

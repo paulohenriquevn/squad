@@ -58,8 +58,8 @@ redefine them. The verdict is the smallest cap among the findings:
 
 ## Hard gates (`FAIL_HARD`)
 
-- `symbol_fabrication_{language}` — at least one production reference points to a name that does not exist in the source tree or in any imported dependency.
-- `dead_code_unallowlisted_{language}` — a symbol exported from a public package surface has no caller and no test, and is not allowlisted.
+- `symbol_fabrication_{language}` (`run_code_quality.py`, detector D2) — at least one production reference points to a name that does not exist in the source tree or in any imported dependency.
+- `dead_code_unallowlisted_{language}` (`run_code_quality.py`, detector D1) — a symbol exported from a public package surface has no caller and no test, and is not allowlisted.
 
 A `FAIL_HARD` verdict blocks `/review`; `INVALID` halts the cycle (surface to human). The fix path for `FAIL_HARD` is back to `/implement` (or a targeted fix branch). A `FAIL_SOFT` MAY proceed to `/review` only with an ADR dismissing each soft cap (per golden rule § 1).
 

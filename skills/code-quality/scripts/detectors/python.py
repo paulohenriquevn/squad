@@ -12,7 +12,12 @@ import sys
 from pathlib import Path
 
 from scripts import _registry
-from scripts._shared import Finding, sanitize_symbol, to_rel_path
+from scripts._shared import (
+    DEFAULT_SKIP_DIRS,
+    Finding,
+    sanitize_symbol,
+    to_rel_path,
+)
 from scripts.check_symbol_fab import extract_imports_and_calls
 
 from . import BaseDetector, _arch, _mutation, _wiring
@@ -43,10 +48,19 @@ class PythonDetector(BaseDetector):
             If vulture is unavailable, returns a single SOFT_CAP Finding with
             allowlist_key containing `auditor_unavailable_vulture`.
         """
+        # `--exclude` rather than the bare directory: vulture walks everything
+        # below what it is handed, and `_shared.DEFAULT_SKIP_DIRS` — which
+        # `enumerate_source_files` already honours — exists to keep this gate on
+        # the PRODUCT. Measured in a fresh install at min_confidence 60: 44
+        # findings, 42 of them inside `.claude/` (the kit itself) and 2 in the
+        # adopter's code, with the verdict FAIL_HARD on their strength. Same
+        # defect the stop-hook had and fixed; never propagated here.
         cmd = [
             "vulture",
             "--min-confidence",
             str(self.min_confidence),
+            "--exclude",
+            ",".join(f"*/{name}/*" for name in sorted(DEFAULT_SKIP_DIRS)),
             str(manifest_dir),
         ]
         try:
