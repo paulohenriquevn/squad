@@ -44,8 +44,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Skills documented as "auxiliary" (not bound to any cycle)
 # - ast-grep: structural search utility
-# - deck, marp-slide, excalidraw: presentation skills, project-agnostic
-# - dogfood: honesty gate consumed transversally (README/CHANGELOG edits, release decisions)
+# - slide-deck, marp-slide, excalidraw: presentation skills, project-agnostic
+# - honesty-gate: honesty gate consumed transversally (README/CHANGELOG edits, release decisions)
 # - roadmap-init: single-shot bootstrap at project inception; intentionally isolated
 #   (its ARTIFACTS — ROADMAP.md + knowledge-base/references/ — are consumed by cycle-roadmap
 #   and cycle-discover; the SKILL itself is never invoked mid-cycle)
@@ -57,7 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # - skill-creator: standalone skill-authoring tool (the official Anthropic skill-creator);
 #   invoked on demand to create/improve any skill at skills/{purpose}/. Deliberately decoupled
 #   from every cycle (replaced the retired skill-writer/validator/register discover tail).
-AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "backlog-init", "backlog-review", "cycle-goal", "plan-help", "quality-init", "skill-creator", "frontend-design", "cap-theorem-specialist", "backpressure-specialist", "resilience-specialist", "arch-check", "sop-author", "sop-run", "sop-review"}
+AUXILIARY_SKILLS = {"ast-grep", "slide-deck", "marp-slide", "excalidraw", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "commands-help", "quality-init", "skill-creator", "frontend-design", "cap-theorem-specialist", "backpressure-specialist", "resilience-specialist", "arch-check", "sop-author", "sop-run", "sop-review"}
 
 
 def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:
@@ -108,7 +108,7 @@ def _is_auto_generated(skill: str) -> bool:
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 BACKTICK_PATH_RE = re.compile(r"`(\.?[a-zA-Z0-9_./\-]+\.(?:md|py|sh|json|txt|yml|yaml))`")
 # `[a-z]+(?:-[a-z]+)*` and not `[a-z]+`: three of the kit's twelve cycle rules
-# are multi-hyphen (cycle-code-quality, cycle-auto-plan, cycle-judge-codex), and a
+# are multi-hyphen (cycle-code-quality, cycle-idea-to-release, cycle-judge-codex), and a
 # group without the hyphen truncated them to cycle-code / cycle-auto /
 # cycle-judge — names that do not exist. The validator then reported a present
 # file as missing.
@@ -207,7 +207,7 @@ def _extract_cycle_phases(cycle_rule_content: str) -> set[str]:
         # Match /skill-name in the chain. Accept either:
         #   - kebab-case skills (e.g. /to-plan, /edge-case-plan)
         #   - single-word skills explicitly listed (release, implement, review)
-        for m in re.finditer(r"/([a-z][a-z0-9]+(?:-[a-z0-9]+)+|to-plan|implement|review|release|analysis|acceptance)[\s{]", chain):
+        for m in re.finditer(r"/([a-z][a-z0-9]+(?:-[a-z0-9]+)+|to-plan|implement|review|release|trajectory-review|acceptance)[\s{]", chain):
             skills.add(m.group(1))
 
     return skills
@@ -219,7 +219,7 @@ def _extract_cycle_contract_ref(
     """Find `cycle-{name}` referenced in a SKILL.md's Cycle contract section.
 
     `skill_names` disambiguates a namespace collision: a SKILL directory may itself
-    be named with the cycle- prefix (skills/cycle-goal/ is the one in this kit), and
+    be named with the cycle- prefix (skills/session-goal/ is the one in this kit), and
     then every mention of that command in prose looks exactly like a reference to a
     cycle rule file that was never meant to exist. Names are written unbackticked
     throughout this docstring precisely because backticks are what the sibling

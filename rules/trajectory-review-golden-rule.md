@@ -1,18 +1,18 @@
 # Analysis Golden Rule
 
-Locked unbreakable contract that `/analysis` reads to score hypotheses, run analysis modules, decide verdicts, and surface trajectory evidence. **This file is the Source of Truth for the analysis methodology, module contracts, severity rubric, and verdict score caps.**
+Locked unbreakable contract that `/trajectory-review` reads to score hypotheses, run trajectory-review modules, decide verdicts, and surface trajectory evidence. **This file is the Source of Truth for the trajectory-review methodology, module contracts, severity rubric, and verdict score caps.**
 
-Without this file, `/analysis` emits `INVALID` with flag `analysis_golden_rule_missing` and refuses to run.
+Without this file, `/trajectory-review` emits `INVALID` with flag `analysis_golden_rule_missing` and refuses to run.
 
 ## § 1 — Verdict tokens (LOCKED)
 
-`/analysis` MUST emit one of the following verdicts. They are aligned with the canonical matrix in `cycle-rule-schema.md`.
+`/trajectory-review` MUST emit one of the following verdicts. They are aligned with the canonical matrix in `cycle-rule-schema.md`.
 
 | Verdict | Score range | Meaning | Downstream action |
 |---|---|---|---|
 | `ON_TRACK` | 90-100 | All hypotheses validated with quantitative evidence. Architecture, performance, and scalability meet or exceed targets. | Archive report as baseline. Next milestone proceeds normally via `cycle-maintenance`. |
-| `ON_TRACK_WITH_RISKS` | 70-89 | Most hypotheses validated. Identified risks have concrete mitigation paths. No fundamental design flaw. | Next milestone proceeds, but risk mitigation tasks are injected into the next `/to-plan`. Follow-up `/analysis` scheduled after next release. |
-| `COURSE_CORRECTION_NEEDED` | 40-69 | Multiple hypotheses falsified OR performance significantly below targets. Correctable without architectural rewrite. | Before next feature work, run `/to-plan` for corrective tasks. Then `/implement` corrections and re-release. Re-run `/analysis` to validate corrections. |
+| `ON_TRACK_WITH_RISKS` | 70-89 | Most hypotheses validated. Identified risks have concrete mitigation paths. No fundamental design flaw. | Next milestone proceeds, but risk mitigation tasks are injected into the next `/to-plan`. Follow-up `/trajectory-review` scheduled after next release. |
+| `COURSE_CORRECTION_NEEDED` | 40-69 | Multiple hypotheses falsified OR performance significantly below targets. Correctable without architectural rewrite. | Before next feature work, run `/to-plan` for corrective tasks. Then `/implement` corrections and re-release. Re-run `/trajectory-review` to validate corrections. |
 | `FUNDAMENTAL_RETHINK` | 0-39 | Architecture cannot meet stated goals based on empirical evidence. Benchmark data contradicts core design assumptions. | Run `/discover-plan` for alternatives + `/to-plan` for redesign. Write ADR documenting failure evidence. `cycle-maintenance` pauses until human decides. |
 | `INVALID` | — | Structural integrity broken (config missing, no benchmarks exist for engine profile, golden rule corrupted). | Stop. Surface to human. |
 
@@ -25,7 +25,7 @@ Six modules, run in fixed order. Each module produces **findings** with quantita
 | Module | Name | What it measures | Evidence type |
 |---|---|---|---|
 | A1 | Performance benchmarks | Throughput, latency, startup time via language-specific benchmark frameworks | Numbers: ops/sec, p50/p95/p99 latency, wall-clock time |
-| A2 | Complexity analysis | Cyclomatic + cognitive complexity, function/file length, nesting depth | Numbers: CC score, LOC, max nesting |
+| A2 | Complexity trajectory-review | Cyclomatic + cognitive complexity, function/file length, nesting depth | Numbers: CC score, LOC, max nesting |
 | A3 | Architecture fitness | Dependency graph, coupling metrics (Ca/Ce/I/A/D), circular deps, layer violations | Graph: module dependency matrix, instability index |
 | A4 | Memory & resource profile | Per-object overhead, allocation patterns, unsafe blocks (Rust), resource leaks | Numbers: bytes/entity, alloc count, unsafe ratio |
 | A5 | Scalability projection | Empirical Big-O by benchmarking at N, 2N, 4N; bottleneck identification | Curve: measured vs expected growth, inflection points |
@@ -46,7 +46,7 @@ A module MAY report `module_unavailable_{id}` when its toolchain is missing — 
 
 ## § 3 — Hypothesis methodology (LOCKED)
 
-Every `/analysis` run follows the scientific method:
+Every `/trajectory-review` run follows the scientific method:
 
 1. **Extract hypotheses** — Read project CLAUDE.md, plan files, ADRs, README. Extract testable claims about architecture, performance, scalability.
 2. **Formulate predictions** — Each hypothesis becomes a measurable prediction: "If the architecture is correct, then [metric] should be [comparison] [threshold]."
@@ -101,22 +101,22 @@ Hard caps block the verdict at `COURSE_CORRECTION_NEEDED` or below. They cannot 
 
 | # | Check | Flag |
 |---|---|---|
-| 1 | This file (`analysis-golden-rule.md`) exists and parses | `analysis_golden_rule_missing` |
-| 2 | `analysis-config.txt` exists with `enabled = true` | `analysis_not_enabled` |
+| 1 | This file (`trajectory-review-golden-rule.md`) exists and parses | `analysis_golden_rule_missing` |
+| 2 | `trajectory-review-config.txt` exists with `enabled = true` | `analysis_not_enabled` |
 | 3 | Profile-required benchmarks exist (engine/api profiles) | `no_benchmarks_for_profile` |
 | 4 | No circular dependency in core modules | `circular_dependency_{modules}` |
 | 5 | No core architecture hypothesis falsified | `hypothesis_falsified_core_{id}` |
-| 6 | `/release` completed before `/analysis` runs | `release_not_completed` |
+| 6 | `/release` completed before `/trajectory-review` runs | `release_not_completed` |
 
 ## § 5.1 — Pre-condition: post-release only (LOCKED)
 
-`/analysis` MUST run after `/release` emits `RELEASED`. This is non-negotiable because:
+`/trajectory-review` MUST run after `/release` emits `RELEASED`. This is non-negotiable because:
 
 - Measuring in-progress code produces unreliable baselines that pollute regression detection.
 - The feedback loop only works if the measured state is the state that shipped — otherwise corrections target a moving target.
 - Benchmark variance during active development masks real regressions.
 
-If no release exists yet (project bootstrap), `/analysis` MAY run once to establish the initial baseline, but the report MUST note "pre-release baseline — no regression comparison available".
+If no release exists yet (project bootstrap), `/trajectory-review` MAY run once to establish the initial baseline, but the report MUST note "pre-release baseline — no regression comparison available".
 
 ## § 6 — Profile weights (PER-PROJECT — EDIT THIS)
 
@@ -135,7 +135,7 @@ Weights MUST sum to 100 per profile. Custom weights require an ADR.
 
 ## § 7 — Baseline management
 
-- First `/analysis` run on a project creates the baseline at `baseline_dir`.
+- First `/trajectory-review` run on a project creates the baseline at `baseline_dir`.
 - Subsequent runs compare against the most recent baseline.
 - A baseline is a JSON file: `{module}_{date}.json` with raw measurements.
 - Baselines are committed to the repo (they are reproducibility evidence, not ephemeral).
@@ -143,7 +143,7 @@ Weights MUST sum to 100 per profile. Custom weights require an ADR.
 
 ## § 8 — Report contract
 
-Every `/analysis` report MUST contain:
+Every `/trajectory-review` report MUST contain:
 
 | Section | Required | Content |
 |---|---|---|
@@ -163,7 +163,7 @@ Per `cycle-rule-schema.md § Golden Rule Change Protocol`. No rule-specific devi
 ## Cross-references
 
 - Schema for cycle rules: `cycle-rule-schema.md`
-- Cycle rule: `cycle-analysis.md`
-- Skill: `skills/analysis/SKILL.md`
-- Config: `analysis-config.txt`
+- Cycle rule: `cycle-trajectory-review.md`
+- Skill: `skills/trajectory-review/SKILL.md`
+- Config: `trajectory-review-config.txt`
 - Languages (reused): `code-quality-languages.txt`

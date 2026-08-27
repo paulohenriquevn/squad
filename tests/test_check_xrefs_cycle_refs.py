@@ -83,12 +83,12 @@ def test_rule_citing_a_nonexistent_rules_file_is_caught(tmp_path: Path) -> None:
 
 
 def test_a_cycle_that_exists_as_a_skill_is_not_a_broken_reference(tmp_path: Path) -> None:
-    """`cycle-goal` is a skill, not a rule file — citing it is legitimate."""
+    """`session-goal` is a skill, not a rule file — citing it is legitimate."""
     eco = _make_ecosystem(tmp_path)
-    (eco / "skills" / "cycle-goal").mkdir(parents=True)
-    (eco / "skills" / "cycle-goal" / "SKILL.md").write_text("# cycle-goal\n", encoding="utf-8")
+    (eco / "skills" / "session-goal").mkdir(parents=True)
+    (eco / "skills" / "session-goal" / "SKILL.md").write_text("# session-goal\n", encoding="utf-8")
     (eco / "rules" / "cycle-implement.md").write_text(
-        "# Cycle: IMPLEMENT\n\nThe `cycle-goal` Stop-hook reads the verdict.\n"
+        "# Cycle: IMPLEMENT\n\nThe `session-goal` Stop-hook reads the verdict.\n"
         "\n## Cross-references\n\n- `skills/implement/SKILL.md`\n",
         encoding="utf-8",
     )

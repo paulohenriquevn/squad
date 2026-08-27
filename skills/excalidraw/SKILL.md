@@ -2,7 +2,7 @@
 name: excalidraw
 version: 0.1.0
 requires: []
-description: Create Excalidraw diagram JSON files that make visual arguments. Use when the user wants to visualize workflows, architectures, or concepts (standalone or as input to /marp-slide and /deck).
+description: Create Excalidraw diagram JSON files that make visual arguments. Use when the user wants to visualize workflows, architectures, or concepts (standalone or as input to /marp-slide and /slide-deck).
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit
 argument-hint: "<topic or description>"
@@ -18,7 +18,7 @@ argument-hint: "<topic or description>"
 >
 > See `~/.claude/CLAUDE.md` § 1 (95% Confidence).
 
-**Project rules consumed:** if `.claude/rules/public-copy.md` exists, slides/diagrams derived from this output that may surface in README/PITCH are bound by its voice rules. `.claude/rules/dogfood-golden-rule.md` blocks any "production-ready" diagram label without dogfood evidence.
+**Project rules consumed:** if `.claude/rules/public-copy.md` exists, slides/diagrams derived from this output that may surface in README/PITCH are bound by its voice rules. `.claude/rules/honesty-gate-golden-rule.md` blocks any "production-ready" diagram label without honesty-gate evidence.
 
 Generate `.excalidraw` JSON files that **argue visually**, not just display information.
 

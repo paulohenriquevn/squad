@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for auto-plan tests."""
+"""Shared pytest fixtures for idea-to-release tests."""
 from __future__ import annotations
 
 import sys

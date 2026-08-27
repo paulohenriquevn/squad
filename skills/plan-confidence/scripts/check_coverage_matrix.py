@@ -151,7 +151,7 @@ def _find_orphan_references(content: str, matrix_task_ids: set[str]) -> list[str
     v1.1 EC-4 fix: headers like '### T1.1 — Title' are definitions, not references.
     v1.1 EC-9 follow-up: code blocks contain examples (test names), not real refs.
     v1.1+ relaxation: tasks defined as `### T-id` headers are LEGITIMATE plan tasks
-    even if not in the matrix (e.g., wrap-up/dogfood-phase tasks). Only "mentions
+    even if not in the matrix (e.g., wrap-up/honesty-gate-phase tasks). Only "mentions
     in prose with no definition" are true orphans (typos, refs to non-existent tasks).
     """
     prose_only = _strip_code(content)

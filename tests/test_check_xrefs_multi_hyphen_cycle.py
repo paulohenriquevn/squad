@@ -1,7 +1,7 @@
 """A cycle with two hyphens was truncated, and the validator flagged the wrong file.
 
 `CYCLE_REF_RE` was `` `?cycle-([a-z]+)`? `` — `[a-z]+` does not match a hyphen. So
-`cycle-code-quality` was read as `cycle-code`, `cycle-auto-plan` as `cycle-auto`
+`cycle-code-quality` was read as `cycle-code`, `cycle-idea-to-release` as `cycle-auto`
 and `cycle-judge-codex` as `cycle-judge`. None of the three exists in `rules/`,
 and Check 2 (`skill_cycle_contract_resolves`) reported FAIL against a name nobody
 wrote.
@@ -9,8 +9,8 @@ wrote.
 Three of the kit's twelve cycle rules are multi-hyphen, so the defect covered a
 quarter of the inventory. It stayed hidden because the two skills citing those
 cycles no `## Cycle contract` mencionavam antes um cycle de nome simples — e
-`_extract_cycle_contract_ref` retorna no PRIMEIRO match. `auto-plan` cita
-`cycle-discover` antes de `cycle-auto-plan`; a primeira skill a citar um
+`_extract_cycle_contract_ref` retorna no PRIMEIRO match. `idea-to-release` cita
+`cycle-discover` antes de `cycle-idea-to-release`; a primeira skill a citar um
 multi-hyphen alone is what made the bug appear.
 
 The failure mode is the worst kind for a validator: it flags a non-existent file
@@ -30,7 +30,7 @@ _REPO = Path(__file__).resolve().parent.parent
 _SCRIPT = _REPO / "scripts" / "check_xrefs.py"
 
 # Every multi-hyphen cycle rule in the kit. A new name here is a new case for free.
-MULTI_HYPHEN_CYCLES = ["cycle-code-quality", "cycle-auto-plan", "cycle-judge-codex"]
+MULTI_HYPHEN_CYCLES = ["cycle-code-quality", "cycle-idea-to-release", "cycle-judge-codex"]
 
 
 def _make_ecosystem(root: Path, cycle: str) -> Path:

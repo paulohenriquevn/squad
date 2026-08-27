@@ -1,6 +1,6 @@
 """Slice-local matcher: find `*-patterns` skills applicable to a plan.
 
-Replicates the matching shape used by `auto-plan/scripts/assess_confidence.py`
+Replicates the matching shape used by `idea-to-release/scripts/assess_confidence.py`
 (`score_patterns_skills`) and `review/scripts/detect_domain.py`
 (`_patterns_skills_text`): glob `skills/*-patterns`, read the frontmatter
 `description:` line, and report a hit when any plan keyword appears in it.

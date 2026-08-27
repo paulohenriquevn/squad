@@ -153,7 +153,7 @@ names. The installer prints the sequence.
 /discover-confidence B-014              # is the finding solid enough to act on?
 
 # 4. If it survived, run the chain
-/auto-plan B-014
+/idea-to-release B-014
 ```
 
 Sweep a whole domain instead of filing by hand:

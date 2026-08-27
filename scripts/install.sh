@@ -14,7 +14,7 @@
 #   4. Writes settings.plugin.json as target/.claude/settings.json.
 #   5. Creates empty scaffold under target/.claude/knowledge-base/
 #      (plans, implementations, reviews, audits, discoveries/{plans,opportunities,snapshots},
-#      adrs, grills, dogfood, judge-codex, backlog, maintenance-runs, tools).
+#      adrs, grills, honesty-gate, judge-codex, backlog, maintenance-runs, tools).
 #      agents/ receives ONLY README.md (the routing mechanism). Specialists are
 #      derived per project — the kit ships none. agents/ is never deleted.
 #   6. Skips the source repo's history: caches, artifact dirs, audit trails,
@@ -341,7 +341,7 @@ fi
 # category folder that a cycle writes to. Slug-keyed subdirs that exist in
 # the source (e.g. implementations/slice-X/, tools/argo-cd/, discoveries/
 # snapshots/slice-X/) are NOT mirrored — those are historical artefacts of
-# the plan repo's own dogfood, not part of the template.
+# the plan repo's own honesty-gate, not part of the template.
 echo "==> Scaffolding knowledge-base/ subdirs (semantic structure)"
 KB_DIRS=(
   "plans"                       # /to-plan outputs
@@ -353,8 +353,8 @@ KB_DIRS=(
   "maintenance-runs"            # per-item macro-loop audit trail
   "backlog"                     # /backlog-item intake logs
   "grills"                      # /grill-me Q&A logs
-  "dogfood"                     # /dogfood anchor manifest
-  "dogfood/evidence"            # /dogfood evidence files
+  "honesty-gate"                     # /honesty-gate anchor manifest
+  "honesty-gate/evidence"            # /honesty-gate evidence files
   "judge-codex"                 # orthogonal LLM jury outputs (optional plugin)
   "tools"                       # read-only docs of tools the project depends on (consumer populates)
   "discoveries"                 # /discover-* root

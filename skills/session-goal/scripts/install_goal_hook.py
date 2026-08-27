@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Arm or clear the cycle-goal Stop hook — the part `/goal` could not automate.
+"""Arm or clear the session-goal Stop hook — the part `/goal` could not automate.
 
 Writes two things and nothing else:
 
-  - `.claude/cycle-goal.json`  — the goal state (which milestones, block counter)
+  - `.claude/session-goal.json`  — the goal state (which milestones, block counter)
   - a Stop hook in `.claude/settings.local.json` invoking check_goal_met.py
 
 `settings.local.json` on purpose: personal and gitignored, so arming a goal never
@@ -28,7 +28,7 @@ import json
 import sys
 from pathlib import Path
 
-HOOK_MARKER = "cycle-goal/scripts/check_goal_met.py"
+HOOK_MARKER = "session-goal/scripts/check_goal_met.py"
 DEFAULT_MAX_BLOCKS = 40
 #: Canonico: o knowledge-base mora DENTRO de .claude/ (plugin install). O layout
 #: standalone -- the kit's own repo -- is the only one where it sits at the root.
@@ -156,7 +156,7 @@ def main() -> int:
     root = args.project_root.resolve()
     claude_dir = root / ".claude"
     settings_path = claude_dir / "settings.local.json"
-    state_path = claude_dir / "cycle-goal.json"
+    state_path = claude_dir / "session-goal.json"
 
     try:
         settings = _load_settings(settings_path)
@@ -221,7 +221,7 @@ def main() -> int:
 
     if problems and not args.force:
         for problem in problems:
-            print(f"BLOCKED cycle-goal: {problem}", file=sys.stderr)
+            print(f"BLOCKED session-goal: {problem}", file=sys.stderr)
         print(
             "Nothing was armed. A goal with no route to ACCEPTED is a trap: it blocks every "
             "attempt to stop until the ceiling, and each block reads as a legitimate verdict. "
@@ -251,7 +251,7 @@ def main() -> int:
             "type": "command",
             "command": command,
             "timeout": 30,
-            "statusMessage": "cycle-goal: checking acceptance evidence",
+            "statusMessage": "session-goal: checking acceptance evidence",
         }]
     })
     settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")

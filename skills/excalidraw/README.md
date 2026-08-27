@@ -36,7 +36,7 @@ cp -r excalidraw-diagram-skill .claude/skills/excalidraw
 ```
 
 > **Directory name matters.** This skill is installed as `excalidraw/`, not
-> `excalidraw-diagram/` — `SKILL.md`, `/deck` and `/marp-slide` all resolve
+> `excalidraw-diagram/` — `SKILL.md`, `/slide-deck` and `/marp-slide` all resolve
 > `references/color-palette.md` relative to `skills/excalidraw/`.
 
 ## Setup

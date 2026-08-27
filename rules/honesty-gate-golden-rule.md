@@ -1,12 +1,12 @@
 # Dogfood Golden Rule
 
-Locked contract that `/dogfood` reads to evaluate whether a project may legitimately claim `production-ready` / `v1.0`. **This file is a template — each project edits the marked sections to declare its own anchor scenario.**
+Locked contract that `/honesty-gate` reads to evaluate whether a project may legitimately claim `production-ready` / `v1.0`. **This file is a template — each project edits the marked sections to declare its own anchor scenario.**
 
-Without this file, `/dogfood` emits `EVIDENCE_INSUFFICIENT` with flag `golden_rule_missing`.
+Without this file, `/honesty-gate` emits `EVIDENCE_INSUFFICIENT` with flag `golden_rule_missing`.
 
 ## § 1 — Anchor scenario (PER-PROJECT — EDIT THIS)
 
-The anchor scenario is the single use case that, if you cannot dogfood it, you cannot claim production-ready. Pick one. Be specific.
+The anchor scenario is the single use case that, if you cannot honesty-gate it, you cannot claim production-ready. Pick one. Be specific.
 
 **Slug:** `<anchor-slug>` (kebab-case identifier referenced in the manifest)
 
@@ -16,7 +16,7 @@ The anchor scenario is the single use case that, if you cannot dogfood it, you c
 
 ## § 2 — Status vocabulary (LOCKED — do not change without ADR)
 
-The `Status` field in `knowledge-base/dogfood/manifest.md` MUST take one of these values:
+The `Status` field in `knowledge-base/honesty-gate/manifest.md` MUST take one of these values:
 
 | Status | Meaning |
 |---|---|
@@ -26,7 +26,7 @@ The `Status` field in `knowledge-base/dogfood/manifest.md` MUST take one of thes
 | `paused` | Was `running`; explicitly stopped for a documented reason. NOT a degradation of `running`. |
 | `abandoned` | Anchor is no longer pursued. Requires ADR to set. |
 
-`/dogfood` accepts `running` as the only value satisfying hard cap #2 (`anchor_not_running`).
+`/honesty-gate` accepts `running` as the only value satisfying hard cap #2 (`anchor_not_running`).
 
 ## § 3 — Hard caps (LOCKED)
 
@@ -36,7 +36,7 @@ In order; first failure short-circuits to `EVIDENCE_INSUFFICIENT`.
 |---|---|---|
 | 1 | Manifest contains a section identifiable by `Slug` or anchor header | `anchor_missing` |
 | 2 | `Status` matches the running value declared in § 2 | `anchor_not_running` |
-| 3 | At least one evidence file under `knowledge-base/dogfood/evidence/` has frontmatter `scenario:` matching the anchor slug | `no_anchor_evidence` |
+| 3 | At least one evidence file under `knowledge-base/honesty-gate/evidence/` has frontmatter `scenario:` matching the anchor slug | `no_anchor_evidence` |
 | 4 | The most recent matching evidence file (by frontmatter `date:`) is within the freshness threshold below | `anchor_evidence_stale` |
 
 **Freshness threshold (PER-PROJECT — EDIT THIS):** `30 days` by default. Reduce for fast-moving products; never raise without ADR.
@@ -48,17 +48,17 @@ Soft caps cap the verdict at `EVIDENCE_WITH_CAVEATS`. They fire when hard caps p
 | Soft cap | Default | Rationale |
 |---|---|---|
 | Total evidence count for the anchor | ≥ 3 | Single evidence point is not a trend. |
-| Failure stories present | ≥ 1 | A dogfood without failures is theatre. |
+| Failure stories present | ≥ 1 | A honesty-gate without failures is theatre. |
 | Evidence from ≥ 2 different operators | recommended | Avoid "the one person who knows how" syndrome. |
 
 ## § 5 — Evidence file frontmatter (LOCKED)
 
-Every file under `knowledge-base/dogfood/evidence/` MUST have YAML frontmatter:
+Every file under `knowledge-base/honesty-gate/evidence/` MUST have YAML frontmatter:
 
 ```yaml
 ---
 scenario: <slug>        # matches the anchor slug or a declared sibling
-date: YYYY-MM-DD        # local date of the dogfood run
+date: YYYY-MM-DD        # local date of the honesty-gate run
 operator: <name>        # who ran it
 outcome: pass | partial | fail
 summary: <one line>
@@ -81,6 +81,6 @@ deviations:
 
 - "Production-ready" claim backed only by synthetic benchmarks.
 - Silently swapping the anchor when the original becomes inconvenient.
-- Aging evidence (dogfood worked 6 months ago; nothing since).
+- Aging evidence (honesty-gate worked 6 months ago; nothing since).
 - Single-operator knowledge (only one person can actually run the anchor).
 - Dogfood theatre — checking the box without using the product.

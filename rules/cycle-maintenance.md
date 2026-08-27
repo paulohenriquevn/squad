@@ -1,6 +1,6 @@
 # Cycle: MAINTENANCE (macro super-loop)
 
-Source of Truth for the macro super-loop that runs from a `BACKLOG.md` item all the way back to the same `BACKLOG.md` with the item's status advanced. Sits **above** `cycle-auto-plan`: where `cycle-auto-plan` orchestrates one item end-to-end, `cycle-maintenance` orchestrates the ongoing work — item by item — for as long as the ecosystem is maintained.
+Source of Truth for the macro super-loop that runs from a `BACKLOG.md` item all the way back to the same `BACKLOG.md` with the item's status advanced. Sits **above** `cycle-idea-to-release`: where `cycle-idea-to-release` orchestrates one item end-to-end, `cycle-maintenance` orchestrates the ongoing work — item by item — for as long as the ecosystem is maintained.
 
 ## Purpose
 
@@ -50,7 +50,7 @@ DELEGATE:
      ↓ status raw     → /discover-plan B-NNN --mode {suggested_mode}, then the chain
      ↓                  ├── opportunity → status triaged → continue below
      ↓                  └── ITEM_KILLED → status killed → LOOP BACK to SELECT
-     ↓ status triaged → /auto-plan B-NNN
+     ↓ status triaged → /idea-to-release B-NNN
      ↓                  (cycle-plan → implement → code-quality → review → release)
      ↓
 ADVANCE:
@@ -149,7 +149,7 @@ An item advanced in error is moved back with a note recording the advance and wh
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - The registry and its intake: `rules/cycle-backlog.md`
 - Measurement: `rules/cycle-discover.md`
-- Orchestrator this delegates to: `rules/cycle-auto-plan.md`
+- Orchestrator this delegates to: `rules/cycle-idea-to-release.md`
 - Routing: `scripts/route_domain.py`
 - Specialists: `agents/README.md`
 - Branching contract: `rules/git-safety.md`

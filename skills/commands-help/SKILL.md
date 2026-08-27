@@ -1,5 +1,5 @@
 ---
-name: plan-help
+name: commands-help
 version: 0.1.0
 requires: []
 description: Show all available Squad commands with descriptions and recommended flows. Use when the user asks for help, wants to know what commands are available, or says "what can you do" / "help" / "list commands".
@@ -8,7 +8,7 @@ allowed-tools: Read Glob Bash
 argument-hint: "(no arguments)"
 ---
 
-# /plan-help
+# /commands-help
 
 Display every skill in the Squad ecosystem, organized by cycle, plus the flows that chain them.
 
@@ -63,14 +63,14 @@ without a milestone ends at `RELEASED`, and that is correct.
 
 **D. Autonomous, end to end:**
 ```
-/cycle-goal M2      bind the session so it cannot stop before acceptance is green
-/auto-plan M2       run every phase of flow B for that milestone
+/session-goal M2      bind the session so it cannot stop before acceptance is green
+/idea-to-release M2       run every phase of flow B for that milestone
 ```
 
 There is **no `/discover` command** — the discovery chain is six separate skills (five mandatory
 plus `/discover-improve`, invoked only on `NEEDS_REVISION`), each with its own gate. When a rule or
 a skill refers to the chain as a whole, it names the cycle — `cycle-discover` — never a slash
-command. `/auto-plan` runs them for you; invoke them by hand when you want to stop between gates.
+command. `/idea-to-release` runs them for you; invoke them by hand when you want to stop between gates.
 
 ### cycle-backlog — the registry
 
@@ -118,21 +118,21 @@ Runs against **our** code and runtime. Prior art can never be evidence here.
 | Command | Purpose |
 |---|---|
 | `/acceptance M<N>` | Exercise the **released** delivery against the milestone's DoD. Only a green verdict flips `[ ]` → `[x]` |
-| `/cycle-goal M<N> [M<N> ...]` | Bind the session so it cannot stop until acceptance is green |
+| `/session-goal M<N> [M<N> ...]` | Bind the session so it cannot stop until acceptance is green |
 
 ### Orchestration
 
 | Command | Purpose |
 |---|---|
-| `/auto-plan [M<N>\|B-NNN\|{slug}]` | Chain discover → plan → implement → code-quality → review → release → acceptance |
+| `/idea-to-release [M<N>\|B-NNN\|{slug}]` | Chain discover → plan → implement → code-quality → review → release → acceptance |
 
 ### Independent audits (do not gate the main chain)
 
 | Command | Purpose |
 |---|---|
-| `/analysis [slug]` | Empirical trajectory validation — benchmarks, complexity, scalability. Opt-in per project |
+| `/trajectory-review [slug]` | Empirical trajectory validation — benchmarks, complexity, scalability. Opt-in per project |
 | `/arch-check [repo]` | Verify architecture boundaries, or propose ones the repo already obeys |
-| `/dogfood [audit\|log-evidence\|status]` | Honesty gate blocking "production-ready" claims without evidence |
+| `/honesty-gate [audit\|log-evidence\|status]` | Honesty gate blocking "production-ready" claims without evidence |
 
 ### Setup and utilities
 
@@ -141,7 +141,7 @@ Runs against **our** code and runtime. Prior art can never be evidence here.
 | `/quality-init TARGET` | Generate quality-gate hooks calibrated to the project's real p90 metrics |
 | `/ast-grep {pattern}` | Structural search via tree-sitter — queries Grep cannot express |
 | `/skill-creator` | Author, improve and eval any skill |
-| `/plan-help` | This help (you are here) |
+| `/commands-help` | This help (you are here) |
 
 ### Domain specialists
 
@@ -157,7 +157,7 @@ Invoked on demand; not a phase of any cycle.
 
 | Command | Purpose |
 |---|---|
-| `/deck {topic}` | Full presentation — orchestrates `/marp-slide` + `/excalidraw` |
+| `/slide-deck {topic}` | Full presentation — orchestrates `/marp-slide` + `/excalidraw` |
 | `/marp-slide {topic}` | Marp slides only (`.md` + `.html` + `.pptx`) |
 | `/excalidraw {topic}` | Excalidraw diagram JSON that argues visually |
 | `/frontend-design` | Visual direction for new UI that does not read as templated |

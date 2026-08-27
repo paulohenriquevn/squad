@@ -12,7 +12,7 @@
 
 ## Metrics
 
-A backpressure analysis should consider: input rate, output rate, queue depth, **age of the oldest item**, wait time, processing latency, CPU use, memory use, in-flight operations, busy connections, drop rate, rejection rate, retry count, timeouts, overload errors, consumer lag, throughput per partition, drain rate.
+A backpressure trajectory-review should consider: input rate, output rate, queue depth, **age of the oldest item**, wait time, processing latency, CPU use, memory use, in-flight operations, busy connections, drop rate, rejection rate, retry count, timeouts, overload errors, consumer lag, throughput per partition, drain rate.
 
 ### Reading the signals
 

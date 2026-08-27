@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Confidence assessment heuristic for /auto-plan orchestrator.
+"""Confidence assessment heuristic for /idea-to-release orchestrator.
 
 Deterministic (no LLM). Scans repo state for signals that the requested topic
 has enough prior art for plan-only mode vs needs full discover.

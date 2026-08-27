@@ -1,13 +1,13 @@
 """A skill named `cycle-something` was indistinguishable from a cycle reference.
 
-`skills/cycle-goal/` is a skill, not a cycle phase — there is no (and should be
-no) `rules/cycle-goal.md`. But Check 2 extracted the first `cycle-X` token from
+`skills/session-goal/` is a skill, not a cycle phase — there is no (and should be
+no) `rules/session-goal.md`. But Check 2 extracted the first `cycle-X` token from
 the whole SKILL.md when there was no `## Cycle contract` section, and concluded
 the
 skill declarava pertencer a um cycle inexistente.
 
-The practical effect: `plan-help`, whose whole job is to LIST the commands, could
-not mention `/cycle-goal` without driving the validator to FAIL. The bug stayed
+The practical effect: `commands-help`, whose whole job is to LIST the commands, could
+not mention `/session-goal` without driving the validator to FAIL. The bug stayed
 latent while the documentation omitted the command — the omission hid the defect,
 and fixing the omission revealed it.
 
@@ -66,11 +66,11 @@ def _write_aux(eco: Path, *names: str) -> None:
 
 def test_skill_named_cycle_something_is_not_a_cycle_reference(tmp_path: Path) -> None:
     eco = _make_ecosystem(tmp_path)
-    (eco / "skills" / "cycle-goal").mkdir(parents=True)
-    (eco / "skills" / "cycle-goal" / "SKILL.md").write_text(
-        "# `/cycle-goal`\n\nBinds a session to a milestone.\n", encoding="utf-8"
+    (eco / "skills" / "session-goal").mkdir(parents=True)
+    (eco / "skills" / "session-goal" / "SKILL.md").write_text(
+        "# `/session-goal`\n\nBinds a session to a milestone.\n", encoding="utf-8"
     )
-    _write_aux(eco, "cycle-goal")
+    _write_aux(eco, "session-goal")
 
     rc, data = _run(eco)
 
@@ -79,17 +79,17 @@ def test_skill_named_cycle_something_is_not_a_cycle_reference(tmp_path: Path) ->
 
 
 def test_another_skill_may_mention_the_cycle_named_skill(tmp_path: Path) -> None:
-    """The case that actually broke: `plan-help` listing `/cycle-goal`."""
+    """The case that actually broke: `commands-help` listing `/session-goal`."""
     eco = _make_ecosystem(tmp_path)
-    (eco / "skills" / "cycle-goal").mkdir(parents=True)
-    (eco / "skills" / "cycle-goal" / "SKILL.md").write_text(
-        "# `/cycle-goal`\n\nBinds a session to a milestone.\n", encoding="utf-8"
+    (eco / "skills" / "session-goal").mkdir(parents=True)
+    (eco / "skills" / "session-goal" / "SKILL.md").write_text(
+        "# `/session-goal`\n\nBinds a session to a milestone.\n", encoding="utf-8"
     )
-    (eco / "skills" / "plan-help").mkdir(parents=True)
-    (eco / "skills" / "plan-help" / "SKILL.md").write_text(
-        "# `/plan-help`\n\n| `/cycle-goal M<N>` | Bind the session |\n", encoding="utf-8"
+    (eco / "skills" / "commands-help").mkdir(parents=True)
+    (eco / "skills" / "commands-help" / "SKILL.md").write_text(
+        "# `/commands-help`\n\n| `/session-goal M<N>` | Bind the session |\n", encoding="utf-8"
     )
-    _write_aux(eco, "cycle-goal", "plan-help")
+    _write_aux(eco, "session-goal", "commands-help")
 
     rc, data = _run(eco)
 

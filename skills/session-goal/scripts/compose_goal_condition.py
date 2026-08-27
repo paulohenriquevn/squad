@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compose the termination condition the `cycle-goal` Stop hook operates under.
+"""Compose the termination condition the `session-goal` Stop hook operates under.
 
 The condition is read into the session as the operating contract. It is NOT
 what decides whether the session may stop — `check_goal_met.py` decides that,
@@ -229,12 +229,12 @@ def main() -> int:
         _reject_wrong_header_level(text, args.milestones)
         ordered = select(parse_roadmap(text), args.milestones)
     except GateViolation as exc:
-        print(f"BLOCKED cycle-goal: {exc}", file=sys.stderr)
+        print(f"BLOCKED session-goal: {exc}", file=sys.stderr)
         return 1
 
     if [m.milestone_id for m in ordered] != args.milestones:
         print(
-            "INFO cycle-goal: normalized to ascending order "
+            "INFO session-goal: normalized to ascending order "
             f"{' '.join(m.milestone_id for m in ordered)} — one milestone in flight at a time.",
             file=sys.stderr,
         )
@@ -242,7 +242,7 @@ def main() -> int:
     condition = compose(ordered)
     if len(condition) > GOAL_CHAR_CAP:
         print(
-            f"BLOCKED cycle-goal: condition is {len(condition)} chars, over the "
+            f"BLOCKED session-goal: condition is {len(condition)} chars, over the "
             f"{GOAL_CHAR_CAP}-char readability cap this skill enforces on itself. "
             "Split the run into fewer milestones.",
             file=sys.stderr,

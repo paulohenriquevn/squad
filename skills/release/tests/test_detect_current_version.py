@@ -122,7 +122,7 @@ def test_a_major_disagreement_is_refused_rather_than_maximised() -> None:
     I wrote that "a base that is too high is safe". It is not, and the cost is not recoverable: npm
     versions are IMMUTABLE, so a burned range is burned permanently; a major bump leaves every
     consumer's `^0.64.0` behind, so they silently stop receiving updates; and shipping 1.x is a v1.0
-    claim that `rules/dogfood-golden-rule.md` gates and the release chain never checks.
+    claim that `rules/honesty-gate-golden-rule.md` gates and the release chain never checks.
 
     `git tag` has no upper bound — it lists whatever any `git fetch --tags` ever brought in.
     Measured before the guard: [v0.64.0, v1.0.0] derived 1.0.0, [v0.64.0, v9.9.9] derived 9.9.9, and

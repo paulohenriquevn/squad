@@ -6,7 +6,7 @@ milestone's objective, definition-of-done bullets, and declared dependencies,
 then picks the lowest-N milestone whose status is `[ ]` and whose dependencies
 are all `[x]`.
 
-Output is a single JSON line on stdout suitable for piping into the auto-plan
+Output is a single JSON line on stdout suitable for piping into the idea-to-release
 orchestrator's Step 0.
 
 Usage:

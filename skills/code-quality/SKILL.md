@@ -41,7 +41,7 @@ Upstream is [`cycle-implement`](../../rules/cycle-implement.md) (runs after its 
 Invoke this skill when:
 
 - `/implement` has just completed (halt-loop emitted `IMPLEMENTATION_COMPLETE`) and you're about to handoff to `/review`.
-- Standalone audit before merge / release / dogfood evidence collection.
+- Standalone audit before merge / release / honesty-gate evidence collection.
 - After significant LLM-generated code lands and you want to surface fabricated symbols + dead code.
 - Periodic schedule (suggested weekly via `/loop 7d /code-quality`).
 

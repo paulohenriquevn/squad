@@ -381,9 +381,9 @@ Output from blind comparator. Located at `<grading-dir>/comparison-N.json`.
 
 ---
 
-## analysis.json
+## trajectory-review.json
 
-Output from post-hoc analyzer. Located at `<grading-dir>/analysis.json`.
+Output from post-hoc analyzer. Located at `<grading-dir>/trajectory-review.json`.
 
 ```json
 {

@@ -1,5 +1,5 @@
 ---
-name: auto-plan
+name: idea-to-release
 version: 0.1.0
 requires: [discover-plan, discover-edge-cases, discover-plan-confidence, discover-execute, discover-confidence, discover-improve, to-plan, edge-case-plan, deps-audit, plan-confidence, plan-improve, implement, code-quality, review, release, acceptance]
 description: End-to-end autonomous orchestrator for cycle-discover + cycle-plan + cycle-implement + cycle-code-quality + cycle-review + cycle-release + cycle-acceptance. Single entry-point chains the whole pipeline from idea to a released, accepted milestone — pausing at the one manual gate, human approval of the release PR. Default is full-pipeline; --plan-only retains the legacy discover+plan behavior. Depth (none/light/full) is derived deterministically from a confidence score against repo state — no interactive prompts. MUST-FIX items from /edge-case-plan are auto-injected into the plan before /plan-confidence re-scores. Inspired by planning-with-files v2.43.0 autonomy + composes Claude Code primitives (/plan-goal, /plan-loop) absorbed 2026-05-26.
@@ -8,7 +8,7 @@ allowed-tools: Read Write Edit Bash Glob Grep Skill
 argument-hint: "[M<N> | B-NNN | {topic-slug}] [--plan-only] [--depth=none|light|full] [--no-release] [--bump=patch|minor|major]"
 ---
 
-# `/auto-plan` — Autonomous cycle orchestrator (full pipeline)
+# `/idea-to-release` — Autonomous cycle orchestrator (full pipeline)
 
 End-to-end autonomous orchestration of the 6-cycle pipeline: `cycle-discover` → `cycle-plan` → `cycle-implement` → `cycle-code-quality` → `cycle-review` → `cycle-release`. Replaces the 9+ slash manual sequence with a single invocation that:
 
@@ -33,16 +33,16 @@ Do NOT invoke when:
 ## Argument parsing
 
 ```
-/auto-plan                                   # ROADMAP-DRIVEN: read ROADMAP.md, pick next eligible milestone
-/auto-plan M<N>                              # ROADMAP-DRIVEN: target specific milestone (M0..M8)
-/auto-plan {topic-slug}                      # AD-HOC: full pipeline with a free-form slug (no roadmap link)
-/auto-plan {topic-slug} --plan-only          # legacy: stop after plan; user runs /implement manually
-/auto-plan {topic-slug} --depth=none         # skip discover; depth is auto-derived from confidence band otherwise
-/auto-plan {topic-slug} --depth=light
-/auto-plan {topic-slug} --depth=full
-/auto-plan {topic-slug} --no-release         # full pipeline but stop after /review; do not open release PR
-/auto-plan {topic-slug} --bump=patch|minor|major  # forwarded to /release (otherwise auto-derived from CHANGELOG)
-/auto-plan {topic-slug} --force-override     # bypass refusal even at LOW confidence
+/idea-to-release                                   # ROADMAP-DRIVEN: read ROADMAP.md, pick next eligible milestone
+/idea-to-release M<N>                              # ROADMAP-DRIVEN: target specific milestone (M0..M8)
+/idea-to-release {topic-slug}                      # AD-HOC: full pipeline with a free-form slug (no roadmap link)
+/idea-to-release {topic-slug} --plan-only          # legacy: stop after plan; user runs /implement manually
+/idea-to-release {topic-slug} --depth=none         # skip discover; depth is auto-derived from confidence band otherwise
+/idea-to-release {topic-slug} --depth=light
+/idea-to-release {topic-slug} --depth=full
+/idea-to-release {topic-slug} --no-release         # full pipeline but stop after /review; do not open release PR
+/idea-to-release {topic-slug} --bump=patch|minor|major  # forwarded to /release (otherwise auto-derived from CHANGELOG)
+/idea-to-release {topic-slug} --force-override     # bypass refusal even at LOW confidence
 ```
 
 **Slug resolution order:**
@@ -52,7 +52,7 @@ Do NOT invoke when:
 3. If arg matches `^B-\d{3}$` → backlog-driven mode: read that item from `BACKLOG.md` and use its statement + Definition of Done as the topic. This is the form `cycle-maintenance` delegates.
 4. Otherwise → ad-hoc mode with the arg as free-form slug. Emit `INFO ad-hoc: no milestone_id will be persisted; the chain ends at RELEASED with no acceptance phase`.
 
-If no arg AND `ROADMAP.md` is MISSING → refuse with `BLOCKED roadmap-required: ROADMAP.md is hand-authored — no skill generates it (see rules/cycle-acceptance.md § The ROADMAP.md contract). Invoke /auto-plan B-NNN for backlog work, or /auto-plan {topic-slug} for ad-hoc work`.
+If no arg AND `ROADMAP.md` is MISSING → refuse with `BLOCKED roadmap-required: ROADMAP.md is hand-authored — no skill generates it (see rules/cycle-acceptance.md § The ROADMAP.md contract). Invoke /idea-to-release B-NNN for backlog work, or /idea-to-release {topic-slug} for ad-hoc work`.
 
 ## Process
 
@@ -63,7 +63,7 @@ Skip this step in ad-hoc mode.
 ```bash
 # 0.1  Pick target milestone
 if [ -z "$ARG" ] || [[ "$ARG" =~ ^M[0-8]$ ]]; then
-  TARGET_MILESTONE=$(python3 skills/auto-plan/scripts/select_next_milestone.py \
+  TARGET_MILESTONE=$(python3 skills/idea-to-release/scripts/select_next_milestone.py \
     --roadmap ROADMAP.md \
     ${ARG:+--prefer "$ARG"} \
     --json)
@@ -84,7 +84,7 @@ Outputs from this step feed Step 2 (derive depth) and Step 3 (chain execution): 
 Run:
 
 ```bash
-python3 .claude/skills/auto-plan/scripts/assess_confidence.py {topic-slug} \
+python3 .claude/skills/idea-to-release/scripts/assess_confidence.py {topic-slug} \
   --context-length={len(user_provided_context_in_chars)} --json
 ```
 
@@ -92,7 +92,7 @@ Parse JSON output. Note `score`, `verdict`, `recommended_depth`, `signals`.
 
 ### Step 2 — Derive depth deterministically (no interactive prompts)
 
-Depth is now derived from the confidence band, NOT asked. Eliminates one `AskUserQuestion` per invocation and makes `/auto-plan` resumable from any context.
+Depth is now derived from the confidence band, NOT asked. Eliminates one `AskUserQuestion` per invocation and makes `/idea-to-release` resumable from any context.
 
 | Confidence band | Auto-derived depth | Note |
 |---|---|---|
@@ -142,11 +142,11 @@ If `/discover-confidence` after improve still < SHIPPABLE_WITH_CAVEATS → halt 
 Skill(/to-plan {topic-slug} [--milestone M<N>])   # --milestone forwarded only in roadmap-driven mode
 Skill(/edge-case-plan {topic-slug})
 # AUTO-INJECT MUST-FIX items into the plan (no AskUserQuestion):
-Bash(python3 skills/auto-plan/scripts/inject_must_fix.py \
+Bash(python3 skills/idea-to-release/scripts/inject_must_fix.py \
        --plan knowledge-base/plans/{slug}-plan.md \
        --edge-cases knowledge-base/reviews/{slug}-edge-cases-*.md)
 # INJECT milestone_id into plan frontmatter (roadmap-driven mode only):
-Bash(python3 skills/auto-plan/scripts/inject_milestone_id.py \
+Bash(python3 skills/idea-to-release/scripts/inject_milestone_id.py \
        --plan knowledge-base/plans/{slug}-plan.md \
        --milestone-id M<N>)
 Skill(/deps-audit {topic-slug})
@@ -206,7 +206,7 @@ Skill(/release [--bump={forwarded}])
 Print summary:
 
 ```
-=== /auto-plan complete ===
+=== /idea-to-release complete ===
 Topic: {slug}
 Mode: {full-pipeline | plan-only}
 Depth chosen: {none|light|full}
@@ -270,12 +270,12 @@ If any phase blocked → honest report listing what blocked + recommended human 
 
 ## Cycle contract
 
-This skill is `phase 0` of the super-cycle that orchestrates `cycle-discover` + `cycle-plan` + `cycle-implement` + `cycle-code-quality` + `cycle-review` + `cycle-release`. The cycle rule SoT is `rules/cycle-auto-plan.md`. Hard gates + soft gates + anti-patterns live there.
+This skill is `phase 0` of the super-cycle that orchestrates `cycle-discover` + `cycle-plan` + `cycle-implement` + `cycle-code-quality` + `cycle-review` + `cycle-release`. The cycle rule SoT is `rules/cycle-idea-to-release.md`. Hard gates + soft gates + anti-patterns live there.
 
 ## Related
 
-- `rules/cycle-maintenance.md` — macro super-loop that delegates one `cycle-auto-plan` run per milestone
-- `rules/cycle-auto-plan.md` — cycle SoT
+- `rules/cycle-maintenance.md` — macro super-loop that delegates one `cycle-idea-to-release` run per milestone
+- `rules/cycle-idea-to-release.md` — cycle SoT
 - `rules/cycle-discover.md` — discover sub-cycle
 - `rules/cycle-plan.md` — plan sub-cycle
 - `rules/cycle-implement.md` — implement sub-cycle
@@ -285,7 +285,7 @@ This skill is `phase 0` of the super-cycle that orchestrates `cycle-discover` + 
 - `rules/cycle-acceptance.md` — acceptance sub-cycle (exercises the RELEASED delivery and owns the checkbox flip)
 - `commands/plan-goal.md` + `plan-loop.md` — Claude Code primitive composition (alternative autonomy mechanism)
 - `scripts/attest_plan.sh` — attestation post-plan
-- `skills/auto-plan/scripts/select_next_milestone.py` — Step 0 milestone selector (roadmap-driven mode)
-- `skills/auto-plan/scripts/inject_milestone_id.py` — Phase P metadata injector
-- `skills/auto-plan/scripts/inject_must_fix.py` — auto-absorption of MUST-FIX items
+- `skills/idea-to-release/scripts/select_next_milestone.py` — Step 0 milestone selector (roadmap-driven mode)
+- `skills/idea-to-release/scripts/inject_milestone_id.py` — Phase P metadata injector
+- `skills/idea-to-release/scripts/inject_must_fix.py` — auto-absorption of MUST-FIX items
 - Inspired by `planning-with-files` v2.43.0 (MIT, OthmanAdi) — autonomous file-based planning pattern, absorbed 2026-05-26

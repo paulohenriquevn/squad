@@ -24,7 +24,7 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "I noticed something worth looking at" | `cycle-backlog` | `/backlog-item {slug}` |
 | "Is this hunch real?" | `cycle-discover` | `/discover-plan B-NNN --mode {review\|live-test\|bug\|evolve}`, then the chain |
 | "Sweep a domain for things nobody filed" | `cycle-discover` | `/discover-execute --sweep {domain}` |
-| "Advance the next item end-to-end autonomously" | `cycle-maintenance` → `cycle-auto-plan` | `/auto-plan` (no arg) or `/auto-plan B-NNN` |
+| "Advance the next item end-to-end autonomously" | `cycle-maintenance` → `cycle-idea-to-release` | `/idea-to-release` (no arg) or `/idea-to-release B-NNN` |
 | "The measurement holds — design the fix" | `cycle-plan` | `/to-plan B-NNN` |
 | "Requirements are still vague" | `cycle-plan` phase 0 | `/grill-me {slug}` |
 | "Build it per the plan" | `cycle-implement` | `/implement {plan-slug}` |
@@ -32,7 +32,7 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "Review before merge" | `cycle-review` | `/review {plan-slug}` |
 | "Cut a release (develop → main + tag)" | `cycle-release` | `/release [bump-level]` |
 | "Check the released thing works for its user" | `cycle-acceptance` | `/acceptance M<N>` (milestones only — see below) |
-| "Hold the session to the process until acceptance is green" | `cycle-acceptance` | `/cycle-goal M<N> [M<N> ...]` |
+| "Hold the session to the process until acceptance is green" | `cycle-acceptance` | `/session-goal M<N> [M<N> ...]` |
 | "What has rotted in the registry?" | auxiliary | `/backlog-review` |
 | "Which specialist owns this repo?" | auxiliary | `python3 scripts/route_domain.py {repo}` |
 | "Just locate something in the code" | (no cycle) | Glob/Grep, or `/ast-grep` for structural queries |
@@ -40,10 +40,10 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "The queue never drains / we OOM under load" | auxiliary | `/backpressure-specialist` |
 | "One slow service took the whole site down" | auxiliary | `/resilience-specialist` |
 | "Boundaries: does this repo have any, and do they still fire?" | auxiliary | `/arch-check` |
-| "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-analysis` | `/analysis [plan-slug]` |
+| "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-trajectory-review` | `/trajectory-review [plan-slug]` |
 | "Block code smells automatically on every Write/Edit" | (setup, once) | `/quality-init TARGET` |
-| "Can we call this production-ready?" | auxiliary | `/dogfood audit` |
-| "What commands exist?" | auxiliary | `/plan-help` |
+| "Can we call this production-ready?" | auxiliary | `/honesty-gate audit` |
+| "What commands exist?" | auxiliary | `/commands-help` |
 
 ## Quick start
 
@@ -77,7 +77,7 @@ Four questions, one per turn: what changed in **our** system; which repo and the
 
 There is no single `/discover` command — the chain is the five skills above, plus
 `/discover-improve` when a score comes back `NEEDS_REVISION`. Each has its own gate. Referred to as
-a whole, it is the cycle: `cycle-discover`. `/auto-plan` runs them for you; invoke them by hand when
+a whole, it is the cycle: `cycle-discover`. `/idea-to-release` runs them for you; invoke them by hand when
 you want to stop between gates.
 Measuring against our code or runtime. Two legitimate endings:
 
@@ -89,7 +89,7 @@ Measuring against our code or runtime. Two legitimate endings:
 ### 4. Ship it
 
 ```bash
-/auto-plan B-014
+/idea-to-release B-014
 ```
 
 Chains plan → implement → code-quality → review → release, pausing at each gate.

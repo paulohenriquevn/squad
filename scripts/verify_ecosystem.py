@@ -124,7 +124,7 @@ def check_xrefs(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 def check_cycle_rules(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     issues: list[str] = []
     required_sections = ("## Purpose", "## Chain", "## Anti-patterns")
-    for cycle_name in ("discover", "plan", "implement", "review", "code-quality", "auto-plan"):
+    for cycle_name in ("discover", "plan", "implement", "review", "code-quality", "idea-to-release"):
         rule = ecosystem_dir / "rules" / f"cycle-{cycle_name}.md"
         if not rule.exists():
             issues.append(f"  missing cycle rule: cycle-{cycle_name}.md")

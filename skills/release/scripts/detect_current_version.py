@@ -152,7 +152,7 @@ def detect_current_version(repo_root: Path) -> str:
     # The cost is not symmetric with a base that is too low, and it is not recoverable: npm versions
     # are IMMUTABLE, so a burned range is burned permanently; a major bump leaves every consumer's
     # `^0.64.0` behind, so they silently stop receiving updates; and shipping 1.x is a v1.0 claim
-    # that `rules/dogfood-golden-rule.md` gates and this chain never checks.
+    # that `rules/honesty-gate-golden-rule.md` gates and this chain never checks.
     #
     # Within one major, disagreement is NORMAL and `max()` is right: the manifest lags the tag
     # between the release commit and the merge, and the tag lags the manifest for the 13 published

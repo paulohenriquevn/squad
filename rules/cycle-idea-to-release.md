@@ -1,6 +1,6 @@
 # Cycle: AUTO-PLAN (sub-cycle of cycle-maintenance)
 
-Source of Truth for the end-to-end autonomous orchestrator. Sits **below** `cycle-maintenance` in the cycle hierarchy: `cycle-maintenance` selects the next milestone and delegates one full `cycle-auto-plan` run per milestone.
+Source of Truth for the end-to-end autonomous orchestrator. Sits **below** `cycle-maintenance` in the cycle hierarchy: `cycle-maintenance` selects the next milestone and delegates one full `cycle-idea-to-release` run per milestone.
 
 ## Purpose
 
@@ -8,9 +8,9 @@ Chain DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE au
 
 Two invocation modes coexist:
 
-- **Backlog-driven** (`/auto-plan B-NNN`): the form `cycle-maintenance` delegates. Takes the item's statement + Definition of Done as the input topic. When the item is bound to a milestone, the plan carries `milestone_id` so `cycle-acceptance` can find it after release.
-- **Roadmap-driven** (`/auto-plan M<N>` OR `/auto-plan` without arg): reads `ROADMAP.md`, takes the milestone objective + DoD as the input topic, persists `milestone_id` in the resulting plan frontmatter so `cycle-acceptance` knows which checkbox its verdict governs.
-- **Ad-hoc** (`/auto-plan {topic-slug}`): work outside both registries (hotfixes, exploratory). The plan carries no `milestone_id` — the chain ends at `RELEASED`, with no acceptance phase to run.
+- **Backlog-driven** (`/idea-to-release B-NNN`): the form `cycle-maintenance` delegates. Takes the item's statement + Definition of Done as the input topic. When the item is bound to a milestone, the plan carries `milestone_id` so `cycle-acceptance` can find it after release.
+- **Roadmap-driven** (`/idea-to-release M<N>` OR `/idea-to-release` without arg): reads `ROADMAP.md`, takes the milestone objective + DoD as the input topic, persists `milestone_id` in the resulting plan frontmatter so `cycle-acceptance` knows which checkbox its verdict governs.
+- **Ad-hoc** (`/idea-to-release {topic-slug}`): work outside both registries (hotfixes, exploratory). The plan carries no `milestone_id` — the chain ends at `RELEASED`, with no acceptance phase to run.
 
 ## Pre-conditions
 
@@ -26,10 +26,10 @@ When NOT to use:
 
 ## Chain
 
-Default roadmap-driven (`/auto-plan` or `/auto-plan M<N>`):
+Default roadmap-driven (`/idea-to-release` or `/idea-to-release M<N>`):
 
 ```
-/auto-plan M<N>
+/idea-to-release M<N>
      ↓ READ ROADMAP — extract milestone objective + DoD; derive slug; record milestone_id
      ↓ DISCOVER     (full chain, if no prior opportunity)
      ↓ PLAN         (full chain — auto-injects MUST-FIX from edge-case-plan into the plan)
@@ -47,10 +47,10 @@ Default roadmap-driven (`/auto-plan` or `/auto-plan M<N>`):
      ↓                OR PR_OPEN_AWAITING_APPROVAL (chain paused at the human gate)
 ```
 
-Ad-hoc (`/auto-plan {topic-slug}` with arbitrary slug):
+Ad-hoc (`/idea-to-release {topic-slug}` with arbitrary slug):
 
 ```
-/auto-plan {topic-slug}
+/idea-to-release {topic-slug}
      ↓ (same chain as above)
      ↓ plan frontmatter carries NO milestone_id (this work is off-roadmap)
      ↓ no milestone_id → no acceptance phase; the chain ends at the release
@@ -60,7 +60,7 @@ Ad-hoc (`/auto-plan {topic-slug}` with arbitrary slug):
 `--plan-only` mode:
 
 ```
-/auto-plan {topic-slug} --plan-only
+/idea-to-release {topic-slug} --plan-only
      ↓ DISCOVER
      ↓ PLAN
      ↓ stops at the locked plan; user invokes /implement manually later
@@ -87,18 +87,18 @@ Any gate failure → pause + surface the blocking finding. The orchestrator does
 
 ## Anti-patterns
 
-- Running `/auto-plan` on a topic with unclear requirements. Garbage in, garbage out.
+- Running `/idea-to-release` on a topic with unclear requirements. Garbage in, garbage out.
 - Ignoring the confidence gates ("just proceed anyway"). The gates exist to catch divergence early.
-- Mixing manual and auto-plan invocations on the same slug — they share state and will conflict.
+- Mixing manual and idea-to-release invocations on the same slug — they share state and will conflict.
 
 ## When manual cycles are preferred
 
-For most features, running cycles manually with human review between them produces better output than autonomous chaining. Reserve `/auto-plan` for topics where the orchestration overhead actually pays for itself.
+For most features, running cycles manually with human review between them produces better output than autonomous chaining. Reserve `/idea-to-release` for topics where the orchestration overhead actually pays for itself.
 
 ## Cross-references
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
-- Orchestrator skill: `skills/auto-plan/SKILL.md`
-- Upstream macro super-loop: `rules/cycle-maintenance.md` — selects the next `B-NNN` item and delegates one full `cycle-auto-plan` run per item
+- Orchestrator skill: `skills/idea-to-release/SKILL.md`
+- Upstream macro super-loop: `rules/cycle-maintenance.md` — selects the next `B-NNN` item and delegates one full `cycle-idea-to-release` run per item
 - Chained cycles: `rules/cycle-discover.md`, `rules/cycle-plan.md`, `rules/cycle-implement.md`, `rules/cycle-code-quality.md`, `rules/cycle-review.md`, `rules/cycle-release.md`, `rules/cycle-acceptance.md`
 - Conventions: `rules/loop-engine-convention.md`

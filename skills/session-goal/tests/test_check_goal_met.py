@@ -88,7 +88,7 @@ class TestEvaluate:
 
 class TestHookContract:
     def _run(self, state: dict, tmp_path: Path) -> dict:
-        state_path = tmp_path / "cycle-goal.json"
+        state_path = tmp_path / "session-goal.json"
         state_path.write_text(json.dumps(state), encoding="utf-8")
         result = subprocess.run(
             [sys.executable, str(SCRIPT), "--state", str(state_path), "--project-root", str(tmp_path)],
@@ -116,11 +116,11 @@ class TestHookContract:
         out = self._run({"milestones": ["M2"]}, tmp_path)
 
         assert "decision" not in out
-        assert not (tmp_path / "cycle-goal.json").exists()
+        assert not (tmp_path / "session-goal.json").exists()
 
     def test_counts_the_blocks_so_it_does_not_lock_forever(self, tmp_path: Path) -> None:
         self._project(tmp_path, " ", None)
-        state_path = tmp_path / "cycle-goal.json"
+        state_path = tmp_path / "session-goal.json"
 
         self._run({"milestones": ["M2"], "blocks": 0, "max_blocks": 2}, tmp_path)
 
@@ -144,7 +144,7 @@ class TestHookContract:
 
     def test_falha_para_o_lado_aberto(self, tmp_path: Path) -> None:
         """Corrupted state must not trap the session."""
-        state_path = tmp_path / "cycle-goal.json"
+        state_path = tmp_path / "session-goal.json"
         state_path.write_text("{ this is not json", encoding="utf-8")
 
         result = subprocess.run(
@@ -181,7 +181,7 @@ class TestInstaller:
 
         hooks = self._settings(tmp_path)["hooks"]["Stop"]
         assert "check_goal_met.py" in hooks[0]["hooks"][0]["command"]
-        assert json.loads((tmp_path / ".claude" / "cycle-goal.json").read_text())["milestones"] == ["M2"]
+        assert json.loads((tmp_path / ".claude" / "session-goal.json").read_text())["milestones"] == ["M2"]
 
     def test_rearming_does_not_stack_duplicate_hooks(self, tmp_path: Path) -> None:
         self._arm(tmp_path, "M2")
@@ -221,7 +221,7 @@ class TestInstaller:
         settings = self._settings(tmp_path)
         commands = [h["command"] for e in settings.get("hooks", {}).get("Stop", []) for h in e["hooks"]]
         assert commands == ["outro-script.sh"]
-        assert not (claude / "cycle-goal.json").exists()
+        assert not (claude / "session-goal.json").exists()
 
     def test_refuses_settings_with_invalid_json_instead_of_overwriting(self, tmp_path: Path) -> None:
         claude = tmp_path / ".claude"
@@ -291,7 +291,7 @@ class TestInstallerPathValidation:
 
         assert result.returncode == 2
         assert "acceptance directory does not exist" in result.stderr
-        assert not (tmp_path / ".claude" / "cycle-goal.json").exists()
+        assert not (tmp_path / ".claude" / "session-goal.json").exists()
 
     def test_refuses_to_arm_when_the_roadmap_does_not_resolve(self, tmp_path: Path) -> None:
         self._project(tmp_path, roadmap_file=False, acc_dir=True)
@@ -317,7 +317,7 @@ class TestInstallerPathValidation:
         result = self._arm(tmp_path, "--acceptance-dir", "pacote/knowledge-base/acceptance")
 
         assert result.returncode == 0, result.stderr
-        state = json.loads((tmp_path / ".claude" / "cycle-goal.json").read_text())
+        state = json.loads((tmp_path / ".claude" / "session-goal.json").read_text())
         assert state["acceptance_dir"] == "pacote/knowledge-base/acceptance"
 
 
@@ -345,7 +345,7 @@ class TestAutonomy:
         root = self._project(tmp_path)
 
         assert self._arm(root).returncode == 0
-        state = json.loads((root / ".claude" / "cycle-goal.json").read_text())
+        state = json.loads((root / ".claude" / "session-goal.json").read_text())
         assert state["acceptance_dir"] == ".claude/knowledge-base/acceptance"
 
     def test_refuses_an_acceptance_dir_from_another_project(self, tmp_path: Path) -> None:
@@ -357,7 +357,7 @@ class TestAutonomy:
 
         assert result.returncode == 2
         assert "OUTSIDE the project" in result.stderr
-        assert not (root / ".claude" / "cycle-goal.json").exists()
+        assert not (root / ".claude" / "session-goal.json").exists()
 
     def test_refuses_a_roadmap_from_another_project(self, tmp_path: Path) -> None:
         root = self._project(tmp_path)
@@ -414,7 +414,7 @@ class TestGoalRefusesUnsatisfiable:
 
         assert result.returncode == 2
         assert "no Definition of done" in result.stderr
-        assert not (root / ".claude" / "cycle-goal.json").exists()
+        assert not (root / ".claude" / "session-goal.json").exists()
 
     def test_refuses_without_a_declared_acceptance_target(self, tmp_path: Path) -> None:
         root = self._project(tmp_path, target=False)

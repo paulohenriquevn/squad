@@ -61,7 +61,7 @@ Log every defect observed along the way with a severity (`blocker` | `major` | `
 
 `knowledge-base/acceptance/{milestone}-{date}.md`, plus artifacts under `knowledge-base/acceptance/evidence/`. Cite evidence by path; the paths must resolve.
 
-The frontmatter MUST carry `verdict: <TOKEN>` — `cycle-goal`'s Stop-hook gate reads that exact line to decide whether the session may end (`rules/cycle-acceptance.md § Output`). A verdict stated only in prose leaves the milestone looking never-accepted.
+The frontmatter MUST carry `verdict: <TOKEN>` — `session-goal`'s Stop-hook gate reads that exact line to decide whether the session may end (`rules/cycle-acceptance.md § Output`). A verdict stated only in prose leaves the milestone looking never-accepted.
 
 ### 5. Compute the verdict — do not name it
 
@@ -109,14 +109,14 @@ State the target address, the verdict token, per-criterion status, evidence path
 
 - Does not run unit, integration or e2e suites — `cycle-code-quality` and the plan's Integration Validation phase own those.
 - Does not deploy, roll back, or hotfix. It reports and blocks; the fix re-enters at `/to-plan`.
-- Does not decide production-readiness across releases — that is `/dogfood`, which can consume these records as evidence.
+- Does not decide production-readiness across releases — that is `/honesty-gate`, which can consume these records as evidence.
 - Does not invent acceptance criteria.
 - Does not ask a human to sign off. By design in this project: the gate rests on computed evidence instead. The trade-off is stated plainly in `cycle-acceptance § Hard gates`.
 
 ## Related
 
 - [`skills/release/SKILL.md`](../release/SKILL.md) — must have emitted `RELEASED`; no longer flips the checkbox
-- [`skills/dogfood/SKILL.md`](../dogfood/SKILL.md) — sustained-use honesty gate that consumes acceptance evidence
-- [`skills/cycle-goal/SKILL.md`](../cycle-goal/SKILL.md) — names this phase in the milestone goal condition
+- [`skills/honesty-gate/SKILL.md`](../honesty-gate/SKILL.md) — sustained-use honesty gate that consumes acceptance evidence
+- [`skills/session-goal/SKILL.md`](../session-goal/SKILL.md) — names this phase in the milestone goal condition
 - `rules/cycle-maintenance.md` — the macro loop that consumes this verdict
 - `rules/testing.md` — why exercised behaviour beats asserted coverage

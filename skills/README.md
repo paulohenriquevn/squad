@@ -33,9 +33,9 @@ purpose — it is a documented exception, not an oversight to "fix" on the next 
 | `review` | cycle-review | Multi-agent parallel review |
 | `release` | cycle-release | Semver tag + develop-to-main PR |
 | `acceptance` | cycle-acceptance | Exercise the RELEASED delivery; the only gate that flips a milestone |
-| `cycle-goal` | cycle-acceptance | Bind the session so it cannot stop before acceptance is green |
-| `auto-plan` | cycle-auto-plan | End-to-end autonomous orchestrator |
-| `analysis` | cycle-analysis | Empirical trajectory validation; independent, does not gate the chain |
+| `session-goal` | cycle-acceptance | Bind the session so it cannot stop before acceptance is green |
+| `idea-to-release` | cycle-idea-to-release | End-to-end autonomous orchestrator |
+| `trajectory-review` | cycle-trajectory-review | Empirical trajectory validation; independent, does not gate the chain |
 | `backlog-item` | cycle-backlog | Register one item — a hypothesis, evidence not required |
 | `discover-plan` | cycle-discover | Measurement plan: what is measured, and what would kill the hypothesis |
 | `discover-edge-cases` | cycle-discover | What could make this measurement lie |
@@ -54,14 +54,14 @@ purpose — it is a documented exception, not an oversight to "fix" on the next 
 | `cap-theorem-specialist` | Analyses CP/AP trade-offs in distributed architectures |
 | `backpressure-specialist` | Diagnoses producer/consumer rate mismatch and flow control |
 | `resilience-specialist` | Designs timeouts, retries, breakers, bulkheads and degradation |
-| `deck` | Full presentation with diagrams |
+| `slide-deck` | Full presentation with diagrams |
 | `marp-slide` | Marp slides only |
 | `excalidraw` | Diagram JSON generation |
-| `dogfood` | Honesty gate for v1.0 claims |
+| `honesty-gate` | Honesty gate for v1.0 claims |
 | `deps-audit` | Dependency CVE + version audit |
 | `arch-check` | Verify architecture boundaries, or propose ones the repo already obeys |
 | `quality-init` | Generate quality-gate hooks calibrated to the project's real p90 metrics |
-| `plan-help` | List every command, by cycle, with the recommended flows |
+| `commands-help` | List every command, by cycle, with the recommended flows |
 | `frontend-design` | Visual direction for new UI (vendored, Anthropic) |
 | `skill-creator` | Author / improve / eval any skill at `skills/{purpose}/` (official Anthropic skill-creator, standalone) |
 

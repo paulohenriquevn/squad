@@ -60,7 +60,7 @@ knowledge-base/releases/*.md
 knowledge-base/roadmap-runs/**
 knowledge-base/audits/*.md
 knowledge-base/adrs/*.md
-knowledge-base/dogfood/evidence/*.md
+knowledge-base/honesty-gate/evidence/*.md
 knowledge-base/discoveries/plans/*.md
 knowledge-base/discoveries/blueprints/*.md
 knowledge-base/discoveries/snapshots/**

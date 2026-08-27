@@ -149,7 +149,7 @@ These rules are NON-NEGOTIABLE for every plan produced by this skill:
 
 2. **Every task has "Files to edit"** — exact paths, not vague references. If a file doesn't exist yet, say "(NEW)". Every file listed here MUST also appear in `## Baseline Context § Files that will be touched`.
 
-3. **Every task has "Deep file dependency analysis"** — understand what you're touching and what depends on it. Citations resolve against `## Baseline Context § Current callers`.
+3. **Every task has "Deep file dependency trajectory-review"** — understand what you're touching and what depends on it. Citations resolve against `## Baseline Context § Current callers`.
 
 4. **Every task has "Why this step"** — ReAct discipline: one paragraph for the action, one paragraph for the reasoning chain (cite ADR, prior-art entry, or Baseline Context row). A junior reading only this subsection understands both the move and the motivation.
 
@@ -161,7 +161,7 @@ These rules are NON-NEGOTIABLE for every plan produced by this skill:
 
 8. **Dependency graph is explicit** — which phases block which. Which can parallelize.
 
-9. **Evidence-driven** — every phase/task references concrete evidence (data, logs, `file:line` from code analysis) that justifies its existence. No speculative tasks.
+9. **Evidence-driven** — every phase/task references concrete evidence (data, logs, `file:line` from code trajectory-review) that justifies its existence. No speculative tasks.
 
 10. **No file paths in ADRs** — ADRs describe architectural decisions, not implementation details. File paths go in tasks.
 

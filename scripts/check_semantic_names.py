@@ -19,7 +19,7 @@ WHAT IT CHECKS
 
 WHAT IT CANNOT DECIDE
 ---------------------
-Whether `analysis` is a worse name than `trajectory-validation`. That is
+Whether `trajectory-review` is a worse name than `trajectory-validation`. That is
 judgement about meaning, and a checker asserting it would produce confident
 nonsense at scale. This gate catches names that are *structurally* empty — the
 bin, the mixed convention, the misfiled test, the silent script. Noticing that a
@@ -234,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         f"directory(ies) — {len(report.findings)} name(s) that do not state a purpose"
     )
     print(
-        "  (structure only: a name that is merely vague — `analysis`, `deck` — is "
+        "  (structure only: a name that is merely vague — `trajectory-review`, `deck` — is "
         "judgement this checker does not claim)"
     )
     for finding in report.findings:

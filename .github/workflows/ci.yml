@@ -83,7 +83,7 @@ jobs:
       - name: End-to-end smoke
         run: python3 scripts/verify_ecosystem.py
 
-      - name: Python static analysis
+      - name: Python static trajectory-review
         run: ruff check scripts skills hooks tests conftest.py
 
       # The kit demanded this gate of every consumer and never ran it on itself.
@@ -137,7 +137,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - name: Shell static analysis
+      - name: Shell static trajectory-review
         run: shellcheck -x -P hooks --severity=warning hooks/*.sh hooks/environment/*.sh scripts/*.sh tests/hooks/*.sh
       - name: Hook behavior suites
         run: for test_file in tests/hooks/test_*.sh; do bash "$test_file"; done

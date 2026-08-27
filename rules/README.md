@@ -24,9 +24,9 @@ Each `cycle-{name}.md` defines:
 | `cycle-review.md` | Multi-agent review | READY_TO_MERGE, NEEDS_FIXES, NEEDS_DEEPER |
 | `cycle-release.md` | Release cut | RELEASED, PR_OPEN_AWAITING_APPROVAL |
 | `cycle-acceptance.md` | End-user validation of the released delivery; owns the milestone flip | ACCEPTED, ACCEPTED_WITH_CAVEATS, REJECTED, NOT_VALIDATED |
-| `cycle-analysis.md` | Trajectory analysis (opt-in, post-release) | ON_TRACK, COURSE_CORRECTION_NEEDED |
+| `cycle-trajectory-review.md` | Trajectory trajectory-review (opt-in, post-release) | ON_TRACK, COURSE_CORRECTION_NEEDED |
 | `cycle-judge-codex.md` | External Codex jury (optional plugin) | SHIPPABLE, READY_TO_MERGE |
-| `cycle-auto-plan.md` | Auto-orchestrator | Delegates to sub-cycles |
+| `cycle-idea-to-release.md` | Auto-orchestrator | Delegates to sub-cycles |
 
 ## Golden Rules (locked severity rubrics)
 
@@ -38,7 +38,7 @@ Each `cycle-{name}.md` defines:
 | `discover-plan-golden-rule.md` | Discovery plan scoring rubric |
 | `deps-audit-golden-rule.md` | Dependency audit severity |
 | `dogfood-golden-rule.md` | Anchor scenario + status vocab |
-| `analysis-golden-rule.md` | Trajectory analysis modules + verdict caps |
+| `trajectory-review-golden-rule.md` | Trajectory trajectory-review modules + verdict caps |
 
 ## Thresholds and Allowlists
 
@@ -55,7 +55,7 @@ Each `cycle-{name}.md` defines:
 | `live-target.txt` | Declared live environments per domain (live-test refuses without one) |
 | `current-constraint.md` | The constraint lens — advisory, never a gate |
 | `discover-plan-thresholds.txt` | Discovery plan scoring thresholds |
-| `analysis-config.txt` | Trajectory analysis profile + enablement |
+| `trajectory-review-config.txt` | Trajectory trajectory-review profile + enablement |
 | `review-model-routing.txt` | Agent model routing for review |
 
 ## Other Rules

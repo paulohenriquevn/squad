@@ -35,7 +35,7 @@ hands the reader a number that looks authoritative and is not.
 
 **No raising.** A phase that did real work must not fail because its bookkeeping
 could not be written. `emit_*` swallows every environmental error — the same
-fail-open discipline `cycle-goal`'s Stop gate applies, and for the same reason:
+fail-open discipline `session-goal`'s Stop gate applies, and for the same reason:
 a gate that jams the session is worse than one that misses a record. A caller
 error (an empty cycle name) still raises, because that is a bug at the call
 site, not a condition of the machine.

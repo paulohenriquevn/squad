@@ -298,4 +298,4 @@ Next: nothing — release is published. Start a new cycle with /to-plan or /gril
 - Hooks enforced: `hooks/validate-command.sh` (git safety + Co-Authored-By block), `hooks/stop-validation.sh` (CHANGELOG hard gate)
 - Scripts: `scripts/compute_next_version.py`, `scripts/bump_version.py`, `scripts/detect_current_version.py`, `scripts/promote_unreleased.py`, `scripts/render_release_notes.py`, `scripts/changelog_section_nonempty.py`, `scripts/flip_milestone_checkbox.py` (housed here, invoked only by `cycle-acceptance` — see Step 7.5)
 - Downstream cycle: [`rules/cycle-acceptance.md`](../../rules/cycle-acceptance.md) — consumes `RELEASED`, owns the single-flip invariant and the roadmap-runs file contract
-- Macro super-loop: [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md) — selects the next `B-NNN` and delegates one `cycle-auto-plan` run per item
+- Macro super-loop: [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md) — selects the next `B-NNN` and delegates one `cycle-idea-to-release` run per item

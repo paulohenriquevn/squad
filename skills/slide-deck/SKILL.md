@@ -1,5 +1,5 @@
 ---
-name: deck
+name: slide-deck
 version: 0.1.0
 requires: []
 description: Create complete presentation decks with diagrams. Orchestrates /marp-slide and /excalidraw into a single workflow — plans structure, creates diagrams, builds slides, renders HTML + PPTX. Use when the user wants a full presentation with visuals.
@@ -23,17 +23,17 @@ Orchestrates `/marp-slide` and `/excalidraw` into a single end-to-end workflow. 
 **This skill does NOT duplicate the rules of `/marp-slide` or `/excalidraw`.** It reads their SKILL.md files at runtime and follows them. This file defines only the orchestration — what to do, in what order, and how the two skills connect.
 
 **Project rules consumed:**
-- `.claude/rules/public-copy.md` — voice rules apply to any deck that may surface in README/PITCH or marketing material.
-- `.claude/rules/dogfood-golden-rule.md` — NEVER produce a deck claiming "production-ready" / "v1.0" / "production-grade" for the project without recorded dogfood evidence. Invoke `/dogfood` BEFORE generating any status-claim deck.
+- `.claude/rules/public-copy.md` — voice rules apply to any slide-deck that may surface in README/PITCH or marketing material.
+- `.claude/rules/honesty-gate-golden-rule.md` — NEVER produce a slide-deck claiming "production-ready" / "v1.0" / "production-grade" for the project without recorded honesty-gate evidence. Invoke `/honesty-gate` BEFORE generating any status-claim slide-deck.
 
 ---
 
 ## When to Trigger
 
-- User asks for a "presentation with diagrams", "complete deck", "visual presentation"
+- User asks for a "presentation with diagrams", "complete slide-deck", "visual presentation"
 - User wants slides AND diagrams created together
 - User says "create a presentation about X" and the topic clearly benefits from visual diagrams
-- User explicitly invokes `/deck`
+- User explicitly invokes `/slide-deck`
 
 **When NOT to use:** If the user only wants slides (no diagrams) → use `/marp-slide`. If the user only wants a diagram → use `/excalidraw`.
 
@@ -143,7 +143,7 @@ These rules ensure diagrams and slides work together:
 | Marp width with text | `![w:780]` or `![w:560]` depending on text volume |
 | Diagram background | White (`#ffffff`) — contrasts with dark slide bg |
 | Filename convention | `NN-description.excalidraw` (zero-padded, kebab-case) |
-| Max diagrams per deck | No hard limit, but aim for 40-60% of slides having diagrams |
+| Max diagrams per slide-deck | No hard limit, but aim for 40-60% of slides having diagrams |
 | Diagram depth | Matches audience: simple=conceptual, technical=evidence artifacts |
 
 ---
@@ -162,7 +162,7 @@ Deck has ONE set of orchestration checks. Slide-quality and diagram-quality chec
 | 5 | All diagrams use 1280x720 frame |
 | 6 | All diagrams were rendered and visually validated per `/excalidraw` Render & Validate loop |
 | 7 | Color palette is consistent across all diagrams (from `skills/excalidraw/references/color-palette.md`) |
-| 8 | If the deck mentions production status of the project, `/dogfood` was invoked and returned `EVIDENCE_SUFFICIENT` or `EVIDENCE_WITH_CAVEATS` |
+| 8 | If the slide-deck mentions production status of the project, `/honesty-gate` was invoked and returned `EVIDENCE_SUFFICIENT` or `EVIDENCE_WITH_CAVEATS` |
 
 ### Downstream checks (delegated)
 - **Slides:** run the full Quality Checklist of `/marp-slide` (19 items).
@@ -174,18 +174,18 @@ Deck has ONE set of orchestration checks. Slide-quality and diagram-quality chec
 
 ### Minimal invocation
 ```
-/deck Memory and Context for AI Agents
+/slide-deck Memory and Context for AI Agents
 ```
 → Infers intermediate audience, pt-BR, 10-16 slides, tech theme.
 
 ### Explicit invocation
 ```
-/deck topic="Compaction Pipeline" audience=technical slides=12 lang=pt-BR
+/slide-deck topic="Compaction Pipeline" audience=technical slides=12 lang=pt-BR
 ```
 → Technical audience, terminal-style headers, 22px font, evidence artifacts in diagrams.
 
 ### From existing content
 ```
-/deck based on domain.md, simplified version for managers
+/slide-deck based on domain.md, simplified version for managers
 ```
 → Reads domain.md, creates simple version with conceptual diagrams.

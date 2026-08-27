@@ -39,7 +39,7 @@ This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md), between 
 Invoke this skill when:
 
 - `/edge-case-plan` has just returned PLAN OK and you're about to run `/plan-confidence` (recommended cycle-plan position — see `cycle-plan.md`).
-- Standalone audit before merge / release / dogfood evidence collection.
+- Standalone audit before merge / release / honesty-gate evidence collection.
 - After adding or upgrading a dependency manually.
 - Periodic schedule (suggested weekly via `/loop 7d /deps-audit`).
 - A new CVE has been disclosed for a dep you use.
@@ -313,7 +313,7 @@ Allowlisted findings (within sunset) downgrade by ONE severity level: CRITICAL �
 - Wired into: [`rules/cycle-plan.md`](../../rules/cycle-plan.md) (new phase between `/edge-case-plan` and `/plan-confidence` — v1.1)
 - Renovate/Dependabot complementary setup: `.github/dependabot.yml` or `renovate.json` — passive GitHub-side infra, out of scope for this skill
 - Unbreakable Rule 9: [`~/.claude/CLAUDE.md § 9`](file://~/.claude/CLAUDE.md) (Do Not Reinvent the Wheel)
-- Sibling skills: `/plan-confidence` (consumes this skill's verdict), `/dogfood` (also a hard-cap gate on plans)
+- Sibling skills: `/plan-confidence` (consumes this skill's verdict), `/honesty-gate` (also a hard-cap gate on plans)
 
 ## Downstream wiring required (NOT yet shipped — follow-up)
 

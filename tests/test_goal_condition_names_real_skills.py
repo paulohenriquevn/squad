@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-_SCRIPT = _REPO / "skills" / "cycle-goal" / "scripts" / "compose_goal_condition.py"
+_SCRIPT = _REPO / "skills" / "session-goal" / "scripts" / "compose_goal_condition.py"
 
 # `/foo-bar` in prose. Excludes paths (`/tmp/x`) by requiring hyphen-or-end and
 # rejeitando um `/` logo depois.
@@ -130,5 +130,5 @@ def test_the_condition_actually_names_the_pipeline() -> None:
     for command in ("/implement", "/code-quality", "/review", "/acceptance"):
         assert command in source, (
             f"{command} vanished from the condition text — if that was intentional, "
-            "atualize `requires` em skills/cycle-goal/SKILL.md junto"
+            "atualize `requires` em skills/session-goal/SKILL.md junto"
         )

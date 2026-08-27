@@ -105,7 +105,7 @@ def test_skill_count() -> None:
 
     Retired the in-cycle skill-distillation tail (skill-writer + skill-validator
     + skill-register, -3), adopted the standalone official skill-creator (+1),
-    added the frontend-design utility skill (+1), the cycle-goal session-binding
+    added the frontend-design utility skill (+1), the session-goal session-binding
     skill (+1), the acceptance cycle skill (+1), and the roadmap-review skill (+1):
     30 -> 28 -> 29 -> 30 -> 31 -> 32.
 

@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for cycle-goal tests."""
+"""Shared pytest fixtures for session-goal tests."""
 from __future__ import annotations
 
 import sys

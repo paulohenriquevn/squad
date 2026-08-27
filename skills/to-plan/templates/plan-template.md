@@ -179,7 +179,7 @@ Data, logs, or observations that justify this task. Cite by `file:line` (path re
 
 Every path here MUST also appear in the `## Baseline Context § Files that will be touched` table.
 
-#### Deep file dependency analysis
+#### Deep file dependency trajectory-review
 For each file listed above, explain:
 - What the file does today (cite `## Baseline Context` row)
 - How this task changes it (specific functions/types added, removed, renamed)

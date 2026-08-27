@@ -71,7 +71,7 @@ total_grading_time_minutes: 0
 ## Outcome (filled in post-implementation)
 
 - `cross_validation`: PENDING | PASS | PASS_WITH_CAVEATS | FAIL
-- `dogfood`: PENDING | PASS | PASS_WITH_CAVEATS | FAIL | NOT_RUN
+- `honesty-gate`: PENDING | PASS | PASS_WITH_CAVEATS | FAIL | NOT_RUN
 - `revisions_required`: 0
 - `edge_cases_surfaced`: 0
 

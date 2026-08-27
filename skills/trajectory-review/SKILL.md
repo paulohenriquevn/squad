@@ -1,11 +1,11 @@
 ---
-name: analysis
+name: trajectory-review
 version: 0.1.0
 requires: []
-description: PhD-level trajectory validation with empirical evidence — benchmarks, complexity metrics, architecture fitness, scalability projections. Opt-in per project via rules/analysis-config.txt. Runs 6 analysis modules (A1-A6) weighted by project profile (engine/api/library/cli/infrastructure). Produces hypothesis-driven report with quantitative evidence, not opinions. Independent cycle — does not gate the main chain.
+description: PhD-level trajectory validation with empirical evidence — benchmarks, complexity metrics, architecture fitness, scalability projections. Opt-in per project via rules/trajectory-review-config.txt. Runs 6 trajectory-review modules (A1-A6) weighted by project profile (engine/api/library/cli/infrastructure). Produces hypothesis-driven report with quantitative evidence, not opinions. Independent cycle — does not gate the main chain.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Agent
-argument-hint: "[plan-slug] (optional — bind analysis to a plan's architecture claims)"
+argument-hint: "[plan-slug] (optional — bind trajectory-review to a plan's architecture claims)"
 ---
 
 # Analysis — PhD-Level Trajectory Validation
@@ -18,11 +18,11 @@ argument-hint: "[plan-slug] (optional — bind analysis to a plan's architecture
 >
 > See `~/.claude/CLAUDE.md` § 1 (95% Confidence).
 
-Single entry-point for [`cycle-analysis`](../../rules/cycle-analysis.md). Validates whether a project is on the correct trajectory using the scientific method: hypotheses → measurements → evidence → verdict.
+Single entry-point for [`cycle-trajectory-review`](../../rules/cycle-trajectory-review.md). Validates whether a project is on the correct trajectory using the scientific method: hypotheses → measurements → evidence → verdict.
 
 **Project rules consumed:**
-- `.claude/rules/analysis-golden-rule.md` — locked unbreakable contract.
-- `.claude/rules/analysis-config.txt` — opt-in enablement + profile + paths.
+- `.claude/rules/trajectory-review-golden-rule.md` — locked unbreakable contract.
+- `.claude/rules/trajectory-review-config.txt` — opt-in enablement + profile + paths.
 - `.claude/rules/code-quality-languages.txt` — which languages are enabled (reused).
 - Unbreakable Rule 9 (`~/.claude/CLAUDE.md § 9`) — use existing benchmark/profiling tools, never reimplement.
 
@@ -30,9 +30,9 @@ Single entry-point for [`cycle-analysis`](../../rules/cycle-analysis.md). Valida
 
 ## Cycle contract
 
-This skill is **the only phase** of [`cycle-analysis`](../../rules/cycle-analysis.md). The cycle rule is the **source of truth** for: pre-conditions, hard gates, verdicts, anti-patterns, and output paths.
+This skill is **the only phase** of [`cycle-trajectory-review`](../../rules/cycle-trajectory-review.md). The cycle rule is the **source of truth** for: pre-conditions, hard gates, verdicts, anti-patterns, and output paths.
 
-**Read `cycle-analysis.md` before invoking this skill.**
+**Read `cycle-trajectory-review.md` before invoking this skill.**
 
 This SKILL.md retains phase-specific detail (module execution, hypothesis methodology, report generation).
 
@@ -40,21 +40,21 @@ This SKILL.md retains phase-specific detail (module execution, hypothesis method
 
 ## When to Trigger
 
-User explicitly invokes `/analysis [plan-slug]` when:
+User explicitly invokes `/trajectory-review [plan-slug]` when:
 
-- `/release` completed — analysis runs on **released code**, not in-progress work
-- Project has `rules/analysis-config.txt` with `enabled = true`
+- `/release` completed — trajectory-review runs on **released code**, not in-progress work
+- Project has `rules/trajectory-review-config.txt` with `enabled = true`
 - Codebase is in a stable, buildable, testable state
 - Benchmarks exist (required for `engine` and `api` profiles)
 - User wants evidence-backed assessment of project trajectory post-release
 
-Exception: on project bootstrap (no release yet), `/analysis` MAY run once to establish the initial baseline. The report MUST note "pre-release baseline — no regression comparison available".
+Exception: on project bootstrap (no release yet), `/trajectory-review` MAY run once to establish the initial baseline. The report MUST note "pre-release baseline — no regression comparison available".
 
 Refuse to start when:
 
-- `/release` has NOT completed and this is not the initial baseline run → refuse with "analysis runs after release"
-- `analysis-config.txt` missing or `enabled ≠ true` → INFO "analysis not enabled for this project"
-- `analysis-golden-rule.md` missing → INVALID
+- `/release` has NOT completed and this is not the initial baseline run → refuse with "trajectory-review runs after release"
+- `trajectory-review-config.txt` missing or `enabled ≠ true` → INFO "trajectory-review not enabled for this project"
+- `trajectory-review-golden-rule.md` missing → INVALID
 - Working tree has uncommitted changes
 - Project doesn't compile / tests don't pass
 - Active `/implement` halt-loop running (unstable state)
@@ -63,18 +63,18 @@ Refuse to start when:
 
 ## Modes
 
-### Mode 1 — Standalone analysis
+### Mode 1 — Standalone trajectory-review
 
 ```
-/analysis
+/trajectory-review
 ```
 
 Extracts hypotheses from project CLAUDE.md, README, and ADRs. Runs all profile-enabled modules against current codebase. Report to stdout + `knowledge-base/audits/{date}-analysis.md`.
 
-### Mode 2 — Plan-bound analysis (RECOMMENDED)
+### Mode 2 — Plan-bound trajectory-review (RECOMMENDED)
 
 ```
-/analysis {plan-slug}
+/trajectory-review {plan-slug}
 ```
 
 Additionally reads `.claude/knowledge-base/plans/{slug}-plan.md` to extract architecture claims and performance targets declared in the plan. Hypotheses are richer because they include plan-specific goals.
@@ -87,8 +87,8 @@ Additionally reads `.claude/knowledge-base/plans/{slug}-plan.md` to extract arch
 
 ```
 1. Verify /release completed → REFUSE if no release found (exception: initial baseline)
-2. Read analysis-config.txt → REFUSE if not enabled
-3. Read analysis-golden-rule.md → INVALID if missing
+2. Read trajectory-review-config.txt → REFUSE if not enabled
+3. Read trajectory-review-golden-rule.md → INVALID if missing
 4. Check working tree clean → REFUSE if dirty
 5. Detect languages from code-quality-languages.txt + manifests
 5. Load profile weights from golden-rule § 6
@@ -121,7 +121,7 @@ Hypothesis H{N}:
 
 **Target**: 5-15 hypotheses covering performance, architecture, and scalability.
 
-### Step 2 — Run analysis modules
+### Step 2 — Run trajectory-review modules
 
 Run each module with profile weight > 0, in order A1→A6. For each module:
 
@@ -152,7 +152,7 @@ If no benchmark suite exists:
 - `engine`/`api` profile → emit `no_benchmarks_for_profile` HARD finding
 - Other profiles → emit INFO and skip A1
 
-#### A2 — Complexity analysis
+#### A2 — Complexity trajectory-review
 
 ```bash
 # Rust (using external tools when available, fallback to grep-based)
@@ -243,7 +243,7 @@ If benchmarks are not parameterized, analyze algorithmic complexity statically:
 
 #### A6 — Reference comparison
 
-If `reference_repos` configured in `analysis-config.txt`:
+If `reference_repos` configured in `trajectory-review-config.txt`:
 
 For each reference project:
 1. Read its architecture (CLAUDE.md or equivalent)
@@ -358,13 +358,13 @@ Print JSON summary to stdout:
 
 ## Multi-agent execution (RECOMMENDED for thoroughness)
 
-For comprehensive analysis, spawn specialist agents in parallel:
+For comprehensive trajectory-review, spawn specialist agents in parallel:
 
 | Agent | Modules | Focus |
 |---|---|---|
 | **benchmark-analyst** | A1, A5 | Run benchmarks, scalability projection, regression detection |
 | **architecture-analyst** | A3, A6 | Dependency graph, coupling metrics, reference comparison |
-| **code-analyst** | A2, A4 | Complexity metrics, memory profiling, resource analysis |
+| **code-analyst** | A2, A4 | Complexity metrics, memory profiling, resource trajectory-review |
 
 Consolidate findings from all agents into a single report.
 
@@ -378,22 +378,22 @@ The verdict is not advisory — it prescribes a concrete next step in the cycle 
 |---|---|---|
 | `ON_TRACK` | `proceed` | Report archived as baseline. Next milestone proceeds normally via `cycle-maintenance`. |
 | `ON_TRACK_WITH_RISKS` | `inject_risk_tasks` | Report includes specific risk mitigation tasks. These MUST be injected as requirements in the next `/to-plan`. The report is cited as prior art (same as a cycle-discover opportunity). |
-| `COURSE_CORRECTION_NEEDED` | `corrective_plan` | Before any new feature work: run `/to-plan` scoped to the falsified hypotheses. The analysis report becomes the "problem statement" input. Then `/implement` the corrections, re-release, re-run `/analysis`. |
+| `COURSE_CORRECTION_NEEDED` | `corrective_plan` | Before any new feature work: run `/to-plan` scoped to the falsified hypotheses. The trajectory-review report becomes the "problem statement" input. Then `/implement` the corrections, re-release, re-run `/trajectory-review`. |
 | `FUNDAMENTAL_RETHINK` | `redesign` | Run `/discover-plan` to investigate alternatives. Write ADR documenting empirical evidence of why the current approach fails. Then `/to-plan` for the redesigned architecture. `cycle-maintenance` pauses until the human decides. |
 | `INVALID` | `stop` | Surface to human. Fix config/golden-rule before proceeding. |
 
-The analysis report at `knowledge-base/audits/` is referenced by the next iteration's `/to-plan` as **prior art** — the same way cycle-discover opportunities feed planning.
+The trajectory-review report at `knowledge-base/audits/` is referenced by the next iteration's `/to-plan` as **prior art** — the same way cycle-discover opportunities feed planning.
 
 ---
 
 ## Anti-patterns
 
 1. **NEVER fabricate measurements** — every number comes from an actual tool run with subprocess evidence.
-2. **NEVER skip hypothesis extraction** — benchmarks without hypotheses are just benchmarking, not analysis.
+2. **NEVER skip hypothesis extraction** — benchmarks without hypotheses are just benchmarking, not trajectory-review.
 3. **NEVER compare incomparable baselines** — always note differences in hardware, storage model, workload.
 4. **NEVER report a single benchmark run as evidence** — minimum 3 iterations with mean ± std dev.
 5. **NEVER treat ON_TRACK_WITH_RISKS as ON_TRACK** — each risk has a documented mitigation.
-6. **NEVER run on dirty working tree** — analysis reads stable state only.
+6. **NEVER run on dirty working tree** — trajectory-review reads stable state only.
 7. **NEVER edit source code** — this skill is read-only by contract. Recommendations go in the report.
 
 ---
@@ -409,9 +409,9 @@ The analysis report at `knowledge-base/audits/` is referenced by the next iterat
 
 ## Cross-references
 
-- Golden rule: [`.claude/rules/analysis-golden-rule.md`](../../rules/analysis-golden-rule.md)
-- Config: [`.claude/rules/analysis-config.txt`](../../rules/analysis-config.txt)
-- Cycle: [`.claude/rules/cycle-analysis.md`](../../rules/cycle-analysis.md)
+- Golden rule: [`.claude/rules/trajectory-review-golden-rule.md`](../../rules/trajectory-review-golden-rule.md)
+- Config: [`.claude/rules/trajectory-review-config.txt`](../../rules/trajectory-review-config.txt)
+- Cycle: [`.claude/rules/cycle-trajectory-review.md`](../../rules/cycle-trajectory-review.md)
 - Languages (reused): [`.claude/rules/code-quality-languages.txt`](../../rules/code-quality-languages.txt)
 - Sibling (structural gate): [`/code-quality`](../code-quality/SKILL.md)
 - Sibling (merge gate): [`/review`](../review/SKILL.md)

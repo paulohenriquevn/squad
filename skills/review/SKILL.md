@@ -162,7 +162,7 @@ Plus, `/review` adds:
 - Lint warnings: 0 (not "fewer than before")
 - Test runtime regression check (if previous run available)
 
-### Step 6 — Edge-case coverage analysis
+### Step 6 — Edge-case coverage trajectory-review
 
 ```bash
 python3 .claude/skills/review/scripts/edge_case_coverage.py \

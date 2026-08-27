@@ -34,7 +34,7 @@ positional bands relative to the required sections.
 | `## Hard gates` | When at least one finding is severe enough to block the chain |
 | `## Severity rubric` | Cycles that classify findings (code-quality, review) |
 | `## Stop conditions` | Loop-style cycles (halt-loop, ralph-loop) where a stop signal must be defined |
-| `## Confidence gates between phases` | Orchestrators (auto-plan) that gate transitions |
+| `## Confidence gates between phases` | Orchestrators (idea-to-release) that gate transitions |
 
 **Footer band — after `## Anti-patterns`, before `## Cross-references`:**
 
@@ -64,10 +64,10 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 | `cycle-review` | `READY_TO_MERGE` | `READY_TO_MERGE_WITH_FOLLOWUPS` | `NEEDS_FIXES` | `NEEDS_DEEPER` |
 | `cycle-release` | `RELEASED` | — | `PR_OPEN_AWAITING_APPROVAL` (paused at human-approval gate) | `BLOCKED` |
 | `cycle-acceptance` | `ACCEPTED` | `ACCEPTED_WITH_CAVEATS` | `REJECTED` | `NOT_VALIDATED` |
-| `cycle-auto-plan` | (delegates to each chained cycle's verdict) | — | (pause + ask human at any gate failure) | — |
+| `cycle-idea-to-release` | (delegates to each chained cycle's verdict) | — | (pause + ask human at any gate failure) | — |
 | `cycle-judge-codex` (optional, external plugin) | `SHIPPABLE` / `READY_TO_MERGE` (`:final` only) | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` / `NEEDS_FIXES` / `NEEDS_DEEPER` (`:final` only) | `FAIL_HARD` / `INVALID` / `META_DEFECT_FOUND` (`:final` only) / `AGGREGATOR_BUG_SUSPECTED` (`:final` only) |
-| `dogfood` (utility) | `EVIDENCE_SUFFICIENT` | `EVIDENCE_WITH_CAVEATS` | — | `EVIDENCE_INSUFFICIENT` |
-| `cycle-analysis` (opt-in, independent) | `ON_TRACK` | `ON_TRACK_WITH_RISKS` | `COURSE_CORRECTION_NEEDED` | `FUNDAMENTAL_RETHINK` / `INVALID` |
+| `honesty-gate` (utility) | `EVIDENCE_SUFFICIENT` | `EVIDENCE_WITH_CAVEATS` | — | `EVIDENCE_INSUFFICIENT` |
+| `cycle-trajectory-review` (opt-in, independent) | `ON_TRACK` | `ON_TRACK_WITH_RISKS` | `COURSE_CORRECTION_NEEDED` | `FUNDAMENTAL_RETHINK` / `INVALID` |
 
 ### Why each vocabulary differs
 
@@ -77,8 +77,8 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 - **code-quality** emits a **graded quality verdict** keyed to a score cap (per `code-quality-golden-rule.md` § 1): `PASS`/`PASS_WITH_CAVEATS` proceed to `/review`; `FAIL_SOFT` may proceed only with an ADR dismissing each soft cap; `FAIL_HARD` blocks `/review` and loops back to `/implement`; `INVALID` means structural integrity is broken (golden rule missing/corrupt). The golden rule is the Source of Truth for the rubric — this matrix only lists the tokens.
 - **review** emits **merge-readiness**: `READY_TO_MERGE` is the only green; `NEEDS_FIXES` returns to `/implement`; `NEEDS_DEEPER` returns to `/to-plan` for re-scoping.
 - **acceptance** emits an **end-user validation verdict** on the *released* delivery, so its "not OK" band splits on a distinction no other cycle needs: `REJECTED` means the delivery was exercised and a Definition-of-done criterion did not hold; `NOT_VALIDATED` means the run could not establish either outcome (target unreachable, criterion never exercised, evidence missing, milestone declared no DoD). Collapsing them into one token would let untested work be reported as tested — the exact failure the cycle exists to prevent. Both block the `ROADMAP.md` checkbox flip identically. `ACCEPTED_WITH_CAVEATS` requires every caveat to be a filed issue.
-- **dogfood** emits **evidence-readiness** because its decision is "is the v1.0 claim supported by recorded usage?"
-- **analysis** emits **trajectory assessment verdicts** because it answers "is this project heading in the right direction?" — a gradient that binary gates (`PASS`/`FAIL`) cannot capture. `ON_TRACK` vs `COURSE_CORRECTION_NEEDED` vs `FUNDAMENTAL_RETHINK` maps to the severity of course correction needed: none, targeted fixes, or architectural redesign. The cycle is opt-in (requires `analysis-config.txt` with `enabled = true`) and independent — it does not gate the main chain.
+- **honesty-gate** emits **evidence-readiness** because its decision is "is the v1.0 claim supported by recorded usage?"
+- **trajectory-review** emits **trajectory assessment verdicts** because it answers "is this project heading in the right direction?" — a gradient that binary gates (`PASS`/`FAIL`) cannot capture. `ON_TRACK` vs `COURSE_CORRECTION_NEEDED` vs `FUNDAMENTAL_RETHINK` maps to the severity of course correction needed: none, targeted fixes, or architectural redesign. The cycle is opt-in (requires `trajectory-review-config.txt` with `enabled = true`) and independent — it does not gate the main chain.
 - **judge-codex** mirrors the **upstream cycle's vocabulary** intentionally — `:discover`/`:plan` reuse the SHIPPABLE band; `:implementation` mirrors `cycle-implement` exit states adapted to a verdict; `:final` mirrors `cycle-review`'s merge-readiness plus two **meta-verdicts** (`META_DEFECT_FOUND`, `AGGREGATOR_BUG_SUSPECTED`) that exist only at the review-of-review stage. The plugin is **delivered externally** (`usetheodev/judge-codex-plugin-cc`) and consumes `plan`'s golden-rule files by path convention.
 
 Do NOT introduce a new verdict token without adding it to this matrix and explaining why an existing token does not fit.

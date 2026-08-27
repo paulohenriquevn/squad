@@ -1,6 +1,6 @@
 # Deps-Audit Golden Rule
 
-Locked unbreakable contract that `/deps-audit` reads to score findings and gate `/plan-confidence`. Mirrors the dogfood/code-quality golden-rule pattern: locked sections require an ADR to change; per-project sections are tuned in `deps-audit-allowlist.txt`.
+Locked unbreakable contract that `/deps-audit` reads to score findings and gate `/plan-confidence`. Mirrors the honesty-gate/code-quality golden-rule pattern: locked sections require an ADR to change; per-project sections are tuned in `deps-audit-allowlist.txt`.
 
 Without this file, `/deps-audit` emits `INVALID` with flag `deps_audit_golden_rule_missing`.
 

@@ -2,7 +2,7 @@
 name: marp-slide
 version: 0.1.0
 requires: []
-description: Create Marp presentation slides with embedded CSS theme — outputs self-contained .md + rendered .html + .pptx. Use when the user wants slides only (no full deck with diagrams; for that use /deck).
+description: Create Marp presentation slides with embedded CSS theme — outputs self-contained .md + rendered .html + .pptx. Use when the user wants slides only (no full slide-deck with diagrams; for that use /slide-deck).
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit
 argument-hint: "<topic or file>"
@@ -27,13 +27,13 @@ Generate Marp presentations with embedded CSS themes. No external files needed �
 
 **Project rules consumed:**
 - `.claude/rules/public-copy.md` — voice for slides that surface in README/PITCH.
-- `.claude/rules/dogfood-golden-rule.md` — NEVER produce slides claiming "production-ready" / "v1.0" / "production-grade" for the project without recorded dogfood evidence. Apply the gate before generating any status-claim slide.
+- `.claude/rules/honesty-gate-golden-rule.md` — NEVER produce slides claiming "production-ready" / "v1.0" / "production-grade" for the project without recorded honesty-gate evidence. Apply the gate before generating any status-claim slide.
 
 ---
 
 ## When to Trigger
 
-- User asks to create slides, a presentation, or a deck
+- User asks to create slides, a presentation, or a slide-deck
 - User mentions Marp explicitly
 - User says "make slides about X", "presentation about X", "create a presentation"
 
@@ -135,15 +135,15 @@ and for the one-command install that creates it. Everything below assumes you ra
 you did not, skip to **Working without the library**.
 
 Saying so is the point. A slide that references an SVG path which does not resolve renders a
-broken-image box in the deck — and the failure surfaces in front of an audience, not at build time.
+broken-image box in the slide-deck — and the failure surfaces in front of an audience, not at build time.
 
 Three approaches, once the library is present:
 
 **Approach A: Image reference (simplest, works without `html: true`)**
 
 Write `<icons>` for `skills/excalidraw/references/icons/`, expressed **relative to the slide `.md`**
-— Marp resolves image paths from the deck, not from this skill, and a deck can live anywhere. The
-placeholder is deliberate: a literal `../../…` copied from here is wrong the moment your deck sits
+— Marp resolves image paths from the slide-deck, not from this skill, and a slide-deck can live anywhere. The
+placeholder is deliberate: a literal `../../…` copied from here is wrong the moment your slide-deck sits
 at a different depth, and it fails as a broken-image box on screen rather than at build time.
 
 ```markdown

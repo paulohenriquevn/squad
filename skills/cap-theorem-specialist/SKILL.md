@@ -171,7 +171,7 @@ Tie the choice to the business requirements.
 
 A booking system has two servers in different regions. During a network failure, both may receive requests for the last available seat.
 
-### CP analysis
+### CP trajectory-review
 
 One of the servers blocks new bookings until it can confirm the global state.
 
@@ -179,7 +179,7 @@ One of the servers blocks new bookings until it can confirm the global state.
 * Sacrifices: availability in one of the regions.
 * Result: some users get an error or have to wait.
 
-### AP analysis
+### AP trajectory-review
 
 Both servers accept the booking.
 
@@ -280,7 +280,7 @@ When the user asks for a brief explanation:
 This skill must not:
 
 * guarantee that a technology is CP or AP without knowing its configuration;
-* replace a detailed analysis of the replication protocol;
+* replace a detailed trajectory-review of the replication protocol;
 * treat database examples as absolute classifications;
 * ignore recovery and conflict-resolution requirements;
 * recommend availability for operations that may create critical risk without flagging those risks.

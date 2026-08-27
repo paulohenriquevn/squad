@@ -61,13 +61,13 @@ skills/acceptance/scripts/compute_acceptance_verdict.py
 skills/acceptance/tests/conftest.py
 skills/acceptance/tests/test_extract_acceptance_criteria.py
 skills/acceptance/tests/test_compute_acceptance_verdict.py
-skills/cycle-goal/SKILL.md
-skills/cycle-goal/scripts/compose_goal_condition.py
-skills/cycle-goal/tests/conftest.py
-skills/cycle-goal/scripts/check_goal_met.py
-skills/cycle-goal/scripts/install_goal_hook.py
-skills/cycle-goal/tests/test_check_goal_met.py
-skills/cycle-goal/tests/test_compose_goal_condition.py
+skills/session-goal/SKILL.md
+skills/session-goal/scripts/compose_goal_condition.py
+skills/session-goal/tests/conftest.py
+skills/session-goal/scripts/check_goal_met.py
+skills/session-goal/scripts/install_goal_hook.py
+skills/session-goal/tests/test_check_goal_met.py
+skills/session-goal/tests/test_compose_goal_condition.py
 skills/release/SKILL.md
 skills/release/scripts/changelog_section_nonempty.py
 skills/release/scripts/compute_next_version.py
@@ -98,12 +98,12 @@ skills/backlog-review/SKILL.md
 skills/backlog-review/scripts/check_backlog_structure.py
 
 # === New scripts inside existing skills ===
-skills/auto-plan/SKILL.md
-skills/auto-plan/scripts/select_next_milestone.py
-skills/auto-plan/scripts/inject_milestone_id.py
-skills/auto-plan/tests/conftest.py
-skills/auto-plan/tests/test_select_next_milestone.py
-skills/auto-plan/tests/test_inject_milestone_id.py
+skills/idea-to-release/SKILL.md
+skills/idea-to-release/scripts/select_next_milestone.py
+skills/idea-to-release/scripts/inject_milestone_id.py
+skills/idea-to-release/tests/conftest.py
+skills/idea-to-release/tests/test_select_next_milestone.py
+skills/idea-to-release/tests/test_inject_milestone_id.py
 skills/implement/SKILL.md
 skills/implement/prompts/implementation-prompt.md
 skills/implement/prompts/validation-fix-prompt.md
@@ -168,7 +168,7 @@ scripts/route_domain.py
 
 # === Rules (cycle definitions) ===
 rules/cycle-rule-schema.md
-rules/cycle-auto-plan.md
+rules/cycle-idea-to-release.md
 rules/cycle-release.md
 rules/cycle-acceptance.md
 rules/cycle-implement.md
@@ -179,7 +179,7 @@ rules/cycle-plan.md
 rules/cycle-review.md
 rules/cycle-code-quality.md
 rules/cycle-judge-codex.md
-rules/cycle-analysis.md
+rules/cycle-trajectory-review.md
 rules/plan-confidence-golden-rule.md
 
 # === Rules (golden rules + conventions + index) — rules-audit 2026-06-28 ===
@@ -187,8 +187,8 @@ rules/code-quality-golden-rule.md
 rules/deps-audit-golden-rule.md
 rules/discover-opportunity-golden-rule.md
 rules/discover-plan-golden-rule.md
-rules/dogfood-golden-rule.md
-rules/analysis-golden-rule.md
+rules/honesty-gate-golden-rule.md
+rules/trajectory-review-golden-rule.md
 rules/error-handling.md
 rules/git-safety.md
 rules/live-target.txt
@@ -221,9 +221,9 @@ scripts/ecosystem_utils.py
 # Listing every plan-source skill here guarantees ANY skill added in a previous
 # session that did not get a per-file MANIFEST entry still reaches the consumer.
 skills/ast-grep/
-skills/auto-plan/
+skills/idea-to-release/
 skills/code-quality/
-skills/deck/
+skills/slide-deck/
 skills/deps-audit/
 skills/discover-confidence/
 skills/discover-edge-cases/
@@ -231,7 +231,7 @@ skills/discover-execute/
 skills/discover-improve/
 skills/discover-plan/
 skills/discover-plan-confidence/
-skills/dogfood/
+skills/honesty-gate/
 skills/edge-case-plan/
 skills/excalidraw/
 skills/grill-me/
@@ -398,7 +398,7 @@ done
 
 # --- knowledge-base scaffold for NEW cycles ---------------------------------
 # A patch copies files; it never created directories a new cycle writes into. That
-# gap bit for real: cycle-goal's Stop hook defaults to knowledge-base/acceptance,
+# gap bit for real: session-goal's Stop hook defaults to knowledge-base/acceptance,
 # which existed in ZERO of the 29 patched consumers, so an armed gate reported
 # "/acceptance never ran" — a message indistinguishable from a legitimate verdict —
 # and blocked forever on a configuration problem.
@@ -406,7 +406,7 @@ done
 # Only creates what is missing, and only empty directories. Existing content is
 # never touched, so this stays inside the "patch never deletes" contract.
 NEW_KB_DIRS=(
-  "knowledge-base/acceptance"           # cycle-acceptance records (read by the cycle-goal gate)
+  "knowledge-base/acceptance"           # cycle-acceptance records (read by the session-goal gate)
   "knowledge-base/acceptance/evidence"  # screenshots, console/network dumps, transcripts
   "knowledge-base/roadmap-runs"         # per-milestone macro-loop audit trail
 )

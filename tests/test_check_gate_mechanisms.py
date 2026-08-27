@@ -295,7 +295,7 @@ def test_a_bullet_does_not_inherit_from_section_prose(tmp_path: Path) -> None:
 def test_a_table_inherits_an_exemption_declared_in_its_section_prose(tmp_path: Path) -> None:
     """One note above the table beats the same marker pasted into six rows.
 
-    `cycle-analysis.md` is the real case: measured 2026-08-27, `skills/analysis/`
+    `cycle-trajectory-review.md` is the real case: measured 2026-08-27, `skills/trajectory-review/`
     ships a SKILL.md and no scripts, so all six of its hard caps are asserted
     rather than computed. That is one fact about the slice, and stating it once
     where the reader meets the table says more than six identical parentheticals
@@ -410,7 +410,7 @@ def test_a_partially_mechanized_gate_is_counted_apart(tmp_path: Path) -> None:
         "`check_goal_met.py` _(not mechanized at the point of action: the flip "
         "script never reads the verdict)_\n"
     ))
-    _with_script(root, "skills/cycle-goal/scripts/check_goal_met.py")
+    _with_script(root, "skills/session-goal/scripts/check_goal_met.py")
 
     report = check_gate_mechanisms(root)
 

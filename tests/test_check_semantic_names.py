@@ -25,7 +25,7 @@ WHAT IT CHECKS, AND WHY EACH IS MECHANIZABLE
 
 WHAT IT CANNOT DECIDE
 ---------------------
-Whether `analysis` is a better name than `trajectory-validation`. That is
+Whether `trajectory-review` is a better name than `trajectory-validation`. That is
 judgement about meaning, and a checker asserting it would produce confident
 nonsense. The gate catches names that are *structurally* empty; a human still
 has to notice that a name is merely vague.

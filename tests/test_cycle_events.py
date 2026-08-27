@@ -25,7 +25,7 @@ and its judge into one artefact, which is exactly the shape that lets a plan and
 its execution drift without anyone noticing.
 
 It also never raises. A phase that did real work must not fail because its
-bookkeeping could not be written; the same fail-open discipline `cycle-goal`'s
+bookkeeping could not be written; the same fail-open discipline `session-goal`'s
 gate applies, and for the same reason.
 
 WHY THERE IS NO SEQUENCE NUMBER
@@ -208,7 +208,7 @@ def test_a_non_json_safe_extra_is_refused_at_the_boundary(tmp_path: Path) -> Non
 
 def test_an_unwritable_destination_does_not_raise(tmp_path: Path, monkeypatch) -> None:
     """A phase that did real work must not fail because its bookkeeping could
-    not be written. Same discipline as `cycle-goal`'s gate, same reason."""
+    not be written. Same discipline as `session-goal`'s gate, same reason."""
     def _boom(*_args, **_kwargs):
         raise OSError("read-only file system")
 

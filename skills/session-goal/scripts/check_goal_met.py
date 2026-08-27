@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop-hook gate: refuse to end the session while a milestone goal is unmet.
 
-This is what `/cycle-goal` uses INSTEAD of Claude Code's built-in `/goal`, and
+This is what `/session-goal` uses INSTEAD of Claude Code's built-in `/goal`, and
 the substitution is an upgrade rather than a workaround:
 
   - `/goal` cannot be invoked by a skill. It is a built-in command, and the
@@ -31,7 +31,7 @@ Two safety properties, both deliberate:
     large value is not a tighter grip, it is theatre. The gate cannot trap a
     session, and that is a property to rely on, not a gap to close.
 
-Reads the goal state from `.claude/cycle-goal.json`; absent state = no goal = allow.
+Reads the goal state from `.claude/session-goal.json`; absent state = no goal = allow.
 
 Usage (wired automatically by install_goal_hook.py):
     python3 check_goal_met.py [--state PATH] [--project-root PATH]
@@ -121,7 +121,7 @@ def evaluate(milestones: list[str], roadmap_text: str, acceptance_dir: Path) -> 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--state", type=Path, default=Path(".claude/cycle-goal.json"))
+    parser.add_argument("--state", type=Path, default=Path(".claude/session-goal.json"))
     parser.add_argument("--project-root", type=Path, default=Path("."))
     args = parser.parse_args()
 
@@ -140,7 +140,7 @@ def main() -> int:
         roadmap_path = args.project_root / state.get("roadmap", "ROADMAP.md")
         if not roadmap_path.exists():
             print(json.dumps({
-                "systemMessage": f"cycle-goal: {roadmap_path} not found — goal gate stood down.",
+                "systemMessage": f"session-goal: {roadmap_path} not found — goal gate stood down.",
             }))
             return 0
 
@@ -154,14 +154,14 @@ def main() -> int:
         if not reasons:
             args.state.unlink(missing_ok=True)
             print(json.dumps({
-                "systemMessage": "cycle-goal: every milestone accepted and flipped — goal met, gate cleared.",
+                "systemMessage": "session-goal: every milestone accepted and flipped — goal met, gate cleared.",
             }))
             return 0
 
         if blocks >= max_blocks:
             print(json.dumps({
                 "systemMessage": (
-                    f"cycle-goal: released after {blocks} blocks without the goal being met. "
+                    f"session-goal: released after {blocks} blocks without the goal being met. "
                     "The gate stops holding rather than loop forever — the milestone is NOT done. "
                     + " | ".join(reasons)
                 ),
@@ -174,19 +174,19 @@ def main() -> int:
         print(json.dumps({
             "decision": "block",
             "reason": (
-                "The active cycle-goal is not met. The stop criterion is the acceptance run, "
+                "The active session-goal is not met. The stop criterion is the acceptance run, "
                 "and nothing else ends it — not a green test suite, not READY_TO_MERGE, not "
                 "RELEASED, not a published tag, not your own judgement that the work looks "
                 "finished.\n\n" + "\n".join(f"- {r}" for r in reasons) +
                 "\n\nContinue the cycle. If the GOAL itself is wrong, clear it with:\n"
-                "  python3 .claude/skills/cycle-goal/scripts/install_goal_hook.py --clear"
+                "  python3 .claude/skills/session-goal/scripts/install_goal_hook.py --clear"
             ),
         }))
         return 0
 
     except Exception as exc:  # noqa: BLE001 — fail-open is the deliberate policy here
         print(json.dumps({
-            "systemMessage": f"cycle-goal gate errored ({type(exc).__name__}: {exc}) — allowing stop.",
+            "systemMessage": f"session-goal gate errored ({type(exc).__name__}: {exc}) — allowing stop.",
         }))
         return 0
 
