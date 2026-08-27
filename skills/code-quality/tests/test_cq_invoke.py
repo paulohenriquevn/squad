@@ -186,3 +186,70 @@ def test_merge_verdict_fail_soft_downgrades_to_nonshippable() -> None:
     cq_invoke.merge_verdict_into_plan_confidence(out, cq)
     assert out["verdict"] == "NON_SHIPPABLE"
     assert out["final_score_after_caps"] == 70
+
+
+# ── The escape the rule promises, which the code did not implement ───────────
+
+
+def test_fail_soft_with_an_adr_dismissing_every_soft_cap_does_not_demote() -> None:
+    """`rules/cycle-code-quality.md` § 1 promises this and nothing implemented it.
+
+    The rule reads: *"A `FAIL_SOFT` MAY proceed to `/review` only with an ADR
+    dismissing each soft cap"*. The merge demoted SHIPPABLE* to NON_SHIPPABLE on
+    FAIL_SOFT unconditionally — no ADR was looked for, read, or able to change
+    anything.
+
+    The consequence is not cosmetic. Golden rule § 2 maps an unconfigured
+    mutation runner to FAIL_SOFT, so a repository that has not set up Stryker
+    gets FAIL_SOFT on every run, forever; that caps every plan at 70 and demotes
+    it to NON_SHIPPABLE; and `cycle-plan.md` requires >= SHIPPABLE_WITH_CAVEATS
+    to enter `/implement`. Measured by the consumer session in `theokit-skills`,
+    which is blocked right now on a plan with zero hard caps, zero soft caps of
+    its own, and 91.6 weighted.
+
+    A soft cap that cannot be dismissed is a hard cap wearing another name. The
+    distinction between the two tiers is exactly dismissibility, so implementing
+    the escape is what makes the tier real.
+    """
+    out = {"verdict": "SHIPPABLE", "final_score_after_caps": 91.6}
+    cq = {
+        "verdict": "FAIL_SOFT",
+        "score_cap": 70,
+        "soft_caps_triggered": ["soft_cap_mutation_unconfigured_typescript"],
+    }
+    cq_invoke.merge_verdict_into_plan_confidence(
+        out, cq, dismissed_soft_caps={"soft_cap_mutation_unconfigured_typescript"}
+    )
+    assert out["verdict"] == "SHIPPABLE_WITH_CAVEATS", (
+        "an ADR dismissing every soft cap must let the plan proceed"
+    )
+    assert out["final_score_after_caps"] == 70, "the score cap still applies — quality was measured"
+
+
+def test_a_partially_dismissed_fail_soft_still_demotes_and_names_the_gap() -> None:
+    """Dismissing SOME soft caps is not dismissing each of them.
+
+    The rule says *each*. A merge that accepted one ADR for three caps would let
+    a plan through on a fraction of the justification it requires — and the two
+    undismissed caps would never be seen again.
+    """
+    out = {"verdict": "SHIPPABLE", "final_score_after_caps": 95.0}
+    cq = {
+        "verdict": "FAIL_SOFT",
+        "score_cap": 70,
+        "soft_caps_triggered": ["soft_cap_a", "soft_cap_b"],
+    }
+    cq_invoke.merge_verdict_into_plan_confidence(out, cq, dismissed_soft_caps={"soft_cap_a"})
+    assert out["verdict"] == "NON_SHIPPABLE"
+    assert "soft_cap_b" in out.get("undismissed_soft_caps", []), (
+        "the verdict must name WHICH cap is missing its ADR — the consumer had to read "
+        "cq_invoke.py to find out why a clean plan was refused"
+    )
+
+
+def test_fail_soft_without_any_adr_demotes_as_before() -> None:
+    """The default is unchanged: no ADR, no passage."""
+    out = {"verdict": "SHIPPABLE", "final_score_after_caps": 95.0}
+    cq = {"verdict": "FAIL_SOFT", "score_cap": 70, "soft_caps_triggered": ["soft_cap_a"]}
+    cq_invoke.merge_verdict_into_plan_confidence(out, cq)
+    assert out["verdict"] == "NON_SHIPPABLE"

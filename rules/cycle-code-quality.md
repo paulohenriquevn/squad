@@ -63,6 +63,47 @@ redefine them. The verdict is the smallest cap among the findings:
 
 A `FAIL_HARD` verdict blocks `/review`; `INVALID` halts the cycle (surface to human). The fix path for `FAIL_HARD` is back to `/implement` (or a targeted fix branch). A `FAIL_SOFT` MAY proceed to `/review` only with an ADR dismissing each soft cap (per golden rule § 1).
 
+### How a plan dismisses a soft cap
+
+The ADR carries a marker naming the cap it dismisses, read by
+`skills/plan-confidence/scripts/run_structural.py`:
+
+```markdown
+## ADRs
+
+### ADR-3 — Proceed without a mutation runner
+
+<!-- ADR-DISMISS-SOFT-CAP: soft_cap_mutation_unconfigured_typescript: Stryker lands in v0.3; followup registered as B-007 -->
+
+Rejected alternatives: ...
+```
+
+The marker, rather than prose naming the id, because a plan can name a cap in
+order to say it will NOT be dismissed and no keyword search tells the two apart.
+The shape copies `check_wiring.py`'s `ADR-DEFER-WIRING-B` — one convention for
+"an ADR waives this", not a new one per gate.
+
+**EACH** cap needs its own marker. A partially dismissed `FAIL_SOFT` still
+demotes, and the verdict then lists `undismissed_soft_caps` so the gap is named
+rather than discovered by reading the kit's source.
+
+The score cap applies either way: quality was measured, and an ADR justifies
+proceeding — not a better number. A dismissed `FAIL_SOFT` reaches
+`SHIPPABLE_WITH_CAVEATS`, never `SHIPPABLE`.
+
+**Why this exists.** For a long time the paragraph above promised the escape and
+no code implemented it: the demotion ran unconditionally and no ADR was ever
+looked for. That was not cosmetic. Golden rule § 2 maps an unconfigured mutation
+runner to `FAIL_SOFT`, so a repository that had not set up Stryker got
+`FAIL_SOFT` on every run forever, every plan capped at 70 and demoted to
+`NON_SHIPPABLE`, and `rules/cycle-plan.md` requires `≥ SHIPPABLE_WITH_CAVEATS`
+to enter `/implement`. **A project in that state could not start `/implement` by
+any path, while this rule said it could.** Found by a consumer, blocked on a plan
+with zero hard caps, zero soft caps of its own and 91.6 weighted.
+
+A soft cap that cannot be dismissed is a hard cap under another name;
+dismissibility is the whole difference between the tiers.
+
 ## Stop conditions
 
 - A detector crashes (e.g., parse error in a source file) → halt; surface the parse error; do NOT emit a partial report.

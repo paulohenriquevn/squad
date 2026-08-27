@@ -24,12 +24,38 @@
 # go         | go.mod              | ENABLED  | Where the module lives.
 # python     | pyproject.toml      | ENABLED  |
 # typescript | package.json        | ENABLED  | A monorepo declares the workspace it audits.
-# javascript | package.json        | ENABLED  |
+# [NO DETECTOR — do not enable] javascript | package.json        | ENABLED  |
 # rust       | Cargo.toml          | ENABLED  | Point at the crate, not the workspace root.
-# java       | pom.xml             | ENABLED  |
-# kotlin     | build.gradle.kts    | ENABLED  |
-# ruby       | Gemfile             | ENABLED  |
-# csharp     | *.csproj            | ENABLED  |
+# [NO DETECTOR — do not enable] java       | pom.xml             | ENABLED  |
+# [NO DETECTOR — do not enable] kotlin     | build.gradle.kts    | ENABLED  |
+# [NO DETECTOR — do not enable] ruby       | Gemfile             | ENABLED  |
+# [NO DETECTOR — do not enable] csharp     | *.csproj            | ENABLED  |
+#
+# WHICH LANGUAGES THE DETECTORS ACTUALLY IMPLEMENT
+# ------------------------------------------------
+# Enabling one outside that set does not degrade gracefully — it produces
+# `languages_skipped` with `no detector implementation`, then the hard cap
+# `no_languages_audited`, then `verdict: INVALID`, on every run. There is no
+# configuration that recovers from it.
+#
+# This file used to list nine languages in its examples while four had a
+# detector. A consumer whose repository is JavaScript followed the commented
+# `javascript` line, got permanent INVALID, and worked around it by declaring
+# `typescript` on a tree with zero `.ts` files — a false declaration kept honest
+# by an eight-line comment, which is the worst kind of correction and was the
+# only one available.
+#
+# The examples below are therefore split. `tests/test_language_examples.py`
+# fails if this list and the detectors' disagree, because a comment nothing
+# recomputes is a claim that rots.
+#
+# IMPLEMENTED: go, python, rust, typescript
+#
+# NOT IMPLEMENTED (do NOT enable — INVALID, not a soft failure): csharp, java, javascript, kotlin, ruby
+#   `typescript` covers what a JS/TS project needs: the detectors run `knip` and
+#   `ts-morph`, which read `package.json` and plain `.js`/`.mjs` sources. The
+#   identifier names the DETECTOR, not the source language.
+#
 
 # ---------------------------------------------------------------------------------------------
 # ENABLED FOR THIS REPOSITORY (B-060)

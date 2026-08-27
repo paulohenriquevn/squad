@@ -653,14 +653,42 @@ except ImportError:
     cq_invoke = None  # type: ignore[assignment]
 
 
-def _merge_code_quality_verdict(out: dict, cq_summary: dict) -> None:
+#: A plan dismissing one soft cap, with the reason inline.
+#:
+#: The shape copies `check_wiring.py`'s `<!-- ADR-DEFER-WIRING-B: <symbol>:
+#: <reason> -->` rather than inventing a third marker convention — advice this
+#: repository received from a consumer and had already followed once.
+#:
+#: An explicit marker, not prose mentioning the id: a plan can name a cap in
+#: order to say it will NOT be dismissed, and a grep cannot tell the two apart.
+#: The gate has to read a decision, not a keyword.
+_DISMISS_SOFT_CAP_RE = re.compile(
+    r"<!--\s*ADR-DISMISS-SOFT-CAP:\s*([a-z0-9_]+)\s*:\s*[^>]+?-->"
+)
+
+
+def _dismissed_soft_caps(plan_text: str) -> set[str]:
+    """Soft-cap ids this plan dismisses with an ADR.
+
+    `rules/cycle-code-quality.md` § 1 promised the escape and nothing read it.
+    This is the reading half.
+    """
+    return set(_DISMISS_SOFT_CAP_RE.findall(plan_text))
+
+
+def _merge_code_quality_verdict(out: dict, cq_summary: dict, plan_text: str = "") -> None:
     """Thin wrapper around `cq_invoke.merge_verdict_into_plan_confidence` for
     backward compatibility with existing call sites + the test suite that
     imports this symbol via `from run_structural import _merge_code_quality_verdict`.
+
+    `plan_text` is optional so the older two-argument call sites keep working;
+    without it no cap is dismissed, which is the pre-existing behaviour.
     """
     if cq_invoke is None:
         return
-    cq_invoke.merge_verdict_into_plan_confidence(out, cq_summary)
+    cq_invoke.merge_verdict_into_plan_confidence(
+        out, cq_summary, dismissed_soft_caps=_dismissed_soft_caps(plan_text)
+    )
 
 
 def _invoke_code_quality(plan_slug: str, repo_root: Path, timeout_s: int = 600) -> dict | None:
@@ -729,7 +757,7 @@ def main(argv: list[str] | None = None) -> int:
             }
             # Severity-tier-aware merge (bug fix 2026-05-23: previous logic blindly
             # forced INVALID on any cq cap entry, neutralizing allowlist downgrades).
-            _merge_code_quality_verdict(out, cq_summary)
+            _merge_code_quality_verdict(out, cq_summary, content)
         else:
             out["code_quality"] = {"verdict": "UNAVAILABLE", "reason": "invocation failed or skipped"}
 

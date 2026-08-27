@@ -46,6 +46,19 @@ _BLUEPRINT_REF_RE = re.compile(
 # Backtick is a valid boundary because plans idiomatically wrap citations as ``D8``.
 _ADR_REF_RE = re.compile(r"\bADR\s+(D\d+)\b|(?<![A-Za-z0-9_])(D\d+)(?=[\s,.;)`]|$)")
 
+#: `D1`..`D5` are the kit's own DETECTOR names — `rules/code-quality-golden-rule.md`
+#: § 5 uses them throughout, and so does every plan that reasons about which
+#: detector produced a finding.
+#:
+#: The bare `D\d+` half of `_ADR_REF_RE` cannot tell the two apart, so a plan
+#: that wrote "Disable D4 in the thresholds file" as a REJECTED ALTERNATIVE was
+#: read as citing an undefined ADR: `fabricated_citation`, INVALID, score 49.
+#: Measured on a consumer, and it cost a cycle plus a rewrite to avoid a token.
+#:
+#: A fabrication gate that fires on the kit's own vocabulary is what teaches
+#: people to ignore fabrication gates.
+_KIT_DETECTOR_IDS = frozenset({"D1", "D2", "D3", "D4", "D5"})
+
 _UNBREAKABLE_RULE_RE = re.compile(r"Unbreakable\s+Rule\s+(\d+)")
 
 # Section header in markdown — captures `## Title`, `### Title`, etc.
@@ -324,6 +337,12 @@ def _scan_adr_refs(
         if key in seen:
             continue
         seen.add(key)
+        # A bare `D4` that resolves to a defined ADR IS a citation — the plan
+        # said so by defining it. One that does not, and names a kit detector,
+        # is the kit's vocabulary rather than a fabricated reference. Deciding
+        # only on the unresolved case keeps every real citation working.
+        if adr_id not in defined_adrs and adr_id in _KIT_DETECTOR_IDS and not m.group(1):
+            continue
         resolved = adr_id in defined_adrs
         if resolved:
             out.append((Citation(kind="adr", raw_text=adr_id, location_line=line_no, reason=""), True))

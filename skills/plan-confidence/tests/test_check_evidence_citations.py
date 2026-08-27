@@ -372,3 +372,32 @@ def test_detector_does_not_flag_when_token_is_only_in_fenced_block(tmp_path: Pat
     assert all(
         "missing-doc.md" not in c.raw_text for c in report.unresolved_citations
     ), "fenced citation should NOT be flagged"
+
+
+
+def test_a_detector_name_is_not_read_as_a_fabricated_adr(tmp_path) -> None:
+    """`D4` in prose is the kit's detector, not a citation of ADR D4.
+
+    `_ADR_REF_RE` captures a bare `D\\d+`, and `D1`..`D5` are the detector names
+    `rules/code-quality-golden-rule.md` § 5 uses throughout. A consumer's plan
+    listed, among rejected alternatives, "Disable D4 in the thresholds file" —
+    and the gate reported `ADR D4 is referenced but not defined`, raising
+    `fabricated_citation` and INVALID at score 49.
+
+    The finding was false and the plan was correct. A fabrication gate that
+    fires on the kit's own vocabulary teaches people to ignore fabrication
+    gates, which costs more than the gate ever returns.
+
+    An explicit `ADR D4` still counts as a citation, and so does a bare `D4`
+    when the plan actually defines that ADR: the exemption applies only where
+    the reference does not resolve AND the token names a detector.
+    """
+    project_root = _make_project_root(tmp_path)
+    plan = _write_plan(
+        tmp_path,
+        "# Plan\n\n## ADRs\n\n### ADR-1 — something\n\n"
+        "Rejected: *Disable D4 in the thresholds file.* The runner is absent.\n",
+    )
+    report = check_evidence_citations(plan, project_root)
+    adr_refs = [c for c in report.unresolved_citations if "D4" in c.raw_text]
+    assert adr_refs == [], f"D4 read as a fabricated ADR citation: {adr_refs}"

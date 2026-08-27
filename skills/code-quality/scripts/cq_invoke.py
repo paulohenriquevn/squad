@@ -57,7 +57,9 @@ def invoke(plan_slug: str, repo_root: Path, *, timeout_s: int = 600) -> dict | N
         return None
 
 
-def merge_verdict_into_plan_confidence(out: dict, cq_summary: dict) -> None:
+def merge_verdict_into_plan_confidence(
+    out: dict, cq_summary: dict, dismissed_soft_caps: set[str] | None = None
+) -> None:
     """Severity-tier-aware merge of CQ verdict into plan-confidence output.
 
     Tier mapping (consults cq_summary["score_cap"] AND ["verdict"]):
@@ -71,6 +73,26 @@ def merge_verdict_into_plan_confidence(out: dict, cq_summary: dict) -> None:
 
     The CQ `hard_caps_triggered` identifiers are always appended to the plan's
     list for audit visibility, regardless of severity tier.
+
+    `dismissed_soft_caps` carries the soft-cap ids the plan dismisses with an
+    ADR. `rules/cycle-code-quality.md` § 1 has always promised this — "A
+    `FAIL_SOFT` MAY proceed to `/review` only with an ADR dismissing each soft
+    cap" — and nothing implemented it: the demotion below ran unconditionally,
+    and no ADR was ever looked for or read.
+
+    The gap was load-bearing rather than cosmetic. Golden rule § 2 maps an
+    unconfigured mutation runner to FAIL_SOFT, so a repository without Stryker
+    got FAIL_SOFT on every run forever, every plan capped at 70 and demoted, and
+    `cycle-plan.md` requires >= SHIPPABLE_WITH_CAVEATS to enter `/implement`.
+    Measured on a consumer: blocked on a plan carrying zero hard caps, zero soft
+    caps of its own, and 91.6 weighted.
+
+    A soft cap that cannot be dismissed is a hard cap under another name —
+    dismissibility is the entire difference between the two tiers.
+
+    EACH cap must be dismissed, per the rule's wording. The score cap applies
+    either way: quality was measured, and an ADR justifies proceeding, not a
+    better number.
     """
     cq_caps = list(cq_summary.get("hard_caps_triggered", []))
     if cq_caps:
@@ -90,8 +112,20 @@ def merge_verdict_into_plan_confidence(out: dict, cq_summary: dict) -> None:
     if cq_verdict in ("FAIL_HARD", "INVALID"):
         out["verdict"] = "INVALID"
     elif cq_verdict == "FAIL_SOFT":
-        if current in ("SHIPPABLE", "SHIPPABLE_WITH_CAVEATS"):
-            out["verdict"] = "NON_SHIPPABLE"
+        soft_caps = list(cq_summary.get("soft_caps_triggered", []))
+        undismissed = [c for c in soft_caps if c not in (dismissed_soft_caps or set())]
+        if undismissed or not soft_caps:
+            # An empty soft-cap list means there is nothing identifiable to
+            # dismiss, so the demotion stands: waiving a cap nobody can name is
+            # waiving the gate itself.
+            out["undismissed_soft_caps"] = undismissed
+            if current in ("SHIPPABLE", "SHIPPABLE_WITH_CAVEATS"):
+                out["verdict"] = "NON_SHIPPABLE"
+        elif current == "SHIPPABLE":
+            # Every cap carries an ADR. The plan proceeds WITH CAVEATS, never
+            # clean: the caveats are real and were justified, not removed.
+            out["verdict"] = "SHIPPABLE_WITH_CAVEATS"
+            out["dismissed_soft_caps"] = sorted(dismissed_soft_caps or set())
     elif cq_verdict == "PASS_WITH_CAVEATS":
         if current == "SHIPPABLE":
             out["verdict"] = "SHIPPABLE_WITH_CAVEATS"
