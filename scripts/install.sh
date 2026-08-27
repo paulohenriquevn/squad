@@ -170,10 +170,56 @@ PYEOF
 # (`architecture-debate-table`, `placement-algorithms`, `quota-isolation`, …) — plus 13 named
 # architect agents and their memory. The `rm -rf` below would have deleted every one of them, and
 # a snapshot in `.install-backups/` is a consolation prize, not a correct install.
+# The derived routing table is PROJECT configuration living inside a kit `.md`,
+# and it is the one thing in that file the consumer cannot get back: the kit
+# cannot know which repositories exist there. So it is saved before the copy and
+# put back after — in EVERY mode.
+#
+# It used to be saved inside the `--merge` branch only. `--force` is the flag a
+# reinstall actually uses, and it did exactly what the comment at
+# `apply_routing_template` forbids: traded a correct map for an empty one.
+# Measured on a consumer with `svc-a` and `svc-b` derived — both gone, and
+# `route_domain` on either went from exit 0 to unroutable. The same defect the
+# merge branch cites as already measured on `speculative`, fixed once, in one of
+# the two paths.
+save_routing_section() {
+  local target="$ECO/rules/cycle-backlog.md"
+  [ -f "$target" ] || return 0
+  ROUTING_KEEP="$(mktemp)"
+  python3 - "$target" "$ROUTING_KEEP" <<'PYEOF'
+import re, sys
+src, out = sys.argv[1], sys.argv[2]
+body = open(src, encoding="utf-8-sig").read()
+m = re.search(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", body, re.MULTILINE | re.DOTALL)
+section = m.group(0) if m else ""
+# An empty table is not worth preserving: the consumer never derived one, and
+# re-injecting it would skip the template that tells them how.
+open(out, "w", encoding="utf-8").write("" if "_(empty" in section else section)
+PYEOF
+}
+
+restore_routing_section() {
+  [ -n "${ROUTING_KEEP:-}" ] && [ -s "$ROUTING_KEEP" ] || return 0
+  python3 - "$ECO/rules/cycle-backlog.md" "$ROUTING_KEEP" <<'PYEOF'
+import re, sys
+target, keep = sys.argv[1], sys.argv[2]
+body = open(target, encoding="utf-8-sig").read()
+section = open(keep, encoding="utf-8").read()
+patched = re.sub(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", lambda _: section,
+                 body, count=1, flags=re.MULTILINE | re.DOTALL)
+open(target, "w", encoding="utf-8").write(patched)
+PYEOF
+  echo "    kept (yours): rules/cycle-backlog.md § Domain routing"
+  ROUTING_PRESERVED=1
+  rm -f "$ROUTING_KEEP"
+}
+
 mkdir -p "$ECO"
 # Becomes 1 when the consumer's DERIVED table was preserved — in that case the
 # empty template must not be applied on top of it.
 ROUTING_PRESERVED=0
+ROUTING_KEEP=""
+save_routing_section
 for item in skills rules hooks commands scripts; do
   if [ "$MERGE" -eq 1 ]; then
     echo "==> Merging $item/ (adding, deleting nothing)"
@@ -185,17 +231,6 @@ for item in skills rules hooks commands scripts; do
       # `route_domain <project>` went from exit 0 to exit 1 — the project stopped
       # being able to route items about itself. The rest of cycle-backlog.md is the
       # kit's contract.
-      ROUTING_KEEP=""
-      if [ -f "$ECO/rules/cycle-backlog.md" ]; then
-        ROUTING_KEEP="$(mktemp)"
-        python3 - "$ECO/rules/cycle-backlog.md" "$ROUTING_KEEP" <<'PYEOF'
-import re, sys
-src, out = sys.argv[1], sys.argv[2]
-body = open(src, encoding="utf-8-sig").read()
-m = re.search(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", body, re.MULTILINE | re.DOTALL)
-open(out, "w", encoding="utf-8").write(m.group(0) if m else "")
-PYEOF
-      fi
       # `rules/*.txt` is the project's CONFIGURATION — enabled languages, live
       # target, allowlists, declared auxiliary skills. Copying the template over it
       # erases local tuning in silence: measured on `speculative`, where the
@@ -226,20 +261,6 @@ PYEOF
           cp "$f" "$ECO/rules/$base"
         fi
       done
-      if [ -n "$ROUTING_KEEP" ] && [ -s "$ROUTING_KEEP" ]; then
-        python3 - "$ECO/rules/cycle-backlog.md" "$ROUTING_KEEP" <<'PYEOF'
-import re, sys
-target, keep = sys.argv[1], sys.argv[2]
-body = open(target, encoding="utf-8-sig").read()
-section = open(keep, encoding="utf-8").read()
-patched = re.sub(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", lambda _: section,
-                 body, count=1, flags=re.MULTILINE | re.DOTALL)
-open(target, "w", encoding="utf-8").write(patched)
-PYEOF
-        echo "    kept (yours): rules/cycle-backlog.md § Domain routing"
-        ROUTING_PRESERVED=1
-        rm -f "$ROUTING_KEEP"
-      fi
     else
       copy_tree "$SRC_DIR/$item" "$ECO/$item"
     fi
@@ -260,6 +281,8 @@ PYEOF
     fi
   fi
 done
+
+restore_routing_section
 
 # The routing table is only born empty when there is no derived one to preserve.
 # Overwriting the consumer's would trade a correct map for an empty one — the

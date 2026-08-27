@@ -185,3 +185,46 @@ def test_the_routing_contract_survives_the_command_the_kit_prescribes(installed)
     )
     for text in invariants:
         assert rule.read_text(encoding="utf-8").count(text) == 1, f"after --write: {text}"
+
+
+@pytest.mark.parametrize("mode", ["--force", "--merge"])
+def test_reinstalling_never_empties_the_derived_routing_table(
+    versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory, mode: str
+) -> None:
+    """The derived table must survive a reinstall in EVERY mode, not just `--merge`.
+
+    `install.sh` already says this, at the call site of `apply_routing_template`:
+    *"The routing table is only born empty when there is no derived one to
+    preserve. Overwriting the consumer's would trade a correct map for an empty
+    one — the exact opposite of the defect this template fixes."* The save-and
+    -reinject that honours it was written inside the `MERGE` branch only, so
+    `--force` — the flag a reinstall actually uses — went on doing precisely what
+    the comment forbids.
+
+    Measured: a consumer with `svc-a` and `svc-b` derived came back as
+    `_(empty — run detect_domains.py --write)_`, and `route_domain` on either
+    repo went from exit 0 to unroutable. The same defect the comment cites as
+    already measured on `speculative`, fixed once, in one of the two paths.
+    """
+    target = tmp_path_factory.mktemp(f"reinstall{mode.strip('-')}")
+    (target / "svc-a").mkdir()
+    for path in (target, target / "svc-a"):
+        subprocess.run(["git", "init", "-q", "."], cwd=path, check=True)
+
+    install = [str(versioned_kit / "scripts" / "install.sh"), str(target)]
+    subprocess.run(["bash", *install], capture_output=True, check=True)
+    subprocess.run(  # noqa: PLW1510
+        [sys.executable, ".claude/skills/backlog-init/scripts/detect_domains.py",
+         "--root", ".", "--write", ".claude/rules/cycle-backlog.md"],
+        cwd=target, capture_output=True, text=True,
+    )
+    rule = target / ".claude" / "rules" / "cycle-backlog.md"
+    assert "`svc-a`" in rule.read_text(encoding="utf-8"), "fixture did not derive a table"
+
+    subprocess.run(["bash", *install, mode], capture_output=True, check=True)
+
+    after = rule.read_text(encoding="utf-8")
+    assert "`svc-a`" in after, (
+        f"{mode} replaced the consumer's derived table with the empty template — "
+        "the project can no longer route items about its own repository"
+    )
