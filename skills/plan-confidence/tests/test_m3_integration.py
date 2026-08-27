@@ -168,3 +168,51 @@ def test_merge_verdict_pass_does_not_modify(tmp_path: Path) -> None:
     assert out["verdict"] == "SHIPPABLE"
     assert out["final_score_after_caps"] == 98.0
     assert out["hard_caps_triggered"] == []
+
+
+
+def test_main_runs_end_to_end_with_code_quality_active(tmp_path, monkeypatch, capsys) -> None:
+    """`main()` must survive the branch where the CQ summary is truthy.
+
+    This is the test that was missing, and its absence shipped a NameError that
+    killed the scorer for every plan in every consumer. The fix that broke it
+    added an argument at the call site — `_merge_code_quality_verdict(out,
+    cq_summary, content)` — inside `main()`, where `content` does not exist: the
+    only other read of the plan lives in a different function.
+
+    A unit test over `_merge_code_quality_verdict` could not have caught it. The
+    function was correct; the CALLER was wrong, and the caller only runs when
+    `--no-code-quality` is absent and the invocation returns something. That
+    branch had no end-to-end coverage at all, so CI stayed green while the
+    default path — the one `cycle-plan` uses as its gate — was dead.
+
+    Diagnosed by the consumer session that hit it, which also named the shape of
+    the missing test.
+    """
+    import run_structural
+
+    # The shared helper, so the fixture stays a VALID plan. A hand-rolled one
+    # missing `## Coverage Matrix` makes main() exit before the branch under
+    # test, and the test then passes for the wrong reason.
+    plan = tmp_path / "plan.md"
+    plan.write_text(_plan_with_evidence("- Cites `D1` from this plan.\n"), encoding="utf-8")
+
+    monkeypatch.setattr(run_structural, "_find_repo_root_from_plan", lambda _p: tmp_path)
+    monkeypatch.setattr(
+        run_structural,
+        "_invoke_code_quality",
+        lambda *_a, **_k: {
+            "verdict": "FAIL_SOFT",
+            "score_cap": 70,
+            "hard_caps_triggered": [],
+            "soft_caps_triggered": ["soft_cap_mutation_unconfigured_typescript"],
+            "languages_audited": ["typescript"],
+        },
+    )
+
+    # The assertion is that this returns at all: a NameError here propagates.
+    code = run_structural.main([str(plan), "--no-warn"])
+
+    out = capsys.readouterr().out
+    assert code in (0, 1, 2, 3), f"unexpected exit {code}"
+    assert '"code_quality"' in out, "the CQ block must reach stdout on the active path"

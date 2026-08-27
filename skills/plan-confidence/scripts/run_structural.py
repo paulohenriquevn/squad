@@ -757,7 +757,13 @@ def main(argv: list[str] | None = None) -> int:
             }
             # Severity-tier-aware merge (bug fix 2026-05-23: previous logic blindly
             # forced INVALID on any cq cap entry, neutralizing allowlist downgrades).
-            _merge_code_quality_verdict(out, cq_summary, content)
+            # Read here rather than reusing a `content` from elsewhere: this is
+            # `main()`, and the only other read lives inside a different function.
+            # Passing a name that is not in scope is exactly what shipped once and
+            # killed the scorer for every plan.
+            _merge_code_quality_verdict(
+                out, cq_summary, plan_path.read_text(encoding="utf-8-sig")
+            )
         else:
             out["code_quality"] = {"verdict": "UNAVAILABLE", "reason": "invocation failed or skipped"}
 
