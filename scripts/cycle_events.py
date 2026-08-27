@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -160,7 +161,9 @@ def _json_safe(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, str)):
         return value
     if isinstance(value, float):
-        return value if value == value and value not in (float("inf"), float("-inf")) else str(value)
+        # NaN and the infinities are not JSON. `math.isfinite` says that in one
+        # word; the earlier `value == value` NaN idiom reads as a typo.
+        return value if math.isfinite(value) else str(value)
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
     if isinstance(value, dict):

@@ -68,7 +68,7 @@ _UNMECHANIZED_RE = re.compile(
 )
 
 #: `## Hard gates`, `### Hard gates (per iteration)`, and so on.
-_SECTION_RE = re.compile(r"^(#{2,})[^\n]*Hard gate[^\n]*\n(.*?)(?=^#{1,6} |\Z)", re.M | re.S)
+_SECTION_RE = re.compile(r"^(#{2,})[^\n]*Hard gate[^\n]*\n(.*?)(?=^#{1,6} |\Z)", re.MULTILINE | re.DOTALL)
 
 #: A markdown table's separator row: `|---|---|`.
 _SEPARATOR_CHARS = set("|-: ")

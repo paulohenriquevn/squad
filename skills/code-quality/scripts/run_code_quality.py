@@ -455,6 +455,7 @@ def _emit_and_exit(
     # whether the gate was skipped or ran and wrote nothing; an absent event can.
     _emit_phase_end(
         repo_root,
+        cycle="code-quality",
         slug=args.slug or "",
         verdict=verdict,
         languages=languages_audited or [],
@@ -467,25 +468,26 @@ def _emit_and_exit(
     return 0
 
 
-def _emit_phase_end(repo_root: Path, *, slug: str, verdict: str, **extra: object) -> None:
-    """Record the phase transition, and never let the bookkeeping fail the gate.
+def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:
+    """Record the phase transition; never let bookkeeping fail the phase.
 
-    The importer resolves `scripts/` against THIS FILE rather than the audited
-    repository: in a plugin install the kit lives under `.claude/` while the
-    audited tree is the project, and resolving against the target would find
-    nothing. `ImportError` is caught on its own — a bare `except Exception` here
-    would swallow a real bug in the emitter into a silence indistinguishable from
-    a phase that never ran, which is the defect the stream exists to remove.
+    `scripts/` resolves against THIS FILE, not the audited project: in a plugin
+    install the kit lives under `.claude/` while the project is elsewhere.
+    `ImportError` is caught alone — a bare `except Exception` would swallow a
+    real emitter bug into a silence indistinguishable from a phase that never
+    ran, which is the defect the stream exists to remove.
     """
-    tooling = Path(__file__).resolve().parents[3] / "scripts"
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "scripts"
     if str(tooling) not in sys.path:
         sys.path.insert(0, str(tooling))
     try:
-        from cycle_events import emit_phase_end
-    except ImportError as error:  # emitter genuinely unavailable
+        from cycle_events import emit_phase_end, project_root_for
+    except ImportError as error:
         print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
         return
-    emit_phase_end(repo_root, cycle="code-quality", slug=slug, verdict=verdict, **extra)
+    emit_phase_end(project_root_for(project_root), cycle=cycle, slug=slug,
+                   verdict=verdict, **extra)
 
 
 def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: Path, slug: str) -> None:
