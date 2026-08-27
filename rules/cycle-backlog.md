@@ -115,6 +115,12 @@ While this section is empty, `/backlog-item` refuses every item. That refusal is
 |---|---|---|
 | _(empty — run `detect_domains.py --write`)_ | | |
 
+## Routing invariants
+
+**This section is deliberately outside `## Domain routing`, and the separation is load-bearing.** `detect_domains.py --write` replaces everything between that heading and the next `##` — `^##\s+Domain routing\b.*?(?=^##\s|\Z)` under DOTALL. What lives inside that span is bootstrap prose, which is supposed to expire the moment it runs; what lives here is contract, which never does. Do not move these paragraphs back up, and do not demote this heading to `###`: the regex only stops at a `##`.
+
+Both paragraphs were inside the span once. Running the command this very file prescribes deleted them — measured on an adopter, the section went from 45 lines to 12 — and `route_domain.py` kept enforcing a rule no file stated any more. That is the inverse of a fabricated mechanism: a real gate whose contract is written nowhere, which `rules/cycle-rule-schema.md` exists to prevent in the other direction.
+
 **One repo, one domain.** `scripts/route_domain.py` enforces the invariant: listing the same repository under two domains makes routing depend on dict iteration order, and the same item starts routing differently between runs. When one repository holds two genuinely distinct things — a service and the dashboard that consumes it, in the same checkout — separate them by path (`repo` and `repo/subdir`), never by repeating the bare name in both rows.
 
 **Record the divergence instead of deleting it.** A repository the inventory names and disk does not have should stay listed, marked as having no checkout: an item filed against it routes nowhere, and seeing that written down is cheaper than discovering it through the refusal.

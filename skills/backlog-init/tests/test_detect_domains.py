@@ -296,3 +296,35 @@ def test_a_skeleton_is_routable(tmp_path: Path) -> None:
         capture_output=True, text=True,
     )
     assert out.returncode == 0, out.stdout + out.stderr
+
+
+def test_write_does_not_destroy_the_invariants_the_code_enforces(tmp_path: Path) -> None:
+    """`--write` may replace the table; it may not take the contract with it.
+
+    `_ROUTING_SECTION_RE` runs `.*?` under DOTALL from the heading to the next
+    `##`, so everything in between is replaced wholesale. The prose in there was
+    two different things at once: bootstrap instructions, which expire the moment
+    they run, and invariants, which never expire. Replacing the section deleted
+    both — measured on an adopter, 45 lines down to 12.
+
+    The one that hurts is `One repo, one domain`. `scripts/route_domain.py` still
+    raises on a repo listed twice, and its own header says the rule file is the
+    source of truth it refuses to copy. So the gate went on rejecting tables for
+    a reason no longer written anywhere — the inverse of a fabricated mechanism:
+    a real gate with no stated contract.
+
+    This asserts against the SHIPPED rule, not a fixture. A fixture would prove
+    the regex behaves and say nothing about whether the file consumers receive
+    survives the command the kit tells them to run.
+    """
+    shipped = Path(__file__).resolve().parents[3] / "rules" / "cycle-backlog.md"
+    rule = tmp_path / "cycle-backlog.md"
+    rule.write_text(shipped.read_text(encoding="utf-8"), encoding="utf-8")
+
+    rewrite_routing_section(rule, detect_domains(_repo(tmp_path / "eco", "svc-a").parent))
+
+    survived = rule.read_text(encoding="utf-8")
+    assert "One repo, one domain" in survived, (
+        "route_domain.py enforces this; the rule must keep stating it"
+    )
+    assert "Record the divergence instead of deleting it" in survived
