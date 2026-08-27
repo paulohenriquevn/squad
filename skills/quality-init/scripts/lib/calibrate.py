@@ -206,3 +206,116 @@ def calibrate_thresholds(
     )
 
     return cal
+
+
+# ---------------------------------------------------------------------------
+# Taxa de bloqueio — o número que faltava para a calibração ser verificável
+# ---------------------------------------------------------------------------
+
+#: Acima disto o gate reprova código demais para ser ligado como está. Não é um
+#: percentil observado: é o ponto em que a experiência de quem trabalha vira
+#: "todo edit é bloqueado", e um gate assim é desligado — o que deixa o hook no
+#: settings, a confiança de que ele protege algo, e um bypass no dedo de quem usa.
+BLOCKING_RATE_CEILING = 10.0
+
+#: Abaixo disto o gate nasce praticamente verde e só reage ao que PIORA, que é o
+#: comportamento que a calibração p90 promete.
+BLOCKING_RATE_READY = 5.0
+
+
+@dataclass
+class BlockingRate:
+    """Quanto do código existente o gate calibrado reprovaria, hoje."""
+
+    files_measured: int = 0
+    files_blocked: int = 0
+    percent: float | None = None
+    verdict: str = "NOT_MEASURED"
+    advice: str = ""
+    worst_offenders: tuple[str, ...] = ()
+
+
+def _file_violates(path: Path, thresholds: "ThresholdCalibration") -> bool:
+    """True quando qualquer métrica do arquivo excede o limiar correspondente.
+
+    Mede com `_measure_python_metrics`, o MESMO instrumento que produziu os p90 da
+    calibração — assim a taxa é exata para os números que a calibração usou. O que
+    esta conta NÃO cobre é a duplicação, que o hook gerado também checa e a
+    calibração nunca mediu: a taxa real pode ser um pouco maior que a reportada, e
+    nunca menor.
+    """
+    metrics = _measure_python_metrics([path])
+    checks = (
+        ("complexity", thresholds.max_complexity),
+        ("function_lines", thresholds.max_function_lines),
+        ("nesting_depth", thresholds.max_nesting_depth),
+        ("parameters", thresholds.max_parameters),
+        ("file_lines", thresholds.max_file_lines),
+    )
+    for key, limit in checks:
+        values = metrics.get(key) or []
+        if values and max(values) > limit:
+            return True
+    return False
+
+
+def measure_blocking_rate(
+    target: str | Path,
+    thresholds: "ThresholdCalibration",
+    skip_tests: bool = False,
+) -> BlockingRate:
+    """Measure how much of the EXISTING code the calibrated gate would block.
+
+    `SKILL.md § Why p90 and not p50 or max?` explains that the adaptive calibration
+    exists so the gate does not start out rejecting the code already in the repo. It
+    was never checked. Measured on this repository 2026-08-26 — thresholds
+    complexity=10, function_lines=29, nesting=3, params=4, file_lines=367 — **156 of
+    256 tracked files would be blocked**.
+
+    The arithmetic the p90 does not cover: it is computed PER METRIC, over the
+    project's functions, while the gate rejects a FILE when ANY of its functions
+    exceeds ANY threshold. A file with thirty functions gets thirty independent
+    chances of holding one of the worst 10%, and five metrics multiply that. p90 per
+    function is not p90 per file.
+
+    This does not fix the calibration. It ends the silence about it: whoever turns
+    the gate on now knows what they are turning on.
+    """
+    files = _walk_source_files(str(target), SKIP_DIRS, skip_test_dirs=skip_tests)
+    py_files = [f for f in files if f.suffix.lower() == ".py"]
+    if not py_files:
+        return BlockingRate(
+            verdict="NOT_MEASURED",
+            advice="nenhum arquivo Python medido — a taxa de bloqueio é desconhecida, "
+                   "que não é o mesmo que zero",
+        )
+
+    blocked = [f for f in py_files if _file_violates(f, thresholds)]
+    percent = round(len(blocked) * 100 / len(py_files), 1)
+
+    if percent <= BLOCKING_RATE_READY:
+        verdict, advice = "READY", (
+            "o gate nasce praticamente verde e passa a reagir ao que piorar — que é o "
+            "comportamento que a calibração p90 promete"
+        )
+    elif percent <= BLOCKING_RATE_CEILING:
+        verdict, advice = "REVIEW", (
+            f"{len(blocked)} arquivos existentes seriam bloqueados. Revise-os antes de "
+            "ligar o hook, ou afrouxe o limiar que mais dispara"
+        )
+    else:
+        verdict, advice = "TOO_STRICT", (
+            f"{percent}% do código existente seria bloqueado. Um gate que nasce vermelho "
+            "é desligado na primeira hora, e o que sobra é pior que gate nenhum: o hook "
+            "no settings, a confiança de que ele protege alguma coisa, e um bypass no "
+            "dedo de quem trabalha. Afrouxe os limiares ou trate os arquivos primeiro"
+        )
+
+    return BlockingRate(
+        files_measured=len(py_files),
+        files_blocked=len(blocked),
+        percent=percent,
+        verdict=verdict,
+        advice=advice,
+        worst_offenders=tuple(str(f) for f in blocked[:10]),
+    )

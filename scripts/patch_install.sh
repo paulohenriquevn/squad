@@ -162,16 +162,8 @@ skills/plan-confidence/tests/test_golden_rule.py
 scripts/test_e2e_smoke.py
 CHANGELOG.md
 
-# === Squad domain specialists ===
+# === Squad domain routing (the mechanism; specialists are derived per project) ===
 agents/README.md
-agents/engine-go.md
-agents/control-plane.md
-agents/data-plane-ts.md
-agents/theo-db.md
-agents/infra-terraform.md
-agents/contracts-auth.md
-agents/frontend-dashboard.md
-agents/platform-cli.md
 scripts/route_domain.py
 
 # === Rules (cycle definitions) ===

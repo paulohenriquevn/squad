@@ -26,11 +26,19 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 ZONE_DIRS = ("knowledge-base/references", "knowledge-base/tools")
+
+# Árvores que um clone de projeto par traz consigo e que não são o código dele.
+ZONE_SKIP_DIRS = frozenset({
+    ".git", "node_modules", ".venv", "venv", "__pycache__", "target",
+    "dist", "build", "out", ".next", ".nuxt", "vendor", ".mypy_cache",
+    ".pytest_cache", ".ruff_cache",
+})
 DEFAULT_SHINGLE = 5
 DEFAULT_MAX_ZONE_FILES = 5000
 MAX_FILE_BYTES = 2_000_000
@@ -110,12 +118,36 @@ def changed_files(repo: Path, explicit: list[str] | None) -> list[Path]:
     return [repo / r for r in sorted(rels) if not in_zone(r)]
 
 
-def zone_files(repo: Path) -> list[Path]:
+def zone_roots(repo: Path) -> list[Path]:
+    """The study-zone directories that actually exist. O(1) — no traversal.
+
+    Separated from the enumeration on purpose: whether the zone EXISTS decides
+    SKIP-vs-PASS, and that question is answerable without walking anything.
+    """
+    return [
+        root
+        for base in ZONE_DIRS
+        for root in (repo / base, repo / ".claude" / base)
+        if root.is_dir()
+    ]
+
+
+def zone_files_from(roots: list[Path]) -> list[Path]:
+    """Every file under the given zone roots, skipping vendored/VCS trees.
+
+    The zone holds CLONES of peer projects, so it carries their `node_modules`,
+    their `.git` and their build output along with the source. None of that is
+    code the peer wrote, and enumerating it is pure cost. Pruning happens DURING
+    the walk — filtering after `rglob("*")` still descends into every one of
+    those directories, which is the same defect this repository already measured
+    at 832x elsewhere.
+    """
     found: list[Path] = []
-    for base in ZONE_DIRS:
-        for root in (repo / base, repo / ".claude" / base):
-            if root.is_dir():
-                found.extend(p for p in root.rglob("*") if p.is_file())
+    for root in roots:
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in ZONE_SKIP_DIRS]
+            for name in filenames:
+                found.append(Path(dirpath) / name)
     return found
 
 
@@ -136,15 +168,28 @@ def build_index(files: list[Path], repo: Path, size: int) -> dict[str, tuple[str
 
 def scan(repo: Path, size: int, max_zone_files: int, explicit: list[str] | None):
     """Returns (findings, stats). A finding is a suspected literal copy."""
-    zone = zone_files(repo)
-    stats = {"zone_files": len(zone), "zone_scanned": 0, "truncated": False}
-    if not zone:
+    roots = zone_roots(repo)
+    stats = {
+        "zone_present": bool(roots),
+        "zone_files": 0,
+        "zone_scanned": 0,
+        "truncated": False,
+    }
+    if not roots:
         return [], stats
 
+    # O ÍNDICE PRIMEIRO, A ZONA DEPOIS — e a ordem é o ponto.
+    # Este script roda em todo Stop, antes do early-exit do hook. Enumerar a
+    # zona antes de saber se há algo a comparar fazia uma sessão que não
+    # escreveu nada pagar a travessia inteira de milhares de arquivos de
+    # terceiros para chegar a "nada a comparar".
     index = build_index(changed_files(repo, explicit), repo, size)
     stats["indexed_shingles"] = len(index)
     if not index:
         return [], stats
+
+    zone = zone_files_from(roots)
+    stats["zone_files"] = len(zone)
 
     findings = []
     seen: set[tuple[str, str]] = set()
@@ -200,7 +245,7 @@ def main() -> int:
 
     findings, stats = scan(repo, args.shingle, args.max_zone_files, args.files or None)
 
-    if not stats["zone_files"]:
+    if not stats["zone_present"]:
         print("SKIP reference-leakage: study zone absent or empty — nothing to compare against.")
         return 0
 

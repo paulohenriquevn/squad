@@ -49,6 +49,15 @@ from typing import Any
 
 import yaml
 
+# O gate upstream vive ao lado deste script. Ele roda como `__main__` (o diretório
+# entra no sys.path sozinho) e também é importado por testes que inserem o diretório
+# à mão — o fallback cobre o caso em que nem um nem outro aconteceu.
+try:
+    from check_upstream_gate import check_upstream_gate
+except ImportError:  # pragma: no cover - caminho de importação alternativa
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_upstream_gate import check_upstream_gate
+
 SEVERITY_ORDER = ["BLOCKER", "HIGH", "MEDIUM", "LOW", "INFO"]
 # Back-compat alias map for findings emitted by agents using legacy tokens.
 SEVERITY_ALIASES = {
@@ -237,6 +246,21 @@ def _unregistered_high(findings: list[dict[str, Any]], registered: set[str]) -> 
             continue
         unowned.append(fid or f.get("summary", "<unidentified finding>"))
     return unowned
+
+
+
+def _project_root_for(findings_dir: Path) -> Path:
+    """Sobe do diretório de achados até a raiz que carrega a knowledge-base.
+
+    `/review` escreve os achados sob `agents/review-{slug}-{data}/`, então a raiz é
+    o ancestral que tem `knowledge-base/` ou `.claude/knowledge-base/` — os dois
+    layouts de instalação.
+    """
+    current = findings_dir.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / "knowledge-base").is_dir() or (candidate / ".claude" / "knowledge-base").is_dir():
+            return candidate
+    return current
 
 
 def _classify_verdict(
@@ -587,6 +611,18 @@ def main() -> int:
         for f in findings:
             if isinstance(f, dict):
                 all_findings.append(_normalize_finding(f, str(agent_role)))
+
+    # A pré-condição upstream entra como achado, não como passo separado.
+    #
+    # `code-quality-golden-rule.md § 1` condiciona a entrada no `/review` ao veredito do
+    # `/code-quality` — e, em FAIL_SOFT, à existência de um ADR dispensando CADA soft cap.
+    # Isso era prosa em `SKILL.md` (um `test -f` que alguém precisava lembrar de rodar) e o
+    # ADR não era procurado por ninguém: bastava afirmar que existia. Injetado aqui, o
+    # veredito do review não pode mais ser calculado ignorando o gate anterior.
+    all_findings.extend(
+        _normalize_finding(f, "check_upstream_gate")
+        for f in check_upstream_gate(_project_root_for(args.findings_dir), slug)
+    )
 
     # Deduplicate
     deduped = _dedupe_findings(all_findings)

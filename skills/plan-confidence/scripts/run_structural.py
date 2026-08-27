@@ -32,6 +32,7 @@ from check_baseline_context import check_baseline_context
 from check_concurrency_tests import check_concurrency_tests
 from check_coverage_matrix import CoverageReport, check_coverage_matrix
 from check_criterion_executability import ExecutabilityReport, check_criterion_executability
+from check_deps_audit import check_deps_audit
 from check_drawbacks_section import check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
 from check_failure_scenarios import check_failure_scenarios
@@ -307,6 +308,7 @@ def run_structural(
     drawbacks = check_drawbacks_section(plan_path)
     concurrency = check_concurrency_tests(plan_path)
     failure_scenarios = check_failure_scenarios(plan_path)
+    deps_audit = check_deps_audit(plan_path)
     patterns_consumption = check_patterns_consumption(plan_path, _find_repo_root_from_plan(plan_path))
 
     # Compute per-dimension scores
@@ -378,12 +380,26 @@ def run_structural(
         hard_cap_ids.append("soft_floor_failure_scenarios_missing")
         final_score = min(final_score, 89.0)
 
+    # O gate de CVE do `cycle-plan` deixou de depender de alguém honrá-lo. Este check
+    # não procura CVE — `/deps-audit` faz isso, com os scanners — ele LÊ o veredito que
+    # aquele run deixou em disco. Um plano que declara dependência nova e não tem
+    # auditoria recebe soft floor (ninguém verificou); um cujo relatório aponta CVE
+    # CRITICAL/HIGH recebe hard cap, que é o gate que `cycle-plan.md § Phase contracts`
+    # declarava e nada cobrava.
+    if deps_audit.applies and deps_audit.hard_cap:
+        hard_cap_ids.append(deps_audit.stable_id)
+        final_score = min(final_score, 49.0)
+    elif deps_audit.applies and deps_audit.soft_floor:
+        hard_cap_ids.append(deps_audit.stable_id)
+        final_score = min(final_score, 89.0)
+
     verdict = _lookup_verdict(final_score, bands)
     # Hard caps "coverage_lt_100" and "fabricated_citation" force INVALID regardless of bands.
     if (
         "coverage_lt_100" in hard_cap_ids
         or "fabricated_citation" in hard_cap_ids
         or "patterns_skill_ignored" in hard_cap_ids
+        or "deps_audit_insecure" in hard_cap_ids
     ):
         verdict = "INVALID"
 
@@ -526,6 +542,15 @@ def run_structural(
                 "reasons": list(patterns_consumption.reasons),
             },
             "failure_scenarios": {
+                "deps_audit": {
+                    "applies": deps_audit.applies,
+                    "verdict": deps_audit.verdict,
+                    "hard_cap": deps_audit.hard_cap,
+                    "soft_floor": deps_audit.soft_floor,
+                    "declared": list(deps_audit.declared),
+                    "audit_path": deps_audit.audit_path,
+                    "reasons": list(deps_audit.reasons),
+                },
                 "external_io_detected": failure_scenarios.external_io_detected,
                 "signals_sample": list(failure_scenarios.signals_sample),
                 "section_present": failure_scenarios.section_present,

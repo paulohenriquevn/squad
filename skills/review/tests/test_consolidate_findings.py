@@ -42,7 +42,29 @@ findings: []
 """
 
 
-def _run(findings_dir: Path, output: Path) -> tuple[int, dict[str, object]]:
+def _upstream_ok(findings_dir: Path, slug: str = "fixture") -> None:
+    """Declara o contexto upstream que o consolidador agora exige.
+
+    `consolidate_findings.py` injeta a pré-condição do `/review` como BLOCKER
+    (`check_upstream_gate`): sem audit de `/code-quality` admissível, não há
+    veredito de merge. Estes testes medem o CONSOLIDADOR, então declaram o
+    upstream verde e seguem medindo o que vieram medir — o gate em si tem a sua
+    própria suíte em `test_check_upstream_gate.py`.
+    """
+    audits = findings_dir.parent / "knowledge-base" / "audits"
+    audits.mkdir(parents=True, exist_ok=True)
+    audit = audits / f"{slug}-code-quality-2026-08-26.md"
+    if not audit.exists():
+        audit.write_text(
+            "**Verdict:** PASS\n**Hard caps triggered:** _none_\n"
+            "**Soft caps triggered:** _none_\n",
+            encoding="utf-8",
+        )
+
+
+def _run(findings_dir: Path, output: Path, *, upstream: bool = True) -> tuple[int, dict[str, object]]:
+    if upstream:
+        _upstream_ok(findings_dir)
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--findings-dir", str(findings_dir),
          "--output", str(output), "--slug", "fixture"],
@@ -376,6 +398,7 @@ PLAN_REGISTERING_TWO = """# Plan: fixture
 
 
 def _run_with_plan(findings_dir: Path, output: Path, plan: Path) -> tuple[int, dict[str, object]]:
+    _upstream_ok(findings_dir)
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--findings-dir", str(findings_dir),
          "--output", str(output), "--slug", "fixture", "--plan", str(plan)],
@@ -474,6 +497,7 @@ def _repo_with_state(tmp_path: Path, dirty_after: bool) -> tuple[Path, Path]:
 
 
 def _run_in_repo(findings: Path, output: Path, repo: Path) -> tuple[int, dict[str, object]]:
+    _upstream_ok(findings)
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--findings-dir", str(findings),
          "--output", str(output), "--slug", "fixture", "--repo-root", str(repo)],
@@ -609,3 +633,36 @@ def test_a_rename_with_one_end_outside_the_findings_dir_is_reported(tmp_path: Pa
                    cwd=repo, check=True, capture_output=True, env=env)
 
     assert check_tree_contamination(repo, findings) is not None
+
+
+# ---------------------------------------------------------------------------
+# A pré-condição upstream, medida pelo consolidador — não só pelo gate isolado
+# ---------------------------------------------------------------------------
+
+def test_without_an_upstream_audit_there_is_no_merge_verdict(tmp_path: Path) -> None:
+    """`cycle-review.md § Pre-conditions` exige o audit; nada o cobrava.
+
+    O `/review` rodando sem `/code-quality` herda tudo que o audit teria pegado —
+    dead code, símbolo fabricado, export órfão — e devolve `READY_TO_MERGE` sobre
+    uma varredura que não aconteceu.
+    """
+    findings = tmp_path / "findings"
+    findings.mkdir()
+    (findings / "architecture.yml").write_text(CLEAN, encoding="utf-8")
+
+    code, payload = _run(findings, tmp_path / "report.md", upstream=False)
+
+    assert code != 0
+    assert payload.get("verdict") == "NEEDS_FIXES"
+
+
+def test_an_admissible_upstream_audit_lets_the_review_grade(tmp_path: Path) -> None:
+    """O outro lado: o gate não pode transformar todo review em NEEDS_FIXES."""
+    findings = tmp_path / "findings"
+    findings.mkdir()
+    (findings / "architecture.yml").write_text(CLEAN, encoding="utf-8")
+
+    code, payload = _run(findings, tmp_path / "report.md")
+
+    assert payload.get("verdict") == "READY_TO_MERGE", payload
+    assert code == 0

@@ -151,3 +151,83 @@ def test_invalid_shingle_size_is_an_invocation_error(tmp_path, bad):
     result = _run(repo, "--shingle", bad)
     assert result.returncode == 2
     assert "ERROR" in result.stderr
+
+
+def test_zone_is_not_enumerated_when_nothing_changed(tmp_path, monkeypatch):
+    """A sessão que não escreveu nada não paga a travessia da zona.
+
+    O script roda em TODO Stop, antes do early-exit do hook. `scan` listava a
+    zona inteira ANTES de construir o índice dos arquivos alterados — e é esse
+    índice que decide se existe qualquer trabalho a fazer. Numa zona com
+    milhares de arquivos de terceiros, uma sessão read-only pagava a travessia
+    completa para chegar a "nada a comparar".
+
+    Fixa a FORMA (a zona não é enumerada), não uma duração.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import check_reference_leakage as leak
+
+    repo = _init_repo(tmp_path)
+    _add_zone_file(repo, "peer/a.py", COPIED_BLOCK)
+
+    calls = []
+    real = leak.zone_files_from
+
+    def spy(roots):
+        calls.append(roots)
+        return real(roots)
+
+    monkeypatch.setattr(leak, "zone_files_from", spy)
+
+    # Sem arquivos alterados: nada a indexar, logo nada a comparar.
+    findings, stats = leak.scan(repo, 5, 5000, None)
+
+    assert findings == []
+    assert calls == [], "a zona foi enumerada mesmo sem nada para comparar"
+    assert stats["zone_present"] is True
+
+
+def test_zone_is_enumerated_when_there_is_something_to_compare(tmp_path, monkeypatch):
+    """Regressão do teste acima: com arquivo alterado, a zona É percorrida."""
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import check_reference_leakage as leak
+
+    repo = _init_repo(tmp_path)
+    _add_zone_file(repo, "peer/a.py", COPIED_BLOCK)
+    (repo / "src" / "mine.py").write_text(COPIED_BLOCK, encoding="utf-8")
+
+    calls = []
+    real = leak.zone_files_from
+
+    def spy(roots):
+        calls.append(roots)
+        return real(roots)
+
+    monkeypatch.setattr(leak, "zone_files_from", spy)
+
+    findings, _ = leak.scan(repo, 5, 5000, ["src/mine.py"])
+
+    assert calls, "a zona não foi percorrida quando havia o que comparar"
+    assert findings, "a cópia literal deixou de ser detectada"
+
+
+def test_zone_traversal_skips_vendored_trees(tmp_path):
+    """`node_modules` e `.git` dentro da zona não são lidos.
+
+    A zona é o clone de um projeto par — ela traz a árvore de dependências e o
+    repositório git dele junto. Enumerar isso é trabalho puro: nada ali é o
+    código que o par escreveu.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import check_reference_leakage as leak
+
+    repo = _init_repo(tmp_path)
+    _add_zone_file(repo, "peer/real.py", COPIED_BLOCK)
+    _add_zone_file(repo, "peer/node_modules/dep/index.py", COPIED_BLOCK)
+    _add_zone_file(repo, "peer/.git/objects/thing.py", COPIED_BLOCK)
+
+    found = {p.name for p in leak.zone_files_from(leak.zone_roots(repo))}
+
+    assert "real.py" in found
+    assert "index.py" not in found, "node_modules da zona foi percorrido"
+    assert "thing.py" not in found, ".git da zona foi percorrido"

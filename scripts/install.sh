@@ -15,9 +15,8 @@
 #   5. Creates empty scaffold under target/.claude/knowledge-base/
 #      (plans, implementations, reviews, audits, discoveries/{plans,opportunities,snapshots},
 #      adrs, grills, dogfood, judge-codex, backlog, maintenance-runs, tools).
-#      agents/ receives ONLY README.md (the routing mechanism). The 8 domain
-#      specialists describe the `theo` ecosystem's repos and are NOT copied —
-#      pass --with-domain-agents to opt into them. agents/ is never deleted.
+#      agents/ receives ONLY README.md (the routing mechanism). Specialists are
+#      derived per project — the kit ships none. agents/ is never deleted.
 #   6. Skips the source repo's history: caches, artifact dirs, audit trails,
 #      CHANGELOG.md, .git/, .compaction-snapshots/, .attestations/.
 #   7. Prints next steps.
@@ -41,14 +40,12 @@ fi
 TARGET="$1"
 FORCE=0
 MERGE=0
-WITH_DOMAIN_AGENTS=0
 for arg in "${@:2}"; do
   case "$arg" in
     --force) FORCE=1 ;;
     --merge) MERGE=1 ;;
-    --with-domain-agents) WITH_DOMAIN_AGENTS=1 ;;
     "") ;;
-    *) echo "ERROR: unknown flag ${arg}. Expected --force, --merge or --with-domain-agents." >&2; exit 2 ;;
+    *) echo "ERROR: unknown flag ${arg}. Expected --force or --merge." >&2; exit 2 ;;
   esac
 done
 
@@ -271,21 +268,30 @@ fi
 # o check_xrefs varrer arquivos que não governam nada.
 rm -rf "$ECO/rules/templates"
 
+# `hooks/quality/` é o gate de smells DESTE repositório, gerado por `/quality-init`
+# com limiares calibrados no p90 do código daqui (max_file_lines = 367, e assim por
+# diante). Entregá-lo repetiria o defeito que o kit passou meses corrigindo em
+# `rules/*.txt` e na tabela de roteamento: distribuir a configuração de quem escreveu
+# como se fosse a de quem instala. O consumidor gera a dele com o mesmo comando,
+# contra os números dele — o passo 3 das instruções finais o nomeia.
+rm -rf "$ECO/hooks/quality"
+
 # agents/ is copied FILE BY FILE, not wholesale. This repo dogfoods its own cycles, and
 # `/implement` and `/review` write their per-run agent definitions into subdirectories here
 # (`implement-slice-*/`, `review-*/`). Those are THIS repo's audit trail, not template content —
 # and `cp -r` shipped two of them, dated May 2026, into every consumer install. The header above
 # already promises to skip audit trails; this is what keeping that promise looks like.
-# Os oito especialistas em agents/*.md descrevem os repos do ecossistema `theo`:
-# `engine-go` cobre `theo`, `data-plane-ts` cobre seis produtos TypeScript. Num
-# consumidor que não é aquele ecossistema, são arquivos sobre repositórios que não
-# existem ali. Medido em 2026-08-20 sobre 41 instalações: 19 já viviam sem eles e
-# nada quebrou, 11 escrevem os seus, e a tabela de roteamento passou a ser DERIVADA
-# do projeto — o acoplamento que os justificava deixou de existir.
+# O kit NÃO tem especialistas para copiar. Os oito que ele carregava descreviam os
+# repos de um ecossistema só; num consumidor que não é aquele, eram arquivos sobre
+# repositórios inexistentes. Medido em 2026-08-20 sobre 41 instalações: 19 já viviam
+# sem eles e nada quebrou, 11 escrevem os seus, e a tabela de roteamento passou a ser
+# DERIVADA do projeto — o acoplamento que os justificava deixou de existir. Foram
+# removidos da fonte em 2026-08-26; nunca estiveram versionados (`.gitignore`
+# `agents/**`), então a flag `--with-domain-agents` copiava arquivos que só existiam
+# na máquina de quem os escreveu.
 #
 # O README continua vindo sempre: ele descreve o MECANISMO de roteamento, não um
-# domínio. `--with-domain-agents` traz os oito, para os repos do ecossistema `theo`
-# que ainda dependem do kit para recebê-los (`theo-rag` não os versiona).
+# domínio.
 # `agents/` NUNCA é apagado, em modo nenhum. Aqui moram os especialistas que o projeto
 # escreveu — e `rm -rf` no modo não-merge levava todos junto. Nada no kit justifica
 # destruir o especialista de domínio de um consumidor: ele descreve o repositório dele,
@@ -298,11 +304,6 @@ elif [ -f "$SRC_DIR/agents/README.md" ]; then
   echo "==> Copying agents/README.md (the routing mechanism)"
   cp "$SRC_DIR/agents/README.md" "$ECO/agents/README.md"
 fi
-if [ "$WITH_DOMAIN_AGENTS" -eq 1 ]; then
-  echo "==> Copying agents/*.md (domain specialists — --with-domain-agents)"
-  find "$SRC_DIR/agents" -maxdepth 1 -type f -name '*.md' -exec cp {} "$ECO/agents/" \;
-fi
-
 # Top-level docs and manifest
 for f in HOW-TO-USE.md README.md .active_plan.example; do
   [ -f "$SRC_DIR/$f" ] && cp "$SRC_DIR/$f" "$ECO/$f"
@@ -368,9 +369,9 @@ if [ -f "$SRC_DIR/knowledge-base/backlog.md" ]; then
   fi
 fi
 
-# agents/ was copied above with the 8 domain specialists. An empty agents/ would
-# leave route_domain.py pointing at files that do not exist — the routing table would
-# resolve and the specialist behind it would be missing.
+# agents/ holds only the README above. The routing table ships empty alongside it,
+# so route_domain.py has nothing to resolve until the project derives both — a table
+# with rows and no specialist on disk is what exit 3 (BROKEN ROUTE) exists to catch.
 
 
 # --- What the overwrite actually took ---
@@ -425,13 +426,7 @@ MANIFEST="$ECO/.kit-manifest.txt"
   for f in "$SRC_DIR"/rules/*; do
     [ -f "$f" ] && echo "rules/$(basename "$f")"
   done
-  if [ "$WITH_DOMAIN_AGENTS" -eq 1 ]; then
-    for f in "$SRC_DIR"/agents/*.md; do
-      [ -f "$f" ] && echo "agents/$(basename "$f")"
-    done
-  else
-    [ -f "$SRC_DIR/agents/README.md" ] && echo "agents/README.md"
-  fi
+  [ -f "$SRC_DIR/agents/README.md" ] && echo "agents/README.md"
 } > "$MANIFEST"
 echo "==> Manifest written: $(grep -vc '^#' "$MANIFEST") paths from the kit"
 
@@ -462,8 +457,8 @@ Next steps for the target project:
   1. (optional) Add a CLAUDE.md at the project root pointing to .claude/ and
      listing project-specific stack/conventions. Hooks read it on SessionStart.
 
-  2. Derive the domain routing table FOR THIS PROJECT (it ships with the source
-     ecosystem's, and gate G1 refuses every item until this runs):
+  2. Derive the domain routing table FOR THIS PROJECT (it ships EMPTY, and gate
+     G1 refuses every item until this runs):
        python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \
          --write .claude/rules/cycle-backlog.md
      Then write the specialist file(s) it names under .claude/agents/.

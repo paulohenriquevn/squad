@@ -97,32 +97,27 @@ raw ──/discover-execute measures──┬──> triaged ──/to-plan─�
 
 ## Domain routing
 
-`domain` is what assigns the item to a specialist. **This table is derived from the project it lives in** — `skills/backlog-init/scripts/detect_domains.py` reads the topology from disk and emits it. What follows is THIS repository's instance (the `theo` ecosystem), not a set every consumer must fit into.
+`domain` is what assigns the item to a specialist. **This table is derived from the project it lives in** — nothing here can be copied from another ecosystem, because it describes which repositories exist in this one.
 
-A consumer that keeps this table inherits a map of repos it does not have, and gate G1 then refuses every item it files — correctly, since it genuinely cannot tell who owns the work. Measured on `theokit-sdk` (2026-08-18): 88 items with measured `file:line` evidence, all `BLOCKER/unroutable_repo`. Re-derive with `--write` when adopting the kit.
+**It starts empty, and that is deliberate.** The kit used to ship the table of the ecosystem it was written in: eight domains pointing at twenty repositories a consumer does not have. The effect was measured on an adopter in 2026-08-18 — 88 items filed with real `file:line` evidence, every one refused by gate G1 as `BLOCKER/unroutable_repo`. The gate was right: it genuinely could not tell who owned the work. Inheriting the wrong map is worse than having no map, because the refusal looks like a problem with the item rather than with the configuration.
 
-Verified on disk 2026-08-05 (`find -maxdepth 2 -name .git` + `git -C <repo> rev-list --count HEAD`), not copied from any inventory table.
+### Derive yours
+
+```bash
+python3 skills/backlog-init/scripts/detect_domains.py --root . --write rules/cycle-backlog.md
+```
+
+The script reads the topology from disk — not from an inventory, not from a `CLAUDE.md` — and fills in the table below. Then write the specialist file it names, under `agents/`.
+
+While this section is empty, `/backlog-item` refuses every item. That refusal is the correct behaviour: without a table, routing would be a guess.
 
 | Domain | Repos (present on disk) | Specialist |
 |---|---|---|
-| `engine-go` | `theo` | `agents/engine-go.md` |
-| `control-plane` | `theo-cloud`, `theo-traefik-mcp` | `agents/control-plane.md` |
-| `data-plane-ts` | `theo-memory`, `theo-rag`, `theo-lens`, `theo-trust`, `theo-skills`, `theo-promptly` | `agents/data-plane-ts.md` |
-| `theo-db` | `theo-db` | `agents/theo-db.md` |
-| `infra-terraform` | `theo-infra-modules`, `theo-infra-live` | `agents/infra-terraform.md` |
-| `contracts-auth` | `theo-contracts` | `agents/contracts-auth.md` |
-| `frontend-dashboard` | `theo-cloud/dashboard` | `agents/frontend-dashboard.md` |
-| `platform-cli` | `theo-cli`, `theo-storage` | `agents/platform-cli.md` |
+| _(empty — run `detect_domains.py --write`)_ | | |
 
-**One repo, two domains — resolved by path, not by judgement.** `theo-cloud` holds both the Go control plane and the TypeScript dashboard (`theo-cloud/dashboard/package.json`, verified on disk). The `repo` field therefore takes `theo-cloud` for the Go half and `theo-cloud/dashboard` for the UI half. Listing the bare repo under both domains would make routing depend on iteration order — the same item routing differently on different runs, which works until it does not and nothing changed. `scripts/route_domain.py` enforces the one-repo-one-domain invariant, and `tests/test_route_domain.py::test_no_repo_belongs_to_two_domains` is what caught the ambiguity.
+**One repo, one domain.** `scripts/route_domain.py` enforces the invariant: listing the same repository under two domains makes routing depend on dict iteration order, and the same item starts routing differently between runs. When one repository holds two genuinely distinct things — a service and the dashboard that consumes it, in the same checkout — separate them by path (`repo` and `repo/subdir`), never by repeating the bare name in both rows.
 
-### Repos an inventory names but disk does not
-
-`theo-contextify`, `theo-gateway`, `theo-sandboox`, `theokit-app` and `theo-itself` appear in the umbrella's `CLAUDE.md` and have **no checkout** as of 2026-08-05. They are listed here rather than deleted so that the divergence stays visible: an item filed against one of them routes nowhere until the repo is actually cloned, and `/backlog-item` gate G1 refuses it.
-
-This is exactly why `skills/backlog-init/SKILL.md` mandates reading the inventory from disk. The umbrella's table claims it was "verified 2026-07-28" and states that a repo absent from it does not exist in the folder; a week later, five of its entries had no checkout. Documentation drifts, and a routing table that names a repo nobody has cloned sends work to a specialist who cannot open the code.
-
-`theo-workspace` (a nested clone of the umbrella itself) takes no items.
+**Record the divergence instead of deleting it.** A repository the inventory names and disk does not have should stay listed, marked as having no checkout: an item filed against it routes nowhere, and seeing that written down is cheaper than discovering it through the refusal.
 
 ## Verdicts
 

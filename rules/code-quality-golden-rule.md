@@ -31,6 +31,10 @@ In order of severity ceiling; first hit wins (smallest cap is the verdict).
 | Plan missing `## Critical paths` section (Mode 2 + D4 mutation only) | `FAIL_SOFT` (70) | `plan_missing_critical_paths_section` |
 | Orphan exported symbol (no importer, exporting from a public package) | `FAIL_SOFT` (70) | `soft_cap_orphan_export_{language}` |
 | Mutation score < 60% on declared critical paths | `FAIL_SOFT` (70) | `soft_cap_mutation_score_low_{language}` |
+| Mutation runner not configured by the project | `FAIL_SOFT` (70) | `soft_cap_mutation_unconfigured_{language}` |
+| Mutation deferred for the language (Rust, Go) | `FAIL_SOFT` (70) | `soft_cap_mutation_deferred_{language}` |
+| Mutation run produced zero mutants | `FAIL_SOFT` (70) | `soft_cap_mutation_no_mutants_{language}` |
+| No declared public surface for D3 to audit | INFO | `d3_no_public_surface` |
 | Auditor unavailable (tool missing for enabled language) | `FAIL_SOFT` (70) | `auditor_unavailable_{tool}` |
 | Mutation score 60-79% on declared critical paths | `PASS_WITH_CAVEATS` (89) | `soft_floor_mutation_score_medium_{language}` |
 | Dead internal symbol (private function with no caller) | `PASS_WITH_CAVEATS` (89) | `dead_internal_symbol_{language}` |
@@ -75,14 +79,43 @@ Detectors run in fixed order. Each detector MUST be subprocess-isolated, never m
 |---|---|---|---|
 | D1 — Dead code | vulture, knip, cargo-udeps, deadcode | Python, TS, Rust, Go | No exported symbol unreachable from a caller or a test |
 | D2 — Symbol fabrication | tree-sitter + registry introspection | All enabled | Every imported symbol resolves to a real definition |
-| D3 — Cross-package wiring | ast-grep | All enabled | Public exports have at least one importer (soft cap) |
-| D4 — Mutation testing | mutmut, stryker | Python, TS (Rust+Go deferred) | Mutation score ≥ floor on declared critical paths |
+| D3 — Cross-package wiring | `detectors/_wiring.py` | All enabled | Every DECLARED export has a production consumer (soft cap) |
+| D4 — Mutation testing | mutmut, Stryker via `detectors/_mutation.py` | Python, TS (Rust+Go deferred) | Mutation score ≥ floor, scoped by the project's own runner config |
 
 A detector MAY be added to this table only via an ADR + corresponding implementation in `skills/code-quality/scripts/detectors/`.
+
+**D3 and D4 were declared here and implemented nowhere until 2026-08-26.** All four
+language adapters returned `unavailable("d3"/"d4", …, "is not configured")`, and
+because `unavailable()` emits SOFT_CAP, every audit in every project carried two
+permanent soft caps — making `PASS` unreachable by construction and turning the
+`/implement` gate into a WARN nobody reads. What they assert now:
+
+- **D3 audits the surface the project DECLARED** — `__all__` and `__init__.py`
+  re-exports (Python), the files `package.json` points at (TypeScript), `pub` in
+  `src/lib.rs` (Rust), exported identifiers outside `internal/` (Go). Inferring a
+  surface from "every name without an underscore" produces hundreds of findings in
+  any script repository, which is the most efficient way to disable a gate without
+  removing it. A project with no declared surface gets INFO, never a verdict about a
+  contract nobody wrote. A test is not a consumer, for the same reason pillar (a) of
+  the wiring triad does not count one. A type named in another public export's
+  signature IS consumed — it lives through that export.
+- **D4 is scoped by the project's own runner config**, not by a file list: neither
+  mutmut nor Stryker accepts an arbitrary list as scope, and the orchestrator was
+  building one and dropping it. The stats FILE is the evidence, never the exit code —
+  measured 2026-08-26, mutmut 3.5 exits 0 when the test runner collected nothing. Zero
+  mutants is reported as absence of measurement: a perfect score over an empty set is
+  absolute green with nothing measured.
 
 ## § 6 — Per-project tuning (PER-PROJECT — EDIT THIS)
 
 Thresholds for the detectors live in `code-quality-thresholds.txt`. The keys are stable; the values are per-project. Defaults are shipped in `skills/code-quality/defaults/thresholds.txt` and may be promoted to `rules/code-quality-thresholds.txt` for project-specific overrides.
+
+**Until 2026-08-26 none of them reached a detector.** The orchestrator called
+`load_thresholds()` for the side-effect of validating the file and discarded the
+result, with an inline note that "detectors use hardcoded defaults in v0.1" — so every
+documented key here was inert. A configuration file that cannot change behaviour is
+worse than none: it reads as a control that exists. The values now reach the detectors
+through `BaseDetector.thresholds` / `BaseDetector.threshold()`.
 
 Each project SHOULD:
 

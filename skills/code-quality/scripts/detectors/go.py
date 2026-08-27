@@ -13,7 +13,7 @@ from scripts import _registry
 from scripts._shared import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_imports_and_calls
 
-from . import BaseDetector, _arch
+from . import BaseDetector, _arch, _mutation, _wiring
 
 _DEADCODE_TIMEOUT_SEC = 180
 _ARCH_TIMEOUT_SEC = 240
@@ -147,11 +147,17 @@ class GoDetector(BaseDetector):
         return None
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        return self.unavailable("d3", "orphan_export", "cross-package wiring is not configured")
+        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
 
-    def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
-        # T4.3 — DEFERRED to v0.2 (evaluate go-mutesting vs gremlins first)
-        return self.unavailable("d4", "mutation_low", "Go mutation testing is deferred")
+    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
+        return _mutation.detect_mutation_score(
+            self.language,
+            manifest_dir,
+            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
+            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
+            timeout_minutes=self.threshold(
+                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
+        )
 
     # ------------------------------------------------------------------
 

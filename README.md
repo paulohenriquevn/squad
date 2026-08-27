@@ -95,27 +95,29 @@ The macro loop (`cycle-maintenance`) selects the next item — measured before u
 
 ## The specialists
 
-**You derive yours; the table below is this repository's.** A specialist file
-describes repositories that exist in *one* ecosystem, so the kit ships the
-routing MECHANISM (`agents/README.md`) and leaves the map empty — a consumer
-that inherits someone else's table has gate G1 refuse every item it files, which
-was measured on an adopter in 2026-08-18: 88 items with real `file:line`
-evidence, all `unroutable_repo`. Run `detect_domains.py --write` and write the
-files it names. What follows is the `theo` ecosystem's instance, kept here
-because a concrete example says more than a schema.
+**You derive yours; the kit ships none.** A specialist file describes
+repositories that exist in *one* ecosystem, so what travels is the routing
+MECHANISM (`agents/README.md`) with the map left empty — a consumer that
+inherits someone else's table has gate G1 refuse every item it files, which was
+measured on an adopter in 2026-08-18: 88 items with real `file:line` evidence,
+all `unroutable_repo`.
 
-| Specialist | Repos | Knows |
-|---|---|---|
-| `engine-go` | `theo` | A root `go build ./...` covers almost nothing — it is multi-module |
-| `control-plane` | `theo-cloud`, `theo-traefik-mcp` | Cross-tenant leakage; metering that mis-counts money |
-| `data-plane-ts` | `theo-memory`, `theo-rag`, `theo-lens`, `theo-trust`, `theo-skills`, `theo-promptly` | Tenant isolation; drift between SDK, REST and MCP |
-| `theo-db` | `theo-db` | A defect crashes the database; the AGPL licence gate |
-| `infra-terraform` | `theo-infra-modules`, `theo-infra-live` | Terraform (not OpenTofu); RDS is a protected unit; Pulumi is legacy |
-| `contracts-auth` | `theo-contracts` | Everything imports it — assume cross-repo by default |
-| `frontend-dashboard` | `theo-cloud/dashboard` | Environment vs product — the only domain with a live target |
-| `platform-cli` | `theo-cli`, `theo-storage` | `npm`, not `pnpm`; consumers are scripts, not importers |
+```bash
+python3 skills/backlog-init/scripts/detect_domains.py --root . --write rules/cycle-backlog.md
+```
 
-Routing is deterministic (`scripts/route_domain.py`) and reads its table from `rules/cycle-backlog.md` — one table, one truth. `agents/README.md` is the one file in `agents/` the kit versions and always installs; the specialists themselves are opt-in (`install.sh --with-domain-agents`). See [`agents/README.md`](agents/README.md).
+The script reads the topology from disk and writes the table; then write one
+file per domain it names, under `agents/`. Each specialist carries the repos it
+covers, the build commands **verified on disk** rather than copied from a table,
+the invariants of its domain, and the shape a real finding takes there. Cut the
+domains at the granularity where those invariants differ — one agent per repo
+rots once per copy, one agent per role is too coarse to hold "this RDS instance
+is a protected unit".
+
+Routing is deterministic (`scripts/route_domain.py`) and reads its table from
+`rules/cycle-backlog.md` — one table, one truth. A domain naming a specialist
+that is not on disk exits 3 (`BROKEN ROUTE`) rather than reporting a route to
+nobody. See [`agents/README.md`](agents/README.md).
 
 ## Quick start
 
@@ -141,7 +143,7 @@ names. The installer prints the sequence.
 /backlog-init
 
 # 2. Register something worth looking at — a hunch is enough
-/backlog-item theo-lens-trace-latency
+/backlog-item trace-explorer-feels-slow
 
 # 3. Measure it. This may kill the item, and that is a good day
 /discover-plan B-014 --mode live-test   # what will be measured, and what would kill it
@@ -178,7 +180,7 @@ Each mode defines what counts as a measurement. Evidence from one does not satis
 
 ```
 squad/
-├── agents/          ← README (the routing mechanism) + the specialists you derive
+├── agents/          ← README (the routing mechanism); specialists are derived per project
 ├── rules/           ← contracts. cycle-*.md are the source of truth
 │   ├── cycle-backlog.md      ← the registry, intake, domain routing
 │   ├── cycle-discover.md     ← the four modes, evidence contracts, gates

@@ -52,11 +52,21 @@ Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requiremen
 | deps-audit | plan | dependency report with CVE status | no critical CVE on a planned dependency — **human-enforced, see below** |
 | plan-confidence | plan | score + verdict | INVALID returns to /to-plan |
 
-**The `deps-audit` gate is the one gate in this cycle nothing mechanizes.** Every other hard gate
-above is checked by a script that can fail the phase. This one is not: `/plan-confidence` does not
-read the dependency report, because wiring it in would EXTEND the gate, and `plan-confidence-golden-rule.md`
-§ When this rule may change puts an extension behind an ADR. Until that ADR exists, the gate holds
-only if a human invokes `/deps-audit {slug}` and honors the verdict by hand.
+**The `deps-audit` gate was, until 2026-08-26, the one gate in this cycle nothing mechanized.**
+Every other hard gate above is checked by a script that can fail the phase; this one held only if a
+human invoked `/deps-audit {slug}` and honoured the verdict by hand. It is now checked by
+`check_deps_audit.py`, which `/plan-confidence` runs like any other check:
+
+| Plan state | Effect |
+|---|---|
+| declares no new dependency | check does not apply |
+| declares one, no audit report on disk | soft floor ≤ 89 (`soft_floor_deps_audit_missing`) |
+| report says CRITICAL/HIGH CVE in a declared dep | hard cap ≤ 49 → `INVALID` (`deps_audit_insecure`) |
+
+The check does NOT scan for CVEs — `/deps-audit` does that, with the scanners. It reads the verdict
+that run left on disk, so the human step that remains is running the audit, and forgetting it now
+costs the plan its band instead of passing silently. The extension of the gate is recorded in
+`plan-confidence-golden-rule.md` § Rules that cannot be bent.
 
 Stating it is the point. A gate listed beside four mechanized ones reads as mechanized, and a gate
 believed to be automatic is one nobody runs.

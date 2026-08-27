@@ -40,9 +40,14 @@ from lib.calibrate import (
     FLOOR_NESTING_DEPTH,
     FLOOR_PARAMETERS,
     ThresholdCalibration,
-    _measure_python_metrics,
-    _percentile,
+    # Re-exports deliberados: `tests/test_init_quality_gates.py` importa os dois
+    # daqui. Ficaram FORA do `__all__` — um nome privado numa superfície pública é
+    # a contradição que D3 apontou neste arquivo — mas continuam importáveis, que
+    # é o que o teste precisa. Sem o noqa, `ruff --fix` os apaga por não usados.
+    _measure_python_metrics,  # noqa: F401
+    _percentile,  # noqa: F401
     calibrate_thresholds,
+    measure_blocking_rate,
 )
 from lib.detect import (
     LanguageInfo,
@@ -58,17 +63,21 @@ from lib.emit import generate_hook_scripts, patch_settings_json
 # Re-exports above keep the public import surface stable for tests, which
 # import these symbols directly from init_quality_gates.
 
+# Este módulo é um CLI, e `__all__` listava tudo que ele define — incluindo dois
+# nomes privados (`_measure_python_metrics`, `_percentile`), o que já dizia que a
+# lista era um inventário e não uma superfície. D3 apontou três exports sem
+# consumidor (`InitResult`, `smoke_test_tools`, `validate_round_trip`); os três são
+# usados aqui dentro, pelo `main`. O que sobra é o que outro módulo importaria: os
+# estágios reutilizáveis de detecção e calibração. Os testes seguem importando por
+# nome, que `__all__` não restringe.
 __all__ = [
     "FLOOR_COMPLEXITY",
     "FLOOR_FILE_LINES",
     "FLOOR_FUNCTION_LINES",
     "FLOOR_NESTING_DEPTH",
     "FLOOR_PARAMETERS",
-    "InitResult",
     "LanguageInfo",
     "ThresholdCalibration",
-    "_measure_python_metrics",
-    "_percentile",
     "calibrate_thresholds",
     "detect_existing_linters",
     "detect_frameworks",
@@ -77,8 +86,6 @@ __all__ = [
     "generate_hook_scripts",
     "main",
     "patch_settings_json",
-    "smoke_test_tools",
-    "validate_round_trip",
     "validate_target",
 ]
 
@@ -98,6 +105,9 @@ class InitResult:
     settings_patched: bool = False
     lizard_available: bool = False
     generated_date: str = ""
+    #: Quanto do código existente o gate calibrado reprovaria. `None` quando a
+    #: medição não rodou — que não é o mesmo que zero.
+    blocking_rate: object = None
 
 
 # ── Stage 7: smoke_test_tools ────────────────────────────────────────
@@ -243,6 +253,26 @@ def _format_report(result: InitResult) -> str:
         lines.append(f"  (calibrated from {cal.sample_count} source files)")
     lines.append("")
 
+    # Quanto do código EXISTENTE estes limiares reprovariam. O p90 é calculado por
+    # MÉTRICA e o gate reprova por ARQUIVO — um arquivo com trinta funções tem trinta
+    # chances de conter uma das 10% piores, e cinco métricas multiplicam isso. Medido
+    # neste repositório em 2026-08-26: limiares p90 legítimos, 61% dos arquivos
+    # bloqueados. Sem este número, "calibrado" era uma palavra sem verificação.
+    rate = result.blocking_rate
+    if rate is not None:
+        lines.append("Taxa de bloqueio sobre o código atual:")
+        if rate.percent is None:
+            lines.append(f"  {rate.verdict} — {rate.advice}")
+        else:
+            lines.append(
+                f"  {rate.files_blocked}/{rate.files_measured} arquivos ({rate.percent}%) "
+                f"-> {rate.verdict}"
+            )
+            lines.append(f"  {rate.advice}")
+            for offender in rate.worst_offenders[:5]:
+                lines.append(f"    - {offender}")
+        lines.append("")
+
     # Tools
     lines.append(f"Lizard (multi-language): {'available' if result.lizard_available else 'NOT available'}")
     lines.append("")
@@ -321,6 +351,12 @@ def main() -> None:
         strict=args.strict,
         skip_tests=args.skip_tests,
         verbose=args.verbose,
+    )
+
+    # Stage 6.5 — a calibração deixa de ser uma afirmação e passa a ter um número.
+    _log("Stage 6.5/10: measure_blocking_rate", args.verbose)
+    result.blocking_rate = measure_blocking_rate(
+        result.target, result.thresholds, skip_tests=args.skip_tests
     )
 
     # Stage 7

@@ -1,4 +1,11 @@
-# Where /discover-execute exercises the ecosystem in live-test mode — PER-PROJECT, edit this.
+# Nenhum alvo vivo declarado.
+#
+# O kit distribuía aqui o alvo vivo do ecossistema em que foi escrito — uma URL de
+# ambiente dev e dois domínios concretos. Num outro projeto isso é pior que
+# vazio: `/discover-execute (live-test mode)` e `/acceptance` sondariam o produto de outra pessoa e
+# chamariam o resultado de evidência deste projeto. Declare o alvo DESTE sistema.
+
+# Where /discover-execute (live-test mode) exercises the ecosystem — PER-PROJECT, edit this.
 #
 # This is the DEV environment the Squad probes to produce runtime evidence. It is
 # deliberately NOT the same declaration as `acceptance-target.txt`:
@@ -12,10 +19,10 @@
 # validated against an environment nobody ships. Keep them separate.
 #
 # Format: `key = value`, one per line. `#` starts a comment. Blocks are per-domain;
-# a domain with no block has no live surface, and /discover-execute in live-test mode
+# a domain with no block has no live surface, and /discover-execute (live-test mode)
 # REFUSES on it rather than inventing one.
 #
-# domain      (required) one of the 8 registered domains (rules/cycle-backlog.md)
+# domain      (required) a domain registered in the routing table (rules/cycle-backlog.md)
 # kind        (required) one of: web | api | cli | cluster
 # target      (required) how to reach it — URL, endpoint, or command
 # auth        (optional) NAME of the credential needed. NEVER the value. If a run
@@ -24,31 +31,24 @@
 #             surface had been exercised.
 # notes       (optional) anything a prober must know before touching it
 #
+# Example of one block, to be replaced by yours:
+#
+#   domain = frontend
+#   kind = web
+#   target = https://app-dev.example.internal
+#   notes = Verified reachable YYYY-MM-DD: HTTP 200, no redirect. Probe with the
+#           real browser via chrome-devtools MCP. Non-destructive discipline
+#           applies — do not disturb personal tabs or sessions.
+#
 # --- this ecosystem -------------------------------------------------------
 
-domain = frontend-dashboard
-kind = web
-target = https://app-dev.usetheo.dev
-notes = Verified reachable 2026-08-05: HTTP 200, 0.6s, no redirect. Probe with the
-        real Chrome via chrome-devtools MCP. Non-destructive discipline applies —
-        do not disturb personal tabs or sessions.
 
-domain = control-plane
-kind = web
-target = https://app-dev.usetheo.dev
-notes = Same deployed surface as the dashboard; the control-plane finding is the
-        one that lands in the cloud API layer rather than the UI. Attribute by
-        where the evidence points (network/server behaviour vs rendered UI), not
-        by which URL was opened.
 
-# Domains with NO live surface declared — /discover-execute (live-test mode) refuses on
-# these, by design. Use --mode review, bug, or evolve instead:
+# A domain with NO block here is refused by /discover-execute in live-test mode, by
+# design. Use --mode review, bug, or evolve on it instead.
 #
-#   engine-go · theo-db · infra-terraform · contracts-auth · data-plane-ts ·
-#   platform-cli
-#
-# Their absence is a statement, not an omission: a Go library, a Postgres
-# extension and a Terraform module have no running surface a browser can probe.
-# Declaring a block for one of them because "live-test sounds thorough" produces
-# theatre, not evidence. If a data-plane service later gets a deployed endpoint
-# worth probing, add its block here — and only then.
+# That absence is a statement, not an omission: a library, a database extension and
+# an infrastructure module have no running surface a browser can probe. Declaring a
+# block for one of them because "live-test sounds thorough" produces theatre, not
+# evidence. If such a component later gets a deployed endpoint worth probing, add
+# its block then — and only then.

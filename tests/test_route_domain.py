@@ -1,4 +1,18 @@
-"""Tests for route_domain.py — deterministic repo -> domain -> specialist routing."""
+"""Tests for route_domain.py — deterministic repo -> domain -> specialist routing.
+
+POR QUE ESTES TESTES NÃO NOMEIAM REPOSITÓRIOS
+---------------------------------------------
+Até 2026-08-26 metade deste arquivo media a tabela do ecossistema em que o kit
+foi escrito: `len(table) == 8`, `("theo-lens", "data-plane-ts")`, cinco repos sem
+checkout. Os oito especialistas que essa tabela nomeava saíram do kit (a tabela é
+DERIVADA do projeto, `rules/cycle-backlog.md § Domain routing`), e com eles some a
+possibilidade de asseverar sobre um mapa concreto — este repositório pode ter
+tabela, não ter, ou ter uma completamente diferente da de ontem.
+
+O que sobrevive é mais forte: as invariantes ESTRUTURAIS do roteador, exercidas
+contra tabelas sintéticas, mais as duas direções da consistência entre a tabela
+deste repositório e os especialistas em disco — quaisquer que sejam.
+"""
 from __future__ import annotations
 
 import sys
@@ -12,98 +26,143 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 from route_domain import parse_routing_table, route  # noqa: E402
 
 RULE = PROJECT_ROOT / "rules" / "cycle-backlog.md"
+AGENTS_DIR = PROJECT_ROOT / "agents"
 
+
+def _table_with(rows: str, tmp_path: Path) -> Path:
+    """A minimal rule file carrying only a `## Domain routing` section."""
+    rule = tmp_path / "cycle-backlog.md"
+    rule.write_text(
+        "# Cycle: BACKLOG\n\n## Domain routing\n\n"
+        "| Domain | Packages | Specialist |\n|---|---|---|\n" + rows,
+        encoding="utf-8",
+    )
+    return rule
+
+
+# ---------------------------------------------------------------------------
+# A tabela DESTE repositório — qualquer que seja o seu estado
+# ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def table() -> dict:
-    return parse_routing_table(RULE)
+def table() -> dict | None:
+    """A tabela derivada deste projeto, ou None enquanto ninguém a derivou.
 
-
-def test_routing_table_parses(table: dict) -> None:
-    assert table, "the table parsed to zero rows — every item would be unroutable"
-    assert len(table) == 8
-
-
-def test_every_domain_declares_an_agent(table: dict) -> None:
-    missing = [d for d, e in table.items() if not e["agent"]]
-    assert missing == [], f"domains with no specialist declared: {missing}"
-
-
-def test_every_declared_agent_exists_on_disk(table: dict) -> None:
-    """The guard that makes the table more than prose.
-
-    A domain naming an agent file that does not exist routes work to nobody, and the
-    failure is silent: the item looks routed. Adding a domain without writing its
-    specialist must fail here rather than at the moment someone tries to use it.
+    Vazia é um estado LEGÍTIMO — é como o kit nasce e como ele é entregue
+    (`rules/templates/domain-routing.md`). Um teste que exigisse linhas aqui
+    obrigaria o repositório do kit a inventar um mapa para ficar verde.
     """
-    for domain, entry in table.items():
-        agent_path = PROJECT_ROOT / entry["agent"]
-        assert agent_path.is_file(), f"{domain} -> {entry['agent']} does not exist"
+    try:
+        return parse_routing_table(RULE)
+    except ValueError:
+        return None
 
 
-def test_every_agent_on_disk_is_reachable_from_the_table(table: dict) -> None:
-    """The other direction: an agent nobody routes to is dead weight.
+def test_the_section_exists_and_says_how_to_fill_itself() -> None:
+    """Sem tabela E sem instrução, o vazio vira um mistério em vez de uma tarefa.
 
-    Without this, a specialist can be written, reviewed and merged while no item can
-    ever reach it — the work looks done and changes nothing.
+    `parse_routing_table` distingue os dois casos por exceção — 'no section' é um
+    arquivo corrompido, 'zero rows' é a configuração ainda por derivar. A seção
+    tem de existir sempre, e nomear o script que a preenche.
     """
-    declared = {entry["agent"] for entry in table.values()}
-    on_disk = {
-        f"agents/{p.name}"
-        for p in (PROJECT_ROOT / "agents").glob("*.md")
-        if p.name != "README.md"
-    }
-    assert on_disk - declared == set(), f"agents nothing routes to: {sorted(on_disk - declared)}"
+    body = RULE.read_text(encoding="utf-8-sig")
+    assert "## Domain routing" in body, "a seção sumiu — route_domain.py sai 2 em tudo"
+    assert "detect_domains.py" in body, (
+        "a seção não nomeia o script que deriva a tabela — quem a encontra vazia "
+        "não descobre que é ele quem a preenche"
+    )
 
 
-def test_no_repo_belongs_to_two_domains(table: dict) -> None:
-    """Gate G3 assumes one repo maps to exactly one specialist.
+def test_the_repository_table_is_internally_consistent(table: dict | None) -> None:
+    """As três invariantes da tabela real, num teste que NUNCA pula.
 
-    A repo in two rows makes routing order-dependent — the same item would route
-    differently depending on dict iteration, which is the worst kind of wrong: it works
-    until it does not, and nothing changed.
+    Cada uma tem um par sintético mais abaixo, exercendo o parser e a ferramenta.
+    Aqui elas incidem sobre a tabela DESTE repositório — que hoje está vazia, e por
+    isso o corpo é vacuamente satisfeito. Escrito assim de propósito: um `skip`
+    enquanto ninguém derivou a tabela é um teste que some do relatório e volta a
+    existir sem que ninguém perceba. Este ganha dentes sozinho no dia em que
+    `detect_domains.py --write` rodar aqui.
+
+      1. Todo domínio declara um especialista, e o arquivo existe — apontar para um
+         arquivo que ninguém escreveu roteia para o vácuo, e o item PARECE roteado.
+      2. Um repo pertence a exatamente um domínio — gate G3 depende disso, e duas
+         linhas fazem o roteamento seguir a ordem de iteração do dict.
+      3. Todo domínio tem ao menos um repo — zero repos é inalcançável, e em silêncio.
     """
     seen: dict[str, str] = {}
-    for domain, entry in table.items():
+    for domain, entry in (table or {}).items():
+        assert entry["agent"], f"domínio sem especialista declarado: {domain}"
+        assert (PROJECT_ROOT / entry["agent"]).is_file(), (
+            f"{domain} -> {entry['agent']} não existe em disco"
+        )
+        assert entry["repos"], f"domínio que item nenhum alcança: {domain}"
         for repo in entry["repos"]:
-            assert repo not in seen, f"`{repo}` is in both {seen[repo]} and {domain}"
+            assert repo not in seen or seen[repo] == domain, (
+                f"`{repo}` está em {seen[repo]} e em {domain}"
+            )
             seen[repo] = domain
 
 
-@pytest.mark.parametrize(
-    "repo,expected_domain",
-    [
-        ("theo", "engine-go"),
-        ("theo-cloud", "control-plane"),
-        ("theo-traefik-mcp", "control-plane"),
-        ("theo-lens", "data-plane-ts"),
-        ("theo-memory", "data-plane-ts"),
-        ("theo-db", "theo-db"),
-        ("theo-contracts", "contracts-auth"),
-        ("theo-infra-live", "infra-terraform"),
-        ("theo-cli", "platform-cli"),
-        ("theo-storage", "platform-cli"),
-    ],
-)
-def test_known_repos_route(table: dict, repo: str, expected_domain: str) -> None:
-    result = route(repo, table)
-    assert result is not None, f"`{repo}` did not route"
-    assert result[0] == expected_domain
+def test_every_specialist_on_disk_is_reachable_from_the_table(table: dict | None) -> None:
+    """A outra direção: um especialista que ninguém roteia é peso morto.
 
-
-def test_uncloned_repo_does_not_route(table: dict) -> None:
-    """Repos the umbrella's CLAUDE.md names but disk does not must NOT route.
-
-    Measured 2026-08-05: theo-contextify, theo-gateway, theo-sandboox, theokit-app and
-    theo-itself have no checkout. Routing an item to a repo nobody cloned sends it to a
-    specialist who cannot open the code — so gate G1 refuses it instead.
+    Sem isto, um arquivo de domínio pode ser escrito, revisado e mergeado sem que
+    item nenhum consiga alcançá-lo — o trabalho parece feito e não muda nada. Vale
+    inclusive com a tabela vazia, que é quando o descasamento é mais fácil de criar.
     """
-    for repo in ("theo-contextify", "theo-gateway", "theo-sandboox", "theokit-app", "theo-itself"):
-        assert route(repo, table) is None, f"`{repo}` routed, but it has no checkout"
+    declared = {entry["agent"] for entry in (table or {}).values()}
+    on_disk = {
+        f"agents/{p.name}" for p in AGENTS_DIR.glob("*.md") if p.name != "README.md"
+    }
+    orphans = sorted(on_disk - declared)
+    assert orphans == [], (
+        f"especialistas que a tabela não alcança: {orphans}. Declare-os em "
+        f"`rules/cycle-backlog.md § Domain routing` ou remova-os."
+    )
 
 
-def test_unknown_repo_does_not_route(table: dict) -> None:
+# ---------------------------------------------------------------------------
+# O roteador, contra tabelas sintéticas
+# ---------------------------------------------------------------------------
+
+def test_a_known_repo_routes_to_its_domain(tmp_path: Path) -> None:
+    table = parse_routing_table(
+        _table_with(
+            "| `alpha` | `pkg-one`, `pkg-two` | `agents/alpha.md` |\n"
+            "| `beta` | `pkg-three` | `agents/beta.md` |\n",
+            tmp_path,
+        )
+    )
+    assert route("pkg-two", table) == ("alpha", "agents/alpha.md")
+    assert route("pkg-three", table) == ("beta", "agents/beta.md")
+
+
+def test_an_unknown_repo_does_not_route(tmp_path: Path) -> None:
+    """Gate G1 recusa o item em vez de mandá-lo para quem não abre o código."""
+    table = parse_routing_table(
+        _table_with("| `alpha` | `pkg-one` | `agents/alpha.md` |\n", tmp_path)
+    )
     assert route("some-other-project", table) is None
+
+
+def test_a_path_scoped_repo_routes(tmp_path: Path) -> None:
+    """Um repo dividido entre domínios é endereçado por caminho, e o caminho tem de rotear.
+
+    Pego na prática: o identificador continha uma barra, o padrão de repo não a
+    aceitava, e o domínio parseava com lista de repos VAZIA. Todos os outros testes
+    passavam — uma lista vazia não viola unicidade, declara um agente que existe e
+    parece inteiramente saudável. O domínio simplesmente nunca podia receber um item.
+    """
+    table = parse_routing_table(
+        _table_with(
+            "| `service` | `alpha-cloud` | `agents/service.md` |\n"
+            "| `ui` | `alpha-cloud/dashboard` | `agents/ui.md` |\n",
+            tmp_path,
+        )
+    )
+    assert table["ui"]["repos"] == ["alpha-cloud/dashboard"], "a barra truncou o repo"
+    assert route("alpha-cloud/dashboard", table) == ("ui", "agents/ui.md")
+    assert route("alpha-cloud", table) == ("service", "agents/service.md")
 
 
 def test_missing_section_raises(tmp_path: Path) -> None:
@@ -114,11 +173,11 @@ def test_missing_section_raises(tmp_path: Path) -> None:
 
 
 def test_empty_table_raises(tmp_path: Path) -> None:
-    """Zero rows must be an error, never an empty dict.
+    """Zero linhas tem de ser erro, nunca um dict vazio.
 
-    An empty dict would make every repo silently unroutable while the script exits 0 —
-    the same shape as the thresholds file that parsed to zero bands and sent every score
-    to INVALID.
+    Um dict vazio deixaria todo repo silenciosamente inalcançável enquanto o script
+    sai 0 — a mesma forma do arquivo de thresholds que parseou para zero bandas e
+    mandou todo score para INVALID.
     """
     rule = tmp_path / "empty.md"
     rule.write_text("# X\n\n## Domain routing\n\nNo table here.\n\n## Next\n", encoding="utf-8")
@@ -126,34 +185,27 @@ def test_empty_table_raises(tmp_path: Path) -> None:
         parse_routing_table(rule)
 
 
-def test_every_domain_has_at_least_one_repo(table: dict) -> None:
-    """A domain with zero repos is unreachable, and silently so.
+def test_the_shipped_empty_section_parses_to_zero_rows() -> None:
+    """O template entregue ao consumidor tem de cair no caminho 'zero rows'.
 
-    Caught in practice: `theo-cloud/dashboard` contains a slash, the repo pattern did not
-    allow one, and `frontend-dashboard` parsed to an EMPTY repo list. Every other test
-    still passed — an empty list violates no uniqueness assertion, declares an agent that
-    exists, and looks entirely healthy. The domain simply could never receive an item.
-
-    Zero repos must fail loudly here, because nothing downstream will notice.
+    Ele carrega uma linha de tabela com o texto `_(empty — run …)_` justamente para
+    a seção continuar parecendo uma tabela. Se essa linha PARSEASSE, o consumidor
+    nasceria com um domínio fantasma que aceita item nenhum e reporta sucesso.
     """
-    empty = [d for d, e in table.items() if not e["repos"]]
-    assert empty == [], f"domains no item can reach: {empty}"
-
-
-def test_path_scoped_repo_routes(table: dict) -> None:
-    """A repo split across domains is addressed by path, and the path must route."""
-    result = route("theo-cloud/dashboard", table)
-    assert result is not None, "the path-scoped dashboard identifier did not route"
-    assert result[0] == "frontend-dashboard"
+    template = PROJECT_ROOT / "rules" / "templates" / "domain-routing.md"
+    assert template.is_file()
+    with pytest.raises(ValueError, match="zero rows"):
+        parse_routing_table(template)
 
 
 def test_a_domain_naming_a_missing_specialist_exits_3(tmp_path, capsys) -> None:
-    """The invariant moved from this file into the tool, and this pins that it moved.
+    """A invariante mudou deste arquivo para a ferramenta, e isto fixa a mudança.
 
-    It lived only here, and `install.sh` does not copy `tests/` — so in every consumer repo the
-    guard was absent. Measured while installing into TheoCode: a second three-column table inside
-    `## Domain routing` parses as routing, inventing domains whose specialist files were never
-    written, and `route_domain.py` answered `routed: true` / `agent: null` with exit 0.
+    Ela vivia só aqui, e `install.sh` não copia `tests/` — então em todo repositório
+    consumidor a guarda estava ausente. Medido ao instalar no TheoCode: uma segunda
+    tabela de três colunas dentro de `## Domain routing` parseia como roteamento,
+    inventando domínios cujos arquivos de especialista nunca foram escritos, e
+    `route_domain.py` respondia `routed: true` / `agent: null` com exit 0.
     """
     from route_domain import main as route_main
 
@@ -172,7 +224,7 @@ def test_a_domain_naming_a_missing_specialist_exits_3(tmp_path, capsys) -> None:
 
 
 def test_a_domain_whose_specialist_exists_still_routes(tmp_path) -> None:
-    """The refusal must not swallow the normal case."""
+    """A recusa não pode engolir o caso normal."""
     from route_domain import main as route_main
 
     (tmp_path / "rules").mkdir()
@@ -191,11 +243,11 @@ def test_a_domain_whose_specialist_exists_still_routes(tmp_path) -> None:
 def test_item_repo_field_accepts_a_monorepo_path(tmp_path: Path) -> None:
     """`repo: packages/sdk` num arquivo de item tem de chegar inteiro ao roteador.
 
-    A tabela sempre aceitou caminho (`theo-cloud/dashboard`, documentado como "um
-    repo, dois domínios — resolvido por caminho"), mas o extrator do ITEM parava
-    na barra e devolvia `packages`. O roteamento então falhava por um repo que
-    ninguém escreveu. Descoberto ao derivar a tabela do `theokit-sdk`, onde 68 dos
-    88 itens citam `packages/sdk`.
+    A tabela sempre aceitou caminho (documentado como "um repo, dois domínios —
+    resolvido por caminho"), mas o extrator do ITEM parava na barra e devolvia
+    `packages`. O roteamento então falhava por um repo que ninguém escreveu.
+    Descoberto ao derivar a tabela de um adotante, onde 68 dos 88 itens citam
+    `packages/sdk`.
     """
     item = tmp_path / "item.md"
     item.write_text("## B-001 — algo\n\nrepo: packages/sdk\nstatus: raw\n", encoding="utf-8")
@@ -206,31 +258,19 @@ def test_item_repo_field_accepts_a_monorepo_path(tmp_path: Path) -> None:
     assert match.group(1) == "packages/sdk"
 
 
-def _table_with(rows: str, tmp_path: Path) -> Path:
-    """A minimal rule file carrying only a `## Domain routing` section."""
-    rule = tmp_path / "cycle-backlog.md"
-    rule.write_text(
-        "# Cycle: BACKLOG\n\n## Domain routing\n\n"
-        "| Domain | Packages | Specialist |\n|---|---|---|\n" + rows,
-        encoding="utf-8",
-    )
-    return rule
-
-
 def test_a_repo_in_two_domains_is_refused_by_the_parser(tmp_path: Path) -> None:
-    """The one-repo-one-domain invariant belongs to the TOOL, not to this suite.
+    """A invariante um-repo-um-domínio pertence à FERRAMENTA, não a esta suíte.
 
-    `test_no_repo_belongs_to_two_domains` above asserts it for THIS repository's table, and
-    that is all it can do: it hard-codes `RULE = PROJECT_ROOT / "rules" / "cycle-backlog.md"`
-    and `len(table) == 8`. Every consumer install carries its own table with its own domain
-    count, and `install.sh` does not copy `tests/` — so in a consumer repo the invariant was
-    asserted by nobody, exactly as the exit-3 guard was before it moved into the tool.
+    `test_no_repo_belongs_to_two_domains` acima a assevera para a tabela DESTE
+    repositório, e é tudo que ele pode fazer. Todo consumidor carrega a sua, com a
+    sua contagem de domínios, e `install.sh` não copia `tests/` — então num repo
+    consumidor a invariante era asseverada por ninguém, exatamente como a guarda do
+    exit 3 antes de mudar para a ferramenta.
 
-    Measured in the theokit-plugins install on 2026-08-24: 11 packages across 4 domains, and
-    nothing anywhere checks that none of them appears twice. A repo in two rows makes routing
-    depend on dict iteration order — the same item routing differently on different runs.
-
-    So the parser refuses it, which is what makes the guarantee travel with the tool.
+    Medido numa instalação em 2026-08-24: 11 pacotes em 4 domínios, e nada em lugar
+    nenhum checava que nenhum deles aparecia duas vezes. Um repo em duas linhas faz o
+    roteamento depender da ordem de iteração do dict — o mesmo item roteando
+    diferente entre execuções.
     """
     rule = _table_with(
         "| `alpha` | `pkg-one`, `pkg-two` | `agents/alpha.md` |\n"
@@ -243,10 +283,11 @@ def test_a_repo_in_two_domains_is_refused_by_the_parser(tmp_path: Path) -> None:
 
 
 def test_the_same_repo_twice_in_ONE_domain_is_not_a_duplicate(tmp_path: Path) -> None:
-    """Two mentions in one row route identically, so nothing is ambiguous.
+    """Duas menções numa linha roteiam igual, então nada é ambíguo.
 
-    Without this, the guard could be written as a naive count and would reject a table that
-    is merely repetitive — turning a cosmetic edit into a broken install.
+    Sem isto, a guarda poderia ser escrita como contagem ingênua e rejeitaria uma
+    tabela meramente repetitiva — transformando uma edição cosmética em instalação
+    quebrada.
     """
     rule = _table_with(
         "| `alpha` | `pkg-one`, `pkg-one` | `agents/alpha.md` |\n",

@@ -58,7 +58,7 @@ Inventories the repos **from disk** (`find` + `git rev-list`), never from a docu
 ### 2. Register a hunch
 
 ```bash
-/backlog-item theo-lens-trace-latency
+/backlog-item trace-explorer-feels-slow
 ```
 
 Four questions, one per turn: what changed in **our** system; which repo and therefore which domain; which discover mode looks right (a guess, not a decision); and the verifiable Definition of Done.
@@ -119,20 +119,20 @@ Chains plan → implement → code-quality → review → release, pausing at ea
 | `knowledge-base/maintenance-runs/` | One record per macro-loop run |
 | `knowledge-base/reviews/` | Edge-case reports |
 | `rules/cycle-*.md` | The contracts. Source of truth for every phase |
-| `agents/*.md` | The eight domain specialists |
+| `agents/*.md` | The domain specialists you derive (the kit ships only the README) |
 
 ## The specialists
 
 Routing is deterministic: the item declares `repo`, and a repo belongs to exactly one domain.
 
 ```bash
-python3 scripts/route_domain.py theo-lens
-# repo   : theo-lens
-# domain : data-plane-ts
-# agent  : agents/data-plane-ts.md
+python3 scripts/route_domain.py my-service
+# repo   : my-service
+# domain : backend
+# agent  : agents/backend.md
 ```
 
-A repo the routing table does not know **does not route** — gate G1 refuses the item rather than sending it to a specialist who cannot open the code. Read `agents/README.md` before assuming a build command: each specialist carries commands verified on disk, and documentation drifts.
+The table is derived from your project — `detect_domains.py --write` reads the topology from disk and fills it in; the kit ships it empty. A repo the routing table does not know **does not route**, and gate G1 refuses the item rather than sending it to a specialist who cannot open the code. Read `agents/README.md` before writing one: a specialist carries commands verified on disk, because documentation drifts.
 
 ## Unbreakable principles
 
@@ -167,7 +167,7 @@ No. `BACKLOG_EMPTY` means nobody has looked recently. Run `/discover-execute --s
 
 ### "How do I adapt this to another ecosystem?"
 
-Replace the domain routing table in `rules/cycle-backlog.md`, write one specialist per domain in `agents/`, and declare your live environments in `rules/live-target.txt`. The phases, gates and evidence contracts are ecosystem-agnostic; the routing table and the specialists are not.
+Derive the domain routing table into `rules/cycle-backlog.md` (`detect_domains.py --write`), write one specialist per domain in `agents/`, and declare your live environments in `rules/live-target.txt`. All three ship empty on purpose: the phases, gates and evidence contracts are ecosystem-agnostic; a routing table, a specialist and a live target never are.
 
 ## Maintenance notes
 

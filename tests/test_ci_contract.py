@@ -102,3 +102,56 @@ def test_ci_runs_the_install_contract(_broken: None = None):
     assert "run_slice_tests.sh" in runs or "test_clean_install" in runs, (
         "nenhum passo do CI executa a suíte que contém o contrato de instalação"
     )
+
+
+def _jobs() -> dict:
+    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8")).get("jobs", {})
+
+
+def test_the_root_suite_is_not_run_twice_in_the_same_job():
+    """Rodar a mesma suíte duas vezes não mede nada a mais — só custa o dobro.
+
+    O job principal executava `run_slice_tests.sh` (que já roda `tests`) e, no
+    passo seguinte, `pytest tests` de novo com cobertura. Medido 2026-08-26: 45 s
+    duplicados por execução. A cobertura passou a ser calculada na única
+    execução, com o mesmo limiar cobrado.
+    """
+    for name, job in _jobs().items():
+        runs = [(s.get("run") or "") for s in (job.get("steps") or [])]
+        slice_runner = [r for r in runs if "run_slice_tests.sh" in r]
+        if not slice_runner:
+            continue
+        standalone_root = [
+            r for r in runs
+            if "run_slice_tests.sh" not in r
+            and "pytest" in r
+            and " tests" in r
+        ]
+        assert not standalone_root, (
+            f"job {name!r} roda a suíte raiz duas vezes: {standalone_root}"
+        )
+
+
+def test_coverage_threshold_survives_the_deduplication():
+    """A desduplicação não pode ter levado o limiar de cobertura junto."""
+    runs = " ".join((s.get("run") or "") for s in _steps())
+    env = " ".join(
+        f"{k}={v}"
+        for job in _jobs().values()
+        for step in (job.get("steps") or [])
+        for k, v in (step.get("env") or {}).items()
+    )
+    assert "cov-fail-under" in runs or "ROOT_SUITE_COV" in runs + env, (
+        "nenhum passo do CI cobra um limiar de cobertura"
+    )
+
+
+def test_python_setup_caches_dependencies():
+    """Quatro jobs reinstalando as mesmas dependências a cada execução é custo puro."""
+    missing = []
+    for name, job in _jobs().items():
+        for step in job.get("steps") or []:
+            if str(step.get("uses", "")).startswith("actions/setup-python"):
+                if not (step.get("with") or {}).get("cache"):
+                    missing.append(name)
+    assert not missing, f"setup-python sem cache de dependências nos jobs: {missing}"

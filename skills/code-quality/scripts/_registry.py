@@ -12,6 +12,7 @@ Per EC-9: cache writes use `write_atomic` for crash-safe concurrent CI runs.
 """
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import time
@@ -25,6 +26,45 @@ _CACHE_DIR_ENV = "CODE_QUALITY_CACHE_DIR"
 _CACHE_TTL_SECONDS = 24 * 3600  # 24h per thresholds default
 _HTTP_TIMEOUT_SECONDS = 5
 _USER_AGENT = "code-quality-skill/0.1 (audit only)"
+
+# --- ORÇAMENTO DE REDE PARA A EXECUÇÃO INTEIRA ------------------------------
+# Cada consulta tem timeout de 5 s, elas são seriais, e um resultado ambíguo
+# não é cacheado — corretamente: falha de rede não é prova de que o pacote não
+# existe. O que faltava era um limite para o CONJUNTO. Numa máquina offline ou
+# atrás de proxy, 100 imports desconhecidos custavam 500 s de espera que nunca
+# viravam resposta, em toda execução, indefinidamente.
+#
+# Depois de _MAX_CONSECUTIVE_FAILURES falhas seguidas, D2 declara a rede
+# indisponível e devolve None de imediato — o MESMO veredito ambíguo de antes,
+# sem a espera. Um único acerto zera o contador, para que um blip não desligue
+# o detector pelo resto da execução.
+_MAX_CONSECUTIVE_FAILURES = 3
+_NETWORK_BUDGET_SECONDS = 30.0
+
+_consecutive_failures = 0
+_network_seconds_spent = 0.0
+_network_unavailable = False
+
+# Cache em memória por ecossistema, escrito no disco UMA vez (ver flush_caches).
+_memory_cache: dict[str, dict[str, Any]] = {}
+_dirty_ecosystems: set[str] = set()
+
+
+def reset_network_state() -> None:
+    """Zera breaker, orçamento e cache em memória. Para testes e re-execução."""
+    global _consecutive_failures, _network_seconds_spent, _network_unavailable
+    _consecutive_failures = 0
+    _network_seconds_spent = 0.0
+    _network_unavailable = False
+    _memory_cache.clear()
+    _dirty_ecosystems.clear()
+
+
+def network_is_available() -> bool:
+    """False quando o breaker abriu ou o orçamento da execução acabou."""
+    if _network_unavailable:
+        return False
+    return _network_seconds_spent < _NETWORK_BUDGET_SECONDS
 
 
 def _cache_dir() -> Path:
@@ -41,7 +81,30 @@ def _cache_path(ecosystem: str) -> Path:
 
 
 def _load_cache(ecosystem: str) -> dict[str, Any]:
-    """Load the ecosystem cache. Returns empty dict on missing or corrupted (EC-3)."""
+    """Load the ecosystem cache. Returns empty dict on missing or corrupted (EC-3).
+
+    Memoizado por execução: `_cache_set` relia e reescrevia o arquivo inteiro a
+    cada resultado, o que é I/O quadrático no número de pacotes consultados.
+    """
+    if ecosystem in _memory_cache:
+        return _memory_cache[ecosystem]
+    loaded = _read_cache_file(ecosystem)
+    _memory_cache[ecosystem] = loaded
+    return loaded
+
+
+def flush_caches() -> None:
+    """Escreve no disco os ecossistemas que mudaram. Uma escrita por ecossistema.
+
+    Registrado em `atexit` para que um script que só chama `package_exists_*`
+    não precise saber que este passo existe. EC-9 (escrita atômica) preservado.
+    """
+    for ecosystem in sorted(_dirty_ecosystems):
+        _save_cache(ecosystem, _memory_cache.get(ecosystem, {}))
+    _dirty_ecosystems.clear()
+
+
+def _read_cache_file(ecosystem: str) -> dict[str, Any]:
     path = _cache_path(ecosystem)
     if not path.exists():
         return {}
@@ -91,12 +154,47 @@ def _cache_set(ecosystem: str, key: str, exists: bool | None) -> None:
         return
     cache = _load_cache(ecosystem)
     cache[key] = {"exists": exists, "ts": _now()}
-    _save_cache(ecosystem, cache)
+    _dirty_ecosystems.add(ecosystem)
 
 
 # ---------------------------------------------------------------------------
 # Per-ecosystem lookups
 # ---------------------------------------------------------------------------
+
+
+def _lookup(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    false_statuses: tuple[int, ...] = (404,),
+    require_json: bool = True,
+) -> bool | None:
+    """Consulta com breaker. None = ambíguo — o mesmo veredito de sempre.
+
+    `require_json=False` existe para o proxy Go, cujo `@v/list` responde 200 com
+    uma lista em texto puro: exigir JSON ali transformaria toda consulta bem
+    sucedida em ambiguidade, e três delas seguidas desligariam o detector.
+
+    Uma diferença de comportamento que vale declarar: um status inesperado (500,
+    por exemplo) agora é ambíguo em vez de "não existe". Antes, no caminho do
+    crates.io, um 500 fazia o candidato seguir para o próximo e a busca terminar
+    em False — um HARD finding a partir de uma indisponibilidade do registry, que
+    é exatamente o que EC-2 existe para impedir.
+    """
+    global _consecutive_failures, _network_unavailable
+    if not network_is_available():
+        return None
+    data, status = _http_get_json(url, headers=headers)
+    if status == 200 and (not require_json or isinstance(data, dict)):
+        _consecutive_failures = 0
+        return True
+    if status in false_statuses:
+        _consecutive_failures = 0
+        return False
+    _consecutive_failures += 1
+    if _consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+        _network_unavailable = True
+    return None
 
 
 def _http_get_json(url: str, *, headers: dict[str, str] | None = None) -> tuple[Any | None, int | None]:
@@ -110,10 +208,14 @@ def _http_get_json(url: str, *, headers: dict[str, str] | None = None) -> tuple[
     h = {"User-Agent": _USER_AGENT}
     if headers:
         h.update(headers)
+    global _network_seconds_spent
+    started = _now()
     try:
         resp = requests.get(url, headers=h, timeout=_HTTP_TIMEOUT_SECONDS)
     except Exception:  # noqa: BLE001 — any network failure -> ambiguous
+        _network_seconds_spent += _now() - started
         return (None, None)
+    _network_seconds_spent += _now() - started
     if resp.status_code != 200:
         return (None, resp.status_code)
     content_type = resp.headers.get("Content-Type", "")
@@ -131,12 +233,8 @@ def package_exists_on_pypi(name: str) -> bool | None:
     cached = _cache_get("python", name)
     if cached is not None:
         return cached
-    data, status = _http_get_json(f"https://pypi.org/pypi/{quote(name, safe='-_.')}/json")
-    if status == 200 and isinstance(data, dict):
-        result = True
-    elif status == 404:
-        result = False
-    else:
+    result = _lookup(f"https://pypi.org/pypi/{quote(name, safe='-_.')}/json")
+    if result is None:
         return None
     _cache_set("python", name, result)
     return result
@@ -149,12 +247,8 @@ def package_exists_on_npm(name: str) -> bool | None:
         return cached
     encoded = quote(name, safe="@/")
     encoded = encoded.replace("/", "%2F") if name.startswith("@") else encoded
-    data, status = _http_get_json(f"https://registry.npmjs.org/{encoded}")
-    if status == 200 and isinstance(data, dict):
-        result = True
-    elif status == 404:
-        result = False
-    else:
+    result = _lookup(f"https://registry.npmjs.org/{encoded}")
+    if result is None:
         return None
     _cache_set("typescript", name, result)
     return result
@@ -167,13 +261,11 @@ def crate_exists_on_crates_io(name: str) -> bool | None:
         return cached
     # crates.io stores names case-insensitively but underscores vs dashes can differ
     for candidate in {name, name.replace("_", "-"), name.replace("-", "_")}:
-        data, status = _http_get_json(
-            f"https://crates.io/api/v1/crates/{quote(candidate, safe='-_')}"
-        )
-        if status == 200 and isinstance(data, dict):
+        result = _lookup(f"https://crates.io/api/v1/crates/{quote(candidate, safe='-_')}")
+        if result is True:
             _cache_set("rust", name, True)
             return True
-        if status is None:
+        if result is None:
             # Network ambiguity on first try → bail out as None (don't keep guessing)
             return None
     _cache_set("rust", name, False)
@@ -201,20 +293,30 @@ def module_exists_on_go_proxy(import_path: str) -> bool | None:
         _cache_set("go", import_path, True)
         return True
     encoded = _go_proxy_encode(import_path)
-    data, status = _http_get_json(f"https://proxy.golang.org/{encoded}/@v/list")
-    if status == 200:
-        result = True
-    elif status in (404, 410):
-        result = False
-    else:
+    result = _lookup(
+        f"https://proxy.golang.org/{encoded}/@v/list",
+        false_statuses=(404, 410),
+        require_json=False,
+    )
+    if result is None:
         return None
     _cache_set("go", import_path, result)
     return result
 
 
+# A superfície pública deste módulo são as quatro consultas de registro. As
+# helpers de estado (`network_is_available`, `reset_network_state`) são internas:
+# uma é usada aqui mesmo, a outra existe para o teste reiniciar estado global entre
+# casos. Estavam declaradas como API pública e D3 as apontou como exports sem
+# consumidor — corretamente. `__all__` volta a descrever o que outros módulos usam;
+# os testes seguem importando por nome, que `__all__` não restringe.
 __all__ = [
+    "flush_caches",
     "package_exists_on_pypi",
     "package_exists_on_npm",
     "crate_exists_on_crates_io",
     "module_exists_on_go_proxy",
 ]
+
+
+atexit.register(flush_caches)

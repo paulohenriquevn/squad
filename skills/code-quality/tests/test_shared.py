@@ -21,6 +21,7 @@ from scripts._shared import (
     AllowlistEntry,
     AllowlistMatch,
     Finding,
+    compute_verdict,
     emit_json_summary,
     is_allowlisted,
     load_allowlist,
@@ -363,3 +364,70 @@ def test_the_shipped_template_parses_when_you_follow_its_own_instructions(tmp_pa
     for language, entry in cfg.items():
         assert entry["manifest"], f"{language} example declares no manifest marker"
         assert entry["status"] == "ENABLED"
+
+
+# ---------------------------------------------------------------------------
+# Os dois campos de cap do JSON dizem o que o nome deles promete
+#
+# Medido 2026-08-26 rodando o gate no próprio kit, depois que D3 e D4 passaram a
+# emitir achados de verdade:
+#
+#   "hard_caps_triggered": ["soft_cap_orphan_export_python", "soft_cap_..."]
+#   "soft_caps_triggered": ["flush_caches", "DEFAULT_SKIP_DIRS", ...]
+#
+# Duas coisas erradas de uma vez. `compute_verdict` devolve TODOS os identificadores
+# quando o veredito é FAIL_SOFT, e o orquestrador os publica sob o nome `hard`; e o
+# campo `soft` carregava a cauda do `allowlist_key`, que em D3 é o NOME DO SÍMBOLO,
+# não o identificador estável. A golden rule § 1.4 exige identificadores estáveis em
+# ambos — é por eles que uma allowlist é escrita e que um relatório é comparado entre
+# execuções. Um símbolo no lugar de um id manda quem lê allowlistar a coisa errada.
+# ---------------------------------------------------------------------------
+
+def _orphan_finding(symbol: str = "solitaria") -> Finding:
+    return Finding(
+        detector="d3_orphan_export",
+        language="python",
+        severity="SOFT_CAP",
+        file_path="pkg/api.py",
+        symbol_or_line=symbol,
+        message="...",
+        allowlist_key=f"python|pkg/api.py|orphan_export|{symbol}",
+    )
+
+
+def test_soft_caps_are_reported_as_stable_identifiers() -> None:
+    summary = emit_json_summary(
+        [_orphan_finding("flush_caches"), _orphan_finding("DEFAULT_SKIP_DIRS")],
+        "FAIL_SOFT",
+        [],
+    )
+    assert summary["soft_caps_triggered"] == ["soft_cap_orphan_export_python"], (
+        "o campo lista identificadores estáveis, não os símbolos achados"
+    )
+
+
+def test_hard_field_stays_empty_when_no_hard_finding_fired() -> None:
+    findings = [_orphan_finding()]
+    verdict, ids = compute_verdict(findings)
+    summary = emit_json_summary(findings, verdict, ids)
+    assert verdict == "FAIL_SOFT"
+    assert summary["hard_caps_triggered"] == [], (
+        "um campo chamado `hard` que lista soft caps faz o leitor tratar um cap "
+        "dispensável como bloqueio — e o inverso, quando um HARD real aparecer no meio"
+    )
+
+
+def test_a_hard_finding_still_reaches_the_hard_field() -> None:
+    findings = [
+        _orphan_finding(),
+        Finding(
+            detector="d1_dead_code", language="python", severity="HARD",
+            file_path="src/x.py", symbol_or_line="morta", message="...",
+            allowlist_key="python|src/x.py|dead_code|morta",
+        ),
+    ]
+    verdict, ids = compute_verdict(findings)
+    summary = emit_json_summary(findings, verdict, ids)
+    assert verdict == "FAIL_HARD"
+    assert summary["hard_caps_triggered"] == ["dead_code_unallowlisted_python"]
+    assert summary["soft_caps_triggered"] == ["soft_cap_orphan_export_python"]

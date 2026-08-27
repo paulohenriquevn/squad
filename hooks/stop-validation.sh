@@ -75,10 +75,23 @@ fi
 # O filtro serve os dois layouts sem precisar distinguir qual: em plugin-install
 # o kit vive sob `.claude/` e sai; em standalone o repositório do kit tem seus
 # arquivos em `skills/`, `hooks/`, `scripts/`, que seguem auditados normalmente.
+#
+# `knowledge-base/{references,tools}/` sai pela MESMA razão, uma camada acima:
+# não é nem sequer dependência, é código de TERCEIROS que o kit declara material
+# de estudo read-only — `validate-command.sh` bloqueia escrever nele e copiar
+# dele. Auditá-lo é pior que auditar a própria dependência, porque o volume é de
+# outra ordem: medido 2026-08-26 num adotante, 500 arquivos de um projeto par
+# clonado renderam 517 linhas de saída e 16.944 ms, com 500 avisos de TDD sobre
+# código que ninguém neste repositório escreveu. `install.sh` não mexe no
+# `.gitignore` do consumidor por decisão explícita, então esses arquivos chegam
+# aqui como untracked e não-ignorados — o caminho normal, não o excepcional.
+# Extrapolando o linear, ~3.000 arquivos alcançam os 120 s de timeout deste
+# hook, e um hook morto por timeout não bloqueia coisa alguma.
 ALL_FILES=$(echo -e "${UNSTAGED}\n${STAGED}\n${UNTRACKED}\n${LAST_COMMIT}" \
   | sort -u \
   | grep -v '^$' \
   | grep -v '^\.claude/' \
+  | grep -vE '^(\./)?knowledge-base/(references|tools)/' \
   || true)
 
 WARNINGS=()
@@ -139,6 +152,45 @@ SRC_CHANGED=$(echo "$ALL_FILES" \
 
 if [ -n "$SRC_CHANGED" ]; then
   MISSING_TESTS=()
+
+  # Índice de nomes de arquivo de teste, UMA varredura por unidade.
+  #
+  # Antes havia um `find` por arquivo alterado, e o custo é da ÁRVORE, não da
+  # mudança: 39 ms por chamada medidos num repositório de 13 mil arquivos. Com
+  # a zona de estudo entrando no conjunto isso alcançava os 120 s de timeout
+  # deste hook (2026-08-26). Excluir a zona tirou o volume; varrer por unidade
+  # tira a forma que produziu o volume — um `find` a mais custa uma árvore
+  # inteira, e nada além do número de arquivos alterados o limitava.
+  #
+  # Sem array associativo de propósito: `bash` 3.2 (o que a Apple ainda envia)
+  # não os tem, e este hook roda na máquina do adotante. Duas listas paralelas
+  # com varredura linear resolvem — o número de unidades distintas é pequeno.
+  # O resultado sai por variável global, não por `$(...)`: uma substituição de
+  # comando é um fork, e um fork por arquivo é exatamente o que se removeu.
+  _UNIT_KEYS=("")
+  _UNIT_IDX=("")
+  _UNIT_IDX_RESULT=""
+  _unit_test_index() {
+    local unit="$1" i=0 n=${#_UNIT_KEYS[@]} names
+    while [ "$i" -lt "$n" ]; do
+      if [ "${_UNIT_KEYS[$i]}" = "$unit" ]; then
+        _UNIT_IDX_RESULT="${_UNIT_IDX[$i]}"
+        return 0
+      fi
+      i=$((i + 1))
+    done
+    names=$(find "$unit" -maxdepth 6 \
+        \( -name node_modules -o -name dist -o -name build -o -name target \
+           -o -name .git -o -name .venv -o -name venv -o -name __pycache__ \
+           -o -name .next -o -name .nuxt -o -name vendor \) -prune -o \
+        \( -name '*_test.*' -o -name '*.test.*' -o -name '*.spec.*' \
+           -o -name 'test_*.*' \) -print 2>/dev/null \
+      | sed 's|.*/||' || true)
+    _UNIT_IDX_RESULT=$'\n'"$names"$'\n'
+    _UNIT_KEYS+=("$unit")
+    _UNIT_IDX+=("$_UNIT_IDX_RESULT")
+  }
+
   while IFS= read -r src_file; do
     [ -z "$src_file" ] && continue
 
@@ -155,11 +207,15 @@ if [ -n "$SRC_CHANGED" ]; then
       continue
     fi
 
-    # Fallback: ANY test-named file in the same package directory
-    found=$(find "$pkg_dir" -maxdepth 1 \( \
-        -name "*_test.${ext}" -o -name "*.test.${ext}" -o -name "*.spec.${ext}" -o -name "test_*.${ext}" \
-      \) -print -quit 2>/dev/null || true)
-    if [ -n "$found" ]; then
+    # Fallback: ANY test-named file in the same package directory.
+    # Glob do shell, não `find`: um único diretório não justifica um fork, e
+    # este trecho roda uma vez por arquivo alterado.
+    sibling_hit=no
+    for _g in "${pkg_dir}"/*_test."${ext}" "${pkg_dir}"/*.test."${ext}" \
+              "${pkg_dir}"/*.spec."${ext}" "${pkg_dir}"/test_*."${ext}"; do
+      if [ -f "$_g" ]; then sibling_hit=yes; break; fi
+    done
+    if [ "$sibling_hit" = yes ]; then
       continue
     fi
 
@@ -189,13 +245,19 @@ if [ -n "$SRC_CHANGED" ]; then
     done
 
     if [ -d "$unit_dir" ]; then
-      found=$(find "$unit_dir" -maxdepth 6 \
-          \( -name node_modules -o -name dist -o -name build -o -name target \) -prune -o \
-          \( -name "${base_no_ext}_test.${ext}" -o -name "${base_no_ext}.test.${ext}" \
-             -o -name "${base_no_ext}.spec.${ext}" -o -name "test_${base_no_ext}.${ext}" \
-             -o -name "${base_no_ext}.test.tsx" -o -name "${base_no_ext}.spec.tsx" \
-          \) -print -quit 2>/dev/null || true)
-      if [ -n "$found" ]; then
+      _unit_test_index "$unit_dir"
+      unit_hit=no
+      for _cand in "${base_no_ext}_test.${ext}" "${base_no_ext}.test.${ext}" \
+                   "${base_no_ext}.spec.${ext}" "test_${base_no_ext}.${ext}" \
+                   "${base_no_ext}.test.tsx" "${base_no_ext}.spec.tsx"; do
+        # As aspas tornam o candidato literal dentro do padrão de `case`, e as
+        # quebras de linha em volta fazem a comparação ser de linha inteira —
+        # um nome de arquivo não contém quebra de linha.
+        case "$_UNIT_IDX_RESULT" in
+          *$'\n'"$_cand"$'\n'*) unit_hit=yes; break ;;
+        esac
+      done
+      if [ "$unit_hit" = yes ]; then
         continue
       fi
     fi

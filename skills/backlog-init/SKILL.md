@@ -67,7 +67,7 @@ python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . --json
 
 The rule is the repository as the unit of ownership: an umbrella of checked-out repos gets one domain per repo; a single repo gets ONE domain named after it, with each monorepo package listed as a path-addressed entry (`packages/sdk`) — the form the routing table already supports.
 
-Do NOT classify the target's repos into the 8 domains that ship in `cycle-backlog.md`. Those are the `theo` ecosystem's, and they are there as that project's own instance of this table, not as a set every consumer must fit into. Measured on `theokit-sdk` (2026-08-18): 88 items carrying measured `file:line` evidence, every one of them `BLOCKER/unroutable_repo`, because `packages/sdk` cannot exist in another ecosystem's map.
+Do NOT classify the target's repos into a domain set borrowed from anywhere — not from another project, not from a set the kit once shipped. `cycle-backlog.md` ships the section EMPTY precisely so there is nothing to borrow. Measured on `theokit-sdk` (2026-08-18), back when eight foreign domains did ship: 88 items carrying measured `file:line` evidence, every one of them `BLOCKER/unroutable_repo`, because `packages/sdk` cannot exist in another ecosystem's map.
 
 Two classes get **excluded from routing**, and the registry says so out loud rather than omitting them silently:
 
@@ -85,11 +85,11 @@ Print the derived table and ask for confirmation before writing. The routing tab
 ```
 Domain               Repos (verified on disk)
 -------------------  ------------------------------------------
-engine-go            theo
-control-plane        theo-cloud · theo-traefik-mcp
-data-plane-ts        theo-memory · theo-rag · theo-lens · …
+engine                acme-engine
+control-plane         acme-cloud · acme-proxy
+data-plane            acme-memory · acme-rag · acme-lens · …
 …
-Excluded             theo-itself (0 commits) · theo-workspace (nested clone)
+Excluded              acme-scratch (0 commits) · acme-workspace (nested clone)
 ```
 
 ### Step 3 — Write `BACKLOG.md`

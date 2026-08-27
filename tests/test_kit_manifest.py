@@ -89,10 +89,6 @@ def test_merge_never_overwrites_an_existing_rules_txt(tmp_path: Path) -> None:
 # passou a ser derivada do projeto — o acoplamento que os justificava sumiu.
 # ---------------------------------------------------------------------------
 
-_DOMAIN_AGENTS = ("engine-go", "control-plane", "data-plane-ts", "theo-db",
-                  "infra-terraform", "contracts-auth", "frontend-dashboard", "platform-cli")
-
-
 def _install(target: Path, *flags: str) -> None:
     target.mkdir(parents=True, exist_ok=True)
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
@@ -102,22 +98,22 @@ def _install(target: Path, *flags: str) -> None:
     )
 
 
-def test_domain_agents_are_not_installed_by_default(tmp_path: Path) -> None:
+def test_no_specialist_is_ever_installed(tmp_path: Path) -> None:
+    """Só o README viaja. Um especialista descreve os repos de UM ecossistema.
+
+    O kit carregava oito, do ecossistema em que foi escrito, e a flag
+    `--with-domain-agents` os entregava a quem pedisse. Saíram em 2026-08-26. Este
+    teste não fixa os nomes que saíram — fixa a REGRA, e por isso continua valendo
+    para um especialista que alguém escreva na fonte amanhã: nada em `agents/` além
+    do README é do consumidor até que ele o derive.
+    """
     target = tmp_path / "consumidor"
     _install(target)
     agents = target / ".claude" / "agents"
-    for name in _DOMAIN_AGENTS:
-        assert not (agents / f"{name}.md").exists(), f"{name} descreve repos de outro ecossistema"
-    assert (agents / "README.md").is_file(), "o README descreve o MECANISMO e continua vindo"
-
-
-def test_the_flag_brings_them_for_the_theo_ecosystem(tmp_path: Path) -> None:
-    """Repos do ecossistema `theo` ainda os obtêm — `theo-rag` não os versiona."""
-    target = tmp_path / "consumidor"
-    _install(target, "--with-domain-agents")
-    agents = target / ".claude" / "agents"
-    for name in _DOMAIN_AGENTS:
-        assert (agents / f"{name}.md").is_file(), name
+    installed = sorted(p.name for p in agents.glob("*.md"))
+    assert installed == ["README.md"], (
+        f"a instalação trouxe especialistas de outro ecossistema: {installed}"
+    )
 
 
 def test_the_manifest_does_not_claim_agents_it_did_not_install(tmp_path: Path) -> None:
@@ -125,9 +121,11 @@ def test_the_manifest_does_not_claim_agents_it_did_not_install(tmp_path: Path) -
     decidir o que é dele."""
     target = tmp_path / "consumidor"
     _install(target)
-    listed = (target / MANIFEST).read_text(encoding="utf-8")
-    for name in _DOMAIN_AGENTS:
-        assert f"agents/{name}.md" not in listed, name
+    listed = [
+        line.strip() for line in (target / MANIFEST).read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("agents/")
+    ]
+    assert listed == ["agents/README.md"], listed
 
 
 # ---------------------------------------------------------------------------
@@ -170,20 +168,25 @@ def test_the_readme_is_written_when_absent(tmp_path: Path) -> None:
     assert (target / ".claude" / "agents" / "README.md").is_file()
 
 
-def test_with_domain_agents_does_not_touch_project_agents(tmp_path: Path) -> None:
+def test_the_removed_flag_is_refused_instead_of_ignored(tmp_path: Path) -> None:
+    """`--with-domain-agents` saiu com os especialistas. Aceitá-la em silêncio faria
+    quem a usa acreditar que recebeu algo."""
     target = tmp_path / "consumidor"
-    _project_agents(target)
-    _install(target, "--merge", "--with-domain-agents")
-    agents = target / ".claude" / "agents"
-    assert (agents / "meu-dominio.md").is_file()
-    assert (agents / "engine-go.md").is_file(), "a flag traz os do kit"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    proc = subprocess.run(
+        ["bash", str(_REPO / "scripts" / "install.sh"), str(target), "--with-domain-agents"],
+        capture_output=True, text=True, check=False,
+    )
+    assert proc.returncode == 2, proc.stdout
+    assert "unknown flag" in proc.stderr
 
 
 def test_merge_preserves_the_derived_routing_table(tmp_path: Path) -> None:
     """A tabela de roteamento é CONFIGURAÇÃO do projeto e mora num `.md` do kit.
 
-    Medido no `speculative`: a reinstalação restaurou a tabela do ecossistema `theo`
-    por cima da derivada, e `route_domain speculative` foi de exit 0 para exit 1 — o
+    Medido no `speculative`: a reinstalação restaurou a tabela do ecossistema de
+    origem por cima da derivada, e `route_domain speculative` foi de exit 0 para exit 1 — o
     projeto deixou de conseguir rotear itens sobre si mesmo. O resto do
     `cycle-backlog.md` é contrato do kit e continua sendo atualizado; só a seção
     `## Domain routing` é do consumidor.
@@ -203,15 +206,15 @@ def test_merge_preserves_the_derived_routing_table(tmp_path: Path) -> None:
 
     body = (rules / "cycle-backlog.md").read_text(encoding="utf-8")
     assert "`meu-dominio`" in body, "a tabela derivada foi sobrescrita"
-    assert "engine-go" not in body, "a tabela do outro ecossistema voltou"
+    assert "_(empty" not in body, "o template vazio sobrescreveu a tabela derivada"
     assert "## Hard gates" in body, "o resto da regra tem de vir atualizado do kit"
 
 
 # ---------------------------------------------------------------------------
 # O kit distribuía a configuração DELE como se fosse do consumidor. Medido no
 # `speculative`: nasceu com `python | pyproject.toml | ENABLED` (o squad é
-# Python; o alvo não tem pyproject) e com o alvo vivo do ecossistema `theo`
-# (`https://app-dev.usetheo.dev`). São 41 instalações nessa condição.
+# Python; o alvo não tem pyproject) e com o alvo vivo do ecossistema de origem
+# — uma URL de ambiente dev de outra gente. São 41 instalações nessa condição.
 # ---------------------------------------------------------------------------
 
 def _active_lines(path: Path) -> list[str]:
@@ -236,3 +239,24 @@ def test_universal_defaults_are_still_shipped(tmp_path: Path) -> None:
     _install(target)
     body = (target / ".claude" / "rules" / "plan-confidence-thresholds.txt").read_text()
     assert "SHIPPABLE|90" in body
+
+
+def test_the_projects_own_quality_gate_never_ships(tmp_path: Path) -> None:
+    """`hooks/quality/` são os limiares DESTE repositório, não os de quem instala.
+
+    `/quality-init` calibra no p90 do código que mede: aqui deu `max_file_lines = 367`
+    e `max_function_lines = 29`. Esses números não dizem nada sobre a codebase de
+    outro projeto, e um gate calibrado na régua errada nasce vermelho — que é como um
+    gate é desligado na primeira hora. Mesmo defeito que a tabela de roteamento e os
+    `rules/*.txt` já corrigiram: distribuir a configuração de quem escreveu.
+    """
+    target = tmp_path / "consumidor"
+    _install(target)
+    hooks = target / ".claude" / "hooks"
+
+    assert hooks.is_dir(), "os hooks do kit continuam vindo"
+    assert not (hooks / "quality").exists(), (
+        "o gate de smells calibrado neste repositório chegou ao consumidor"
+    )
+    listed = (target / MANIFEST).read_text(encoding="utf-8")
+    assert "hooks/quality" not in listed

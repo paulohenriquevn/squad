@@ -113,7 +113,7 @@ class _ModelOverrideAction(argparse.Action):
 
     def __call__(  # type: ignore[override]
         self, parser: argparse.ArgumentParser, namespace: argparse.Namespace,
-        values: object, option_string: str | None = None,
+        values: object, _option_string: str | None = None,
     ) -> None:
         current: dict[str, str] = getattr(namespace, self.dest, None) or {}
         if not isinstance(values, str) or "=" not in values:

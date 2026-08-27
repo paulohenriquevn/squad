@@ -190,11 +190,18 @@ def test_cli_standalone_mode_is_invalid_when_nothing_was_audited(
     assert data["mode"] == "standalone"
 
 
-def test_cli_a_real_audit_reports_unavailable_deferred_detectors(tmp_path: Path, capsys) -> None:
+def test_cli_a_real_audit_names_what_it_could_not_measure(tmp_path: Path, capsys) -> None:
     """The other half of the guard's contract: it must not turn a real clean audit INVALID.
 
     Without this, the guard could be tightened into "always INVALID" and nothing would notice —
     the same negative-space omission `does_not_refuse_ordinary_text` covers for B-086's predicate.
+
+    Até 2026-08-26 este teste exigia `d3_unavailable` e `d4_unavailable`, porque os dois
+    detectores devolviam "not configured" em toda linguagem — ele fixava a ausência de
+    implementação como se fosse o contrato. Agora D3 e D4 rodam, e o que se exige é que
+    cada um diga o que fez: D3 não tem superfície pública declarada neste projeto de
+    fixture (`package.json` sem `main`/`exports`), e D4 não tem runner de mutação
+    configurado. Ambos são resultados, não silêncios.
     """
     _write_rules(tmp_path)
     (tmp_path / "package.json").write_text('{"name": "demo", "version": "0.0.0"}')
@@ -210,9 +217,12 @@ def test_cli_a_real_audit_reports_unavailable_deferred_detectors(tmp_path: Path,
     assert exit_code == 0
     assert data["verdict"] == "FAIL_SOFT"
     assert set(data["findings_by_detector"]) >= {
-        "d3_unavailable",
-        "d4_unavailable",
+        "d3_orphan_export_skipped",
+        "d4_mutation",
     }
+    assert data["soft_caps_triggered"] == ["soft_cap_mutation_unconfigured_typescript"], (
+        "o soft cap tem de nomear a ação de quem lê o relatório — configurar o runner"
+    )
 
 
 def test_cli_no_network_emits_info_finding(tmp_path: Path, capsys) -> None:
@@ -308,7 +318,7 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
         def detect_orphan_exports(self, target: Path) -> list:
             return []
 
-        def detect_mutation_score(self, critical_paths: list[Path]) -> list:
+        def detect_mutation_score(self, target: Path) -> list:
             return []
 
         def detect_architecture_violations(self, target: Path) -> list:
@@ -318,7 +328,8 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
             return []
 
     monkeypatch.setattr(
-        "scripts.run_code_quality._build_detector", lambda _lang: _SpyDetector()
+        "scripts.run_code_quality._build_detector",
+        lambda _lang, _thresholds=None: _SpyDetector(),
     )
 
     main(["--repo-root", str(tmp_path), "--no-network"])

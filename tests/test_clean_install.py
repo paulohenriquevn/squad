@@ -4,9 +4,10 @@ POR QUE A LISTA DE ARQUIVOS VEM DO GIT
 --------------------------------------
 Todo teste de instalação que este repositório tinha copiava a árvore de
 trabalho — e a árvore de trabalho do mantenedor carrega arquivos que o
-`.gitignore` esconde. `agents/*.md` é o caso: nove arquivos presentes em uma
-máquina e em nenhuma outra. Enquanto o teste instalasse do disco, ele mediria
-a máquina de quem o roda, não o que o kit entrega.
+`.gitignore` esconde. `agents/**` é o caso — o diretório inteiro é ignorado, e os
+oito especialistas que o kit distribuía viveram por meses numa máquina e em
+nenhuma outra. Enquanto o teste instalasse do disco, ele mediria a máquina de
+quem o roda, não o que o kit entrega.
 
 Medido em 2026-08-26: um clone limpo instalado num alvo vazio produzia
 `.claude/agents/` VAZIO — nem o `README.md`, que o instalador copia
@@ -84,11 +85,14 @@ def test_routing_mechanism_reaches_the_consumer(installed):
     assert readme.stat().st_size > 0
 
 
-def test_domain_specialists_are_opt_in(installed):
-    """Sem `--with-domain-agents`, nenhum especialista de domínio é instalado.
+def test_no_domain_specialist_is_installed(installed):
+    """Nenhum especialista de domínio chega ao consumidor — ele deriva os seus.
 
     Eles descrevem os repositórios de UM ecossistema; num consumidor que não é
-    aquele, são arquivos sobre repositórios que não existem ali.
+    aquele, são arquivos sobre repositórios que não existem ali. O kit deixou de
+    carregá-los em 2026-08-26, e a fixture instala a partir de `git ls-files`, de
+    modo que um especialista deixado no disco desta máquina não pode mascarar o
+    resultado.
     """
     target, _ = installed
     agents = target / ".claude" / "agents"

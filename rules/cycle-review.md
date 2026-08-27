@@ -10,6 +10,8 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 
 - Implementation output exists at `knowledge-base/implementations/{slug}-implementation.md`.
 - Code-quality audit exists at `knowledge-base/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} — or `FAIL_SOFT` accompanied by an ADR dismissing each soft cap (per `code-quality-golden-rule.md` § 1). `FAIL_HARD` and `INVALID` block this cycle.
+
+  **Enforced, not remembered.** `skills/review/scripts/check_upstream_gate.py` reads the newest audit for the slug and emits a BLOCKER when it is missing, unreadable, `FAIL_HARD`/`INVALID`, or `FAIL_SOFT` with any soft cap that no ADR names. `consolidate_findings.py` folds those findings into the same verdict computation as every other finding, so a `/review` verdict cannot be produced without the check having run. Until 2026-08-26 this was prose plus a `test -f` in `SKILL.md`, and the ADR — the artefact that makes a soft cap dismissible — was never looked for: asserting it existed was enough. "Each soft cap" is the strict reading: with two caps and one ADR, the loose reading approves the cap nobody examined as a passenger of the one that was.
 - Working branch has commits ahead of the base branch.
 - No uncommitted changes (review reads a stable state).
 

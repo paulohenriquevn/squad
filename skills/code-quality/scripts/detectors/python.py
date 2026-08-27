@@ -15,7 +15,7 @@ from scripts import _registry
 from scripts._shared import Finding, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_imports_and_calls
 
-from . import BaseDetector, _arch
+from . import BaseDetector, _arch, _mutation, _wiring
 
 _ARCH_TIMEOUT_SEC = 240
 #: import-linter reads the first of these it finds.
@@ -116,10 +116,17 @@ class PythonDetector(BaseDetector):
         return findings
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        return self.unavailable("d3", "orphan_export", "cross-package wiring is not configured")
+        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
 
-    def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
-        return self.unavailable("d4", "mutation_low", "mutmut integration is not configured")
+    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
+        return _mutation.detect_mutation_score(
+            self.language,
+            manifest_dir,
+            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
+            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
+            timeout_minutes=self.threshold(
+                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
+        )
 
     # ------------------------------------------------------------------
     # internal helpers

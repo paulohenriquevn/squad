@@ -337,6 +337,136 @@ fi
 teardown
 
 # ---------------------------------------------------------------------------
+# knowledge-base/{references,tools}/ é material de estudo de TERCEIROS
+# ---------------------------------------------------------------------------
+# Mesma falha que o filtro de `.claude/` acima já corrigiu, na zona que o kit
+# declara read-only por escrito. Medido em 2026-08-26 num adotante: 500 arquivos
+# de um projeto par clonado para `knowledge-base/references/` produziram 517
+# linhas de saída e 16.944 ms — 500 avisos de TDD sobre código que não é do
+# projeto. Extrapolado linearmente, ~3.000 arquivos alcançam os 120 s de timeout
+# declarados para este hook, e um hook morto por timeout não bloqueia nada.
+
+# ---- arquivo da zona de estudo não gera aviso ----
+setup
+rm -f "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
+mkdir -p "$TMPDIR_TEST/knowledge-base/references/peer/mod"
+echo "def f(): pass" > "$TMPDIR_TEST/knowledge-base/references/peer/mod/s.py"
+git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
+out=$(run_hook_capture)
+TOTAL=$((TOTAL + 1))
+if echo "$out" | grep -q 'knowledge-base/references/'; then
+  echo "  FAIL  arquivo de knowledge-base/references/ apareceu num aviso (audita terceiros)"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+else
+  echo "  PASS  arquivo de knowledge-base/references/ não gera aviso"
+  PASS_COUNT=$((PASS_COUNT + 1))
+fi
+teardown
+
+# ---- knowledge-base/tools/ idem ----
+setup
+rm -f "$TMPDIR_TEST/CHANGELOG.md"
+git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
+mkdir -p "$TMPDIR_TEST/knowledge-base/tools/dep"
+echo "def f(): pass" > "$TMPDIR_TEST/knowledge-base/tools/dep/s.py"
+git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
+out=$(run_hook_capture)
+TOTAL=$((TOTAL + 1))
+if echo "$out" | grep -q 'knowledge-base/tools/'; then
+  echo "  FAIL  arquivo de knowledge-base/tools/ apareceu num aviso (audita terceiros)"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+else
+  echo "  PASS  arquivo de knowledge-base/tools/ não gera aviso"
+  PASS_COUNT=$((PASS_COUNT + 1))
+fi
+teardown
+
+# ---- a zona não silencia o CHANGELOG gate sobre código do projeto ----
+setup
+mkdir -p "$TMPDIR_TEST/knowledge-base/references/peer" "$TMPDIR_TEST/src"
+echo "def f(): pass" > "$TMPDIR_TEST/knowledge-base/references/peer/s.py"
+echo "def g(): pass" > "$TMPDIR_TEST/src/mine.py"
+git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
+rc=$(run_hook)
+assert_exit "regressão: código do projeto ao lado da zona ainda exige CHANGELOG" 2 "$rc"
+teardown
+
+# ---------------------------------------------------------------------------
+# O gate de TDD varre a árvore UMA vez por unidade, não uma vez por arquivo
+# ---------------------------------------------------------------------------
+# Fixa a FORMA de onde a velocidade vem, não uma duração — asserção de tempo é
+# teste instável em máquina carregada. O custo medido de um `find -maxdepth 6`
+# sem match foi de 39 ms num repo de 13 mil arquivos; um por arquivo alterado é
+# o que levava o hook ao timeout.
+setup
+mkdir -p "$TMPDIR_TEST/src"
+printf '[project]\nname="x"\n' > "$TMPDIR_TEST/pyproject.toml"
+for i in 1 2 3 4 5 6 7 8; do
+  echo "def f$i(): pass" > "$TMPDIR_TEST/src/mod$i.py"
+done
+git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
+
+FIND_SHIM_DIR="$TMPDIR_TEST/.shim"
+mkdir -p "$FIND_SHIM_DIR"
+REAL_FIND="$(command -v find)"
+cat > "$FIND_SHIM_DIR/find" <<SHIM
+#!/bin/bash
+echo "call" >> "$TMPDIR_TEST/.find-calls"
+exec "$REAL_FIND" "\$@"
+SHIM
+chmod +x "$FIND_SHIM_DIR/find"
+: > "$TMPDIR_TEST/.find-calls"
+(cd "$TMPDIR_TEST" && PATH="$FIND_SHIM_DIR:$PATH" bash "$HOOK") >/dev/null 2>&1 || true
+FIND_CALLS=$(wc -l < "$TMPDIR_TEST/.find-calls" | tr -d ' ')
+TOTAL=$((TOTAL + 1))
+if [ "$FIND_CALLS" -le 2 ]; then
+  echo "  PASS  gate de TDD varre por unidade ($FIND_CALLS chamadas de find para 8 arquivos)"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL  gate de TDD varre por arquivo ($FIND_CALLS chamadas de find para 8 arquivos)"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+teardown
+
+# ---- regressão: o teste pareado continua sendo encontrado na árvore da unidade ----
+setup
+mkdir -p "$TMPDIR_TEST/src" "$TMPDIR_TEST/tests/unit"
+printf '[project]\nname="x"\n' > "$TMPDIR_TEST/pyproject.toml"
+printf '# Changelog\n\n## [Unreleased]\n- x\n' > "$TMPDIR_TEST/CHANGELOG.md"
+echo "def g(): pass" > "$TMPDIR_TEST/src/pagamento.py"
+echo "def test_g(): pass" > "$TMPDIR_TEST/tests/unit/test_pagamento.py"
+git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
+out=$(run_hook_capture)
+TOTAL=$((TOTAL + 1))
+if echo "$out" | grep -q 'src/pagamento.py'; then
+  echo "  FAIL  teste em tests/unit/ não foi encontrado (falso aviso de TDD)"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+else
+  echo "  PASS  teste em tests/unit/ é encontrado pelo índice da unidade"
+  PASS_COUNT=$((PASS_COUNT + 1))
+fi
+teardown
+
+# ---- regressão: arquivo REALMENTE sem teste continua sendo apontado ----
+setup
+mkdir -p "$TMPDIR_TEST/src"
+printf '[project]\nname="x"\n' > "$TMPDIR_TEST/pyproject.toml"
+printf '# Changelog\n\n## [Unreleased]\n- x\n' > "$TMPDIR_TEST/CHANGELOG.md"
+echo "def g(): pass" > "$TMPDIR_TEST/src/orfao.py"
+git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
+out=$(run_hook_capture)
+TOTAL=$((TOTAL + 1))
+if echo "$out" | grep -q 'src/orfao.py'; then
+  echo "  PASS  arquivo sem teste continua apontado pelo gate"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL  o índice cegou o gate para um arquivo sem teste"
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+teardown
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""

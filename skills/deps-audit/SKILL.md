@@ -32,7 +32,7 @@ Audit project dependencies for known vulnerabilities AND outdated versions. Mult
 
 This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md), between `/edge-case-plan` (phase 2) and `/plan-confidence` (phase 4). The cycle rule is the **source of truth** for chain order, gates, verdicts and anti-patterns. **Read `cycle-plan.md` before invoking.** This SKILL.md retains phase-specific detail (scanner routing, severity rubric, report shape).
 
-**Its gate is human-enforced, not mechanized.** `/plan-confidence` does not read this audit's verdict — wiring it in would EXTEND the gate, which `plan-confidence-golden-rule.md` § When this rule may change puts behind an ADR. So the CVE gate holds only if a human invokes this skill and honors its verdict. See § Downstream wiring required.
+**Its verdict is now read downstream.** `/plan-confidence` runs `check_deps_audit.py`, which binds a plan's `## Dependencies` section to the newest `{slug}-deps-audit-*.md` on disk: `FAIL_INSECURE` / `INVALID_PLAN_DEPS` cap the plan at 49 (`INVALID`), `FAIL_MEDIUM` and a MISSING report cap it at 89. Until 2026-08-26 nothing read it, and the gate held only if a human remembered to honour the verdict. What still requires a human is RUNNING this skill — but forgetting now costs the plan its band instead of passing silently.
 
 ## Trigger conditions
 

@@ -5,7 +5,7 @@
 #   LANGUAGE         one of the identifiers listed below
 #   MANIFEST-MARKER  path to the manifest, RELATIVE TO THE REPO ROOT. Not cosmetic: it is
 #                    what sends each detector to the right directory. The dead-code CLIs
-#                    resolve their project from the cwd, so a crate at `theodb_rs/Cargo.toml`
+#                    resolve their project from the cwd, so a crate at `engine_rs/Cargo.toml`
 #                    or a package under `web/` must declare it here or the auditor reports
 #                    itself unavailable and the cycle stalls on a path assumption.
 #   STATUS           ENABLED | DISABLED | DEFER

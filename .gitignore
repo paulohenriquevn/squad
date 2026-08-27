@@ -9,6 +9,8 @@ build/
 # Test / lint / type / benchmark caches (generated at runtime)
 .pytest_cache/
 .ruff_cache/
+.coverage
+coverage.xml
 .mypy_cache/
 .hypothesis/
 .benchmarks/
@@ -74,6 +76,9 @@ agents/**
 # EXCEÇÃO: o README descreve o MECANISMO de roteamento, não um domínio, e
 # install.sh o copia incondicionalmente. Mantê-lo ignorado fazia toda instalação
 # feita fora desta máquina nascer com `.claude/agents/` vazio e uma referência
-# quebrada em rules/cycle-maintenance.md. Os 8 especialistas seguem fora: eles
-# descrevem os repos de UM ecossistema e são opt-in (--with-domain-agents).
+# quebrada em rules/cycle-maintenance.md. Os especialistas seguem fora: cada um
+# descreve os repos de UM ecossistema, e é o projeto que deriva os seus. Os oito
+# que o kit carregava foram removidos em 2026-08-26 — viveram anos aqui sem nunca
+# estarem versionados, que é como uma flag (--with-domain-agents) pôde entregar
+# arquivos que só existiam numa máquina.
 !agents/README.md

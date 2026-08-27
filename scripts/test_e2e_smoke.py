@@ -7,7 +7,7 @@ Supports dual-mode layouts:
   - Plugin install — <root>/.claude/plugins/cycle/.
 
 Validates:
-  1. All Python scripts have valid syntax (py_compile)
+  1. All Python scripts have valid syntax (compiled in memory — nothing is written)
   2. All shell hooks have valid bash syntax
   3. settings.json is valid JSON
   4. Cross-reference validator passes
@@ -27,7 +27,7 @@ Exit codes:
 from __future__ import annotations
 
 import json
-import py_compile
+import os
 import subprocess
 import sys
 import tempfile
@@ -44,19 +44,37 @@ def _find_ecosystem_dir() -> Path:
     return find_ecosystem_dir(require=True)  # type: ignore[return-value]
 
 
+_SYNTAX_SKIP_DIRS = frozenset({
+    "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    ".git", "node_modules", ".venv", "venv",
+})
+
+
 def check_python_syntax(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Compila em memória — nada é escrito no alvo.
+
+    `py_compile.compile` GRAVA o `.pyc` como efeito colateral, e isso custava as
+    duas coisas: 267 ms dos 693 ms deste script (medido 2026-08-26, 259
+    arquivos) e a reintrodução do cache que o `install.sh` acabara de excluir da
+    cópia — o motivo de `prune_caches` existir. Verificar sintaxe não exige
+    gravar bytecode: `compile()` responde a mesma pergunta sem tocar no disco.
+
+    A poda acontece DURANTE a travessia; um `rglob` com filtro posterior desce
+    em `.git` e `node_modules` inteiros antes de descartá-los.
+    """
     issues: list[str] = []
-    py_files = list(ecosystem_dir.rglob("*.py"))
-    # Filter caches
-    py_files = [
-        p for p in py_files
-        if not any(part in str(p) for part in ("__pycache__", ".mypy_cache", ".pytest_cache"))
-    ]
-    for py in py_files:
-        try:
-            py_compile.compile(str(py), doraise=True)
-        except py_compile.PyCompileError as exc:
-            issues.append(f"  syntax error in {py.relative_to(ecosystem_dir)}: {exc}")
+    for dirpath, dirnames, filenames in os.walk(ecosystem_dir):
+        dirnames[:] = [d for d in dirnames if d not in _SYNTAX_SKIP_DIRS]
+        for name in filenames:
+            if not name.endswith(".py"):
+                continue
+            py = Path(dirpath) / name
+            try:
+                compile(py.read_text(encoding="utf-8"), str(py), "exec")
+            except SyntaxError as exc:
+                issues.append(f"  syntax error in {py.relative_to(ecosystem_dir)}: {exc}")
+            except (OSError, UnicodeDecodeError, ValueError) as exc:
+                issues.append(f"  unreadable source {py.relative_to(ecosystem_dir)}: {exc}")
     return len(issues) == 0, issues
 
 
@@ -231,12 +249,28 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         )
 
         # 5. consolidate_findings
+        #
+        # O consolidador injeta a pré-condição upstream do `/review`
+        # (`check_upstream_gate`): sem audit de `/code-quality` admissível para o
+        # slug, o veredito é BLOCKER e o processo sai 1. A cadeia que este smoke
+        # exercita é detect_domain → spawn_reviewers → consolidate, então o
+        # contexto upstream é declarado aqui — do mesmo jeito que um `/review` de
+        # verdade o encontra depois de um `/code-quality` verde.
+        audits = findings_dir.parent.parent / "knowledge-base" / "audits"
+        audits.mkdir(parents=True, exist_ok=True)
+        (audits / "smoke-code-quality-2026-01-01.md").write_text(
+            "**Verdict:** PASS\n**Hard caps triggered:** _none_\n"
+            "**Soft caps triggered:** _none_\n",
+            encoding="utf-8",
+        )
+
         report = tmp / "report.md"
         consolidate = review_skill / "scripts" / "consolidate_findings.py"
         r3 = subprocess.run(  # noqa: PLW1510
             [sys.executable, str(consolidate),
              "--findings-dir", str(findings_dir),
              "--output", str(report),
+             "--slug", "smoke",
              "--edge-case-coverage-ratio", "1.0"],
             capture_output=True, text=True,
         )

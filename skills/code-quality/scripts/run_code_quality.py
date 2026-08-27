@@ -94,11 +94,19 @@ def _resolve_plan_path(slug: str, repo_root: Path) -> Path:
     )
 
 
-def _build_detector(language: str):
+def _build_detector(language: str, thresholds: dict | None = None):
     cls = _DETECTOR_CLASSES.get(language)
     if cls is None:
         return None
-    return cls()
+    detector = cls()
+    # Os knobs do projeto chegam ao detector. Antes, `load_thresholds()` era chamado
+    # pelo efeito colateral de validar o arquivo e o resultado era descartado — todo
+    # `vulture.min_confidence` ou `mutation.score_floor_low` declarado em
+    # `code-quality-thresholds.txt` era inerte.
+    detector.thresholds = thresholds or {}
+    if language == "python" and "vulture.min_confidence" in detector.thresholds:
+        detector.min_confidence = int(detector.thresholds["vulture.min_confidence"])
+    return detector
 
 
 def _safe_call(label: str, func, *args, language: str = "") -> tuple[list[Finding], Finding | None]:
@@ -140,23 +148,17 @@ def _safe_call(label: str, func, *args, language: str = "") -> tuple[list[Findin
 
 
 def _enumerate_source_files(repo_root: Path, language: str) -> list[Path]:
-    from scripts._shared import DEFAULT_SKIP_DIRS
+    """Delega a `_shared.enumerate_source_files`.
 
-    exts = {
-        "python": (".py",),
-        "typescript": (".ts", ".tsx"),
-        "rust": (".rs",),
-        "go": (".go",),
-    }.get(language, ())
-    if not exts:
-        return []
-    out: list[Path] = []
-    for path in repo_root.rglob("*"):
-        if any(part in DEFAULT_SKIP_DIRS for part in path.parts):
-            continue
-        if path.is_file() and path.suffix in exts:
-            out.append(path)
-    return out
+    A implementação morava aqui e os detectores passaram a precisar dela (D3
+    procura consumidores no repositório inteiro). Duas cópias da mesma travessia
+    divergem na primeira vez que alguém corrige a poda de uma só — que é
+    exatamente o defeito que o CHANGELOG registra entre `check_wiring.py` e este
+    arquivo.
+    """
+    from scripts._shared import enumerate_source_files
+
+    return enumerate_source_files(repo_root, language)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -185,10 +187,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: cannot load languages config: {e}", file=sys.stderr)
         return 2
 
+    thresholds: dict = {}
     try:
         if thresholds_rule.exists():
-            # Side-effect: validates the rule file; detectors use hardcoded defaults in v0.1.
-            load_thresholds(thresholds_rule)
+            thresholds = load_thresholds(thresholds_rule)
     except ValueError as e:
         print(f"ERROR: thresholds malformed: {e}", file=sys.stderr)
         return 2
@@ -229,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     for language in enabled_languages:
         manifest_marker = cfg[language]["manifest"]
         manifest_present = (repo_root / manifest_marker).exists()
-        detector = _build_detector(language)
+        detector = _build_detector(language, thresholds)
         if detector is None:
             languages_skipped[language] = "no detector implementation"
             continue
@@ -263,11 +265,11 @@ def main(argv: list[str] | None = None) -> int:
             findings.append(d3_crash)
         findings.extend(d3_findings)
 
-        # D4 — mutation score on the language's source set.  Detectors may report that their
-        # external mutation runner is unavailable; that is an auditable result, not a PASS.
-        critical_paths = _enumerate_source_files(manifest_dir, language)
+        # D4 — mutation score. O escopo é o que o PROJETO declarou na config do runner
+        # (`[mutmut] source_paths`, `stryker.config.json`); nenhum dos dois aceita lista de
+        # arquivos como escopo, e a lista que era montada aqui nunca chegava a lugar nenhum.
         d4_findings, d4_crash = _safe_call(
-            "d4", detector.detect_mutation_score, critical_paths, language=language
+            "d4", detector.detect_mutation_score, manifest_dir, language=language
         )
         if d4_crash:
             findings.append(d4_crash)
@@ -483,6 +485,7 @@ def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: P
 **Verdict:** {summary['verdict']}
 **Score cap:** {summary['score_cap']}
 **Hard caps triggered:** {', '.join(summary['hard_caps_triggered']) or '_none_'}
+**Soft caps triggered:** {', '.join(summary['soft_caps_triggered']) or '_none_'}
 
 ## Summary
 

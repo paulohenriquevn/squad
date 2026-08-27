@@ -26,9 +26,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          # Quatro jobs reinstalavam as mesmas dependências a cada execução.
+          cache: 'pip'
 
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff
+        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff vulture
 
       # `--strict` NÃO é cosmético: sem ele um achado WARN é impresso e o
       # processo sai 0 — a saída traz a linha do WARN e, logo abaixo,
@@ -51,11 +53,32 @@ jobs:
       - name: Python static analysis
         run: ruff check scripts skills hooks tests conftest.py
 
-      - name: Root suite + every skill slice (isolated processes)
-        run: bash scripts/run_slice_tests.sh
+      # O kit cobrava este gate de todo consumidor e nunca o rodava sobre si.
+      # Medido 2026-08-26, na primeira execução: FAIL_HARD por um `unused variable`
+      # de assinatura obrigatória do argparse, com a allowlist vazia — o falso
+      # positivo estava lá desde sempre e ninguém tinha visto, porque ninguém tinha
+      # rodado. Um gate sem calibração não é um gate: é uma promessa.
+      #
+      # O script sai 1 em FAIL_HARD / INVALID, que é o contrato de
+      # `code-quality-golden-rule.md` § 1. FAIL_SOFT não quebra o build aqui — a
+      # golden rule o resolve com ADR, e um CI que trata soft cap como bloqueio
+      # ensina a contorná-lo.
+      - name: Code-quality gate (the kit audits itself)
+        run: |
+          python3 skills/code-quality/scripts/run_code_quality.py \
+            --languages-rule rules/code-quality-languages.txt \
+            --thresholds-rule rules/code-quality-thresholds.txt \
+            --allowlist rules/code-quality-allowlist.txt \
+            --no-network --no-audit-write
 
-      - name: Root coverage baseline
-        run: python -m pytest tests -q --cov=scripts --cov-report=term --cov-fail-under=40
+      # A suíte raiz rodava DUAS vezes: uma dentro de run_slice_tests.sh e outra
+      # aqui, só para calcular cobertura — 45 s duplicados por execução, medidos
+      # em 2026-08-26. ROOT_SUITE_COV=1 mede na execução que já acontece, e o
+      # limiar de 40% segue sendo cobrado (--cov-fail-under dentro do script).
+      - name: Root suite + every skill slice (isolated processes, with coverage)
+        env:
+          ROOT_SUITE_COV: '1'
+        run: bash scripts/run_slice_tests.sh
 
   compatibility:
     name: Python ${{ matrix.python-version }} compatibility
@@ -69,6 +92,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
       - run: python -m pip install --upgrade pip pytest pyyaml
       - name: Full compatibility suite
         run: bash scripts/run_slice_tests.sh

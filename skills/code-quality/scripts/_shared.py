@@ -341,6 +341,40 @@ def write_atomic(target: Path, content: str | bytes) -> None:
 # ---------------------------------------------------------------------------
 
 
+#: Extensões de fonte por linguagem, para a enumeração compartilhada.
+_SOURCE_EXTS = {
+    "python": (".py",),
+    "typescript": (".ts", ".tsx"),
+    "rust": (".rs",),
+    "go": (".go",),
+}
+
+
+def enumerate_source_files(root: Path, language: str) -> list[Path]:
+    """Todo arquivo-fonte da linguagem sob `root`, podando durante a travessia.
+
+    Vive aqui, e não no orquestrador, porque os DETECTORES precisam dela (D3
+    percorre o repositório atrás de consumidores). Um detector importando o
+    orquestrador inverteria a dependência do módulo que o instancia.
+
+    PODA DURANTE A TRAVESSIA, NÃO FILTRO DEPOIS. `rglob("*")` seguido de filtro
+    dá a resposta certa pelo caminho errado: já desceu em `node_modules`, `.git`
+    e `.venv` inteiros para então descartá-los. Medido 2026-08-26 num repositório
+    de 56.128 arquivos (40 mil em node_modules): 326 ms contra 0,4 ms — 832x, uma
+    vez por linguagem habilitada.
+    """
+    exts = _SOURCE_EXTS.get(language, ())
+    if not exts:
+        return []
+    out: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in DEFAULT_SKIP_DIRS]
+        for name in filenames:
+            if name.endswith(exts):
+                out.append(Path(dirpath) / name)
+    return out
+
+
 def make_relative(path: Path, repo_root: Path) -> str:
     """Return path relative to repo_root using forward slashes."""
     rel = path.resolve().relative_to(repo_root.resolve())
@@ -383,17 +417,27 @@ def emit_json_summary(
         severity_counts[f.severity] = severity_counts.get(f.severity, 0) + 1
         by_detector.setdefault(f.detector, {})
         by_detector[f.detector][f.language] = by_detector[f.detector].get(f.language, 0) + 1
-        if f.severity == "SOFT_CAP" and f.allowlist_key:
-            tail = f.allowlist_key.rsplit("|", 1)[-1]
-            if tail and tail not in soft_caps:
-                soft_caps.append(tail)
+        if f.severity == "SOFT_CAP":
+            # O identificador ESTÁVEL, não a cauda do allowlist_key — em D3 a cauda é o
+            # nome do símbolo achado (`flush_caches`), e publicá-lo aqui manda quem lê o
+            # relatório allowlistar uma coisa que não é um cap. Golden rule § 1.4 exige
+            # identificadores estáveis: é por eles que se compara duas execuções.
+            sid = _finding_to_stable_identifier(f) or f.allowlist_key.rsplit("|", 1)[-1]
+            if sid and sid not in soft_caps:
+                soft_caps.append(sid)
         if f.language:
             languages_set.add(f.language)
+
+    # `hard_caps_triggered` carrega HARD caps. `compute_verdict` devolve todos os
+    # identificadores disparados — inclusive os soft, quando o veredito é FAIL_SOFT — e
+    # publicá-los sob este nome fazia um cap dispensável (com ADR) parecer bloqueio, e
+    # esconderia um HARD real no meio da lista quando os dois coexistem.
+    hard_only = [sid for sid in hard_caps_triggered if not sid.startswith("soft_")]
 
     return {
         "verdict": verdict,
         "score_cap": _verdict_to_cap(verdict),
-        "hard_caps_triggered": hard_caps_triggered,
+        "hard_caps_triggered": hard_only,
         "soft_caps_triggered": soft_caps,
         "findings_by_detector": by_detector,
         "severity_counts": severity_counts,
@@ -441,13 +485,28 @@ def compute_verdict(findings: list[Finding]) -> tuple[str, list[str]]:
     return "PASS", []
 
 
+#: Prefixos que marcam a cauda do `allowlist_key` como um identificador estável
+#: já pronto, em vez de um símbolo achado.
+_STABLE_ID_PREFIXES = ("auditor_", "soft_cap_", "soft_floor_", "mutation_score_ok_")
+
+
 def _finding_to_stable_identifier(f: Finding) -> str:
-    """Map a Finding to the stable identifier from code-quality-golden-rule.md."""
+    """Map a Finding to the stable identifier from code-quality-golden-rule.md.
+
+    Quando o detector JÁ nomeou o cap na cauda do `allowlist_key`, essa cauda ganha —
+    D4 distingue `soft_cap_mutation_score_low_*` (a suíte não detecta) de
+    `soft_cap_mutation_unconfigured_*` (o runner não foi declarado) e
+    `soft_cap_mutation_deferred_*` (a linguagem está fora do contrato). Colapsar os
+    três em "score baixo" mandaria escrever testes onde falta configurar um runner —
+    um relatório que nomeia a ação errada custa mais que um que não nomeia nenhuma.
+    """
+    tail = f.allowlist_key.rsplit("|", 1)[-1]
+    if f.detector.startswith(("d3_", "d4_")) and tail.startswith(_STABLE_ID_PREFIXES):
+        return tail
     if f.detector == "d1_dead_code" and f.severity == "HARD":
         return f"dead_code_unallowlisted_{f.language}"
     if f.detector == "d1_dead_code" and f.severity == "SOFT_CAP":
         # auditor_unavailable lives in allowlist_key tail
-        tail = f.allowlist_key.rsplit("|", 1)[-1]
         return tail if tail.startswith(("auditor_", "soft_")) else f"soft_cap_{f.language}"
     if f.detector == "d2_symbol_fab" and f.severity == "HARD":
         return f"symbol_fabrication_{f.language}"
@@ -463,12 +522,12 @@ def _finding_to_stable_identifier(f: Finding) -> str:
 
 
 __all__ = [
-    "DEFAULT_SKIP_DIRS",
     "AllowlistEntry",
     "AllowlistMatch",
     "Finding",
     "compute_verdict",
     "emit_json_summary",
+    "enumerate_source_files",
     "is_allowlisted",
     "load_allowlist",
     "load_languages_config",

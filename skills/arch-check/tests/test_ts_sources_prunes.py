@@ -1,0 +1,44 @@
+"""`_ts_sources` poda na travessia em vez de filtrar depois.
+
+Mesmo defeito medido em `run_code_quality._enumerate_source_files`: 326 ms
+contra 0,4 ms num repositório de 56 mil arquivos. Aqui pesa mais, porque um
+monorepo TypeScript é justamente onde `node_modules` é grande.
+"""
+from __future__ import annotations
+
+import pathlib
+import sys
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from propose_rules import _ts_sources  # noqa: E402
+
+
+def _tree(root: Path) -> None:
+    (root / "src").mkdir(parents=True)
+    (root / "src" / "app.ts").write_text("export const a = 1\n", encoding="utf-8")
+    (root / "src" / "app.test.ts").write_text("test('x', () => {})\n", encoding="utf-8")
+    for skipped in ("node_modules", ".git", "dist", "vendor"):
+        d = root / skipped / "deep"
+        d.mkdir(parents=True)
+        (d / "noise.ts").write_text("export const b = 2\n", encoding="utf-8")
+
+
+def test_finds_project_sources_and_skips_tests(tmp_path):
+    _tree(tmp_path)
+    assert {p.name for p in _ts_sources(tmp_path)} == {"app.ts"}
+
+
+def test_does_not_traverse_skipped_trees(tmp_path, monkeypatch):
+    _tree(tmp_path)
+
+    def forbidden(self, *args, **kwargs):
+        raise AssertionError(
+            "rglob sobre a árvore inteira: a poda voltou a acontecer depois da travessia"
+        )
+
+    monkeypatch.setattr(pathlib.Path, "rglob", forbidden)
+    assert {p.name for p in _ts_sources(tmp_path)} == {"app.ts"}

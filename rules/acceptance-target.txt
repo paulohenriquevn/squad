@@ -21,7 +21,7 @@
 # target = https://app.example.com
 #
 # kind = internal
-# target = @usetheo/skills-monorepo
+# target = @your-scope/your-monorepo
 # build = git worktree add /tmp/rel <tag> && cd /tmp/rel && pnpm install && pnpm build
 # verify = node -e "console.log(require('./package.json').version)"
 # credentials = NPM_TOKEN

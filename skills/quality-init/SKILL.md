@@ -168,6 +168,33 @@ If PostToolUse already has entries, the new hook is **appended** (not replacing)
 
 The calibration is **adaptive**: it measures actual code metrics from the project and uses the higher of (measured p90, minimum floor).
 
+### The blocking rate — what "adaptive" was never checked against
+
+Stage 6.5 now measures how much of the EXISTING code the calibrated gate would
+reject, and reports it with a verdict:
+
+| Rate | Verdict | Meaning |
+|---|---|---|
+| ≤ 5% | `READY` | the gate starts green and reacts to what gets WORSE |
+| ≤ 10% | `REVIEW` | a handful of files to fix or a threshold to loosen first |
+| > 10% | `TOO_STRICT` | do not turn it on as calibrated |
+
+It exists because the promise below was never verified. Measured on the Squad
+repository 2026-08-26, with thresholds this skill itself produced (complexity=10,
+function_lines=29, nesting=3, params=4, file_lines=367): **49% of files would be
+blocked** — and passing every file through the generated hook, which also checks
+duplication, gives 61%.
+
+The arithmetic p90 does not cover: it is computed PER METRIC, over the project's
+functions, while the gate rejects a FILE when ANY function exceeds ANY threshold. A
+file with thirty functions gets thirty independent chances of holding one of the
+worst 10%, and five metrics multiply that. **p90 per function is not p90 per file.**
+
+A gate that starts red is switched off within the hour, and what remains is worse
+than no gate: the hook in `settings.json`, the belief that it protects something,
+and a bypass flag in the hand of whoever works there. The rate does not fix the
+calibration — it ends the silence about it.
+
 ### Why p90 and not p50 or max?
 
 - **p50** is too lenient — half the codebase already exceeds it, so the hook would block constantly on existing patterns.

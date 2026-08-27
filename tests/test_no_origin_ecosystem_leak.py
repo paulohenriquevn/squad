@@ -3,7 +3,7 @@
 O DEFEITO QUE ISTO FIXA
 -----------------------
 `rules/cycle-backlog.md` carrega a tabela de roteamento por domínio, e a versão
-versionada aqui é a do ecossistema `theo`: oito domínios apontando para
+versionada aqui já foi a do ecossistema `theo`: oito domínios apontando para
 `theo-cloud`, `theo-rag`, `theo-contracts` e mais doze repositórios.
 
 O próprio arquivo já descrevia a consequência, com medição:
@@ -20,10 +20,16 @@ ecossistema de origem seguia por padrão.
 
 POR QUE O TESTE MEDE A INSTALAÇÃO, NÃO O REPOSITÓRIO
 -----------------------------------------------------
-A tabela deste repositório está correta PARA ESTE repositório — ele realmente
-mantém aqueles repos, e `route_domain.py` depende dela para rodar aqui. O
-defeito nunca foi tê-la; foi entregá-la. Então a asserção é sobre o que sai do
-instalador, e o kit segue livre para descrever o próprio ecossistema.
+A tabela de um repositório está correta PARA ELE — quem a derivou realmente
+mantém aqueles repos, e `route_domain.py` depende dela para rodar ali. O defeito
+nunca foi tê-la; foi entregá-la. Então a asserção é sobre o que sai do
+instalador, e cada repositório segue livre para descrever o próprio ecossistema.
+
+Este aqui deixou de exercer essa liberdade em 2026-08-26: a tabela e os oito
+especialistas que ela nomeava saíram, e a seção passou a nascer vazia também na
+fonte. O teste continua valendo, e continua sendo o que garante a propriedade —
+a fonte pode voltar a descrever um ecossistema a qualquer momento, e a entrega
+não pode.
 """
 from __future__ import annotations
 

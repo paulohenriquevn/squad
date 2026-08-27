@@ -31,6 +31,22 @@ class BaseDetector:
     language: str = ""
     manifest_marker: str = ""
 
+    #: Per-project knobs from `code-quality-thresholds.txt`, injected by the
+    #: orchestrator. Empty means "use the shipped defaults" — never "no gate".
+    thresholds: dict = {}
+
+    def threshold(self, key: str, default):
+        """Read one knob, falling back to the shipped default.
+
+        `load_thresholds()` was called for its parse side-effect and its result
+        discarded, with the orchestrator noting that "detectors use hardcoded
+        defaults in v0.1" — so every documented key in the rules file was inert.
+        A configuration file that cannot change behaviour is worse than none: it
+        reads as a control that exists.
+        """
+        value = self.thresholds.get(key, default)
+        return type(default)(value) if default is not None and value is not None else value
+
     def unavailable(self, detector: str, finding_type: str, message: str) -> list[Finding]:
         """Represent a detector capability that could not run without failing open."""
         return [
@@ -70,11 +86,18 @@ class BaseDetector:
         """
         raise NotImplementedError
 
-    def detect_mutation_score(self, critical_paths: list[Path]) -> list:
-        """Run D4 — mutation testing scoped to plan's `## Critical paths`.
+    def detect_mutation_score(self, manifest_dir: Path) -> list:
+        """Run D4 — mutation testing, scoped by the project's own mutation config.
 
-        Wraps mutmut (Python) / stryker (TypeScript). Rust + Go DEFERRED
-        to v0.2 (graceful skip via INFO Finding per T4.3 ADR).
+        Wraps mutmut (Python) / Stryker (TypeScript); Rust and Go are declared
+        deferrals per golden rule § 5.
+
+        The parameter used to be `critical_paths: list[Path]` and the orchestrator
+        passed every source file in the language. Neither runner accepts an
+        arbitrary file list as scope — both read what the project declared
+        (`[mutmut] source_paths`, `stryker.config.json`) — so the list was built,
+        passed, and dropped. Handing the runner the directory it actually resolves
+        from removes a parameter that documented a scoping that never happened.
         """
         raise NotImplementedError
 

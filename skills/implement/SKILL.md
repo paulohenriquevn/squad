@@ -2,7 +2,7 @@
 name: implement
 version: 0.1.0
 requires: [plan-confidence]
-description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + quality gates (SOLID, Clean Code, DRY, Design Patterns). Single entry-point for cycle-implement. Use after /to-plan chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `workspace`.
+description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + mechanized gates (test suite, coverage floor, TDD shape, /code-quality verdict) + a REFACTOR-phase design review against SOLID, Clean Code and DRY — judgement, not a detector. Single entry-point for cycle-implement. Use after /to-plan chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `workspace`.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill Agent
 argument-hint: "{plan-slug}"
