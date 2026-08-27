@@ -70,6 +70,6 @@ fi
 echo ""
 echo "ast-grep is ready. Try:"
 echo "  $BIN run --pattern 'class \$NAME extends \$BASE { \$\$\$ }' --lang typescript path/to/code/"
-echo "  $BIN scan --rule .claude/skills/ast-grep/rules/decorated-function-python.yml .claude/knowledge-base/references/project-b/"
+echo "  $BIN scan --rule .claude/skills/ast-grep/rules/decorated-function-python.yml .claude/records/references/project-b/"
 
 exit 0

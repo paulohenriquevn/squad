@@ -337,11 +337,11 @@ fi
 teardown
 
 # ---------------------------------------------------------------------------
-# knowledge-base/{references,tools}/ is THIRD-PARTY study material
+# records/{references,tools}/ is THIRD-PARTY study material
 # ---------------------------------------------------------------------------
 # The same failure the `.claude/` filter above already fixed, in the zone the kit
 # declares read-only in writing. Measured 2026-08-26 on an adopter: 500 files from
-# a peer project cloned into `knowledge-base/references/` produced 517 output
+# a peer project cloned into `records/references/` produced 517 output
 # lines and 16,944 ms — 500 TDD warnings about code that is not the project's.
 # Extrapolated linearly, ~3,000 files reach the 120s timeout declared for this
 # hook, and a hook killed by timeout blocks nothing.
@@ -350,42 +350,42 @@ teardown
 setup
 rm -f "$TMPDIR_TEST/CHANGELOG.md"
 git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
-mkdir -p "$TMPDIR_TEST/knowledge-base/references/peer/mod"
-echo "def f(): pass" > "$TMPDIR_TEST/knowledge-base/references/peer/mod/s.py"
+mkdir -p "$TMPDIR_TEST/records/references/peer/mod"
+echo "def f(): pass" > "$TMPDIR_TEST/records/references/peer/mod/s.py"
 git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
-if echo "$out" | grep -q 'knowledge-base/references/'; then
-  echo "  FAIL  a knowledge-base/references/ file appeared in a warning (audits third parties)"
+if echo "$out" | grep -q 'records/references/'; then
+  echo "  FAIL  a records/references/ file appeared in a warning (audits third parties)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-  echo "  PASS  a knowledge-base/references/ file produces no warning"
+  echo "  PASS  a records/references/ file produces no warning"
   PASS_COUNT=$((PASS_COUNT + 1))
 fi
 teardown
 
-# ---- knowledge-base/tools/ idem ----
+# ---- study-material/ idem ----
 setup
 rm -f "$TMPDIR_TEST/CHANGELOG.md"
 git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
-mkdir -p "$TMPDIR_TEST/knowledge-base/tools/dep"
-echo "def f(): pass" > "$TMPDIR_TEST/knowledge-base/tools/dep/s.py"
+mkdir -p "$TMPDIR_TEST/study-material/dep"
+echo "def f(): pass" > "$TMPDIR_TEST/study-material/dep/s.py"
 git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
-if echo "$out" | grep -q 'knowledge-base/tools/'; then
-  echo "  FAIL  a knowledge-base/tools/ file appeared in a warning (audits third parties)"
+if echo "$out" | grep -q 'study-material/'; then
+  echo "  FAIL  a study-material/ file appeared in a warning (audits third parties)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-  echo "  PASS  a knowledge-base/tools/ file produces no warning"
+  echo "  PASS  a study-material/ file produces no warning"
   PASS_COUNT=$((PASS_COUNT + 1))
 fi
 teardown
 
 # ---- the zone does not silence the CHANGELOG gate about project code ----
 setup
-mkdir -p "$TMPDIR_TEST/knowledge-base/references/peer" "$TMPDIR_TEST/src"
-echo "def f(): pass" > "$TMPDIR_TEST/knowledge-base/references/peer/s.py"
+mkdir -p "$TMPDIR_TEST/records/references/peer" "$TMPDIR_TEST/src"
+echo "def f(): pass" > "$TMPDIR_TEST/records/references/peer/s.py"
 echo "def g(): pass" > "$TMPDIR_TEST/src/mine.py"
 git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 rc=$(run_hook)

@@ -13,7 +13,7 @@ hook that clobbers a permissions block would be a worse bug than the one it fixe
 Usage:
     python3 install_goal_hook.py --milestones M2 M3 [--project-root .] [--max-blocks 40]
     python3 install_goal_hook.py --milestones M27 --roadmap ../outro-repo/ROADMAP.md \\
-                                 --acceptance-dir ../outro-repo/knowledge-base/acceptance
+                                 --acceptance-dir ../outro-repo/records/acceptance
     python3 install_goal_hook.py --clear [--project-root .]
 
 Exit codes:
@@ -30,17 +30,17 @@ from pathlib import Path
 
 HOOK_MARKER = "session-goal/scripts/check_goal_met.py"
 DEFAULT_MAX_BLOCKS = 40
-#: Canonico: o knowledge-base mora DENTRO de .claude/ (plugin install). O layout
+#: Canonico: o records mora DENTRO de .claude/ (plugin install). O layout
 #: standalone -- the kit's own repo -- is the only one where it sits at the root.
-#: Choosing wrong does not break loudly: it creates a second empty knowledge-base beside the
+#: Choosing wrong does not break loudly: it creates a second empty records beside the
 #: real, e os artefatos passam a se perder entre os dois.
-PLUGIN_ACCEPTANCE_DIR = ".claude/knowledge-base/acceptance"
-STANDALONE_ACCEPTANCE_DIR = "knowledge-base/acceptance"
+PLUGIN_ACCEPTANCE_DIR = ".claude/records/acceptance"
+STANDALONE_ACCEPTANCE_DIR = "records/acceptance"
 
 
 def default_acceptance_dir(root: Path) -> str:
-    """Resolve the canonical knowledge-base for this project's layout."""
-    if (root / ".claude" / "knowledge-base").exists():
+    """Resolve the canonical records for this project's layout."""
+    if (root / ".claude" / "records").exists():
         return PLUGIN_ACCEPTANCE_DIR
     if (root / ".claude").exists():
         return PLUGIN_ACCEPTANCE_DIR  # plugin install; o scaffold ainda vai nascer
@@ -141,8 +141,8 @@ def main() -> int:
         default=None,
         help=(
             "Where cycle-acceptance writes its records, relative to --project-root. "
-            "Defaults to the canonical .claude/knowledge-base/acceptance. Must stay INSIDE "
-            "the project — consumers are autonomous and do not share a knowledge-base."
+            "Defaults to the canonical .claude/records/acceptance. Must stay INSIDE "
+            "the project — consumers are autonomous and do not share a records."
         ),
     )
     parser.add_argument("--max-blocks", type=int, default=DEFAULT_MAX_BLOCKS)
@@ -187,14 +187,14 @@ def main() -> int:
 
     problems = []
 
-    # Autonomy: each project has ITS OWN knowledge-base and ITS OWN roadmap. A gate
+    # Autonomy: each project has ITS OWN records and ITS OWN roadmap. A gate
     # pointing outside couples two autonomous repos and makes one's milestone depend
     # on the other's state -- exactly what the architecture forbids.
     for label, path in (("roadmap", roadmap_path), ("acceptance directory", acceptance_path)):
         if root not in path.parents and path != root:
             problems.append(
                 f"{label} is OUTSIDE the project: {path}. Consumers are autonomous — "
-                "each has its own ROADMAP.md and its own .claude/knowledge-base/."
+                "each has its own ROADMAP.md and its own .claude/records/."
             )
     if not roadmap_path.exists():
         problems.append(f"roadmap does not exist: {roadmap_path}")

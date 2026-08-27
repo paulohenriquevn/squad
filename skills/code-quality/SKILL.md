@@ -68,13 +68,13 @@ Detects all manifests at repo root (respecting `DEFAULT_SKIP_DIRS` exclusions), 
 /code-quality {plan-slug}
 ```
 
-Reads `.claude/knowledge-base/plans/{slug}-plan.md`. Slug resolution order (strict — per EC-6):
+Reads `.claude/records/plans/{slug}-plan.md`. Slug resolution order (strict — per EC-6):
 
-1. `.claude/knowledge-base/plans/{slug}-plan.md`
-2. `.claude/knowledge-base/plans/completed/{slug}-plan.md` (already merged)
-3. **REFUSE** if slug matches only `.claude/knowledge-base/discoveries/plans/{slug}-plan.md` (discovery plan; different schema) — emits helpful error pointing to `/discover-confidence`.
+1. `.claude/records/plans/{slug}-plan.md`
+2. `.claude/records/plans/completed/{slug}-plan.md` (already merged)
+3. **REFUSE** if slug matches only `.claude/records/discoveries/plans/{slug}-plan.md` (discovery plan; different schema) — emits helpful error pointing to `/discover-confidence`.
 
-Parses plan's `## Critical paths` section (when present, drives D4 mutation testing scope). Writes audit Markdown to `.claude/knowledge-base/audits/{slug}-code-quality-{date}.md`. Emits JSON verdict to stdout (or `--json-out PATH`).
+Parses plan's `## Critical paths` section (when present, drives D4 mutation testing scope). Writes audit Markdown to `.claude/records/audits/{slug}-code-quality-{date}.md`. Emits JSON verdict to stdout (or `--json-out PATH`).
 
 ---
 
@@ -139,7 +139,7 @@ Per [`code-quality-golden-rule.md § Severity rubric`](../../rules/code-quality-
 }
 ```
 
-**Markdown** (Mode 2: written to `.claude/knowledge-base/audits/{slug}-code-quality-{date}.md`; Mode 1: stdout). See `templates/code-quality-report.md` for the template.
+**Markdown** (Mode 2: written to `.claude/records/audits/{slug}-code-quality-{date}.md`; Mode 1: stdout). See `templates/code-quality-report.md` for the template.
 
 ---
 
@@ -165,7 +165,7 @@ Per [`code-quality-golden-rule.md § Severity rubric`](../../rules/code-quality-
 3. **NEVER fabricate findings** — every Finding MUST come from a real detector run (subprocess + parse).
 4. **NEVER claim "no dead code" when D1 auditor failed** — emit `auditor_unavailable_{tool}` SOFT_CAP honestly.
 5. **NEVER consume the allowlist silently for malformed entries** — emit `allowlist_malformed_entry` HARD (EC-4).
-6. **NEVER scan `.claude/knowledge-base/references/`** — `DEFAULT_SKIP_DIRS` covers it; read-only zone for the entire ecosystem.
+6. **NEVER scan `.claude/records/references/`** — `DEFAULT_SKIP_DIRS` covers it; read-only zone for the entire ecosystem.
 
 ---
 
@@ -173,7 +173,7 @@ Per [`code-quality-golden-rule.md § Severity rubric`](../../rules/code-quality-
 
 | Artifact | Procedure |
 |---|---|
-| Audit report at `.claude/knowledge-base/audits/{slug}-code-quality-{date}.md` | Delete file; no further state. |
+| Audit report at `.claude/records/audits/{slug}-code-quality-{date}.md` | Delete file; no further state. |
 | Allowlist entry at `.claude/rules/code-quality-allowlist.txt` | Standard git revert. |
 | Registry cache at `~/.cache/code-quality/registry/*.json` | Delete files; auto-rebuilds next run. |
 

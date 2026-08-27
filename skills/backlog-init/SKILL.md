@@ -124,7 +124,7 @@ Next step:  /backlog-item {slug}   or   /discover-execute --sweep {domain}
 
 ## Out of scope (deliberately)
 
-**Migrating existing findings.** The `knowledge-base/` of an adopting workspace often holds review reports with real, still-open findings. Importing them here is a **separate, evidence-preserving migration** — each imported item needs its original evidence pointer and its original date, or it arrives as a hunch and loses exactly what made it worth keeping. This skill does not attempt it, and a registry created by it is honestly empty rather than dishonestly populated.
+**Migrating existing findings.** The `records/` of an adopting workspace often holds review reports with real, still-open findings. Importing them here is a **separate, evidence-preserving migration** — each imported item needs its original evidence pointer and its original date, or it arrives as a hunch and loses exactly what made it worth keeping. This skill does not attempt it, and a registry created by it is honestly empty rather than dishonestly populated.
 
 ## Anti-patterns
 

@@ -99,7 +99,7 @@ keeps only its own deviations.
 
 A golden rule is LOCKED. Changing it requires ALL of:
 
-1. An ADR in `knowledge-base/adrs/` proposing the change.
+1. An ADR in `records/adrs/` proposing the change.
 2. A CHANGELOG entry under `[Unreleased] § Changed`.
 3. `python3 scripts/check_xrefs.py` and `python3 scripts/verify_ecosystem.py` both PASS.
 

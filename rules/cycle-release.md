@@ -8,7 +8,7 @@ Take an approved implementation from `READY_TO_MERGE` to a released, tagged vers
 
 ## Pre-conditions
 
-- `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `knowledge-base/reviews/{slug}-review-{date}.md`).
+- `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `records/reviews/{slug}-review-{date}.md`).
 - Working branch is `workspace` (never `develop` or `main` directly — see `git-safety.md` § 1). The release commits are authored on `workspace` and reach `develop` through the promotion PR, like every other change.
 - No uncommitted changes (`git status --porcelain` empty).
 - CHANGELOG `[Unreleased]` section has ≥ 1 entry — otherwise the release has nothing to announce.
@@ -112,7 +112,7 @@ where the reasoning was written down and measured.
 ## Stop conditions
 
 - `gh pr create` fails → halt; surface stderr.
-- PR is closed without merge → halt; record the rationale in `knowledge-base/releases/{version}-release.md`.
+- PR is closed without merge → halt; record the rationale in `records/releases/{version}-release.md`.
 - Tag already exists for the computed version → halt; ask the human to pick the next version explicitly.
 
 ## Anti-patterns
@@ -127,7 +127,7 @@ where the reasoning was written down and measured.
 
 ## Output
 
-- `knowledge-base/releases/{version}-release.md` — record of the release run: input verdict, computed version, PR URL, merge commit, tag, GitHub release URL.
+- `records/releases/{version}-release.md` — record of the release run: input verdict, computed version, PR URL, merge commit, tag, GitHub release URL.
 - `[Unreleased]` empty (until the next change lands).
 - `git tag v{version}` annotated, pushed.
 - GitHub release published.

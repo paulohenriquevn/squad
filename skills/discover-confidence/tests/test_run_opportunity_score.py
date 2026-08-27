@@ -35,7 +35,7 @@ def staged(project_root: Path):
     written: list[Path] = []
 
     def _write(name: str, content: str) -> Path:
-        directory = project_root / ".claude" / "knowledge-base" / "discoveries" / "opportunities"
+        directory = project_root / ".claude" / "records" / "discoveries" / "opportunities"
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / name
         path.write_text(content, encoding="utf-8")

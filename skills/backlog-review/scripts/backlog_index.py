@@ -10,8 +10,8 @@ rows. The answer existed only as a `grep` over `status:`.
 The obvious fix is a table at the top. The obvious fix is also the one that rots: 592 items, and
 the index is wrong the moment one of them changes status — silently, because nothing compares the
 two. An index that disagrees with the items is worse than none, since a reader who trusts it
-reports absence where evidence exists. That is the same failure `rules/knowledge-base-location.md`
-records for a split knowledge-base, and the same one the D5 meta-gate exists to catch.
+reports absence where evidence exists. That is the same failure `rules/records-location.md`
+records for a split records, and the same one the D5 meta-gate exists to catch.
 
 So the index is derived from the item blocks, and `check_backlog_structure.py` fails when the
 file's index does not match the one this module would generate. Hand-editing it is not forbidden;

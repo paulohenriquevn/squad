@@ -9,7 +9,7 @@ Without this file, `/discover-plan-confidence` falls back to the example templat
 A measurement plan is `INVALID` and cannot produce a `SHIPPABLE` verdict when any of the following holds:
 
 1. **Empty research question** — `## Research questions` is missing or has zero non-placeholder entries.
-2. **Fabricated source citation** — at least one `knowledge-base/references/{project}` cited in the plan does not exist when checked via `Path.exists()`.
+2. **Fabricated source citation** — at least one `records/references/{project}` cited in the plan does not exist when checked via `Path.exists()`.
 3. **Question budget violated** — declared question count > 15 (per `cycle-discover.md`).
 4. **Coverage corner declared but empty** — any `## Coverage Corner N` heading present with zero questions targeting it.
 
@@ -27,7 +27,7 @@ A measurement plan is `INVALID` and cannot produce a `SHIPPABLE` verdict when an
 | Rule | Enforcement script |
 |---|---|
 | All declared coverage corners have ≥ 1 question | `check_coverage_corners.py` |
-| All `knowledge-base/references/{...}` paths resolve | `check_measurement_targets.py` |
+| All `records/references/{...}` paths resolve | `check_measurement_targets.py` |
 | Question count ≤ 15 | `check_question_budget.py` |
 | `--skip-checks` flag does not exist and SHALL NOT be added | Constructor invariant |
 | `hard_caps_triggered` MUST be non-empty when verdict==INVALID | JSON schema invariant |

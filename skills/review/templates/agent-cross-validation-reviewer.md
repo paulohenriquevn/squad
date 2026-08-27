@@ -37,8 +37,8 @@ moved is reported at the top of the review, above every finding in it.
 ## Pre-read (mandatory)
 
 1. The plan: `{PLAN_PATH}` — read FULLY, including ADRs + Coverage Matrix + Global DoD + every task's TDD section
-2. The implementation contract (if exists): `.claude/knowledge-base/implementations/{SLUG}-implementation.md`
-3. The progress audit (if exists): `.claude/knowledge-base/implementations/.progress-{SLUG}.json`
+2. The implementation contract (if exists): `.claude/records/implementations/{SLUG}-implementation.md`
+3. The progress audit (if exists): `.claude/records/implementations/.progress-{SLUG}.json`
 4. The full commit history of the branch: `git log {DIFF_BASE}..HEAD --oneline --stat`
 5. The full diff: `git diff {DIFF_BASE}..HEAD`
 

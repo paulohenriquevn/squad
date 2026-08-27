@@ -6,7 +6,7 @@
       "id": 0,
       "name": "writes-a-falsifiable-criterion",
       "prompt": "let's measure B-014 (round-trips in the theo-lens trace listing). put together the measurement plan",
-      "expected_output": "A measurement plan at knowledge-base/discoveries/plans/{slug}-plan.md whose ## Falsification section states a concrete result that would kill the hypothesis — specific enough that /discover-execute can check it every iteration — and which also says what does NOT rescue it.",
+      "expected_output": "A measurement plan at records/discoveries/plans/{slug}-plan.md whose ## Falsification section states a concrete result that would kill the hypothesis — specific enough that /discover-execute can check it every iteration — and which also says what does NOT rescue it.",
       "files": [
         "BACKLOG.md"
       ],

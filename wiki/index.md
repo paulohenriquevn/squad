@@ -10,7 +10,7 @@ depends on.
 
 **This bundle is not the audit trail.** Dated, immutable records of what
 happened — audits, reviews, implementations, releases, acceptance runs, SOP run
-records — live in `knowledge-base/` and stay there. A record of one execution on
+records — live in `records/` and stay there. A record of one execution on
 one day is not a concept that evolves, and forcing it into a schema built for
 knowledge that does would lose what makes it evidence.
 

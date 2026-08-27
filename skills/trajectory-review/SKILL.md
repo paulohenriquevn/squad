@@ -69,7 +69,7 @@ Refuse to start when:
 /trajectory-review
 ```
 
-Extracts hypotheses from project CLAUDE.md, README, and ADRs. Runs all profile-enabled modules against current codebase. Report to stdout + `knowledge-base/audits/{date}-analysis.md`.
+Extracts hypotheses from project CLAUDE.md, README, and ADRs. Runs all profile-enabled modules against current codebase. Report to stdout + `records/audits/{date}-analysis.md`.
 
 ### Mode 2 — Plan-bound trajectory-review (RECOMMENDED)
 
@@ -77,7 +77,7 @@ Extracts hypotheses from project CLAUDE.md, README, and ADRs. Runs all profile-e
 /trajectory-review {plan-slug}
 ```
 
-Additionally reads `.claude/knowledge-base/plans/{slug}-plan.md` to extract architecture claims and performance targets declared in the plan. Hypotheses are richer because they include plan-specific goals.
+Additionally reads `.claude/records/plans/{slug}-plan.md` to extract architecture claims and performance targets declared in the plan. Hypotheses are richer because they include plan-specific goals.
 
 ---
 
@@ -104,7 +104,7 @@ Read these sources in order and extract testable claims:
 | `CLAUDE.md` | Architecture decisions, stated patterns | "MVCC via delta chains provides snapshot isolation" |
 | Plan file (Mode 2) | Performance targets, scalability goals | "Support 1M vertices with < 10ms traversal" |
 | `README.md` | Public promises, claimed capabilities | "Concurrent reads without locking" |
-| `knowledge-base/adrs/*.md` | Design decisions with stated rationale | "Chose DashMap over RwLock<HashMap> for concurrent access" |
+| `records/adrs/*.md` | Design decisions with stated rationale | "Chose DashMap over RwLock<HashMap> for concurrent access" |
 | Source code (key modules) | Implicit claims from architecture | "SmallVec<4> for inline adjacency avoids heap alloc for typical degree" |
 
 For each claim, formulate:
@@ -274,7 +274,7 @@ Map to verdict per golden rule § 1.
 
 ### Step 4 — Generate report
 
-Write `knowledge-base/audits/{slug-or-date}-analysis.md` following this structure:
+Write `records/audits/{slug-or-date}-analysis.md` following this structure:
 
 ```markdown
 # Analysis Report: {project} — {date}
@@ -346,7 +346,7 @@ Print JSON summary to stdout:
   "findings_critical": 0,
   "findings_high": 2,
   "findings_medium": 3,
-  "report_path": "knowledge-base/audits/theo-graphdb-analysis-2026-06-16.md",
+  "report_path": "records/audits/theo-graphdb-analysis-2026-06-16.md",
   "baseline_updated": true,
   "feedback_action": "inject_risk_tasks",
   "feedback_detail": "Risk mitigation tasks to inject into next /to-plan: [list]",
@@ -382,7 +382,7 @@ The verdict is not advisory — it prescribes a concrete next step in the cycle 
 | `FUNDAMENTAL_RETHINK` | `redesign` | Run `/discover-plan` to investigate alternatives. Write ADR documenting empirical evidence of why the current approach fails. Then `/to-plan` for the redesigned architecture. `cycle-maintenance` pauses until the human decides. |
 | `INVALID` | `stop` | Surface to human. Fix config/golden-rule before proceeding. |
 
-The trajectory-review report at `knowledge-base/audits/` is referenced by the next iteration's `/to-plan` as **prior art** — the same way cycle-discover opportunities feed planning.
+The trajectory-review report at `records/audits/` is referenced by the next iteration's `/to-plan` as **prior art** — the same way cycle-discover opportunities feed planning.
 
 ---
 
@@ -402,7 +402,7 @@ The trajectory-review report at `knowledge-base/audits/` is referenced by the ne
 
 | Artifact | Procedure |
 |---|---|
-| Analysis report at `knowledge-base/audits/{slug}-analysis-{date}.md` | Delete file; no further state. |
+| Analysis report at `records/audits/{slug}-analysis-{date}.md` | Delete file; no further state. |
 | Baseline files at `{baseline_dir}/` | Delete files; next run creates fresh baseline. |
 
 ---

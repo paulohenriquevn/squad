@@ -9,7 +9,7 @@
 **A opportunity is INVALID and CANNOT produce a SHIPPABLE verdict when:**
 
 1. **Empty coverage corner** — at least one of `## Coverage Corner 1 — Integration Tests`, `## Coverage Corner 2 — Dependencies`, `## Coverage Corner 3 — Tools`, `## Coverage Corner 4 — Techniques` is missing or has zero non-placeholder content.
-2. **Fabricated citation** — at least one `.claude/knowledge-base/references/{project}/{path}` referenced in the opportunity does not exist when checked via `Path.exists()`.
+2. **Fabricated citation** — at least one `.claude/records/references/{project}/{path}` referenced in the opportunity does not exist when checked via `Path.exists()`.
 
 This is NOT a guideline. It is a constraint enforced by the skill itself. The skill SHALL fail-closed when an unbreakable rule is violated.
 
@@ -34,7 +34,7 @@ The rule closes this gap by forcing minimum structural state PRESENT before the 
 | Rule | Enforcement |
 |---|---|
 | All 4 coverage corners populated | M2 — `run_opportunity_score.py` via `check_corner_coverage.py` |
-| All `.claude/knowledge-base/references/{...}` citations exist | M2 — `check_evidence_pointers.py` (path.exists() check) |
+| All `.claude/records/references/{...}` citations exist | M2 — `check_evidence_pointers.py` (path.exists() check) |
 | Mandatory opportunity sections present | M2 — `check_opportunity_completeness.py` (cap 70) |
 | ADRs section present with at least one ADR | M2 — `check_opportunity_completeness.py` (cap 70) |
 | `--skip-checks` flag does not exist and SHALL NOT be added | Constructor invariant in `run_opportunity_score.py` |

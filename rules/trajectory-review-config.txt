@@ -47,7 +47,7 @@
 # Paths to cloned reference projects for A6 comparative trajectory-review.
 # Comma-separated. Optional — A6 is skipped when empty.
 #
-# reference_repos = knowledge-base/references/neo4j,knowledge-base/references/memgraph
+# reference_repos = records/references/neo4j,records/references/memgraph
 #
 # ─── Scalability targets ─────────────────────────────────────────────
 #

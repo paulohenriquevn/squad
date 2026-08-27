@@ -1,14 +1,14 @@
 # Reference Provenance
 
 Source of Truth for how third-party study material is kept OUT of this project.
-`knowledge-base/references/` holds cloned peer projects (inspiration) and
-`knowledge-base/tools/` holds tools we depend on. Both are read-only: we read them
+`records/references/` holds cloned peer projects (inspiration) and
+`study-material/` holds tools we depend on. Both are read-only: we read them
 to learn, and we write our own code. A literal copy carries the original licence
 into this repository, which is a legal problem, not a style one.
 
 ## § 1 — The zone
 
-`knowledge-base/references/**` and `knowledge-base/tools/**` (also valid under a
+`records/references/**` and `study-material/**` (also valid under a
 `.claude/` prefix). Never versioned — `.gitignore` excludes both.
 
 ## § 2 — Four layers, four different guarantees
@@ -32,7 +32,7 @@ git history. The intended path from study to code is:
 
 ```
 read the zone → understand → write your own version
-              → record the finding in knowledge-base/discoveries/opportunities/, citing the source
+              → record the finding in records/discoveries/opportunities/, citing the source
 ```
 
 ## § 4 — Limits, stated honestly

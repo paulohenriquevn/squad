@@ -40,7 +40,7 @@ resolve_ecosystem_dir() {
 
 ECOSYSTEM_DIR=$(resolve_ecosystem_dir)
 ATTEST_DIR="${ECOSYSTEM_DIR}/.attestations"
-PLANS_DIR="${ECOSYSTEM_DIR}/knowledge-base/plans"
+PLANS_DIR="${ECOSYSTEM_DIR}/records/plans"
 
 mkdir -p "$ATTEST_DIR"
 

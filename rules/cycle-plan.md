@@ -23,14 +23,14 @@ Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requiremen
 ```
 /grill-me {topic-slug}                     [Phase 0 — OPTIONAL]
      ↓ (interview-driven requirements resolution)
-     ↓ (produces: knowledge-base/grills/{slug}-grill.md)
+     ↓ (produces: records/grills/{slug}-grill.md)
      ↓ verdict:
      ↓   READY_FOR_PLAN  → proceed to /to-plan
      ↓   NEEDS_SPLIT     → split topic, re-grill sub-topics
      ↓   NEEDS_DISCOVERY → return to /discover-plan first
 /to-plan "{one-sentence feature description}"
      ↓ (Step 0 auto-discovers rules/ + skills/*-patterns/ + grill output if present)
-     ↓ (produces: knowledge-base/plans/{slug}-plan.md)
+     ↓ (produces: records/plans/{slug}-plan.md)
 /edge-case-plan {slug}
      ↓ (MUST-FIX absorbed into the plan)
 /deps-audit {slug}
@@ -46,7 +46,7 @@ Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requiremen
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| grill-me (opt.) | topic slug | grill log + verdict in knowledge-base/grills/{slug}-grill.md | every recommended answer offered; ≤ 15 questions; verdict declared |
+| grill-me (opt.) | topic slug | grill log + verdict in records/grills/{slug}-grill.md | every recommended answer offered; ≤ 15 questions; verdict declared |
 | to-plan | feature description (+ grill output if Phase 0 ran) | plan with Goal, Tasks, Risks, Test Plan, Open Questions | Coverage Matrix present (every Goal claim mapped to ≥ 1 task) |
 | edge-case-plan | plan | annotated plan with MUST-FIX | every MUST-FIX has owner + acceptance criterion |
 | deps-audit | plan | dependency report with CVE status | no critical CVE on a planned dependency — **human-enforced, see below** |

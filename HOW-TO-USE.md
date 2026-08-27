@@ -114,10 +114,10 @@ Chains plan → implement → code-quality → review → release, pausing at ea
 | Path | What |
 |---|---|
 | `BACKLOG.md` | The single registry, at the umbrella root |
-| `knowledge-base/discoveries/plans/` | Measurement plans |
-| `knowledge-base/discoveries/opportunities/` | Opportunities (the terminal artifact) |
-| `knowledge-base/maintenance-runs/` | One record per macro-loop run |
-| `knowledge-base/reviews/` | Edge-case reports |
+| `records/discoveries/plans/` | Measurement plans |
+| `records/discoveries/opportunities/` | Opportunities (the terminal artifact) |
+| `records/maintenance-runs/` | One record per macro-loop run |
+| `records/reviews/` | Edge-case reports |
 | `rules/cycle-*.md` | The contracts. Source of truth for every phase |
 | `agents/*.md` | The domain specialists you derive (the kit ships only the README) |
 

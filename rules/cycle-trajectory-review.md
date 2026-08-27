@@ -56,7 +56,7 @@ Do NOT trigger when:
 | **1 — Hypothesis** | Project docs (CLAUDE.md, plans, ADRs, README) | Structured hypothesis list: each with ID, claim, prediction, target module | ≥ 1 testable hypothesis extracted (else INVALID) |
 | **2 — Measurement** | Hypothesis list + trajectory-review-config.txt | Per-module raw measurements with methodology | Profile-required modules produce results (else hard finding) |
 | **3 — Evaluation** | Hypotheses + measurements | Per-hypothesis verdict (VALIDATED / AT_RISK / FALSIFIED) with evidence | Statistical rigor: ≥ 3 runs for benchmarks, mean ± std dev reported |
-| **4 — Verdict + Feedback** | Evaluated hypotheses + module findings | Final report at `knowledge-base/audits/{slug-or-date}-analysis.md` + feedback action | Report follows § 8 contract from golden rule; feedback action maps to next cycle |
+| **4 — Verdict + Feedback** | Evaluated hypotheses + module findings | Final report at `records/audits/{slug-or-date}-analysis.md` + feedback action | Report follows § 8 contract from golden rule; feedback action maps to next cycle |
 
 ## Analysis modules
 
@@ -91,7 +91,7 @@ Six modules, each producing quantitative evidence. Modules run in order A1→A6.
 
 When running inside the `cycle-maintenance` super-loop, the verdict shapes milestone M\<N+1\>: `ON_TRACK` / `ON_TRACK_WITH_RISKS` → roadmap selects the next milestone (risk mitigations injected into `/to-plan` for the latter); `COURSE_CORRECTION_NEEDED` → roadmap inserts a corrective milestone before the next feature milestone; `FUNDAMENTAL_RETHINK` → roadmap pauses for a human redesign/pivot decision.
 
-The trajectory-review report is persisted at `knowledge-base/audits/` and referenced by the next milestone's `/to-plan` as prior art (same as a cycle-discover opportunity).
+The trajectory-review report is persisted at `records/audits/` and referenced by the next milestone's `/to-plan` as prior art (same as a cycle-discover opportunity).
 
 ## Hard gates
 
@@ -119,7 +119,7 @@ The trajectory-review report is persisted at `knowledge-base/audits/` and refere
 
 ## Output
 
-- `knowledge-base/audits/{slug-or-date}-analysis.md` — full report following § 8 contract.
+- `records/audits/{slug-or-date}-analysis.md` — full report following § 8 contract.
 - `{baseline_dir}/{module}_{date}.json` — raw measurements for regression detection.
 - Exit code 0 (`ON_TRACK`), 1 (`ON_TRACK_WITH_RISKS`), 2 (`COURSE_CORRECTION_NEEDED` / `FUNDAMENTAL_RETHINK`), 3 (`INVALID`).
 

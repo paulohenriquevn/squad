@@ -77,7 +77,7 @@ fi
 # kit's repository keeps its files in `skills/`, `hooks/`, `scripts/`, which stay
 # audited as usual.
 #
-# `knowledge-base/{references,tools}/` drops out for the SAME reason, one layer
+# `records/{references,tools}/` drops out for the SAME reason, one layer
 # up: it is not even a dependency, it is THIRD-PARTY code the kit declares
 # read-only study material — `validate-command.sh` blocks writing to it and
 # copying from it. Auditing it is worse than auditing your own dependency,
@@ -92,7 +92,7 @@ ALL_FILES=$(echo -e "${UNSTAGED}\n${STAGED}\n${UNTRACKED}\n${LAST_COMMIT}" \
   | sort -u \
   | grep -v '^$' \
   | grep -v '^\.claude/' \
-  | grep -vE '^(\./)?knowledge-base/(references|tools)/' \
+  | grep -vE '^(\./)?records/(references|tools)/' \
   || true)
 
 WARNINGS=()

@@ -37,7 +37,7 @@ def _commit(repo: Path, rel: str, content: str, msg: str = "feat") -> str:
 
 
 def _write_progress(project_root: Path, tasks: list[dict], slug: str = "wsg") -> None:
-    impl_dir = project_root / ".claude" / "knowledge-base" / "implementations"
+    impl_dir = project_root / ".claude" / "records" / "implementations"
     impl_dir.mkdir(parents=True, exist_ok=True)
     (impl_dir / f".progress-{slug}.json").write_text(
         json.dumps({"slug": slug, "tasks": tasks}), encoding="utf-8"
@@ -149,7 +149,7 @@ def test_with_failing_test_script(fake_project: Path) -> None:
 def test_new_gates_are_wired_into_validation(fake_project: Path) -> None:
     """GAP 1+2 / GAP 6: the acceptance-criteria and test-obligation gates must run as
     part of the final validation, not exist as orphan scripts."""
-    plan_dir = fake_project / ".claude" / "knowledge-base" / "plans"
+    plan_dir = fake_project / ".claude" / "records" / "plans"
     plan_dir.mkdir(parents=True, exist_ok=True)
     (plan_dir / "test-slug-plan.md").write_text(
         "# Plan\n\n### T1.1 — X\n\n#### Acceptance Criteria\n"
@@ -170,7 +170,7 @@ def test_checkpoint_consistency_gate_catches_unrecorded_task(tmp_path: Path) -> 
     repo = _init_repo(tmp_path)
     sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
     _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")  # committed, but not in checkpoint
-    plan_dir = repo / ".claude" / "knowledge-base" / "plans"
+    plan_dir = repo / ".claude" / "records" / "plans"
     plan_dir.mkdir(parents=True, exist_ok=True)
     (plan_dir / "ck-plan.md").write_text(
         "## Phase 1\n### T1.1 — Foo\nbody\n### T1.2 — Bar\nbody\n", encoding="utf-8")
@@ -188,7 +188,7 @@ def test_checkpoint_consistency_gate_catches_unrecorded_task(tmp_path: Path) -> 
 def test_malformed_checkpoint_fails_validation(fake_project: Path) -> None:
     """The progress-schema gate must catch a malformed checkpoint (the prompt's old
     bare-object shape) and FAIL the whole validation, not let gates degrade silently."""
-    impl = fake_project / ".claude" / "knowledge-base" / "implementations"
+    impl = fake_project / ".claude" / "records" / "implementations"
     impl.mkdir(parents=True, exist_ok=True)
     (impl / ".progress-test-slug.json").write_text(
         json.dumps({"task_id": "T1.1", "status": "committed"}),  # no 'tasks' envelope
@@ -218,7 +218,7 @@ from run_validation import check_patterns_advisory  # noqa: E402
 
 
 def test_patterns_advisory_never_fails(tmp_path: Path) -> None:
-    plans = tmp_path / ".claude" / "knowledge-base" / "plans"
+    plans = tmp_path / ".claude" / "records" / "plans"
     plans.mkdir(parents=True)
     (plans / "demo-plan.md").write_text(
         "# Plan: demo\n## Prior Art & Related Work\n- Patterns skills: `foo-patterns` Pattern P1.\n"
@@ -226,7 +226,7 @@ def test_patterns_advisory_never_fails(tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()
     (src / "impl.py").write_text("print('no skill mention here')\n")
-    impl = tmp_path / ".claude" / "knowledge-base" / "implementations"
+    impl = tmp_path / ".claude" / "records" / "implementations"
     impl.mkdir(parents=True)
     (impl / ".progress-demo.json").write_text(json.dumps({
         "slug": "demo",
@@ -239,7 +239,7 @@ def test_patterns_advisory_never_fails(tmp_path: Path) -> None:
 
 
 def test_patterns_advisory_absent_when_no_citation(tmp_path: Path) -> None:
-    plans = tmp_path / ".claude" / "knowledge-base" / "plans"
+    plans = tmp_path / ".claude" / "records" / "plans"
     plans.mkdir(parents=True)
     (plans / "demo-plan.md").write_text("# Plan: demo\n## Goal\nNothing special here.\n")
     r = check_patterns_advisory(tmp_path, "demo")
@@ -247,17 +247,17 @@ def test_patterns_advisory_absent_when_no_citation(tmp_path: Path) -> None:
 
 
 def _standalone_project(tmp_path: Path, *, tasks: list[dict]) -> Path:
-    """A project in the STANDALONE layout — knowledge-base at the root, no `.claude/` wrapper.
+    """A project in the STANDALONE layout — records at the root, no `.claude/` wrapper.
 
-    `rules/knowledge-base-location.md` makes this canonical for the kit's own repository, which
+    `rules/records-location.md` makes this canonical for the kit's own repository, which
     is exactly where the kit dogfoods itself.
     """
-    (tmp_path / "knowledge-base" / "plans").mkdir(parents=True)
-    (tmp_path / "knowledge-base" / "implementations").mkdir(parents=True)
-    (tmp_path / "knowledge-base" / "plans" / "s-plan.md").write_text(
+    (tmp_path / "records" / "plans").mkdir(parents=True)
+    (tmp_path / "records" / "implementations").mkdir(parents=True)
+    (tmp_path / "records" / "plans" / "s-plan.md").write_text(
         "## Phase 1 — core\n\n### T1.1 — first\n### T1.2 — skipped\n", encoding="utf-8"
     )
-    (tmp_path / "knowledge-base" / "implementations" / ".progress-s.json").write_text(
+    (tmp_path / "records" / "implementations" / ".progress-s.json").write_text(
         json.dumps({"tasks": tasks}), encoding="utf-8"
     )
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
@@ -277,7 +277,7 @@ def test_find_progress_reads_the_standalone_layout(tmp_path: Path) -> None:
     root = _standalone_project(tmp_path, tasks=[{"id": "T1.1", "phase": 1, "status": "committed"}])
     found = _find_progress(root, "s")
     assert found is not None
-    assert found == root / "knowledge-base" / "implementations" / ".progress-s.json"
+    assert found == root / "records" / "implementations" / ".progress-s.json"
 
 
 def test_find_progress_still_prefers_the_plugin_layout(tmp_path: Path) -> None:
@@ -285,7 +285,7 @@ def test_find_progress_still_prefers_the_plugin_layout(tmp_path: Path) -> None:
     from run_validation import _find_progress
 
     root = _standalone_project(tmp_path, tasks=[])
-    plugin = root / ".claude" / "knowledge-base" / "implementations"
+    plugin = root / ".claude" / "records" / "implementations"
     plugin.mkdir(parents=True)
     (plugin / ".progress-s.json").write_text(json.dumps({"tasks": []}), encoding="utf-8")
     assert _find_progress(root, "s") == plugin / ".progress-s.json"
@@ -460,13 +460,13 @@ assert add(1, 2) == 3
 
 
 def _write_plan(project_root: Path, slug: str, body: str) -> None:
-    plans = project_root / "knowledge-base" / "plans"
+    plans = project_root / "records" / "plans"
     plans.mkdir(parents=True, exist_ok=True)
     (plans / f"{slug}-plan.md").write_text(body, encoding="utf-8")
 
 
 def _write_standalone_progress(project_root: Path, slug: str, tasks: list[dict]) -> None:
-    impl = project_root / "knowledge-base" / "implementations"
+    impl = project_root / "records" / "implementations"
     impl.mkdir(parents=True, exist_ok=True)
     (impl / f".progress-{slug}.json").write_text(
         json.dumps({"slug": slug, "tasks": tasks}), encoding="utf-8"
@@ -490,7 +490,7 @@ def test_phase_boundary_review_present_passes(fake_project: Path) -> None:
     _write_standalone_progress(fake_project, "phased", [
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "abc", "files": ["src/a.py"]},
     ])
-    reviews = fake_project / "knowledge-base" / "mini-reviews"
+    reviews = fake_project / "records" / "mini-reviews"
     reviews.mkdir(parents=True, exist_ok=True)
     (reviews / "phased-phase1-review-2026-08-18.md").write_text("ok", encoding="utf-8")
     _rc, data = _run_validation("phased", fake_project)

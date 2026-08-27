@@ -16,7 +16,7 @@ The anchor scenario is the single use case that, if you cannot honesty-gate it, 
 
 ## § 2 — Status vocabulary (LOCKED — do not change without ADR)
 
-The `Status` field in `knowledge-base/honesty-gate/manifest.md` MUST take one of these values:
+The `Status` field in `records/honesty-gate/manifest.md` MUST take one of these values:
 
 | Status | Meaning |
 |---|---|
@@ -36,7 +36,7 @@ In order; first failure short-circuits to `EVIDENCE_INSUFFICIENT`.
 |---|---|---|
 | 1 | Manifest contains a section identifiable by `Slug` or anchor header | `anchor_missing` |
 | 2 | `Status` matches the running value declared in § 2 | `anchor_not_running` |
-| 3 | At least one evidence file under `knowledge-base/honesty-gate/evidence/` has frontmatter `scenario:` matching the anchor slug | `no_anchor_evidence` |
+| 3 | At least one evidence file under `records/honesty-gate/evidence/` has frontmatter `scenario:` matching the anchor slug | `no_anchor_evidence` |
 | 4 | The most recent matching evidence file (by frontmatter `date:`) is within the freshness threshold below | `anchor_evidence_stale` |
 
 **Freshness threshold (PER-PROJECT — EDIT THIS):** `30 days` by default. Reduce for fast-moving products; never raise without ADR.
@@ -53,7 +53,7 @@ Soft caps cap the verdict at `EVIDENCE_WITH_CAVEATS`. They fire when hard caps p
 
 ## § 5 — Evidence file frontmatter (LOCKED)
 
-Every file under `knowledge-base/honesty-gate/evidence/` MUST have YAML frontmatter:
+Every file under `records/honesty-gate/evidence/` MUST have YAML frontmatter:
 
 ```yaml
 ---

@@ -111,7 +111,7 @@ def classify_file(install_file: Path, kit_file: Path,
 
 # Directories a consumer generates for itself. They are that project's artifacts, not kit code,
 # and reporting them would bury the signal under 38 rows of noise (measured on theokit-tui).
-_CONSUMER_LOCAL = ("__pycache__", ".pytest_cache", ".benchmarks", "knowledge-base")
+_CONSUMER_LOCAL = ("__pycache__", ".pytest_cache", ".benchmarks", "records")
 
 #: Files that belong to the PROJECT even while living in a directory the kit also has.
 #: `agents/<domain>.md` describes the consumer's repository — harvesting it into the kit

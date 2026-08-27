@@ -16,8 +16,8 @@ That split is the whole design here:
 
 | Artifact | Answers | Lives in |
 |---|---|---|
-| the SOP | *what to do*, in order | `knowledge-base/sops/{slug}.md` |
-| the run record | *what was judged*, and why it differed | `knowledge-base/sop-runs/{slug}-{date}.md` |
+| the SOP | *what to do*, in order | `wiki/sops/{slug}.md` (the OKF bundle) |
+| the run record | *what was judged*, and why it differed | `records/sop-runs/{slug}-{date}.md` |
 
 Keeping them in one file is the failure this schema exists to prevent. A
 procedure that absorbs its own exceptions stops being a procedure: the next

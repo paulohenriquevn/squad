@@ -47,7 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # - slide-deck, marp-slide, excalidraw: presentation skills, project-agnostic
 # - honesty-gate: honesty gate consumed transversally (README/CHANGELOG edits, release decisions)
 # - roadmap-init: single-shot bootstrap at project inception; intentionally isolated
-#   (its ARTIFACTS — ROADMAP.md + knowledge-base/references/ — are consumed by cycle-roadmap
+#   (its ARTIFACTS — ROADMAP.md + records/references/ — are consumed by cycle-roadmap
 #   and cycle-discover; the SKILL itself is never invoked mid-cycle)
 # - roadmap-feature: sister of roadmap-init for adding one milestone to an existing roadmap
 #   (same isolation contract; opposite pre-condition — refuses if ROADMAP.md is missing)
@@ -127,7 +127,7 @@ SKILL_REF_RE = re.compile(r"`?(?:\.claude/)?skills/([a-z0-9\-]+)/SKILL\.md`?")
 #   `.claude/rules/code-quality-thresholds.txt`
 #   "rules/discover-web-allowlist.txt"
 # Examples NOT matched (intentionally):
-#   knowledge-base/rules/...  (different directory tree)
+#   records/rules/...  (different directory tree)
 #   project-rules/...         (different prefix)
 RULES_REF_RE = re.compile(
     r"(?<![A-Za-z0-9_/-])(?:\.claude/)?rules/([A-Za-z0-9._-]+\.(?:md|txt))"

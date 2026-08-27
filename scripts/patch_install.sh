@@ -24,7 +24,7 @@
 # What this script does NOT do:
 #   - Does not delete anything. Skills RETIRED by the kit are MOVED to
 #     .claude/.patch-backups/retired/, nunca apagadas.
-#   - Does not touch settings.json, settings.local.json, knowledge-base/, agents/
+#   - Does not touch settings.json, settings.local.json, records/, agents/
 #   - Does not touch skills NOT in the manifest (preserves SEPA-knowledge etc)
 #   - Does not run tests in the target (different env)
 #   - Does not commit anything (consumer decides)
@@ -194,7 +194,7 @@ rules/git-safety.md
 rules/live-target.txt
 rules/current-constraint.md
 rules/reference-provenance.md
-rules/knowledge-base-location.md
+rules/records-location.md
 rules/README.md
 
 # === Rules (shared conventions referenced by skills/cycles — completes manifest gap) ===
@@ -396,9 +396,9 @@ for s in "${RETIRED_SKILLS[@]}"; do
   fi
 done
 
-# --- knowledge-base scaffold for NEW cycles ---------------------------------
+# --- records scaffold for NEW cycles ---------------------------------
 # A patch copies files; it never created directories a new cycle writes into. That
-# gap bit for real: session-goal's Stop hook defaults to knowledge-base/acceptance,
+# gap bit for real: session-goal's Stop hook defaults to records/acceptance,
 # which existed in ZERO of the 29 patched consumers, so an armed gate reported
 # "/acceptance never ran" — a message indistinguishable from a legitimate verdict —
 # and blocked forever on a configuration problem.
@@ -406,9 +406,9 @@ done
 # Only creates what is missing, and only empty directories. Existing content is
 # never touched, so this stays inside the "patch never deletes" contract.
 NEW_KB_DIRS=(
-  "knowledge-base/acceptance"           # cycle-acceptance records (read by the session-goal gate)
-  "knowledge-base/acceptance/evidence"  # screenshots, console/network dumps, transcripts
-  "knowledge-base/roadmap-runs"         # per-milestone macro-loop audit trail
+  "records/acceptance"           # cycle-acceptance records (read by the session-goal gate)
+  "records/acceptance/evidence"  # screenshots, console/network dumps, transcripts
+  "records/roadmap-runs"         # per-milestone macro-loop audit trail
 )
 KB_CREATED=0
 for d in "${NEW_KB_DIRS[@]}"; do
@@ -421,5 +421,5 @@ done
 
 echo
 echo "Done. Auto-generated skills (SEPA-knowledge, review-*-knowledge) preserved."
-echo "Consumer settings.json and agents/ untouched; knowledge-base/ CONTENT untouched"
+echo "Consumer settings.json and agents/ untouched; records/ CONTENT untouched"
 echo "(${KB_CREATED} empty scaffold dir(s) created; ${RETIRED_MOVED} retired skill(s) archived)."

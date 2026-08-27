@@ -112,7 +112,7 @@ class SopReport:
 
 
 def check_sop_structure(project_root: Path, *, today: str | None = None) -> SopReport:
-    """Sweep `knowledge-base/sops/` and report every structural defect."""
+    """Sweep `records/sops/` and report every structural defect."""
     project_root = Path(project_root)
     report = SopReport()
     directory = resolve_knowledge_dir(project_root, _SOPS_DIR)

@@ -4,7 +4,7 @@
 **Repo:** {repo}
 **Mode:** {review|live-test|bug|evolve}
 **Slug:** `{kebab-case-slug}`
-**Source plan:** `knowledge-base/discoveries/plans/{slug}-plan.md`
+**Source plan:** `records/discoveries/plans/{slug}-plan.md`
 **Generated:** {YYYY-MM-DD} via `/discover-execute`
 **Confidence verdict:** PROVISIONAL (awaiting `/discover-confidence`)
 

@@ -13,7 +13,7 @@ the substitution is an upgrade rather than a workaround:
     ROADMAP checkbox. An assertion cannot forge either.
 
 Contract with `cycle-acceptance`: the run writes
-`knowledge-base/acceptance/{milestone}-{date}.md` carrying `verdict: <TOKEN>` in
+`records/acceptance/{milestone}-{date}.md` carrying `verdict: <TOKEN>` in
 its frontmatter. Only ACCEPTED / ACCEPTED_WITH_CAVEATS satisfy the goal, and the
 milestone's ROADMAP checkbox must read `[x]` — the same pair `cycle-roadmap`
 requires before calling a milestone released.
@@ -145,7 +145,7 @@ def main() -> int:
             return 0
 
         acceptance_dir = args.project_root / state.get(
-            "acceptance_dir", "knowledge-base/acceptance"
+            "acceptance_dir", "records/acceptance"
         )
         reasons = evaluate(
             milestones, roadmap_path.read_text(encoding="utf-8"), acceptance_dir

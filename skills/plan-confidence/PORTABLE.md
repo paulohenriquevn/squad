@@ -67,7 +67,7 @@ The skills walk UP from their location to find:
 
 1. **`.claude/` directory** (or `.git/`) → that's the project root
 2. **`.claude/rules/`** → that's the source of project rules (if exists)
-3. **`.claude/knowledge-base/plans/`** OR **`.claude/plans/`** OR **`plans/`** OR **`docs/plans/`** → plans directory
+3. **`.claude/records/plans/`** OR **`.claude/plans/`** OR **`plans/`** OR **`docs/plans/`** → plans directory
 4. **`.claude/skills/plan-confidence/defaults/`** → fallback rules when (2) is empty
 
 If your project has NONE of `.claude/`, `.git/`, or the conventional structure, the skill falls back to legacy paths. Add a `.claude/` directory at your project root to fix.
@@ -157,10 +157,10 @@ If `.claude/rules/` exists in your project, defaults are ignored. Project rules 
 ## Troubleshooting
 
 ### "Plan not found" when invoking by slug
-The auto-detector looks in `.claude/knowledge-base/plans/`, then `.claude/plans/`, then `plans/`, then `docs/plans/`. If your project uses a different directory, pass the full path to the `.md` file instead of just the slug.
+The auto-detector looks in `.claude/records/plans/`, then `.claude/plans/`, then `plans/`, then `docs/plans/`. If your project uses a different directory, pass the full path to the `.md` file instead of just the slug.
 
 ### "Calibration WARN: PROVISIONAL_v1"
-This is expected on a new project. The skill is signaling that the score band cutoffs are SOTA defaults and not yet calibrated against your project's holdout. Build the holdout in `.claude/knowledge-base/concepts/plan-confidence/holdout/` over time.
+This is expected on a new project. The skill is signaling that the score band cutoffs are SOTA defaults and not yet calibrated against your project's holdout. Build the holdout in `.claude/records/concepts/plan-confidence/holdout/` over time.
 
 ### Tests fail with "real plan not found"
 These tests reference specific plans from the source project. They SKIP gracefully in your project — that's expected behavior.

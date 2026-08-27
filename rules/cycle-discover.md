@@ -36,7 +36,7 @@ Do NOT trigger DISCOVER for:
 /discover-plan-confidence {slug}
      ↓ (gate on the measurement plan itself; INVALID returns to /discover-plan)
 /discover-execute {slug}
-     ↓ (runs the measurement → knowledge-base/discoveries/opportunities/{slug}-opportunity.md)
+     ↓ (runs the measurement → records/discoveries/opportunities/{slug}-opportunity.md)
      │                        └─ or → ITEM_KILLED, and the B-NNN block records kill_reason
 /discover-confidence {slug}
      ↓ (scores the opportunity; INVALID returns to /discover-plan)
@@ -148,15 +148,15 @@ Two phases drive autonomous halt-loops via `ralph-loop:ralph-loop`, following th
 
 ## Output
 
-- `knowledge-base/discoveries/plans/{slug}-plan.md` — the measurement plan
-- `knowledge-base/discoveries/opportunities/{slug}-opportunity.md` — the terminal artifact
+- `records/discoveries/plans/{slug}-plan.md` — the measurement plan
+- `records/discoveries/opportunities/{slug}-opportunity.md` — the terminal artifact
 - `BACKLOG.md` — the `B-NNN` block updated: `status` → `triaged` with `evidence`, or `killed` with `kill_reason`. A `--sweep` appends new blocks with `source: discover-{mode}`.
 
-The study zone the ancestor cycle used (`knowledge-base/references/`, seeded at project inception and governed by a provenance rule) is **retired**: it existed to hold other people's code for imitation, which is the practice this cycle removed.
+The study zone the ancestor cycle used (`records/references/`, seeded at project inception and governed by a provenance rule) is **retired**: it existed to hold other people's code for imitation, which is the practice this cycle removed.
 
 ## Rollback
 
-An opportunity that turns out wrong is simply not consumed downstream — supersede or delete the file under `knowledge-base/discoveries/opportunities/`. The `B-NNN` item returns to `raw` so it can be re-measured, with a note recording that the first measurement was withdrawn and why. Do not silently reset it: an item that was measured, believed, and then withdrawn carries information a fresh-looking `raw` item does not.
+An opportunity that turns out wrong is simply not consumed downstream — supersede or delete the file under `records/discoveries/opportunities/`. The `B-NNN` item returns to `raw` so it can be re-measured, with a note recording that the first measurement was withdrawn and why. Do not silently reset it: an item that was measured, believed, and then withdrawn carries information a fresh-looking `raw` item does not.
 
 ## Cross-references
 

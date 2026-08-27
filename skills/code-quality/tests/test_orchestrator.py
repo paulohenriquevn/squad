@@ -26,7 +26,7 @@ def _write_rules(tmp_path: Path, *, with_allowlist: str = "") -> Path:
     )
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text(with_allowlist)
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
     return tmp_path
 
@@ -37,7 +37,7 @@ def _write_rules(tmp_path: Path, *, with_allowlist: str = "") -> Path:
 
 
 def test_enumerate_source_files_skips_references_zone(tmp_path: Path) -> None:
-    """Regression (issue #37): the audit must NOT walk knowledge-base/references/.
+    """Regression (issue #37): the audit must NOT walk records/references/.
 
     Reference repos cloned there are third-party study material (read-only per
     cycle-discover.md). Walking them parses tens of thousands of foreign files,
@@ -47,7 +47,7 @@ def test_enumerate_source_files_skips_references_zone(tmp_path: Path) -> None:
     module_file.parent.mkdir(parents=True)
     module_file.write_text("def foo():\n    return 1\n")
 
-    foreign = tmp_path / "knowledge-base" / "references" / "langfuse" / "lib.py"
+    foreign = tmp_path / "records" / "references" / "langfuse" / "lib.py"
     foreign.parent.mkdir(parents=True)
     foreign.write_text("def bar():\n    return 2\n")
 
@@ -126,7 +126,7 @@ def test_unimplemented_detector_is_visible_and_caps_the_verdict() -> None:
 
 def test_slug_resolution_finds_plan_in_plans_dir(tmp_path: Path) -> None:
     _write_rules(tmp_path)
-    plan = tmp_path / ".claude" / "knowledge-base" / "plans" / "demo-plan.md"
+    plan = tmp_path / ".claude" / "records" / "plans" / "demo-plan.md"
     plan.write_text("# demo\n")
     resolved = _resolve_plan_path("demo", tmp_path)
     assert resolved == plan
@@ -134,7 +134,7 @@ def test_slug_resolution_finds_plan_in_plans_dir(tmp_path: Path) -> None:
 
 def test_slug_resolution_finds_plan_in_completed(tmp_path: Path) -> None:
     _write_rules(tmp_path)
-    completed = tmp_path / ".claude" / "knowledge-base" / "plans" / "completed"
+    completed = tmp_path / ".claude" / "records" / "plans" / "completed"
     completed.mkdir()
     plan = completed / "old-plan.md"
     plan.write_text("# old\n")
@@ -145,7 +145,7 @@ def test_slug_resolution_finds_plan_in_completed(tmp_path: Path) -> None:
 def test_slug_resolution_refuses_discovery_plan(tmp_path: Path) -> None:
     """EC-6 — discovery plan slug must produce a helpful error mentioning /discover-confidence."""
     _write_rules(tmp_path)
-    disc = tmp_path / ".claude" / "knowledge-base" / "discoveries" / "plans"
+    disc = tmp_path / ".claude" / "records" / "discoveries" / "plans"
     disc.mkdir(parents=True)
     (disc / "investigation-plan.md").write_text("# discovery\n")
     with pytest.raises(FileNotFoundError, match="discover-confidence"):
@@ -249,14 +249,14 @@ def test_cli_malformed_allowlist_emits_hard(tmp_path: Path, capsys) -> None:
 
 def test_cli_plan_bound_mode_writes_markdown_report(tmp_path: Path, capsys) -> None:
     _write_rules(tmp_path)
-    plan = tmp_path / ".claude" / "knowledge-base" / "plans" / "demo-plan.md"
+    plan = tmp_path / ".claude" / "records" / "plans" / "demo-plan.md"
     plan.write_text("# demo\n")
     exit_code = main(["demo", "--repo-root", str(tmp_path), "--no-network"])
     # B-092 — these fixtures enable four languages and provide no manifests, so the audit
     # runs zero detectors and the verdict is now INVALID. This test is about the MARKDOWN
     # report, not the verdict, so it asserts the report rather than the exit code.
     assert exit_code != 0
-    audit_dir = tmp_path / ".claude" / "knowledge-base" / "audits"
+    audit_dir = tmp_path / ".claude" / "records" / "audits"
     audit_files = list(audit_dir.glob("demo-code-quality-*.md"))
     assert len(audit_files) == 1, f"Expected audit Markdown file; got {audit_files}"
 
@@ -264,7 +264,7 @@ def test_cli_plan_bound_mode_writes_markdown_report(tmp_path: Path, capsys) -> N
 def test_cli_no_audit_write_skips_markdown(tmp_path: Path, capsys) -> None:
     """T6.5 contract — --no-audit-write produces JSON only."""
     _write_rules(tmp_path)
-    plan = tmp_path / ".claude" / "knowledge-base" / "plans" / "demo-plan.md"
+    plan = tmp_path / ".claude" / "records" / "plans" / "demo-plan.md"
     plan.write_text("# demo\n")
     exit_code = main(
         ["demo", "--repo-root", str(tmp_path), "--no-network", "--no-audit-write"]
@@ -273,7 +273,7 @@ def test_cli_no_audit_write_skips_markdown(tmp_path: Path, capsys) -> None:
     # runs zero detectors and the verdict is now INVALID. This test is about the MARKDOWN
     # report, not the verdict, so it asserts the report rather than the exit code.
     assert exit_code != 0
-    audit_dir = tmp_path / ".claude" / "knowledge-base" / "audits"
+    audit_dir = tmp_path / ".claude" / "records" / "audits"
     assert not audit_dir.exists() or not list(audit_dir.glob("*.md"))
 
 
@@ -301,7 +301,7 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
     )
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text("")
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
 
     manifest = tmp_path / "crate" / "Cargo.toml"
@@ -348,7 +348,7 @@ def _write_python_only_rules(tmp_path: Path) -> Path:
     (rules / "code-quality-languages.txt").write_text("python | pyproject.toml | ENABLED |\n")
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text("")
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
     return tmp_path
 
@@ -423,7 +423,7 @@ def test_python_disabled_makes_the_same_tree_report_nothing_audited(
     (rules / "code-quality-languages.txt").write_text("# nothing enabled\n")
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text("")
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "0.0.0"\n')
     pkg = tmp_path / "demo"
@@ -493,7 +493,7 @@ def test_a_manifest_nobody_audited_fails_even_when_another_language_was(
     )
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text("")
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
     # Both manifests exist; only one language is enabled.
     (tmp_path / "package.json").write_text('{"name":"fx","version":"0.0.0"}')

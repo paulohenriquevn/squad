@@ -34,7 +34,7 @@ Four deterministic checkers, four dimensions:
 | Dimension | Checker script | Hard cap | Default weight |
 |---|---|---|---|
 | **corner_coverage** | `scripts/check_corner_coverage.py` | ≤49 if any coverage corner is empty AND no `<!-- DEFER-CORNER: {corner} \| {reason} -->` marker present | 0.30 |
-| **measurement_targets** | `scripts/check_measurement_targets.py` | ≤49 if ANY cited path in `.claude/knowledge-base/references/` is fabricated (file does not exist) | 0.30 |
+| **measurement_targets** | `scripts/check_measurement_targets.py` | ≤49 if ANY cited path in `.claude/records/references/` is fabricated (file does not exist) | 0.30 |
 | **plan_completeness** | `scripts/check_plan_completeness.py` | ≤70 if any of: mandatory section missing, ADR count < 2, question budget violated, method missing | 0.25 |
 | **structural_risk** (smells) | `scripts/check_spec_smells.py` | penalty only (no hard cap) | 0.15 |
 
@@ -51,11 +51,11 @@ When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_acti
 
 ## Workflow
 
-1. **Resolve the plan path** — `.claude/knowledge-base/discoveries/plans/{slug}-plan.md`. Refuse if absent.
+1. **Resolve the plan path** — `.claude/records/discoveries/plans/{slug}-plan.md`. Refuse if absent.
 2. **Run the 4 checker scripts** in parallel via Bash subprocess. Each emits a JSON document on stdout.
 3. **Combine outputs** — apply hard caps per the rubric above. Compute weighted average.
 4. **Apply soft caps** — see `discover-plan-golden-rule.md § Soft gates`.
-5. **Emit a JSON score report** at `.claude/knowledge-base/reviews/{slug}-discover-plan-confidence-{date}.json` AND a human-readable rendering at `.claude/knowledge-base/reviews/{slug}-discover-plan-confidence-{date}.md`.
+5. **Emit a JSON score report** at `.claude/records/reviews/{slug}-discover-plan-confidence-{date}.json` AND a human-readable rendering at `.claude/records/reviews/{slug}-discover-plan-confidence-{date}.md`.
 6. **Print verdict** to stdout: one of `SHIPPABLE` (≥90), `SHIPPABLE_WITH_CAVEATS` (70-89), `NON_SHIPPABLE` (50-69), `INVALID` (≤49).
 
 ## Output schema

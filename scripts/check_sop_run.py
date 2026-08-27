@@ -110,10 +110,10 @@ def _sop_version(sops_dir: Path | None, slug: str) -> str | None:
 
 
 def check_sop_runs(project_root: Path) -> RunReport:
-    """Sweep `knowledge-base/sop-runs/` and bind each record to its procedure."""
+    """Sweep `records/sop-runs/` and bind each record to its procedure."""
     project_root = Path(project_root)
     report = RunReport()
-    # The trail stays in the knowledge-base; the procedures may have moved to
+    # The trail stays in the records; the procedures may have moved to
     # the bundle. Two different resolutions on purpose — a record of one
     # execution is not a concept, and the split is the decision this migration
     # rests on (wiki/decisions/where-knowledge-lives.md).

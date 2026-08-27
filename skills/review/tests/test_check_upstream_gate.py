@@ -8,7 +8,7 @@ Pre-conditions` repeats the requirement. Grep across `/review`'s scripts on
 2026-08-26: zero. The entire check was prose in `SKILL.md`:
 
     # /code-quality audit exists AND verdict ∈ {PASS, PASS_WITH_CAVEATS}
-    test -f .claude/knowledge-base/audits/{slug}-code-quality-*.md
+    test -f .claude/records/audits/{slug}-code-quality-*.md
 
 A `test -f` the agent has to remember to run is not a gate — it is a note. And
 the ADR, the piece that makes a soft cap dismissible, was looked for by nobody:
@@ -35,7 +35,7 @@ from check_upstream_gate import check_upstream_gate
 
 
 def _audit(root: Path, slug: str, verdict: str, soft: str = "_none_", hard: str = "_none_") -> Path:
-    audits = root / "knowledge-base" / "audits"
+    audits = root / "records" / "audits"
     audits.mkdir(parents=True, exist_ok=True)
     path = audits / f"{slug}-code-quality-2026-08-26.md"
     path.write_text(
@@ -50,7 +50,7 @@ def _audit(root: Path, slug: str, verdict: str, soft: str = "_none_", hard: str 
 
 
 def _adr(root: Path, name: str, body: str) -> Path:
-    adrs = root / "knowledge-base" / "adrs"
+    adrs = root / "records" / "adrs"
     adrs.mkdir(parents=True, exist_ok=True)
     path = adrs / f"{name}.md"
     path.write_text(body, encoding="utf-8")
@@ -132,7 +132,7 @@ def test_fail_soft_with_an_adr_per_cap_passes(tmp_path: Path) -> None:
 def test_the_plans_adr_section_counts_as_the_dismissal(tmp_path: Path) -> None:
     """The ADR may live in the plan — that is where `/to-plan` writes them."""
     _audit(tmp_path, "demo", "FAIL_SOFT", soft="soft_cap_orphan_export_python")
-    plans = tmp_path / "knowledge-base" / "plans"
+    plans = tmp_path / "records" / "plans"
     plans.mkdir(parents=True)
     (plans / "demo-plan.md").write_text(
         "# Plan\n\n## ADRs\n\n- soft_cap_orphan_export_python: accepted because ...\n", encoding="utf-8")
@@ -143,7 +143,7 @@ def test_the_plans_adr_section_counts_as_the_dismissal(tmp_path: Path) -> None:
 def test_the_newest_audit_wins(tmp_path: Path) -> None:
     """Re-auditing after a fix must count; the old audit must not block."""
     _audit(tmp_path, "demo", "FAIL_HARD", hard="dead_code_unallowlisted_python")
-    audits = tmp_path / "knowledge-base" / "audits"
+    audits = tmp_path / "records" / "audits"
     (audits / "demo-code-quality-2026-08-27.md").write_text(
         "**Verdict:** PASS\n**Hard caps triggered:** _none_\n**Soft caps triggered:** _none_\n",
         encoding="utf-8")
@@ -157,7 +157,7 @@ def test_the_newest_audit_wins(tmp_path: Path) -> None:
 
 def test_an_audit_without_a_verdict_line_blocks(tmp_path: Path) -> None:
     """An unreadable report is an absent verdict, not a favourable one."""
-    audits = tmp_path / "knowledge-base" / "audits"
+    audits = tmp_path / "records" / "audits"
     audits.mkdir(parents=True)
     (audits / "demo-code-quality-2026-08-26.md").write_text("# vazio\n", encoding="utf-8")
 
@@ -166,7 +166,7 @@ def test_an_audit_without_a_verdict_line_blocks(tmp_path: Path) -> None:
     assert "unreadable" in findings[0]["title"]
 
 
-@pytest.mark.parametrize("layout", ["knowledge-base", ".claude/knowledge-base"])
+@pytest.mark.parametrize("layout", ["records", ".claude/records"])
 def test_both_install_layouts_are_searched(tmp_path: Path, layout: str) -> None:
     """The kit lives in two layouts, and a gate that sees only one of them is half a gate."""
     audits = tmp_path / layout / "audits"

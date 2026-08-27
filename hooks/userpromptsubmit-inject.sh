@@ -14,7 +14,7 @@
 #
 # Resolves the active plan via:
 #   1. .active_plan pointer (slug) at project root
-#   2. Newest knowledge-base/plans/*-plan.md by mtime
+#   2. Newest records/plans/*-plan.md by mtime
 #
 # Verifies SHA256 attestation if .attestations/{slug}.sha256 exists. On hash
 # mismatch, emits TAMPERED warning instead of plan content (prompt-injection defense).
@@ -58,7 +58,7 @@ PLAN_SLUG=""
 if [ -f "$ECO/.active_plan" ]; then
   AP=$(tr -d '\r\n[:space:]' < "$ECO/.active_plan" 2>/dev/null)
   if [ -n "$AP" ] && printf '%s' "$AP" | grep -Eq "$SLUG_RE"; then
-    CANDIDATE="$ECO/knowledge-base/plans/${AP}-plan.md"
+    CANDIDATE="$ECO/records/plans/${AP}-plan.md"
     if [ -f "$CANDIDATE" ]; then
       RESOLVED_PLAN="$CANDIDATE"
       PLAN_SLUG="$AP"
@@ -67,10 +67,10 @@ if [ -f "$ECO/.active_plan" ]; then
 fi
 
 # Fallback: newest plan by mtime
-if [ -z "$RESOLVED_PLAN" ] && [ -d "$ECO/knowledge-base/plans" ]; then
+if [ -z "$RESOLVED_PLAN" ] && [ -d "$ECO/records/plans" ]; then
   NEWEST=""
   NEWEST_MT=0
-  for f in "$ECO"/knowledge-base/plans/*-plan.md; do
+  for f in "$ECO"/records/plans/*-plan.md; do
     [ -f "$f" ] || continue
     m=$(stat -c '%Y' "$f" 2>/dev/null || stat -f '%m' "$f" 2>/dev/null || echo 0)
     if [ "$m" -gt "$NEWEST_MT" ] 2>/dev/null; then
@@ -124,7 +124,7 @@ GOAL_LINE=$(awk '/^## Goal/{f=1;next} f&&/^> /{print;exit} f&&/^## /{exit}' "$RE
 Goal: $GOAL_LINE"
 
 # Progress pointer (not the contents).
-PROGRESS_FILE="$ECO/knowledge-base/progress/${PLAN_SLUG}-progress.md"
+PROGRESS_FILE="$ECO/session-state/${PLAN_SLUG}-progress.md"
 [ -f "$PROGRESS_FILE" ] && CTX="$CTX
 Progress log: $PROGRESS_FILE (Read its tail for recent state)."
 

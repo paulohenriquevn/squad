@@ -100,7 +100,7 @@ class TestHookContract:
     def _project(self, tmp_path: Path, checkbox: str, verdict: str | None) -> None:
         (tmp_path / "ROADMAP.md").write_text(roadmap(checkbox), encoding="utf-8")
         if verdict:
-            write_record(tmp_path / "knowledge-base" / "acceptance", "M2", verdict)
+            write_record(tmp_path / "records" / "acceptance", "M2", verdict)
 
     def test_blocks_with_a_reason_when_the_goal_was_not_met(self, tmp_path: Path) -> None:
         self._project(tmp_path, " ", None)
@@ -169,7 +169,7 @@ class TestInstaller:
         (tmp_path / ".claude" / "rules").mkdir(parents=True, exist_ok=True)
         (tmp_path / ".claude" / "rules" / "acceptance-target.txt").write_text(
             "kind = internal\ntarget = @org/p\n", encoding="utf-8")
-        (tmp_path / ".claude" / "knowledge-base" / "acceptance").mkdir(parents=True, exist_ok=True)
+        (tmp_path / ".claude" / "records" / "acceptance").mkdir(parents=True, exist_ok=True)
         return subprocess.run(
             [sys.executable, str(INSTALLER), "--project-root", str(tmp_path),
              "--milestones", *milestones],
@@ -276,7 +276,7 @@ class TestInstallerPathValidation:
                 "### M27 — [ ] Management\n\n**Definition of done:**\n\n- [ ] Responds in 1s.\n",
                 encoding="utf-8")
         if acc_dir:
-            (tmp_path / "knowledge-base" / "acceptance").mkdir(parents=True)
+            (tmp_path / "records" / "acceptance").mkdir(parents=True)
         rules = tmp_path / ".claude" / "rules"
         rules.mkdir(parents=True, exist_ok=True)
         (rules / "acceptance-target.txt").write_text(
@@ -312,21 +312,21 @@ class TestInstallerPathValidation:
     def test_acceptance_dir_customizado_dentro_do_projeto_e_aceito(self, tmp_path: Path) -> None:
         """Relocating INSIDE the project is legitimate; leaving it is not (see TestAutonomy)."""
         self._project(tmp_path, roadmap_file=True, acc_dir=False)
-        (tmp_path / "pacote" / "knowledge-base" / "acceptance").mkdir(parents=True)
+        (tmp_path / "pacote" / "records" / "acceptance").mkdir(parents=True)
 
-        result = self._arm(tmp_path, "--acceptance-dir", "pacote/knowledge-base/acceptance")
+        result = self._arm(tmp_path, "--acceptance-dir", "pacote/records/acceptance")
 
         assert result.returncode == 0, result.stderr
         state = json.loads((tmp_path / ".claude" / "session-goal.json").read_text())
-        assert state["acceptance_dir"] == "pacote/knowledge-base/acceptance"
+        assert state["acceptance_dir"] == "pacote/records/acceptance"
 
 
 class TestAutonomy:
-    """Consumers are autonomous: each has its own roadmap and knowledge-base."""
+    """Consumers are autonomous: each has its own roadmap and records."""
 
     def _project(self, tmp_path: Path) -> Path:
         root = tmp_path / "projeto"
-        (root / ".claude" / "knowledge-base" / "acceptance").mkdir(parents=True)
+        (root / ".claude" / "records" / "acceptance").mkdir(parents=True)
         (root / ".claude" / "rules").mkdir(parents=True)
         (root / ".claude" / "rules" / "acceptance-target.txt").write_text(
             "kind = internal\ntarget = @org/pacote\n", encoding="utf-8")
@@ -346,14 +346,14 @@ class TestAutonomy:
 
         assert self._arm(root).returncode == 0
         state = json.loads((root / ".claude" / "session-goal.json").read_text())
-        assert state["acceptance_dir"] == ".claude/knowledge-base/acceptance"
+        assert state["acceptance_dir"] == ".claude/records/acceptance"
 
     def test_refuses_an_acceptance_dir_from_another_project(self, tmp_path: Path) -> None:
         root = self._project(tmp_path)
-        irmao = tmp_path / "irmao" / ".claude" / "knowledge-base" / "acceptance"
+        irmao = tmp_path / "irmao" / ".claude" / "records" / "acceptance"
         irmao.mkdir(parents=True)
 
-        result = self._arm(root, "--acceptance-dir", "../irmao/.claude/knowledge-base/acceptance")
+        result = self._arm(root, "--acceptance-dir", "../irmao/.claude/records/acceptance")
 
         assert result.returncode == 2
         assert "OUTSIDE the project" in result.stderr
@@ -380,7 +380,7 @@ class TestGoalRefusesUnsatisfiable:
 
     def _project(self, tmp_path: Path, *, dod: bool = True, target: bool = True) -> Path:
         root = tmp_path / "projeto"
-        (root / ".claude" / "knowledge-base" / "acceptance").mkdir(parents=True)
+        (root / ".claude" / "records" / "acceptance").mkdir(parents=True)
         (root / ".claude" / "rules").mkdir(parents=True)
         bloco = "### M2 — [ ] Streaming\n\n**Objective:** sse.\n\n"
         if dod:

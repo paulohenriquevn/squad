@@ -36,13 +36,13 @@ fi
 PLAN_SLUG=""
 if [ -f "$ECO/.active_plan" ]; then
   AP=$(tr -d '\r\n[:space:]' < "$ECO/.active_plan" 2>/dev/null)
-  if [ -n "$AP" ] && [ -f "$ECO/knowledge-base/plans/${AP}-plan.md" ]; then
+  if [ -n "$AP" ] && [ -f "$ECO/records/plans/${AP}-plan.md" ]; then
     PLAN_SLUG="$AP"
-    add "Active plan: $AP ($ECO/knowledge-base/plans/${AP}-plan.md) — pinned via $ECO/.active_plan"
+    add "Active plan: $AP ($ECO/records/plans/${AP}-plan.md) — pinned via $ECO/.active_plan"
   fi
 fi
-if [ -z "$PLAN_SLUG" ] && [ -d "$ECO/knowledge-base/plans" ]; then
-  NEWEST=$(ls -t "$ECO"/knowledge-base/plans/*-plan.md 2>/dev/null | head -1)
+if [ -z "$PLAN_SLUG" ] && [ -d "$ECO/records/plans" ]; then
+  NEWEST=$(ls -t "$ECO"/records/plans/*-plan.md 2>/dev/null | head -1)
   if [ -n "$NEWEST" ]; then
     PLAN_SLUG=$(basename "$NEWEST" -plan.md)
     add "Active plan: $PLAN_SLUG (resolved by mtime — set $ECO/.active_plan to pin)"

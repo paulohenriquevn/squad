@@ -47,7 +47,7 @@ def _init_repo(tmp_path: Path) -> Path:
 
 
 def _add_zone_file(repo: Path, relative: str, content: str) -> None:
-    path = repo / "knowledge-base" / "references" / relative
+    path = repo / "records" / "references" / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 

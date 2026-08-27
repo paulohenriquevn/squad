@@ -51,7 +51,7 @@ def _upstream_ok(findings_dir: Path, slug: str = "fixture") -> None:
     upstream green and go on measuring what they came to measure — the gate itself
     has its own suite in `test_check_upstream_gate.py`.
     """
-    audits = findings_dir.parent / "knowledge-base" / "audits"
+    audits = findings_dir.parent / "records" / "audits"
     audits.mkdir(parents=True, exist_ok=True)
     audit = audits / f"{slug}-code-quality-2026-08-26.md"
     if not audit.exists():

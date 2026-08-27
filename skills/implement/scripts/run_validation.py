@@ -19,7 +19,7 @@ Runs (and gates on):
     Override with --no-code-quality (escape for pre-code / CI without the skill).
 
 Outputs JSON validation report. Saves a markdown summary at:
-  .claude/knowledge-base/reviews/{slug}-implement-validate-{date}.md
+  .claude/records/reviews/{slug}-implement-validate-{date}.md
 
 Exit codes:
   0 — All gates PASS or N/A
@@ -368,8 +368,8 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
 
 def _find_plan(project_root: Path, slug: str) -> Path | None:
     """Locate the plan file in either the plugin (.claude/) or standalone layout."""
-    for base in (project_root / ".claude" / "knowledge-base" / "plans",
-                 project_root / "knowledge-base" / "plans"):
+    for base in (project_root / ".claude" / "records" / "plans",
+                 project_root / "records" / "plans"):
         candidate = base / f"{slug}-plan.md"
         if candidate.exists():
             return candidate
@@ -379,9 +379,9 @@ def _find_plan(project_root: Path, slug: str) -> Path | None:
 def _find_progress(project_root: Path, slug: str) -> Path | None:
     """The checkpoint, in either layout — the companion `_find_plan` always had and this did not.
 
-    Three call sites hardcoded `.claude/knowledge-base/implementations/` while `_find_plan`,
-    written directly above them, already handled both. `rules/knowledge-base-location.md` makes
-    the standalone layout (`<repo>/knowledge-base/`) canonical for the kit's own repository —
+    Three call sites hardcoded `.claude/records/implementations/` while `_find_plan`,
+    written directly above them, already handled both. `rules/records-location.md` makes
+    the standalone layout (`<repo>/records/`) canonical for the kit's own repository —
     which is where the kit dogfoods itself. There, all three answered SKIP: `_read_progress`
     returned None, and the schema and checkpoint-consistency gates reported
     "no progress checkpoint — implement may not have run" for a checkpoint sitting on disk.
@@ -389,8 +389,8 @@ def _find_progress(project_root: Path, slug: str) -> Path | None:
     A gate that reports SKIP because it looked in the wrong directory is indistinguishable in
     the report from one that legitimately had nothing to check, which is why this survived.
     """
-    for base in (project_root / ".claude" / "knowledge-base" / "implementations",
-                 project_root / "knowledge-base" / "implementations"):
+    for base in (project_root / ".claude" / "records" / "implementations",
+                 project_root / "records" / "implementations"):
         candidate = base / f".progress-{slug}.json"
         if candidate.exists():
             return candidate
@@ -448,7 +448,7 @@ def check_progress_schema_gate(project_root: Path, slug: str) -> dict[str, Any]:
     # Falls back to the plugin path when neither layout holds a checkpoint, so the schema
     # check still reports "missing" against a concrete path rather than crashing on None.
     path = _find_progress(project_root, slug) or (
-        project_root / ".claude" / "knowledge-base" / "implementations" / f".progress-{slug}.json"
+        project_root / ".claude" / "records" / "implementations" / f".progress-{slug}.json"
     )
     from check_progress_schema import check_progress_schema
 
@@ -548,8 +548,8 @@ def check_phase_review_gate(project_root: Path, slug: str) -> dict[str, Any]:
     from check_phase_review import check_phase_review
 
     review_dirs = [
-        project_root / ".claude" / "knowledge-base" / "mini-reviews",
-        project_root / "knowledge-base" / "mini-reviews",
+        project_root / ".claude" / "records" / "mini-reviews",
+        project_root / "records" / "mini-reviews",
     ]
     report = check_phase_review(plan, progress, slug, review_dirs)
     return {
@@ -607,7 +607,7 @@ def check_test_obligations_gate(project_root: Path, slug: str) -> dict[str, Any]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Final validation gate for /implement.")
-    parser.add_argument("slug", help="Plan slug (matches .claude/knowledge-base/implementations/{slug}-implementation.md)")
+    parser.add_argument("slug", help="Plan slug (matches .claude/records/implementations/{slug}-implementation.md)")
     parser.add_argument("--project-root", type=Path, default=None)
     parser.add_argument("--no-write-report", action="store_true", help="don't save a markdown report")
     parser.add_argument(
@@ -672,7 +672,7 @@ def main() -> int:
     print(json.dumps(report, indent=2))
 
     if not args.no_write_report:
-        review_dir = project_root / ".claude" / "knowledge-base" / "reviews"
+        review_dir = project_root / ".claude" / "records" / "reviews"
         review_dir.mkdir(parents=True, exist_ok=True)
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         md_path = review_dir / f"{args.slug}-implement-validate-{today}.md"

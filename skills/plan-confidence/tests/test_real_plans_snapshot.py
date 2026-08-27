@@ -18,7 +18,7 @@ from run_structural import run_structural  # noqa: E402
 
 SKILL_ROOT = Path(__file__).parent.parent
 PROJECT_ROOT = SKILL_ROOT.parent.parent.parent
-PLANS_DIR = SKILL_ROOT.parent.parent / "knowledge-base" / "plans"
+PLANS_DIR = SKILL_ROOT.parent.parent / "records" / "plans"
 COMPLETED_DIR = PLANS_DIR / "completed"
 RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"
 THRESHOLDS = SKILL_ROOT.parent.parent / "rules" / "plan-confidence-thresholds.txt"
@@ -141,7 +141,7 @@ def test_snapshots_cover_active_plans_with_matrix() -> None:
         "observability-cache-maturity-baseline.md",
         "observability-cache-maturity-edge-cases.md",
         # Working plan for the patterns-consumption-gate feature itself (gitignored
-        # under knowledge-base/plans/); not a regression-snapshot fixture.
+        # under records/plans/); not a regression-snapshot fixture.
         "patterns-consumption-gate-plan.md",
     }
     snapshot_plans = set(SNAPSHOTS.keys())

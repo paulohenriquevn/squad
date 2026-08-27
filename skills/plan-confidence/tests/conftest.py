@@ -3,7 +3,7 @@
 PORTABLE: paths are auto-detected via walk-up from the skill location, with
 layout fallback so the test suite runs in BOTH layouts:
 
-  - **standalone**: Cycle source repo itself — `rules/`, `skills/`, `knowledge-base/`
+  - **standalone**: Cycle source repo itself — `rules/`, `skills/`, `records/`
     live at the top level (no `.claude/` wrapper).
   - **consumer install**: Cycle ecosystem copied into a consumer project under
     `<consumer>/.claude/` (this is what `scripts/install.sh` and
@@ -77,11 +77,11 @@ def _resolve_rules_dir(project_root: Path) -> Path:
 
 
 def _resolve_concepts_dir(project_root: Path) -> Path:
-    """Return whichever of `<root>/.claude/knowledge-base/concepts/plan-confidence/`
-    or `<root>/knowledge-base/concepts/plan-confidence/` actually exists.
+    """Return whichever of `<root>/.claude/records/concepts/plan-confidence/`
+    or `<root>/records/concepts/plan-confidence/` actually exists.
     """
-    consumer = project_root / ".claude" / "knowledge-base" / "concepts" / "plan-confidence"
-    standalone = project_root / "knowledge-base" / "concepts" / "plan-confidence"
+    consumer = project_root / ".claude" / "records" / "concepts" / "plan-confidence"
+    standalone = project_root / "records" / "concepts" / "plan-confidence"
     if consumer.exists():
         return consumer
     if standalone.exists():

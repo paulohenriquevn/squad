@@ -18,15 +18,15 @@ echo "[precompact-preserve] Context compaction about to occur. Preserving state.
 ACTIVE_PLAN=""
 if [ -f "$ECO/.active_plan" ]; then
   AP=$(tr -d '\r\n[:space:]' < "$ECO/.active_plan" 2>/dev/null)
-  if [ -n "$AP" ] && [ -f "$ECO/knowledge-base/plans/$AP-plan.md" ]; then
-    ACTIVE_PLAN="$ECO/knowledge-base/plans/$AP-plan.md"
+  if [ -n "$AP" ] && [ -f "$ECO/records/plans/$AP-plan.md" ]; then
+    ACTIVE_PLAN="$ECO/records/plans/$AP-plan.md"
   fi
 fi
 
 # Fallback: newest plan file
-if [ -z "$ACTIVE_PLAN" ] && [ -d "$ECO/knowledge-base/plans" ]; then
+if [ -z "$ACTIVE_PLAN" ] && [ -d "$ECO/records/plans" ]; then
   # shellcheck disable=SC2012
-  NEWEST=$(ls -t "$ECO"/knowledge-base/plans/*-plan.md 2>/dev/null | head -1)
+  NEWEST=$(ls -t "$ECO"/records/plans/*-plan.md 2>/dev/null | head -1)
   [ -n "$NEWEST" ] && ACTIVE_PLAN="$NEWEST"
 fi
 
@@ -53,7 +53,7 @@ PLAN_SLUG=""
 if [ -n "$ACTIVE_PLAN" ]; then
   PLAN_SLUG=$(basename "$ACTIVE_PLAN" -plan.md)
 fi
-PROGRESS_FILE="$ECO/knowledge-base/progress/${PLAN_SLUG}-progress.md"
+PROGRESS_FILE="$ECO/session-state/${PLAN_SLUG}-progress.md"
 if [ -n "$PLAN_SLUG" ] && [ -f "$PROGRESS_FILE" ]; then
   echo "[precompact-preserve] Last 10 progress entries:"
   tail -10 "$PROGRESS_FILE" 2>/dev/null | sed 's/^/  /'
@@ -62,6 +62,6 @@ fi
 # 4) Reminder to agent
 echo ""
 echo "[precompact-preserve] Post-compaction: plan + progress are on disk under $ECO/.compaction-snapshots/."
-echo "[precompact-preserve] Re-read $ECO/knowledge-base/plans/ and $ECO/knowledge-base/progress/ to rebuild context."
+echo "[precompact-preserve] Re-read $ECO/records/plans/ and $ECO/session-state/ to rebuild context."
 
 exit 0

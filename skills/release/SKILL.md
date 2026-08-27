@@ -20,7 +20,7 @@ This skill is **the only phase** of [`cycle-release`](../../rules/cycle-release.
 
 User invokes `/release [bump-level]` when:
 
-- A `/review {slug}` run emitted `READY_TO_MERGE` recently (audit at `knowledge-base/reviews/{slug}-review-{date}.md`).
+- A `/review {slug}` run emitted `READY_TO_MERGE` recently (audit at `records/reviews/{slug}-review-{date}.md`).
 - The working branch is `workspace`; `develop` carries the commits ahead of `main` (promoted from `workspace` via PR).
 - `CHANGELOG.md` has content in `[Unreleased]`.
 - `gh` CLI is authenticated.
@@ -49,7 +49,7 @@ If derivation is ambiguous, the skill pauses and asks the human ONCE.
 # Clean tree
 [ -z "$(git status --porcelain)" ]
 # Latest /review verdict is READY_TO_MERGE
-LATEST_REVIEW=$(ls -t knowledge-base/reviews/*-review-*.md 2>/dev/null | head -1)
+LATEST_REVIEW=$(ls -t records/reviews/*-review-*.md 2>/dev/null | head -1)
 grep -q '^\*\*Verdict:\*\* READY_TO_MERGE' "$LATEST_REVIEW"
 # CHANGELOG [Unreleased] has content
 python3 skills/release/scripts/changelog_section_nonempty.py --section Unreleased
@@ -208,7 +208,7 @@ Flipping after `cycle-acceptance` makes it mean *"we shipped it and watched it w
 So this step does exactly one thing: read `milestone_id` from the plan and name the handoff.
 
 ```bash
-PLAN_FILE="knowledge-base/plans/${SLUG}-plan.md"
+PLAN_FILE="records/plans/${SLUG}-plan.md"
 
 MILESTONE_ID=$(python3 -c "
 import sys, yaml
@@ -233,7 +233,7 @@ rather than duplicating it. Staying is not the same as being called: **nothing i
 
 ### Step 8 — Record the release
 
-Write `knowledge-base/releases/v${NEXT_VERSION}-release.md`:
+Write `records/releases/v${NEXT_VERSION}-release.md`:
 
 ```markdown
 # Release v{NEXT_VERSION}

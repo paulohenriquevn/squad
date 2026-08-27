@@ -18,7 +18,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 SCHEMA_PATH = SKILL_ROOT / "templates" / "score-report.schema.json"
 RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"
 THRESHOLDS = SKILL_ROOT.parent.parent / "rules" / "plan-confidence-thresholds.txt"
-PLANS_DIR = SKILL_ROOT.parent.parent / "knowledge-base" / "plans"
+PLANS_DIR = SKILL_ROOT.parent.parent / "records" / "plans"
 COMPLETED_DIR = PLANS_DIR / "completed"
 FIXTURES = SKILL_ROOT / "fixtures"
 

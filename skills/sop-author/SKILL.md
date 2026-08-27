@@ -49,7 +49,7 @@ that produced it, and that nobody would have predicted from a desk.
 
 ## Where to put it
 
-`knowledge-base/sops/{slug}.md`. The slug is stable and never renamed: run
+`records/sops/{slug}.md`. The slug is stable and never renamed: run
 records point at it, and a renamed SOP orphans its own history.
 
 ## What this skill will not do

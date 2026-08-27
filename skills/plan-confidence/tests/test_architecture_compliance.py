@@ -10,7 +10,7 @@ from check_architecture_compliance import (  # noqa: E402
 )
 
 SKILL_ROOT = Path(__file__).parent.parent
-PLANS_DIR = SKILL_ROOT.parent.parent / "knowledge-base" / "plans"
+PLANS_DIR = SKILL_ROOT.parent.parent / "records" / "plans"
 COMPLETED_DIR = PLANS_DIR / "completed"
 
 

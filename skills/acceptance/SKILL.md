@@ -59,7 +59,7 @@ Log every defect observed along the way with a severity (`blocker` | `major` | `
 
 ### 4. Write the record
 
-`knowledge-base/acceptance/{milestone}-{date}.md`, plus artifacts under `knowledge-base/acceptance/evidence/`. Cite evidence by path; the paths must resolve.
+`records/acceptance/{milestone}-{date}.md`, plus artifacts under `records/acceptance/evidence/`. Cite evidence by path; the paths must resolve.
 
 The frontmatter MUST carry `verdict: <TOKEN>` — `session-goal`'s Stop-hook gate reads that exact line to decide whether the session may end (`rules/cycle-acceptance.md § Output`). A verdict stated only in prose leaves the milestone looking never-accepted.
 
@@ -79,7 +79,7 @@ On a green verdict only, reusing the release slice's script so the single-flip i
 ```bash
 python3 skills/release/scripts/flip_milestone_checkbox.py \
     --roadmap ROADMAP.md --milestone-id M2 --version {released-version} \
-    --plan knowledge-base/plans/{slug}-plan.md --commit
+    --plan records/plans/{slug}-plan.md --commit
 ```
 
 On `REJECTED`: the checkbox stays `[ ]`, the release is already public, so open the hotfix path immediately and re-enter at `/to-plan`. On `NOT_VALIDATED`: the checkbox stays `[ ]`; state precisely what could not be exercised and why.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Detect literal copies of third-party study material inside the project.
 
-`knowledge-base/references/` (cloned peer projects) and `knowledge-base/tools/`
+`records/references/` (cloned peer projects) and `study-material/`
 (tools we depend on) are read-only study material. `hooks/validate-command.sh`
 blocks copying files out of that zone, but nothing stops an agent or a human from
 reading a file there and pasting its content into the project by hand. This script
@@ -31,7 +31,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ZONE_DIRS = ("knowledge-base/references", "knowledge-base/tools")
+ZONE_DIRS = ("records/references", "study-material")
 
 # Trees a peer-project clone brings along that are not that project's code.
 ZONE_SKIP_DIRS = frozenset({

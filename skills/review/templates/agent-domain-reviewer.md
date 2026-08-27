@@ -39,8 +39,8 @@ The pre-read list depends on the domain. The spawn script populates the relevant
 1. The plan: `{PLAN_PATH}`
 2. The relevant project rule(s): `.claude/rules/architecture.md` § sections related to {DOMAIN}
 3. The relevant `*-patterns` skill if registered: `.claude/skills/{DOMAIN}-patterns/SKILL.md` if exists
-4. The relevant blueprint if exists: `.claude/knowledge-base/discoveries/blueprints/{DOMAIN}-blueprint.md` if exists
-5. The relevant reference clones in `.claude/knowledge-base/references/` (READ-ONLY; never modify): look at `.claude/knowledge-base/references/{project}/` directories related to {DOMAIN}
+4. The relevant blueprint if exists: `.claude/records/discoveries/blueprints/{DOMAIN}-blueprint.md` if exists
+5. The relevant reference clones in `.claude/records/references/` (READ-ONLY; never modify): look at `.claude/records/references/{project}/` directories related to {DOMAIN}
 6. Domain-specific keywords from `detect_domain.py` output: {DOMAIN_KEYWORDS}
 
 ## Domain-aware checks

@@ -19,7 +19,7 @@ STANDALONE_PREFIX = "$CLAUDE_PROJECT_DIR/"
 PLUGIN_PREFIX = "$CLAUDE_PROJECT_DIR/.claude/"
 
 # Paths that get the prefix rewrite (relative to $CLAUDE_PROJECT_DIR)
-REWRITE_DIRS = ("hooks/", "scripts/", "knowledge-base/")
+REWRITE_DIRS = ("hooks/", "scripts/", "records/")
 
 
 def rewrite_value(value: str) -> str:

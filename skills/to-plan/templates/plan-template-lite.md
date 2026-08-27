@@ -159,7 +159,7 @@ None [or list]
 - [ ] `npm run lint` exits 0
 - [ ] No file in NEW directories exceeds 500 LoC (per `architecture.md § Module hygiene`)
 - [ ] CHANGELOG.md entry under `[Unreleased]`
-- [ ] Plan archived to `.claude/knowledge-base/plans/completed/{slug}-plan.md` post-merge
+- [ ] Plan archived to `.claude/records/plans/completed/{slug}-plan.md` post-merge
 
 ## Followups
 

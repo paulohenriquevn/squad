@@ -59,6 +59,6 @@ The skill assumes the host project has:
 - `.claude/rules/code-quality-thresholds.txt` with per-detector knobs
 - `.claude/rules/code-quality-allowlist.txt` (seed-empty acceptable)
 - `.claude/rules/code-quality-golden-rule.md` defining the unbreakable contract
-- `.claude/knowledge-base/audits/` directory (will be created if absent)
+- `.claude/records/audits/` directory (will be created if absent)
 
 Copy `defaults/thresholds.txt` and `defaults/languages.txt` to `.claude/rules/` and customize per host project. The golden rule + allowlist must be authored explicitly (no defaults — these are policy decisions).

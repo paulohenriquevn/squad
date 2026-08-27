@@ -12,7 +12,7 @@
 #   3. Copies skills/, rules/, hooks/, commands/, scripts/, plugin.json,
 #      HOW-TO-USE.md into target/.claude/.
 #   4. Writes settings.plugin.json as target/.claude/settings.json.
-#   5. Creates empty scaffold under target/.claude/knowledge-base/
+#   5. Creates empty scaffold under target/.claude/records/
 #      (plans, implementations, reviews, audits, discoveries/{plans,opportunities,snapshots},
 #      adrs, grills, honesty-gate, judge-codex, backlog, maintenance-runs, tools).
 #      agents/ receives ONLY README.md (the routing mechanism). Specialists are
@@ -336,13 +336,13 @@ else
   echo "==> settings.json written (plugin install variant)"
 fi
 
-# --- knowledge-base scaffold (empty, idempotent) ---
-# Mirrors the SEMANTIC structure of the source's knowledge-base/ — every
+# --- records scaffold (empty, idempotent) ---
+# Mirrors the SEMANTIC structure of the source's records/ — every
 # category folder that a cycle writes to. Slug-keyed subdirs that exist in
 # the source (e.g. implementations/slice-X/, tools/argo-cd/, discoveries/
 # snapshots/slice-X/) are NOT mirrored — those are historical artefacts of
 # the plan repo's own honesty-gate, not part of the template.
-echo "==> Scaffolding knowledge-base/ subdirs (semantic structure)"
+echo "==> Scaffolding records/ subdirs (semantic structure)"
 KB_DIRS=(
   "plans"                       # /to-plan outputs
   "implementations"             # /implement halt-loop logs
@@ -370,13 +370,13 @@ for d in sops decisions references opportunities; do
   mkdir -p "$ECO/wiki/$d"
 done
 for d in "${KB_DIRS[@]}"; do
-  mkdir -p "$ECO/knowledge-base/$d"
+  mkdir -p "$ECO/records/$d"
 done
 
 # Optional: bring over the project-agnostic backlog template
-if [ -f "$SRC_DIR/knowledge-base/backlog.md" ]; then
-  if [ ! -f "$ECO/knowledge-base/backlog.md" ]; then
-    cp "$SRC_DIR/knowledge-base/backlog.md" "$ECO/knowledge-base/backlog.md"
+if [ -f "$SRC_DIR/records/backlog.md" ]; then
+  if [ ! -f "$ECO/records/backlog.md" ]; then
+    cp "$SRC_DIR/records/backlog.md" "$ECO/records/backlog.md"
   fi
 fi
 

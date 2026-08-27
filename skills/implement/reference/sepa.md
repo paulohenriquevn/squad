@@ -29,11 +29,11 @@ The SEPA agent and its paired skill are both composed from the FULL plan + ADRs 
 2. Substitute the context placeholders with verbatim file contents:
    - `{PLAN_SLUG}` — the slug
    - `{DATE}` — today (YYYY-MM-DD UTC)
-   - `{FULL_PLAN_CONTENT}` — `knowledge-base/plans/{slug}-plan.md`
-   - `{FULL_ADR_FILES_CONCATENATED}` — every `knowledge-base/adrs/ADR-*.md` referenced by the plan
-   - `{FULL_EDGE_CASE_REVIEW}` — `knowledge-base/reviews/{slug}-edge-cases-*.md` if present
-   - `{FULL_DEPS_AUDIT_REPORT}` — `knowledge-base/audits/{slug}-deps-audit-*.md` if present
-   - `{FULL_PLAN_CONFIDENCE_REPORT}` — `knowledge-base/reviews/{slug}-confidence-*.md` if present
+   - `{FULL_PLAN_CONTENT}` — `records/plans/{slug}-plan.md`
+   - `{FULL_ADR_FILES_CONCATENATED}` — every `records/adrs/ADR-*.md` referenced by the plan
+   - `{FULL_EDGE_CASE_REVIEW}` — `records/reviews/{slug}-edge-cases-*.md` if present
+   - `{FULL_DEPS_AUDIT_REPORT}` — `records/audits/{slug}-deps-audit-*.md` if present
+   - `{FULL_PLAN_CONFIDENCE_REPORT}` — `records/reviews/{slug}-confidence-*.md` if present
    - Project rules — `rules/architecture.md`, `testing.md`, `public-copy.md`, plus golden rules relevant to the plan's domain
 3. Assemble the output file as **Claude Code-conformant agent definition**: YAML frontmatter block (between `---` delimiters) + system prompt body. The template documents the exact structure under § "Frontmatter" and § "System prompt body".
 4. Write to `agents/implement-{slug}-{date}/sepa.md` (file name is `sepa.md`, NOT `sepa-staff-engineer.md` — alignment with Claude Code agent-discovery naming). This file is the agent DEFINITION, discoverable by Claude Code's subagent system as `subagent_type='implement-{slug}-sepa'`.
@@ -64,7 +64,7 @@ Invoke `Agent` tool ONCE at startup with:
 
 The Agent's response is the SEPA's "I have read and accept the role" confirmation, plus any IMMEDIATE flags it caught while reading.
 
-Persist the SEPA's initial-brief response to `knowledge-base/implementations/{slug}/sepa-iterations/initial-brief-response.md`. The main session reviews it before invoking ralph-loop. Note: the response is a LOG OUTPUT (not an agent definition), so it lives under `knowledge-base/implementations/`, NOT under `agents/` (which is reserved for agent definitions per Claude Code spec).
+Persist the SEPA's initial-brief response to `records/implementations/{slug}/sepa-iterations/initial-brief-response.md`. The main session reviews it before invoking ralph-loop. Note: the response is a LOG OUTPUT (not an agent definition), so it lives under `records/implementations/`, NOT under `agents/` (which is reserved for agent definitions per Claude Code spec).
 
 ## Per-iteration SEPA invocation
 
@@ -78,7 +78,7 @@ Each invocation is a fresh `Agent` call with the SEPA's frontmatter+system-promp
 
 ## Per-iteration log persistence
 
-After each SEPA response, persist it to `knowledge-base/implementations/{slug}/sepa-iterations/iteration-{N}-{phase}.md` (where `{phase}` ∈ `pre-red`, `post-green`, `pre-commit`). These are LOG OUTPUTS — keep them out of `agents/` to honor the Claude Code agent-discovery convention (the agents directory should contain ONLY agent definitions, not invocation logs).
+After each SEPA response, persist it to `records/implementations/{slug}/sepa-iterations/iteration-{N}-{phase}.md` (where `{phase}` ∈ `pre-red`, `post-green`, `pre-commit`). These are LOG OUTPUTS — keep them out of `agents/` to honor the Claude Code agent-discovery convention (the agents directory should contain ONLY agent definitions, not invocation logs).
 
 ## SEPA authority + boundaries (locked)
 

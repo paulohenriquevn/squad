@@ -191,13 +191,13 @@ REJECTED and NOT_VALIDATED never satisfy this goal. Re-running /acceptance witho
 Reaching that verdict honestly requires ALL of the following, reported in this session for THAT milestone, each with the artifact named:
 
 1. cycle-discover — /grill-me or /discover-plan ran for it, OR the plan states why discovery was unnecessary.
-2. cycle-plan — knowledge-base/plans/{{slug}}-plan.md exists carrying that milestone's `milestone_id` in its frontmatter, and /plan-confidence passed.
-3. cycle-implement — /implement finished and knowledge-base/implementations/{{slug}}-implementation.md records every task against a real commit SHA.
+2. cycle-plan — records/plans/{{slug}}-plan.md exists carrying that milestone's `milestone_id` in its frontmatter, and /plan-confidence passed.
+3. cycle-implement — /implement finished and records/implementations/{{slug}}-implementation.md records every task against a real commit SHA.
 4. cycle-code-quality — /code-quality emitted a verdict with no BLOCKER left open.
 5. cycle-review — /review emitted READY_TO_MERGE for that slug.
 6. cycle-release — /release emitted RELEASED or PR_OPEN_AWAITING_APPROVAL, via PR workspace → develop (never a direct commit to develop or main).
 7. cycle-acceptance — /acceptance M<N> exercised every Definition-of-done bullet against the RELEASED delivery, with evidence per criterion, and the verdict was computed by compute_acceptance_verdict.py rather than named by the agent.
-8. ROADMAP.md — that milestone's checkbox reads [x] and knowledge-base/roadmap-runs/{{milestone}}-*.md has status: completed. The checkbox flips only on a green acceptance verdict.
+8. ROADMAP.md — that milestone's checkbox reads [x] and records/roadmap-runs/{{milestone}}-*.md has status: completed. The checkbox flips only on a green acceptance verdict.
 
 The condition is NOT met if any phase was skipped, reordered, run implicitly, or declared complete without the artifact above; if a result was asserted rather than shown; or if two milestones were worked in parallel.
 

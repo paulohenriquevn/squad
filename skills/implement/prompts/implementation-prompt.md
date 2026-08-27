@@ -4,10 +4,10 @@ You are mid-implementation, iteration {ITERATION}. The user invoked `/implement 
 
 **Plan:** `{PLAN_PATH}`
 **Implementation working contract:** `{IMPLEMENTATION_PATH}`
-**Progress file:** `.claude/knowledge-base/implementations/.progress-{PLAN_SLUG}.json` (gitignored)
+**Progress file:** `.claude/records/implementations/.progress-{PLAN_SLUG}.json` (gitignored)
 **SEPA agent file:** `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa.md` (Claude Code agent definition — frontmatter `name: implement-{PLAN_SLUG}-sepa`, body = role contract + verbatim plan/ADRs/edge-cases/audits/rules)
 **SEPA paired knowledge skill:** `.claude/skills/implement-{PLAN_SLUG}-sepa-knowledge/SKILL.md` (Claude Code Skills-conformant; SEPA invokes via `Skill` tool for WebSearch refresh)
-**SEPA per-iteration logs:** `.claude/knowledge-base/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{N}-{phase}.md`
+**SEPA per-iteration logs:** `.claude/records/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{N}-{phase}.md`
 
 ## SEPA invocation discipline (READ BEFORE Step 1)
 
@@ -35,7 +35,7 @@ Before writing any test, invoke the SEPA via `Agent` tool:
 
 The SEPA's response is markdown advice. Read it BEFORE writing the test. If SEPA flags `[CRITICAL]`, treat as HALT trigger unless you have explicit Unbreakable-Rule-1 (95% confidence) justification to proceed.
 
-Append SEPA's response to `.claude/knowledge-base/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-pre-red.md` for audit trail (NOT `.claude/agents/` — that dir holds agent definitions only per Claude Code spec; logs go under knowledge-base/implementations/).
+Append SEPA's response to `.claude/records/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-pre-red.md` for audit trail (NOT `.claude/agents/` — that dir holds agent definitions only per Claude Code spec; logs go under records/implementations/).
 
 ### RED phase (mandatory first)
 
@@ -70,7 +70,7 @@ Invoke the SEPA via `Agent` tool with the staged diff:
 - `subagent_type`: `general-purpose`
 - `prompt`: read `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa-staff-engineer.md` for the role brief, then review the diff (captured via `git diff` against last commit). Spot SOLID/Clean Code/DRY violations, missed JSDoc cross-references, naming-convention drift, test-d completeness against ADR invariants.
 
-Append response to `.claude/knowledge-base/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-post-green.md`.
+Append response to `.claude/records/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-post-green.md`.
 
 ### REFACTOR phase
 
@@ -126,7 +126,7 @@ Stage the files first (`git add` with specific paths), then invoke the SEPA:
 - `subagent_type`: `general-purpose`
 - `prompt`: read `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa-staff-engineer.md` for the role brief, then audit the staged diff (`git diff --cached`) + draft commit message against the task's DoD checkboxes from the plan. Verify: conventional-commit format, T-id reference, Wiring summary completeness, wiring triad sanity (pillar (a) callers are FUNCTIONAL not no-op stubs).
 
-Append response to `.claude/knowledge-base/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-pre-commit.md`.
+Append response to `.claude/records/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-pre-commit.md`.
 
 If SEPA flags `[CRITICAL]` on this consultation, do NOT commit. Unstage (`git restore --staged`), address the finding, re-invoke SEPA. Repeat up to 2 retries; on third [CRITICAL] mark task BLOCKED.
 
@@ -149,7 +149,7 @@ Update progress file: task status → `committed`, log SHA + iteration outcome.
 
 ### PROGRESS update
 
-Update `.claude/knowledge-base/implementations/.progress-{PLAN_SLUG}.json`. The file
+Update `.claude/records/implementations/.progress-{PLAN_SLUG}.json`. The file
 is a SINGLE JSON object with a top-level `tasks` ARRAY — find the entry for this task
 and set its fields (do NOT append a bare object; the gates read `data["tasks"]`).
 Canonical shape: `.claude/skills/implement/templates/progress-schema.json`.

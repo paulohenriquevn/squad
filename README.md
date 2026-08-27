@@ -178,20 +178,40 @@ Each mode defines what counts as a measurement. Evidence from one does not satis
 
 ## Project structure
 
+Every directory is named for what it holds, and the name is checked:
+`scripts/check_semantic_names.py` runs in CI and refuses a name that says
+nothing — a `lib/`, a `utils/`, a test filed outside a test tree.
+
 ```
 squad/
-├── agents/          ← README (the routing mechanism); specialists are derived per project
-├── rules/           ← contracts. cycle-*.md are the source of truth
-│   ├── cycle-backlog.md      ← the registry, intake, domain routing
-│   ├── cycle-discover.md     ← the four modes, evidence contracts, gates
-│   ├── cycle-maintenance.md  ← the macro loop
-│   ├── current-constraint.md ← the constraint lens (advisory, never a gate)
+├── rules/           ← the contracts. What each cycle promises and which gates block it
+│   ├── cycle-*.md            ← one per phase; the source of truth for that phase
+│   ├── cycle-phases.txt      ← the chain itself, declared once and machine-readable
+│   ├── records-location.md   ← where output goes, and why the split below exists
 │   └── live-target.txt       ← declared live environments
-├── skills/          ← one directory per phase, each with its SKILL.md
-├── scripts/         ← route_domain.py, check_xrefs.py, validators
-├── hooks/           ← runtime guardrails
-└── tests/           ← root suite; per-slice suites live in skills/*/tests
+├── skills/          ← what the agent can DO. One directory per capability
+├── scripts/         ← what COMPUTES the verdicts. No verdict is asserted in prose
+├── hooks/           ← what runs in the runtime, outside the agent's turn
+│   └── environment/          ← what a hook loads before it runs
+├── agents/          ← domain specialists, derived per project (README explains routing)
+├── wiki/            ← durable KNOWLEDGE, as an OKF v0.2 bundle
+│   ├── sops/                 ← procedures performed on the kit
+│   └── decisions/            ← decisions that outlive the discussion
+├── records/         ← the TRAIL. What each run left behind, dated and immutable
+│   ├── audits/ reviews/ releases/ acceptance/ implementations/
+│   └── cycle-events.jsonl    ← one line per phase transition
+├── study-material/  ← third-party docs the project depends on. Read-only, not ours
+├── session-state/   ← per-session checkpoints. Ephemeral, never evidence
+└── tests/           ← the proof the above works; per-slice suites live in skills/*/tests
 ```
+
+**`wiki/` and `records/` are the same split, twice.** Knowledge evolves, has an
+owner and goes stale; a record of one execution on one day does none of those,
+and re-verifying it would falsify what it is. That is why they are two
+directories and not one — and why `records/` is no longer called
+`knowledge-base/`, a name that came to mean *everything left after the knowledge
+moved out*. The reasoning is a concept in the bundle:
+[`wiki/decisions/where-knowledge-lives.md`](wiki/decisions/where-knowledge-lives.md).
 
 Rules are the contract; a SKILL.md carries only phase-specific detail and points back at its rule.
 
@@ -230,7 +250,7 @@ Squad is derived from Cycle (MIT) and inverts its centre. Cycle is greenfield an
 | Agents | generic, stack-agnostic | 8 specialists with verified build commands |
 | Ends when | every milestone is `[x]` | never — maintenance is continuous |
 
-What Squad keeps: TDD halt-loops, the wiring triad, hard gates with derived verdicts, the orthogonal Codex jury, git-safety hooks, and an auditable `knowledge-base/`.
+What Squad keeps: TDD halt-loops, the wiring triad, hard gates with derived verdicts, the orthogonal Codex jury, git-safety hooks, and an auditable `records/`.
 
 ## Status
 

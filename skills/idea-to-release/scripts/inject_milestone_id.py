@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Inject `milestone_id: M<N>` into a plan's YAML frontmatter.
 
-Per the cycle-roadmap contract, the plan at knowledge-base/plans/{slug}-plan.md
+Per the cycle-roadmap contract, the plan at records/plans/{slug}-plan.md
 MUST carry `milestone_id` in its frontmatter so cycle-release can flip the
 correct ROADMAP.md checkbox after merge.
 
@@ -11,7 +11,7 @@ ABORTS rather than silently rewriting — the user must resolve the conflict
 manually (a plan should never change milestones mid-flight).
 
 Usage:
-    python3 inject_milestone_id.py --plan knowledge-base/plans/foo-plan.md --milestone-id M3
+    python3 inject_milestone_id.py --plan records/plans/foo-plan.md --milestone-id M3
 
 Exit codes:
     0 — milestone_id present (added, or already matched, no change needed)

@@ -47,7 +47,7 @@ Also read `rules/current-constraint.md`. If it is `status = declared` and inside
 ### Step 1 — Read the item and inventory what is known
 
 1. The `B-NNN` block in `BACKLOG.md` — `domain`, `repo`, `suggested_mode`, `why_now`, `dod`.
-2. Prior opportunities under `knowledge-base/discoveries/opportunities/` touching the same repo. A hypothesis measured and killed three months ago deserves to know that before being measured again.
+2. Prior opportunities under `records/discoveries/opportunities/` touching the same repo. A hypothesis measured and killed three months ago deserves to know that before being measured again.
 3. The repo's own `README.md` / `CLAUDE.md` and its build manifest — the plan must name tools that repo actually has.
 
 ### Step 2 — Confirm or reclassify the mode
@@ -116,7 +116,7 @@ A plan whose falsification criterion is empty or placeholder caps at 70.
 Use `templates/measurement-plan-template.md`. Save to:
 
 ```
-knowledge-base/discoveries/plans/{slug}-plan.md
+records/discoveries/plans/{slug}-plan.md
 ```
 
 `{slug}` is kebab-case and prefixed by the repo when the problem shape recurs across repos (`theo-lens-trace-latency`, not `latency`). The registry spans 21 repos.

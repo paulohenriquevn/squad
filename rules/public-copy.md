@@ -13,7 +13,7 @@ Applies to:
 Does NOT apply to:
 - `docs/exploration-reports/`, `docs/benchmarks/`, `docs/adr/` — technical-direct
 - `CLAUDE.md`, `PRD.md`, `CHANGELOG.md`, source code
-- `knowledge-base/references/**` — third-party study material
+- `records/references/**` — third-party study material
 
 ## § 2 — Anchor
 

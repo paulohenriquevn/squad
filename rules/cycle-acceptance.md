@@ -80,7 +80,7 @@ Do NOT trigger when:
      ↓   record status ∈ passed | failed | blocked | not_exercised
      ↓
      ↓ record every defect observed on the way, with severity + filed issue
-     ↓ write knowledge-base/acceptance/{milestone}-{date}.md + evidence/
+     ↓ write records/acceptance/{milestone}-{date}.md + evidence/
      ↓ compute_acceptance_verdict.py --criteria criteria.json --evidence evidence.json
      ↓
      ↓ ACCEPTED | ACCEPTED_WITH_CAVEATS → flip_milestone_checkbox.py  [ ] → [x]
@@ -116,7 +116,7 @@ When a criterion cannot be exercised with any available instrument, its status i
 | extract | `ROADMAP.md` § M\<N\> | `criteria.json` with ≥ 1 criterion | milestone declares a non-empty `**Definition of done:**`; otherwise `NOT_VALIDATED` |
 | resolve-target | release artifact | target kind + reachable address | the address points at the RELEASED artifact, not a local or staging build |
 | exercise | criteria + target | one result per criterion, each with evidence | every criterion has a recorded status; `passed` requires at least one evidence artifact |
-| record | results + defects | `knowledge-base/acceptance/{milestone}-{date}.md` + `evidence/` | evidence files exist at the cited paths |
+| record | results + defects | `records/acceptance/{milestone}-{date}.md` + `evidence/` | evidence files exist at the cited paths |
 | verdict | `criteria.json` + `evidence.json` | verdict token | computed by `compute_acceptance_verdict.py`; never asserted by the agent |
 | flip | verdict ∈ {`ACCEPTED`, `ACCEPTED_WITH_CAVEATS`} | `ROADMAP.md` `[ ]` → `[x]` + roadmap-runs updated | single-flip invariant (§ Hard gates, below); no flip on `REJECTED` or `NOT_VALIDATED` |
 
@@ -154,7 +154,7 @@ When a criterion cannot be exercised with any available instrument, its status i
 
 ## Output
 
-- `knowledge-base/acceptance/{milestone-id}-{YYYY-MM-DD}.md` — the acceptance record: target, criteria, per-criterion result, evidence paths, defects, computed verdict.
+- `records/acceptance/{milestone-id}-{YYYY-MM-DD}.md` — the acceptance record: target, criteria, per-criterion result, evidence paths, defects, computed verdict.
 
   The record MUST carry the verdict in its frontmatter as `verdict: <TOKEN>`. This is not cosmetic: `session-goal`'s Stop-hook gate reads that line off disk to decide whether a session may end. A record whose verdict lives only in prose is invisible to the gate, and the milestone will read as never accepted.
 
@@ -166,8 +166,8 @@ When a criterion cannot be exercised with any available instrument, its status i
   date: YYYY-MM-DD
   ---
   ```
-- `knowledge-base/acceptance/evidence/` — screenshots, console dumps, network logs, command transcripts cited by the record.
-- `knowledge-base/roadmap-runs/{milestone-id}-{date}.md` — updated with the acceptance verdict when the flip happens.
+- `records/acceptance/evidence/` — screenshots, console dumps, network logs, command transcripts cited by the record.
+- `records/roadmap-runs/{milestone-id}-{date}.md` — updated with the acceptance verdict when the flip happens.
 
 The record is the artifact an auditor reads to answer "was M3 ever actually used before we called it done?" — the same question `honesty-gate` asks about production claims, one milestone at a time.
 

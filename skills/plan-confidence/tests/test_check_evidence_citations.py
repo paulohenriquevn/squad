@@ -24,24 +24,24 @@ def _make_project_root(
     blueprints: dict[str, str] | None = None,
     opportunities: dict[str, str] | None = None,
 ) -> Path:
-    """Create a fake project root with rules/ and knowledge-base/discoveries/.
+    """Create a fake project root with rules/ and records/discoveries/.
 
     `opportunities` is the path `/discover-execute` actually writes to; `blueprints`
     is the ancestor's directory, kept because plans predating the rename still cite it.
     """
     root = tmp_path / "project"
     (root / "rules").mkdir(parents=True)
-    (root / "knowledge-base" / "discoveries" / "blueprints").mkdir(parents=True)
-    (root / "knowledge-base" / "discoveries" / "opportunities").mkdir(parents=True)
+    (root / "records" / "discoveries" / "blueprints").mkdir(parents=True)
+    (root / "records" / "discoveries" / "opportunities").mkdir(parents=True)
     if rules:
         for name, content in rules.items():
             (root / "rules" / name).write_text(content, encoding="utf-8")
     if blueprints:
         for name, content in blueprints.items():
-            (root / "knowledge-base" / "discoveries" / "blueprints" / name).write_text(content, encoding="utf-8")
+            (root / "records" / "discoveries" / "blueprints" / name).write_text(content, encoding="utf-8")
     if opportunities:
         for name, content in opportunities.items():
-            (root / "knowledge-base" / "discoveries" / "opportunities" / name).write_text(content, encoding="utf-8")
+            (root / "records" / "discoveries" / "opportunities" / name).write_text(content, encoding="utf-8")
     return root
 
 
@@ -195,7 +195,7 @@ def test_citation_has_required_fields() -> None:
 
 def test_resolves_blueprint_ref_when_section_exists_in_blueprints_set(tmp_path: Path) -> None:
     """Positive case: `Blueprint §Q1` resolves when ANY blueprint file in
-    knowledge-base/discoveries/blueprints/ has a heading matching Q1.
+    records/discoveries/blueprints/ has a heading matching Q1.
 
     v0.1 contract documented in plan: detector binds by section anchor presence
     across the set of blueprint files (NOT by blueprint name). M3 v0.2 will
@@ -243,7 +243,7 @@ def test_flags_blueprint_ref_when_no_blueprints_dir(tmp_path: Path) -> None:
     """Defense-in-depth: when there are no blueprints at all, any Blueprint § is flagged."""
     project_root = tmp_path / "project"
     (project_root / "rules").mkdir(parents=True)
-    # NOT creating knowledge-base/discoveries/blueprints/
+    # NOT creating records/discoveries/blueprints/
     plan = _write_plan(
         tmp_path,
         "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Blueprint §Q1.\n",
@@ -262,7 +262,7 @@ def test_flags_blueprint_ref_when_no_blueprints_dir(tmp_path: Path) -> None:
 def test_resolves_opportunity_ref_against_opportunities_dir(tmp_path: Path) -> None:
     """The regression this suite missed for a whole rename.
 
-    `/discover-execute` writes `knowledge-base/discoveries/opportunities/`. The scanner
+    `/discover-execute` writes `records/discoveries/opportunities/`. The scanner
     read `blueprints/` — the ancestor's directory, which nothing writes to any more — so
     a plan citing a real, resolvable section was reported as a fabricated citation, and
     `fabricated_citation` hard-caps the plan at 49. The suite passed throughout, because

@@ -30,7 +30,7 @@ from phase_coverage import Phase, coverage_for_item, grade, scan_registry
 
 
 def _kb(tmp_path: Path) -> Path:
-    kb = tmp_path / "knowledge-base"
+    kb = tmp_path / "records"
     for d in ("plans", "reviews", "audits", "releases", "discoveries/opportunities"):
         (kb / d).mkdir(parents=True)
     return kb

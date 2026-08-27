@@ -170,7 +170,7 @@ def test_main_emits_a_phase_event_and_does_not_crash(tmp_path, monkeypatch):
     )
 
     assert "Traceback" not in result.stderr, result.stderr
-    events = (tmp_path / ".claude" / "knowledge-base" / "cycle-events.jsonl")
+    events = (tmp_path / ".claude" / "records" / "cycle-events.jsonl")
     assert events.is_file(), "the phase left no event"
     event = json.loads(events.read_text(encoding="utf-8").splitlines()[-1])
     assert event["cycle"] == "acceptance"

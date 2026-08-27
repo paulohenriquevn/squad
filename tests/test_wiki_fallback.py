@@ -1,12 +1,12 @@
-"""Readers try the OKF bundle first and the knowledge-base second.
+"""Readers try the OKF bundle first and the records second.
 
 WHY THE FALLBACK EXISTS
 -----------------------
-42 consumers already have `knowledge-base/` on disk. A hard cut would break
+42 consumers already have `records/` on disk. A hard cut would break
 every one of them that updates the kit without running a migration, and the kit
 cannot run anything inside another project's repository.
 
-So: `wiki/` first, `knowledge-base/` second, and writers only ever write the
+So: `wiki/` first, `records/` second, and writers only ever write the
 new one. Each consumer migrates as it runs, and nothing is deleted from under
 anyone.
 
@@ -33,16 +33,16 @@ def test_the_bundle_wins_when_both_exist(tmp_path: Path) -> None:
     """The whole point of writing only to the new root: once a project has both,
     the new one is the answer."""
     (tmp_path / "wiki" / "sops").mkdir(parents=True)
-    (tmp_path / "knowledge-base" / "sops").mkdir(parents=True)
+    (tmp_path / "records" / "sops").mkdir(parents=True)
 
     assert resolve_knowledge_dir(tmp_path, "sops") == tmp_path / "wiki" / "sops"
 
 
 def test_the_old_root_still_answers_when_it_is_all_there_is(tmp_path: Path) -> None:
     """An unmigrated consumer keeps working, unchanged."""
-    (tmp_path / "knowledge-base" / "sops").mkdir(parents=True)
+    (tmp_path / "records" / "sops").mkdir(parents=True)
 
-    assert resolve_knowledge_dir(tmp_path, "sops") == tmp_path / "knowledge-base" / "sops"
+    assert resolve_knowledge_dir(tmp_path, "sops") == tmp_path / "records" / "sops"
 
 
 def test_the_plugin_layout_is_served_on_both_roots(tmp_path: Path) -> None:
@@ -64,9 +64,9 @@ def test_the_trail_never_moves_to_the_bundle(tmp_path: Path) -> None:
     mixing the split exists to prevent.
     """
     (tmp_path / "wiki" / "sop-runs").mkdir(parents=True)
-    (tmp_path / "knowledge-base" / "sop-runs").mkdir(parents=True)
+    (tmp_path / "records" / "sop-runs").mkdir(parents=True)
 
-    assert knowledge_base_dir(tmp_path, "sop-runs") == tmp_path / "knowledge-base" / "sop-runs"
+    assert knowledge_base_dir(tmp_path, "sop-runs") == tmp_path / "records" / "sop-runs"
 
 
 def test_the_sop_checker_reads_the_bundle(tmp_path: Path) -> None:
@@ -92,7 +92,7 @@ def test_the_sop_checker_reads_the_bundle(tmp_path: Path) -> None:
 def test_the_sop_checker_still_reads_the_old_root(tmp_path: Path) -> None:
     from check_sop_structure import check_sop_structure
 
-    sops = tmp_path / "knowledge-base" / "sops"
+    sops = tmp_path / "records" / "sops"
     sops.mkdir(parents=True)
     (sops / "demo.md").write_text(
         "---\ntype: SOP\nsop: demo\nversion: 1.0.0\nowner: someone\n"
@@ -127,17 +127,17 @@ def test_the_fallback_knows_where_the_old_root_actually_kept_it(
 
     Two of the four moved as part of this migration: `adrs/` became `decisions/`
     and `discoveries/opportunities/` flattened to `opportunities/`. Resolving
-    `knowledge-base/<new-name>` would miss both — the consumers that most need
+    `records/<new-name>` would miss both — the consumers that most need
     the fallback are precisely the ones whose files sit under the old names.
     """
-    (tmp_path / "knowledge-base" / legacy).mkdir(parents=True)
+    (tmp_path / "records" / legacy).mkdir(parents=True)
 
-    assert resolve_knowledge_dir(tmp_path, leaf) == tmp_path / "knowledge-base" / legacy
+    assert resolve_knowledge_dir(tmp_path, leaf) == tmp_path / "records" / legacy
 
 
 def test_the_bundle_still_wins_over_a_legacy_path(tmp_path: Path) -> None:
     (tmp_path / "wiki" / "decisions").mkdir(parents=True)
-    (tmp_path / "knowledge-base" / "adrs").mkdir(parents=True)
+    (tmp_path / "records" / "adrs").mkdir(parents=True)
 
     assert resolve_knowledge_dir(tmp_path, "decisions") == tmp_path / "wiki" / "decisions"
 
@@ -148,3 +148,18 @@ def test_this_repository_resolves_its_sops_to_the_bundle() -> None:
 
     assert resolved is not None
     assert resolved.parent.name == "wiki", f"resolved to {resolved}"
+
+
+def test_the_old_records_root_still_answers(tmp_path: Path) -> None:
+    """`knowledge-base/` was renamed to `records/`; consumers still have the old
+    one, and the kit cannot run a migration inside another project's repo."""
+    (tmp_path / "knowledge-base" / "sop-runs").mkdir(parents=True)
+
+    assert knowledge_base_dir(tmp_path, "sop-runs") == tmp_path / "knowledge-base" / "sop-runs"
+
+
+def test_the_new_records_root_wins_over_the_old(tmp_path: Path) -> None:
+    (tmp_path / "records" / "sop-runs").mkdir(parents=True)
+    (tmp_path / "knowledge-base" / "sop-runs").mkdir(parents=True)
+
+    assert knowledge_base_dir(tmp_path, "sop-runs") == tmp_path / "records" / "sop-runs"

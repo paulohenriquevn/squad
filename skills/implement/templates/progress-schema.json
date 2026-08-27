@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/paulohenriquevn/cycle/skills/implement/progress-schema.json",
   "title": "Implement halt-loop progress checkpoint",
-  "description": "Canonical shape of .claude/knowledge-base/implementations/.progress-{slug}.json — the runtime checkpoint the /implement halt-loop writes each iteration and every gate reads. This file is the SINGLE SOURCE OF TRUTH for the schema: implementation-prompt.md's PROGRESS step and check_progress_schema.py both follow it. The gates read `data['tasks']` (an array) and filter each task by `phase`, so a bare task object or a task without `phase`/`id` is NOT consumable.",
+  "description": "Canonical shape of .claude/records/implementations/.progress-{slug}.json — the runtime checkpoint the /implement halt-loop writes each iteration and every gate reads. This file is the SINGLE SOURCE OF TRUTH for the schema: implementation-prompt.md's PROGRESS step and check_progress_schema.py both follow it. The gates read `data['tasks']` (an array) and filter each task by `phase`, so a bare task object or a task without `phase`/`id` is NOT consumable.",
   "type": "object",
   "required": [
     "tasks"

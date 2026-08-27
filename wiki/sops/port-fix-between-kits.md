@@ -16,9 +16,9 @@ status: stable
 stale_after: 2027-02-23
 sources:
   - id: run-1
-    resource: ../../knowledge-base/sop-runs/port-fix-between-kits-2026-08-27.md
+    resource: ../../records/sop-runs/port-fix-between-kits-2026-08-27.md
   - id: run-2
-    resource: ../../knowledge-base/sop-runs/port-fix-between-kits-2026-08-27-sop.md
+    resource: ../../records/sop-runs/port-fix-between-kits-2026-08-27-sop.md
 
 # Kit-specific keys, kept so `check_sop_structure.py` keeps reading this file.
 # OKF preserves unknown keys rather than rejecting them, which is what lets one

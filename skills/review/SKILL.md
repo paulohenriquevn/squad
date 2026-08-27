@@ -63,19 +63,19 @@ Total: 4 baseline + 1-3 domain-specific = 5-7 agents per `/review` invocation.
 
 ```bash
 # Plan exists and was not revised post-implementation
-test -f .claude/knowledge-base/plans/{slug}-plan.md
+test -f .claude/records/plans/{slug}-plan.md
 # Branch state clean (no uncommitted changes)
 [ -z "$(git status --porcelain)" ]
 # On workspace (NEVER on develop/main — review audits work before promotion)
 [ "$(git branch --show-current)" = "workspace" ]
 # /implement validation passed (or PARTIAL with acceptable SKIPs)
-test -f .claude/knowledge-base/reviews/{slug}-implement-validate-*.md
+test -f .claude/records/reviews/{slug}-implement-validate-*.md
 # /code-quality audit exists AND admits /review. Do not trust `test -f`: it does
 # not read the verdict, and the per-soft-cap ADR requirement is not verifiable by
 # eye. The script below is the same one `consolidate_findings.py` injects into the
 # verdict — running it here only anticipates the answer, never replaces it.
 python3 .claude/skills/review/scripts/check_upstream_gate.py {slug} --project-root .
-grep -qE '"verdict":[[:space:]]*"(PASS|PASS_WITH_CAVEATS)"' .claude/knowledge-base/audits/{slug}-code-quality-*.md \
+grep -qE '"verdict":[[:space:]]*"(PASS|PASS_WITH_CAVEATS)"' .claude/records/audits/{slug}-code-quality-*.md \
   || (echo "Refuse: /code-quality verdict is not PASS/PASS_WITH_CAVEATS. Loop back to /implement." && exit 1)
 # Tests green on the branch
 npm test  # or skip if pre-code phase
@@ -87,7 +87,7 @@ If any check fails, refuse with the specific missing piece surfaced honestly. Th
 
 ```bash
 python3 .claude/skills/review/scripts/detect_domain.py \
-  --plan .claude/knowledge-base/plans/{slug}-plan.md \
+  --plan .claude/records/plans/{slug}-plan.md \
   --diff-base main
 ```
 
@@ -106,7 +106,7 @@ Output: JSON with detected domains + confidence per domain.
 
 ```bash
 python3 .claude/skills/review/scripts/spawn_reviewers.py \
-  --plan .claude/knowledge-base/plans/{slug}-plan.md \
+  --plan .claude/records/plans/{slug}-plan.md \
   --slug {slug} \
   --primary-domain memory-layer \
   --secondary-domains pgvector-schema,llm-extraction \
@@ -138,8 +138,8 @@ Each agent runs its review independently and returns findings in a structured fo
 ```bash
 python3 .claude/skills/review/scripts/consolidate_findings.py \
   --findings-dir .claude/agents/review-{slug}-{date}/findings/ \
-  --output .claude/knowledge-base/reviews/{slug}-review-{date}.md \
-  --plan .claude/knowledge-base/plans/{slug}-plan.md
+  --output .claude/records/reviews/{slug}-review-{date}.md \
+  --plan .claude/records/plans/{slug}-plan.md
 ```
 
 The script:
@@ -166,7 +166,7 @@ Plus, `/review` adds:
 
 ```bash
 python3 .claude/skills/review/scripts/edge_case_coverage.py \
-  --plan .claude/knowledge-base/plans/{slug}-plan.md \
+  --plan .claude/records/plans/{slug}-plan.md \
   --tests-dir tests/
 ```
 
@@ -189,7 +189,7 @@ After all findings consolidate, decide (per `rules/cycle-review.md § Verdicts`)
 Write consolidated review report at:
 
 ```
-.claude/knowledge-base/reviews/{slug}-review-{date}.md
+.claude/records/reviews/{slug}-review-{date}.md
 ```
 
 Report format (see `consolidate_findings.py`):
@@ -298,7 +298,7 @@ Per `cycle-review.md § Stop conditions`:
 - Scripts: `scripts/detect_domain.py`, `scripts/spawn_reviewers.py`, `scripts/edge_case_coverage.py`, `scripts/consolidate_findings.py`
 - Reuses: `.claude/skills/implement/scripts/run_validation.py` (quality gates), `.claude/skills/implement/scripts/check_wiring.py` (wiring re-validation)
 - Generated audit trail: `.claude/agents/review-{slug}-{date}/`
-- Final reports: `.claude/knowledge-base/reviews/{slug}-review-{date}.md`
+- Final reports: `.claude/records/reviews/{slug}-review-{date}.md`
 - Project rules consumed: `architecture.md`, `testing.md`, `public-copy.md`, `discover-plan-golden-rule.md` and `discover-opportunity-golden-rule.md` (if the review touches discovery artifacts)
 
 ## Match to the work

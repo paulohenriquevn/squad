@@ -19,7 +19,7 @@ one implementation.
 WHAT BELONGS HERE
 -----------------
 Only the reading, plus where to read from — `resolve_knowledge_dir` is the one
-place that knows the bundle comes before the knowledge-base. Which findings a
+place that knows the bundle comes before the records. Which findings a
 malformed document earns is each checker's
 judgement, and folding that in would put the structural gate and the execution
 gate back into one artifact — the same collapse `rules/sop-schema.md` keeps the
@@ -30,10 +30,16 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-#: Both install layouts. A checker that sees only one is half a checker.
-KB_DIRS = (".claude/knowledge-base", "knowledge-base")
+#: Where the dated trail lives, newest name first. `knowledge-base/` is kept as
+#: a fallback because 42 consumers have it on disk and the rename cannot reach
+#: another project's repository — the same reason the wiki fallback exists.
+#:
+#: The rename happened because the name had become the inverse of the contents:
+#: once durable knowledge moved to the bundle, `knowledge-base/` held exactly
+#: what is NOT knowledge. See rules/records-location.md.
+KB_DIRS = (".claude/records", "records", ".claude/knowledge-base", "knowledge-base")
 
-#: The OKF bundle, checked before the knowledge-base. Writers only ever write
+#: The OKF bundle, checked before the records. Writers only ever write
 #: here; readers fall back, so a consumer that has not migrated keeps working
 #: and migrates the moment it runs.
 WIKI_DIRS = (".claude/wiki", "wiki")
@@ -46,7 +52,7 @@ WIKI_DIRS = (".claude/wiki", "wiki")
 #: would find nothing, and it would fail precisely for the consumers that most
 #: need it: the ones whose files still sit under the old names.
 #:
-#: Everything absent from this map stays in the knowledge-base. A record of one
+#: Everything absent from this map stays in the records. A record of one
 #: execution on one day is not a concept that evolves, and OKF's own fields
 #: (`status`, `stale_after`, `verified`) mean nothing for one.
 DURABLE_LEAVES: dict[str, str] = {
@@ -58,7 +64,7 @@ DURABLE_LEAVES: dict[str, str] = {
 
 
 def knowledge_base_dir(project_root: Path, leaf: str) -> Path | None:
-    """`<project>/{.claude/,}knowledge-base/<leaf>`, whichever exists.
+    """`<project>/{.claude/,}records/<leaf>`, whichever exists.
 
     The dated trail only. For knowledge that may have migrated to the bundle,
     call `resolve_knowledge_dir`.
@@ -83,7 +89,7 @@ def resolve_knowledge_dir(project_root: Path, leaf: str) -> Path | None:
     """Where this project's `<leaf>` knowledge lives — bundle first.
 
     Order matters and is the whole migration strategy: 42 consumers already have
-    `knowledge-base/` on disk, a hard cut would break every one that updates
+    `records/` on disk, a hard cut would break every one that updates
     without migrating, and the kit cannot run anything inside another project's
     repository. So readers fall back and writers do not.
 

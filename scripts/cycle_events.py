@@ -4,7 +4,7 @@
 WHY THIS EXISTS
 ---------------
 The only proof that a phase ran was a file appearing in one of the 15 record
-directories under `knowledge-base/`, reconstructed afterwards by
+directories under `records/`, reconstructed afterwards by
 `phase_coverage.py`. That reconstruction cannot separate two states this
 ecosystem cares about a great deal:
 
@@ -55,11 +55,11 @@ from typing import Any
 #: nobody reads.
 EVENTS_FILENAME = "cycle-events.jsonl"
 
-#: Canonical first. `rules/knowledge-base-location.md` makes
-#: `.claude/knowledge-base/` the location in a plugin install, with the
+#: Canonical first. `rules/records-location.md` makes
+#: `.claude/records/` the location in a plugin install, with the
 #: standalone repo as the single exception. A stream written to the wrong half
-#: recreates the split knowledge-base that `roadmap-review` reports as MAJOR.
-_KB_DIRS = (".claude/knowledge-base", "knowledge-base")
+#: recreates the split records that `roadmap-review` reports as MAJOR.
+_KB_DIRS = (".claude/records", "records")
 
 PHASE_START = "cycle:phase:start"
 PHASE_END = "cycle:phase:end"
@@ -84,7 +84,7 @@ def _is_standalone(project_root: Path) -> bool:
 
     The test is whether `.claude/` HOLDS THE KIT, not whether it exists: this
     repository has a `.claude/` carrying local settings and is still standalone.
-    Getting that wrong created `.claude/knowledge-base/` at the root here on the
+    Getting that wrong created `.claude/records/` at the root here on the
     very first instrumented run.
     """
     if _holds_the_kit(project_root / ".claude"):
@@ -102,12 +102,12 @@ def resolve_events_path(project_root: Path) -> Path:
 
     # Neither exists yet, so the first phase to run decides where the trail
     # begins. Getting this wrong is not a cosmetic error: creating
-    # `.claude/knowledge-base/` inside the kit's own repository plants the split
-    # knowledge-base that `backlog-review` reports as MAJOR — the defect the
+    # `.claude/records/` inside the kit's own repository plants the split
+    # records that `backlog-review` reports as MAJOR — the defect the
     # CHANGELOG records the test suite having planted on every run. Found
     # exactly that way here, by running the instrumented gate against this repo.
     if _is_standalone(project_root):
-        return project_root / "knowledge-base" / EVENTS_FILENAME
+        return project_root / "records" / EVENTS_FILENAME
     return project_root / _KB_DIRS[0] / EVENTS_FILENAME
 
 
@@ -123,7 +123,7 @@ def project_root_for(work_path: Path) -> Path:
     process. Milder than fabricated evidence, and the same shape.
 
     Walks up from `work_path` to the nearest directory that owns a
-    knowledge-base or holds the kit. When nothing above it qualifies — a smoke
+    records or holds the kit. When nothing above it qualifies — a smoke
     run in a bare tmpdir — the walk stops at the filesystem root and the caller
     gets `work_path` itself, so the event lands inside the throwaway tree
     instead of escaping into whichever repository the shell was sitting in.

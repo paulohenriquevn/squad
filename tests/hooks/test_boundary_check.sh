@@ -1,6 +1,6 @@
 #!/bin/bash
 # Tests for hooks/boundary-check.sh
-# Verifies that writes to knowledge-base/references/ and knowledge-base/tools/
+# Verifies that writes to records/references/ and study-material/
 # are blocked, while writes to other paths are allowed.
 #
 # The hook reads JSON from stdin with a file_path field (Edit/Write tool schema).
@@ -65,34 +65,34 @@ echo ""
 echo "=== boundary-check.sh ==="
 echo ""
 
-# ---- Write to knowledge-base/references/ (blocked) ----
+# ---- Write to records/references/ (blocked) ----
 setup
-rc=$(run_hook "knowledge-base/references/project-x/README.md")
-assert_exit "write to knowledge-base/references/ is blocked" 2 "$rc"
+rc=$(run_hook "records/references/project-x/README.md")
+assert_exit "write to records/references/ is blocked" 2 "$rc"
 teardown
 
-# ---- Write to knowledge-base/tools/ (blocked) ----
+# ---- Write to study-material/ (blocked) ----
 setup
-rc=$(run_hook "knowledge-base/tools/sometool/config.yaml")
-assert_exit "write to knowledge-base/tools/ is blocked" 2 "$rc"
+rc=$(run_hook "study-material/sometool/config.yaml")
+assert_exit "write to study-material/ is blocked" 2 "$rc"
 teardown
 
-# ---- Write to .claude/knowledge-base/references/ (blocked) ----
+# ---- Write to .claude/records/references/ (blocked) ----
 setup
-rc=$(run_hook ".claude/knowledge-base/references/lib/file.py")
-assert_exit "write to .claude/knowledge-base/references/ is blocked" 2 "$rc"
+rc=$(run_hook ".claude/records/references/lib/file.py")
+assert_exit "write to .claude/records/references/ is blocked" 2 "$rc"
 teardown
 
-# ---- Write to .claude/knowledge-base/tools/ (blocked) ----
+# ---- Write to .claude/study-material/ (blocked) ----
 setup
-rc=$(run_hook ".claude/knowledge-base/tools/tool/main.go")
-assert_exit "write to .claude/knowledge-base/tools/ is blocked" 2 "$rc"
+rc=$(run_hook ".claude/study-material/tool/main.go")
+assert_exit "write to .claude/study-material/ is blocked" 2 "$rc"
 teardown
 
-# ---- Write to knowledge-base/discoveries/ (allowed) ----
+# ---- Write to records/discoveries/ (allowed) ----
 setup
-rc=$(run_hook "knowledge-base/discoveries/blueprints/finding.md")
-assert_exit "write to knowledge-base/discoveries/ is allowed" 0 "$rc"
+rc=$(run_hook "records/discoveries/blueprints/finding.md")
+assert_exit "write to records/discoveries/ is allowed" 0 "$rc"
 teardown
 
 # ---- Write to src/ (allowed) ----
@@ -120,22 +120,22 @@ echo '{"tool_name":"Write","tool_input":{}}' | bash "$HOOK" >/dev/null 2>&1 || r
 assert_exit "empty file_path is allowed" 0 "$rc"
 teardown
 
-# ---- Absolute path containing knowledge-base/references/ (blocked) ----
+# ---- Absolute path containing records/references/ (blocked) ----
 setup
-rc=$(run_hook "/home/user/project/knowledge-base/references/file.txt")
-assert_exit "absolute path to knowledge-base/references/ is blocked" 2 "$rc"
+rc=$(run_hook "/home/user/project/records/references/file.txt")
+assert_exit "absolute path to records/references/ is blocked" 2 "$rc"
 teardown
 
-# ---- File with 'references' in name but not in knowledge-base (allowed) ----
+# ---- File with 'references' in name but not in records (allowed) ----
 setup
 rc=$(run_hook "docs/references-guide.md")
-assert_exit "file named references outside knowledge-base is allowed" 0 "$rc"
+assert_exit "file named references outside records is allowed" 0 "$rc"
 teardown
 
 # ---- filePath variant (camelCase) ----
 setup
 rc=0
-printf '{"tool_name":"Edit","tool_input":{"filePath":"knowledge-base/references/x.md"}}' \
+printf '{"tool_name":"Edit","tool_input":{"filePath":"records/references/x.md"}}' \
   | bash "$HOOK" >/dev/null 2>&1 || rc=$?
 assert_exit "filePath (camelCase) to references/ is blocked" 2 "$rc"
 teardown

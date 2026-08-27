@@ -1,7 +1,7 @@
 """Evidence-pointer checker for /discover-execute opportunities (M2 deterministic).
 
 Replaces the ancestor `check_reference_citations.py`, which verified citations into
-`knowledge-base/references/` -- the prior-art study zone this cycle retired. Evidence
+`records/references/` -- the prior-art study zone this cycle retired. Evidence
 now points at OUR system, so the checker resolves two different pointer classes:
 
   1. Code pointers      `path/to/file.ext:LINE` -- deterministically verifiable.

@@ -27,7 +27,7 @@ THE FIX, AND WHAT IT SEPARATES
 `detect-layout.sh` now resolves TWO paths where there used to be one:
 
     KIT_DIR  — the kit's CODE (skills/, rules/, hooks/). Read-only.
-    ECO      — the cycle's DATA (knowledge-base/, .active_plan). Writable.
+    ECO      — the cycle's DATA (records/, .active_plan). Writable.
 
 In native mode the two diverge — the code sits outside the project, under
 `$CLAUDE_PLUGIN_ROOT` — and it is that divergence that makes the kit

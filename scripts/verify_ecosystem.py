@@ -256,7 +256,7 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         # smoke exercises is detect_domain → spawn_reviewers → consolidate, so the
         # upstream context is declared here — the same way a real `/review` finds
         # it after a green `/code-quality`.
-        audits = findings_dir.parent.parent / "knowledge-base" / "audits"
+        audits = findings_dir.parent.parent / "records" / "audits"
         audits.mkdir(parents=True, exist_ok=True)
         (audits / "smoke-code-quality-2026-01-01.md").write_text(
             "**Verdict:** PASS\n**Hard caps triggered:** _none_\n"

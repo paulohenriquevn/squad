@@ -12,7 +12,7 @@ own gates all along.
 
 That is why instrumenting alone is not enough. Events without this comparison
 buy a prettier log of the same drift. Reading `rules/cycle-phases.txt` against
-`knowledge-base/cycle-events.jsonl` is the half neither system had.
+`records/cycle-events.jsonl` is the half neither system had.
 
 THE FOUR THINGS IT ANSWERS
 --------------------------
@@ -63,7 +63,7 @@ review        | conditional | absent when implement never ran
 def _project(tmp_path: Path, plan: str = _PLAN) -> Path:
     (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
     (tmp_path / "rules" / "cycle-phases.txt").write_text(plan, encoding="utf-8")
-    (tmp_path / ".claude" / "knowledge-base").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".claude" / "records").mkdir(parents=True, exist_ok=True)
     return tmp_path
 
 

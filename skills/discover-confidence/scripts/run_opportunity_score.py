@@ -41,7 +41,7 @@ def _resolve_opportunity(arg: str) -> Path:
     p = Path(arg)
     if p.exists() and p.suffix == ".md":
         return p.resolve()
-    base = Path(".claude/knowledge-base/discoveries/opportunities")
+    base = Path(".claude/records/discoveries/opportunities")
     for c in (base / f"{arg}-opportunity.md", base / f"{arg}.md"):
         if c.exists():
             return c.resolve()

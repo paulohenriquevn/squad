@@ -37,8 +37,8 @@ moved is reported at the top of the review, above every finding in it.
 ## Pre-read (mandatory)
 
 1. The plan: `{PLAN_PATH}` (specifically Global DoD § Runtime-metric proof, and per-task Acceptance Criteria)
-2. The implementation progress audit: `.claude/knowledge-base/implementations/.progress-{SLUG}.json` (if exists)
-3. The validation report from /implement: `.claude/knowledge-base/reviews/{SLUG}-implement-validate-*.md`
+2. The implementation progress audit: `.claude/records/implementations/.progress-{SLUG}.json` (if exists)
+3. The validation report from /implement: `.claude/records/reviews/{SLUG}-implement-validate-*.md`
 4. Re-run for sanity: `python3 .claude/skills/implement/scripts/check_wiring.py --symbol {each-new-symbol}` for each public export in the diff
 5. The cycle-implement rule: `.claude/rules/cycle-implement.md` § Wiring triad
 

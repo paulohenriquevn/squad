@@ -18,7 +18,7 @@ Verdict:
   PHASE_REVIEW_NEEDS_FIX  — at least one HIGH or BLOCKER → halt-loop BLOCKED
 
 A markdown report is written to:
-  knowledge-base/mini-reviews/{slug}-phase{N}-review-{YYYY-MM-DD}.md
+  records/mini-reviews/{slug}-phase{N}-review-{YYYY-MM-DD}.md
 
 This is the cheap, deterministic implementation. A future Agent-based review
 (senior-dev second opinion on design/cohesion) can plug into the report as
@@ -27,10 +27,10 @@ an additional section without changing the verdict-computation logic.
 Usage:
     python3 mini_review.py \\
         --slug foo \\
-        --plan knowledge-base/plans/foo-plan.md \\
-        --progress knowledge-base/implementations/.progress-foo.json \\
+        --plan records/plans/foo-plan.md \\
+        --progress records/implementations/.progress-foo.json \\
         --phase 2 \\
-        --output-dir knowledge-base/mini-reviews
+        --output-dir records/mini-reviews
 
 Exit codes:
     0 — PHASE_REVIEW_PASS

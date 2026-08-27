@@ -17,7 +17,7 @@ Evidence record (JSON):
      "target": {"kind": "web", "url": "https://app.example.com"},
      "results": [
        {"id": "AC1", "status": "passed",
-        "evidence": ["knowledge-base/acceptance/evidence/M2-AC1-checkout.png"],
+        "evidence": ["records/acceptance/evidence/M2-AC1-checkout.png"],
         "note": "checkout completed, 200 on POST /orders"}
      ],
      "defects": [{"severity": "minor", "summary": "...", "issue": "#412"}]}

@@ -8,7 +8,7 @@ Implementation tasks already produced commits on the working branch. `/implement
 **Implementation working contract:** `{IMPLEMENTATION_PATH}`
 **Last validation report (markdown):** `{VALIDATION_REPORT_PATH}`
 **Last validation report (JSON, captured during Step 5):** `{VALIDATION_REPORT_JSON_PATH}`
-**Progress file:** `.claude/knowledge-base/implementations/.progress-{PLAN_SLUG}.json` (gitignored)
+**Progress file:** `.claude/records/implementations/.progress-{PLAN_SLUG}.json` (gitignored)
 **SEPA agent file:** `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa.md`
 
 ## Your contract for this iteration

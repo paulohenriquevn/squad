@@ -60,7 +60,7 @@ Do NOT invoke when:
 /deps-audit
 ```
 
-Detects all manifests in repo root (excluding `node_modules/`, `.venv/`, `__pycache__/`, `knowledge-base/references/`, `dist/`, `build/`, `target/`), runs the matching auditors, prints a report to stdout. No plan binding; advisory only.
+Detects all manifests in repo root (excluding `node_modules/`, `.venv/`, `__pycache__/`, `records/references/`, `dist/`, `build/`, `target/`), runs the matching auditors, prints a report to stdout. No plan binding; advisory only.
 
 ### Mode 2 — Plan-bound audit (RECOMMENDED for cycle-plan)
 
@@ -68,7 +68,7 @@ Detects all manifests in repo root (excluding `node_modules/`, `.venv/`, `__pyca
 /deps-audit {plan-slug}
 ```
 
-Reads `knowledge-base/plans/{slug}-plan.md` (or `knowledge-base/discoveries/plans/{slug}-plan.md`), parses its `## Dependencies` section, cross-references every declared dep against:
+Reads `records/plans/{slug}-plan.md` (or `records/discoveries/plans/{slug}-plan.md`), parses its `## Dependencies` section, cross-references every declared dep against:
 
 1. The actual manifest state (or marker `(NEW)` if dep is to be added by the plan).
 2. The auditor results (CVE database + outdated versions).
@@ -204,7 +204,7 @@ See [`deps-audit-golden-rule.md § Severity rubric`](../../rules/deps-audit-gold
 
 In **Mode 1**: print full report to stdout.
 
-In **Mode 2**: write to `knowledge-base/audits/{slug}-deps-audit-{date}.md` AND print summary to stdout. The persistent file is the audit trail consumed by `/plan-confidence`.
+In **Mode 2**: write to `records/audits/{slug}-deps-audit-{date}.md` AND print summary to stdout. The persistent file is the audit trail consumed by `/plan-confidence`.
 
 ---
 
@@ -292,7 +292,7 @@ Allowlisted findings (within sunset) downgrade by ONE severity level: CRITICAL �
 9. **NEVER skip Rule 9 column on NEW deps** — see golden rule; this is a hard cap. "Picked X because it's popular" is NOT Rule 9 evaluation. Need rejected alternatives + reasons.
 10. **NEVER allowlist a CRITICAL CVE without sunset ≤ 30 days** — golden rule requires aggressive sunset for high severity; rejecting it via allowlist is a stopgap, not a destination.
 11. **NEVER bypass via `--force` / `--skip-audit` / `--accept-cves` flags** — they do not exist by design (golden rule constructor invariant).
-12. **NEVER use `knowledge-base/references/` clones as part of the audit surface** — read-only zone; their deps are not OUR responsibility.
+12. **NEVER use `records/references/` clones as part of the audit surface** — read-only zone; their deps are not OUR responsibility.
 
 ---
 
@@ -300,7 +300,7 @@ Allowlisted findings (within sunset) downgrade by ONE severity level: CRITICAL �
 
 | Artifact | Rollback procedure |
 |---|---|
-| Report at `knowledge-base/audits/{slug}-deps-audit-{date}.md` | Delete file; no further state to revert. |
+| Report at `records/audits/{slug}-deps-audit-{date}.md` | Delete file; no further state to revert. |
 | Allowlist entry at `rules/deps-audit-allowlist.txt` | Standard git revert of the line addition. |
 | (No manifest changes ever — skill is read-only.) | n/a |
 

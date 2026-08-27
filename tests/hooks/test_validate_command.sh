@@ -287,16 +287,16 @@ echo '{"tool_name":"Bash","tool_input":{}}' | (cd "$TMPDIR_TEST" && bash "$HOOK"
 assert_exit "empty input (no command) is allowed" 0 "$rc"
 teardown
 
-# ---- knowledge-base/references/ write via Bash (blocked) ----
+# ---- records/references/ write via Bash (blocked) ----
 setup
-rc=$(run_hook "rm knowledge-base/references/foo.md")
-assert_exit "rm inside knowledge-base/references/ is blocked" 2 "$rc"
+rc=$(run_hook "rm records/references/foo.md")
+assert_exit "rm inside records/references/ is blocked" 2 "$rc"
 teardown
 
-# ---- knowledge-base/references/ write via Bash with .claude prefix (blocked) ----
+# ---- records/references/ write via Bash with .claude prefix (blocked) ----
 setup
-rc=$(run_hook "cp file.txt .claude/knowledge-base/references/dest.txt")
-assert_exit "cp into .claude/knowledge-base/references/ is blocked" 2 "$rc"
+rc=$(run_hook "cp file.txt .claude/records/references/dest.txt")
+assert_exit "cp into .claude/records/references/ is blocked" 2 "$rc"
 teardown
 
 # ---- Co-Authored-By in commit message (blocked) ----
@@ -347,26 +347,26 @@ setup; rc=$(run_hook "git push --force origin a && git push origin b"); assert_e
 
 # ---------------------------------------------------------------------------
 # P1 — reference EXFILTRATION: content must not leave the read-only study zone
-# The pre-existing guard only watched writes INTO knowledge-base/{references,tools}/.
+# The pre-existing guard only watched writes INTO records/{references,tools}/.
 # Copying content OUT of it is the provenance leak, and was fully open.
 # ---------------------------------------------------------------------------
-setup; rc=$(run_hook "cp knowledge-base/references/redis/src/dict.c src/mine.c"); assert_exit "P1: cp out of the reference zone is blocked" 2 "$rc"; teardown
-setup; rc=$(run_hook "cat knowledge-base/references/redis/src/dict.c > src/mine.c"); assert_exit "P1: redirect out of the reference zone is blocked" 2 "$rc"; teardown
-setup; rc=$(run_hook "rsync -a knowledge-base/tools/foo/ src/vendor/"); assert_exit "P1: rsync out of the tools zone is blocked" 2 "$rc"; teardown
-setup; rc=$(run_hook "cat .claude/knowledge-base/references/x/y.py >> src/z.py"); assert_exit "P1: append out of the .claude-prefixed zone is blocked" 2 "$rc"; teardown
-setup; rc=$(run_hook "cat knowledge-base/references/redis/src/dict.c | tee src/mine.c"); assert_exit "P1: pipe-to-tee out of the zone is blocked" 2 "$rc"; teardown
+setup; rc=$(run_hook "cp records/references/redis/src/dict.c src/mine.c"); assert_exit "P1: cp out of the reference zone is blocked" 2 "$rc"; teardown
+setup; rc=$(run_hook "cat records/references/redis/src/dict.c > src/mine.c"); assert_exit "P1: redirect out of the reference zone is blocked" 2 "$rc"; teardown
+setup; rc=$(run_hook "rsync -a study-material/foo/ src/vendor/"); assert_exit "P1: rsync out of the tools zone is blocked" 2 "$rc"; teardown
+setup; rc=$(run_hook "cat .claude/records/references/x/y.py >> src/z.py"); assert_exit "P1: append out of the .claude-prefixed zone is blocked" 2 "$rc"; teardown
+setup; rc=$(run_hook "cat records/references/redis/src/dict.c | tee src/mine.c"); assert_exit "P1: pipe-to-tee out of the zone is blocked" 2 "$rc"; teardown
 # Reading and searching the zone stays allowed — that is what it is FOR.
-setup; rc=$(run_hook "cat knowledge-base/references/redis/src/dict.c"); assert_exit "P1: plain read of the zone is allowed" 0 "$rc"; teardown
-setup; rc=$(run_hook "grep -rn dictExpand knowledge-base/references/"); assert_exit "P1: grep inside the zone is allowed" 0 "$rc"; teardown
-setup; rc=$(run_hook "ls knowledge-base/references/"); assert_exit "P1: ls of the zone is allowed" 0 "$rc"; teardown
+setup; rc=$(run_hook "cat records/references/redis/src/dict.c"); assert_exit "P1: plain read of the zone is allowed" 0 "$rc"; teardown
+setup; rc=$(run_hook "grep -rn dictExpand records/references/"); assert_exit "P1: grep inside the zone is allowed" 0 "$rc"; teardown
+setup; rc=$(run_hook "ls records/references/"); assert_exit "P1: ls of the zone is allowed" 0 "$rc"; teardown
 # Correlation: an unrelated cp in another segment must not be blamed on the zone.
-setup; rc=$(run_hook "ls knowledge-base/references/ && cp a.txt b.txt"); assert_exit "P1: unrelated cp in another segment is allowed" 0 "$rc"; teardown
+setup; rc=$(run_hook "ls records/references/ && cp a.txt b.txt"); assert_exit "P1: unrelated cp in another segment is allowed" 0 "$rc"; teardown
 
 # ---------------------------------------------------------------------------
 # P2 — commit messages must not carry reference-zone paths
 # ---------------------------------------------------------------------------
-setup; rc=$(run_hook "git commit -m 'port from knowledge-base/references/redis/src/dict.c'"); assert_exit "P2: commit message citing the zone is blocked" 2 "$rc"; teardown
-setup; rc=$(run_hook "git commit -m 'adapted from .claude/knowledge-base/tools/foo'"); assert_exit "P2: commit message citing the tools zone is blocked" 2 "$rc"; teardown
+setup; rc=$(run_hook "git commit -m 'port from records/references/redis/src/dict.c'"); assert_exit "P2: commit message citing the zone is blocked" 2 "$rc"; teardown
+setup; rc=$(run_hook "git commit -m 'adapted from .claude/study-material/foo'"); assert_exit "P2: commit message citing the tools zone is blocked" 2 "$rc"; teardown
 # Precision: the word "references" on its own is NOT the zone.
 setup; rc=$(run_hook "git commit -m 'fix cross-references in rules README'"); assert_exit "P2: 'cross-references' is not the zone" 0 "$rc"; teardown
 setup; rc=$(run_hook "git commit -m 'chore: normal change'"); assert_exit "P2: ordinary commit message is allowed" 0 "$rc"; teardown

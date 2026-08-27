@@ -5,13 +5,13 @@ Deterministic (no LLM). Scans repo state for signals that the requested topic
 has enough prior art for plan-only mode vs needs full discover.
 
 Signals + weights:
-  - References match (knowledge-base/references/{project}/ matches keyword)              +30 each match (cap +30)
-  - Tools match (knowledge-base/tools/{tool}/ matches keyword OR alias)                  +25 each match (cap +25)
+  - References match (records/references/{project}/ matches keyword)              +30 each match (cap +30)
+  - Tools match (study-material/{tool}/ matches keyword OR alias)                  +25 each match (cap +25)
   - Patterns skill (skills/*-patterns/ description contains keyword)                     +25 each match (cap +25)
-  - ADR match (knowledge-base/adrs/ title contains keyword)                              +20 cumulative (cap +20)
+  - ADR match (records/adrs/ title contains keyword)                              +20 cumulative (cap +20)
   - ROADMAP.md mention (slug verbatim +20; ≥2 keywords +10)                              +20 OR +10
   - CLAUDE.md roadmap mention (slug or keywords appear)                                  +10
-  - Completed plan match (knowledge-base/plans/completed/ name contains keyword)         +10 each (cap +20)
+  - Completed plan match (records/plans/completed/ name contains keyword)         +10 each (cap +20)
   - User context length (passed via --context-length flag)                               +5 (>200 chars) OR +10 (>1000)
   - Baseline                                                                             +10 (always)
 
@@ -57,13 +57,13 @@ def tokenize_slug(slug: str) -> list[str]:
 
 # Tool aliases — populated per-project. Keys are short/colloquial names that may
 # appear in slugs; values are the canonical directory names under
-# knowledge-base/tools/. Leave empty by default.
+# study-material/. Leave empty by default.
 TOOL_ALIASES: dict[str, str] = {}
 
 
 def score_references(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
     """+30 if any reference project matches a keyword."""
-    refs_dir = repo / "knowledge-base" / "references"
+    refs_dir = repo / "records" / "references"
     if not refs_dir.is_dir():
         return 0, []
     signals = []
@@ -79,7 +79,7 @@ def score_references(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
 
 def score_tools(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
     """+25 if any tool/{name} matches a keyword or its alias."""
-    tools_dir = repo / "knowledge-base" / "tools"
+    tools_dir = repo / "records" / "tools"
     if not tools_dir.is_dir():
         return 0, []
     signals = []
@@ -138,7 +138,7 @@ def score_patterns_skills(repo: Path, keywords: list[str]) -> tuple[int, list[st
 
 def score_adrs(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
     """+20 if any ADR title/filename matches a keyword."""
-    adrs_dir = repo / "knowledge-base" / "adrs"
+    adrs_dir = repo / "records" / "adrs"
     if not adrs_dir.is_dir():
         return 0, []
     signals = []
@@ -172,7 +172,7 @@ def score_claude_md(repo: Path, keywords: list[str], slug: str) -> tuple[int, li
 
 def score_completed_plans(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
     """+10 each completed plan matching a keyword (cap +20)."""
-    plans_dir = repo / "knowledge-base" / "plans" / "completed"
+    plans_dir = repo / "records" / "plans" / "completed"
     if not plans_dir.is_dir():
         return 0, []
     signals = []

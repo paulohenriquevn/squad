@@ -1,9 +1,9 @@
-"""B-032 — a default that assumes the standalone layout creates the split knowledge-base.
+"""B-032 — a default that assumes the standalone layout creates the split records.
 
-`rules/knowledge-base-location.md`: `<project>/.claude/knowledge-base/` is canonical, and the one
+`rules/records-location.md`: `<project>/.claude/records/` is canonical, and the one
 exception is the standalone kit repository. Two scripts in this skill defaulted to the standalone
 path — `mini_review.py:379` (a WRITER) and `check_phase_review.py:145` (a READER) — so running the
-mini review with defaults in a plugin install created a SECOND knowledge-base at the project root.
+mini review with defaults in a plugin install created a SECOND records at the project root.
 
 The writer and the reader agreed with EACH OTHER while both disagreed with the rest of the
 ecosystem, which is what made it quiet: nothing errors, the gate still passes, and a second tree
@@ -45,7 +45,7 @@ def test_a_plugin_layout_resolves_under_dot_claude(tmp_path: Path) -> None:
 
     resolved = default_mini_reviews_dir(root)
 
-    assert resolved == root / ".claude" / "knowledge-base" / "mini-reviews"
+    assert resolved == root / ".claude" / "records" / "mini-reviews"
     assert ".claude" in resolved.parts
 
 
@@ -56,7 +56,7 @@ def test_a_standalone_layout_resolves_at_the_root(tmp_path: Path) -> None:
 
     resolved = default_mini_reviews_dir(root)
 
-    assert resolved == root / "knowledge-base" / "mini-reviews"
+    assert resolved == root / "records" / "mini-reviews"
     assert ".claude" not in resolved.parts
 
 
@@ -68,14 +68,14 @@ def test_the_writer_defaults_under_dot_claude(tmp_path: Path) -> None:
     resolved = default_mini_reviews_dir(root)
     resolved.mkdir(parents=True)
 
-    assert not (root / "knowledge-base").exists()
+    assert not (root / "records").exists()
 
 
 def test_no_script_defaults_to_the_standalone_layout() -> None:
     """A survey is a point in time; a scan is the survey repeated on every run.
 
     Two scripts were found by accident. This fails when a third grows the same default — an
-    argparse default, or a bare fallback, naming `knowledge-base` without `.claude`. A reader that
+    argparse default, or a bare fallback, naming `records` without `.claude`. A reader that
     lists BOTH layouts is correct and must stay green: that is how `run_validation.py` works.
     """
     offenders: list[str] = []
@@ -87,19 +87,19 @@ def test_no_script_defaults_to_the_standalone_layout() -> None:
             stripped = line.strip()
             if stripped.startswith(("#", '"')):
                 continue
-            # Any `Path("knowledge-base…)` literal, not only an argparse default. A first pass
+            # Any `Path("records…)` literal, not only an argparse default. A first pass
             # matched `default=` and `or` alone, and a mutant that hid the same literal in a
             # function's parameter default sailed through — the shape is not what matters, the
             # hardcoded standalone path is.
-            if not re.search(r'Path\(\s*["\']knowledge-base', line):
+            if not re.search(r'Path\(\s*["\']records', line):
                 continue
             if ".claude" in line:
                 continue
             offenders.append(f"{path.name}:{number}: {stripped[:100]}")
 
     assert offenders == [], (
-        "These default to the standalone layout, which creates a second knowledge-base in every\n"
-        "plugin install (rules/knowledge-base-location.md):\n\n" + "\n".join(offenders)
+        "These default to the standalone layout, which creates a second records in every\n"
+        "plugin install (rules/records-location.md):\n\n" + "\n".join(offenders)
     )
 
 
@@ -108,8 +108,8 @@ def test_the_scan_does_not_flag_a_reader_that_lists_both_layouts() -> None:
     # doing the right thing, and the scan would be loosened or deleted.
     source = (SCRIPTS / "run_validation.py").read_text(encoding="utf-8")
 
-    assert 'project_root / "knowledge-base" / "plans"' in source
-    assert '".claude" / "knowledge-base" / "plans"' in source
+    assert 'project_root / "records" / "plans"' in source
+    assert '".claude" / "records" / "plans"' in source
 
 
 def test_an_explicit_output_dir_still_wins(tmp_path: Path) -> None:
@@ -136,7 +136,7 @@ def test_the_writer_actually_writes_under_dot_claude(tmp_path: Path) -> None:
     """Runs `mini_review.py` for real.
 
     A first pass asserted only the RESOLVER, and a mutant that reverted the writer's wiring to the
-    literal `Path("knowledge-base/mini-reviews")` passed every test. The resolver being right is not
+    literal `Path("records/mini-reviews")` passed every test. The resolver being right is not
     the same as the writer using it.
     """
     root = _plugin_root(tmp_path)
@@ -152,7 +152,7 @@ def test_the_writer_actually_writes_under_dot_claude(tmp_path: Path) -> None:
         capture_output=True, text=True, check=False,
     )
 
-    assert not (root / "knowledge-base").exists(), (
-        "the writer created a second knowledge-base at the project root — the exact split "
-        "rules/knowledge-base-location.md forbids"
+    assert not (root / "records").exists(), (
+        "the writer created a second records at the project root — the exact split "
+        "rules/records-location.md forbids"
     )

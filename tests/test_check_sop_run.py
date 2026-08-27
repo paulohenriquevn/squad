@@ -85,8 +85,8 @@ outcome: COMPLETED_WITH_DEVIATIONS
 
 
 def _project(tmp_path: Path, sop: str = _SOP, run: str = _RUN) -> Path:
-    sops = tmp_path / "knowledge-base" / "sops"
-    runs = tmp_path / "knowledge-base" / "sop-runs"
+    sops = tmp_path / "records" / "sops"
+    runs = tmp_path / "records" / "sop-runs"
     sops.mkdir(parents=True, exist_ok=True)
     runs.mkdir(parents=True, exist_ok=True)
     if sop:
@@ -265,7 +265,7 @@ def test_an_outcome_claiming_no_deviations_while_recording_one_is_reported(
 # ---------------------------------------------------------------------------
 
 def test_a_project_with_no_runs_reports_nothing(tmp_path: Path) -> None:
-    (tmp_path / "knowledge-base" / "sops").mkdir(parents=True)
+    (tmp_path / "records" / "sops").mkdir(parents=True)
 
     report = check_sop_runs(tmp_path)
 

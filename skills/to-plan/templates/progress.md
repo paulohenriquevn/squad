@@ -44,11 +44,11 @@ This file is NOT a replacement for per-phase deterministic audits:
 | Artifact | When written | What it captures |
 |---|---|---|
 | `progress.md` (THIS file) | Continuously, after each Edit/Write | Granular action log: what was done + immediate observations |
-| `.claude/knowledge-base/reviews/{slug}-edge-cases-plan-{date}.md` | Once per `/edge-case-plan` invocation | Classified edges (MUST FIX / SHOULD TEST / DOCUMENT) |
-| `.claude/knowledge-base/reviews/{slug}-plan-confidence-{date}.md.json` | Once per `/plan-confidence` invocation | Structural M2 score + verdict |
-| `.claude/knowledge-base/audits/{slug}-deps-audit-{date}.md` | Once per `/deps-audit` invocation | CVE/Rule 9 verdict |
-| `.claude/knowledge-base/reviews/{slug}-implement-validate-{date}.md` | Once per `/implement` final validation | Test/typecheck/lint/coverage gates |
-| `.claude/knowledge-base/reviews/{slug}-review-{date}.md` | Once per `/review` invocation | 4-7 specialized reviewers' consolidated report |
+| `.claude/records/reviews/{slug}-edge-cases-plan-{date}.md` | Once per `/edge-case-plan` invocation | Classified edges (MUST FIX / SHOULD TEST / DOCUMENT) |
+| `.claude/records/reviews/{slug}-plan-confidence-{date}.md.json` | Once per `/plan-confidence` invocation | Structural M2 score + verdict |
+| `.claude/records/audits/{slug}-deps-audit-{date}.md` | Once per `/deps-audit` invocation | CVE/Rule 9 verdict |
+| `.claude/records/reviews/{slug}-implement-validate-{date}.md` | Once per `/implement` final validation | Test/typecheck/lint/coverage gates |
+| `.claude/records/reviews/{slug}-review-{date}.md` | Once per `/review` invocation | 4-7 specialized reviewers' consolidated report |
 
 `progress.md` lives ALONGSIDE these — it's the **per-action narrative**;
 they are **per-phase verdicts**. PR reviewers consult both.

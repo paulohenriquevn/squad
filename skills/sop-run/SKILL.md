@@ -45,7 +45,7 @@ it, a deviation is unusable evidence.
 
 ## Where to put it
 
-`knowledge-base/sop-runs/{slug}-{YYYY-MM-DD}.md`, pointing at the SOP by slug.
+`records/sop-runs/{slug}-{YYYY-MM-DD}.md`, pointing at the SOP by slug.
 
 ## Exploratory mode
 

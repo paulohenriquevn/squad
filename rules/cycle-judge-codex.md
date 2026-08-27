@@ -42,11 +42,11 @@ Each stage is **idempotent** and **independent** — running `plan` later does n
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| `:discover` | opportunity at `knowledge-base/discoveries/opportunities/{slug}-opportunity.md` | `knowledge-base/judge-codex/{slug}-discover-judge-{date}.json` | ≥2-source evidence rule enforced; `fabricated_citation` caps to INVALID |
-| `:plan` | plan at `knowledge-base/plans/{slug}-plan.md` + optional plan-confidence output | `knowledge-base/judge-codex/{slug}-plan-judge-{date}.json` | semantic completeness above `plan-confidence` M3 structural check; Goal SMART; Risks; fabricated citations beyond Evidence-block scope |
-| `:implementation` | implementation log + `git log` of slice commits | `knowledge-base/judge-codex/{slug}-implementation-judge-{date}.json` | wiring triad pillar (a) caller present; TDD RED commit precedes GREEN; no symbol fabrication |
-| `:final` | consolidated review report + raw agent finding files | `knowledge-base/judge-codex/{slug}-final-judge-{date}.json` | review-of-review: aggregator did not silently drop agent files; verdict consistent with findings |
-| `:auto` | (orchestrates all 4 above) | `knowledge-base/judge-codex/{slug}-auto-judge-{date}.json` | smallest-cap-wins aggregation; halts at first disagreement when `--stop-on-disagreement` is set |
+| `:discover` | opportunity at `records/discoveries/opportunities/{slug}-opportunity.md` | `records/judge-codex/{slug}-discover-judge-{date}.json` | ≥2-source evidence rule enforced; `fabricated_citation` caps to INVALID |
+| `:plan` | plan at `records/plans/{slug}-plan.md` + optional plan-confidence output | `records/judge-codex/{slug}-plan-judge-{date}.json` | semantic completeness above `plan-confidence` M3 structural check; Goal SMART; Risks; fabricated citations beyond Evidence-block scope |
+| `:implementation` | implementation log + `git log` of slice commits | `records/judge-codex/{slug}-implementation-judge-{date}.json` | wiring triad pillar (a) caller present; TDD RED commit precedes GREEN; no symbol fabrication |
+| `:final` | consolidated review report + raw agent finding files | `records/judge-codex/{slug}-final-judge-{date}.json` | review-of-review: aggregator did not silently drop agent files; verdict consistent with findings |
+| `:auto` | (orchestrates all 4 above) | `records/judge-codex/{slug}-auto-judge-{date}.json` | smallest-cap-wins aggregation; halts at first disagreement when `--stop-on-disagreement` is set |
 
 ## Verdicts
 
@@ -68,7 +68,7 @@ Plus meta-verdicts at the `:final` stage:
 
 When `judge-codex:*` and the Claude-side equivalent gate (`/discover-confidence`, `/plan-confidence`, `/review`, etc.) reach **different verdicts** on the same artifact:
 
-1. The disagreement is persisted at `knowledge-base/judge-codex/{slug}-{stage}-disagreement-{date}.json`.
+1. The disagreement is persisted at `records/judge-codex/{slug}-{stage}-disagreement-{date}.json`.
 2. The downstream pipeline is **paused** at the disagreeing stage.
 3. **Human adjudication is required** — neither LLM is automatically trusted.
 
@@ -96,9 +96,9 @@ A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** unt
 
 ## Output
 
-- `knowledge-base/judge-codex/{slug}-{stage}-judge-{date}.json` per stage.
-- `knowledge-base/judge-codex/{slug}-auto-judge-{date}.json` for `:auto` runs.
-- `knowledge-base/judge-codex/{slug}-{stage}-disagreement-{date}.json` when Claude vs Codex differ.
+- `records/judge-codex/{slug}-{stage}-judge-{date}.json` per stage.
+- `records/judge-codex/{slug}-auto-judge-{date}.json` for `:auto` runs.
+- `records/judge-codex/{slug}-{stage}-disagreement-{date}.json` when Claude vs Codex differ.
 
 Install/setup commands live in the plugin repo README (and the Pre-conditions
 above); a dated record of the proof-of-value integration run is in the project

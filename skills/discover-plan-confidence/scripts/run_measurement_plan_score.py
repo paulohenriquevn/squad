@@ -66,8 +66,8 @@ def _resolve_plan(arg: str) -> Path:
     if p.exists() and p.suffix == ".md":
         return p.resolve()
     candidates = [
-        Path(".claude/knowledge-base/discoveries/plans") / f"{arg}-plan.md",
-        Path(".claude/knowledge-base/discoveries/plans") / f"{arg}.md",
+        Path(".claude/records/discoveries/plans") / f"{arg}-plan.md",
+        Path(".claude/records/discoveries/plans") / f"{arg}.md",
     ]
     for c in candidates:
         if c.exists():

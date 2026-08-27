@@ -75,7 +75,7 @@ def build(dest: Path, with_plan: str | None = None, baseline: bool = False) -> N
     )
 
     for sub in ("discoveries/plans", "discoveries/opportunities", "backlog", "reviews"):
-        (dest / "knowledge-base" / sub).mkdir(parents=True, exist_ok=True)
+        (dest / "records" / sub).mkdir(parents=True, exist_ok=True)
 
     # Make it a git repo: skills walk up looking for .git or .claude to find the root, and
     # without a marker they resolve to somewhere outside the sandbox.
@@ -97,12 +97,12 @@ def build(dest: Path, with_plan: str | None = None, baseline: bool = False) -> N
     if (dest / "theo-lens").is_dir():
         print("  governed repo: theo-lens (real N+1 in src/api/traces.ts)")
     if with_plan:
-        print(f"  plan: knowledge-base/discoveries/plans/{with_plan}-plan.md")
+        print(f"  plan: records/discoveries/plans/{with_plan}-plan.md")
 
 
 def _write_plan(dest: Path, slug: str) -> None:
     """A scored measurement plan, for evals that start at /discover-execute."""
-    plan = dest / "knowledge-base" / "discoveries" / "plans" / f"{slug}-plan.md"
+    plan = dest / "records" / "discoveries" / "plans" / f"{slug}-plan.md"
     plan.write_text(
         "# Measurement Plan: round-trips in the trace listing\n\n"
         "**Item:** B-014\n"

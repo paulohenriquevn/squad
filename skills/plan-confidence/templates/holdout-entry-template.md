@@ -1,6 +1,6 @@
 ---
 type: holdout-entry
-plan_path: knowledge-base/plans/EXAMPLE-plan.md
+plan_path: records/plans/EXAMPLE-plan.md
 plan_slug: EXAMPLE
 graded_by: reviewer-name
 graded_at: 2026-MM-DD
@@ -11,7 +11,7 @@ total_grading_time_minutes: 0
 
 # Holdout Entry: {plan_slug}
 
-> Copy this file, fill in each field, and save it under `.claude/knowledge-base/concepts/plan-confidence/holdout/{plan-slug}.md`.
+> Copy this file, fill in each field, and save it under `.claude/records/concepts/plan-confidence/holdout/{plan-slug}.md`.
 
 ## Dimension 1 — Factual completeness (weight 0.30)
 

@@ -8,7 +8,7 @@ documented anti-pattern, and `skills/implement/SKILL.md` says the skill NEVER
 skips it and NEVER emits `PHASE_REVIEW_PASS` without `mini_review.py` having
 written the report. Both sentences addressed the agent; neither was checked by
 anything. `mini_review.py` is invoked from prose, writes a report into
-`knowledge-base/mini-reviews/`, and nobody downstream ever looked for it — so a
+`records/mini-reviews/`, and nobody downstream ever looked for it — so a
 run that skipped every boundary was indistinguishable from one that reviewed
 them all.
 
@@ -254,7 +254,7 @@ def main() -> int:
         root = root.parent
     review_dirs = args.review_dir or [
         default_mini_reviews_dir(root),
-        root / "knowledge-base" / "mini-reviews",
+        root / "records" / "mini-reviews",
     ]
     report = check_phase_review(args.plan, progress, args.slug, review_dirs)
 

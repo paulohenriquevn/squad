@@ -2,7 +2,7 @@
 name: edge-case-plan
 version: 0.1.0
 requires: [to-plan]
-description: Analyzes an implementation plan and identifies unforeseen edge cases. Pragmatic — flags real risks without complicating the design. Use after /to-plan or when reviewing any plan in knowledge-base/plans/.
+description: Analyzes an implementation plan and identifies unforeseen edge cases. Pragmatic — flags real risks without complicating the design. Use after /to-plan or when reviewing any plan in records/plans/.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "[plan-slug|plan-file-path]"
@@ -18,8 +18,8 @@ This skill is **phase 2** of [`cycle-plan`](../../rules/cycle-plan.md). The cycl
 
 ## Argument
 
-- `$ARGUMENTS` = plan slug (resolved against `knowledge-base/plans/{slug}-plan.md`) or a full path
-- No argument = analyze the most recent plan in `knowledge-base/plans/`
+- `$ARGUMENTS` = plan slug (resolved against `records/plans/{slug}-plan.md`) or a full path
+- No argument = analyze the most recent plan in `records/plans/`
 
 ## Philosophy
 
@@ -39,7 +39,7 @@ Golden rules:
 
 ```!
 # Locate the plan
-ls knowledge-base/plans/*${ARGUMENTS}* 2>/dev/null || ls -t knowledge-base/plans/*.md | head -5
+ls records/plans/*${ARGUMENTS}* 2>/dev/null || ls -t records/plans/*.md | head -5
 ```
 
 Read the full plan. Understand:
@@ -107,7 +107,7 @@ For each edge case found, classify:
 Save the report at:
 
 ```
-knowledge-base/reviews/{plan-slug}-edge-cases-{YYYY-MM-DD}.md
+records/reviews/{plan-slug}-edge-cases-{YYYY-MM-DD}.md
 ```
 
 Create the `reviews/` directory if it does not yet exist. The report serves as the audit trail for `/plan-confidence` (which does NOT auto-cross-reference edge case reports in M2 — that is the M4 jury layer).
@@ -177,6 +177,6 @@ Cases found: N (EDGE: N, NEGATIVE: N | MUST FIX: N, SHOULD TEST: N, DOCUMENT: N)
 
 ## Integration
 
-- Runs AFTER `/to-plan` or whenever someone asks for a review of a plan in `knowledge-base/plans/`
+- Runs AFTER `/to-plan` or whenever someone asks for a review of a plan in `records/plans/`
 - This skill analyzes **plans before implementation** — for deep trajectory-review of existing code, open a PR and use `/review` or `/security-review` (built-in)
 - Part of the unbreakable chain documented in `/to-plan` SKILL.md: `/to-plan` → `/edge-case-plan` → `/plan-confidence` → (if needed) `/plan-improve` → `/plan-confidence` re-score

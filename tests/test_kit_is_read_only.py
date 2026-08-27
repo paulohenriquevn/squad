@@ -4,8 +4,8 @@ THE DEFECT THIS FIXES
 ---------------------
 Installed by copy, the kit lives in `<project>/.claude/`, and
 `settings.plugin.json` allows `Edit`, `Write` and `Bash(*)`. No hook covered that
-path: `boundary-check.sh` protected only `knowledge-base/references/` and
-`knowledge-base/tools/`, and `validate-command.sh` mentioned neither
+path: `boundary-check.sh` protected only `records/references/` and
+`study-material/`, and `validate-command.sh` mentioned neither
 `.claude/skills`, nor `.claude/rules`, nor `.claude/hooks`. The
 `.kit-manifest.txt`, written by the installer precisely to say what came from the
 kit, was read by no hook at all.
@@ -25,7 +25,7 @@ WHAT STAYS WRITABLE, AND WHY
 The boundary is not all of `.claude/` — that would break normal use. What belongs
 to the PROJECT stays writable and is enumerated below in
 `test_project_owned_paths_stay_writable`: the configuration (`rules/*.txt`), the
-domain specialists (`agents/`), everything under `knowledge-base/`, and
+domain specialists (`agents/`), everything under `records/`, and
 `settings.json`. What is the kit's CONTRACT — skills, normative rules, hooks,
 scripts — is read-only.
 """
@@ -63,7 +63,7 @@ def copy_install(tmp_path: Path) -> Path:
     project = tmp_path / "consumer"
     eco = project / ".claude"
     for d in ("skills/review", "rules", "hooks/environment", "scripts", "commands",
-              "agents", "knowledge-base/plans"):
+              "agents", "records/plans"):
         (eco / d).mkdir(parents=True, exist_ok=True)
     (eco / "skills/review/SKILL.md").write_text("kit\n", encoding="utf-8")
     (eco / "rules/cycle-review.md").write_text("kit\n", encoding="utf-8")
@@ -111,7 +111,7 @@ def test_relative_paths_are_blocked_too(copy_install: Path):
     [
         ".claude/rules/code-quality-languages.txt",  # the project's configuration
         ".claude/agents/my-domain.md",               # the project's specialist
-        ".claude/knowledge-base/plans/x-plan.md",    # the cycle's output
+        ".claude/records/plans/x-plan.md",    # the cycle's output
         ".claude/settings.json",                     # the project's wiring
         "src/app.py",                                # the consumer's code
         "README.md",
@@ -156,7 +156,7 @@ def test_native_plugin_root_is_read_only(tmp_path: Path):
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "rel",
-    ["knowledge-base/references/outro-projeto.md", "knowledge-base/tools/argo-cd.md"],
+    ["records/references/outro-projeto.md", "study-material/argo-cd.md"],
 )
 def test_study_zone_stays_read_only(copy_install: Path, rel: str):
     assert _run(str(copy_install / ".claude" / rel), copy_install) == BLOCK

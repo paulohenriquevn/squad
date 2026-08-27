@@ -3,7 +3,7 @@
 THE DEFECT THIS CLOSES
 ----------------------
 Today the only proof that a cycle phase ran is a file appearing in one of the
-**15 record directories** under `knowledge-base/`, reconstructed afterwards by
+**15 record directories** under `records/`, reconstructed afterwards by
 `phase_coverage.py`. That reconstruction cannot separate two very different
 states, and this repository has already paid for the confusion:
 
@@ -64,39 +64,39 @@ def _events(root: Path) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def test_the_stream_lands_in_the_canonical_knowledge_base(tmp_path: Path) -> None:
-    """`rules/knowledge-base-location.md` makes `.claude/knowledge-base/` canonical
+    """`rules/records-location.md` makes `.claude/records/` canonical
     in a plugin install. A second stream beside the first is the split
-    knowledge-base this ecosystem classifies as MAJOR."""
-    (tmp_path / ".claude" / "knowledge-base").mkdir(parents=True)
+    records this ecosystem classifies as MAJOR."""
+    (tmp_path / ".claude" / "records").mkdir(parents=True)
 
     assert resolve_events_path(tmp_path) == (
-        tmp_path / ".claude" / "knowledge-base" / EVENTS_FILENAME
+        tmp_path / ".claude" / "records" / EVENTS_FILENAME
     )
 
 
 def test_the_standalone_layout_is_served_too(tmp_path: Path) -> None:
-    (tmp_path / "knowledge-base").mkdir()
-    assert resolve_events_path(tmp_path) == tmp_path / "knowledge-base" / EVENTS_FILENAME
+    (tmp_path / "records").mkdir()
+    assert resolve_events_path(tmp_path) == tmp_path / "records" / EVENTS_FILENAME
 
 
 def test_a_project_with_no_knowledge_base_gets_the_canonical_one_created(tmp_path: Path) -> None:
-    """A fresh adopter has no knowledge-base yet, and the first phase to run must
+    """A fresh adopter has no records yet, and the first phase to run must
     not be the one that loses its record."""
     emit_phase_start(tmp_path, cycle="code-quality", slug="demo")
 
-    assert (tmp_path / ".claude" / "knowledge-base" / EVENTS_FILENAME).is_file()
+    assert (tmp_path / ".claude" / "records" / EVENTS_FILENAME).is_file()
 
 
 def test_the_standalone_repo_never_gets_a_dot_claude_knowledge_base(tmp_path: Path) -> None:
-    """The kit's own repository is the one place `.claude/knowledge-base/` is wrong.
+    """The kit's own repository is the one place `.claude/records/` is wrong.
 
-    `rules/knowledge-base-location.md` states the single exception: in the
+    `rules/records-location.md` states the single exception: in the
     standalone layout — `skills/`, `rules/` and `hooks/` at the root, no
-    `.claude/` wrapper — the knowledge-base is `<repo>/knowledge-base/`.
+    `.claude/` wrapper — the records is `<repo>/records/`.
 
     Caught by running the instrumented `/code-quality` against this repository:
-    the first emit created `.claude/knowledge-base/cycle-events.jsonl` at the
-    root, which is precisely the **split knowledge-base** the CHANGELOG records
+    the first emit created `.claude/records/cycle-events.jsonl` at the
+    root, which is precisely the **split records** the CHANGELOG records
     the test suite having planted before, and that `backlog-review` reports as
     MAJOR. A stream that plants the defect it was built to reveal is worse than
     no stream.
@@ -106,7 +106,7 @@ def test_the_standalone_repo_never_gets_a_dot_claude_knowledge_base(tmp_path: Pa
 
     emit_phase_start(tmp_path, cycle="code-quality", slug="demo")
 
-    assert (tmp_path / "knowledge-base" / EVENTS_FILENAME).is_file()
+    assert (tmp_path / "records" / EVENTS_FILENAME).is_file()
     assert not (tmp_path / ".claude").exists(), (
         "the standalone layout must not grow a .claude/ wrapper"
     )
@@ -114,14 +114,14 @@ def test_the_standalone_repo_never_gets_a_dot_claude_knowledge_base(tmp_path: Pa
 
 def test_an_existing_dot_claude_still_wins_in_a_consumer(tmp_path: Path) -> None:
     """A consumer that installed by copy has `.claude/skills/` — and its
-    knowledge-base stays canonical. The standalone exception is about the kit's
+    records stays canonical. The standalone exception is about the kit's
     own repo, not about any project that happens to own a `skills/` folder."""
     (tmp_path / ".claude" / "skills").mkdir(parents=True)
     (tmp_path / "skills").mkdir()
 
     emit_phase_start(tmp_path, cycle="code-quality", slug="demo")
 
-    assert (tmp_path / ".claude" / "knowledge-base" / EVENTS_FILENAME).is_file()
+    assert (tmp_path / ".claude" / "records" / EVENTS_FILENAME).is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -282,9 +282,9 @@ def test_the_project_root_is_derived_from_the_work_not_from_cwd(tmp_path: Path) 
     """
     from cycle_events import project_root_for
 
-    work = tmp_path / "elsewhere" / "knowledge-base" / "reviews" / "demo"
+    work = tmp_path / "elsewhere" / "records" / "reviews" / "demo"
     work.mkdir(parents=True)
-    (tmp_path / "elsewhere" / ".claude" / "knowledge-base").mkdir(parents=True)
+    (tmp_path / "elsewhere" / ".claude" / "records").mkdir(parents=True)
 
     assert project_root_for(work) == tmp_path / "elsewhere"
 
@@ -315,7 +315,7 @@ def test_a_file_is_resolved_from_its_directory(tmp_path: Path) -> None:
     """
     from cycle_events import project_root_for
 
-    (tmp_path / ".claude" / "knowledge-base").mkdir(parents=True)
+    (tmp_path / ".claude" / "records").mkdir(parents=True)
     criteria = tmp_path / "criteria.json"
     criteria.write_text("{}", encoding="utf-8")
 

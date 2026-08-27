@@ -69,10 +69,10 @@
       "Read(**/*secret*)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
-      "Edit(knowledge-base/references/**)",
-      "Write(knowledge-base/references/**)",
-      "Edit(knowledge-base/tools/**)",
-      "Write(knowledge-base/tools/**)"
+      "Edit(records/references/**)",
+      "Write(records/references/**)",
+      "Edit(study-material/**)",
+      "Write(study-material/**)"
     ]
   },
   "hooks": {

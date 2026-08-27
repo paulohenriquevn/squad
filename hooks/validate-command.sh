@@ -52,7 +52,7 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 # safe — over-matching costs a few milliseconds, under-matching costs a hole.
 HAS_GIT=no;  case "$COMMAND" in *git*) HAS_GIT=yes ;; esac
 HAS_RM=no;   case "$COMMAND" in *rm*)  HAS_RM=yes ;; esac
-HAS_ZONE=no; case "$COMMAND" in *knowledge-base/*) HAS_ZONE=yes ;; esac
+HAS_ZONE=no; case "$COMMAND" in *records/*) HAS_ZONE=yes ;; esac
 HAS_PKG=no
 for pkg_marker in pip poetry uv npm pnpm yarn cargo go; do
   case "$COMMAND" in *"$pkg_marker"*) HAS_PKG=yes; break ;; esac
@@ -67,7 +67,7 @@ done
 # can be the export vector: `cat <file> | tee <dest>`).
 # Defined at top level on purpose: the force-push guard and the study-zone export
 # guard both call it, and those live under different short-circuits. Nesting it
-# inside the git branch made `cat knowledge-base/tools/x | tee /out` fail open
+# inside the git branch made `cat study-material/x | tee /out` fail open
 # with "split_segments: command not found" — the export guard silently skipped.
 split_segments() {
   local sep='(\|\||&&|;)'
@@ -272,14 +272,14 @@ if [ "$HAS_RM" = yes ] \
   exit 2
 fi
 
-# --- knowledge-base/references/ and knowledge-base/tools/ are read-only study material ---
+# --- records/references/ and study-material/ are read-only study material ---
 # Escape hatch: a `.references-bootstrap` marker file at project root unblocks WRITE ops
 # to references/ AND tools/. Use ONLY for initial population; delete it right after.
-# Both guards below require the literal `knowledge-base/` in the command, so the
+# Both guards below require the literal `records/` in the command, so the
 # glob test skips the segment loop (one grep per segment) for everything else.
 if [ "$HAS_ZONE" = yes ] && [ ! -f "$PROJECT_DIR/.references-bootstrap" ]; then
-  if echo "$COMMAND" | grep -qE '(^|[[:space:]]|;|&&|\|\||\||\()[[:space:]]*((rm|mv|cp|sed[[:space:]]+-i|tee)[[:space:]]+[^;&|]*(\./)?(\.claude/)?knowledge-base/(references|tools)/|>{1,2}[[:space:]]+(\./)?(\.claude/)?knowledge-base/(references|tools)/)'; then
-    echo "BLOCKED: 'knowledge-base/references/' and 'knowledge-base/tools/' are read-only study material. Capture findings in 'knowledge-base/discoveries/blueprints/'. For initial bootstrap, create '.references-bootstrap' at project root AND cite the source in CHANGELOG.md; remove the marker when done." >&2
+  if echo "$COMMAND" | grep -qE '(^|[[:space:]]|;|&&|\|\||\||\()[[:space:]]*((rm|mv|cp|sed[[:space:]]+-i|tee)[[:space:]]+[^;&|]*(\./)?(\.claude/)?records/(references|tools)/|>{1,2}[[:space:]]+(\./)?(\.claude/)?records/(references|tools)/)'; then
+    echo "BLOCKED: 'records/references/' and 'study-material/' are read-only study material. Capture findings in 'records/discoveries/blueprints/'. For initial bootstrap, create '.references-bootstrap' at project root AND cite the source in CHANGELOG.md; remove the marker when done." >&2
     exit 2
   fi
 
@@ -291,7 +291,7 @@ if [ "$HAS_ZONE" = yes ] && [ ! -f "$PROJECT_DIR/.references-bootstrap" ]; then
   # Judged per segment so an unrelated `cp` elsewhere in a compound is not blamed
   # on the zone. The pipe does NOT split here — `cat <zone-file> | tee <dest>` is
   # itself an export vector.
-  ZONE_RE='(\./)?(\.claude/)?knowledge-base/(references|tools)/'
+  ZONE_RE='(\./)?(\.claude/)?records/(references|tools)/'
   EXPORT_VERB_RE='(^|[[:space:]]|\()[[:space:]]*(cp|mv|rsync|scp|install|tar|zip|dd)([[:space:]]|$)'
   EXPORT_REDIRECT_RE='>{1,2}[[:space:]]*[^[:space:]&>]'
   EXPORT_PIPE_RE='\|[[:space:]]*(tee|dd)([[:space:]]|$)'
@@ -300,7 +300,7 @@ if [ "$HAS_ZONE" = yes ] && [ ! -f "$PROJECT_DIR/.references-bootstrap" ]; then
     if echo "$seg" | grep -qE "$EXPORT_VERB_RE" \
        || echo "$seg" | grep -qE "$EXPORT_REDIRECT_RE" \
        || echo "$seg" | grep -qE "$EXPORT_PIPE_RE"; then
-      echo "BLOCKED: copying content OUT of 'knowledge-base/references/' or 'knowledge-base/tools/' is forbidden — that is third-party study material and a literal copy carries its licence into this project. Read it, learn from it, and write your own version; record the finding in 'knowledge-base/discoveries/blueprints/' citing the source." >&2
+      echo "BLOCKED: copying content OUT of 'records/references/' or 'study-material/' is forbidden — that is third-party study material and a literal copy carries its licence into this project. Read it, learn from it, and write your own version; record the finding in 'records/discoveries/blueprints/' citing the source." >&2
       exit 2
     fi
   done < <(split_segments "$COMMAND")
@@ -318,8 +318,8 @@ if [ "$HAS_GIT" = yes ] && echo "$CMD" | grep -qE 'git[[:space:]]+commit([[:spac
     COMMIT_TEXT="$COMMIT_TEXT
 $(cat "$MSG_FILE" 2>/dev/null || true)"
   fi
-  if echo "$COMMIT_TEXT" | grep -qE '(\./)?(\.claude/)?knowledge-base/(references|tools)/'; then
-    echo "BLOCKED: the commit message cites a path under 'knowledge-base/references/' or 'knowledge-base/tools/'. That zone is third-party study material and must not be referenced in this repository's public history. Describe the behaviour you implemented, not the material you studied." >&2
+  if echo "$COMMIT_TEXT" | grep -qE '(\./)?(\.claude/)?records/(references|tools)/'; then
+    echo "BLOCKED: the commit message cites a path under 'records/references/' or 'study-material/'. That zone is third-party study material and must not be referenced in this repository's public history. Describe the behaviour you implemented, not the material you studied." >&2
     exit 2
   fi
 fi
@@ -333,8 +333,8 @@ fi
 # --- No dependency install inside read-only references/ ---
 if [ "$HAS_PKG" = yes ] \
    && echo "$COMMAND" | grep -qE '(pip|poetry|uv|npm|pnpm|yarn|cargo|go[[:space:]]+(get|mod))[[:space:]]+(install|add|tidy|download)' \
-   && case "$PWD" in *knowledge-base/references/*) true ;; *) false ;; esac; then
-  echo "BLOCKED: never install dependencies inside knowledge-base/references/. Those are read-only clones." >&2
+   && case "$PWD" in *records/references/*) true ;; *) false ;; esac; then
+  echo "BLOCKED: never install dependencies inside records/references/. Those are read-only clones." >&2
   exit 2
 fi
 

@@ -143,11 +143,11 @@ Skill(/to-plan {topic-slug} [--milestone M<N>])   # --milestone forwarded only i
 Skill(/edge-case-plan {topic-slug})
 # AUTO-INJECT MUST-FIX items into the plan (no AskUserQuestion):
 Bash(python3 skills/idea-to-release/scripts/inject_must_fix.py \
-       --plan knowledge-base/plans/{slug}-plan.md \
-       --edge-cases knowledge-base/reviews/{slug}-edge-cases-*.md)
+       --plan records/plans/{slug}-plan.md \
+       --edge-cases records/reviews/{slug}-edge-cases-*.md)
 # INJECT milestone_id into plan frontmatter (roadmap-driven mode only):
 Bash(python3 skills/idea-to-release/scripts/inject_milestone_id.py \
-       --plan knowledge-base/plans/{slug}-plan.md \
+       --plan records/plans/{slug}-plan.md \
        --milestone-id M<N>)
 Skill(/deps-audit {topic-slug})
 Skill(/plan-confidence {topic-slug})
@@ -220,12 +220,12 @@ Review phase:       {SKIP | READY_TO_MERGE | NEEDS_FIXES | NEEDS_DEEPER}
 Release phase:      {SKIP | RELEASED | PR_OPEN_AWAITING_APPROVAL}
 Acceptance phase:   {SKIP (no milestone_id) | ACCEPTED | ACCEPTED_WITH_CAVEATS | REJECTED | NOT_VALIDATED}
 
-Final plan: knowledge-base/plans/{slug}-plan.md
-Implementation: knowledge-base/implementations/{slug}-implementation.md
-Code-quality audit: knowledge-base/audits/{slug}-code-quality-*.md
-Review: knowledge-base/reviews/{slug}-review-*.md
-Release: knowledge-base/releases/v{version}-release.md (if released)
-Acceptance: knowledge-base/acceptance/{milestone-id}-acceptance-*.md (if a milestone was accepted)
+Final plan: records/plans/{slug}-plan.md
+Implementation: records/implementations/{slug}-implementation.md
+Code-quality audit: records/audits/{slug}-code-quality-*.md
+Review: records/reviews/{slug}-review-*.md
+Release: records/releases/v{version}-release.md (if released)
+Acceptance: records/acceptance/{milestone-id}-acceptance-*.md (if a milestone was accepted)
 Attestation hash: {sha256}
 
 Next step:

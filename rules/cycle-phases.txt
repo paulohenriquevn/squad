@@ -9,7 +9,7 @@
 # single artifact stating what the chain IS.
 #
 # This is that artifact. `scripts/check_phase_drift.py` reads it and confronts
-# it with `knowledge-base/cycle-events.jsonl` — what was DECLARED against what
+# it with `records/cycle-events.jsonl` — what was DECLARED against what
 # actually EMITTED.
 #
 # THE DEFECT THIS PAIR CLOSES, IN BOTH DIRECTIONS

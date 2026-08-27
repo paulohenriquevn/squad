@@ -1,7 +1,7 @@
 """Measurement-target checker for /discover-plan measurement plans (M2 deterministic).
 
 Replaces the ancestor `check_reference_citations.py`, which verified citations into
-`knowledge-base/references/` -- the prior-art study zone this cycle retired.
+`records/references/` -- the prior-art study zone this cycle retired.
 
 A measurement plan names WHAT IT WILL MEASURE, and that is the thing to verify before
 anyone spends time measuring. Two target classes:

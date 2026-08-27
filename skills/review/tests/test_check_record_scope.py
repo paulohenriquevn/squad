@@ -1,6 +1,6 @@
 """B-108 — a review record that does not say what it covered cannot be checked afterwards.
 
-MEASURED, which is why this exists. Across one consumer's knowledge-base:
+MEASURED, which is why this exists. Across one consumer's records:
 
     review files declaring a reviewed range   2 of 48
     audit files mentioning a scope            3 of 16

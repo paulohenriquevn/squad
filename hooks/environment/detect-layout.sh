@@ -9,7 +9,7 @@
 #
 #   KIT_DIR  the kit's CODE (skills/, rules/, hooks/). Read-only for the
 #            consumer. Under the native plugin layout it lives OUTSIDE the project.
-#   ECO      the cycle's DATA (knowledge-base/, .active_plan, .attestations).
+#   ECO      the cycle's DATA (records/, .active_plan, .attestations).
 #            Always inside the project, always writable.
 #
 # $PROJECT_DIR is defined too (default: $CLAUDE_PROJECT_DIR or pwd).

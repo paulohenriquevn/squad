@@ -11,10 +11,10 @@ Steps:
 1. Parse the argument. If the user passes a slug, use that. If empty, resolve the active plan:
    - Prefer `${PLAN_SLUG}` env var if set
    - Then `.active_plan` pointer file contents
-   - Then newest file in `knowledge-base/plans/*-plan.md` by mtime
+   - Then newest file in `records/plans/*-plan.md` by mtime
 2. Run `bash scripts/attest_plan.sh {slug}` to write the hash atomically (temp file + rename).
 3. Print confirmation: `attested {slug} -> {hash}`.
-4. Remind the user: "Any future edit to `knowledge-base/plans/{slug}-plan.md` will cause the next UserPromptSubmit hook to block injection. Re-run `/plan-attest {slug}` after intentional edits to refresh the hash."
+4. Remind the user: "Any future edit to `records/plans/{slug}-plan.md` will cause the next UserPromptSubmit hook to block injection. Re-run `/plan-attest {slug}` after intentional edits to refresh the hash."
 
 If the slug cannot be resolved AND no plans exist, refuse with "no plans found".
 

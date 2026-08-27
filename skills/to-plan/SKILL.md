@@ -2,13 +2,13 @@
 name: to-plan
 version: 0.1.0
 requires: []
-description: Turn the current conversation context into an implementation plan and save it to knowledge-base/plans/. Use when user wants to create a plan from the current context.
+description: Turn the current conversation context into an implementation plan and save it to records/plans/. Use when user wants to create a plan from the current context.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Skill
 argument-hint: "{topic-slug}"
 ---
 
-This skill takes the current conversation context, any `/grill-me` output at `knowledge-base/grills/{slug}-grill.md`, and codebase understanding, then produces a detailed implementation plan. Do NOT interview the user during `/to-plan` itself — if requirements are unclear, halt and recommend `/grill-me {topic-slug}` first. When a grill output exists, the plan's `## Context` section MUST cite specific decisions resolved during grilling.
+This skill takes the current conversation context, any `/grill-me` output at `records/grills/{slug}-grill.md`, and codebase understanding, then produces a detailed implementation plan. Do NOT interview the user during `/to-plan` itself — if requirements are unclear, halt and recommend `/grill-me {topic-slug}` first. When a grill output exists, the plan's `## Context` section MUST cite specific decisions resolved during grilling.
 
 ## Process
 
@@ -97,9 +97,9 @@ grep -E '^## ' rules/architecture.md  # quick section index
 #    Read the relevant module README / package-level docstring; list 3-7 terms with one-line definitions.
 
 # 5. Discover prior art ALREADY available in this repo
-ls knowledge-base/discoveries/opportunities/ 2>/dev/null   # opportunities from /discover-execute runs
+ls records/discoveries/opportunities/ 2>/dev/null   # opportunities from /discover-execute runs
 ls skills/*-patterns/ 2>/dev/null                       # domain patterns skills (authored via /skill-creator)
-ls knowledge-base/references/ 2>/dev/null               # cloned reference projects (read-only)
+ls records/references/ 2>/dev/null               # cloned reference projects (read-only)
 ```
 
 The captured output feeds the `## Baseline Context` table directly. **If a row in the table cannot cite a `file:line` or a real `<sha>`, the row is fabricated and must be removed.**
@@ -107,11 +107,11 @@ The captured output feeds the `## Baseline Context` table directly. **If a row i
 Honesty gates that apply to Step 1:
 
 - If you cannot identify the public callers of a symbol the plan modifies, STOP and ask the user — do not guess. Half the bugs caught in `/review` start with "we did not know X also called this."
-- If `knowledge-base/discoveries/opportunities/` is empty for the topic AND no `*-patterns` skill matches, the `## Prior Art & Related Work` section must say "(none identified — first-of-its-kind in this codebase)" — `/edge-case-plan` will challenge that.
+- If `records/discoveries/opportunities/` is empty for the topic AND no `*-patterns` skill matches, the `## Prior Art & Related Work` section must say "(none identified — first-of-its-kind in this codebase)" — `/edge-case-plan` will challenge that.
 
 ### Step 2 — Architecture Snapshot (BEFORE) — OPTIONAL
 
-This step is for projects that have wired a **project-specific** architecture-docs skill (e.g., a custom `/architecture-docs` skill that emits Mermaid diagrams of the affected packages). The planning ecosystem does NOT ship one — it is an extension point. If your project has installed such a skill under its own `skills/` directory, run it for the affected domain(s) and save the current-state architecture docs to `knowledge-base/architecture/{domain}/`. The diagrams complement the `## Baseline Context` table from Step 1.
+This step is for projects that have wired a **project-specific** architecture-docs skill (e.g., a custom `/architecture-docs` skill that emits Mermaid diagrams of the affected packages). The planning ecosystem does NOT ship one — it is an extension point. If your project has installed such a skill under its own `skills/` directory, run it for the affected domain(s) and save the current-state architecture docs to `records/architecture/{domain}/`. The diagrams complement the `## Baseline Context` table from Step 1.
 
 If no such skill is installed (the default), the `## Baseline Context` table from Step 1 IS the baseline — no extra step needed.
 
@@ -123,7 +123,7 @@ You will need to build or modify. Actively look for opportunities to extract dee
 
 ### Step 4 — Write the plan
 
-Use the template below and save to `knowledge-base/plans/{slug}-plan.md` via the **Write** tool (not `Bash` with heredoc — the Write tool gives the harness a proper diff for permission prompts). The slug should be kebab-case derived from the plan title.
+Use the template below and save to `records/plans/{slug}-plan.md` via the **Write** tool (not `Bash` with heredoc — the Write tool gives the harness a proper diff for permission prompts). The slug should be kebab-case derived from the plan title.
 
 The plan MUST include:
 
@@ -136,7 +136,7 @@ The plan MUST include:
 
 Every plan MUST follow the canonical template at [`templates/plan-template.md`](./templates/plan-template.md). It contains the section structure (Context → Objective → ADRs → Dependency Graph → Phases → Coverage Matrix → Global DoD → Final Phase: Integration Validation) and is the single source of truth — never duplicate it elsewhere.
 
-When generating a plan, read that file and copy everything inside its `<plan-template>` block into `knowledge-base/plans/{slug}-plan.md`, replacing the `{...}` placeholders.
+When generating a plan, read that file and copy everything inside its `<plan-template>` block into `records/plans/{slug}-plan.md`, replacing the `{...}` placeholders.
 
 
 ## Quality Rules
@@ -199,8 +199,8 @@ This skill is **phase 1** of [`cycle-plan`](../../rules/cycle-plan.md). The cycl
 
 Plan compliance audit, integration validation, and architecture-boundary review are NOT this skill's job — they belong to the downstream cycles:
 
-- **Validation gates** (test, typecheck/lint, coverage, wiring triad) → `/implement` → final report at `knowledge-base/reviews/{slug}-implement-validate-{date}.md`.
-- **Line-by-line plan vs implementation cross-validation + severity-classified findings** → `/review` → final report at `knowledge-base/reviews/{slug}-review-{date}.md`.
+- **Validation gates** (test, typecheck/lint, coverage, wiring triad) → `/implement` → final report at `records/reviews/{slug}-implement-validate-{date}.md`.
+- **Line-by-line plan vs implementation cross-validation + severity-classified findings** → `/review` → final report at `records/reviews/{slug}-review-{date}.md`.
 - **Architecture diff** (boundaries evolved? `rules/architecture.md` needs updating?) → caught by `/review`'s `architecture-reviewer` agent + handled by the human in the SAME PR commit that touches the boundary.
 
 If a plan touches architectural boundaries (DIP rules in `architecture.md`, new public exports, new schemas/types/contracts), the plan SHOULD include an ADR proposing the boundary change. `/implement` follows the plan; `/review` flags any divergence.

@@ -74,7 +74,7 @@ def resolve_ecosystem_dir(project_dir: Path) -> Path | None:
       2. ``project_dir/.claude/``
       3. ``project_dir/.claude/plugins/cycle/``
 
-    Returns the first match with ``knowledge-base/`` present, falling back
+    Returns the first match with ``records/`` present, falling back
     to any layout with ``skills/ + rules/ + hooks/``.  Returns None if
     nothing matches.
     """
@@ -83,9 +83,9 @@ def resolve_ecosystem_dir(project_dir: Path) -> Path | None:
         project_dir / ".claude",
         project_dir / ".claude" / "plugins" / "cycle",
     ]
-    # Prefer candidate with knowledge-base/
+    # Prefer candidate with records/
     for c in candidates:
-        if c.is_dir() and (c / "knowledge-base").is_dir():
+        if c.is_dir() and (c / "records").is_dir():
             return c
     # Fallback: any layout with skills/+rules/+hooks/
     for c in candidates:

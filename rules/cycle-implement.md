@@ -8,7 +8,7 @@ Execute a confidence-approved plan into code, tests, and commits. TDD-discipline
 
 ## Pre-conditions
 
-- A plan exists at `knowledge-base/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
+- A plan exists at `records/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
 - The repository is on `workspace` (per Unbreakable Rule 4 — work is born on `workspace` and promoted to `develop` via PR; see `git-safety.md` § 1).
 - The project bootstrapped its language toolchain (e.g., `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`).
 
@@ -131,9 +131,9 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
 ## Output
 
 - Commits on the working branch.
-- `knowledge-base/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
-- `knowledge-base/implementations/{slug}/` — per-iteration logs.
-- `knowledge-base/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
+- `records/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
+- `records/implementations/{slug}/` — per-iteration logs.
+- `records/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
 
 ## Cross-references
 
@@ -150,5 +150,5 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
   - Orchestrator: `skills/implement/scripts/mini_review.py`
   - Phase completeness: `skills/implement/scripts/check_phase_completeness.py`
   - Diff cohesion: `skills/implement/scripts/check_diff_cohesion.py`
-  - Reports persisted at: `knowledge-base/mini-reviews/{slug}-phase{N}-review-{date}.md`
+  - Reports persisted at: `records/mini-reviews/{slug}-phase{N}-review-{date}.md`
   - Companion to `cycle-review.md` (final review): mini review runs per-phase; cycle-review runs once at the end. Both must pass for handoff.

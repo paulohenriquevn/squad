@@ -2,9 +2,9 @@
 # PreToolUse hook for Edit/Write: write boundaries (stack-agnostic).
 #
 # Boundaries defended here:
-#   1. knowledge-base/references/ (similar projects — inspiration) and
-#      knowledge-base/tools/ (tools we depend on) are read-only study material.
-#      Findings go to knowledge-base/discoveries/blueprints/.
+#   1. records/references/ (similar projects — inspiration) and
+#      study-material/ (tools we depend on) are read-only study material.
+#      Findings go to records/discoveries/blueprints/.
 #   2. THE INSTALLED KIT is read-only when it is a dependency of the project.
 #
 # The project's own architectural boundaries (e.g. DIP between domain and
@@ -22,12 +22,12 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-# --- 1. knowledge-base/{references,tools}/ are read-only ---------------------
+# --- 1. records/{references,tools}/ are read-only ---------------------
 # Checked BEFORE the layout is resolved: `detect-layout.sh` exits 0 when it
 # cannot find the kit, and this boundary does not depend on there being a kit at
-# all. Matches both layouts (knowledge-base/ and .claude/knowledge-base/).
-if echo "$FILE_PATH" | grep -qE '(^|/)(\.claude/)?knowledge-base/(references|tools)/'; then
-  echo '{"decision":"block","reason":"BOUNDARY VIOLATION: knowledge-base/references/ (similar projects — inspiration) and knowledge-base/tools/ (tools we depend on) are read-only. Never edit/create files there. Capture findings in knowledge-base/discoveries/blueprints/."}' >&2
+# all. Matches both layouts (records/ and .claude/records/).
+if echo "$FILE_PATH" | grep -qE '(^|/)(\.claude/)?records/(references|tools)/'; then
+  echo '{"decision":"block","reason":"BOUNDARY VIOLATION: records/references/ (similar projects — inspiration) and study-material/ (tools we depend on) are read-only. Never edit/create files there. Capture findings in records/discoveries/blueprints/."}' >&2
   exit 2
 fi
 
@@ -68,13 +68,13 @@ esac
 #                        installs.
 #   agents/**            the specialists the project wrote about its own
 #                        repositories. They exist nowhere else.
-#   knowledge-base/**    the cycle's output: plans, reviews, audits, ADRs.
+#   records/**    the cycle's output: plans, reviews, audits, ADRs.
 #   settings.json        this project's wiring.
 #   .kit-manifest.txt    rewritten by the installer on every install.
 #
 # Everything else under the tree is the kit's CONTRACT.
 case "$REL" in
-  rules/*.txt|agents/*|knowledge-base/*|settings.json|.kit-manifest.txt|.install-backups/*)
+  rules/*.txt|agents/*|records/*|settings.json|.kit-manifest.txt|.install-backups/*)
     exit 0
     ;;
 esac
@@ -93,6 +93,6 @@ case "$REL" in
     ;;
 esac
 
-REASON="BOUNDARY VIOLATION: ${REL} belongs to the installed Squad kit, which is read-only here. A fix written inside an installed kit protects exactly one machine and is erased by the next install. Send it to the kit's own repository instead. Project-owned paths under the same tree stay writable: rules/*.txt (config), agents/ (your domain specialists), knowledge-base/ (cycle output) and settings.json."
+REASON="BOUNDARY VIOLATION: ${REL} belongs to the installed Squad kit, which is read-only here. A fix written inside an installed kit protects exactly one machine and is erased by the next install. Send it to the kit's own repository instead. Project-owned paths under the same tree stay writable: rules/*.txt (config), agents/ (your domain specialists), records/ (cycle output) and settings.json."
 printf '{"decision":"block","reason":%s}\n' "$(printf '%s' "$REASON" | jq -Rs .)" >&2
 exit 2

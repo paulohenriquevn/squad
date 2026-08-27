@@ -32,7 +32,7 @@
 #
 # Adding/modifying entries:
 #   - REQUIRES CHANGELOG entry under `[Unreleased] § Changed`.
-#   - REQUIRES ADR for HARD-level exemptions (`knowledge-base/adrs/`).
+#   - REQUIRES ADR for HARD-level exemptions (`records/adrs/`).
 #
 # A malformed entry triggers the `allowlist_malformed_entry` HARD finding and
 # aborts allowlist processing for the current run.

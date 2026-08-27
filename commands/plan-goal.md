@@ -11,10 +11,10 @@ Bridge the active plan to Claude Code's `/goal` primitive.
 1. Resolve the active plan:
    - Prefer `${PLAN_SLUG}` env var
    - Then `.active_plan` pointer
-   - Then newest `knowledge-base/plans/*-plan.md` by mtime
+   - Then newest `records/plans/*-plan.md` by mtime
 2. Read the resolved plan file.
 3. Derive a goal condition from the plan's content:
-   - **Default condition:** "all Objective checkboxes in `knowledge-base/plans/{slug}-plan.md` are checked AND the named metric in the Goal section is observable AND the Global DoD section's checkboxes all check"
+   - **Default condition:** "all Objective checkboxes in `records/plans/{slug}-plan.md` are checked AND the named metric in the Goal section is observable AND the Global DoD section's checkboxes all check"
    - If the user passed an argument (e.g., `/plan-goal until tests pass`), append it as an extra clause.
 4. Issue Claude Code's `/goal {derived-condition}` invocation.
 5. Confirm to the user:
@@ -48,5 +48,5 @@ This is the lightweight equivalent of ralph-loop's `--completion-promise` mechan
 
 - `/plan-goal` does NOT replace `/goal`. Users can still run `/goal "any condition"` directly.
 - The derived condition stays under `/goal`'s 4000-char limit by quoting only Objective + Goal-metric lines, not full task bodies.
-- If `knowledge-base/plans/{slug}-plan.md` does not exist, this command refuses with "no plan found; run /to-plan first".
+- If `records/plans/{slug}-plan.md` does not exist, this command refuses with "no plan found; run /to-plan first".
 - Pairs naturally with `/plan-attest`: attest first to lock the plan; then `/plan-goal` to drive execution against the locked content.

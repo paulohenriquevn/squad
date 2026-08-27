@@ -53,7 +53,7 @@ _CLEAN = frozenset({"PASS", "PASS_WITH_CAVEATS"})
 _HARD = frozenset({"FAIL_INSECURE", "INVALID_PLAN_DEPS"})
 _SOFT = frozenset({"FAIL_MEDIUM"})
 
-_KB_DIRS = ("knowledge-base", ".claude/knowledge-base")
+_KB_DIRS = ("records", ".claude/records")
 
 
 @dataclass
@@ -89,7 +89,7 @@ def _declared_dependencies(plan_body: str) -> list[str]:
 
 
 def _project_root(plan_path: Path) -> Path:
-    """Walk up from the plan to the root carrying the knowledge-base, in both layouts."""
+    """Walk up from the plan to the root carrying the records, in both layouts."""
     for parent in plan_path.resolve().parents:
         for kb in _KB_DIRS:
             if (parent / kb).is_dir():

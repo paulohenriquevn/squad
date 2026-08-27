@@ -69,7 +69,7 @@ def _find_project_root(start: Path) -> Path:
 def _find_plans_dir(project_root: Path) -> Path:
     """Auto-detect the plans directory across common project conventions."""
     candidates = [
-        project_root / ".claude" / "knowledge-base" / "plans",
+        project_root / ".claude" / "records" / "plans",
         project_root / ".claude" / "plans",
         project_root / "plans",
         project_root / "docs" / "plans",
@@ -84,7 +84,7 @@ def _find_plans_dir(project_root: Path) -> Path:
 def _find_holdout_dir(project_root: Path) -> Path:
     """Auto-detect holdout dir; fall back to canonical path."""
     candidates = [
-        project_root / ".claude" / "knowledge-base" / "concepts" / "plan-confidence" / "holdout",
+        project_root / ".claude" / "records" / "concepts" / "plan-confidence" / "holdout",
         project_root / ".claude" / "plan-confidence" / "holdout",
     ]
     for candidate in candidates:

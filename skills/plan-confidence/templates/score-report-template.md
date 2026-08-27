@@ -7,7 +7,7 @@ The `run_structural.py` orchestrator emits a JSON object matching this schema. U
 ```json
 {
   "plan_slug": "example-plan-slug",
-  "plan_path": ".claude/knowledge-base/plans/example-plan-slug-plan.md",
+  "plan_path": ".claude/records/plans/example-plan-slug-plan.md",
   "plan_version": "1.0",
   "scored_at": "2026-05-17T00:00:00Z",
   "completude_score": 95.0,

@@ -87,7 +87,7 @@ flowchart TD
 
 
 def _sop(tmp_path: Path, body: str = _FRONTMATTER + _BODY, name: str = "demo.md") -> Path:
-    sops = tmp_path / "knowledge-base" / "sops"
+    sops = tmp_path / "records" / "sops"
     sops.mkdir(parents=True, exist_ok=True)
     (sops / name).write_text(body, encoding="utf-8")
     return tmp_path
@@ -298,7 +298,7 @@ def test_an_owner_that_names_nobody_is_reported(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_a_project_with_no_sops_reports_nothing_rather_than_everything(tmp_path: Path) -> None:
-    (tmp_path / "knowledge-base").mkdir(parents=True)
+    (tmp_path / "records").mkdir(parents=True)
 
     report = check_sop_structure(tmp_path, today="2026-08-27")
 
@@ -307,7 +307,7 @@ def test_a_project_with_no_sops_reports_nothing_rather_than_everything(tmp_path:
 
 
 def test_both_install_layouts_are_swept(tmp_path: Path) -> None:
-    sops = tmp_path / ".claude" / "knowledge-base" / "sops"
+    sops = tmp_path / ".claude" / "records" / "sops"
     sops.mkdir(parents=True)
     (sops / "demo.md").write_text(_FRONTMATTER + _BODY, encoding="utf-8")
 

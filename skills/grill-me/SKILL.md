@@ -2,7 +2,7 @@
 name: grill-me
 version: 0.1.0
 requires: []
-description: Interview the user one question at a time until shared understanding on a plan/feature/design is reached. Walks the decision tree branch by branch, resolving dependencies between decisions. For every question, explores the codebase first (Grep/Read) if the answer is there; only asks the user when the answer requires intent/preference/business context. Persists the conversation to knowledge-base/grills/{slug}-grill.md as input for /to-plan. Use BEFORE /to-plan when the feature is non-trivial AND the user has not yet articulated requirements precisely, or when the user explicitly says "grill me". SKIP for trivial fixes or when /to-plan can already synthesize from context.
+description: Interview the user one question at a time until shared understanding on a plan/feature/design is reached. Walks the decision tree branch by branch, resolving dependencies between decisions. For every question, explores the codebase first (Grep/Read) if the answer is there; only asks the user when the answer requires intent/preference/business context. Persists the conversation to records/grills/{slug}-grill.md as input for /to-plan. Use BEFORE /to-plan when the feature is non-trivial AND the user has not yet articulated requirements precisely, or when the user explicitly says "grill me". SKIP for trivial fixes or when /to-plan can already synthesize from context.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "{topic-slug}"
@@ -88,7 +88,7 @@ Stop grilling when ANY of these fires:
 
 ### Step 6 — Persist the conversation
 
-Write the full Q&A log to `knowledge-base/grills/{slug}-grill.md` with frontmatter:
+Write the full Q&A log to `records/grills/{slug}-grill.md` with frontmatter:
 
 ```yaml
 ---
@@ -122,7 +122,7 @@ Based on the verdict:
 
 | Verdict | Recommended next |
 |---|---|
-| `READY_FOR_PLAN` | `/to-plan {topic-slug}` — the plan reads `knowledge-base/grills/{slug}-grill.md` as primary context |
+| `READY_FOR_PLAN` | `/to-plan {topic-slug}` — the plan reads `records/grills/{slug}-grill.md` as primary context |
 | `NEEDS_SPLIT` | Suggest 2-3 sub-topics; re-run `/grill-me {sub-topic}` on each |
 | `NEEDS_DISCOVERY` | `/discover-plan {topic-slug}` first; return to `/grill-me` after the opportunity lands |
 
@@ -145,6 +145,6 @@ Based on the verdict:
 ## Related
 
 - Phase 0 of: [`cycle-plan.md`](../../rules/cycle-plan.md) — optional, for vague topics
-- Downstream: `/to-plan` reads `knowledge-base/grills/{slug}-grill.md` when present
+- Downstream: `/to-plan` reads `records/grills/{slug}-grill.md` when present
 - Sibling when discovery is needed: `/discover-plan`
 - 95%-confidence principle: `~/.claude/CLAUDE.md § 1`

@@ -9,9 +9,9 @@ The SEPA agent (auto-generated at `.claude/agents/implement-{slug}-{date}/sepa.m
 At Step 2.5 (after writing the SEPA agent file), `/implement` reads this template, performs placeholder substitution, and writes the result to `.claude/skills/implement-{slug}-sepa-knowledge/SKILL.md`. Placeholders include:
 
 - `{SLUG}`, `{DATE}` — identity
-- `{PLAN_GOAL_VERBATIM}` — single-sentence Goal from `.claude/knowledge-base/plans/{slug}-plan.md § Goal`
+- `{PLAN_GOAL_VERBATIM}` — single-sentence Goal from `.claude/records/plans/{slug}-plan.md § Goal`
 - `{ADR_SUMMARY_TABLE}` — table of ADRs from plan (ID + 1-line decision)
-- `{EDGE_CASE_FINDINGS_ABSORBED}` — list of MUST FIX items absorbed from `.claude/knowledge-base/reviews/{slug}-edge-cases-*.md`
+- `{EDGE_CASE_FINDINGS_ABSORBED}` — list of MUST FIX items absorbed from `.claude/records/reviews/{slug}-edge-cases-*.md`
 - `{PROJECT_RULES_RELEVANT}` — subset of `.claude/rules/` filenames cited by the plan's ADR Rationale
 - `{DOMAIN_KEYWORDS}` — extracted from plan title + Goal for WebSearch query construction
 
@@ -94,7 +94,7 @@ Always respond in this exact shape:
 ## Sources consulted
 - [verbatim] Plan context (frozen at generation {DATE})
 - [if Mode B] WebSearch query: "<query>"
-- [if Mode B] WebFetch URLs (allowlisted): <url> → snapshot at .claude/knowledge-base/discoveries/snapshots/{SLUG}/sepa-{sha256}.md (when discover-web-v0-1 ships)
+- [if Mode B] WebFetch URLs (allowlisted): <url> → snapshot at .claude/records/discoveries/snapshots/{SLUG}/sepa-{sha256}.md (when discover-web-v0-1 ships)
 
 ## Finding for SEPA
 - (1-3 sentences with verbatim quote when citing canonical source)

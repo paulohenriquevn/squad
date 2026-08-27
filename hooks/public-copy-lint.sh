@@ -12,7 +12,7 @@
 #   - docs/benchmarks/*.md
 #   - docs/adr/*.md
 #   - CLAUDE.md, PRD.md, CHANGELOG.md, source code
-#   - knowledge-base/references/** (already blocked by boundary-check)
+#   - records/references/** (already blocked by boundary-check)
 #
 # Universal banned terms (agnostic — no product/competitor names hardcoded):
 #   - production-ready / production-grade / battle-tested / enterprise-(ready|grade)

@@ -18,7 +18,7 @@ plan-confidence's heuristic missed a vague criterion, /implement still
 refuses to drive a task without an executable test shape.
 
 Usage:
-    python3 check_tdd_shape.py --plan knowledge-base/plans/foo-plan.md
+    python3 check_tdd_shape.py --plan records/plans/foo-plan.md
 
 Exit codes:
     0 — every task has an executable TDD shape

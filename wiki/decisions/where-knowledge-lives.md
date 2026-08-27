@@ -1,8 +1,8 @@
 ---
 type: Architecture Decision
-title: The wiki holds knowledge; the knowledge-base holds the trail
+title: The wiki holds knowledge; the records holds the trail
 description: Durable knowledge moves to an OKF bundle, and dated execution records stay where they are, because they are different kinds of artifact.
-tags: [decision, okf, knowledge-base, layout]
+tags: [decision, okf, records, layout]
 
 generated:
   by: claude/opus-5
@@ -13,7 +13,7 @@ sources:
     resource: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
     author: "process:google-cloud"
   - id: kb-location
-    resource: ../../rules/knowledge-base-location.md
+    resource: ../../rules/records-location.md
 ---
 
 # Decision
@@ -23,11 +23,11 @@ measured opportunities — lives in `wiki/`, an OKF v0.2 bundle.
 
 Dated execution records — audits, reviews, implementations, releases,
 acceptance runs, SOP run records, progress checkpoints — stay in
-`knowledge-base/`, unchanged.
+`records/`, unchanged.
 
 # Context
 
-`knowledge-base/` had grown to 15 directories under one convention, holding two
+`records/` had grown to 15 directories under one convention, holding two
 kinds of artifact that were never the same thing:
 
 | Kind | Example | Property |
@@ -40,10 +40,27 @@ OKF is a format for *"the context an agent needs"*.[^okf-spec] Its fields say so
 one execution on one day — a run record does not become `deprecated`, and
 re-verifying it would falsify what it is.
 
+# The rename that followed
+
+Splitting the two left `knowledge-base/` naming exactly what is **not**
+knowledge, which is worse than a vague name: it is an inverted one. Renamed to
+`records/`, and two things came out of it at the same time because no single
+name was honest about all four natures it held:
+
+| Was | Is | Why it did not belong |
+| --- | --- | --- |
+| `knowledge-base/tools/` | `study-material/` | third-party docs, read-only, never produced by a run |
+| `knowledge-base/progress/` | `session-state/` | ephemeral checkpoint, not evidence of anything |
+| `knowledge-base/*` (the rest) | `records/` | dated, immutable, produced by a phase — the actual trail |
+
+Readers fall back to `knowledge-base/` and writers do not, for the same reason
+the bundle fallback exists: 42 consumers have the old directory on disk and this
+kit cannot run a migration inside another project's repository.
+
 # Consequences
 
 - **Two roots, resolved with a fallback.** Readers try `wiki/` first and
-  `knowledge-base/` second; writers only ever write the new one. No installed
+  `records/` second; writers only ever write the new one. No installed
   consumer breaks, and each migrates as it runs.
 - **The trust tier becomes computable.** A concept with no `verified` is
   unverified — written by an agent, checked by nobody. That distinction was

@@ -119,8 +119,8 @@ Read into the session at step 2, adapted to the milestones in play.
 | Phase | Rule | Produces |
 |---|---|---|
 | discover | [`cycle-discover`](../../rules/cycle-discover.md) | requirements, dependencies, risks, bottlenecks, edge cases, architectural impact |
-| plan | [`cycle-plan`](../../rules/cycle-plan.md) | `knowledge-base/plans/{slug}-plan.md` with `milestone_id`, acceptance criteria, test strategy, rollback |
-| implement | [`cycle-implement`](../../rules/cycle-implement.md) | `knowledge-base/implementations/{slug}-implementation.md`, one commit per task |
+| plan | [`cycle-plan`](../../rules/cycle-plan.md) | `records/plans/{slug}-plan.md` with `milestone_id`, acceptance criteria, test strategy, rollback |
+| implement | [`cycle-implement`](../../rules/cycle-implement.md) | `records/implementations/{slug}-implementation.md`, one commit per task |
 | code-quality | [`cycle-code-quality`](../../rules/cycle-code-quality.md) | quality verdict with no BLOCKER open |
 | review | [`cycle-review`](../../rules/cycle-review.md) | `READY_TO_MERGE` verdict |
 | release | [`cycle-release`](../../rules/cycle-release.md) | PR `workspace → develop`, then `develop → main` + semver tag → `RELEASED` |

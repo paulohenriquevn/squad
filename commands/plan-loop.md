@@ -21,8 +21,8 @@ Run a planning-aware recurring tick on top of Claude Code's `/loop` primitive.
 ## Default planning tick prompt
 
 ```
-Read `knowledge-base/plans/{slug}-plan.md` and the tail of
-`knowledge-base/progress/{slug}-progress.md` (last 20 lines).
+Read `records/plans/{slug}-plan.md` and the tail of
+`session-state/{slug}-progress.md` (last 20 lines).
 
 If no new entry has been added to progress.md since the previous tick,
 write one summarizing the current state and what blocked progress.
@@ -52,4 +52,4 @@ Together they replace ralph-loop's `--max-iterations` + `--completion-promise` m
 - `/plan-loop` composes with `/loop`; it does NOT replace it. `/loop 5m "anything"` still works.
 - For "babysit until plan is done" semantics, combine `/plan-loop 10m` (cadence) with `/plan-goal` (termination). The loop runs every 10 minutes; the goal stops it when the plan is complete.
 - The default tick prompt is intentionally short to stay within compaction-safe length.
-- If `knowledge-base/plans/{slug}-plan.md` does not exist, this command refuses with "no plan found; run /to-plan first".
+- If `records/plans/{slug}-plan.md` does not exist, this command refuses with "no plan found; run /to-plan first".

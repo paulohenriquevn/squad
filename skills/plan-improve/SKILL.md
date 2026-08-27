@@ -32,7 +32,7 @@ Accept these forms:
 - `/plan-improve {slug}`
 - `/plan-improve {slug} --target SHIPPABLE`
 
-Where `{slug}` is the basename of a plan file in `.claude/knowledge-base/plans/` (or auto-detected plans directory).
+Where `{slug}` is the basename of a plan file in `.claude/records/plans/` (or auto-detected plans directory).
 
 Defaults:
 - `--target`: `SHIPPABLE_WITH_CAVEATS` (the realistic ceiling per ADR D8 + EC-5)
@@ -41,7 +41,7 @@ The loop runs until EITHER the target verdict is reached on disk OR a genuine st
 
 ### Step 2 — Resolve plan path
 
-If the argument is a slug, resolve to `.claude/knowledge-base/plans/{slug}-plan.md`. Fall back to `.claude/knowledge-base/plans/completed/{slug}-plan.md` if the active dir doesn't have it.
+If the argument is a slug, resolve to `.claude/records/plans/{slug}-plan.md`. Fall back to `.claude/records/plans/completed/{slug}-plan.md` if the active dir doesn't have it.
 
 ### Step 3 — Build the improvement prompt
 

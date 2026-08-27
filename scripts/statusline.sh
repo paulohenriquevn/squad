@@ -27,8 +27,8 @@ PLAN=""
 if [ -f .active_plan ]; then
   PLAN=$(tr -d '\r\n[:space:]' < .active_plan 2>/dev/null)
 fi
-if [ -z "$PLAN" ] && [ -d knowledge-base/plans ]; then
-  NEWEST=$(ls -t knowledge-base/plans/*-plan.md 2>/dev/null | head -1)
+if [ -z "$PLAN" ] && [ -d records/plans ]; then
+  NEWEST=$(ls -t records/plans/*-plan.md 2>/dev/null | head -1)
   [ -n "$NEWEST" ] && PLAN=$(basename "$NEWEST" -plan.md)
 fi
 if [ -n "$PLAN" ]; then

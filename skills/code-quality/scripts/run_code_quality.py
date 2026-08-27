@@ -6,7 +6,7 @@ T5.1 implementation: CLI + auto-detect + per-language detector dispatch.
 Modes:
   Mode 1 (no plan slug): repo-wide audit; JSON to stdout, no Markdown file.
   Mode 2 (plan slug):    bind audit to the plan's `## Critical paths` (if any);
-                         write Markdown audit to .claude/knowledge-base/audits/
+                         write Markdown audit to .claude/records/audits/
                          {slug}-code-quality-{date}.md unless --no-audit-write.
 
 CLI flags:
@@ -74,14 +74,14 @@ def _find_repo_root(start: Path) -> Path:
 def _resolve_plan_path(slug: str, repo_root: Path) -> Path:
     """EC-6 — strict slug resolution. Refuse discovery plans."""
     candidates = [
-        repo_root / ".claude" / "knowledge-base" / "plans" / f"{slug}-plan.md",
-        repo_root / ".claude" / "knowledge-base" / "plans" / "completed" / f"{slug}-plan.md",
+        repo_root / ".claude" / "records" / "plans" / f"{slug}-plan.md",
+        repo_root / ".claude" / "records" / "plans" / "completed" / f"{slug}-plan.md",
     ]
     for p in candidates:
         if p.is_file():
             return p
     discovery_alt = (
-        repo_root / ".claude" / "knowledge-base" / "discoveries" / "plans" / f"{slug}-plan.md"
+        repo_root / ".claude" / "records" / "discoveries" / "plans" / f"{slug}-plan.md"
     )
     if discovery_alt.is_file():
         raise FileNotFoundError(
@@ -444,7 +444,7 @@ def _emit_and_exit(
             if args.audit_out
             else repo_root
             / ".claude"
-            / "knowledge-base"
+            / "records"
             / "audits"
             / f"{args.slug}-code-quality-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.md"
         )

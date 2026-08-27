@@ -16,7 +16,7 @@ mechanized. `/plan-confidence` does not read this audit's verdict."
 The declared reason was procedural: wiring the gate EXTENDS
 `plan-confidence-golden-rule.md`'s contract, and extending a contract requires a
 record. The record is written in the golden rule (§ "Rules that cannot be bent"), in the format this
-repository actually uses — the files under `knowledge-base/adrs/` are gitignored
+repository actually uses — the files under `records/adrs/` are gitignored
 and do not reach whoever clones.
 
 WHAT THIS CHECK ASSERTS, AND WHAT IT REFUSES TO ASSERT
@@ -73,7 +73,7 @@ Nothing about dependencies.
 
 
 def _plan(root: Path, body: str, slug: str = "demo") -> Path:
-    plans = root / "knowledge-base" / "plans"
+    plans = root / "records" / "plans"
     plans.mkdir(parents=True, exist_ok=True)
     path = plans / f"{slug}-plan.md"
     path.write_text(body, encoding="utf-8")
@@ -81,7 +81,7 @@ def _plan(root: Path, body: str, slug: str = "demo") -> Path:
 
 
 def _audit(root: Path, verdict: str, slug: str = "demo", caps: str = "") -> Path:
-    audits = root / "knowledge-base" / "audits"
+    audits = root / "records" / "audits"
     audits.mkdir(parents=True, exist_ok=True)
     path = audits / f"{slug}-deps-audit-2026-08-26.md"
     path.write_text(
@@ -167,7 +167,7 @@ def test_an_invalid_audit_is_a_hard_cap(tmp_path: Path) -> None:
 
 def test_an_audit_with_no_verdict_line_does_not_count_as_clean(tmp_path: Path) -> None:
     plan = _plan(tmp_path, _PLAN_WITH_DEPS)
-    audits = tmp_path / "knowledge-base" / "audits"
+    audits = tmp_path / "records" / "audits"
     audits.mkdir(parents=True, exist_ok=True)
     (audits / "demo-deps-audit-2026-08-26.md").write_text("# empty\n", encoding="utf-8")
 
@@ -180,14 +180,14 @@ def test_the_newest_audit_wins(tmp_path: Path) -> None:
     """Re-auditing after bumping the dependency must count."""
     plan = _plan(tmp_path, _PLAN_WITH_DEPS)
     _audit(tmp_path, "FAIL_INSECURE")
-    audits = tmp_path / "knowledge-base" / "audits"
+    audits = tmp_path / "records" / "audits"
     (audits / "demo-deps-audit-2026-08-27.md").write_text(
         "**Verdict:** PASS\n", encoding="utf-8")
 
     assert check_deps_audit(plan).hard_cap is False
 
 
-@pytest.mark.parametrize("layout", ["knowledge-base", ".claude/knowledge-base"])
+@pytest.mark.parametrize("layout", ["records", ".claude/records"])
 def test_both_install_layouts_are_searched(tmp_path: Path, layout: str) -> None:
     plans = tmp_path / layout / "plans"
     plans.mkdir(parents=True)

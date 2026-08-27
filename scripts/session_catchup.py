@@ -103,7 +103,7 @@ def main() -> int:
     # 3. Active plan
     print(section("active plan"))
     active_plan = None
-    plans_dir = ecosystem_dir / "knowledge-base" / "plans"
+    plans_dir = ecosystem_dir / "records" / "plans"
 
     active_pointer = ecosystem_dir / ".active_plan"
     if active_pointer.is_file():
@@ -144,7 +144,7 @@ def main() -> int:
     print(section("recent progress"))
     if active_plan:
         slug = active_plan.name.removesuffix("-plan.md")
-        progress_file = ecosystem_dir / "knowledge-base" / "progress" / f"{slug}-progress.md"
+        progress_file = ecosystem_dir / "records" / "progress" / f"{slug}-progress.md"
         if progress_file.is_file():
             lines = progress_file.read_text().splitlines()
             # Show last 20 lines
@@ -152,7 +152,7 @@ def main() -> int:
             for line in lines[-20:]:
                 print(f"  {line}")
         else:
-            print(f"no progress file at {eco_rel}/knowledge-base/progress/{slug}-progress.md")
+            print(f"no progress file at {eco_rel}/session-state/{slug}-progress.md")
 
     # 5. Ralph-loop state
     print(section("ralph-loop state"))

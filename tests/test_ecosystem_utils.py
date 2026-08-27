@@ -105,19 +105,19 @@ def test_find_ecosystem_dir_not_found_optional(tmp_path: Path) -> None:
 
 
 def test_resolve_ecosystem_dir_with_knowledge_base(tmp_path: Path) -> None:
-    """Prefers candidate that has knowledge-base/ even over standalone layout."""
-    # Standalone layout at root (no knowledge-base)
+    """Prefers candidate that has records/ even over standalone layout."""
+    # Standalone layout at root (no records)
     (tmp_path / "skills").mkdir()
     (tmp_path / "rules").mkdir()
     (tmp_path / "hooks").mkdir()
 
-    # .claude/ layout WITH knowledge-base
+    # .claude/ layout WITH records
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     (claude_dir / "skills").mkdir()
     (claude_dir / "rules").mkdir()
     (claude_dir / "hooks").mkdir()
-    (claude_dir / "knowledge-base").mkdir()
+    (claude_dir / "records").mkdir()
 
     result = resolve_ecosystem_dir(tmp_path)
 
@@ -125,7 +125,7 @@ def test_resolve_ecosystem_dir_with_knowledge_base(tmp_path: Path) -> None:
 
 
 def test_resolve_ecosystem_dir_fallback(tmp_path: Path) -> None:
-    """Falls back to skills/rules/hooks layout when no knowledge-base/ exists."""
+    """Falls back to skills/rules/hooks layout when no records/ exists."""
     (tmp_path / "skills").mkdir()
     (tmp_path / "rules").mkdir()
     (tmp_path / "hooks").mkdir()

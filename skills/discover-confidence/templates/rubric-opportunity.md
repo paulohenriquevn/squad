@@ -100,7 +100,7 @@ smells:
 Beyond the hard caps above, soft caps may fire when signals indicate risk:
 
 - `soft_floor_smell_density_high` — ≥ 20 weak-imperative / loophole / vague hits in prose (cap at 89).
-- `soft_floor_citation_density_low` — < 1 `.claude/knowledge-base/references/` citation per 200 words of opportunity prose (cap at 89).
+- `soft_floor_citation_density_low` — < 1 `.claude/records/references/` citation per 200 words of opportunity prose (cap at 89).
 - `soft_floor_per_project_asymmetry` — one in-scope project gets > 80% of opportunity content while others get < 5% each (cap at 89). **Planned for M2.1; no Python checker exists yet — this cap is not fired by M2.**
 
 Soft caps appear in `hard_caps_triggered` with prefix `soft_floor_` but do NOT trigger `verdict == INVALID`.

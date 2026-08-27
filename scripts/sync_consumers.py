@@ -150,7 +150,7 @@ def missing_rule_dependencies(kit: Path, eco: Path, files: list[str]) -> list[st
     """Rules the delta's files cite and the consumer does not have.
 
     The delta must be CLOSED: a new `run_validation.py` cites
-    `rules/knowledge-base-location.md`, and in a lagging consumer that file does
+    `rules/records-location.md`, and in a lagging consumer that file does
     not exist — the target's `check_xrefs` then fails on a broken reference.
     Measured on the first application: 13 of the 40 consumers went red this way.
 

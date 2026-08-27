@@ -51,32 +51,32 @@ specs/
 # Nested repository with its own remote — never a submodule of the cycle
 codex-plugin-cc/
 
-# Generated knowledge-base content (scaffold dirs are tracked via .gitkeep)
-knowledge-base/grills/*.md
-knowledge-base/plans/*.md
-knowledge-base/implementations/**
-knowledge-base/reviews/*.md
-knowledge-base/releases/*.md
-knowledge-base/roadmap-runs/**
-knowledge-base/audits/*.md
-knowledge-base/adrs/*.md
-knowledge-base/honesty-gate/evidence/*.md
-knowledge-base/discoveries/plans/*.md
-knowledge-base/discoveries/blueprints/*.md
-knowledge-base/discoveries/snapshots/**
-knowledge-base/references/**
-knowledge-base/tools/**
-knowledge-base/judge-codex/**
+# Generated records content (scaffold dirs are tracked via .gitkeep)
+records/grills/*.md
+records/plans/*.md
+records/implementations/**
+records/reviews/*.md
+records/releases/*.md
+records/roadmap-runs/**
+records/audits/*.md
+records/adrs/*.md
+records/honesty-gate/evidence/*.md
+records/discoveries/plans/*.md
+records/discoveries/blueprints/*.md
+records/discoveries/snapshots/**
+records/references/**
+study-material/**
+records/judge-codex/**
 # The phase-transition stream. Per-session and per-machine by nature: what this
 # repository's cycles did here says nothing to whoever clones it, and committing
 # it would put one machine's run history in everyone's diff.
-knowledge-base/cycle-events.jsonl
+records/cycle-events.jsonl
 # SOP run records: per-run and per-machine, like the phase-event stream. The
-# PROCEDURE travels with the kit (knowledge-base/sops/ stays versioned); what
+# PROCEDURE travels with the kit (records/sops/ stays versioned); what
 # one machine did while following it does not.
-knowledge-base/sop-runs/**
-!knowledge-base/**/.gitkeep
-!knowledge-base/backlog.md
+records/sop-runs/**
+!records/**/.gitkeep
+!records/backlog.md
 
 # Agent run logs (consumer-specific)
 agents/**

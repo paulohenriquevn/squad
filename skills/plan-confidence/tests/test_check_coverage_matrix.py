@@ -199,7 +199,7 @@ def test_coverage_matrix_real_plan_example() -> None:
 
     Gracefully skips when no real plan file is available in the host project."""
     project_root = Path(__file__).parent.parent.parent.parent.parent  # repo root
-    plans_dir = project_root / "knowledge-base" / "plans"
+    plans_dir = project_root / "records" / "plans"
     if not plans_dir.is_dir():
         pytest.skip(f"plans dir not found: {plans_dir}")
     candidates = list(plans_dir.glob("*-plan.md"))

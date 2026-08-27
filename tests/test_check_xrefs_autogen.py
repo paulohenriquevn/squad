@@ -44,8 +44,8 @@ def test_skill_de_verdade_sem_cycle_continua_orfa() -> None:
 
 
 def test_nome_que_so_parece_gerado_continua_orfa() -> None:
-    """`knowledge-base-helper` does not end in `-knowledge`; it is not exempt."""
-    assert _orphans({"knowledge-base-helper"}) == {"knowledge-base-helper"}
+    """`records-helper` does not end in `-knowledge`; it is not exempt."""
+    assert _orphans({"records-helper"}) == {"records-helper"}
 
 
 def test_gerada_tambem_isenta_de_cycle_contract() -> None:
@@ -60,4 +60,4 @@ def test_gerada_tambem_isenta_de_cycle_contract() -> None:
     assert _is_auto_generated("review-m0-walking-skeleton-tests-knowledge")
     assert _is_auto_generated("promptly-sepa-knowledge")
     assert not _is_auto_generated("skill-writer")
-    assert not _is_auto_generated("knowledge-base-helper")
+    assert not _is_auto_generated("records-helper")

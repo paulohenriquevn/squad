@@ -3,7 +3,7 @@
 can re-score the augmented plan without a human-in-the-loop step.
 
 The /edge-case-plan skill emits a report at:
-    knowledge-base/reviews/{slug}-edge-cases-{YYYY-MM-DD}.md
+    records/reviews/{slug}-edge-cases-{YYYY-MM-DD}.md
 
 with a `## MUST FIX` section listing entries like:
 

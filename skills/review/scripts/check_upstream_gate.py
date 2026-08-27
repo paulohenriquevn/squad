@@ -41,7 +41,7 @@ _ADMITS = frozenset({"PASS", "PASS_WITH_CAVEATS"})
 _BLOCKS_OUTRIGHT = frozenset({"FAIL_HARD", "INVALID"})
 
 #: Both install layouts. A gate that only sees one of them is half a gate.
-_KB_DIRS = ("knowledge-base", ".claude/knowledge-base")
+_KB_DIRS = ("records", ".claude/records")
 
 
 def _finding(title: str, evidence: str, remediation: str) -> dict[str, Any]:
@@ -146,7 +146,7 @@ def check_upstream_gate(project_root: Path, slug: str) -> list[dict[str, Any]]:
         f"/code-quality is {verdict} and {len(undismissed)} soft cap(s) have no ADR",
         f"{audit}: {', '.join(undismissed)}",
         "write an ADR naming EACH cap by its stable identifier (in "
-        "knowledge-base/adrs/ or the plan's `## ADRs`), or fix what the cap points at. "
+        "records/adrs/ or the plan's `## ADRs`), or fix what the cap points at. "
         "One ADR may cover several caps, as long as it names each one.",
     )]
 

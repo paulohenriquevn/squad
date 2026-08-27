@@ -250,15 +250,15 @@ def _unregistered_high(findings: list[dict[str, Any]], registered: set[str]) -> 
 
 
 def _project_root_for(findings_dir: Path) -> Path:
-    """Walk up from the findings directory to the root carrying the knowledge-base.
+    """Walk up from the findings directory to the root carrying the records.
 
     `/review` writes findings under `agents/review-{slug}-{date}/`, so the root is
-    the ancestor holding `knowledge-base/` or `.claude/knowledge-base/` — the two
+    the ancestor holding `records/` or `.claude/records/` — the two
     installation layouts.
     """
     current = findings_dir.resolve()
     for candidate in (current, *current.parents):
-        if (candidate / "knowledge-base").is_dir() or (candidate / ".claude" / "knowledge-base").is_dir():
+        if (candidate / "records").is_dir() or (candidate / ".claude" / "records").is_dir():
             return candidate
     return current
 
