@@ -30,14 +30,9 @@ the correct behaviour: with no table, routing would be a guess.
 |---|---|---|
 | _(empty — run `detect_domains.py --write`)_ | | |
 
-**One repo, one domain.** `scripts/route_domain.py` enforces this invariant:
-listing the same repository under two domains makes routing depend on iteration
-order, and the same item starts routing differently between runs. When one
-repository holds two genuinely distinct things — a service and the dashboard that
-consumes it, in the same checkout — separate them by path (`repo` and
-`repo/subdir`), never by repeating the bare name in both.
-
-**Record the divergence instead of deleting it.** A repository the inventory
-names and disk does not have should stay listed, marked as having no checkout: an
-item filed against it routes nowhere, and seeing that written down is cheaper than
-discovering it through the refusal.
+The invariants that govern this table are NOT here: they live in
+`## Routing invariants`, a section of their own, because everything between
+`## Domain routing` and the next `##` is replaced wholesale — by `install.sh`
+when it lays this template down, and by `detect_domains.py --write` when you
+derive your table. Contract does not survive in a span designed to be
+overwritten.

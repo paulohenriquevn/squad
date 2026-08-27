@@ -24,6 +24,7 @@ file by file, instead of `shutil.copytree`.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -150,3 +151,37 @@ def test_installed_payload_is_not_dominated_by_noise(installed, versioned_kit):
         f"instalados {installed_files} arquivos contra {versioned} versionados — "
         "the excess is not the system."
     )
+
+
+def test_the_routing_contract_survives_the_command_the_kit_prescribes(installed):
+    """Install, derive, reinstall — the invariants must read exactly once throughout.
+
+    Two mechanisms replace the `## Domain routing` span with the same regex:
+    `install.sh` lays the empty template down, and `detect_domains.py --write`
+    fills in the derived table. Anything inside that span is written to be
+    overwritten.
+
+    The invariants were inside it. So the consumer ran the command
+    `agents/README.md` prescribes and lost `One repo, one domain` — while
+    `route_domain.py` went on raising on a repo listed twice, for a reason no
+    file stated any more. Measured on an adopter: 45 lines down to 12.
+
+    `once` is the assertion, not `present`. The first fix moved the paragraphs to
+    `## Routing invariants` but left the template's copy in place, so a fresh
+    install carried each invariant twice — one piece of knowledge in two files,
+    and the copy that gets deleted is the one people would read first.
+    """
+    target, _ = installed
+    rule = target / ".claude" / "rules" / "cycle-backlog.md"
+    invariants = ("One repo, one domain", "Record the divergence instead of deleting it")
+
+    for text in invariants:
+        assert rule.read_text(encoding="utf-8").count(text) == 1, f"after install: {text}"
+
+    subprocess.run(  # noqa: PLW1510
+        [sys.executable, ".claude/skills/backlog-init/scripts/detect_domains.py",
+         "--root", ".", "--write", ".claude/rules/cycle-backlog.md"],
+        cwd=target, capture_output=True, text=True,
+    )
+    for text in invariants:
+        assert rule.read_text(encoding="utf-8").count(text) == 1, f"after --write: {text}"
