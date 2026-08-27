@@ -17,7 +17,7 @@ def item_block(
     suggested_mode: str = "review",
     source: str = "human",
     evidence: str = "none-yet",
-    why_now: str = "o dashboard passou a carregar 30d por padrão",
+    why_now: str = "the dashboard started loading 30d by default",
     status: str = "raw",
     dod: list[str] | None = None,
     extra: str = "",

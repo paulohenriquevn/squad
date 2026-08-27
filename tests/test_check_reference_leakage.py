@@ -154,15 +154,15 @@ def test_invalid_shingle_size_is_an_invocation_error(tmp_path, bad):
 
 
 def test_zone_is_not_enumerated_when_nothing_changed(tmp_path, monkeypatch):
-    """A sessão que não escreveu nada não paga a travessia da zona.
+    """A session that wrote nothing does not pay for walking the zone.
 
     O script roda em TODO Stop, antes do early-exit do hook. `scan` listava a
-    zona inteira ANTES de construir o índice dos arquivos alterados — e é esse
-    índice que decide se existe qualquer trabalho a fazer. Numa zona com
-    milhares de arquivos de terceiros, uma sessão read-only pagava a travessia
-    completa para chegar a "nada a comparar".
+    whole zone BEFORE building the index of changed files — and it is that index
+    that decides whether there is any work at all. In a zone with thousands of
+    third-party files, a read-only session paid the full walk just to reach
+    "nothing to compare".
 
-    Fixa a FORMA (a zona não é enumerada), não uma duração.
+    It pins the SHAPE (the zone is not enumerated), not a duration.
     """
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     import check_reference_leakage as leak
@@ -179,16 +179,16 @@ def test_zone_is_not_enumerated_when_nothing_changed(tmp_path, monkeypatch):
 
     monkeypatch.setattr(leak, "zone_files_from", spy)
 
-    # Sem arquivos alterados: nada a indexar, logo nada a comparar.
+    # No changed files: nothing to index, therefore nothing to compare.
     findings, stats = leak.scan(repo, 5, 5000, None)
 
     assert findings == []
-    assert calls == [], "a zona foi enumerada mesmo sem nada para comparar"
+    assert calls == [], "the zone was enumerated even with nothing to compare"
     assert stats["zone_present"] is True
 
 
 def test_zone_is_enumerated_when_there_is_something_to_compare(tmp_path, monkeypatch):
-    """Regressão do teste acima: com arquivo alterado, a zona É percorrida."""
+    """Regression of the test above: with a changed file, the zone IS walked."""
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     import check_reference_leakage as leak
 
@@ -207,16 +207,16 @@ def test_zone_is_enumerated_when_there_is_something_to_compare(tmp_path, monkeyp
 
     findings, _ = leak.scan(repo, 5, 5000, ["src/mine.py"])
 
-    assert calls, "a zona não foi percorrida quando havia o que comparar"
-    assert findings, "a cópia literal deixou de ser detectada"
+    assert calls, "the zone was not walked when there was something to compare"
+    assert findings, "the literal copy stopped being detected"
 
 
 def test_zone_traversal_skips_vendored_trees(tmp_path):
-    """`node_modules` e `.git` dentro da zona não são lidos.
+    """`node_modules` and `.git` inside the zone are not read.
 
-    A zona é o clone de um projeto par — ela traz a árvore de dependências e o
-    repositório git dele junto. Enumerar isso é trabalho puro: nada ali é o
-    código que o par escreveu.
+    The zone is a peer project's clone — it brings that project's dependency tree
+    and git repository along. Enumerating those is pure work: nothing there is the
+    code the peer wrote.
     """
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     import check_reference_leakage as leak

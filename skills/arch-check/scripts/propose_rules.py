@@ -16,9 +16,9 @@ directions carry traffic, there is no invariant to freeze and this tool proposes
 
 usetheo-labs/agent-builder states the same rule of adoption from the other side:
 
-    "Nenhuma destas regras foi escrita contra violacao existente: as cinco sairam de 0 violacoes
-     no commit que as introduziu, o que significa que elas CONGELAM um estado bom em vez de
-     anunciar divida."
+    "None of these rules was written against an existing violation: all five came out at 0
+     violations in the commit that introduced them, which means they FREEZE a good state
+     instead of announcing debt."
 
 So a candidate that would fail on day one is NOT proposed as a gate. It is a finding — someone
 has to decide whether the crossing is a defect or the architecture — and that decision belongs in
@@ -177,7 +177,7 @@ def independent_pairs(graph: Graph) -> list[Candidate]:
 
     Both directions empty is as measured as one direction empty, and it states something stronger:
     these two are siblings, and neither is a library of the other. Written by hand in
-    usetheo-labs/agent-builder as `superficies-nao-se-importam`, with the reasoning that code both
+    usetheo-labs/agent-builder as `surfaces-do-not-import-each-other`, with the reasoning that code both
     need belongs in a third place — so the rule is what keeps the third place necessary.
 
     Restricted to units that participate in the graph at all. Two directories with no edges in any
@@ -629,9 +629,9 @@ def _unit_of_import(import_path: str, module: str, packages: frozenset[str] = fr
 def _ts_sources(root: Path) -> list[Path]:
     """Every TypeScript source under `root` that is not test, fixture or vendored."""
     # Poda durante a travessia: um `rglob("*")` com filtro posterior desce em
-    # `node_modules` inteiro antes de descartá-lo, e num monorepo TypeScript é
-    # exatamente ali que estão os arquivos. Medido 2026-08-26: 326 ms contra
-    # 0,4 ms num repositório de 56 mil arquivos.
+    # all of `node_modules` before discarding it, and in a TypeScript monorepo that
+    # is exactly where the files are. Measured 2026-08-26: 326 ms against 0.4 ms on a
+    # 56,000-file repository.
     out: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in _NOT_A_UNIT]

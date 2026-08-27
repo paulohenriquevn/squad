@@ -367,20 +367,21 @@ def test_the_shipped_template_parses_when_you_follow_its_own_instructions(tmp_pa
 
 
 # ---------------------------------------------------------------------------
-# Os dois campos de cap do JSON dizem o que o nome deles promete
+# The JSON's two cap fields say what their names promise
 #
-# Medido 2026-08-26 rodando o gate no próprio kit, depois que D3 e D4 passaram a
-# emitir achados de verdade:
+# Measured 2026-08-26 running the gate on the kit itself, after D3 and D4 started
+# emitting real findings:
 #
 #   "hard_caps_triggered": ["soft_cap_orphan_export_python", "soft_cap_..."]
 #   "soft_caps_triggered": ["flush_caches", "DEFAULT_SKIP_DIRS", ...]
 #
 # Duas coisas erradas de uma vez. `compute_verdict` devolve TODOS os identificadores
-# quando o veredito é FAIL_SOFT, e o orquestrador os publica sob o nome `hard`; e o
-# campo `soft` carregava a cauda do `allowlist_key`, que em D3 é o NOME DO SÍMBOLO,
-# não o identificador estável. A golden rule § 1.4 exige identificadores estáveis em
-# ambos — é por eles que uma allowlist é escrita e que um relatório é comparado entre
-# execuções. Um símbolo no lugar de um id manda quem lê allowlistar a coisa errada.
+# when the verdict is FAIL_SOFT, and the orchestrator publishes them under the name
+# `hard`; and the `soft` field carried the `allowlist_key`'s tail, which in D3 is the
+# SYMBOL'S NAME, not the stable identifier. Golden rule § 1.4 requires stable
+# identifiers in both — they are what an allowlist is written by and what two reports
+# are compared by. A symbol in place of an id tells the reader to allowlist the wrong
+# thing.
 # ---------------------------------------------------------------------------
 
 def _orphan_finding(symbol: str = "solitaria") -> Finding:
@@ -402,7 +403,7 @@ def test_soft_caps_are_reported_as_stable_identifiers() -> None:
         [],
     )
     assert summary["soft_caps_triggered"] == ["soft_cap_orphan_export_python"], (
-        "o campo lista identificadores estáveis, não os símbolos achados"
+        "the field lists stable identifiers, not the symbols found"
     )
 
 
@@ -412,8 +413,8 @@ def test_hard_field_stays_empty_when_no_hard_finding_fired() -> None:
     summary = emit_json_summary(findings, verdict, ids)
     assert verdict == "FAIL_SOFT"
     assert summary["hard_caps_triggered"] == [], (
-        "um campo chamado `hard` que lista soft caps faz o leitor tratar um cap "
-        "dispensável como bloqueio — e o inverso, quando um HARD real aparecer no meio"
+        "a field named `hard` that lists soft caps makes the reader treat a "
+        "dismissible cap as a blocker — and the inverse, when a real HARD appears among them"
     )
 
 

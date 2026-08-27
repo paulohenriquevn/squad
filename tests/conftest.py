@@ -24,13 +24,13 @@ def ecosystem_dir() -> Path:
 
 @pytest.fixture(scope="session")
 def versioned_kit(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """O kit contendo APENAS o que o git carrega, com o conteúdo da árvore atual.
+    """The kit holding ONLY what git carries, with the working tree's content.
 
-    Existe porque instalar a partir do disco mede a máquina de quem roda o
-    teste: `.gitignore` esconde arquivos que estão presentes em uma máquina e
-    em nenhuma outra, e foi assim que uma instalação quebrada passou verde por
-    meses. A lista vem de `git ls-files`; o conteúdo vem do disco, para o teste
-    continuar guiando o trabalho em vez de só enxergar o último commit.
+    It exists because installing from disk measures the machine running the test:
+    `.gitignore` hides files present on one machine and on no other, and that is
+    how a broken installation stayed green for months. The list comes from
+    `git ls-files`; the content comes from disk, so the test keeps guiding the work
+    instead of only seeing the last commit.
     """
     src = tmp_path_factory.mktemp("versioned-kit") / "kit"
     src.mkdir()
@@ -43,7 +43,7 @@ def versioned_kit(tmp_path_factory: pytest.TempPathFactory) -> Path:
     ).stdout
     for rel in filter(None, listing.split("\0")):
         source = REPO_ROOT / rel
-        if not source.is_file():  # rastreado, mas apagado na árvore de trabalho
+        if not source.is_file():  # tracked, but deleted in the working tree
             continue
         dest = src / rel
         dest.parent.mkdir(parents=True, exist_ok=True)

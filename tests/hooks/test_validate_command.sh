@@ -397,14 +397,16 @@ setup; rc=$(run_hook "rm -rf \\\$HOME"); assert_exit "F10: 'rm -rf \$HOME' stays
 # ---------------------------------------------------------------------------
 # F12: trunk protection must follow the repo's trunk, not the literal name `main`
 # ---------------------------------------------------------------------------
-# A projeto adotante cujo trunk é `master` instalava o kit, lia que a Regra 4
-# estava protegida, e não estava: o guard casava `[ "$BRANCH" = "main" ]` e mais
-# nada. Medido num projeto descartável — em `master` o commit passava (exit 0),
-# em `main` bloqueava. É o pior formato de falha: promete e não entrega, calado.
+# An adopting project whose trunk is `master` installed the kit, read that Rule 4
+# was protected, and it was not: the guard matched `[ "$BRANCH" = "main" ]` and
+# nothing else. Measured on a throwaway project — on `master` the commit went
+# through (exit 0), on `main` it blocked. The worst failure shape: promising
+# without delivering, silently.
 #
-# `master` cobre a maioria; um trunk de nome próprio (`trunk`, `release`) é lido
-# de `origin/HEAD`. Sobre-proteger é o lado seguro do erro: bloquear um commit
-# que poderia passar custa uma troca de branch, e o inverso custa a garantia.
+# `master` covers the majority; a trunk with a name of its own (`trunk`, `release`) is read
+# from `origin/HEAD`. Over-protecting is the safe side of the error: blocking a
+# commit that could have passed costs a branch switch, and the inverse costs the
+# guarantee.
 
 # ---- commit on master (blocked, like main) ----
 setup

@@ -341,7 +341,7 @@ def write_atomic(target: Path, content: str | bytes) -> None:
 # ---------------------------------------------------------------------------
 
 
-#: Extensões de fonte por linguagem, para a enumeração compartilhada.
+#: Source extensions per language, for the shared enumeration.
 _SOURCE_EXTS = {
     "python": (".py",),
     "typescript": (".ts", ".tsx"),
@@ -351,17 +351,17 @@ _SOURCE_EXTS = {
 
 
 def enumerate_source_files(root: Path, language: str) -> list[Path]:
-    """Todo arquivo-fonte da linguagem sob `root`, podando durante a travessia.
+    """Every source file of the language under `root`, pruning during the walk.
 
-    Vive aqui, e não no orquestrador, porque os DETECTORES precisam dela (D3
-    percorre o repositório atrás de consumidores). Um detector importando o
-    orquestrador inverteria a dependência do módulo que o instancia.
+    It lives here, not in the orchestrator, because the DETECTORS need it (D3
+    walks the repository looking for consumers). A detector importing the
+    orchestrator would invert the dependency of the module that instantiates it.
 
-    PODA DURANTE A TRAVESSIA, NÃO FILTRO DEPOIS. `rglob("*")` seguido de filtro
-    dá a resposta certa pelo caminho errado: já desceu em `node_modules`, `.git`
-    e `.venv` inteiros para então descartá-los. Medido 2026-08-26 num repositório
-    de 56.128 arquivos (40 mil em node_modules): 326 ms contra 0,4 ms — 832x, uma
-    vez por linguagem habilitada.
+    PRUNE DURING THE WALK, DO NOT FILTER AFTERWARDS. `rglob("*")` followed by a
+    filter gives the right answer the wrong way: it has already descended into all
+    of `node_modules`, `.git` and `.venv` before discarding them. Measured
+    2026-08-26 on a 56,128-file repository (40k in node_modules): 326 ms against
+    0.4 ms — 832x, once per enabled language.
     """
     exts = _SOURCE_EXTS.get(language, ())
     if not exts:
@@ -418,10 +418,11 @@ def emit_json_summary(
         by_detector.setdefault(f.detector, {})
         by_detector[f.detector][f.language] = by_detector[f.detector].get(f.language, 0) + 1
         if f.severity == "SOFT_CAP":
-            # O identificador ESTÁVEL, não a cauda do allowlist_key — em D3 a cauda é o
-            # nome do símbolo achado (`flush_caches`), e publicá-lo aqui manda quem lê o
-            # relatório allowlistar uma coisa que não é um cap. Golden rule § 1.4 exige
-            # identificadores estáveis: é por eles que se compara duas execuções.
+            # The STABLE identifier, not the allowlist_key's tail — in D3 the tail is
+            # the found symbol's name (`flush_caches`), and publishing it here tells
+            # whoever reads the report to allowlist something that is not a cap. Golden
+            # rule § 1.4 requires stable identifiers: they are what two runs are
+            # compared by.
             sid = _finding_to_stable_identifier(f) or f.allowlist_key.rsplit("|", 1)[-1]
             if sid and sid not in soft_caps:
                 soft_caps.append(sid)
@@ -429,9 +430,10 @@ def emit_json_summary(
             languages_set.add(f.language)
 
     # `hard_caps_triggered` carrega HARD caps. `compute_verdict` devolve todos os
-    # identificadores disparados — inclusive os soft, quando o veredito é FAIL_SOFT — e
-    # publicá-los sob este nome fazia um cap dispensável (com ADR) parecer bloqueio, e
-    # esconderia um HARD real no meio da lista quando os dois coexistem.
+    # identifiers triggered — including the soft ones, when the verdict is FAIL_SOFT —
+    # and publishing them under this name made a dismissible cap (with an ADR) look
+    # like a blocker, and would hide a real HARD in the middle of the list when both
+    # coexist.
     hard_only = [sid for sid in hard_caps_triggered if not sid.startswith("soft_")]
 
     return {
@@ -485,20 +487,21 @@ def compute_verdict(findings: list[Finding]) -> tuple[str, list[str]]:
     return "PASS", []
 
 
-#: Prefixos que marcam a cauda do `allowlist_key` como um identificador estável
-#: já pronto, em vez de um símbolo achado.
+#: Prefixes marking the `allowlist_key` tail as an already-formed stable
+#: identifier rather than a found symbol.
 _STABLE_ID_PREFIXES = ("auditor_", "soft_cap_", "soft_floor_", "mutation_score_ok_")
 
 
 def _finding_to_stable_identifier(f: Finding) -> str:
     """Map a Finding to the stable identifier from code-quality-golden-rule.md.
 
-    Quando o detector JÁ nomeou o cap na cauda do `allowlist_key`, essa cauda ganha —
-    D4 distingue `soft_cap_mutation_score_low_*` (a suíte não detecta) de
-    `soft_cap_mutation_unconfigured_*` (o runner não foi declarado) e
-    `soft_cap_mutation_deferred_*` (a linguagem está fora do contrato). Colapsar os
-    três em "score baixo" mandaria escrever testes onde falta configurar um runner —
-    um relatório que nomeia a ação errada custa mais que um que não nomeia nenhuma.
+    When the detector has ALREADY named the cap in the `allowlist_key` tail, that
+    tail wins — D4 distinguishes `soft_cap_mutation_score_low_*` (the suite does not
+    detect) from `soft_cap_mutation_unconfigured_*` (the runner was not declared) and
+    `soft_cap_mutation_deferred_*` (the language is outside the contract). Collapsing
+    the three into "low score" would tell people to write tests where a runner needs
+    configuring — a report that names the wrong action costs more than one that names
+    none.
     """
     tail = f.allowlist_key.rsplit("|", 1)[-1]
     if f.detector.startswith(("d3_", "d4_")) and tail.startswith(_STABLE_ID_PREFIXES):

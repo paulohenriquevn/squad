@@ -48,7 +48,7 @@ import sys
 from pathlib import Path
 
 GREEN_VERDICTS = {"ACCEPTED", "ACCEPTED_WITH_CAVEATS"}
-DEFAULT_MAX_BLOCKS = 40  # ver nota acima: o teto efetivo é o do CLI (9 consecutivos)
+DEFAULT_MAX_BLOCKS = 40  # see the note above: the effective ceiling is the CLI's (9 consecutive)
 
 _VERDICT_RE = re.compile(r"^verdict:\s*([A-Z_]+)\s*$", re.MULTILINE)
 
@@ -79,11 +79,11 @@ def evaluate(milestones: list[str], roadmap_text: str, acceptance_dir: Path) -> 
     """Return one blocking reason per unmet milestone; empty list means the goal is met."""
     reasons: list[str] = []
 
-    # Um acceptance_dir inexistente e um milestone que nunca foi aceito produzem a
-    # MESMA ausência de arquivo, e a mensagem "never ran" soa como veredito legítimo.
-    # Separar os dois é o que impede o gate de bloquear para sempre por engano de
-    # configuração — a armadilha que apareceu no primeiro uso real, num setup onde o
-    # roadmap e os artefatos moravam num repo irmão.
+    # A non-existent acceptance_dir and a milestone never accepted produce the SAME
+    # absence of a file, and the "never ran" message reads as a legitimate verdict.
+    # Separating the two is what stops the gate blocking forever over a configuration
+    # mistake — the trap that showed up on the first real use, in a setup where the
+    # roadmap and the artifacts lived in a sibling repo.
     if not acceptance_dir.exists():
         return [
             (f"MISCONFIGURED: {acceptance_dir} does not exist, so no acceptance record can "

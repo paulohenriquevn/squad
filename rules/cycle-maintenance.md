@@ -118,9 +118,9 @@ place to retire work that simply has not been released yet.
 sibling repositories running the same install. The followup that ends it is carrying the fix
 to the kit's own repository, where a release can reach every consumer.
 
-Colhido do `theokit-tui`, onde o estado foi criado e medido (2026-08-20). Ali treze itens
-pagavam esse custo ao mesmo tempo, e a regra que o define vivia sob `.claude/` — de modo que
-o item que a escreveu terminou no próprio estado que inventou.
+Harvested from `theokit-tui`, where the state was created and measured (2026-08-20). There
+thirteen items paid that cost at once, and the rule defining it lived under `.claude/` — so
+the item that wrote it ended up in the very state it invented.
 
 ## Anti-patterns
 

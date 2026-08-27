@@ -1,4 +1,4 @@
-"""Põe scripts/ da slice no sys.path, como nas demais slices."""
+"""Puts the slice's scripts/ on sys.path, as the other slices do."""
 from __future__ import annotations
 
 import sys

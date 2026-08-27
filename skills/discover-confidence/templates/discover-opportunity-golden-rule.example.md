@@ -1,4 +1,4 @@
-# Discover-Opportunity Golden Rule (INQUEBRÁVEL) — TEMPLATE
+# Discover-Opportunity Golden Rule (UNBREAKABLE) — TEMPLATE
 
 > Copy this file to `.claude/rules/discover-opportunity-golden-rule.md` in your project.
 

@@ -27,6 +27,6 @@ def clean_backlog(tmp_path: Path) -> Path:
             suggested_mode="bug",
             status="triaged",
             evidence="src/deploy.ts:88",
-            dod=["`theo deploy` retorna exit != 0 quando um passo falha"],
+            dod=["`theo deploy` returns exit != 0 when a step fails"],
         ),
     )

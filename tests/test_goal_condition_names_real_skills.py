@@ -1,20 +1,21 @@
-"""A condição de término nomeia comandos, e nada garantia que eles existem.
+"""The termination condition names commands, and nothing guaranteed they exist.
 
 `compose_goal_condition.py` embute `/grill-me`, `/discover-plan`,
 `/plan-confidence`, `/implement`, `/code-quality`, `/review` e `/acceptance`
-como strings literais no texto da condição, cada um ao lado do artefato que deve
-produzir. Renomeie ou aposente qualquer um deles e a condição continua
-compondo, continua armando o Stop hook e continua se lendo como autoritativa —
-enquanto manda o agente rodar um comando que não existe mais.
+as literal strings in the condition's text, each beside the artifact it must
+produce. Rename or retire any one of them and the condition still composes, still
+arms the Stop hook and still reads as authoritative — while telling the agent to
+run a command that no longer exists.
 
-O `check_xrefs.py` não cobre este caso: o Check 7 varre `skills/**/*.py` atrás de
-referências a `rules/*.md`, nunca a `/skill-name`. E o histórico mostra que a
-aposentadoria de skills é real, não hipotética — a retirada das skills de roadmap
-deixou 15 referências mecanicamente substituídas, uma delas apontando para a
+`check_xrefs.py` does not cover this case: Check 7 sweeps `skills/**/*.py` for
+references to `rules/*.md`, never to `/skill-name`. And history shows skill
+retirement is real, not hypothetical — retiring the roadmap skills left 15
+references mechanically replaced, one of them pointing at the
 skill errada.
 
-O modo de falha é silencioso e tardio: quem descobre é o agente, no meio de uma
-sessão já vinculada, ao tentar satisfazer um critério impossível.
+The failure mode is silent and late: the one who discovers it is the agent, in
+the middle of an already-bound session, trying to satisfy an impossible
+criterion.
 """
 from __future__ import annotations
 
@@ -25,23 +26,24 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parent.parent
 _SCRIPT = _REPO / "skills" / "cycle-goal" / "scripts" / "compose_goal_condition.py"
 
-# `/foo-bar` em prosa. Exclui caminhos (`/tmp/x`) exigindo hífen-ou-fim e
+# `/foo-bar` in prose. Excludes paths (`/tmp/x`) by requiring hyphen-or-end and
 # rejeitando um `/` logo depois.
 _COMMAND_RE = re.compile(r"(?<![\w/.])/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)(?![\w/-])")
 
-# Tokens que casam a forma mas não são comandos de skill.
+# Tokens matching the shape that are not skill commands.
 _NOT_COMMANDS = {"n", "a"}
 
-# Primitivas de CLI do Claude Code — reais, mas nunca skills deste repositório.
-# `goal` é citada porque a skill existe em boa parte para explicar por que NÃO a
-# usa (`SKILL.md § Why this does not use /goal`) e de onde herdou o cap de 4000
-# caracteres. Proibir a menção obrigaria a reescrever a explicação para não poder
-# nomear seu próprio assunto.
+# Claude Code CLI primitives — real, but never skills of this repository.
+# `goal` is cited because the skill exists largely to explain why it does NOT use
+# it (`SKILL.md § Why this does not use /goal`) and where it inherited the 4000
+# character cap from. Forbidding the mention would force rewriting the explanation
+# so it cannot name its own subject.
 #
-# A distinção que importa: uma primitiva citada em prosa histórica é referência;
-# um comando impresso numa mensagem de erro é instrução. Foi a segunda forma que
-# mandou o usuário rodar `roadmap-init`, aposentada — por isso este allowlist é
-# nominal e curto, nunca um padrão que absolva a categoria inteira.
+# The distinction that matters: a primitive cited in historical prose is a
+# reference; a command printed in an error message is an instruction. It was the
+# second shape that told the user to run `roadmap-init`, retired — which is why
+# this allowlist is nominal and short, never a pattern absolving the whole
+# category.
 _CLI_PRIMITIVES = {"goal"}
 
 
@@ -50,8 +52,8 @@ def _existing_skills() -> set[str]:
 
 
 def test_script_exists() -> None:
-    # Arrange / Act / Assert — o teste inteiro é vácuo se o alvo sumiu de lugar.
-    assert _SCRIPT.is_file(), f"alvo do teste não encontrado: {_SCRIPT}"
+    # Arrange / Act / Assert — the whole test is vacuous if the target moved.
+    assert _SCRIPT.is_file(), f"test target not found: {_SCRIPT}"
 
 
 def test_every_command_named_in_the_condition_is_a_real_skill() -> None:
@@ -59,7 +61,7 @@ def test_every_command_named_in_the_condition_is_a_real_skill() -> None:
     source = _SCRIPT.read_text(encoding="utf-8")
     skills = _existing_skills()
 
-    # Act — todo `/comando` citado no script, com a linha onde aparece.
+    # Act — every `/command` cited in the script, with the line it appears on.
     cited: dict[str, int] = {}
     for lineno, line in enumerate(source.split("\n"), 1):
         for match in _COMMAND_RE.finditer(line):
@@ -68,29 +70,29 @@ def test_every_command_named_in_the_condition_is_a_real_skill() -> None:
                 continue
             cited.setdefault(name, lineno)
 
-    # Assert — nenhum deles pode ser um comando que não existe.
+    # Assert — none of them may be a command that does not exist.
     ghosts = {n: ln for n, ln in cited.items() if n not in skills}
     assert not ghosts, (
-        "compose_goal_condition.py nomeia comandos sem skill correspondente "
-        f"(nome -> linha): {ghosts}. A condição comporia e armaria assim mesmo, "
+        "compose_goal_condition.py names commands with no matching skill "
+        f"(name -> line): {ghosts}. The condition would compose and arm anyway, "
         "mandando o agente rodar algo inexistente."
     )
 
 
 def test_no_user_facing_message_points_at_a_command_that_does_not_exist() -> None:
-    """O allowlist de primitivas vale para prosa, nunca para instrução.
+    """The primitives allowlist covers prose, never instruction.
 
-    `_CLI_PRIMITIVES` isenta menções históricas em docstrings e comentários. Uma
-    mensagem impressa ao usuário é outra coisa: ela diz o que fazer AGORA. Foi
-    exatamente essa forma que mandou rodar `roadmap-init` depois da aposentadoria.
-    Aqui nada é isento — se está num `print`, tem que existir.
+    `_CLI_PRIMITIVES` exempts historical mentions in docstrings and comments. A
+    message printed to the user is another thing: it says what to do NOW. That is
+    exactly the shape that told people to run `roadmap-init` after its retirement.
+    Nothing is exempt here — if it is in a `print`, it must exist.
     """
     # Arrange
     source = _SCRIPT.read_text(encoding="utf-8")
     skills = _existing_skills()
     tree = ast.parse(source)
 
-    # Act — todo literal de string que chega a um `print(...)`.
+    # Act — every string literal that reaches a `print(...)`.
     printed: list[tuple[str, int]] = []
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "print"):
@@ -109,17 +111,17 @@ def test_no_user_facing_message_points_at_a_command_that_does_not_exist() -> Non
             ghosts.setdefault(name, lineno)
 
     assert not ghosts, (
-        "mensagem impressa ao usuário nomeia comando inexistente "
-        f"(nome -> linha do print): {ghosts}. Um remédio que não existe é pior "
-        "que nenhum: manda procurar em vez de resolver."
+        "a message printed to the user names a non-existent command "
+        f"(name -> print line): {ghosts}. A remedy that does not exist is worse "
+        "than none: it sends people searching instead of resolving."
     )
 
 
 def test_the_condition_actually_names_the_pipeline() -> None:
     """Guarda contra o teste acima passar por vacuidade.
 
-    Se um refactor trocar os literais por interpolação, o teste anterior fica
-    verde sem verificar nada. Este exige que a espinha dorsal ainda esteja lá.
+    If a refactor replaces the literals with interpolation, the previous test goes
+    green while verifying nothing. This one demands the backbone is still there.
     """
     # Arrange
     source = _SCRIPT.read_text(encoding="utf-8")
@@ -127,6 +129,6 @@ def test_the_condition_actually_names_the_pipeline() -> None:
     # Act / Assert
     for command in ("/implement", "/code-quality", "/review", "/acceptance"):
         assert command in source, (
-            f"{command} sumiu do texto da condição — se foi intencional, "
+            f"{command} vanished from the condition text — if that was intentional, "
             "atualize `requires` em skills/cycle-goal/SKILL.md junto"
         )

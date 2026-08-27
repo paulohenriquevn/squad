@@ -24,14 +24,14 @@ class TestExtract:
         assert {c["source"] for c in criteria} == {"roadmap-dod"}
 
     def test_para_no_proximo_rotulo_em_negrito(self, roadmap_text: str) -> None:
-        """`**Dependencies:**` e `**Top risks:**` não podem virar critérios de aceite."""
+        """`**Dependencies:**` and `**Top risks:**` must not become acceptance criteria."""
         texts = [c["text"] for c in extract(roadmap_text, "M2")["criteria"]]
 
         assert not any("Proxy buffering" in t for t in texts)
         assert not any("M1" == t for t in texts)
 
     def test_le_dod_de_milestone_ja_lancado(self, roadmap_text: str) -> None:
-        """Bullets `[x]` continuam sendo critérios — o estado do bullet não é o veredito."""
+        """`[x]` bullets are still criteria — the bullet's state is not the verdict."""
         assert len(extract(roadmap_text, "M1")["criteria"]) == 2
 
     def test_recusa_milestone_sem_definition_of_done(self, roadmap_text: str) -> None:

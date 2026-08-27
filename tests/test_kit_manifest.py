@@ -1,13 +1,13 @@
-"""O consumidor precisa saber o que é dele e o que veio do kit.
+"""The consumer needs to know what is theirs and what came from the kit.
 
-Medido no `speculative` (2026-08-20): o projeto tem um auditor próprio,
-`scripts/audit.py`, que percorre `.claude/skills/*/SKILL.md` e exige a spec Agent
-Skills de cada uma. Antes da instalação ele dizia `APROVADO`; depois, `REPROVADO`
-— porque passou a auditar as 37 skills do kit contra o padrão das 9 do projeto.
+Measured on `speculative` (2026-08-20): the project has an auditor of its own,
+`scripts/audit.py`, which walks `.claude/skills/*/SKILL.md` and demands the Agent
+Skills spec of each. Before the install it said PASS; afterwards, FAIL — because
+it started auditing the kit's 37 skills against the standard of the project's 9.
 
-A instalação não apagou nada (46 untracked, zero modificados). O dano foi só
-esse: um gate do consumidor que passou a medir código que não é do consumidor.
-Sem um manifesto, a única forma de distinguir seria adivinhar por nome.
+The install deleted nothing (46 untracked, zero modified). That was the entire
+damage: a consumer gate that started measuring code that is not the consumer's.
+Without a manifest, the only way to tell them apart would be guessing by name.
 """
 from __future__ import annotations
 
@@ -29,18 +29,18 @@ def test_install_writes_a_manifest_of_what_the_kit_brought(tmp_path: Path) -> No
     )
 
     manifest = target / MANIFEST
-    assert manifest.is_file(), "sem manifesto, o consumidor não sabe o que é dele"
+    assert manifest.is_file(), "without a manifest the consumer cannot tell what is theirs"
     listed = {line.strip() for line in manifest.read_text(encoding="utf-8").splitlines()
               if line.strip() and not line.startswith("#")}
     assert "skills/implement" in listed
     assert "skills/review" in listed
-    # Toda skill listada existe de fato no alvo — manifesto que mente é pior que nenhum.
+    # Every listed skill really exists in the target — a lying manifest is worse than none.
     for entry in listed:
         assert (target / ".claude" / entry).exists(), entry
 
 
 def test_a_project_skill_is_absent_from_the_manifest(tmp_path: Path) -> None:
-    """O ponto do arquivo: o que o projeto escreveu NÃO aparece nele."""
+    """The point of the file: what the project wrote does NOT appear in it."""
     target = tmp_path / "consumidor"
     (target / ".claude" / "skills" / "minha-skill-de-dominio").mkdir(parents=True)
     (target / ".claude" / "skills" / "minha-skill-de-dominio" / "SKILL.md").write_text(
@@ -58,12 +58,12 @@ def test_a_project_skill_is_absent_from_the_manifest(tmp_path: Path) -> None:
 
 
 def test_merge_never_overwrites_an_existing_rules_txt(tmp_path: Path) -> None:
-    """`rules/*.txt` é a CONFIGURAÇÃO do projeto: linguagens habilitadas, alvos
-    vivos, allowlists, skills auxiliares declaradas. O `--merge` copiava o
-    template por cima — medido no `speculative`, onde a declaração das 9 skills
-    do projeto foi apagada pela reinstalação que a seguiu.
+    """`rules/*.txt` is the project's CONFIGURATION: enabled languages, live
+    targets, allowlists, declared auxiliary skills. `--merge` copied the template
+    over it — measured on `speculative`, where the declaration of the project's 9
+    skills was erased by the reinstall that followed.
 
-    Os `.md` continuam sendo atualizados: são o contrato normativo do kit.
+    The `.md` files keep being updated: they are the kit's normative contract.
     """
     target = tmp_path / "consumidor"
     rules = target / ".claude" / "rules"
@@ -83,10 +83,10 @@ def test_merge_never_overwrites_an_existing_rules_txt(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Grill kit-domain-agents-install, decisões 1 e 4: os oito especialistas do
-# ecossistema `theo` deixam de ser copiados por padrão. Medido: 19 dos 41
-# consumidores já viviam sem eles, 11 escrevem os seus, e a tabela de roteamento
-# passou a ser derivada do projeto — o acoplamento que os justificava sumiu.
+# Grill kit-domain-agents-install, decisions 1 and 4: the origin ecosystem's eight
+# specialists stop being copied by default. Measured: 19 of the 41 consumers
+# already lived without them, 11 write their own, and the routing table became
+# derived from the project — the coupling that justified them vanished.
 # ---------------------------------------------------------------------------
 
 def _install(target: Path, *flags: str) -> None:
@@ -99,26 +99,26 @@ def _install(target: Path, *flags: str) -> None:
 
 
 def test_no_specialist_is_ever_installed(tmp_path: Path) -> None:
-    """Só o README viaja. Um especialista descreve os repos de UM ecossistema.
+    """Only the README travels. A specialist describes ONE ecosystem's repos.
 
-    O kit carregava oito, do ecossistema em que foi escrito, e a flag
-    `--with-domain-agents` os entregava a quem pedisse. Saíram em 2026-08-26. Este
-    teste não fixa os nomes que saíram — fixa a REGRA, e por isso continua valendo
-    para um especialista que alguém escreva na fonte amanhã: nada em `agents/` além
-    do README é do consumidor até que ele o derive.
+    The kit carried eight, from the ecosystem it was written in, and the
+    `--with-domain-agents` flag delivered them on request. They left on 2026-08-26.
+    This test does not pin the names that left — it pins the RULE, and therefore
+    still holds for a specialist someone writes into the source tomorrow: nothing in
+    `agents/` beyond the README is the consumer's until they derive it.
     """
     target = tmp_path / "consumidor"
     _install(target)
     agents = target / ".claude" / "agents"
     installed = sorted(p.name for p in agents.glob("*.md"))
     assert installed == ["README.md"], (
-        f"a instalação trouxe especialistas de outro ecossistema: {installed}"
+        f"the install brought specialists from another ecosystem: {installed}"
     )
 
 
 def test_the_manifest_does_not_claim_agents_it_did_not_install(tmp_path: Path) -> None:
-    """Manifesto que mente é pior que manifesto nenhum: o consumidor o usa para
-    decidir o que é dele."""
+    """A lying manifest is worse than none: the consumer uses it to decide what is
+    theirs."""
     target = tmp_path / "consumidor"
     _install(target)
     listed = [
@@ -129,9 +129,9 @@ def test_the_manifest_does_not_claim_agents_it_did_not_install(tmp_path: Path) -
 
 
 # ---------------------------------------------------------------------------
-# Os agentes do PROJETO sobrevivem a qualquer instalação. Sem isto, a limpeza
-# feita num consumidor dura até a próxima instalação — e pior, uma instalação
-# sem --merge apagava os especialistas que o projeto escreveu.
+# The PROJECT's agents survive any install. Without this, a cleanup done in a
+# consumer lasts until the next install — and worse, an install without --merge
+# deleted the specialists the project wrote.
 # ---------------------------------------------------------------------------
 
 def _project_agents(target: Path) -> Path:
@@ -139,12 +139,12 @@ def _project_agents(target: Path) -> Path:
     agents.mkdir(parents=True, exist_ok=True)
     (agents / "meu-dominio.md").write_text("# especialista do projeto\n", encoding="utf-8")
     (agents / "meu-validador.md").write_text("# validador do projeto\n", encoding="utf-8")
-    (agents / "README.md").write_text("# README que o projeto escreveu\n", encoding="utf-8")
+    (agents / "README.md").write_text("# README the project wrote\n", encoding="utf-8")
     return agents
 
 
 def test_a_plain_install_never_deletes_project_agents(tmp_path: Path) -> None:
-    """`rm -rf agents/` levava junto o que o projeto escreveu."""
+    """`rm -rf agents/` took what the project wrote along with it."""
     target = tmp_path / "consumidor"
     _project_agents(target)
     _install(target, "--force")
@@ -154,12 +154,12 @@ def test_a_plain_install_never_deletes_project_agents(tmp_path: Path) -> None:
 
 
 def test_an_existing_agents_readme_is_kept(tmp_path: Path) -> None:
-    """O README lista os agentes DO PROJETO depois que alguém o adapta."""
+    """The README lists the PROJECT's agents once someone adapts it."""
     target = tmp_path / "consumidor"
     _project_agents(target)
     _install(target, "--merge")
     kept = (target / ".claude" / "agents" / "README.md").read_text(encoding="utf-8")
-    assert "que o projeto escreveu" in kept
+    assert "the project wrote" in kept
 
 
 def test_the_readme_is_written_when_absent(tmp_path: Path) -> None:
@@ -169,8 +169,8 @@ def test_the_readme_is_written_when_absent(tmp_path: Path) -> None:
 
 
 def test_the_removed_flag_is_refused_instead_of_ignored(tmp_path: Path) -> None:
-    """`--with-domain-agents` saiu com os especialistas. Aceitá-la em silêncio faria
-    quem a usa acreditar que recebeu algo."""
+    """`--with-domain-agents` left with the specialists. Accepting it silently would
+    make whoever uses it believe they received something."""
     target = tmp_path / "consumidor"
     target.mkdir(parents=True, exist_ok=True)
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
@@ -183,13 +183,13 @@ def test_the_removed_flag_is_refused_instead_of_ignored(tmp_path: Path) -> None:
 
 
 def test_merge_preserves_the_derived_routing_table(tmp_path: Path) -> None:
-    """A tabela de roteamento é CONFIGURAÇÃO do projeto e mora num `.md` do kit.
+    """The routing table is project CONFIGURATION living inside a kit `.md`.
 
-    Medido no `speculative`: a reinstalação restaurou a tabela do ecossistema de
-    origem por cima da derivada, e `route_domain speculative` foi de exit 0 para exit 1 — o
-    projeto deixou de conseguir rotear itens sobre si mesmo. O resto do
-    `cycle-backlog.md` é contrato do kit e continua sendo atualizado; só a seção
-    `## Domain routing` é do consumidor.
+    Measured on `speculative`: the reinstall restored the origin ecosystem's table
+    over the derived one, and `route_domain speculative` went from exit 0 to exit 1
+    — the project lost the ability to route items about itself. The rest of
+    `cycle-backlog.md` is the kit's contract and keeps being updated; only the
+    `## Domain routing` section is the consumer's.
     """
     target = tmp_path / "consumidor"
     rules = target / ".claude" / "rules"
@@ -211,10 +211,10 @@ def test_merge_preserves_the_derived_routing_table(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# O kit distribuía a configuração DELE como se fosse do consumidor. Medido no
-# `speculative`: nasceu com `python | pyproject.toml | ENABLED` (o squad é
-# Python; o alvo não tem pyproject) e com o alvo vivo do ecossistema de origem
-# — uma URL de ambiente dev de outra gente. São 41 instalações nessa condição.
+# The kit shipped ITS OWN configuration as if it were the consumer's. Measured on
+# `speculative`: it was born with `python | pyproject.toml | ENABLED` (the kit is
+# Python; the target has no pyproject) and with the origin ecosystem's live target
+# — somebody else's dev environment URL. That is 41 installs in that condition.
 # ---------------------------------------------------------------------------
 
 def _active_lines(path: Path) -> list[str]:
@@ -229,12 +229,12 @@ def test_project_specific_config_is_installed_as_a_blank_template(tmp_path: Path
     assert _active_lines(rules / "code-quality-languages.txt") == [], \
         "o consumidor nasceria com a linguagem do KIT habilitada"
     assert _active_lines(rules / "live-target.txt") == [], \
-        "o consumidor nasceria sondando o serviço de outro ecossistema"
+        "the consumer would be born probing another ecosystem's service"
 
 
 def test_universal_defaults_are_still_shipped(tmp_path: Path) -> None:
-    """Os thresholds são defaults do kit (`YOUR_ADR_REF` é placeholder), não
-    calibração local — esvaziá-los deixaria o gate sem banda nenhuma."""
+    """The thresholds are kit defaults (`YOUR_ADR_REF` is a placeholder), not local
+    calibration — emptying them would leave the gate with no band at all."""
     target = tmp_path / "consumidor"
     _install(target)
     body = (target / ".claude" / "rules" / "plan-confidence-thresholds.txt").read_text()
@@ -242,13 +242,14 @@ def test_universal_defaults_are_still_shipped(tmp_path: Path) -> None:
 
 
 def test_the_projects_own_quality_gate_never_ships(tmp_path: Path) -> None:
-    """`hooks/quality/` são os limiares DESTE repositório, não os de quem instala.
+    """`hooks/quality/` holds THIS repository's thresholds, not the installer's.
 
-    `/quality-init` calibra no p90 do código que mede: aqui deu `max_file_lines = 367`
-    e `max_function_lines = 29`. Esses números não dizem nada sobre a codebase de
-    outro projeto, e um gate calibrado na régua errada nasce vermelho — que é como um
-    gate é desligado na primeira hora. Mesmo defeito que a tabela de roteamento e os
-    `rules/*.txt` já corrigiram: distribuir a configuração de quem escreveu.
+    `/quality-init` calibrates on the p90 of the code it measures: here that gave
+    `max_file_lines = 367` and `max_function_lines = 29`. Those numbers say nothing
+    about another project's codebase, and a gate calibrated on the wrong ruler starts
+    red — which is how a gate gets switched off within the hour. Same defect the
+    routing table and the `rules/*.txt` already fixed: distributing the author's
+    configuration.
     """
     target = tmp_path / "consumidor"
     _install(target)
@@ -256,7 +257,7 @@ def test_the_projects_own_quality_gate_never_ships(tmp_path: Path) -> None:
 
     assert hooks.is_dir(), "os hooks do kit continuam vindo"
     assert not (hooks / "quality").exists(), (
-        "o gate de smells calibrado neste repositório chegou ao consumidor"
+        "the smell gate calibrated in this repository reached the consumer"
     )
     listed = (target / MANIFEST).read_text(encoding="utf-8")
     assert "hooks/quality" not in listed

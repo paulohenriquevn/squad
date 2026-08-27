@@ -1,15 +1,16 @@
-"""Uma regra pode citar uma regra que não existe, e o validador não olhava.
+"""A rule may cite a rule that does not exist, and the validator did not look.
 
 `rules/cycle-acceptance.md` e `rules/cycle-release.md` ancoravam o single-flip
-invariant em *"cycle-roadmap § Hard gates"*. O `cycle-roadmap` foi substituído
-por `cycle-maintenance` e o arquivo não existe mais — mas o `check_xrefs.py`
-reportava PASS, porque o Check 7 varria `skills/**/SKILL.md`, `skills/**/*.py` e
-`scripts/**/*.py`, e **nunca `rules/*.md`**; e porque nada checava referências a
-um cycle por nome (`cycle-roadmap`), só a caminhos `rules/<arquivo>.md`.
+invariant at *"cycle-roadmap § Hard gates"*. `cycle-roadmap` was replaced by
+`cycle-maintenance` and the file no longer exists — but `check_xrefs.py` reported
+PASS, because Check 7 swept `skills/**/SKILL.md`, `skills/**/*.py` and
+`scripts/**/*.py`, and **never `rules/*.md`**; and because nothing checked
+references to a cycle by name (`cycle-roadmap`), only paths like
+`rules/<file>.md`.
 
-Uma âncora normativa apontando para o vazio não quebra a execução hoje — quebra
-a próxima manutenção, que vai procurar a seção citada para saber o que o gate
-promete e não vai encontrá-la.
+A normative anchor pointing at nothing does not break execution today — it breaks
+the next maintenance, which will look for the cited section to learn what the gate
+promises and will not find it.
 """
 from __future__ import annotations
 
@@ -72,7 +73,7 @@ def test_rule_citing_a_nonexistent_rules_file_is_caught(tmp_path: Path) -> None:
     """Check 7 nunca varreu `rules/` — uma regra citando outra escapava."""
     eco = _make_ecosystem(tmp_path)
     (eco / "rules" / "cycle-implement.md").write_text(
-        "# Cycle: IMPLEMENT\n\nSee `rules/nao-existe-em-lugar-nenhum.md`.\n"
+        "# Cycle: IMPLEMENT\n\nSee `rules/does-not-exist-anywhere.md`.\n"
         "\n## Cross-references\n\n- `skills/implement/SKILL.md`\n",
         encoding="utf-8",
     )
@@ -82,7 +83,7 @@ def test_rule_citing_a_nonexistent_rules_file_is_caught(tmp_path: Path) -> None:
 
 
 def test_a_cycle_that_exists_as_a_skill_is_not_a_broken_reference(tmp_path: Path) -> None:
-    """`cycle-goal` é uma skill, não um arquivo de regra — citá-la é legítimo."""
+    """`cycle-goal` is a skill, not a rule file — citing it is legitimate."""
     eco = _make_ecosystem(tmp_path)
     (eco / "skills" / "cycle-goal").mkdir(parents=True)
     (eco / "skills" / "cycle-goal" / "SKILL.md").write_text("# cycle-goal\n", encoding="utf-8")

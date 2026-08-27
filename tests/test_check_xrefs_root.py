@@ -1,18 +1,18 @@
-"""O validador audita o ecossistema a que PERTENCE, não o do diretório atual.
+"""The validator audits the ecosystem it BELONGS to, not the current directory's.
 
-Antes, sem `--ecosystem-dir`, a raiz saía de `Path.cwd()`. O efeito era um
-validador que mente por omissão: rodar
+Before, without `--ecosystem-dir`, the root came from `Path.cwd()`. The effect was
+a validator that lies by omission: running
 
     python3 <outro-projeto>/.claude/scripts/check_xrefs.py
 
 de um cwd qualquer auditava silenciosamente o ecossistema DO CWD e imprimia o
 veredito dele — com o nome do outro projeto na linha de comando. Medido em
-2026-08-03: três consumidores reportados `PASS` estavam com 3, 0 e 11 findings;
-o `PASS` era o repo do kit se auto-validando três vezes.
+2026-08-03: three consumers reported as `PASS` actually had 3, 0 and 11 findings;
+the `PASS` was the kit's own repo validating itself three times.
 
-Um validador que audita o alvo errado é pior que nenhum: nenhum não produz
-confiança, este produz confiança infundada — e a decisão tomada em cima dela
-(“os três estão limpos, pode seguir”) já foi tomada.
+A validator that audits the wrong target is worse than none: none produces no
+confidence, this one produces unfounded confidence — and the decision taken on top
+of it ("all three are clean, go ahead") has already been taken.
 """
 from __future__ import annotations
 
@@ -26,16 +26,16 @@ _SCRIPT = _REPO / "scripts" / "check_xrefs.py"
 
 
 def _make_ecosystem(root: Path, *, skill: str, missing_rule: bool) -> Path:
-    """Cria um .claude/ mínimo, opcionalmente com uma referência de regra quebrada."""
+    """Creates a minimal .claude/, optionally with a broken rule reference."""
     eco = root / ".claude"
     (eco / "skills" / skill).mkdir(parents=True)
     (eco / "rules").mkdir(parents=True)
     (eco / "scripts").mkdir(parents=True)
-    (eco / "hooks").mkdir(parents=True)  # find_ecosystem_dir exige os três
+    (eco / "hooks").mkdir(parents=True)  # find_ecosystem_dir requires all three
 
     body = "# Skill\n\n## Cycle contract\n\nSee `rules/cycle-implement.md`.\n"
     if missing_rule:
-        body += "\nAlso reads `rules/nao-existe-em-lugar-nenhum.md`.\n"
+        body += "\nAlso reads `rules/does-not-exist-anywhere.md`.\n"
     (eco / "skills" / skill / "SKILL.md").write_text(body, encoding="utf-8")
     (eco / "rules" / "cycle-implement.md").write_text(
         f"# cycle-implement\n\nChain: `implement`\n\nUses skills/{skill}/.\n", encoding="utf-8"
@@ -52,7 +52,7 @@ def _findings(script: Path, cwd: Path) -> list[dict]:
 
 
 def test_raiz_vem_do_script_e_nao_do_cwd(tmp_path: Path) -> None:
-    """A regressão exata: script do projeto sujo, chamado de um cwd limpo."""
+    """The exact regression: a dirty project's script, called from a clean cwd."""
     sujo = tmp_path / "sujo"
     limpo = tmp_path / "limpo"
     eco_sujo = _make_ecosystem(sujo, skill="implement", missing_rule=True)
@@ -64,19 +64,19 @@ def test_raiz_vem_do_script_e_nao_do_cwd(tmp_path: Path) -> None:
         if shared.name != "check_xrefs.py":
             (eco_sujo / "scripts" / shared.name).write_bytes(shared.read_bytes())
 
-    quebradas = [
+    broken = [
         f for f in _findings(copia, cwd=limpo)
         if f.get("check") == "rules_reference_resolves"
     ]
-    assert quebradas, (
-        "o script do projeto sujo, chamado de um cwd limpo, não viu a referência "
-        "quebrada que existe no projeto ao qual ele pertence — está auditando o cwd"
+    assert broken, (
+        "the dirty project's script, called from a clean cwd, did not see the broken "
+        "reference that exists in the project it belongs to — it is auditing the cwd"
     )
-    assert quebradas[0]["missing_rule"] == "nao-existe-em-lugar-nenhum.md"
+    assert broken[0]["missing_rule"] == "does-not-exist-anywhere.md"
 
 
 def test_ecosystem_dir_explicito_continua_mandando(tmp_path: Path) -> None:
-    """`--ecosystem-dir` é a única forma de apontar para outro alvo, e ela vence."""
+    """`--ecosystem-dir` is the only way to point at another target, and it wins."""
     outro = tmp_path / "outro"
     eco_outro = _make_ecosystem(outro, skill="implement", missing_rule=True)
 

@@ -49,12 +49,12 @@ from typing import Any
 
 import yaml
 
-# O gate upstream vive ao lado deste script. Ele roda como `__main__` (o diretório
-# entra no sys.path sozinho) e também é importado por testes que inserem o diretório
-# à mão — o fallback cobre o caso em que nem um nem outro aconteceu.
+# The upstream gate lives beside this script. It runs as `__main__` (the directory
+# enters sys.path on its own) and is also imported by tests that insert the directory
+# by hand — the fallback covers the case where neither happened.
 try:
     from check_upstream_gate import check_upstream_gate
-except ImportError:  # pragma: no cover - caminho de importação alternativa
+except ImportError:  # pragma: no cover - alternative import path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from check_upstream_gate import check_upstream_gate
 
@@ -250,11 +250,11 @@ def _unregistered_high(findings: list[dict[str, Any]], registered: set[str]) -> 
 
 
 def _project_root_for(findings_dir: Path) -> Path:
-    """Sobe do diretório de achados até a raiz que carrega a knowledge-base.
+    """Walk up from the findings directory to the root carrying the knowledge-base.
 
-    `/review` escreve os achados sob `agents/review-{slug}-{data}/`, então a raiz é
-    o ancestral que tem `knowledge-base/` ou `.claude/knowledge-base/` — os dois
-    layouts de instalação.
+    `/review` writes findings under `agents/review-{slug}-{date}/`, so the root is
+    the ancestor holding `knowledge-base/` or `.claude/knowledge-base/` — the two
+    installation layouts.
     """
     current = findings_dir.resolve()
     for candidate in (current, *current.parents):
@@ -612,13 +612,13 @@ def main() -> int:
             if isinstance(f, dict):
                 all_findings.append(_normalize_finding(f, str(agent_role)))
 
-    # A pré-condição upstream entra como achado, não como passo separado.
+    # The upstream pre-condition enters as a finding, not as a separate step.
     #
-    # `code-quality-golden-rule.md § 1` condiciona a entrada no `/review` ao veredito do
-    # `/code-quality` — e, em FAIL_SOFT, à existência de um ADR dispensando CADA soft cap.
-    # Isso era prosa em `SKILL.md` (um `test -f` que alguém precisava lembrar de rodar) e o
-    # ADR não era procurado por ninguém: bastava afirmar que existia. Injetado aqui, o
-    # veredito do review não pode mais ser calculado ignorando o gate anterior.
+    # `code-quality-golden-rule.md § 1` conditions entry into `/review` on
+    # `/code-quality`'s verdict — and, on FAIL_SOFT, on an ADR dismissing EACH soft cap.
+    # That was prose in `SKILL.md` (a `test -f` someone had to remember to run) and the
+    # ADR was looked for by nobody: asserting it existed was enough. Injected here, the
+    # review verdict can no longer be computed while ignoring the previous gate.
     all_findings.extend(
         _normalize_finding(f, "check_upstream_gate")
         for f in check_upstream_gate(_project_root_for(args.findings_dir), slug)

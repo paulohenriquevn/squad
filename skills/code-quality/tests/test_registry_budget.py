@@ -1,16 +1,16 @@
-"""D2 desiste da rede em vez de pagar N x timeout por execução.
+"""D2 gives up on the network instead of paying N x timeout per run.
 
-As consultas ao registry são seriais, com 5 s de timeout cada, e um resultado
-ambíguo (timeout, HTML, rede fora) NÃO é cacheado — por decisão correta: uma
-falha de rede não é prova de que o pacote não existe. O efeito colateral é que
-uma máquina offline ou atrás de proxy pagava 5 s por pacote desconhecido, em
-toda execução, para sempre: 100 imports = 500 s de espera que nunca vira
+The registry queries are serial, 5s timeout each, and an ambiguous result
+(timeout, HTML, network down) is NOT cached — by a correct decision: a network
+failure is not proof that the package does not exist. The side effect is that an
+offline machine or one behind a proxy paid 5s per unknown package, on every run,
+forever: 100 imports = 500s of waiting that never becomes
 resposta.
 
-O que se corrige não é o timeout de cada consulta — é a ausência de um limite
-para o conjunto delas. Depois de N falhas seguidas, D2 declara a rede
-indisponível e devolve None imediatamente, que é o mesmo veredito ambíguo de
-antes, sem a espera.
+What gets fixed is not each query's timeout — it is the absence of a bound for
+the set of them. After N consecutive failures, D2 declares the network
+unavailable and returns None immediately, which is the same ambiguous verdict as
+before, without the wait.
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def test_a_success_resets_the_breaker(monkeypatch):
 
     def flaky(url, *, headers=None):
         calls["n"] += 1
-        # Falha uma vez, acerta na seguinte: um blip não deve desligar D2.
+        # Fails once, succeeds next: a blip must not switch D2 off.
         if calls["n"] % 2 == 1:
             return (None, None)
         return ({"info": {}}, 200)
@@ -64,11 +64,11 @@ def test_a_success_resets_the_breaker(monkeypatch):
 
 
 def test_the_cache_file_is_written_once_not_per_lookup(monkeypatch):
-    """Uma escrita por execução, não uma por pacote.
+    """One write per run, not one per package.
 
-    `_cache_set` relia e reescrevia o arquivo inteiro a cada resultado — I/O
-    quadrático no número de pacotes. O conteúdo final é o mesmo; o número de
-    escritas, não.
+    `_cache_set` re-read and rewrote the whole file on every result — I/O quadratic
+    in the number of packages. The final content is the same; the number of writes
+    is not.
     """
     writes = []
     real = _registry._save_cache
@@ -88,7 +88,7 @@ def test_the_cache_file_is_written_once_not_per_lookup(monkeypatch):
     _registry.flush_caches()
     assert len(writes) == 1, f"esperava 1 escrita no flush, houve {len(writes)}"
 
-    # E o resultado persiste: uma segunda execução lê do disco, sem rede.
+    # And the result persists: a second run reads from disk, with no network.
     _registry.reset_network_state()
     monkeypatch.setattr(
         _registry,
@@ -99,10 +99,10 @@ def test_the_cache_file_is_written_once_not_per_lookup(monkeypatch):
 
 
 def test_go_proxy_accepts_a_plain_text_200(monkeypatch):
-    """`@v/list` responde 200 com texto puro, não JSON.
+    """`@v/list` answers 200 with plain text, not JSON.
 
     Exigir JSON ali transformaria toda consulta bem sucedida em ambiguidade — e
-    três seguidas desligariam D2 para Go pelo resto da execução.
+    three in a row would switch D2 off for Go for the rest of the run.
     """
     monkeypatch.setattr(_registry, "_http_get_json", lambda url, headers=None: (None, 200))
     assert _registry.module_exists_on_go_proxy("github.com/x/y") is True
@@ -114,7 +114,7 @@ def test_go_proxy_410_means_absent(monkeypatch):
 
 
 def test_registry_outage_is_ambiguous_not_absent(monkeypatch):
-    """EC-2: um 500 do registry não pode virar 'o pacote não existe'."""
+    """EC-2: a 500 from the registry must not become 'the package does not exist'."""
     monkeypatch.setattr(_registry, "_http_get_json", lambda url, headers=None: (None, 500))
     assert _registry.crate_exists_on_crates_io("serde") is None
     assert _registry.package_exists_on_pypi("requests") is None

@@ -103,26 +103,26 @@ assert_exit "source changed with CHANGELOG update => exit 0" 0 "$rc"
 teardown
 
 # ---- Comment-only change to source => exit 0 (colhido do theokit-tui) ----
-# Uma mudança só de comentário não tem NADA a anunciar a um consumidor, e a Regra 6 manda
-# escrever para o consumidor. Exigir entrada por ela convida aos dois piores desfechos: uma
-# linha fabricada poluindo o contrato público, ou o override — e recorrer ao override para
-# satisfazer uma pergunta que o gate não devia ter feito é como um gate deixa de ser lido.
+# A comment-only change has NOTHING to announce to a consumer, and Rule 6 says to write
+# for the consumer. Demanding an entry for it invites the two worst outcomes: a fabricated
+# line polluting the public contract, or the override — and reaching for the override to
+# satisfy a question the gate should not have asked is how a gate stops being read.
 setup
 printf 'print("hello")\n' > "$TMPDIR_TEST/app.py"
 printf '# Changelog\n\n## [Unreleased]\n### Added\n- app.py\n' > "$TMPDIR_TEST/CHANGELOG.md"
 git -C "$TMPDIR_TEST" add app.py CHANGELOG.md
 git -C "$TMPDIR_TEST" commit -m "base" --quiet
-printf '# explica o porque\nprint("hello")\n' > "$TMPDIR_TEST/app.py"
+printf '# explains the why\nprint("hello")\n' > "$TMPDIR_TEST/app.py"
 git -C "$TMPDIR_TEST" add app.py
 git -C "$TMPDIR_TEST" commit -m "comment only" --quiet
 rc=$(run_hook)
 assert_exit "comment-only change without CHANGELOG => exit 0" 0 "$rc"
 teardown
 
-# ---- Code change disguised among comments => exit 2 (conservador por construção) ----
-# O teste tira apenas linhas inequivocamente comentário ou branco, então QUALQUER linha
-# alterada carregando código deixa o arquivo em CODE_CHANGED. Falso negativo sobre mudança
-# real é impossível; falso positivo é apenas inconveniente. A assimetria é deliberada.
+# ---- Code change disguised among comments => exit 2 (conservative by construction) ----
+# The check removes only unambiguously comment or blank lines, so ANY changed line carrying
+# code leaves the file in CODE_CHANGED. A false negative about a real change is impossible;
+# a false positive is merely inconvenient. The asymmetry is deliberate.
 setup
 printf 'print("hello")\n' > "$TMPDIR_TEST/app.py"
 printf '# Changelog\n\n## [Unreleased]\n### Added\n- app.py\n' > "$TMPDIR_TEST/CHANGELOG.md"
@@ -237,40 +237,40 @@ assert_exit "non-code file change without CHANGELOG => exit 0" 0 "$rc"
 teardown
 
 # ---------------------------------------------------------------------------
-# Projeto SEM CHANGELOG.md — o gate não pode sumir em silêncio
+# Project WITHOUT CHANGELOG.md — the gate must not vanish silently
 # ---------------------------------------------------------------------------
-# `if [ -f "CHANGELOG.md" ]` desativava a Regra 6 inteira quando o arquivo não
-# existia. Um projeto adotante que nunca o criou nunca descobria que o kit
-# esperava um: disciplina prometida na documentação, ausente na prática.
+# `if [ -f "CHANGELOG.md" ]` disabled all of Rule 6 when the file did not exist.
+# An adopting project that never created one never discovered the kit expected
+# it: discipline promised in the documentation, absent in practice.
 #
-# ADVISORY e não BLOCKER — criar o arquivo é decisão do consumidor, e travar
-# toda sessão de um repo recém-adotado faria da instalação uma parede. O que o
-# teste exige é que o silêncio acabe, não que a sessão pare.
+# ADVISORY and not BLOCKER — creating the file is the consumer's decision, and
+# locking every session of a freshly adopted repo would make the install a wall.
+# What the test demands is that the silence ends, not that the session stops.
 
 run_hook_capture() {
   (cd "$TMPDIR_TEST" && bash "$HOOK") 2>&1 || true
 }
 
-# ---- código muda, sem CHANGELOG.md => avisa, mas não bloqueia ----
+# ---- code changes, no CHANGELOG.md => warns, but does not block ----
 setup
 rm -f "$TMPDIR_TEST/CHANGELOG.md"
 git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
 echo "package main" > "$TMPDIR_TEST/app.go"
 git -C "$TMPDIR_TEST" add app.go >/dev/null 2>&1
 rc=$(run_hook)
-assert_exit "sem CHANGELOG.md: mudança de código NÃO bloqueia" 0 "$rc"
+assert_exit "no CHANGELOG.md: a code change does NOT block" 0 "$rc"
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
 if echo "$out" | grep -q "No CHANGELOG.md in this project"; then
-  echo "  PASS  sem CHANGELOG.md: emite advisory nomeando o gap"
+  echo "  PASS  no CHANGELOG.md: emits an advisory naming the gap"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL  sem CHANGELOG.md: advisory ausente (o gate sumiu em silêncio)"
+  echo "  FAIL  no CHANGELOG.md: advisory missing (the gate vanished silently)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 teardown
 
-# ---- sem CHANGELOG.md e sem mudança de código => silêncio é correto ----
+# ---- no CHANGELOG.md and no code change => silence is correct ----
 setup
 rm -f "$TMPDIR_TEST/CHANGELOG.md"
 git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
@@ -279,27 +279,27 @@ git -C "$TMPDIR_TEST" add NOTES.md >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
 if echo "$out" | grep -q "No CHANGELOG.md in this project"; then
-  echo "  FAIL  sem código mudado: advisory não deveria disparar (ruído)"
+  echo "  FAIL  no code changed: the advisory should not fire (noise)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-  echo "  PASS  sem código mudado: nenhum advisory (silêncio correto)"
+  echo "  PASS  no code changed: no advisory (correct silence)"
   PASS_COUNT=$((PASS_COUNT + 1))
 fi
 teardown
 
 # ---------------------------------------------------------------------------
-# O kit instalado sob .claude/ é dependência, não fonte do consumidor
+# The kit installed under .claude/ is a dependency, not the consumer's source
 # ---------------------------------------------------------------------------
-# Medido num projeto adotante recém-instalado: a primeira sessão emitia 107
-# linhas de aviso sobre arquivos DO KIT (`.claude/skills/**/*.py`) contra UM
-# achado real no código do usuário. Auditar a própria dependência é o jeito
-# canônico de ensinar alguém a ignorar o gate.
+# Measured on a freshly installed adopting project: the first session emitted 107
+# warning lines about KIT files (`.claude/skills/**/*.py`) against ONE real
+# finding in the user's code. Auditing your own dependency is the canonical way
+# to teach someone to ignore the gate.
 #
-# O filtro é `^\.claude/`, e vale nos dois layouts sem precisar detectar qual:
-# em plugin-install o kit mora em `.claude/` e é excluído; em standalone o
-# repositório do kit tem os arquivos em `skills/`, que seguem auditados.
+# The filter is `^\.claude/`, and it holds in both layouts without detecting
+# which: under a plugin install the kit lives in `.claude/` and is excluded; in
+# standalone the kit's repository keeps its files in `skills/`, still audited.
 
-# ---- arquivo do kit sob .claude/ não gera aviso ----
+# ---- a kit file under .claude/ produces no warning ----
 setup
 rm -f "$TMPDIR_TEST/CHANGELOG.md"
 git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
@@ -309,15 +309,15 @@ git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
 if echo "$out" | grep -q '\.claude/'; then
-  echo "  FAIL  arquivo do kit sob .claude/ apareceu num aviso (audita a dependência)"
+  echo "  FAIL  a kit file under .claude/ appeared in a warning (audits the dependency)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-  echo "  PASS  arquivo do kit sob .claude/ não gera aviso"
+  echo "  PASS  a kit file under .claude/ produces no warning"
   PASS_COUNT=$((PASS_COUNT + 1))
 fi
 teardown
 
-# ---- regressão: código do usuário FORA de .claude/ segue auditado ----
+# ---- regression: user code OUTSIDE .claude/ stays audited ----
 setup
 rm -f "$TMPDIR_TEST/CHANGELOG.md"
 git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
@@ -328,25 +328,25 @@ git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
 if echo "$out" | grep -q 'src/mine.py'; then
-  echo "  PASS  regressão: código do usuário fora de .claude/ segue auditado"
+  echo "  PASS  regression: user code outside .claude/ stays audited"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL  regressão: o filtro cegou o gate para o código do usuário"
+  echo "  FAIL  regression: the filter blinded the gate to the user's code"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 teardown
 
 # ---------------------------------------------------------------------------
-# knowledge-base/{references,tools}/ é material de estudo de TERCEIROS
+# knowledge-base/{references,tools}/ is THIRD-PARTY study material
 # ---------------------------------------------------------------------------
-# Mesma falha que o filtro de `.claude/` acima já corrigiu, na zona que o kit
-# declara read-only por escrito. Medido em 2026-08-26 num adotante: 500 arquivos
-# de um projeto par clonado para `knowledge-base/references/` produziram 517
-# linhas de saída e 16.944 ms — 500 avisos de TDD sobre código que não é do
-# projeto. Extrapolado linearmente, ~3.000 arquivos alcançam os 120 s de timeout
-# declarados para este hook, e um hook morto por timeout não bloqueia nada.
+# The same failure the `.claude/` filter above already fixed, in the zone the kit
+# declares read-only in writing. Measured 2026-08-26 on an adopter: 500 files from
+# a peer project cloned into `knowledge-base/references/` produced 517 output
+# lines and 16,944 ms — 500 TDD warnings about code that is not the project's.
+# Extrapolated linearly, ~3,000 files reach the 120s timeout declared for this
+# hook, and a hook killed by timeout blocks nothing.
 
-# ---- arquivo da zona de estudo não gera aviso ----
+# ---- a study-zone file produces no warning ----
 setup
 rm -f "$TMPDIR_TEST/CHANGELOG.md"
 git -C "$TMPDIR_TEST" rm -q --cached CHANGELOG.md >/dev/null 2>&1 || true
@@ -356,10 +356,10 @@ git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
 if echo "$out" | grep -q 'knowledge-base/references/'; then
-  echo "  FAIL  arquivo de knowledge-base/references/ apareceu num aviso (audita terceiros)"
+  echo "  FAIL  a knowledge-base/references/ file appeared in a warning (audits third parties)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-  echo "  PASS  arquivo de knowledge-base/references/ não gera aviso"
+  echo "  PASS  a knowledge-base/references/ file produces no warning"
   PASS_COUNT=$((PASS_COUNT + 1))
 fi
 teardown
@@ -374,31 +374,31 @@ git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
 if echo "$out" | grep -q 'knowledge-base/tools/'; then
-  echo "  FAIL  arquivo de knowledge-base/tools/ apareceu num aviso (audita terceiros)"
+  echo "  FAIL  a knowledge-base/tools/ file appeared in a warning (audits third parties)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-  echo "  PASS  arquivo de knowledge-base/tools/ não gera aviso"
+  echo "  PASS  a knowledge-base/tools/ file produces no warning"
   PASS_COUNT=$((PASS_COUNT + 1))
 fi
 teardown
 
-# ---- a zona não silencia o CHANGELOG gate sobre código do projeto ----
+# ---- the zone does not silence the CHANGELOG gate about project code ----
 setup
 mkdir -p "$TMPDIR_TEST/knowledge-base/references/peer" "$TMPDIR_TEST/src"
 echo "def f(): pass" > "$TMPDIR_TEST/knowledge-base/references/peer/s.py"
 echo "def g(): pass" > "$TMPDIR_TEST/src/mine.py"
 git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 rc=$(run_hook)
-assert_exit "regressão: código do projeto ao lado da zona ainda exige CHANGELOG" 2 "$rc"
+assert_exit "regression: project code beside the zone still requires a CHANGELOG" 2 "$rc"
 teardown
 
 # ---------------------------------------------------------------------------
-# O gate de TDD varre a árvore UMA vez por unidade, não uma vez por arquivo
+# The TDD gate walks the tree ONCE per unit, not once per file
 # ---------------------------------------------------------------------------
-# Fixa a FORMA de onde a velocidade vem, não uma duração — asserção de tempo é
-# teste instável em máquina carregada. O custo medido de um `find -maxdepth 6`
-# sem match foi de 39 ms num repo de 13 mil arquivos; um por arquivo alterado é
-# o que levava o hook ao timeout.
+# It pins the SHAPE the speed comes from, not a duration — a timing assertion is
+# a flaky test on a loaded machine. The measured cost of one `find -maxdepth 6`
+# with no match was 39 ms on a 13,000-file repo; one per changed file is what
+# drove the hook to its timeout.
 setup
 mkdir -p "$TMPDIR_TEST/src"
 printf '[project]\nname="x"\n' > "$TMPDIR_TEST/pyproject.toml"
@@ -421,15 +421,15 @@ chmod +x "$FIND_SHIM_DIR/find"
 FIND_CALLS=$(wc -l < "$TMPDIR_TEST/.find-calls" | tr -d ' ')
 TOTAL=$((TOTAL + 1))
 if [ "$FIND_CALLS" -le 2 ]; then
-  echo "  PASS  gate de TDD varre por unidade ($FIND_CALLS chamadas de find para 8 arquivos)"
+  echo "  PASS  TDD gate walks per unit ($FIND_CALLS find calls for 8 files)"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL  gate de TDD varre por arquivo ($FIND_CALLS chamadas de find para 8 arquivos)"
+  echo "  FAIL  TDD gate walks per file ($FIND_CALLS find calls for 8 files)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 teardown
 
-# ---- regressão: o teste pareado continua sendo encontrado na árvore da unidade ----
+# ---- regression: the paired test is still found in the unit's tree ----
 setup
 mkdir -p "$TMPDIR_TEST/src" "$TMPDIR_TEST/tests/unit"
 printf '[project]\nname="x"\n' > "$TMPDIR_TEST/pyproject.toml"
@@ -440,15 +440,15 @@ git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
 if echo "$out" | grep -q 'src/pagamento.py'; then
-  echo "  FAIL  teste em tests/unit/ não foi encontrado (falso aviso de TDD)"
+  echo "  FAIL  a test in tests/unit/ was not found (false TDD warning)"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 else
-  echo "  PASS  teste em tests/unit/ é encontrado pelo índice da unidade"
+  echo "  PASS  a test in tests/unit/ is found by the unit index"
   PASS_COUNT=$((PASS_COUNT + 1))
 fi
 teardown
 
-# ---- regressão: arquivo REALMENTE sem teste continua sendo apontado ----
+# ---- regression: a file REALLY without a test is still flagged ----
 setup
 mkdir -p "$TMPDIR_TEST/src"
 printf '[project]\nname="x"\n' > "$TMPDIR_TEST/pyproject.toml"
@@ -458,10 +458,10 @@ git -C "$TMPDIR_TEST" add -A >/dev/null 2>&1
 out=$(run_hook_capture)
 TOTAL=$((TOTAL + 1))
 if echo "$out" | grep -q 'src/orfao.py'; then
-  echo "  PASS  arquivo sem teste continua apontado pelo gate"
+  echo "  PASS  a file without a test is still flagged by the gate"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL  o índice cegou o gate para um arquivo sem teste"
+  echo "  FAIL  the index blinded the gate to a file without a test"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 teardown

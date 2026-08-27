@@ -137,8 +137,8 @@ def _aggregate_wiring(progress_path: Path, phase: str, repo_root: Path) -> dict[
     }
 
 
-#: Extensão → linguagem, para a única pergunta que a fronteira de fase consegue
-#: responder sobre o audit: ele vai olhar para estes arquivos?
+#: Extension → language, for the one question the phase boundary can answer about
+#: the audit: is it going to look at these files?
 _EXT_TO_LANGUAGE = {
     ".py": "python",
     ".ts": "typescript", ".tsx": "typescript",
@@ -153,22 +153,22 @@ _EXT_TO_LANGUAGE = {
 
 
 def _check_delta_audit_coverage(files: tuple[str, ...], project_root: Path) -> dict[str, Any]:
-    """Os arquivos desta fase serão auditados pelo `/code-quality` do Step 5?
+    """Will this phase's files be audited by Step 5's `/code-quality`?
 
-    Esta função substitui `_invoke_code_quality_on_delta`, que era um SKIP
-    incondicional: o `cq_invoke` pontua o plano inteiro, não um subconjunto de
-    arquivos, e fingir um audit delta-scoped teria sido pior. A metade honesta
-    era admitir isso; a metade desonesta era a linha do relatório, que se lia
-    como um check que rodou — o Step 4.7 anunciava mais rigor do que entregava.
+    This function replaces `_invoke_code_quality_on_delta`, which was an
+    unconditional SKIP: `cq_invoke` scores the whole plan, not a subset of files,
+    and faking a delta-scoped audit would have been worse. The honest half was
+    admitting that; the dishonest half was the report line, which read like a check
+    that ran — Step 4.7 announced more rigour than it delivered.
 
-    O que sobra é a pergunta que o SKIP deixava em aberto, e essa a fronteira
-    responde de graça: um arquivo cuja linguagem não está ENABLED em
-    `rules/code-quality-languages.txt` não será visto por detector nenhum, nem
-    aqui nem no Step 5. É a mesma classe de defeito que o D5 persegue — um
-    auditor que nunca roda reporta sucesso — e não tinha detector na fronteira.
+    What remains is the question the SKIP left open, and the boundary answers it for
+    free: a file whose language is not ENABLED in
+    `rules/code-quality-languages.txt` will be seen by no detector, neither here nor
+    at Step 5. It is the same class of defect D5 pursues — an auditor that never runs
+    reports success — and it had no detector at the boundary.
 
-    Sem o arquivo de regra: SKIP. Adivinhar quais linguagens um projeto audita
-    produziria o achado inventado que o kit recusa em toda parte.
+    Without the rule file: SKIP. Guessing which languages a project audits would
+    produce the invented finding the kit refuses everywhere.
     """
     rule_path = None
     for candidate in (project_root / "rules" / "code-quality-languages.txt",
@@ -179,8 +179,8 @@ def _check_delta_audit_coverage(files: tuple[str, ...], project_root: Path) -> d
     if rule_path is None:
         return {
             "status": "SKIP",
-            "reason": "rules/code-quality-languages.txt ausente — sem ele, quais linguagens "
-                      "são auditadas é adivinhação",
+            "reason": "rules/code-quality-languages.txt missing — without it, which "
+                      "languages are audited is guesswork",
             "uncovered_files": [],
             "findings": [],
         }
@@ -207,14 +207,14 @@ def _check_delta_audit_coverage(files: tuple[str, ...], project_root: Path) -> d
         }
     return {
         "status": "WARN",
-        "reason": "arquivos do delta que nenhum detector vai auditar",
+        "reason": "delta files no detector is going to audit",
         "uncovered_files": uncovered,
         "findings": [{
             "severity": "MEDIUM",
             "code": "delta_language_not_audited",
             "message": (
-                f"{len(uncovered)} arquivo(s) desta fase em linguagem que não está ENABLED em "
-                f"{rule_path.name} — o audit do Step 5 não vai olhar para eles: "
+                f"{len(uncovered)} file(s) in this phase in a language not ENABLED in "
+                f"{rule_path.name} — Step 5's audit will not look at them: "
                 f"{', '.join(uncovered[:5])}"
             ),
         }],

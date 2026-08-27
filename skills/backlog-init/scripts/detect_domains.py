@@ -1,42 +1,44 @@
 #!/usr/bin/env python3
-"""Deriva a tabela de roteamento DO PROJETO, em vez de herdá-la de outro.
+"""Derive THE PROJECT's routing table instead of inheriting someone else's.
 
 O PROBLEMA
 ----------
-`rules/cycle-backlog.md § Domain routing` embarcava os 8 domínios do ecossistema
-`theo`. Toda instalação levava essa tabela junto, e o `backlog-init` mandava
-encaixar os repos do alvo *dentro* dos 8, com a instrução explícita de não
-"inventar um nono domínio". Num projeto que não é o `theo`, nenhum repo encaixa.
+`rules/cycle-backlog.md § Domain routing` used to embed the 8 domains of the
+ecosystem the kit was written in. Every install carried that table along, and
+`backlog-init` instructed people to fit the target's repos *inside* those 8, with
+an explicit instruction not to "invent a ninth domain". In a project that is not
+that ecosystem, no repo fits.
 
-Medido no `theokit-sdk` em 2026-08-18: 88 itens de backlog com evidência
-`file:line` medida, todos reprovados como `BLOCKER/unroutable_repo` — 68 citando
-`packages/sdk`, 14 `theokit-sdk`, e mais quatro pacotes. O gate estava certo no
-que dizia (*"não sei para quem mandar isto"*); errada estava a tabela, que era
+Measured on `theokit-sdk` on 2026-08-18: 88 backlog items with measured
+`file:line` evidence, all rejected as `BLOCKER/unroutable_repo` — 68 citing
+`packages/sdk`, 14 `theokit-sdk`, and four more packages. The gate was right in
+what it said (*"I do not know who to send this to"*); what was wrong was the
+table, which belonged to
 dado de um projeto morando dentro do template de todos.
 
-A REGRA DE DERIVAÇÃO
---------------------
-A unidade de propriedade é o repositório, então:
+THE DERIVATION RULE
+-------------------
+The unit of ownership is the repository, so:
 
-- **Guarda-chuva** (subdiretórios com `.git` próprio): um domínio por repo. É o
-  formato do ecossistema `theo`, onde cada repo tem dono distinto.
-- **Repo único**: UM domínio, com o nome do repositório. Se ele for um monorepo,
-  cada pacote entra como um `repo` endereçado por caminho (`packages/sdk`) — a
-  forma que o kit já suporta e documenta (`theo-cloud/dashboard`). Um domínio por
-  pacote criaria seis especialistas onde existe um SDK.
+- **Umbrella** (subdirectories with their own `.git`): one domain per repo. That
+  is the shape of a multi-repo ecosystem, where each repo has a distinct owner.
+- **Single repo**: ONE domain, named after the repository. If it is a monorepo,
+  each package enters as a path-addressed `repo` (`packages/sdk`) — the form the
+  kit already supports and documents. One domain per package would create six
+  specialists where a single SDK exists.
 
-O que NÃO é derivado: quem é o especialista. O arquivo `agents/<domínio>.md` é
-nomeado aqui, mas escrevê-lo é trabalho humano — um especialista sem conteúdo
-rotearia o item para um prompt vazio, e `route_domain.py` sai 3 quando o arquivo
-não existe, de propósito.
+What is NOT derived: who the specialist is. The `agents/<domain>.md` file is named
+here, but writing it is human work — a specialist with no content would route the
+item into an empty prompt, and `route_domain.py` exits 3 when the file does not
+exist, on purpose.
 
 DUAS FONTES, E A SEGUNDA MANDA
 ------------------------------
-`--from-backlog` deriva dos pares (domain, repo) que os itens JÁ declaram. Use-a
-sempre que o registro existir: a topologia diz o que existe, não quem é dono.
-Medido no `theokit-sdk` — o registro separa `sdk-core`, `repo-platform`,
-`sdk-satellites`, `edge-cli-acp` e `memory-adapters`, cinco domínios que nenhum
-layout de diretório revela e que nenhum detector deveria adivinhar.
+`--from-backlog` derives from the (domain, repo) pairs the items ALREADY declare.
+Use it whenever the registry exists: topology says what exists, not who owns it.
+Measured on `theokit-sdk` — the registry separates `sdk-core`, `repo-platform`,
+`sdk-satellites`, `edge-cli-acp` and `memory-adapters`, five domains no directory
+layout reveals and no detector should guess.
 
 Uso:
     python3 detect_domains.py                       # imprime a tabela proposta
@@ -46,8 +48,8 @@ Uso:
 
 Exit codes:
     0 — tabela derivada (e escrita, se --write)
-    1 — nenhum domínio derivável (diretório sem repo e sem manifesto)
-    2 — erro de escrita (arquivo sem a seção `## Domain routing`)
+    1 — no derivable domain (a directory with no repo and no manifest)
+    2 — write error (file without a `## Domain routing` section)
 """
 from __future__ import annotations
 
@@ -58,16 +60,16 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Diretórios que nunca são unidade arquitetural, em qualquer ecossistema.
+#: Directories that are never an architectural unit, in any ecosystem.
 _IGNORED_DIRS = {
     "node_modules", "vendor", "dist", "build", "target", "coverage",
     ".git", ".claude", "__pycache__", ".venv", "venv", ".tox", "testdata",
 }
 
-#: Onde um monorepo guarda seus pacotes, por convenção de cada ecossistema.
+#: Where a monorepo keeps its packages, by each ecosystem's convention.
 _WORKSPACE_PARENTS = ("packages", "apps", "services", "crates", "libs", "modules")
 
-#: Manifesto que prova que um subdiretório é uma unidade publicável.
+#: A manifest proving a subdirectory is a publishable unit.
 _PACKAGE_MANIFESTS = ("package.json", "pyproject.toml", "Cargo.toml", "go.mod", "composer.json")
 
 _GO_USE_BLOCK_RE = re.compile(r"^use\s*\((.*?)^\)", re.MULTILINE | re.DOTALL)
@@ -82,10 +84,10 @@ class Domain:
     name: str
     repos: list[str]
     agent: str
-    #: Repos que o registro cita e o disco não tem. Ficam NA tabela, nomeados —
-    #: apagá-los esconderia a divergência, e um item filed contra eles routes
-    #: para código que ninguém abre. Mesma decisão da seção "Repos an inventory
-    #: names but disk does not" que o `theo` mantém à mão.
+    #: Repos the registry cites and disk does not have. They stay IN the table,
+    #: named — deleting them would hide the divergence, and an item filed against
+    #: them routes to code nobody opens. Same decision as the "Repos an inventory
+    #: names but disk does not" section kept by hand.
     missing_on_disk: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -107,22 +109,22 @@ def _child_repos(root: Path) -> list[Path]:
 
 
 def detect_scope(root: Path) -> str:
-    """`umbrella` quando há mais de um repositório governado abaixo; senão `single-repo`.
+    """`umbrella` when more than one governed repository sits below; else `single-repo`.
 
-    O `backlog-init` recusava rodar sem guarda-chuva — *"no umbrella detected: run
-    at the workspace root"* — o que, num projeto autônomo, manda criar o
+    `backlog-init` refused to run without an umbrella — *"no umbrella detected: run
+    at the workspace root"* — which, in an autonomous project, means creating the
     `BACKLOG.md` na raiz do guarda-chuva, **fora do projeto**. Medido no
     `theokit-framework`: dez repos independentes, cada um com seu ciclo, e o kit
-    empurrava o registro dos dez para um diretório que não é repositório de nada.
+    pushed all ten registries into a directory that is nobody's repository.
 
-    O princípio que a regra defende ("uma pergunta, um lugar para olhar") não
-    exige guarda-chuva: exige **um registro por escopo governado**. Um repo
-    autônomo é um escopo.
+    The principle the rule defends ("one question, one place to look") does not
+    require an umbrella: it requires **one registry per governed scope**. An
+    autonomous repo is a scope.
     """
     root = root.resolve()
-    # A raiz SER um repositório é o que decide: um projeto com um clone vendorizado
-    # abaixo continua sendo um projeto. Guarda-chuva é o diretório que não é
-    # repositório de nada e existe para agrupar os que são.
+    # The root BEING a repository is what decides: a project with a vendored clone
+    # below is still a project. An umbrella is the directory that is nobody's
+    # repository and exists to group the ones that are.
     if _is_repo(root):
         return "single-repo"
     return "umbrella" if _child_repos(root) else "single-repo"
@@ -141,8 +143,8 @@ def _go_workspace_members(root: Path) -> list[str]:
     members: list[str] = []
     for entry in entries:
         entry = entry.strip().strip('"')
-        # Um caminho que sai do repositório pertence a outro repositório, com
-        # gates próprios — o `go.work` do `theo` lista `../theo-contracts`.
+        # A path that leaves the repository belongs to another repository, with
+        # gates of its own — a `go.work` may list `../sibling-repo`.
         if not entry or entry.startswith(".."):
             continue
         rel = entry.removeprefix("./")
@@ -152,7 +154,7 @@ def _go_workspace_members(root: Path) -> list[str]:
 
 
 def _workspace_packages(root: Path) -> list[str]:
-    """Pacotes de um monorepo, endereçados pelo caminho relativo à raiz."""
+    """A monorepo's packages, addressed by path relative to the root."""
     found: list[str] = []
     for parent_name in _WORKSPACE_PARENTS:
         parent = root / parent_name
@@ -167,12 +169,12 @@ def _workspace_packages(root: Path) -> list[str]:
 
 
 def detect_domains(root: Path) -> list[Domain]:
-    """Deriva os domínios da topologia real do projeto."""
+    """Derive the domains from the project's real topology."""
     root = root.resolve()
     children = _child_repos(root)
 
     if children:
-        # Guarda-chuva: a unidade de propriedade é o repositório.
+        # Umbrella: the unit of ownership is the repository.
         return [
             Domain(name=repo.name, repos=[repo.name], agent=f"agents/{repo.name}.md")
             for repo in children
@@ -188,17 +190,17 @@ _FIELD_RE = re.compile(r"^(domain|repo):\s*`?([^`\n]+?)`?\s*$", re.MULTILINE)
 
 
 def domains_from_backlog(backlog_path: Path, root: Path) -> list[Domain]:
-    """Deriva a tabela dos pares (domain, repo) que os itens JÁ declaram.
+    """Derive the table from the (domain, repo) pairs the items ALREADY declare.
 
-    A topologia diz o que existe; ela não diz a semântica de propriedade. Medido
-    no `theokit-sdk`: o registro separa `sdk-core`, `repo-platform`,
-    `sdk-satellites`, `edge-cli-acp` e `memory-adapters` — cinco domínios que
-    nenhum layout de diretório revela e que nenhum detector deveria adivinhar.
-    Os itens já carregam a resposta; isto apenas a lê.
+    Topology says what exists; it does not say the semantics of ownership.
+    Measured on `theokit-sdk`: the registry separates `sdk-core`, `repo-platform`,
+    `sdk-satellites`, `edge-cli-acp` and `memory-adapters` — five domains no
+    directory layout reveals and no detector should guess. The items already carry
+    the answer; this merely reads it.
 
-    Levanta ValueError quando um repo aparece em dois domínios: `route_domain`
-    exige um-repo-um-domínio, e uma tabela ambígua rotearia por ordem de
-    iteração — o mesmo item indo para lugares diferentes em execuções diferentes.
+    Raises ValueError when a repo appears in two domains: `route_domain` requires
+    one-repo-one-domain, and an ambiguous table would route by iteration order —
+    the same item going to different places on different runs.
     """
     content = backlog_path.read_text(encoding="utf-8-sig")
     blocks = list(_ITEM_BLOCK_RE.finditer(content))
@@ -231,24 +233,25 @@ def domains_from_backlog(backlog_path: Path, root: Path) -> list[Domain]:
     return domains
 
 
-#: Marca que a seção precisa de um humano. O `check_xrefs` reporta WARN enquanto ela
-#: estiver no arquivo — um esqueleto que se parece com um especialista pronto é pior
-#: que rota quebrada, porque a rota quebrada pelo menos avisa.
-UNREVIEWED_MARKER = "<!-- POR PREENCHER: só um humano sabe isto -->"
+#: Marks that the section needs a human. `check_xrefs` reports WARN while it is in
+#: the file — a skeleton that looks like a finished specialist is worse than a broken
+#: route, because the broken route at least warns.
+UNREVIEWED_MARKER = "<!-- TO BE FILLED IN: only a human knows this -->"
 
 
 def render_specialist(domain: Domain, root: Path) -> str:
-    """Esqueleto de `agents/<domínio>.md` com o que foi MEDIDO, e nada além.
+    """Skeleton of `agents/<domain>.md` carrying what was MEASURED, and nothing else.
 
-    Existe porque derivar a tabela sem resolver o especialista troca um defeito por
-    outro: `route_domain` responde `BROKEN ROUTE — the table names an owner who does
-    not exist`. Medido em 2026-08-20: 11 consumidores já estavam nesse estado.
+    It exists because deriving the table without resolving the specialist trades one
+    defect for another: `route_domain` answers `BROKEN ROUTE — the table names an
+    owner who does not exist`. Measured 2026-08-20: 11 consumers were already in that
+    state.
 
-    O que entra: nome do domínio, repos que ele cobre, linguagens cujo manifesto está
-    em disco. O que NÃO entra: invariantes, o que é um achado real, falsos positivos —
-    as três coisas que fazem um especialista valer alguma coisa e que nenhuma medição
-    produz. Elas ficam presentes e vazias, marcadas, porque um arquivo sem elas parece
-    completo.
+    What goes in: the domain name, the repos it covers, the languages whose manifest
+    is on disk. What does NOT go in: invariants, what a real finding looks like, the
+    false positives — the three things that make a specialist worth anything and that
+    no measurement produces. They are present and empty, marked, because a file
+    without them looks complete.
     """
     try:
         import sys as _sys
@@ -257,69 +260,69 @@ def render_specialist(domain: Domain, root: Path) -> str:
             _sys.path.insert(0, str(_impl))
         from suite_runners import detect_languages
         languages = detect_languages(root) or []
-    except Exception:  # noqa: BLE001 — a detecção é um extra; sem ela o esqueleto ainda serve
+    except Exception:  # noqa: BLE001 — detection is a bonus; without it the skeleton still serves
         languages = []
 
     repos = "\n".join(f"| `{r}` |" for r in domain.repos)
     langs = ", ".join(f"`{l}`" for l in languages) if languages else (  # noqa: E741
-        "nenhum manifesto de linguagem na raiz — os gates por linguagem respondem SKIP, "
-        "e isso descreve o repositório em vez de ser configuração pendente")
+        "no language manifest at the root — the per-language gates answer SKIP, "
+        "and that describes the repository rather than being pending configuration")
 
     return f"""---
 name: {domain.name}
-description: Domain specialist for `{domain.name}`. DERIVADO automaticamente por detect_domains.py e AINDA NÃO REVISADO — as seções de julgamento estão vazias.
+description: Domain specialist for `{domain.name}`. DERIVED automatically by detect_domains.py and NOT YET REVIEWED — the judgement sections are empty.
 tools: Read, Grep, Glob, Bash
 derived: true
 reviewed_by_human: false
 ---
 
-# {domain.name} — esqueleto derivado
+# {domain.name} — derived skeleton
 
-> **Este arquivo foi gerado, não escrito.** Ele existe para que o roteamento funcione
-> (`route_domain` sai 3 quando a tabela nomeia um especialista ausente) e para que o
-> débito fique visível. Enquanto os marcadores abaixo existirem, `check_xrefs` reporta
-> WARN. Remova cada marcador ao preencher a seção — e remova `reviewed_by_human: false`
-> quando o arquivo descrever o domínio de verdade.
+> **This file was generated, not written.** It exists so the routing works
+> (`route_domain` exits 3 when the table names a missing specialist) and so the debt
+> stays visible. While the markers below exist, `check_xrefs` reports WARN. Remove
+> each marker as you fill the section in — and remove `reviewed_by_human: false` when
+> the file genuinely describes the domain.
 
-## Cobertura (medida em disco)
+## Coverage (measured on disk)
 
 | Repo |
 |---|
 {repos}
 
-**Linguagens detectadas:** {langs}
+**Languages detected:** {langs}
 
-## Comandos
-
-{UNREVIEWED_MARKER}
-
-Os comandos que este domínio usa de fato, **verificados executando** — não copiados de
-um README. Ex.: `python3 scripts/audit.py`, `pnpm test`, `go test ./...`.
-
-## O que é um achado real aqui
+## Commands
 
 {UNREVIEWED_MARKER}
 
-As formas que um defeito toma neste domínio. Um especialista que não sabe distinguir
-achado de ruído devolve ruído com autoridade.
+The commands this domain actually uses, **verified by running them** — not copied
+from a README. E.g. `python3 scripts/audit.py`, `pnpm test`, `go test ./...`.
 
-## Falsos positivos que este domínio gera
-
-{UNREVIEWED_MARKER}
-
-O que parece defeito e não é. Sem esta seção, cada varredura re-descobre os mesmos
-não-problemas.
-
-## Invariantes
+## What a real finding looks like here
 
 {UNREVIEWED_MARKER}
 
-O que nunca pode deixar de valer aqui.
+The shapes a defect takes in this domain. A specialist that cannot tell a finding
+from noise returns noise with authority.
+
+## False positives this domain generates
+
+{UNREVIEWED_MARKER}
+
+What looks like a defect and is not. Without this section, every sweep re-discovers
+the same non-problems.
+
+## Invariants
+
+{UNREVIEWED_MARKER}
+
+What must never stop holding here.
 
 ## Cycle contract
 
-Destino de roteamento do domínio `{domain.name}` (`rules/cycle-backlog.md § Domain
-routing`, derivada por `skills/backlog-init/scripts/detect_domains.py`).
+Routing destination for domain `{domain.name}` (`rules/cycle-backlog.md § Domain
+routing`, derived by `skills/backlog-init/scripts/detect_domains.py`).
 """
 
 
@@ -343,10 +346,10 @@ def render_table(domains: list[Domain]) -> str:
 
 
 def rewrite_routing_section(rule_path: Path, domains: list[Domain]) -> None:
-    """Substitui a seção `## Domain routing` preservando o resto do arquivo."""
+    """Replace the `## Domain routing` section, preserving the rest of the file."""
     content = rule_path.read_text(encoding="utf-8-sig")
     if not _ROUTING_SECTION_RE.search(content):
-        raise ValueError(f"{rule_path}: sem a seção '## Domain routing' para substituir")
+        raise ValueError(f"{rule_path}: no '## Domain routing' section to replace")
     rule_path.write_text(
         _ROUTING_SECTION_RE.sub(lambda _: render_table(domains) + "\n", content, count=1),
         encoding="utf-8",
@@ -357,9 +360,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--from-backlog", type=Path, default=None,
-                        help="deriva dos pares (domain, repo) que os itens já declaram — "
-                             "use quando o registro existe: a semântica de propriedade está "
-                             "lá, e nenhum layout de diretório a revela")
+                        help="derive from the (domain, repo) pairs the items already "
+                             "declare — use it when the registry exists: the semantics of "
+                             "ownership live there, and no directory layout reveals them")
     parser.add_argument("--write", type=Path, default=None,
                         help="caminho de rules/cycle-backlog.md a atualizar")
     parser.add_argument("--json", action="store_true")
@@ -375,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
     if not domains:
-        print("nenhum domínio derivável — o diretório não é repo nem tem manifesto",
+        print("no derivable domain — the directory is neither a repo nor has a manifest",
               file=sys.stderr)
         return 1
 
@@ -394,12 +397,12 @@ def main(argv: list[str] | None = None) -> int:
         print(render_table(domains))
         absent = sorted({r for d in domains for r in d.missing_on_disk})
         if absent:
-            print("Repos que o registro cita e o disco não tem "
-                  "(ficam na tabela, nomeados, para a divergência não sumir):")
+            print("Repos the registry cites and disk does not have "
+                  "(they stay in the table, named, so the divergence does not vanish):")
             for repo in absent:
                 print(f"  - {repo}")
         if missing:
-            print("Especialistas que precisam ser escritos (route_domain sai 3 sem eles):")
+            print("Specialists that need writing (route_domain exits 3 without them):")
             for agent in missing:
                 print(f"  - {agent}")
 

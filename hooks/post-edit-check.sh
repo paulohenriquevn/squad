@@ -14,23 +14,23 @@
 #
 # Never blocks — output is advisory.
 #
-# TUDO AQUI É ESCOPADO AO ARQUIVO EDITADO, E ISSO É O DESENHO
-# -----------------------------------------------------------
-# Este hook roda de forma SÍNCRONA em toda edição: o agente espera por ele, e
-# não há debounce — dez edições seguidas são dez execuções. Até 2026-08-26 três
-# dos quatro caminhos verificavam o PROJETO INTEIRO: `tsc --noEmit -p
-# tsconfig.json` (inclusive ao editar um `.js`), `cargo check` (crate inteira) e
-# `go vet <dir>/...` (o módulo inteiro quando o arquivo editado está na raiz).
-# Com timeout de 60 s, o desfecho num repositório de porte médio era um dos dois
-# piores: o turno travava por dezenas de segundos, ou o hook morria no meio e o
-# feedback que ele existe para dar nunca chegava.
+# EVERYTHING HERE IS SCOPED TO THE EDITED FILE, AND THAT IS THE DESIGN
+# --------------------------------------------------------------------
+# This hook runs SYNCHRONOUSLY on every edit: the agent waits for it, and there
+# is no debounce — ten edits in a row are ten runs. Until 2026-08-26 three of
+# the four paths checked the WHOLE PROJECT: `tsc --noEmit -p tsconfig.json`
+# (even when editing a `.js`), `cargo check` (the entire crate) and
+# `go vet <dir>/...` (the entire module whenever the edited file sits at the
+# root). With a 60s timeout, the outcome on a mid-sized repository was one of
+# the two worst: the turn stalled for tens of seconds, or the hook died halfway
+# and the feedback it exists to give never arrived.
 #
-# O que se perde é real e vale dizer em voz alta: `tsc` por arquivo não é
-# equivalente a `tsc` de projeto — um erro de tipo que atravessa módulos não
-# aparece mais aqui. Ele continua sendo pego pela suíte e pelo CI, que é onde
-# uma verificação dessa escala cabe. Para quem prefere pagar o custo por edição,
-# POST_EDIT_FULL_TYPECHECK=1 restaura `tsc -p` e `cargo check` — agora escopado
-# à crate dona do arquivo, nunca ao workspace inteiro.
+# What is lost is real and worth saying out loud: per-file `tsc` is not
+# equivalent to project `tsc` — a type error crossing modules no longer shows up
+# here. It is still caught by the suite and by CI, which is where a check of
+# that scale belongs. For anyone who prefers to pay the cost per edit,
+# POST_EDIT_FULL_TYPECHECK=1 restores `tsc -p` and `cargo check` — now scoped to
+# the crate that owns the file, never to the whole workspace.
 
 set -uo pipefail
 
@@ -54,11 +54,12 @@ case "$FILE_PATH" in
 esac
 PKG_DIR=$(dirname "$ABS_FILE_PATH")
 
-# Opt-in para as verificações de escala de projeto (ver cabeçalho).
+# Opt-in for the project-scale checks (see the header).
 FULL_TYPECHECK="${POST_EDIT_FULL_TYPECHECK:-0}"
 
-# Manifesto da crate dona do arquivo — o ancestral mais próximo com Cargo.toml.
-# Só é consultado no caminho Rust; resolvê-lo aqui mantém o `case` legível.
+# Manifest of the crate that owns the file — the nearest ancestor with a
+# Cargo.toml. Only consulted on the Rust path; resolving it here keeps the
+# `case` readable.
 CRATE_MANIFEST="Cargo.toml"
 _crate_dir="$PKG_DIR"
 while [ "$_crate_dir" != "/" ] && [ "$_crate_dir" != "." ]; do
@@ -72,8 +73,8 @@ done
 case "$FILE_PATH" in
   *.go)
     if [ -f go.mod ] && command -v go >/dev/null 2>&1; then
-      # O PACOTE do arquivo, sem `/...`: a forma recursiva vira o módulo inteiro
-      # sempre que o arquivo editado está na raiz, que é o caso de `main.go`.
+      # The file's PACKAGE, without `/...`: the recursive form becomes the whole
+      # module whenever the edited file sits at the root, as `main.go` does.
       VET_OUTPUT=$(go vet "$PKG_DIR" 2>&1 || true)
       if [ -n "$VET_OUTPUT" ]; then
         echo "go vet warnings on $PKG_DIR — first 8 lines:"
@@ -120,8 +121,8 @@ case "$FILE_PATH" in
   *.rs)
     if [ -f Cargo.toml ]; then
       if [ "$FULL_TYPECHECK" = "1" ] && command -v cargo >/dev/null 2>&1; then
-        # A crate DONA do arquivo, não o workspace: `--manifest-path` é o que
-        # limita um `cargo check` num workspace com dezenas de membros.
+        # The crate that OWNS the file, not the workspace: `--manifest-path` is
+        # what bounds a `cargo check` in a workspace with dozens of members.
         CARGO_OUTPUT=$(cargo check --manifest-path "$CRATE_MANIFEST" --message-format=short 2>&1 | head -12 || true)
         if [ -n "$CARGO_OUTPUT" ]; then
           echo "cargo check (crate $CRATE_MANIFEST, POST_EDIT_FULL_TYPECHECK=1) — first 12 lines:"

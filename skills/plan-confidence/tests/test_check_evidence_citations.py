@@ -73,7 +73,7 @@ def test_flags_missing_section(tmp_path: Path) -> None:
     project_root = _make_project_root(tmp_path, rules={"architecture.md": "# Architecture\n\n## §1\nBody.\n"})
     plan = _write_plan(
         tmp_path,
-        "# Plan\n\n### T1.1 — Task\n#### Evidence\nReferência a `architecture.md §99`.\n",
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nReference to `architecture.md §99`.\n",
     )
     report = check_evidence_citations(plan, project_root)
     flagged = [c for c in report.unresolved_citations if "architecture.md" in c.raw_text and "99" in c.raw_text]
@@ -229,7 +229,7 @@ def test_flags_blueprint_ref_when_section_absent(tmp_path: Path) -> None:
     )
     plan = _write_plan(
         tmp_path,
-        "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Blueprint §Q99 que não existe.\n",
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nSee Blueprint §Q99, which does not exist.\n",
     )
     report = check_evidence_citations(plan, project_root)
     blueprint_unresolved = [c for c in report.unresolved_citations if c.kind == "blueprint"]

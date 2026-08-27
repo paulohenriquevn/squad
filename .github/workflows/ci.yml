@@ -26,18 +26,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          # Quatro jobs reinstalavam as mesmas dependências a cada execução.
+          # Four jobs reinstalled the same dependencies on every run.
           cache: 'pip'
 
       - name: Install test dependencies
         run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff vulture
 
-      # `--strict` NÃO é cosmético: sem ele um achado WARN é impresso e o
-      # processo sai 0 — a saída traz a linha do WARN e, logo abaixo,
-      # `Overall: PASS`. `scripts/install.sh` sempre chamou com `--strict`, o
-      # workflow chamava sem, e o mesmo commit produzia `check_xrefs.py: FAIL`
-      # na instalação e verde no CI. Um gate que olha, vê e aprova é pior que
-      # um gate ausente: ele produz confiança onde não há verificação.
+      # `--strict` is NOT cosmetic: without it a WARN finding is printed and the
+      # process exits 0 — the output carries the WARN line and, right below it,
+      # `Overall: PASS`. `scripts/install.sh` always called it with `--strict`, the
+      # workflow called it without, and the same commit produced
+      # `check_xrefs.py: FAIL` at install time and green in CI. A gate that looks,
+      # sees and approves is worse than an absent gate: it produces confidence where
+      # there was no verification.
       - name: Cross-reference validator (strict)
         run: python3 scripts/check_xrefs.py --strict
 
@@ -54,15 +55,15 @@ jobs:
         run: ruff check scripts skills hooks tests conftest.py
 
       # O kit cobrava este gate de todo consumidor e nunca o rodava sobre si.
-      # Medido 2026-08-26, na primeira execução: FAIL_HARD por um `unused variable`
-      # de assinatura obrigatória do argparse, com a allowlist vazia — o falso
-      # positivo estava lá desde sempre e ninguém tinha visto, porque ninguém tinha
-      # rodado. Um gate sem calibração não é um gate: é uma promessa.
+      # Measured 2026-08-26, on the first run: FAIL_HARD from an `unused variable`
+      # in an argparse-mandated signature, with an empty allowlist — the false
+      # positive had been there all along and nobody had seen it, because nobody had
+      # run it. A gate without calibration is not a gate: it is a promise.
       #
-      # O script sai 1 em FAIL_HARD / INVALID, que é o contrato de
-      # `code-quality-golden-rule.md` § 1. FAIL_SOFT não quebra o build aqui — a
-      # golden rule o resolve com ADR, e um CI que trata soft cap como bloqueio
-      # ensina a contorná-lo.
+      # The script exits 1 on FAIL_HARD / INVALID, which is
+      # `code-quality-golden-rule.md` § 1's contract. FAIL_SOFT does not break the
+      # build here — the golden rule resolves it with an ADR, and a CI that treats a
+      # soft cap as a blocker teaches people to route around it.
       - name: Code-quality gate (the kit audits itself)
         run: |
           python3 skills/code-quality/scripts/run_code_quality.py \
@@ -71,10 +72,10 @@ jobs:
             --allowlist rules/code-quality-allowlist.txt \
             --no-network --no-audit-write
 
-      # A suíte raiz rodava DUAS vezes: uma dentro de run_slice_tests.sh e outra
-      # aqui, só para calcular cobertura — 45 s duplicados por execução, medidos
-      # em 2026-08-26. ROOT_SUITE_COV=1 mede na execução que já acontece, e o
-      # limiar de 40% segue sendo cobrado (--cov-fail-under dentro do script).
+      # The root suite ran TWICE: once inside run_slice_tests.sh and again here,
+      # only to compute coverage — 45s duplicated per run, measured 2026-08-26.
+      # ROOT_SUITE_COV=1 measures in the run that already happens, and the threshold
+      # is still enforced (--cov-fail-under inside the script).
       - name: Root suite + every skill slice (isolated processes, with coverage)
         env:
           ROOT_SUITE_COV: '1'

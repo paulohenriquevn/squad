@@ -43,13 +43,13 @@ findings: []
 
 
 def _upstream_ok(findings_dir: Path, slug: str = "fixture") -> None:
-    """Declara o contexto upstream que o consolidador agora exige.
+    """Declares the upstream context the consolidator now requires.
 
-    `consolidate_findings.py` injeta a pré-condição do `/review` como BLOCKER
-    (`check_upstream_gate`): sem audit de `/code-quality` admissível, não há
-    veredito de merge. Estes testes medem o CONSOLIDADOR, então declaram o
-    upstream verde e seguem medindo o que vieram medir — o gate em si tem a sua
-    própria suíte em `test_check_upstream_gate.py`.
+    `consolidate_findings.py` injects `/review`'s pre-condition as a BLOCKER
+    (`check_upstream_gate`): with no admissible `/code-quality` audit there is no
+    merge verdict. These tests measure the CONSOLIDATOR, so they declare the
+    upstream green and go on measuring what they came to measure — the gate itself
+    has its own suite in `test_check_upstream_gate.py`.
     """
     audits = findings_dir.parent / "knowledge-base" / "audits"
     audits.mkdir(parents=True, exist_ok=True)
@@ -636,15 +636,15 @@ def test_a_rename_with_one_end_outside_the_findings_dir_is_reported(tmp_path: Pa
 
 
 # ---------------------------------------------------------------------------
-# A pré-condição upstream, medida pelo consolidador — não só pelo gate isolado
+# The upstream pre-condition, measured through the consolidator — not only the gate
 # ---------------------------------------------------------------------------
 
 def test_without_an_upstream_audit_there_is_no_merge_verdict(tmp_path: Path) -> None:
     """`cycle-review.md § Pre-conditions` exige o audit; nada o cobrava.
 
-    O `/review` rodando sem `/code-quality` herda tudo que o audit teria pegado —
-    dead code, símbolo fabricado, export órfão — e devolve `READY_TO_MERGE` sobre
-    uma varredura que não aconteceu.
+    `/review` running without `/code-quality` inherits everything the audit would
+    have caught — dead code, fabricated symbol, orphan export — and returns
+    `READY_TO_MERGE` over a sweep that never happened.
     """
     findings = tmp_path / "findings"
     findings.mkdir()
@@ -657,7 +657,7 @@ def test_without_an_upstream_audit_there_is_no_merge_verdict(tmp_path: Path) -> 
 
 
 def test_an_admissible_upstream_audit_lets_the_review_grade(tmp_path: Path) -> None:
-    """O outro lado: o gate não pode transformar todo review em NEEDS_FIXES."""
+    """The other side: the gate must not turn every review into NEEDS_FIXES."""
     findings = tmp_path / "findings"
     findings.mkdir()
     (findings / "architecture.yml").write_text(CLEAN, encoding="utf-8")

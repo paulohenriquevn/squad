@@ -70,10 +70,10 @@ test -f .claude/knowledge-base/plans/{slug}-plan.md
 [ "$(git branch --show-current)" = "workspace" ]
 # /implement validation passed (or PARTIAL with acceptable SKIPs)
 test -f .claude/knowledge-base/reviews/{slug}-implement-validate-*.md
-# /code-quality audit exists AND admits /review. Não confie no `test -f`: ele
-# não lê o veredito, e a exigência de ADR por soft cap não é verificável a olho.
-# O script abaixo é o mesmo que `consolidate_findings.py` injeta no veredito —
-# rodá-lo aqui só antecipa a resposta, nunca a substitui.
+# /code-quality audit exists AND admits /review. Do not trust `test -f`: it does
+# not read the verdict, and the per-soft-cap ADR requirement is not verifiable by
+# eye. The script below is the same one `consolidate_findings.py` injects into the
+# verdict — running it here only anticipates the answer, never replaces it.
 python3 .claude/skills/review/scripts/check_upstream_gate.py {slug} --project-root .
 grep -qE '"verdict":[[:space:]]*"(PASS|PASS_WITH_CAVEATS)"' .claude/knowledge-base/audits/{slug}-code-quality-*.md \
   || (echo "Refuse: /code-quality verdict is not PASS/PASS_WITH_CAVEATS. Loop back to /implement." && exit 1)
@@ -303,4 +303,4 @@ Per `cycle-review.md § Stop conditions`:
 
 ## Match to the work
 
-This skill spawns 5-7 agents in parallel — the gate is "MAIS RIGOROSO de TODAS". Don't run `/review` for trivial changes; for small PRs, the built-in `/review` (Anthropic) is sufficient and far lighter.
+This skill spawns 5-7 agents in parallel — it is the MOST RIGOROUS gate of all. Don't run `/review` for trivial changes; for small PRs, the built-in `/review` (Anthropic) is sufficient and far lighter.

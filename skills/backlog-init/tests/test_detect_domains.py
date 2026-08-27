@@ -1,14 +1,14 @@
-"""A tabela de roteamento é dado do projeto, e vivia dentro do template.
+"""The routing table is project data, and it used to live inside the template.
 
-`rules/cycle-backlog.md § Domain routing` embarca os 8 domínios do ecossistema
-`theo` (`engine-go`, `control-plane`, `theo-db`, …). Toda instalação copia essa
-tabela, e o `backlog-init` mandava classificar os repos do alvo *dentro* desses
-8, proibindo "inventar um nono domínio". O resultado, medido no `theokit-sdk`:
-88 itens com evidência `file:line` medida, todos `BLOCKER/unroutable_repo`,
-porque `packages/sdk` e `theokit-sdk` não existem no mapa de outro ecossistema.
+`rules/cycle-backlog.md § Domain routing` used to embed 8 domains from the
+ecosystem the kit was written in. Every install copied that table, and
+`backlog-init` instructed people to classify the target's repos *inside* those 8,
+forbidding them to "invent a ninth domain". The result, measured on `theokit-sdk`:
+88 items with measured `file:line` evidence, all `BLOCKER/unroutable_repo`,
+because `packages/sdk` and `theokit-sdk` do not exist in another ecosystem's map.
 
-O gate estava certo em recusar — ele não sabia para quem mandar o trabalho. O
-que estava errado era a tabela vir pronta de fora.
+The gate was right to refuse — it did not know who to send the work to. What was
+wrong was the table arriving ready-made from outside.
 """
 from __future__ import annotations
 
@@ -34,10 +34,10 @@ def test_single_repo_becomes_one_domain_named_after_it(tmp_path: Path) -> None:
 
 
 def test_npm_monorepo_lists_each_package_by_path(tmp_path: Path) -> None:
-    """O caso do theokit-sdk: um repo, vários pacotes, itens citando `packages/x`.
+    """The theokit-sdk case: one repo, several packages, items citing `packages/x`.
 
-    Um domínio só — existe um SDK, não seis times. Os pacotes entram como repos
-    endereçados por caminho, forma que o kit já suporta (`theo-cloud/dashboard`).
+    A single domain — there is one SDK, not six teams. The packages enter as
+    path-addressed repos, a form the kit already supports.
     """
     root = _repo(tmp_path, "theokit-sdk")
     for pkg in ("sdk", "acp", "sdk-pty"):
@@ -58,23 +58,23 @@ def test_go_workspace_modules_become_repos(tmp_path: Path) -> None:
     (root / "api").mkdir()
     (root / "operators").mkdir()
     domains = detect_domains(root)
-    assert domains[0].repos == ["theo", "api", "operators"]  # o irmão fora do repo não entra
+    assert domains[0].repos == ["theo", "api", "operators"]  # the sibling outside the repo stays out
 
 
 def test_umbrella_gives_one_domain_per_checked_out_repo(tmp_path: Path) -> None:
-    """Workspace guarda-chuva: a unidade de propriedade é o repositório."""
+    """Umbrella workspace: the unit of ownership is the repository."""
     root = tmp_path / "umbrella"
     root.mkdir()
     _repo(root, "theo-lens")
     _repo(root, "theo-db")
-    (root / "docs").mkdir()  # sem .git — não é repo, não vira domínio
+    (root / "docs").mkdir()  # no .git — not a repo, does not become a domain
     domains = detect_domains(root)
     assert [d.name for d in domains] == ["theo-db", "theo-lens"]
     assert all(d.repos == [d.name] for d in domains)
 
 
 def test_rendered_table_is_parseable_by_route_domain(tmp_path: Path) -> None:
-    """O contrato real: o que sai daqui tem que entrar no parser do route_domain."""
+    """The real contract: what comes out here must go into route_domain's parser."""
     import sys
     root = _repo(tmp_path, "theokit-sdk")
     (root / "packages" / "sdk").mkdir(parents=True)
@@ -96,22 +96,22 @@ def test_rendered_table_is_parseable_by_route_domain(tmp_path: Path) -> None:
     assert "velho" not in table, "a tabela do outro ecossistema tem de sair"
     assert route("packages/sdk", table) == ("theokit-sdk", "agents/theokit-sdk.md")
     assert route("theokit-sdk", table) == ("theokit-sdk", "agents/theokit-sdk.md")
-    assert "## Verdicts" in rule.read_text(encoding="utf-8"), "o resto do arquivo sobrevive"
+    assert "## Verdicts" in rule.read_text(encoding="utf-8"), "the rest of the file survives"
 
 
 def test_render_names_the_specialist_files_that_must_exist(tmp_path: Path) -> None:
-    """route_domain sai 3 quando a tabela nomeia um agente que não está em disco —
-    trocar 88 blockers por esse erro não seria conserto."""
+    """route_domain exits 3 when the table names an agent that is not on disk —
+    trading 88 blockers for that error would not be a fix."""
     root = _repo(tmp_path, "theokit-sdk")
     table = render_table(detect_domains(root))
     assert "agents/theokit-sdk.md" in table
 
 
 # ---------------------------------------------------------------------------
-# Derivar do BACKLOG. A topologia dá o que EXISTE; ela não dá a SEMÂNTICA de
+# Deriving from the BACKLOG. Topology gives what EXISTS; it does not give the
 # propriedade. Medido no theokit-sdk: o registro declara `sdk-core`,
 # `repo-platform`, `sdk-satellites`, `edge-cli-acp` e `memory-adapters` — cinco
-# domínios que nenhum layout de diretório revela, e que os itens já carregam.
+# SEMANTICS of ownership — domains no directory layout reveals, which the items carry.
 # ---------------------------------------------------------------------------
 
 from detect_domains import domains_from_backlog  # noqa: E402
@@ -158,12 +158,12 @@ def test_domains_come_from_the_pairs_the_items_declare(tmp_path: Path) -> None:
 
 
 def test_a_repo_the_items_cite_but_disk_does_not_have_is_surfaced(tmp_path: Path) -> None:
-    """Um repo que só existe no registro roteia para código que ninguém abre —
-    a mesma divergência que a tabela do theo documenta em vez de apagar."""
+    """A repo that exists only in the registry routes to code nobody opens —
+    the same divergence a hand-kept table documents instead of deleting."""
     backlog = tmp_path / "BACKLOG.md"
     backlog.write_text(_BACKLOG, encoding="utf-8")
     root = _repo(tmp_path, "theokit-sdk")
-    (root / "packages" / "sdk").mkdir(parents=True)  # sdk-pty NÃO existe
+    (root / "packages" / "sdk").mkdir(parents=True)  # sdk-pty does NOT exist
 
     domains = domains_from_backlog(backlog, root)
     satellites = next(d for d in domains if d.name == "sdk-satellites")
@@ -172,8 +172,8 @@ def test_a_repo_the_items_cite_but_disk_does_not_have_is_surfaced(tmp_path: Path
 
 
 def test_one_repo_in_two_domains_is_refused(tmp_path: Path) -> None:
-    """O invariante que route_domain já exige: um repo, um domínio. Se o registro
-    contradiz isso, a tabela derivada rotearia por ordem de iteração."""
+    """The invariant route_domain already requires: one repo, one domain. If the
+    registry contradicts it, the derived table would route by iteration order."""
     backlog = tmp_path / "BACKLOG.md"
     backlog.write_text(_BACKLOG + """
 ## B-005 — cinco   [ ]
@@ -192,10 +192,11 @@ status: raw
 
 
 # ---------------------------------------------------------------------------
-# O escopo do registro. `backlog-init` Step 0.2 recusava rodar quando não havia
-# mais de um repo abaixo ("no umbrella detected — run at the workspace root"), o
-# que num projeto autônomo manda criar o BACKLOG na raiz do guarda-chuva, FORA
-# do projeto. O princípio ("um lugar para olhar") não exige guarda-chuva: exige
+# The registry's scope. `backlog-init` Step 0.2 refused to run when there was not
+# more than one repo below ("no umbrella detected — run at the workspace root"),
+# which in an autonomous project means creating the BACKLOG at the umbrella root,
+# OUTSIDE the project. The principle ("one place to look") does not require an
+# umbrella: it requires
 # um registro por escopo governado.
 # ---------------------------------------------------------------------------
 
@@ -211,7 +212,7 @@ def test_umbrella_scope_when_more_than_one_repo_lives_below(tmp_path: Path) -> N
 
 
 def test_single_repo_scope_is_valid_not_an_error(tmp_path: Path) -> None:
-    """theokit-sdk: um repo, seu próprio ciclo, seu próprio registro."""
+    """theokit-sdk: one repo, its own cycle, its own registry."""
     root = _repo(tmp_path, "theokit-sdk")
     (root / "packages" / "sdk").mkdir(parents=True)
     (root / "packages" / "sdk" / "package.json").write_text("{}", encoding="utf-8")
@@ -219,11 +220,11 @@ def test_single_repo_scope_is_valid_not_an_error(tmp_path: Path) -> None:
 
 
 def test_a_project_with_a_vendored_clone_is_still_single_repo(tmp_path: Path) -> None:
-    """O que decide é a raiz SER um repositório, não a contagem de `.git` abaixo.
+    """What decides is the root BEING a repository, not the count of `.git` below.
 
-    A guarda antiga contava `find -maxdepth 2 -name .git` e exigia `> 1`, então um
-    projeto com um clone vendorizado dentro passava por guarda-chuva e o registro
-    dele ia para o diretório de cima.
+    The old guard counted `find -maxdepth 2 -name .git` and required `> 1`, so a
+    project with a vendored clone inside passed as an umbrella and its registry
+    went to the directory above.
     """
     root = _repo(tmp_path, "projeto")
     _repo(root, "vendored-thing")
@@ -238,10 +239,10 @@ def test_umbrella_is_a_directory_that_is_not_itself_a_repo(tmp_path: Path) -> No
 
 
 # ---------------------------------------------------------------------------
-# Grill kit-domain-agents-install, decisão 2: derivar a tabela sem resolver o
-# especialista troca "tabela de outro ecossistema" por "tabela que aponta para
-# ninguém" — `route_domain` responde BROKEN ROUTE. O esqueleto sai do que foi
-# MEDIDO, e declara de si mesmo que não foi revisado.
+# Grill kit-domain-agents-install, decision 2: deriving the table without
+# resolving the specialist trades "another ecosystem's table" for "a table
+# pointing at nobody" — `route_domain` answers BROKEN ROUTE. The skeleton comes
+# from what was MEASURED, and declares of itself that it was not reviewed.
 # ---------------------------------------------------------------------------
 
 from detect_domains import UNREVIEWED_MARKER, render_specialist  # noqa: E402
@@ -253,11 +254,11 @@ def test_the_skeleton_declares_that_nobody_reviewed_it(tmp_path: Path) -> None:
     body = render_specialist(domain, root)
     assert "derived: true" in body
     assert "reviewed_by_human: false" in body
-    assert UNREVIEWED_MARKER in body, "o débito tem de ficar visível, não silencioso"
+    assert UNREVIEWED_MARKER in body, "the debt must stay visible, not silent"
 
 
 def test_the_skeleton_carries_only_measured_facts(tmp_path: Path) -> None:
-    """Nome, repos e linguagens detectadas. Nada de invariantes inventados."""
+    """Name, repos and detected languages. No invented invariants."""
     root = _repo(tmp_path, "meu-projeto")
     (root / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
     body = render_specialist(detect_domains(root)[0], root)
@@ -266,13 +267,13 @@ def test_the_skeleton_carries_only_measured_facts(tmp_path: Path) -> None:
 
 
 def test_the_judgement_sections_exist_and_are_empty(tmp_path: Path) -> None:
-    """As seções que exigem julgamento humano ficam presentes e vazias: um
-    especialista sem elas parece completo, e é aí que ele engana."""
+    """The sections requiring human judgement stay present and empty: a specialist
+    without them looks complete, and that is where it misleads."""
     root = _repo(tmp_path, "meu-projeto")
     body = render_specialist(detect_domains(root)[0], root)
-    for section in ("Invariantes", "O que é um achado real aqui", "Falsos positivos"):
+    for section in ("Invariants", "What a real finding looks like here", "False positives"):
         assert section in body, section
-    assert body.count(UNREVIEWED_MARKER) >= 3, "um marcador por seção de julgamento"
+    assert body.count(UNREVIEWED_MARKER) >= 3, "one marker per judgement section"
 
 
 def test_a_skeleton_is_routable(tmp_path: Path) -> None:

@@ -27,17 +27,17 @@ _CACHE_TTL_SECONDS = 24 * 3600  # 24h per thresholds default
 _HTTP_TIMEOUT_SECONDS = 5
 _USER_AGENT = "code-quality-skill/0.1 (audit only)"
 
-# --- ORÇAMENTO DE REDE PARA A EXECUÇÃO INTEIRA ------------------------------
-# Cada consulta tem timeout de 5 s, elas são seriais, e um resultado ambíguo
-# não é cacheado — corretamente: falha de rede não é prova de que o pacote não
-# existe. O que faltava era um limite para o CONJUNTO. Numa máquina offline ou
-# atrás de proxy, 100 imports desconhecidos custavam 500 s de espera que nunca
-# viravam resposta, em toda execução, indefinidamente.
+# --- NETWORK BUDGET FOR THE WHOLE RUN ----------------------------------------
+# Each query has a 5s timeout, they are serial, and an ambiguous result is not
+# cached — correctly: a network failure is not proof that the package does not
+# exist. What was missing was a bound for the SET. On an offline machine or
+# behind a proxy, 100 unknown imports cost 500s of waiting that never became an
+# answer, on every run, indefinitely.
 #
 # Depois de _MAX_CONSECUTIVE_FAILURES falhas seguidas, D2 declara a rede
-# indisponível e devolve None de imediato — o MESMO veredito ambíguo de antes,
-# sem a espera. Um único acerto zera o contador, para que um blip não desligue
-# o detector pelo resto da execução.
+# unavailable and returns None immediately — the SAME ambiguous verdict as
+# before, without the wait. A single hit resets the counter, so a blip does not
+# switch the detector off for the rest of the run.
 _MAX_CONSECUTIVE_FAILURES = 3
 _NETWORK_BUDGET_SECONDS = 30.0
 
@@ -45,13 +45,13 @@ _consecutive_failures = 0
 _network_seconds_spent = 0.0
 _network_unavailable = False
 
-# Cache em memória por ecossistema, escrito no disco UMA vez (ver flush_caches).
+# In-memory cache per ecosystem, written to disk ONCE (see flush_caches).
 _memory_cache: dict[str, dict[str, Any]] = {}
 _dirty_ecosystems: set[str] = set()
 
 
 def reset_network_state() -> None:
-    """Zera breaker, orçamento e cache em memória. Para testes e re-execução."""
+    """Resets breaker, budget and in-memory cache. For tests and re-runs."""
     global _consecutive_failures, _network_seconds_spent, _network_unavailable
     _consecutive_failures = 0
     _network_seconds_spent = 0.0
@@ -61,7 +61,7 @@ def reset_network_state() -> None:
 
 
 def network_is_available() -> bool:
-    """False quando o breaker abriu ou o orçamento da execução acabou."""
+    """False when the breaker has opened or the run's budget is exhausted."""
     if _network_unavailable:
         return False
     return _network_seconds_spent < _NETWORK_BUDGET_SECONDS
@@ -83,8 +83,8 @@ def _cache_path(ecosystem: str) -> Path:
 def _load_cache(ecosystem: str) -> dict[str, Any]:
     """Load the ecosystem cache. Returns empty dict on missing or corrupted (EC-3).
 
-    Memoizado por execução: `_cache_set` relia e reescrevia o arquivo inteiro a
-    cada resultado, o que é I/O quadrático no número de pacotes consultados.
+    Memoized per run: `_cache_set` re-read and rewrote the whole file on every
+    result, which is quadratic I/O in the number of packages queried.
     """
     if ecosystem in _memory_cache:
         return _memory_cache[ecosystem]
@@ -94,10 +94,10 @@ def _load_cache(ecosystem: str) -> dict[str, Any]:
 
 
 def flush_caches() -> None:
-    """Escreve no disco os ecossistemas que mudaram. Uma escrita por ecossistema.
+    """Writes the ecosystems that changed to disk. One write per ecosystem.
 
-    Registrado em `atexit` para que um script que só chama `package_exists_*`
-    não precise saber que este passo existe. EC-9 (escrita atômica) preservado.
+    Registered with `atexit` so a script that only calls `package_exists_*` does
+    not need to know this step exists. EC-9 (atomic write) preserved.
     """
     for ecosystem in sorted(_dirty_ecosystems):
         _save_cache(ecosystem, _memory_cache.get(ecosystem, {}))
@@ -169,17 +169,17 @@ def _lookup(
     false_statuses: tuple[int, ...] = (404,),
     require_json: bool = True,
 ) -> bool | None:
-    """Consulta com breaker. None = ambíguo — o mesmo veredito de sempre.
+    """Query with a breaker. None = ambiguous — the same verdict as always.
 
-    `require_json=False` existe para o proxy Go, cujo `@v/list` responde 200 com
-    uma lista em texto puro: exigir JSON ali transformaria toda consulta bem
-    sucedida em ambiguidade, e três delas seguidas desligariam o detector.
+    `require_json=False` exists for the Go proxy, whose `@v/list` answers 200 with
+    a plain-text list: demanding JSON there would turn every successful query into
+    ambiguity, and three of those in a row would switch the detector off.
 
-    Uma diferença de comportamento que vale declarar: um status inesperado (500,
-    por exemplo) agora é ambíguo em vez de "não existe". Antes, no caminho do
-    crates.io, um 500 fazia o candidato seguir para o próximo e a busca terminar
-    em False — um HARD finding a partir de uma indisponibilidade do registry, que
-    é exatamente o que EC-2 existe para impedir.
+    One behaviour difference worth declaring: an unexpected status (500, say) is
+    now ambiguous instead of "does not exist". Before, on the crates.io path, a
+    500 sent the candidate on to the next one and ended the search at False — a
+    HARD finding derived from a registry outage, which is exactly what EC-2 exists
+    to prevent.
     """
     global _consecutive_failures, _network_unavailable
     if not network_is_available():
@@ -304,12 +304,12 @@ def module_exists_on_go_proxy(import_path: str) -> bool | None:
     return result
 
 
-# A superfície pública deste módulo são as quatro consultas de registro. As
-# helpers de estado (`network_is_available`, `reset_network_state`) são internas:
-# uma é usada aqui mesmo, a outra existe para o teste reiniciar estado global entre
-# casos. Estavam declaradas como API pública e D3 as apontou como exports sem
-# consumidor — corretamente. `__all__` volta a descrever o que outros módulos usam;
-# os testes seguem importando por nome, que `__all__` não restringe.
+# This module's public surface is the four registry queries. The state helpers
+# (`network_is_available`, `reset_network_state`) are internal: one is used right
+# here, the other exists so tests can reset global state between cases. They were
+# declared as public API and D3 flagged them as exports with no consumer —
+# correctly. `__all__` goes back to describing what other modules use; the tests
+# keep importing by name, which `__all__` does not restrict.
 __all__ = [
     "flush_caches",
     "package_exists_on_pypi",

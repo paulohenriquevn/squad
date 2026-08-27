@@ -1,40 +1,40 @@
-"""D4 — mutation testing: os testes DETECTAM defeito, ou apenas passam?
+"""D4 — mutation testing: do the tests DETECT a defect, or merely pass?
 
-O DEFEITO QUE ISTO FIXA
------------------------
-`code-quality-golden-rule.md § 5` lista D4 como contrato LOCKED — mutmut para
-Python, Stryker para TypeScript, pisos em 60 e 80. Os quatro detectores
-devolviam a mesma coisa:
+THE DEFECT THIS FIXES
+---------------------
+`code-quality-golden-rule.md § 5` lists D4 as LOCKED contract — mutmut for
+Python, Stryker for TypeScript, floors at 60 and 80. All four detectors returned
+the same thing:
 
     return self.unavailable("d4", "mutation_low", "mutmut integration is not configured")
 
-Como `unavailable()` emite SOFT_CAP, `PASS` era inalcançável em qualquer projeto
-e o `/implement` convertia o soft cap em WARN. O gate que responde à única
-pergunta que cobertura não responde — *os testes detectam defeito?* — estava
-declarado, versionado, documentado, e não rodava.
+Because `unavailable()` emits SOFT_CAP, `PASS` was unreachable in any project and
+`/implement` converted the soft cap into a WARN. The gate that answers the one
+question coverage does not — *do the tests detect a defect?* — was declared,
+versioned, documented, and did not run.
 
-A PROVA DE QUE O GATE VALE
---------------------------
-Medido em 2026-08-26 com mutmut 3.5 num módulo de 4 linhas coberto por um teste
-tautológico (`assert isinstance(desconto(100, 10), float)`):
+THE PROOF THAT THE GATE IS WORTH IT
+-----------------------------------
+Measured 2026-08-26 with mutmut 3.5 on a 4-line module covered by a tautological
+test (`assert isinstance(discount(100, 10), float)`):
 
     {"killed": 1, "survived": 7, "total": 8, ...}   -> score 12.5%
 
-Cobertura de linha: 100%. É exatamente o teste que passa sem provar nada, e
-nenhum outro detector desta pilha o enxerga.
+Line coverage: 100%. It is exactly the test that passes without proving anything,
+and no other detector in this pile sees it.
 
-DOIS COMPORTAMENTOS DO MUTMUT QUE O DETECTOR NÃO PODE IGNORAR
--------------------------------------------------------------
-1. **Ele sai 0 mesmo quando não rodou nada.** Com os testes fora do padrão que
-   ele coleta, a saída traz `failed to collect stats. runner returned 5` e o
-   processo encerra com sucesso. Um detector que lesse o exit code registraria
-   um run que não aconteceu — o mesmo defeito que o gate de cobertura tinha ao
-   transformar exit code em medição.
-2. **Ele nem carrega sem `source_paths` configurado.** `mutmut --help` fora de um
-   projeto configurado levanta `FileNotFoundError` na importação. A ausência de
-   configuração é, portanto, indistinguível de ausência da ferramenta se o
-   detector só olhar para a exceção — e as duas exigem ações diferentes de quem
-   lê o relatório.
+TWO MUTMUT BEHAVIOURS THE DETECTOR CANNOT IGNORE
+------------------------------------------------
+1. **It exits 0 even when it ran nothing.** With tests outside the layout it
+   collects, the output carries `failed to collect stats. runner returned 5` and
+   the process ends successfully. A detector reading the exit code would record a
+   run that never happened — the same defect the coverage gate had when it turned
+   an exit code into a measurement.
+2. **It does not even load without `source_paths` configured.** `mutmut --help`
+   outside a configured project raises `FileNotFoundError` on import. Missing
+   configuration is therefore indistinguishable from a missing tool if the
+   detector only looks at the exception — and the two demand different actions
+   from whoever reads the report.
 """
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ import pytest
 
 from scripts.detectors import _mutation
 
-#: Saída real de `mutmut export-cicd-stats`, capturada 2026-08-26 (mutmut 3.5).
+#: Real output of `mutmut export-cicd-stats`, captured 2026-08-26 (mutmut 3.5).
 _STATS_STRONG = {"killed": 3, "survived": 0, "total": 3, "no_tests": 0, "skipped": 0,
                  "suspicious": 0, "timeout": 0, "check_was_interrupted_by_user": 0, "segfault": 0}
 _STATS_WEAK = {"killed": 1, "survived": 7, "total": 8, "no_tests": 0, "skipped": 0,
@@ -71,7 +71,7 @@ def _runner_missing(*_args, **_kwargs):
 
 
 # ---------------------------------------------------------------------------
-# Score -> severidade
+# Score -> severity
 # ---------------------------------------------------------------------------
 
 def test_a_strong_suite_produces_no_capping_finding(tmp_path: Path) -> None:
@@ -79,12 +79,12 @@ def test_a_strong_suite_produces_no_capping_finding(tmp_path: Path) -> None:
     findings = _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok)
     assert [f for f in findings if f.severity in ("SOFT_CAP", "SOFT_FLOOR", "HARD")] == []
     info = [f for f in findings if f.severity == "INFO"]
-    assert len(info) == 1, "o score medido tem de aparecer no relatório mesmo quando passa"
+    assert len(info) == 1, "the measured score must appear in the report even when it passes"
     assert "100.0%" in info[0].message
 
 
 def test_a_tautological_suite_is_capped(tmp_path: Path) -> None:
-    """O caso medido: cobertura de linha 100%, score de mutação 12.5%."""
+    """The measured case: 100% line coverage, 12.5% mutation score."""
     _python_project(tmp_path, _STATS_WEAK)
     findings = _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok)
     caps = [f for f in findings if f.severity == "SOFT_CAP"]
@@ -102,21 +102,21 @@ def test_a_medium_score_is_a_floor_not_a_cap(tmp_path: Path) -> None:
 
 
 def test_a_timeout_counts_as_detected(tmp_path: Path) -> None:
-    """Um mutante que trava o teste FOI detectado — a suíte reagiu à mutação."""
+    """A mutant that hangs the test WAS detected — the suite reacted to the mutation."""
     _python_project(tmp_path, {**_STATS_STRONG, "killed": 6, "timeout": 2, "survived": 2, "total": 10})
     findings = _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok)
     assert "80.0%" in [f.message for f in findings][0]
 
 
 def test_skipped_mutants_leave_the_denominator(tmp_path: Path) -> None:
-    """`skipped` é exclusão deliberada; mantê-los no denominador puniria a decisão."""
+    """`skipped` is deliberate exclusion; keeping them in the denominator would punish the decision."""
     _python_project(tmp_path, {**_STATS_STRONG, "killed": 5, "survived": 0, "skipped": 5, "total": 10})
     findings = _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok)
     assert "100.0%" in [f.message for f in findings][0]
 
 
 def test_uncovered_mutants_stay_in_the_denominator(tmp_path: Path) -> None:
-    """`no_tests` é mutante que teste nenhum alcança — não detectado, por definição."""
+    """`no_tests` is a mutant no test reaches — undetected, by definition."""
     _python_project(tmp_path, {**_STATS_STRONG, "killed": 5, "survived": 0, "no_tests": 5, "total": 10})
     findings = _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok)
     caps = [f for f in findings if f.severity == "SOFT_CAP"]
@@ -125,14 +125,14 @@ def test_uncovered_mutants_stay_in_the_denominator(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Os modos de falha que não podem virar verde
+# The failure modes that must not turn green
 # ---------------------------------------------------------------------------
 
 def test_zero_mutants_is_never_a_perfect_score(tmp_path: Path) -> None:
-    """Denominador zero é ausência de medição, não medição perfeita.
+    """A zero denominator is absence of measurement, not perfect measurement.
 
-    100% de zero mutantes é o pior resultado possível: verde absoluto sem que
-    nada tenha sido medido.
+    100% of zero mutants is the worst possible output: absolute green with nothing
+    measured.
     """
     _python_project(tmp_path, {**_STATS_STRONG, "killed": 0, "survived": 0, "total": 0})
     findings = _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok)
@@ -142,10 +142,10 @@ def test_zero_mutants_is_never_a_perfect_score(tmp_path: Path) -> None:
 
 
 def test_a_run_that_produced_no_stats_is_unavailable_not_clean(tmp_path: Path) -> None:
-    """Medido: mutmut sai 0 mesmo quando o pytest não coletou teste nenhum.
+    """Measured: mutmut exits 0 even when pytest collected no test at all.
 
-    Sem o arquivo de stats não houve medição — e o detector tem de dizer isso em
-    vez de herdar o exit code como veredito.
+    Without the stats file there was no measurement — and the detector has to say
+    so instead of inheriting the exit code as a verdict.
     """
     _python_project(tmp_path, None)
     findings = _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok)
@@ -163,8 +163,8 @@ def test_a_missing_tool_is_reported_as_such(tmp_path: Path) -> None:
 
 
 def test_a_project_without_mutation_config_says_so(tmp_path: Path) -> None:
-    """Sem `[mutmut] source_paths`, a ferramenta nem carrega — e a ação de quem lê
-    o relatório é configurar, não instalar."""
+    """Without `[mutmut] source_paths` the tool does not even load — and the action
+    for whoever reads the report is to configure, not to install."""
     (tmp_path / "calc").mkdir()
     (tmp_path / "calc" / "core.py").write_text("def f(x):\n    return x\n", encoding="utf-8")
 
@@ -179,7 +179,7 @@ def test_a_project_without_mutation_config_says_so(tmp_path: Path) -> None:
 def test_a_corrupt_stats_file_is_unavailable_not_zero(tmp_path: Path) -> None:
     _python_project(tmp_path, None)
     (tmp_path / "mutants").mkdir(exist_ok=True)
-    (tmp_path / "mutants" / "mutmut-cicd-stats.json").write_text("{nao é json", encoding="utf-8")
+    (tmp_path / "mutants" / "mutmut-cicd-stats.json").write_text("{not json", encoding="utf-8")
 
     findings = _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok)
 
@@ -228,8 +228,8 @@ def test_typescript_without_stryker_config_says_so(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("language", ["rust", "go"])
 def test_deferred_languages_declare_the_deferral(tmp_path: Path, language: str) -> None:
-    """A golden rule § 5 declara Rust e Go adiados. Adiado e declarado é honesto;
-    adiado e apresentado como implementado é o defeito que este módulo fecha."""
+    """The golden rule § 5 declares Rust and Go deferred. Deferred and declared is
+    honest; deferred and presented as implemented is the defect this module closes."""
     findings = _mutation.detect_mutation_score(language, tmp_path, runner=_runner_ok)
     assert len(findings) == 1
     assert findings[0].severity == "SOFT_CAP"
@@ -237,8 +237,8 @@ def test_deferred_languages_declare_the_deferral(tmp_path: Path, language: str) 
 
 
 def test_floors_come_from_the_caller_not_from_a_constant(tmp_path: Path) -> None:
-    """`code-quality-thresholds.txt` documenta `mutation.score_floor_low/high`.
-    Um piso hard-coded faria o arquivo mentir sobre ser configurável."""
+    """`code-quality-thresholds.txt` documents `mutation.score_floor_low/high`.
+    A hard-coded floor would make that file lie about being configurable."""
     _python_project(tmp_path, {**_STATS_STRONG, "killed": 7, "survived": 3, "total": 10})
 
     strict = _mutation.detect_mutation_score(
@@ -246,8 +246,8 @@ def test_floors_come_from_the_caller_not_from_a_constant(tmp_path: Path) -> None
     lenient = _mutation.detect_mutation_score(
         "python", tmp_path, floor_low=50, floor_high=60, runner=_runner_ok)
 
-    assert [f.severity for f in strict] == ["SOFT_CAP"], "70% abaixo de um piso de 75 é cap"
-    assert [f.severity for f in lenient] == ["INFO"], "70% acima de um piso de 60 passa"
+    assert [f.severity for f in strict] == ["SOFT_CAP"], "70% below a floor of 75 is a cap"
+    assert [f.severity for f in lenient] == ["INFO"], "70% above a floor of 60 passes"
 
 
 def test_findings_carry_a_wellformed_allowlist_key(tmp_path: Path) -> None:

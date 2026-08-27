@@ -22,7 +22,7 @@
 #   - Prints summary: created vs overwritten counts
 #
 # What this script does NOT do:
-#   - Does not delete anything. Skills APOSENTADAS pelo kit sao MOVIDAS para
+#   - Does not delete anything. Skills RETIRED by the kit are MOVED to
 #     .claude/.patch-backups/retired/, nunca apagadas.
 #   - Does not touch settings.json, settings.local.json, knowledge-base/, agents/
 #   - Does not touch skills NOT in the manifest (preserves SEPA-knowledge etc)
@@ -280,9 +280,9 @@ while IFS= read -r line; do
           SKIPPED=$((SKIPPED + 1))
           continue
         fi
-        # Mesma guarda do ramo de arquivo. Entradas de DIRETORIO sao o caminho
-        # por onde o conserto do detector D2 se perdeu: `skills/code-quality/`
-        # varre a pasta inteira, e a reversao nao dizia uma palavra.
+        # Same guard as the file branch. DIRECTORY entries are the path by which
+        # the D2 detector fix was lost: `skills/code-quality/` sweeps the whole
+        # folder, and the reversal did not say a word.
         if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1 &&
            ! git -C "$TARGET" diff --quiet -- ".claude/$line$rel" 2>/dev/null; then
           mkdir -p "$BACKUP_DIR/$(dirname "$line$rel")"
@@ -315,11 +315,11 @@ while IFS= read -r line; do
       SKIPPED=$((SKIPPED + 1))
       continue
     fi
-    # O consumidor mexeu num arquivo do kit? Guardar antes de sobrescrever.
-    # Sem isto o patch destroi conserto local em silencio -- aconteceu de
-    # verdade: um consumidor corrigiu dois defeitos do detector D2 (112 achados,
-    # zero reais) com teste de regressao, e a propagacao seguinte reverteu tudo
-    # sem uma linha de aviso. O trabalho so nao se perdeu porque estava commitado.
+    # Did the consumer touch a kit file? Save it before overwriting. Without this
+    # the patch destroys a local fix in silence -- which happened, for
+    # real: a consumer fixed two D2 detector defects (112 findings, zero real)
+    # with a regression test, and the next propagation reverted everything without
+    # a line of warning. The work survived only because it had been committed.
     if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1 &&
        ! git -C "$TARGET" diff --quiet -- ".claude/$line" 2>/dev/null; then
       LOCAL_EDIT=1
@@ -360,11 +360,11 @@ if [ "$OVERWRITTEN" -gt 0 ] && [ "${VERBOSE:-0}" = "1" ]; then
 fi
 if [ "$CLOBBERED" -gt 0 ]; then
   echo
-  echo "!!! $CLOBBERED arquivo(s) do kit tinham MUDANCA LOCAL nao-commitada e foram sobrescritos:"
+  echo "!!! $CLOBBERED kit file(s) had UNCOMMITTED LOCAL CHANGES and were overwritten:"
   printf '    ~ %s\n' "${CLOBBERED_FILES[@]}"
-  echo "    Copias preservadas em: $BACKUP_DIR"
-  echo "    Se algum for conserto de defeito do kit, leve-o para a FONTE -- aqui ele"
-  echo "    sera revertido a cada propagacao."
+  echo "    Copies preserved in: $BACKUP_DIR"
+  echo "    If any of them fixes a kit defect, take it to the SOURCE -- here it"
+  echo "    will be reverted on every propagation."
 fi
 
 if [ "$MISSING" -gt 0 ]; then
@@ -372,17 +372,17 @@ if [ "$MISSING" -gt 0 ]; then
   printf '  ? %s\n' "${MISSING_FILES[@]}"
 fi
 
-# --- skills APOSENTADAS ------------------------------------------------------
-# O kit remove skills ao evoluir, mas o patch nunca deleta -- entao a cauda
-# aposentada sobrevive para sempre no consumidor e o check_xrefs a acusa de orfa,
-# a cada execucao, para sempre. Medido nos tres consumidores em 2026-08-03:
-# skill-writer, skill-validator e skill-register, aposentados quando adotamos o
+# --- RETIRED skills ----------------------------------------------------------
+# The kit removes skills as it evolves, but the patch never deletes -- so the
+# retired tail survives forever in the consumer and check_xrefs reports it as
+# orphaned, on every run, forever. Measured on the three consumers 2026-08-03:
+# skill-writer, skill-validator and skill-register, retired when we adopted the
 # skill-creator oficial, ainda produziam 3 WARN e faziam --strict falhar.
 #
-# NAO deletamos: MOVEMOS para .claude/.patch-backups/retired/<timestamp>/. A
-# garantia "o patch nunca destroi" continua de pe, e a arvore fica limpa.
+# We do NOT delete: we MOVE to .claude/.patch-backups/retired/<timestamp>/. The
+# "the patch never destroys" guarantee still stands, and the tree stays clean.
 RETIRED_SKILLS=(
-  "skill-writer"      # aposentada 2026-06: substituida pelo skill-creator oficial
+  "skill-writer"      # retired 2026-06: replaced by the official skill-creator
   "skill-validator"   # idem
   "skill-register"    # idem
 )
@@ -392,7 +392,7 @@ for s in "${RETIRED_SKILLS[@]}"; do
     mkdir -p "$BACKUP_DIR/retired"
     mv "$ECO/skills/$s" "$BACKUP_DIR/retired/$s"
     RETIRED_MOVED=$((RETIRED_MOVED + 1))
-    echo "  - skills/$s/ (aposentada; movida para .patch-backups/retired/)"
+    echo "  - skills/$s/ (retired; moved to .patch-backups/retired/)"
   fi
 done
 

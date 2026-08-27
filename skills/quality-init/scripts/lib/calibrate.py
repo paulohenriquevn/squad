@@ -209,23 +209,24 @@ def calibrate_thresholds(
 
 
 # ---------------------------------------------------------------------------
-# Taxa de bloqueio — o número que faltava para a calibração ser verificável
+# Blocking rate — the number the calibration was missing to be verifiable
 # ---------------------------------------------------------------------------
 
-#: Acima disto o gate reprova código demais para ser ligado como está. Não é um
-#: percentil observado: é o ponto em que a experiência de quem trabalha vira
-#: "todo edit é bloqueado", e um gate assim é desligado — o que deixa o hook no
-#: settings, a confiança de que ele protege algo, e um bypass no dedo de quem usa.
+#: Above this the gate rejects too much code to be switched on as calibrated. It is
+#: not an observed percentile: it is the point where the experience of working turns
+#: into "every edit is blocked", and a gate like that gets switched off — which
+#: leaves the hook in settings, the belief that it protects something, and a bypass
+#: in the hand of whoever uses it.
 BLOCKING_RATE_CEILING = 10.0
 
-#: Abaixo disto o gate nasce praticamente verde e só reage ao que PIORA, que é o
-#: comportamento que a calibração p90 promete.
+#: Below this the gate starts practically green and only reacts to what gets WORSE,
+#: which is the behaviour the p90 calibration promises.
 BLOCKING_RATE_READY = 5.0
 
 
 @dataclass
 class BlockingRate:
-    """Quanto do código existente o gate calibrado reprovaria, hoje."""
+    """How much of the existing code the calibrated gate would reject, today."""
 
     files_measured: int = 0
     files_blocked: int = 0
@@ -236,13 +237,13 @@ class BlockingRate:
 
 
 def _file_violates(path: Path, thresholds: "ThresholdCalibration") -> bool:
-    """True quando qualquer métrica do arquivo excede o limiar correspondente.
+    """True when any of the file's metrics exceeds the corresponding threshold.
 
-    Mede com `_measure_python_metrics`, o MESMO instrumento que produziu os p90 da
-    calibração — assim a taxa é exata para os números que a calibração usou. O que
-    esta conta NÃO cobre é a duplicação, que o hook gerado também checa e a
-    calibração nunca mediu: a taxa real pode ser um pouco maior que a reportada, e
-    nunca menor.
+    Measures with `_measure_python_metrics`, the SAME instrument that produced the
+    calibration's p90 — so the rate is exact for the numbers the calibration used.
+    What this count does NOT cover is duplication, which the generated hook also
+    checks and the calibration never measured: the real rate may be slightly higher
+    than reported, and never lower.
     """
     metrics = _measure_python_metrics([path])
     checks = (
@@ -286,8 +287,8 @@ def measure_blocking_rate(
     if not py_files:
         return BlockingRate(
             verdict="NOT_MEASURED",
-            advice="nenhum arquivo Python medido — a taxa de bloqueio é desconhecida, "
-                   "que não é o mesmo que zero",
+            advice="no Python file measured — the blocking rate is unknown, "
+                   "which is not the same as zero",
         )
 
     blocked = [f for f in py_files if _file_violates(f, thresholds)]
@@ -295,20 +296,21 @@ def measure_blocking_rate(
 
     if percent <= BLOCKING_RATE_READY:
         verdict, advice = "READY", (
-            "o gate nasce praticamente verde e passa a reagir ao que piorar — que é o "
-            "comportamento que a calibração p90 promete"
+            "the gate starts practically green and reacts to what gets worse — which "
+            "is the behaviour the p90 calibration promises"
         )
     elif percent <= BLOCKING_RATE_CEILING:
         verdict, advice = "REVIEW", (
-            f"{len(blocked)} arquivos existentes seriam bloqueados. Revise-os antes de "
-            "ligar o hook, ou afrouxe o limiar que mais dispara"
+            f"{len(blocked)} existing files would be blocked. Review them before "
+            "switching the hook on, or loosen the threshold that fires most"
         )
     else:
         verdict, advice = "TOO_STRICT", (
-            f"{percent}% do código existente seria bloqueado. Um gate que nasce vermelho "
-            "é desligado na primeira hora, e o que sobra é pior que gate nenhum: o hook "
-            "no settings, a confiança de que ele protege alguma coisa, e um bypass no "
-            "dedo de quem trabalha. Afrouxe os limiares ou trate os arquivos primeiro"
+            f"{percent}% of the existing code would be blocked. A gate that starts red "
+            "is switched off within the hour, and what remains is worse than no gate: "
+            "the hook in settings, the belief that it protects something, and a bypass "
+            "in the hand of whoever works there. Loosen the thresholds or deal with the "
+            "files first"
         )
 
     return BlockingRate(

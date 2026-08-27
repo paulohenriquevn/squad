@@ -1,29 +1,30 @@
-"""O CI tem de reprovar o que os gates reprovam.
+"""CI must fail what the gates fail.
 
-O DEFEITO QUE ISTO FIXA
------------------------
-`check_xrefs.py` tem dois modos. Sem `--strict`, um achado de severidade WARN
-é impresso e o processo sai 0 — a saída literal traz a linha do WARN e, logo
+THE DEFECT THIS FIXES
+---------------------
+`check_xrefs.py` has two modes. Without `--strict`, a WARN-severity finding is
+printed and the process exits 0 — the literal output carries the WARN line and,
+right
 abaixo, `Overall: PASS`. Com `--strict`, o mesmo achado sai 1.
 
-`scripts/install.sh` sempre chamou com `--strict`. O workflow chamava sem. O
-resultado, medido em 2026-08-26: uma instalação a partir de um clone limpo
-nascia com `rules/cycle-maintenance.md` apontando para um `agents/README.md`
+`scripts/install.sh` always called it with `--strict`. The workflow called it
+without. The result, measured 2026-08-26: an installation from a clean clone was
+born with `rules/cycle-maintenance.md` pointing at an `agents/README.md`
 inexistente, o instalador dizia `check_xrefs.py: FAIL`, e o CI do mesmo commit
 ficava verde. O gate olhou, viu e aprovou.
 
-POR QUE O TESTE LÊ O COMANDO DO WORKFLOW EM VEZ DE PROCURAR A FLAG
-------------------------------------------------------------------
-Um teste que fizesse `assert "--strict" in ci_yml` casaria com a flag escrita
-em qualquer lugar do arquivo — num comentário, num passo desativado, num job
-que não roda. Ele afirmaria sobre o TEXTO do workflow, não sobre o que o
+WHY THE TEST READS THE WORKFLOW'S COMMAND INSTEAD OF LOOKING FOR THE FLAG
+--------------------------------------------------------------------------
+A test doing `assert "--strict" in ci_yml` would match the flag written anywhere
+in the file — in a comment, in a disabled step, in a job that does not run. It
+would assert about the workflow's TEXT, not about what the
 workflow faz.
 
-Então este módulo extrai o comando exato de cada passo e o EXECUTA contra uma
-árvore deliberadamente corrompida. O que se afirma é o comportamento: dado um
-defeito real, o comando que o CI roda precisa sair diferente de zero. Isso
-continua valendo se alguém trocar `--strict` por outro mecanismo — que é
-exatamente o que um teste de comportamento deve permitir.
+So this module extracts each step's exact command and RUNS it against a
+deliberately corrupted tree. What is asserted is behaviour: given a real defect,
+the command CI runs must exit non-zero. That keeps holding if someone replaces
+`--strict` with another mechanism — which is exactly what a behaviour test should
+allow.
 """
 from __future__ import annotations
 
@@ -48,59 +49,60 @@ def _steps() -> list[dict]:
 
 def _step_running(fragment: str) -> dict:
     matches = [s for s in _steps() if fragment in (s.get("run") or "")]
-    assert matches, f"nenhum passo do CI executa {fragment!r} — o gate saiu do workflow"
+    assert matches, f"no CI step runs {fragment!r} — the gate left the workflow"
     assert len(matches) == 1, f"{fragment!r} aparece em {len(matches)} passos; esperado 1"
     return matches[0]
 
 
 @pytest.fixture()
 def broken_kit(versioned_kit: Path, tmp_path: Path) -> Path:
-    """Uma cópia do kit com exatamente o defeito que passou verde.
+    """A copy of the kit with exactly the defect that passed green.
 
-    `agents/README.md` é citado por `rules/cycle-maintenance.md`. Removê-lo
-    reproduz o estado em que todo clone limpo nascia antes da correção.
+    `agents/README.md` is cited by `rules/cycle-maintenance.md`. Removing it
+    reproduces the state every clean clone was born in before the fix.
     """
     kit = tmp_path / "broken-kit"
     shutil.copytree(versioned_kit, kit)
     readme = kit / "agents" / "README.md"
     assert readme.is_file(), (
-        "agents/README.md não está versionado — este teste não consegue "
-        "reproduzir o defeito, e o kit já está quebrado por outro motivo."
+        "agents/README.md is not versioned — this test cannot reproduce the "
+        "defect, and the kit is already broken for another reason."
     )
     readme.unlink()
     return kit
 
 
 def test_ci_xref_step_rejects_a_broken_reference(broken_kit: Path):
-    """O comando de cross-reference do CI, executado sobre uma árvore quebrada, precisa falhar."""
+    """CI's cross-reference command, run against a broken tree, must fail."""
     run = _step_running("check_xrefs.py")["run"].strip()
     proc = subprocess.run(run, shell=True, cwd=broken_kit, capture_output=True, text=True)  # noqa: PLW1510
     assert proc.returncode != 0, (
-        "O passo de cross-reference do CI aprovou uma referência quebrada.\n"
-        f"comando: {run}\n"
-        f"saída:\n{proc.stdout}\n{proc.stderr}"
+        "CI's cross-reference step approved a broken reference.\n"
+        f"command: {run}\n"
+        f"output:\n{proc.stdout}\n{proc.stderr}"
     )
 
 
 def test_ci_xref_step_accepts_the_healthy_kit(versioned_kit: Path):
-    """E precisa aprovar a árvore íntegra — senão o teste acima passaria por acidente."""
+    """And it must approve the intact tree — otherwise the test above would pass by accident."""
     run = _step_running("check_xrefs.py")["run"].strip()
     proc = subprocess.run(run, shell=True, cwd=versioned_kit, capture_output=True, text=True)  # noqa: PLW1510
     assert proc.returncode == 0, (
-        f"O CI reprova o kit íntegro:\n{proc.stdout}\n{proc.stderr}"
+        f"CI fails the intact kit:\n{proc.stdout}\n{proc.stderr}"
     )
 
 
 def test_ci_runs_the_install_contract(_broken: None = None):
-    """A regressão de instalação limpa precisa estar no workflow, não só no disco.
+    """The clean-install regression must be in the workflow, not only on disk.
 
-    `tests/test_clean_install.py` é o único teste que enxerga o que outra
-    máquina receberia. Se ele não roda no CI, volta a ser um arquivo que passou
+    `tests/test_clean_install.py` is the only test that sees what another machine
+    would receive. If it does not run in CI, it goes back to being a file that
+    passed
     uma vez.
     """
     runs = " ".join((s.get("run") or "") for s in _steps())
     assert "run_slice_tests.sh" in runs or "test_clean_install" in runs, (
-        "nenhum passo do CI executa a suíte que contém o contrato de instalação"
+        "no CI step runs the suite containing the installation contract"
     )
 
 
@@ -109,12 +111,12 @@ def _jobs() -> dict:
 
 
 def test_the_root_suite_is_not_run_twice_in_the_same_job():
-    """Rodar a mesma suíte duas vezes não mede nada a mais — só custa o dobro.
+    """Running the same suite twice measures nothing more — it only costs double.
 
-    O job principal executava `run_slice_tests.sh` (que já roda `tests`) e, no
-    passo seguinte, `pytest tests` de novo com cobertura. Medido 2026-08-26: 45 s
-    duplicados por execução. A cobertura passou a ser calculada na única
-    execução, com o mesmo limiar cobrado.
+    The main job ran `run_slice_tests.sh` (which already runs `tests`) and, in the
+    next step, `pytest tests` again with coverage. Measured 2026-08-26: 45s
+    duplicated per run. Coverage is now computed in the single run, with the same
+    threshold enforced.
     """
     for name, job in _jobs().items():
         runs = [(s.get("run") or "") for s in (job.get("steps") or [])]
@@ -128,12 +130,12 @@ def test_the_root_suite_is_not_run_twice_in_the_same_job():
             and " tests" in r
         ]
         assert not standalone_root, (
-            f"job {name!r} roda a suíte raiz duas vezes: {standalone_root}"
+            f"job {name!r} runs the root suite twice: {standalone_root}"
         )
 
 
 def test_coverage_threshold_survives_the_deduplication():
-    """A desduplicação não pode ter levado o limiar de cobertura junto."""
+    """The de-duplication must not have taken the coverage threshold with it."""
     runs = " ".join((s.get("run") or "") for s in _steps())
     env = " ".join(
         f"{k}={v}"
@@ -142,16 +144,16 @@ def test_coverage_threshold_survives_the_deduplication():
         for k, v in (step.get("env") or {}).items()
     )
     assert "cov-fail-under" in runs or "ROOT_SUITE_COV" in runs + env, (
-        "nenhum passo do CI cobra um limiar de cobertura"
+        "no CI step enforces a coverage threshold"
     )
 
 
 def test_python_setup_caches_dependencies():
-    """Quatro jobs reinstalando as mesmas dependências a cada execução é custo puro."""
+    """Four jobs reinstalling the same dependencies on every run is pure cost."""
     missing = []
     for name, job in _jobs().items():
         for step in job.get("steps") or []:
             if str(step.get("uses", "")).startswith("actions/setup-python"):
                 if not (step.get("with") or {}).get("cache"):
                     missing.append(name)
-    assert not missing, f"setup-python sem cache de dependências nos jobs: {missing}"
+    assert not missing, f"setup-python without dependency cache in jobs: {missing}"

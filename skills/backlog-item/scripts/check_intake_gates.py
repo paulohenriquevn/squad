@@ -1,33 +1,34 @@
 #!/usr/bin/env python3
 """Gates G1 e G2 do intake, executados em vez de lembrados.
 
-POR QUE ESTE SCRIPT EXISTE
---------------------------
-`rules/cycle-backlog.md` declara cinco hard gates e a skill não embarcava um
-único script. G3 (domínio único), G4 (DoD verificável) e G5 (sem justificativa
-por prior art) são julgamento e seguem conversacionais — é o desenho certo, e a
-bateria de evals cobre exatamente isso. G1 e G2 não são julgamento:
+WHY THIS SCRIPT EXISTS
+----------------------
+`rules/cycle-backlog.md` declares five hard gates and the skill shipped not a
+single script. G3 (single domain), G4 (verifiable DoD) and G5 (no prior-art
+justification) are judgement and stay conversational — that is the right design,
+and the eval battery covers exactly that. G1 and G2 are not judgement:
 
-  G1 — o `repo` resolve para um domínio com especialista em disco.
-       `scripts/route_domain.py` já fazia isso, com 23 testes, e a skill não o
-       chamava: instruía um `python3 -c` inline.
-  G2 — a busca de dedup RODOU. A skill instruía um `grep` cuja execução ninguém
-       verificava depois. Um gate que depende de o agente lembrar não é um gate;
-       é uma intenção.
+  G1 — the `repo` resolves to a domain with a specialist on disk.
+       `scripts/route_domain.py` already did that, with 23 tests, and the skill
+       did not call it: it instructed an inline `python3 -c`.
+  G2 — the dedup search RAN. The skill instructed a `grep` whose execution nobody
+       verified afterwards. A gate that depends on the agent remembering is not a
+       gate; it is an intention.
 
-O que este script NÃO faz: decidir. Ele roteia, busca, e devolve os candidatos
-com a ação que a regra prescreve para cada status. A escolha entre `ITEM_MERGED`,
-`supersedes` e `regression_of` continua sendo do humano no grill — um keyword hit
-é candidato, não veredito, e automatizar essa decisão inventaria fusões erradas.
+What this script does NOT do: decide. It routes, searches, and returns the
+candidates with the action the rule prescribes for each status. The choice between
+`ITEM_MERGED`, `supersedes` and `regression_of` stays with the human in the grill
+— a keyword hit is a candidate, not a verdict, and automating that decision would
+invent wrong merges.
 
 Uso:
     python3 check_intake_gates.py --backlog BACKLOG.md --repo theo-lens \\
         --term ingest --term latencia
 
 Exit codes:
-    0 — G1 e G2 passaram, nenhum candidato de dedup
-    1 — G1 recusou o item (repo fora da tabela de roteamento)
-    2 — erro de execução (BACKLOG.md ausente, tabela ilegível)
+    0 — G1 and G2 passed, no dedup candidate
+    1 — G1 refused the item (repo outside the routing table)
+    2 — execution error (BACKLOG.md missing, table unreadable)
     3 — G2 encontrou candidatos: leia cada bloco antes de alocar um id novo
 """
 from __future__ import annotations
@@ -41,9 +42,9 @@ from pathlib import Path
 from typing import Any
 
 
-#: Uma definição do formato do bloco, importada de quem já a mantém. Um segundo
-#: regex aqui divergiria em silêncio, e os dois discordariam sobre o que o
-#: registro contém — o defeito exato que o índice do backlog existe para expor.
+#: One definition of the block format, imported from whoever already maintains it.
+#: A second regex here would diverge silently, and the two would disagree about
+#: what the registry contains — the exact defect the backlog index exists to expose.
 def _load_block_re() -> Any:
     for base in (
         Path(__file__).resolve().parents[2] / "backlog-review" / "scripts",
@@ -55,14 +56,14 @@ def _load_block_re() -> Any:
 
             return BLOCK_RE
     raise FileNotFoundError(
-        "check_backlog_structure.py não encontrado — o parser de blocos do BACKLOG "
-        "é mantido lá e não é duplicado aqui"
+        "check_backlog_structure.py not found — the BACKLOG block parser is "
+        "maintained there and is not duplicated here"
     )
 
 
 STATUS_RE = re.compile(r"^status:\s*`?([a-z_]+)`?", re.MULTILINE)
 
-#: O que a regra manda fazer para cada status atingido pela busca
+#: What the rule prescribes for each status the search hits
 #: (`rules/cycle-backlog.md § Chain`, Step 2 do SKILL).
 ACTION_BY_STATUS = {
     "raw": "ITEM_MERGED",
@@ -74,14 +75,14 @@ ACTION_BY_STATUS = {
 
 
 def _route(repo: str, project_root: Path) -> dict[str, Any]:
-    """G1 — delega à tabela de roteamento, que é a fonte única."""
+    """G1 — delegates to the routing table, which is the single source."""
     for candidate in (project_root / "scripts" / "route_domain.py",
                       project_root / ".claude" / "scripts" / "route_domain.py"):
         if candidate.is_file():
             script = candidate
             break
     else:
-        return {"routed": False, "error": "route_domain.py não encontrado"}
+        return {"routed": False, "error": "route_domain.py not found"}
 
     result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(script), repo, "--json"],
@@ -90,13 +91,13 @@ def _route(repo: str, project_root: Path) -> dict[str, Any]:
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError:
-        return {"routed": False, "error": result.stderr.strip() or "saída ilegível"}
+        return {"routed": False, "error": result.stderr.strip() or "unreadable output"}
     payload.setdefault("routed", False)
     return payload
 
 
 def _dedup(backlog_text: str, terms: list[str]) -> list[dict[str, Any]]:
-    """G2 — todo bloco cujo título ou corpo casa qualquer termo (case-insensitive)."""
+    """G2 — every block whose title or body matches any term (case-insensitive)."""
     block_re = _load_block_re()
     matches = list(block_re.finditer(backlog_text))
     lowered = [t.lower() for t in terms if t.strip()]
@@ -128,23 +129,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backlog", type=Path, required=True)
     parser.add_argument("--repo", required=True, help="o campo `repo:` do item (gate G1)")
     parser.add_argument("--term", action="append", default=[],
-                        help="substantivo significativo da descrição (repetível)")
+                        help="meaningful noun from the description (repeatable)")
     parser.add_argument("--project-root", type=Path, default=None)
     args = parser.parse_args(argv)
 
     if not args.backlog.is_file():
         print(json.dumps({
             "verdict": "ERROR",
-            "message": f"BACKLOG.md não encontrado em {args.backlog} — rode /backlog-init primeiro",
+            "message": f"BACKLOG.md not found at {args.backlog} — run /backlog-init first",
         }, indent=2, ensure_ascii=False))
         return 2
 
     project_root = args.project_root or Path.cwd()
     g1 = _route(args.repo, project_root)
 
-    # O nome do repo é SEMPRE um termo de busca. Deixar isso a cargo de quem chama
-    # é como o repo saía da busca sem ninguém notar — e o repo é o termo que mais
-    # colide num registro que cobre 21 deles.
+    # The repo name is ALWAYS a search term. Leaving that to the caller is how the
+    # repo dropped out of the search with nobody noticing — and the repo is the term
+    # that collides most in a registry covering 21 of them.
     terms = list(dict.fromkeys([*args.term, args.repo]))
     try:
         candidates = _dedup(args.backlog.read_text(encoding="utf-8-sig"), terms)

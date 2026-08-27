@@ -1,14 +1,14 @@
-"""A enumeração de fontes PODA na travessia, não filtra depois.
+"""Source enumeration PRUNES during the walk, it does not filter afterwards.
 
 `_enumerate_source_files` descia em `node_modules`, `.git` e `.venv` inteiros e
-só então descartava o que havia encontrado. O resultado era o mesmo; o custo,
-não. Medido em 2026-08-26 num repositório de 56.128 arquivos (40 mil deles em
+and only then discarded what it had found. The result was the same; the cost was
+not. Measured 2026-08-26 on a 56,128-file repository (40k of them in
 `node_modules`): 326 ms percorrendo tudo contra 0,4 ms podando — 832x, uma vez
 por linguagem habilitada.
 
-Esta é a mesma lição que o CHANGELOG já registra em `check_wiring.py`
-(1080 ms -> 13 ms, 83x). Os testes abaixo fixam a FORMA de onde a velocidade
-vem, porque asserção de duração é teste instável em máquina carregada.
+This is the same lesson the CHANGELOG already records for `check_wiring.py`
+(1080 ms -> 13 ms, 83x). The tests below pin the SHAPE the speed comes from,
+because a duration assertion is a flaky test on a loaded machine.
 """
 from __future__ import annotations
 
@@ -36,17 +36,17 @@ def test_finds_project_sources(tmp_path):
 
 
 def test_does_not_traverse_skipped_trees(tmp_path, monkeypatch):
-    """Sem `rglob` sobre a árvore inteira — a poda tem de acontecer durante.
+    """No `rglob` over the whole tree — the pruning has to happen during it.
 
     Um `rglob("*")` seguido de filtro produz a resposta certa pelo caminho
-    errado: ele já desceu em tudo que ia descartar. Proibir a primitiva é o que
-    torna a poda verificável sem cronômetro.
+    way: it has already descended into everything it was going to discard. Banning
+    the primitive is what makes the pruning verifiable without a stopwatch.
     """
     _tree(tmp_path)
 
     def forbidden(self, *args, **kwargs):
         raise AssertionError(
-            "rglob sobre a árvore inteira: a poda voltou a acontecer depois da travessia"
+            "rglob over the whole tree: pruning went back to happening after the walk"
         )
 
     monkeypatch.setattr(pathlib.Path, "rglob", forbidden)

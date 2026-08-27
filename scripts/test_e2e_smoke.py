@@ -51,16 +51,16 @@ _SYNTAX_SKIP_DIRS = frozenset({
 
 
 def check_python_syntax(ecosystem_dir: Path) -> tuple[bool, list[str]]:
-    """Compila em memória — nada é escrito no alvo.
+    """Compiles in memory — nothing is written to the target.
 
-    `py_compile.compile` GRAVA o `.pyc` como efeito colateral, e isso custava as
-    duas coisas: 267 ms dos 693 ms deste script (medido 2026-08-26, 259
-    arquivos) e a reintrodução do cache que o `install.sh` acabara de excluir da
-    cópia — o motivo de `prune_caches` existir. Verificar sintaxe não exige
-    gravar bytecode: `compile()` responde a mesma pergunta sem tocar no disco.
+    `py_compile.compile` WRITES the `.pyc` as a side effect, and that cost both
+    things: 267 ms of this script's 693 ms (measured 2026-08-26, 259 files) and
+    the reintroduction of the cache `install.sh` had just excluded from the copy
+    — the reason `prune_caches` exists. Checking syntax does not require writing
+    bytecode: `compile()` answers the same question without touching disk.
 
-    A poda acontece DURANTE a travessia; um `rglob` com filtro posterior desce
-    em `.git` e `node_modules` inteiros antes de descartá-los.
+    The pruning happens DURING the walk; an `rglob` with a later filter descends
+    into all of `.git` and `node_modules` before discarding them.
     """
     issues: list[str] = []
     for dirpath, dirnames, filenames in os.walk(ecosystem_dir):
@@ -250,12 +250,12 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 
         # 5. consolidate_findings
         #
-        # O consolidador injeta a pré-condição upstream do `/review`
-        # (`check_upstream_gate`): sem audit de `/code-quality` admissível para o
-        # slug, o veredito é BLOCKER e o processo sai 1. A cadeia que este smoke
-        # exercita é detect_domain → spawn_reviewers → consolidate, então o
-        # contexto upstream é declarado aqui — do mesmo jeito que um `/review` de
-        # verdade o encontra depois de um `/code-quality` verde.
+        # The consolidator injects `/review`'s upstream pre-condition
+        # (`check_upstream_gate`): with no admissible `/code-quality` audit for the
+        # slug, the verdict is BLOCKER and the process exits 1. The chain this
+        # smoke exercises is detect_domain → spawn_reviewers → consolidate, so the
+        # upstream context is declared here — the same way a real `/review` finds
+        # it after a green `/code-quality`.
         audits = findings_dir.parent.parent / "knowledge-base" / "audits"
         audits.mkdir(parents=True, exist_ok=True)
         (audits / "smoke-code-quality-2026-01-01.md").write_text(

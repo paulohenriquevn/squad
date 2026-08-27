@@ -75,7 +75,7 @@ Capped at 70 (SHIPPABLE_WITH_CAVEATS at most):
 - **Mandatory section missing** — Header, Item, Repo, Mode, Context, Corner 1–4, Recommendation.
 - **No ADR on a cross-repo change** — fires **only** when the Blast Radius corner names an ecosystem repo other than the opportunity's own. A repo-local fix carries no ADR requirement; the ancestor demanded one from every blueprint, which for maintenance work is ceremony. A change that reaches other repos decides something for their maintainers, and shipping it unrecorded is how a breaking change arrives unannounced.
 
-These caps are INQUEBRÁVEIS. See `rules/discover-opportunity-golden-rule.md`.
+These caps are UNBREAKABLE. See `rules/discover-opportunity-golden-rule.md`.
 
 ## Conservative Bias (fail-closed)
 

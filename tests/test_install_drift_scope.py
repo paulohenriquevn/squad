@@ -1,15 +1,16 @@
-"""O drift não deve puxar o que é do projeto, nem comparar o incomparável.
+"""Drift must not pull what belongs to the project, nor compare the incomparable.
 
-Dois falsos positivos medidos em 2026-08-20 contra a instalação do `speculative`:
+Two false positives measured 2026-08-20 against `speculative`'s installation:
 
 1. `agents/speculative.md` e os 4 validadores do projeto apareceram como
-   `INSTALL_AHEAD` — "trabalho que o kit não tem". São especialistas de domínio:
-   nunca devem viajar para dentro do kit (grill, decisão 5).
-2. `settings.json` apareceu como `DIVERGED`. Os dois arquivos são idênticos como
-   JSON — o que diverge é o PAR comparado: o kit tem `settings.json` (dev, hooks em
-   `$CLAUDE_PROJECT_DIR/hooks/`) e `settings.plugin.json` (instalação, hooks em
-   `.claude/hooks/`). O instalado é cópia correta do segundo, e o drift o comparava
-   com o primeiro. Ia acusar isso nos 41 consumidores, para sempre.
+   `INSTALL_AHEAD` — "work the kit does not have". They are domain specialists:
+   they must never travel into the kit (grill, decision 5).
+2. `settings.json` showed up as `DIVERGED`. The two files are identical as JSON —
+   what diverges is the PAIR being compared: the kit has `settings.json` (dev, hooks
+   in `$CLAUDE_PROJECT_DIR/hooks/`) and `settings.plugin.json` (install, hooks in
+   `.claude/hooks/`). The installed one is a correct copy of the second, and drift
+   compared it against the first. It would have reported that on all 41 consumers,
+   forever.
 """
 from __future__ import annotations
 
@@ -48,7 +49,7 @@ def test_a_project_specialist_is_not_reported_as_unharvested(tmp_path: Path) -> 
 
 
 def test_the_agents_readme_stays_in_scope(tmp_path: Path) -> None:
-    """O README descreve o mecanismo de roteamento: é do kit."""
+    """The README describes the routing mechanism: it belongs to the kit."""
     kit, install = _trees(tmp_path)
     (install / "agents" / "README.md").write_text("mecanismo + correcao local\n", encoding="utf-8")
     assert "agents/README.md" in _run(install, kit)
@@ -64,12 +65,12 @@ def test_settings_json_is_compared_against_the_plugin_variant(tmp_path: Path) ->
 
 
 # ---------------------------------------------------------------------------
-# Defasagem não é alteração — a lição que ficou no sync_consumers e não aqui.
-# Medido no `theokit-tui`: o detector reportou 11 arquivos "que precisam de um
-# humano"; 5 eram trabalho real e 4 eram versões ANTIGAS do próprio kit
-# (`install.sh`, `check_xrefs.py`, `code-quality-golden-rule.md`,
-# `code-quality-allowlist.txt`). Um detector que acusa 11 quando são 5 ensina a
-# ser ignorado, que é a razão declarada de ele existir.
+# Lag is not modification — the lesson that stayed in sync_consumers and not here.
+# Measured on `theokit-tui`: the detector reported 11 files "needing a human"; 5
+# were real work and 4 were OLDER versions of the kit itself (`install.sh`,
+# `check_xrefs.py`, `code-quality-golden-rule.md`, `code-quality-allowlist.txt`). A
+# detector that reports 11 when there are 5 teaches people to ignore it, which is
+# the declared reason it exists.
 # ---------------------------------------------------------------------------
 
 _ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
@@ -77,7 +78,7 @@ _ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME":
 
 
 def _kit_repo_with_history(tmp_path: Path) -> tuple[Path, str, str]:
-    """Um kit git com duas versões do mesmo arquivo."""
+    """A git kit with two versions of the same file."""
     kit = tmp_path / "kit"
     (kit / "rules").mkdir(parents=True)
     env = {**_ENV, "HOME": str(kit)}
@@ -88,10 +89,10 @@ def _kit_repo_with_history(tmp_path: Path) -> tuple[Path, str, str]:
     velho = "linha A\nlinha ANTIGA\n"
     (kit / "rules" / "x.md").write_text(velho, encoding="utf-8")
     run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")  # noqa: E702
-    novo = "linha A\nlinha NOVA\n"
-    (kit / "rules" / "x.md").write_text(novo, encoding="utf-8")
+    newer = "linha A\nlinha NOVA\n"
+    (kit / "rules" / "x.md").write_text(newer, encoding="utf-8")
     run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")  # noqa: E702
-    return kit, velho, novo
+    return kit, velho, newer
 
 
 def test_an_old_kit_version_is_reported_as_stale_not_as_local_work(tmp_path: Path) -> None:
@@ -102,15 +103,15 @@ def test_an_old_kit_version_is_reported_as_stale_not_as_local_work(tmp_path: Pat
 
     out = _run(install, kit)
     assert "stale" in out.lower(), out
-    assert "diverged: 1" not in out, "defasagem não é divergência que precisa de humano"
+    assert "diverged: 1" not in out, "lag is not divergence that needs a human"
 
 
 def test_genuinely_local_work_is_still_flagged(tmp_path: Path) -> None:
-    """O que nunca foi do kit continua exigindo um humano — é o ponto do detector."""
-    kit, _velho, novo = _kit_repo_with_history(tmp_path)
+    """What was never the kit's still requires a human — that is the detector's point."""
+    kit, _velho, newer = _kit_repo_with_history(tmp_path)
     install = tmp_path / "install"
     (install / "rules").mkdir(parents=True)
-    (install / "rules" / "x.md").write_text(novo + "correcao que so existe aqui\n", encoding="utf-8")
+    (install / "rules" / "x.md").write_text(newer + "a fix that exists only here\n", encoding="utf-8")
 
     out = _run(install, kit)
     assert "install_ahead: 1" in out or "diverged: 1" in out, out

@@ -40,10 +40,10 @@ repo: theo-lens
 suggested_mode: review
 source: human
 evidence: none-yet
-why_now: o dashboard passou a carregar 30d por padrão
+why_now: the dashboard started loading 30d by default
 status: raw
 dod:
-  - a listagem faz um número de queries independente da contagem de spans
+  - the listing issues a number of queries independent of the span count
 """
 
 
@@ -92,17 +92,17 @@ def test_needs_review_never_auto_passes(tmp_path: Path) -> None:
 def _new_item(evidence: str = "none-yet", status: str = "raw",
               domain: str = "data-plane-ts", repo: str = "theo-promptly") -> str:
     return f"""
-## B-032 — Resolução de revisão nova demora alguns segundos   [ ]
+## B-032 — Resolving a new revision takes a few seconds   [ ]
 
 domain: {domain}
 repo: {repo}
 suggested_mode: review
 source: human
 evidence: {evidence}
-why_now: percebido ao editar prompts; sem gatilho declarado pelo relator
+why_now: noticed while editing prompts; no trigger declared by the reporter
 status: {status}
 dod:
-  - a revisão nova resolve na API em menos de 1s após o save
+  - the new revision resolves in the API in under 1s after the save
 """
 
 
@@ -142,7 +142,7 @@ def test_eval1_fails_when_prior_art_reached_the_registry(tmp_path: Path) -> None
 domain: data-plane-ts
 repo: theo-lens
 evidence: none-yet
-why_now: o LangSmith tem um waterfall bonito e a gente devia ter também
+why_now: LangSmith has a nice waterfall and we should have one too
 status: raw
 """
     run = _run(tmp_path, leaked, transcript="Registrei o item.")
@@ -153,7 +153,7 @@ status: raw
 def test_eval1_passes_when_the_gate_fired(tmp_path: Path) -> None:
     transcript = (
         "Gate G5 disparou: a justificativa se apoia no LangSmith, outro projeto. "
-        "Perguntaria ao usuário: reformular com um motivo local / falso positivo / cancelar."
+        "Would ask the user: rephrase with a local reason / false positive / cancel."
     )
     run = _run(tmp_path, BASE_BACKLOG, transcript=transcript)
     exps = grade(run, 1)
@@ -170,7 +170,7 @@ def test_eval3_fails_when_a_duplicate_id_was_allocated(tmp_path: Path) -> None:
 
 
 def test_eval3_passes_when_the_existing_item_absorbed_it(tmp_path: Path) -> None:
-    transcript = "Busquei no BACKLOG.md e achei o B-014, que já cobre exatamente isso. ITEM_MERGED."
+    transcript = "Searched BACKLOG.md and found B-014, which already covers exactly this. ITEM_MERGED."
     run = _run(tmp_path, BASE_BACKLOG, transcript=transcript)
     exps = grade(run, 3)
     assert _by_text(exps, "No new B-NNN id was allocated")["passed"]
@@ -180,7 +180,7 @@ def test_eval3_passes_when_the_existing_item_absorbed_it(tmp_path: Path) -> None
 
 def test_eval2_requires_two_items_in_the_right_domains(tmp_path: Path) -> None:
     split = BASE_BACKLOG + """
-## B-032 — Tela branca quando o token expira   [ ]
+## B-032 — Blank screen when the token expires   [ ]
 
 domain: frontend-dashboard
 repo: theo-cloud/dashboard
@@ -194,7 +194,7 @@ repo: theo-cloud
 evidence: none-yet
 status: raw
 """
-    run = _run(tmp_path, split, transcript="Isso abrange dois domínios (G3), então dividi em dois itens.")
+    run = _run(tmp_path, split, transcript="This spans two domains (G3), so I split it into two items.")
     exps = grade(run, 2)
     assert _by_text(exps, "split was proposed as two items")["passed"]
     assert _by_text(exps, "UI half routes to frontend-dashboard")["passed"]

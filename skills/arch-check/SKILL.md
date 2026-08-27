@@ -39,9 +39,9 @@ is proposed.
 
 The same criterion, stated from the adoption side by `usetheo-labs/agent-builder`:
 
-> *"Nenhuma destas regras foi escrita contra violação existente: as cinco saíram de 0 violações no
-> commit que as introduziu, o que significa que elas CONGELAM um estado bom em vez de anunciar
-> dívida."*
+> *"None of these rules was written against an existing violation: all five came out at 0
+> violations in the commit that introduced them, which means they FREEZE a good state instead
+> of announcing debt."*
 
 A candidate that would fail on day one is therefore **not** proposed as a gate. Someone has to
 decide whether that crossing is a defect or the architecture, and that decision belongs in

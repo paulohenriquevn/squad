@@ -41,9 +41,9 @@ from lib.calibrate import (
     FLOOR_PARAMETERS,
     ThresholdCalibration,
     # Re-exports deliberados: `tests/test_init_quality_gates.py` importa os dois
-    # daqui. Ficaram FORA do `__all__` — um nome privado numa superfície pública é
-    # a contradição que D3 apontou neste arquivo — mas continuam importáveis, que
-    # é o que o teste precisa. Sem o noqa, `ruff --fix` os apaga por não usados.
+    # from here. They stayed OUT of `__all__` — a private name in a public surface
+    # is the contradiction D3 flagged in this file — but remain importable, which is
+    # what the test needs. Without the noqa, `ruff --fix` deletes them as unused.
     _measure_python_metrics,  # noqa: F401
     _percentile,  # noqa: F401
     calibrate_thresholds,
@@ -63,13 +63,13 @@ from lib.emit import generate_hook_scripts, patch_settings_json
 # Re-exports above keep the public import surface stable for tests, which
 # import these symbols directly from init_quality_gates.
 
-# Este módulo é um CLI, e `__all__` listava tudo que ele define — incluindo dois
-# nomes privados (`_measure_python_metrics`, `_percentile`), o que já dizia que a
-# lista era um inventário e não uma superfície. D3 apontou três exports sem
-# consumidor (`InitResult`, `smoke_test_tools`, `validate_round_trip`); os três são
-# usados aqui dentro, pelo `main`. O que sobra é o que outro módulo importaria: os
-# estágios reutilizáveis de detecção e calibração. Os testes seguem importando por
-# nome, que `__all__` não restringe.
+# This module is a CLI, and `__all__` listed everything it defines — including two
+# private names (`_measure_python_metrics`, `_percentile`), which already said the
+# list was an inventory and not a surface. D3 flagged three exports with no consumer
+# (`InitResult`, `smoke_test_tools`, `validate_round_trip`); all three are used right
+# here, by `main`. What remains is what another module would import: the reusable
+# detection and calibration stages. The tests keep importing by name, which `__all__`
+# does not restrict.
 __all__ = [
     "FLOOR_COMPLEXITY",
     "FLOOR_FILE_LINES",
@@ -105,8 +105,8 @@ class InitResult:
     settings_patched: bool = False
     lizard_available: bool = False
     generated_date: str = ""
-    #: Quanto do código existente o gate calibrado reprovaria. `None` quando a
-    #: medição não rodou — que não é o mesmo que zero.
+    #: How much of the existing code the calibrated gate would reject. `None` when
+    #: the measurement did not run — which is not the same as zero.
     blocking_rate: object = None
 
 
@@ -253,14 +253,14 @@ def _format_report(result: InitResult) -> str:
         lines.append(f"  (calibrated from {cal.sample_count} source files)")
     lines.append("")
 
-    # Quanto do código EXISTENTE estes limiares reprovariam. O p90 é calculado por
-    # MÉTRICA e o gate reprova por ARQUIVO — um arquivo com trinta funções tem trinta
-    # chances de conter uma das 10% piores, e cinco métricas multiplicam isso. Medido
-    # neste repositório em 2026-08-26: limiares p90 legítimos, 61% dos arquivos
-    # bloqueados. Sem este número, "calibrado" era uma palavra sem verificação.
+    # How much of the EXISTING code these thresholds would reject. The p90 is computed
+    # PER METRIC and the gate rejects per FILE — a file with thirty functions has
+    # thirty chances of holding one of the worst 10%, and five metrics multiply that.
+    # Measured on this repository 2026-08-26: legitimate p90 thresholds, 61% of files
+    # blocked. Without this number, "calibrated" was a word with no verification.
     rate = result.blocking_rate
     if rate is not None:
-        lines.append("Taxa de bloqueio sobre o código atual:")
+        lines.append("Blocking rate against the current code:")
         if rate.percent is None:
             lines.append(f"  {rate.verdict} — {rate.advice}")
         else:
@@ -353,7 +353,7 @@ def main() -> None:
         verbose=args.verbose,
     )
 
-    # Stage 6.5 — a calibração deixa de ser uma afirmação e passa a ter um número.
+    # Stage 6.5 — the calibration stops being an assertion and gets a number.
     _log("Stage 6.5/10: measure_blocking_rate", args.verbose)
     result.blocking_rate = measure_blocking_rate(
         result.target, result.thresholds, skip_tests=args.skip_tests

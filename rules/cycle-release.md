@@ -78,26 +78,27 @@ If the rule cannot pick deterministically, the chain pauses and the human choose
 
 ### Why a `Changed`-only release pauses, and stays pausing
 
-A `[Unreleased]` carrying only `### Changed` — *"mudamos como algo já publicado se comporta, sem
-acrescentar nem remover"* — não casa com nenhuma das três regras acima. É uma forma **ordinária**
-de release, não exótica, e bate na pausa toda vez. Medido no `theokit-tui` em 2026-08-18:
+A `[Unreleased]` carrying only `### Changed` — *"we changed how something already published
+behaves, without adding or removing"* — matches none of the three rules above. It is an
+**ordinary** release shape, not an exotic one, and it hits the pause every time. Measured on
+`theokit-tui` on 2026-08-18:
 `compute_next_version.py --current 0.61.0 --bump auto` → `AMBIGUOUS`.
 
-**Não é derivado, e isso é uma decisão em vez de uma lacuna.** Sob 0.x — onde `public-copy.md § 3`
-mantém o pacote até haver evidência de produção sustentada — uma quebra é **minor** e uma mudança
-compatível é **patch**. Então `Changed` mapeia para qualquer um dos dois, dependendo de um fato que
-a seção não contém:
+**It is not derived, and that is a decision rather than a gap.** Under 0.x — where
+`public-copy.md § 3` holds the package until there is evidence of sustained production use — a
+break is **minor** and a compatible change is **patch**. So `Changed` maps to either of the two,
+depending on a fact the section does not contain:
 
-> **A pergunta: isto muda um comportamento de que alguém que chama depende?**
+> **The question: does this change a behaviour a caller depends on?**
 
 Chutar `minor` transforma toda entrada reescrita em sinal de incompatibilidade. Chutar `patch`
-subestima uma quebra real — exatamente a falha que o semver existe para impedir, entregue em
-silêncio a quem está num range com caret. Inferir da prosa da entrada é o mesmo chute com um regex
-mais longo, e a mesma origem mediu como uma variação de formatação (`**BREAKING:`) derrota esse
+understates a real break — exactly the failure semver exists to prevent, delivered silently to
+anyone on a caret range. Inferring from the entry's prose is the same guess with a longer regex,
+and the same source measured how a formatting variation (`**BREAKING:`) defeats that
 tipo de casamento neste mesmo script.
 
-A pausa fica, e **carrega a pergunta** em vez de um chute. Colhido do `theokit-tui`, onde o
-raciocínio foi escrito e medido.
+The pause stays, and **carries the question** instead of a guess. Harvested from `theokit-tui`,
+where the reasoning was written down and measured.
 
 ## Hard gates
 

@@ -1,25 +1,26 @@
-"""A pré-condição do `/review` deixa de depender de alguém lembrar dela.
+"""`/review`'s pre-condition stops depending on someone remembering it.
 
-O DEFEITO QUE ISTO FIXA
------------------------
-`code-quality-golden-rule.md § 1` diz que `FAIL_SOFT` só avança para o `/review`
-com "explicit ADR dismissing each soft cap", e `cycle-review.md § Pre-conditions`
-repete a exigência. Grep nos scripts do `/review` em 2026-08-26: zero. A
-verificação inteira era prosa em `SKILL.md`:
+THE DEFECT THIS FIXES
+---------------------
+`code-quality-golden-rule.md § 1` says `FAIL_SOFT` only advances to `/review`
+with an "explicit ADR dismissing each soft cap", and `cycle-review.md §
+Pre-conditions` repeats the requirement. Grep across `/review`'s scripts on
+2026-08-26: zero. The entire check was prose in `SKILL.md`:
 
     # /code-quality audit exists AND verdict ∈ {PASS, PASS_WITH_CAVEATS}
     test -f .claude/knowledge-base/audits/{slug}-code-quality-*.md
 
-Um `test -f` que o agente precisa lembrar de executar não é um gate — é uma nota.
-E o ADR, que é a peça que torna um soft cap dispensável, não era procurado por
-ninguém: bastava afirmar que existia.
+A `test -f` the agent has to remember to run is not a gate — it is a note. And
+the ADR, the piece that makes a soft cap dismissible, was looked for by nobody:
+asserting it existed was enough.
 
-POR QUE ISTO VIVE NO CONSOLIDADOR, E NÃO NUM PASSO À PARTE
+WHY THIS LIVES IN THE CONSOLIDATOR, NOT IN A SEPARATE STEP
 -----------------------------------------------------------
-Um passo separado tem a mesma fragilidade da prosa: alguém tem de chamá-lo. O
-veredito do `/review` já é calculado por `consolidate_findings.py`, então a
-pré-condição entra como um BLOCKER sintético no mesmo cálculo. Um veredito que
-ignora o upstream deixa de ser possível, em vez de deixar de ser recomendado.
+A separate step has the same fragility as the prose: someone has to call it.
+`/review`'s verdict is already computed by `consolidate_findings.py`, so the
+pre-condition enters as a synthetic BLOCKER in that same computation. A verdict
+that ignores the upstream stops being possible, instead of stopping being
+recommended.
 """
 from __future__ import annotations
 
@@ -57,11 +58,11 @@ def _adr(root: Path, name: str, body: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Os caminhos que precisam BLOQUEAR
+# The paths that must BLOCK
 # ---------------------------------------------------------------------------
 
 def test_a_missing_audit_blocks(tmp_path: Path) -> None:
-    """Sem audit, o `/review` estaria auditando código que ninguém varreu."""
+    """With no audit, `/review` would be reviewing code nobody swept."""
     findings = check_upstream_gate(tmp_path, "demo")
     assert len(findings) == 1
     assert findings[0]["severity"] == "BLOCKER"
@@ -90,14 +91,14 @@ def test_fail_soft_without_any_adr_blocks(tmp_path: Path) -> None:
 
 
 def test_an_adr_that_dismisses_only_one_of_two_caps_still_blocks(tmp_path: Path) -> None:
-    """"Cada soft cap" é a leitura estrita, e é a que fecha o buraco.
+    """"Each soft cap" is the strict reading, and it is the one that closes the hole.
 
-    Com dois caps e um ADR que nomeia um, a leitura frouxa ("existe ADR") aprova —
-    e o cap que ninguém examinou passa junto, carona no que foi examinado.
+    With two caps and an ADR naming one, the loose reading ("an ADR exists")
+    approves — and the cap nobody examined rides along with the one that was.
     """
     _audit(tmp_path, "demo", "FAIL_SOFT",
            soft="soft_cap_orphan_export_python, soft_cap_mutation_score_low_python")
-    _adr(tmp_path, "0007-orphans", "# ADR: exports órfãos\n\nsoft_cap_orphan_export_python é aceito porque ...\n")
+    _adr(tmp_path, "0007-orphans", "# ADR: orphan exports\n\nsoft_cap_orphan_export_python is accepted because ...\n")
 
     findings = check_upstream_gate(tmp_path, "demo")
 
@@ -107,7 +108,7 @@ def test_an_adr_that_dismisses_only_one_of_two_caps_still_blocks(tmp_path: Path)
 
 
 # ---------------------------------------------------------------------------
-# Os caminhos que precisam PASSAR
+# The paths that must PASS
 # ---------------------------------------------------------------------------
 
 def test_pass_produces_no_finding(tmp_path: Path) -> None:
@@ -123,24 +124,24 @@ def test_pass_with_caveats_produces_no_finding(tmp_path: Path) -> None:
 def test_fail_soft_with_an_adr_per_cap_passes(tmp_path: Path) -> None:
     _audit(tmp_path, "demo", "FAIL_SOFT",
            soft="soft_cap_orphan_export_python, soft_cap_mutation_score_low_python")
-    _adr(tmp_path, "0007-caps", "# ADR\n\nDispensamos soft_cap_orphan_export_python e "
-                                "soft_cap_mutation_score_low_python porque ...\n")
+    _adr(tmp_path, "0007-caps", "# ADR\n\nWe dismiss soft_cap_orphan_export_python and "
+                                "soft_cap_mutation_score_low_python because ...\n")
     assert check_upstream_gate(tmp_path, "demo") == []
 
 
 def test_the_plans_adr_section_counts_as_the_dismissal(tmp_path: Path) -> None:
-    """O ADR pode viver no plano — é onde `/to-plan` os escreve."""
+    """The ADR may live in the plan — that is where `/to-plan` writes them."""
     _audit(tmp_path, "demo", "FAIL_SOFT", soft="soft_cap_orphan_export_python")
     plans = tmp_path / "knowledge-base" / "plans"
     plans.mkdir(parents=True)
     (plans / "demo-plan.md").write_text(
-        "# Plano\n\n## ADRs\n\n- soft_cap_orphan_export_python: aceito porque ...\n", encoding="utf-8")
+        "# Plan\n\n## ADRs\n\n- soft_cap_orphan_export_python: accepted because ...\n", encoding="utf-8")
 
     assert check_upstream_gate(tmp_path, "demo") == []
 
 
 def test_the_newest_audit_wins(tmp_path: Path) -> None:
-    """Reauditar depois de corrigir tem de contar; o audit velho não pode bloquear."""
+    """Re-auditing after a fix must count; the old audit must not block."""
     _audit(tmp_path, "demo", "FAIL_HARD", hard="dead_code_unallowlisted_python")
     audits = tmp_path / "knowledge-base" / "audits"
     (audits / "demo-code-quality-2026-08-27.md").write_text(
@@ -155,7 +156,7 @@ def test_the_newest_audit_wins(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_an_audit_without_a_verdict_line_blocks(tmp_path: Path) -> None:
-    """Um relatório ilegível é ausência de veredito, não veredito favorável."""
+    """An unreadable report is an absent verdict, not a favourable one."""
     audits = tmp_path / "knowledge-base" / "audits"
     audits.mkdir(parents=True)
     (audits / "demo-code-quality-2026-08-26.md").write_text("# vazio\n", encoding="utf-8")
@@ -167,7 +168,7 @@ def test_an_audit_without_a_verdict_line_blocks(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("layout", ["knowledge-base", ".claude/knowledge-base"])
 def test_both_install_layouts_are_searched(tmp_path: Path, layout: str) -> None:
-    """O kit vive em dois layouts, e um gate que só enxerga um deles é meio gate."""
+    """The kit lives in two layouts, and a gate that sees only one of them is half a gate."""
     audits = tmp_path / layout / "audits"
     audits.mkdir(parents=True)
     (audits / "demo-code-quality-2026-08-26.md").write_text(

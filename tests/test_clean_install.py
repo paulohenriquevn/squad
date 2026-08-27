@@ -1,24 +1,25 @@
-"""A instalação que qualquer OUTRA máquina recebe.
+"""The installation any OTHER machine receives.
 
-POR QUE A LISTA DE ARQUIVOS VEM DO GIT
---------------------------------------
-Todo teste de instalação que este repositório tinha copiava a árvore de
-trabalho — e a árvore de trabalho do mantenedor carrega arquivos que o
-`.gitignore` esconde. `agents/**` é o caso — o diretório inteiro é ignorado, e os
-oito especialistas que o kit distribuía viveram por meses numa máquina e em
-nenhuma outra. Enquanto o teste instalasse do disco, ele mediria a máquina de
-quem o roda, não o que o kit entrega.
+WHY THE FILE LIST COMES FROM GIT
+--------------------------------
+Every installation test this repository had copied the working tree — and the
+maintainer's working tree carries files `.gitignore` hides. `agents/**` is the
+case — the whole directory is ignored, and the eight specialists the kit
+distributed lived for months on one machine and on no other. As long as the test
+installed from disk, it measured the machine running it, not what the kit
+delivers.
 
 Medido em 2026-08-26: um clone limpo instalado num alvo vazio produzia
-`.claude/agents/` VAZIO — nem o `README.md`, que o instalador copia
-incondicionalmente — e `check_xrefs.py --strict` saía 1, porque
-`rules/cycle-maintenance.md` cita `agents/README.md`. Na máquina do mantenedor,
-verde. O mesmo `cp -r` levava 342 `.pyc` ao consumidor, contra uma promessa
-explícita no cabeçalho do instalador de que caches seriam pulados.
+an EMPTY `.claude/agents/` — not even the `README.md` the installer copies
+unconditionally — and `check_xrefs.py --strict` exited 1, because
+`rules/cycle-maintenance.md` cites `agents/README.md`. On the maintainer's
+machine, green. The same `cp -r` carried 342 `.pyc` files to the consumer,
+against an explicit promise in the installer's header that caches would be
+skipped.
 
-`git ls-files` é a única fonte que responde "o que está versionado?" sem
-consultar o disco — e é por isso que a fixture abaixo monta a árvore a partir
-dela, arquivo a arquivo, em vez de fazer `shutil.copytree`.
+`git ls-files` is the only source that answers "what is versioned?" without
+consulting the disk — and that is why the fixture below builds the tree from it,
+file by file, instead of `shutil.copytree`.
 """
 from __future__ import annotations
 
@@ -29,13 +30,13 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 
-#: Diretórios que são cache de ferramenta — nunca conteúdo do kit.
+#: Directories that are tool cache — never kit content.
 CACHE_DIRS = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache"}
 
 
 @pytest.fixture(scope="module")
 def installed(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory):
-    """Instalação real, a partir do kit versionado, num alvo vazio."""
+    """A real installation, from the versioned kit, into an empty target."""
     target = tmp_path_factory.mktemp("consumer")
     proc = subprocess.run(  # noqa: PLW1510
         ["bash", str(versioned_kit / "scripts" / "install.sh"), str(target)],
@@ -52,9 +53,9 @@ def test_install_succeeds(installed):
 
 
 def test_strict_xrefs_passes_on_a_fresh_install(installed):
-    """O validador que o próprio install.sh chama tem de aprovar o que ele acabou de escrever.
+    """The validator install.sh itself calls must approve what it just wrote.
 
-    `--strict` é deliberado: sem ele, uma referência quebrada sai como
+    `--strict` is deliberate: without it, a broken reference comes out as
     `Overall: PASS` com exit 0 (ver `test_ci_contract.py`).
     """
     target, _ = installed
@@ -65,51 +66,51 @@ def test_strict_xrefs_passes_on_a_fresh_install(installed):
         text=True,
     )
     assert proc.returncode == 0, (
-        "Uma instalação recém-feita não passa no seu próprio validador:\n"
+        "A freshly made installation does not pass its own validator:\n"
         f"{proc.stdout}\n{proc.stderr}"
     )
 
 
 def test_routing_mechanism_reaches_the_consumer(installed):
-    """`agents/README.md` descreve o MECANISMO de roteamento, não um domínio.
+    """`agents/README.md` describes the routing MECHANISM, not a domain.
 
     O instalador o copia incondicionalmente e `rules/cycle-maintenance.md` o
-    cita. Se ele não estiver versionado, chega vazio em todo consumidor.
+    cites it. If it is not versioned, it arrives empty in every consumer.
     """
     target, _ = installed
     readme = target / ".claude" / "agents" / "README.md"
     assert readme.is_file(), (
-        "agents/README.md não chegou ao consumidor — ou não está versionado, "
-        "ou o instalador parou de copiá-lo."
+        "agents/README.md did not reach the consumer — either it is not versioned, "
+        "or the installer stopped copying it."
     )
     assert readme.stat().st_size > 0
 
 
 def test_no_domain_specialist_is_installed(installed):
-    """Nenhum especialista de domínio chega ao consumidor — ele deriva os seus.
+    """No domain specialist reaches the consumer — they derive their own.
 
-    Eles descrevem os repositórios de UM ecossistema; num consumidor que não é
-    aquele, são arquivos sobre repositórios que não existem ali. O kit deixou de
-    carregá-los em 2026-08-26, e a fixture instala a partir de `git ls-files`, de
-    modo que um especialista deixado no disco desta máquina não pode mascarar o
-    resultado.
+    They describe ONE ecosystem's repositories; in a consumer that is not that
+    ecosystem, they are files about repositories that do not exist there. The kit
+    stopped carrying them on 2026-08-26, and the fixture installs from
+    `git ls-files`, so a specialist left on this machine's disk cannot mask the
+    result.
     """
     target, _ = installed
     agents = target / ".claude" / "agents"
     specialists = [p for p in agents.glob("*.md") if p.name != "README.md"]
-    assert specialists == [], f"especialistas de domínio vazaram: {specialists}"
+    assert specialists == [], f"domain specialists leaked: {specialists}"
 
 
 def test_no_tool_cache_reaches_the_consumer(versioned_kit, tmp_path):
-    """O cabeçalho do install.sh promete pular caches. Este teste cobra a promessa.
+    """install.sh's header promises to skip caches. This test enforces the promise.
 
-    Instala a partir de uma árvore que TEM caches — como a do mantenedor — e
-    exige que nenhum atravesse. Instalar do `versioned_kit` não provaria nada:
+    It installs from a tree that HAS caches — like the maintainer's — and demands
+    that none crosses over. Installing from `versioned_kit` would prove nothing:
     o git nunca carregou um `.pyc`.
     """
     dirty = tmp_path / "dirty-kit"
     subprocess.run(["cp", "-r", str(versioned_kit), str(dirty)], check=True)
-    # Planta exatamente o lixo que a árvore de trabalho real acumula.
+    # Plants exactly the litter a real working tree accumulates.
     for rel in ("skills/__pycache__", "scripts/__pycache__", "skills/code-quality/.pytest_cache"):
         d = dirty / rel
         d.mkdir(parents=True, exist_ok=True)
@@ -132,11 +133,11 @@ def test_no_tool_cache_reaches_the_consumer(versioned_kit, tmp_path):
 
 
 def test_installed_payload_is_not_dominated_by_noise(installed, versioned_kit):
-    """Guarda-corpo de ordem de grandeza sobre o que o consumidor recebe.
+    """An order-of-magnitude guardrail on what the consumer receives.
 
-    Não fixa um número — o kit cresce. Fixa a relação: o que é instalado não
-    pode exceder muito o que o git carrega, porque tudo além disso é conteúdo
-    que ninguém versionou.
+    It does not pin a number — the kit grows. It pins the ratio: what is installed
+    must not exceed by much what git carries, because everything beyond that is
+    content nobody versioned.
     """
     target, _ = installed
     versioned = len(
@@ -147,5 +148,5 @@ def test_installed_payload_is_not_dominated_by_noise(installed, versioned_kit):
     installed_files = sum(1 for p in (target / ".claude").rglob("*") if p.is_file())
     assert installed_files <= versioned * 1.25, (
         f"instalados {installed_files} arquivos contra {versioned} versionados — "
-        "o excedente não é o sistema."
+        "the excess is not the system."
     )

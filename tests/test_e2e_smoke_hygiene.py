@@ -1,15 +1,15 @@
-"""O smoke test verifica sintaxe sem escrever bytecode no alvo.
+"""The smoke test checks syntax without writing bytecode into the target.
 
-`check_python_syntax` usava `py_compile.compile`, que ESCREVE o `.pyc` em
-`__pycache__` como efeito colateral. Duas consequências, ambas medidas em
+`check_python_syntax` used `py_compile.compile`, which WRITES the `.pyc` into
+`__pycache__` as a side effect. Two consequences, both measured on
 2026-08-26:
 
 1. Custo. Compilar-e-gravar 259 arquivos levava 267 ms dos 693 ms do smoke, e o
-   smoke é chamado por `install.sh` — que responde por 21 execuções na suíte
-   raiz sozinha (1 071 ms cada). Verificar sintaxe não exige gravar nada.
-2. Higiene. O cabeçalho do `install.sh` promete não levar cache ao consumidor, e
-   `prune_caches` existe exatamente porque este passo o reintroduzia depois da
-   cópia. A promessa passa a ser cumprida na origem.
+   smoke is called by `install.sh` — which accounts for 21 runs in the root suite
+   alone (1,071 ms each). Checking syntax requires writing nothing.
+2. Hygiene. `install.sh`'s header promises not to carry cache to the consumer, and
+   `prune_caches` exists precisely because this step reintroduced it after the
+   copy. The promise is now kept at the source.
 """
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def test_syntax_error_is_still_reported(tmp_path):
 
 
 def test_cache_directories_are_not_traversed(tmp_path):
-    """Um `__pycache__` com um arquivo inválido não pode reprovar o smoke."""
+    """A `__pycache__` holding an invalid file must not fail the smoke."""
     module = _load()
     eco = _fake_ecosystem(tmp_path)
     cache = eco / "scripts" / "__pycache__"
@@ -75,7 +75,7 @@ def test_cache_directories_are_not_traversed(tmp_path):
 
 
 def test_the_script_still_passes_end_to_end():
-    """Regressão de integração: o smoke real continua verde neste repositório."""
+    """Integration regression: the real smoke stays green in this repository."""
     proc = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(SCRIPT)],
         cwd=REPO_ROOT, capture_output=True, text=True, timeout=120,

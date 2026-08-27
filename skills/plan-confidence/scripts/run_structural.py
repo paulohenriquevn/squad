@@ -380,12 +380,12 @@ def run_structural(
         hard_cap_ids.append("soft_floor_failure_scenarios_missing")
         final_score = min(final_score, 89.0)
 
-    # O gate de CVE do `cycle-plan` deixou de depender de alguém honrá-lo. Este check
-    # não procura CVE — `/deps-audit` faz isso, com os scanners — ele LÊ o veredito que
-    # aquele run deixou em disco. Um plano que declara dependência nova e não tem
-    # auditoria recebe soft floor (ninguém verificou); um cujo relatório aponta CVE
-    # CRITICAL/HIGH recebe hard cap, que é o gate que `cycle-plan.md § Phase contracts`
-    # declarava e nada cobrava.
+    # `cycle-plan`'s CVE gate stopped depending on someone honouring it. This check
+    # does not look for CVEs — `/deps-audit` does that, with the scanners — it READS
+    # the verdict that run left on disk. A plan declaring a new dependency with no
+    # audit gets a soft floor (nobody checked); one whose report points at a
+    # CRITICAL/HIGH CVE gets a hard cap, which is the gate `cycle-plan.md § Phase
+    # contracts` declared and nothing enforced.
     if deps_audit.applies and deps_audit.hard_cap:
         hard_cap_ids.append(deps_audit.stable_id)
         final_score = min(final_score, 49.0)

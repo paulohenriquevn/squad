@@ -196,12 +196,12 @@ def test_cli_a_real_audit_names_what_it_could_not_measure(tmp_path: Path, capsys
     Without this, the guard could be tightened into "always INVALID" and nothing would notice —
     the same negative-space omission `does_not_refuse_ordinary_text` covers for B-086's predicate.
 
-    Até 2026-08-26 este teste exigia `d3_unavailable` e `d4_unavailable`, porque os dois
-    detectores devolviam "not configured" em toda linguagem — ele fixava a ausência de
-    implementação como se fosse o contrato. Agora D3 e D4 rodam, e o que se exige é que
-    cada um diga o que fez: D3 não tem superfície pública declarada neste projeto de
-    fixture (`package.json` sem `main`/`exports`), e D4 não tem runner de mutação
-    configurado. Ambos são resultados, não silêncios.
+    Until 2026-08-26 this test demanded `d3_unavailable` and `d4_unavailable`, because
+    both detectors returned "not configured" in every language — it pinned the absence
+    of implementation as if it were the contract. Now D3 and D4 run, and what is
+    demanded is that each says what it did: D3 has no declared public surface in this
+    fixture project (`package.json` without `main`/`exports`), and D4 has no mutation
+    runner configured. Both are results, not silences.
     """
     _write_rules(tmp_path)
     (tmp_path / "package.json").write_text('{"name": "demo", "version": "0.0.0"}')
@@ -221,7 +221,7 @@ def test_cli_a_real_audit_names_what_it_could_not_measure(tmp_path: Path, capsys
         "d4_mutation",
     }
     assert data["soft_caps_triggered"] == ["soft_cap_mutation_unconfigured_typescript"], (
-        "o soft cap tem de nomear a ação de quem lê o relatório — configurar o runner"
+        "the soft cap must name the action for whoever reads the report — configure the runner"
     )
 
 

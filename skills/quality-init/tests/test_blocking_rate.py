@@ -1,30 +1,32 @@
-"""A calibração passa a dizer QUANTO do código ela bloquearia.
+"""The calibration starts saying HOW MUCH of the code it would block.
 
-O DEFEITO QUE ISTO FIXA
+THE DEFECT THIS FIXES
 -----------------------
 `SKILL.md` promete: "calibrates adaptive thresholds ... from the project's actual
 p90 metrics — never generic defaults", e § "Why p90 and not p50 or max?" explica
-que o p90 existe para o gate não nascer reprovando o código que já está lá.
+that the p90 exists so the gate does not start out rejecting the code already
+there.
 
-Ele nasce, e ninguém media. Medido 2026-08-26 rodando `/quality-init` contra este
-repositório e depois passando cada arquivo pelo hook gerado:
+It does, and nobody measured it. Measured 2026-08-26 by running `/quality-init`
+against this repository and then passing every file through the generated hook:
 
     limiares: complexity=10, function_lines=29, nesting=3, params=4, file_lines=367
     resultado: 156 de 256 arquivos versionados seriam BLOQUEADOS (61%)
 
-A aritmética é simples e o p90 não a cobre: ele é calculado POR MÉTRICA — o
-percentil 90 das funções do projeto — enquanto o gate reprova um ARQUIVO quando
-QUALQUER função dele excede QUALQUER limiar. Um arquivo com trinta funções tem
-trinta chances independentes de conter uma das 10% piores, e cinco métricas
-multiplicam isso. p90 por função não é p90 por arquivo, e a diferença é a distância
-entre um gate que nasce verde e um que trava dois terços do repositório.
+The arithmetic is simple and the p90 does not cover it: it is computed PER METRIC
+— the 90th percentile of the project's functions — while the gate rejects a FILE
+when ANY of its functions exceeds ANY threshold. A file with thirty functions has
+thirty independent chances of holding one of the worst 10%, and five metrics
+multiply that. p90 per function is not p90 per file, and the difference is the
+distance between a gate that starts green and one that locks two thirds of the
+repository.
 
-Um gate que nasce vermelho é desligado na primeira hora, e o que sobra é a pior das
-duas situações: o hook no `settings.json`, a confiança de que ele protege alguma
-coisa, e uma flag de bypass no dedo de quem trabalha.
+A gate that starts red is switched off within the hour, and what remains is the
+worse of the two situations: the hook in `settings.json`, the belief that it
+protects something, and a bypass flag in the hand of whoever works there.
 
-Isto não conserta a calibração — conserta o SILÊNCIO sobre ela. Quem liga o gate
-passa a saber o que está ligando.
+This does not fix the calibration — it fixes the SILENCE about it. Whoever
+switches the gate on now knows what they are switching on.
 """
 from __future__ import annotations
 
@@ -39,9 +41,9 @@ _CLEAN = """def soma(a, b):
     return a + b
 """
 
-#: Viola APENAS aninhamento — dois parâmetros, corpo curto. Isolar a métrica é o
-#: ponto: um fixture que viola três limiares de uma vez não consegue provar que a
-#: taxa reage ao limiar que o teste está variando.
+#: Violates nesting ONLY — two parameters, short body. Isolating the metric is the
+#: point: a fixture violating three thresholds at once cannot prove the rate reacts
+#: to the threshold the test is varying.
 _COMPLEX = """def decide(a, b):
     if a:
         if b:
@@ -88,7 +90,7 @@ def test_a_violating_file_is_counted(tmp_path: Path) -> None:
 
 
 def test_the_rate_reacts_to_the_thresholds(tmp_path: Path) -> None:
-    """O ponto do número: ele muda quando a calibração muda."""
+    """The point of the number: it changes when the calibration changes."""
     (tmp_path / "deep.py").write_text(_COMPLEX, encoding="utf-8")
 
     strict = measure_blocking_rate(tmp_path, _calibration(max_nesting_depth=2))
@@ -99,8 +101,8 @@ def test_the_rate_reacts_to_the_thresholds(tmp_path: Path) -> None:
 
 
 def test_an_empty_project_is_not_a_perfect_score(tmp_path: Path) -> None:
-    """Zero arquivos medidos é ausência de medição — a mesma regra do denominador
-    zero em D4 e do relatório de cobertura ilegível."""
+    """Zero files measured is absence of measurement — the same rule as D4's zero
+    denominator and the unreadable coverage report."""
     rate = measure_blocking_rate(tmp_path, _calibration())
     assert rate.files_measured == 0
     assert rate.percent is None
@@ -114,8 +116,8 @@ def test_a_low_rate_is_reported_as_ready(tmp_path: Path) -> None:
 
 
 def test_a_high_rate_refuses_to_call_the_calibration_ready(tmp_path: Path) -> None:
-    """O veredito é o que impede o relatório de dizer 'calibrado' sobre um gate
-    que reprova a maior parte do código que ele deveria proteger."""
+    """The verdict is what stops the report saying 'calibrated' about a gate that
+    rejects most of the code it is supposed to protect."""
     for i in range(10):
         (tmp_path / f"f{i}.py").write_text(_COMPLEX, encoding="utf-8")
 
@@ -123,11 +125,11 @@ def test_a_high_rate_refuses_to_call_the_calibration_ready(tmp_path: Path) -> No
 
     assert rate.percent == 100.0
     assert rate.verdict == "TOO_STRICT"
-    assert "desligado" in rate.advice or "disabled" in rate.advice
+    assert "switched off" in rate.advice
 
 
 def test_test_files_are_excluded_when_asked(tmp_path: Path) -> None:
-    """`--skip-tests` já existe na calibração; a taxa mede o mesmo conjunto."""
+    """`--skip-tests` already exists in the calibration; the rate measures the same set."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "a.py").write_text(_CLEAN, encoding="utf-8")
     (tmp_path / "tests").mkdir()

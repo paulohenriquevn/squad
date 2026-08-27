@@ -1,18 +1,19 @@
-"""Uma skill chamada `cycle-algo` era indistinguível de uma referência a um cycle.
+"""A skill named `cycle-something` was indistinguishable from a cycle reference.
 
-`skills/cycle-goal/` é uma skill, não uma fase de cycle — não existe (nem deve
-existir) `rules/cycle-goal.md`. Mas o Check 2 extraía o primeiro token `cycle-X`
-do SKILL.md inteiro quando não havia seção `## Cycle contract`, e concluía que a
+`skills/cycle-goal/` is a skill, not a cycle phase — there is no (and should be
+no) `rules/cycle-goal.md`. But Check 2 extracted the first `cycle-X` token from
+the whole SKILL.md when there was no `## Cycle contract` section, and concluded
+the
 skill declarava pertencer a um cycle inexistente.
 
-O efeito prático: o `plan-help`, cuja função é justamente LISTAR os comandos,
-não podia mencionar `/cycle-goal` sem derrubar o validador para FAIL. O bug ficou
-latente enquanto a documentação omitia o comando — a omissão escondia o defeito,
-e corrigir a omissão o revelou.
+The practical effect: `plan-help`, whose whole job is to LIST the commands, could
+not mention `/cycle-goal` without driving the validator to FAIL. The bug stayed
+latent while the documentation omitted the command — the omission hid the defect,
+and fixing the omission revealed it.
 
-Um `cycle-X` cujo X nomeia uma skill existente é a skill, nunca uma regra. Quem
-de fato pertence a um cycle diz isso numa seção `## Cycle contract`, que é casada
-primeiro e não é ambígua.
+A `cycle-X` whose X names an existing skill IS the skill, never a rule. Whatever
+genuinely belongs to a cycle says so in a `## Cycle contract` section, which is
+matched first and is not ambiguous.
 """
 from __future__ import annotations
 
@@ -78,7 +79,7 @@ def test_skill_named_cycle_something_is_not_a_cycle_reference(tmp_path: Path) ->
 
 
 def test_another_skill_may_mention_the_cycle_named_skill(tmp_path: Path) -> None:
-    """O caso que quebrou de verdade: o `plan-help` listando `/cycle-goal`."""
+    """The case that actually broke: `plan-help` listing `/cycle-goal`."""
     eco = _make_ecosystem(tmp_path)
     (eco / "skills" / "cycle-goal").mkdir(parents=True)
     (eco / "skills" / "cycle-goal" / "SKILL.md").write_text(
@@ -97,7 +98,7 @@ def test_another_skill_may_mention_the_cycle_named_skill(tmp_path: Path) -> None
 
 
 def test_a_genuinely_missing_cycle_is_still_caught(tmp_path: Path) -> None:
-    """A correção não pode cegar o check: só nomes de SKILL existentes são isentos."""
+    """The fix must not blind the check: only existing SKILL names are exempt."""
     eco = _make_ecosystem(tmp_path)
     (eco / "skills" / "orfa").mkdir(parents=True)
     (eco / "skills" / "orfa" / "SKILL.md").write_text(

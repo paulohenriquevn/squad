@@ -33,7 +33,7 @@ from pathlib import Path
 
 ZONE_DIRS = ("knowledge-base/references", "knowledge-base/tools")
 
-# Árvores que um clone de projeto par traz consigo e que não são o código dele.
+# Trees a peer-project clone brings along that are not that project's code.
 ZONE_SKIP_DIRS = frozenset({
     ".git", "node_modules", ".venv", "venv", "__pycache__", "target",
     "dist", "build", "out", ".next", ".nuxt", "vendor", ".mypy_cache",
@@ -178,11 +178,12 @@ def scan(repo: Path, size: int, max_zone_files: int, explicit: list[str] | None)
     if not roots:
         return [], stats
 
-    # O ÍNDICE PRIMEIRO, A ZONA DEPOIS — e a ordem é o ponto.
+    # THE INDEX FIRST, THE ZONE AFTERWARDS — and the order is the point.
     # Este script roda em todo Stop, antes do early-exit do hook. Enumerar a
-    # zona antes de saber se há algo a comparar fazia uma sessão que não
-    # escreveu nada pagar a travessia inteira de milhares de arquivos de
-    # terceiros para chegar a "nada a comparar".
+    # This script runs on every Stop, before the hook's early exit. Enumerating
+    # the zone before knowing whether there is anything to compare made a session
+    # that wrote nothing pay the full walk of thousands of third-party files just
+    # to reach "nothing to compare".
     index = build_index(changed_files(repo, explicit), repo, size)
     stats["indexed_shingles"] = len(index)
     if not index:

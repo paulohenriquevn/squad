@@ -97,17 +97,17 @@ if [ -d "$ECO" ]; then
   echo "==> Snapshot of the previous rules/ and agents/: $BACKUP_DIR"
 fi
 
-# --- cópia sem cache de ferramenta ------------------------------------------
-# O cabeçalho deste script promete pular caches. `cp -r` não lê `.gitignore`, e
-# os caches vivem DENTRO de `skills/` — então a promessa nunca foi cumprida:
-# medido em 2026-08-26, uma instalação levava 342 `.pyc` e 51 diretórios de
-# cache (3,9 MB) ao consumidor, 887 arquivos contra 496 versionados. Quase
-# metade do que chegava não era o sistema, e auditores próprios do consumidor
-# passavam a medir arquivos que não são do projeto.
+# --- copy without tool caches ------------------------------------------------
+# This script's header promises to skip caches. `cp -r` does not read
+# `.gitignore`, and the caches live INSIDE `skills/` — so the promise was never
+# kept: measured 2026-08-26, an install carried 342 `.pyc` files and 51 cache
+# directories (3.9 MB) to the consumer, 887 files against 496 tracked. Almost
+# half of what arrived was not the system, and the consumer's own auditors
+# started measuring files that are not the project's.
 #
-# `tar` em pipe, não `rsync`: rsync não é garantido em toda máquina; tar é. As
-# exclusões são de CACHE apenas — nada aqui decide o que é conteúdo do kit,
-# essa continua sendo a árvore de origem.
+# `tar` in a pipe, not `rsync`: rsync is not guaranteed on every machine; tar is.
+# The exclusions are CACHE only — nothing here decides what counts as kit
+# content, that remains the source tree.
 KIT_EXCLUDES=(
   --exclude=__pycache__
   --exclude=.pytest_cache
@@ -119,17 +119,17 @@ KIT_EXCLUDES=(
   --exclude=.DS_Store
 )
 
-# copy_tree <src> <dest> — copia o CONTEÚDO de src para dentro de dest.
+# copy_tree <src> <dest> — copies the CONTENTS of src into dest.
 copy_tree() {
   local src="$1" dest="$2"
   mkdir -p "$dest"
   tar -cf - -C "$src" "${KIT_EXCLUDES[@]}" . | tar -xf - -C "$dest"
 }
 
-# Remove cache que tenha sido gerado DEPOIS da cópia. A validação no fim deste
-# script executa Python dentro do alvo, e o interpretador escreve `__pycache__`
-# ao importar — sem esta limpeza o passo de verificação reintroduz exatamente o
-# lixo que a cópia acabou de evitar.
+# Removes cache generated AFTER the copy. The validation at the end of this
+# script runs Python inside the target, and the interpreter writes `__pycache__`
+# on import — without this cleanup the verification step reintroduces exactly the
+# litter the copy just avoided.
 prune_caches() {
   find "$1" -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache \
        -o -name .mypy_cache \) -prune -exec rm -rf {} + 2>/dev/null || true
@@ -137,15 +137,16 @@ prune_caches() {
 }
 
 # --- tabela de roteamento: entregue VAZIA ------------------------------------
-# `rules/cycle-backlog.md` é contrato do kit e vem inteiro, com uma exceção: a
-# seção `## Domain routing` descreve QUAIS REPOSITÓRIOS EXISTEM, e a deste
-# repositório é a do ecossistema em que o kit foi escrito. Entregá-la faz o
-# consumidor herdar um mapa de repos que ele não tem — medido em 2026-08-18 num
-# adotante: 88 itens com evidência `file:line` real, todos recusados por G1 como
-# `unroutable_repo`. O gate estava certo; a configuração é que era de outro.
+# `rules/cycle-backlog.md` is the kit's contract and ships whole, with one
+# exception: the `## Domain routing` section describes WHICH REPOSITORIES EXIST,
+# and this repository's is the one from the ecosystem the kit was written in.
+# Shipping it makes the consumer inherit a map of repos it does not have —
+# measured 2026-08-18 on an adopter: 88 items with real `file:line` evidence, all
+# refused by G1 as `unroutable_repo`. The gate was right; the configuration was
+# somebody else's.
 #
-# `rules/templates/domain-routing.md` é um template de SEÇÃO, não de arquivo:
-# por isso é excluído do loop que copia `templates/*` sobre `rules/*`.
+# `rules/templates/domain-routing.md` is a SECTION template, not a file one:
+# hence it is excluded from the loop that copies `templates/*` over `rules/*`.
 apply_routing_template() {
   local target="$ECO/rules/cycle-backlog.md"
   local tpl="$SRC_DIR/rules/templates/domain-routing.md"
@@ -170,19 +171,20 @@ PYEOF
 # architect agents and their memory. The `rm -rf` below would have deleted every one of them, and
 # a snapshot in `.install-backups/` is a consolation prize, not a correct install.
 mkdir -p "$ECO"
-# Vira 1 quando a tabela DERIVADA do consumidor foi preservada — nesse caso o
-# template vazio não pode ser aplicado por cima dela.
+# Becomes 1 when the consumer's DERIVED table was preserved — in that case the
+# empty template must not be applied on top of it.
 ROUTING_PRESERVED=0
 for item in skills rules hooks commands scripts; do
   if [ "$MERGE" -eq 1 ]; then
     echo "==> Merging $item/ (adding, deleting nothing)"
     mkdir -p "$ECO/$item"
     if [ "$item" = "rules" ]; then
-      # A tabela de roteamento é configuração do projeto e mora num `.md` do kit.
-      # Guardá-la antes de copiar e reinjetá-la depois: medido no `speculative`, a
-      # reinstalação restaurou a tabela do ecossistema de origem por cima da derivada
-      # e `route_domain <projeto>` foi de exit 0 para exit 1 — o projeto deixou de
-      # rotear itens sobre si mesmo. O resto de cycle-backlog.md é contrato do kit.
+      # The routing table is project configuration living inside a kit `.md`.
+      # Save it before copying and re-inject it after: measured on `speculative`,
+      # reinstalling restored the origin ecosystem's table over the derived one and
+      # `route_domain <project>` went from exit 0 to exit 1 — the project stopped
+      # being able to route items about itself. The rest of cycle-backlog.md is the
+      # kit's contract.
       ROUTING_KEEP=""
       if [ -f "$ECO/rules/cycle-backlog.md" ]; then
         ROUTING_KEEP="$(mktemp)"
@@ -194,11 +196,12 @@ m = re.search(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", body, re.MULTILINE | re.
 open(out, "w", encoding="utf-8").write(m.group(0) if m else "")
 PYEOF
       fi
-      # `rules/*.txt` é a CONFIGURAÇÃO do projeto — linguagens habilitadas, alvo
-      # vivo, allowlists, skills auxiliares declaradas. Copiar o template por cima
-      # apaga ajuste local em silêncio: medido no `speculative`, onde a declaração
-      # das 9 skills do projeto morreu na reinstalação seguinte. Os `.md` continuam
-      # sendo atualizados — são o contrato normativo, e o kit é dono deles.
+      # `rules/*.txt` is the project's CONFIGURATION — enabled languages, live
+      # target, allowlists, declared auxiliary skills. Copying the template over it
+      # erases local tuning in silence: measured on `speculative`, where the
+      # declaration of the project's 9 skills died on the next reinstall. The `.md`
+      # files keep being updated — they are the normative contract, and the kit owns
+      # them.
       for f in "$SRC_DIR/rules"/*; do
         [ -f "$f" ] || continue
         base="$(basename "$f")"
@@ -210,12 +213,12 @@ PYEOF
             fi
             ;;
         esac
-        # Config específica do projeto nasce em branco: o kit distribuía a SUA
-        # (Python habilitado, alvo vivo do ecossistema de origem) como se fosse do
-        # consumidor. Os thresholds NÃO têm template — são defaults universais, e
-        # esvaziá-los deixaria o gate sem banda nenhuma.
+        # Project-specific config is born blank: the kit used to ship ITS OWN
+        # (Python enabled, the origin ecosystem's live target) as if it were the
+        # consumer's. The thresholds have NO template — they are universal defaults,
+        # and emptying them would leave the gate with no band at all.
         if [ "$base" = "domain-routing.md" ]; then
-          continue  # template de SEÇÃO, aplicado por apply_routing_template
+          continue  # SECTION template, applied by apply_routing_template
         fi
         if [ -f "$SRC_DIR/rules/templates/$base" ]; then
           cp "$SRC_DIR/rules/templates/$base" "$ECO/rules/$base"
@@ -245,8 +248,9 @@ PYEOF
     rm -rf "${ECO:?}/$item"
     copy_tree "$SRC_DIR/$item" "$ECO/$item"
     if [ "$item" = "rules" ]; then
-      # Mesmo numa instalação limpa: a config específica do projeto nasce em branco.
-      # Sem isto, o ramo não-merge copiava a configuração do kit (Python habilitado,
+      # Even on a clean install: project-specific config is born blank. Without
+      # this, the non-merge branch copied the kit's own configuration (Python
+      # enabled,
       # alvo vivo do ecossistema de origem) e o consumidor nascia com ela.
       for tpl in "$SRC_DIR"/rules/templates/*; do
         [ -f "$tpl" ] || continue
@@ -257,23 +261,23 @@ PYEOF
   fi
 done
 
-# A tabela de roteamento só nasce vazia quando não há uma derivada a preservar.
-# Sobrescrever a do consumidor seria trocar um mapa correto por um vazio — o
-# oposto exato do defeito que este template corrige.
+# The routing table is only born empty when there is no derived one to preserve.
+# Overwriting the consumer's would trade a correct map for an empty one — the
+# exact opposite of the defect this template fixes.
 if [ "$ROUTING_PRESERVED" -eq 0 ]; then
   apply_routing_template
 fi
 
-# `rules/templates/` é insumo do instalador, não regra. Deixá-lo no consumidor faria
-# o check_xrefs varrer arquivos que não governam nada.
+# `rules/templates/` is installer input, not a rule. Leaving it in the consumer
+# would make check_xrefs sweep files that govern nothing.
 rm -rf "$ECO/rules/templates"
 
-# `hooks/quality/` é o gate de smells DESTE repositório, gerado por `/quality-init`
-# com limiares calibrados no p90 do código daqui (max_file_lines = 367, e assim por
-# diante). Entregá-lo repetiria o defeito que o kit passou meses corrigindo em
-# `rules/*.txt` e na tabela de roteamento: distribuir a configuração de quem escreveu
-# como se fosse a de quem instala. O consumidor gera a dele com o mesmo comando,
-# contra os números dele — o passo 3 das instruções finais o nomeia.
+# `hooks/quality/` is THIS repository's smell gate, generated by `/quality-init`
+# with thresholds calibrated on the p90 of the code here (max_file_lines = 367,
+# and so on). Shipping it would repeat the defect the kit spent months fixing in
+# `rules/*.txt` and in the routing table: distributing the author's configuration
+# as if it were the installer's. The consumer generates its own with the same
+# command, against its own numbers — step 3 of the closing instructions names it.
 rm -rf "$ECO/hooks/quality"
 
 # agents/ is copied FILE BY FILE, not wholesale. This repo dogfoods its own cycles, and
@@ -281,24 +285,25 @@ rm -rf "$ECO/hooks/quality"
 # (`implement-slice-*/`, `review-*/`). Those are THIS repo's audit trail, not template content —
 # and `cp -r` shipped two of them, dated May 2026, into every consumer install. The header above
 # already promises to skip audit trails; this is what keeping that promise looks like.
-# O kit NÃO tem especialistas para copiar. Os oito que ele carregava descreviam os
-# repos de um ecossistema só; num consumidor que não é aquele, eram arquivos sobre
-# repositórios inexistentes. Medido em 2026-08-20 sobre 41 instalações: 19 já viviam
-# sem eles e nada quebrou, 11 escrevem os seus, e a tabela de roteamento passou a ser
-# DERIVADA do projeto — o acoplamento que os justificava deixou de existir. Foram
-# removidos da fonte em 2026-08-26; nunca estiveram versionados (`.gitignore`
-# `agents/**`), então a flag `--with-domain-agents` copiava arquivos que só existiam
-# na máquina de quem os escreveu.
+# The kit has NO specialists to copy. The eight it used to carry described the
+# repos of a single ecosystem; in a consumer that is not that ecosystem, they were
+# files about repositories that do not exist there. Measured 2026-08-20 across 41
+# installs: 19 already lived without them and nothing broke, 11 write their own,
+# and the routing table became DERIVED from the project — the coupling that
+# justified them ceased to exist. They were removed from the source on 2026-08-26;
+# they were never versioned (`.gitignore agents/**`), so the
+# `--with-domain-agents` flag copied files that existed only on the machine of
+# whoever wrote them.
 #
-# O README continua vindo sempre: ele descreve o MECANISMO de roteamento, não um
-# domínio.
-# `agents/` NUNCA é apagado, em modo nenhum. Aqui moram os especialistas que o projeto
-# escreveu — e `rm -rf` no modo não-merge levava todos junto. Nada no kit justifica
-# destruir o especialista de domínio de um consumidor: ele descreve o repositório dele,
-# não é cópia de nada nosso, e não existe em lugar nenhum além dali.
+# The README always ships: it describes the routing MECHANISM, not a domain.
+# `agents/` is NEVER deleted, in any mode. This is where the specialists the
+# project wrote live — and `rm -rf` in non-merge mode took every one of them.
+# Nothing in the kit justifies destroying a consumer's domain specialist: it
+# describes their repository, it is a copy of nothing of ours, and it exists
+# nowhere else.
 mkdir -p "$ECO/agents"
 if [ -f "$ECO/agents/README.md" ]; then
-  # Depois que alguém o adapta, este README lista os agentes DO PROJETO.
+  # Once someone adapts it, this README lists the PROJECT's agents.
   echo "    kept (yours): agents/README.md"
 elif [ -f "$SRC_DIR/agents/README.md" ]; then
   echo "==> Copying agents/README.md (the routing mechanism)"
@@ -308,9 +313,10 @@ fi
 for f in HOW-TO-USE.md README.md .active_plan.example; do
   [ -f "$SRC_DIR/$f" ] && cp "$SRC_DIR/$f" "$ECO/$f"
 done
-# O manifesto tem UM lugar canônico — `.claude-plugin/plugin.json`, onde o
-# Claude Code o procura. Havia uma segunda cópia na raiz, e duas cópias de um
-# manifesto divergem: a da raiz era a que o README apontava e a que este script
+# The manifest has ONE canonical place — `.claude-plugin/plugin.json`, where
+# Claude Code looks for it. There used to be a second copy at the root, and two
+# copies of a manifest diverge: the root one was what the README pointed at and
+# what this script
 # instalava, enquanto o mecanismo nativo lia a outra.
 [ -f "$SRC_DIR/.claude-plugin/plugin.json" ] && cp "$SRC_DIR/.claude-plugin/plugin.json" "$ECO/plugin.json"
 
@@ -408,18 +414,19 @@ fi
 #
 # check_xrefs.py resolves from its own path and caught the same corruption (exit 1). Two lines
 # printed the same word for two different amounts of verification.
-# --- manifesto: o que veio do kit ------------------------------------------
-# Um consumidor com auditor próprio precisa distinguir o que ele escreveu do que
+# --- manifest: what came from the kit ----------------------------------------
+# A consumer with an auditor of its own needs to tell what it wrote from what
 # foi instalado. Medido no `speculative`: seu `scripts/audit.py` percorre
 # `.claude/skills/*/SKILL.md` exigindo a spec Agent Skills; com o kit instalado
-# ele passou de APROVADO a REPROVADO, auditando 37 skills que não são do projeto
-# contra o padrão das 9 que são. Sem manifesto, a única saída seria adivinhar por
-# nome. As skills do PROJETO nunca entram aqui — a lista sai da árvore do kit.
+# it went from PASS to FAIL, auditing 37 skills that are not the project's
+# against the standard of the 9 that are. Without a manifest, the only way out
+# would be guessing by name. The PROJECT's skills never enter here — the list
+# comes from the kit's tree.
 MANIFEST="$ECO/.kit-manifest.txt"
 {
-  echo "# Escrito por scripts/install.sh — o que ESTE kit trouxe para .claude/."
-  echo "# Um caminho por linha, relativo a .claude/. Tudo que não está aqui é do projeto."
-  echo "# Regenerado a cada instalação; não edite à mão."
+  echo "# Written by scripts/install.sh — what THIS kit brought into .claude/."
+  echo "# One path per line, relative to .claude/. Anything not here is the project's."
+  echo "# Regenerated on every install; do not edit by hand."
   for d in "$SRC_DIR"/skills/*/; do
     [ -f "$d/SKILL.md" ] && echo "skills/$(basename "$d")"
   done
@@ -443,9 +450,9 @@ else
   echo "    test_e2e_smoke.py: FAIL (re-run manually)"
 fi
 
-# Os dois validadores acima importam módulos do alvo, e o interpretador escreve
-# `__pycache__` ao fazê-lo. Sem isto, o passo que confirma a instalação é o que
-# volta a sujá-la.
+# The two validators above import modules from the target, and the interpreter
+# writes `__pycache__` while doing so. Without this, the step that confirms the
+# install is the one that dirties it again.
 prune_caches "$ECO"
 
 cat <<EOF

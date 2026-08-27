@@ -1,21 +1,21 @@
-"""Um cycle com dois hífens era truncado, e o validador acusava o arquivo errado.
+"""A cycle with two hyphens was truncated, and the validator flagged the wrong file.
 
-`CYCLE_REF_RE` era `` `?cycle-([a-z]+)`? `` — `[a-z]+` não casa hífen. Então
-`cycle-code-quality` era lido como `cycle-code`, `cycle-auto-plan` como
-`cycle-auto` e `cycle-judge-codex` como `cycle-judge`. Nenhum dos três existe em
-`rules/`, e o Check 2 (`skill_cycle_contract_resolves`) reportava FAIL contra um
-nome que ninguém escreveu.
+`CYCLE_REF_RE` was `` `?cycle-([a-z]+)`? `` — `[a-z]+` does not match a hyphen. So
+`cycle-code-quality` was read as `cycle-code`, `cycle-auto-plan` as `cycle-auto`
+and `cycle-judge-codex` as `cycle-judge`. None of the three exists in `rules/`,
+and Check 2 (`skill_cycle_contract_resolves`) reported FAIL against a name nobody
+wrote.
 
-Três dos doze cycle rules do kit são multi-hífen, então o defeito cobria um
-quarto do inventário. Ficou escondido porque as duas skills que citavam esses
+Three of the kit's twelve cycle rules are multi-hyphen, so the defect covered a
+quarter of the inventory. It stayed hidden because the two skills citing those
 cycles no `## Cycle contract` mencionavam antes um cycle de nome simples — e
 `_extract_cycle_contract_ref` retorna no PRIMEIRO match. `auto-plan` cita
 `cycle-discover` antes de `cycle-auto-plan`; a primeira skill a citar um
-multi-hífen sozinha foi a que fez o bug aparecer.
+multi-hyphen alone is what made the bug appear.
 
-O modo de falha é o pior para um validador: ele acusa um arquivo inexistente
-enquanto o arquivo real está lá, e a leitura natural — "o validador está
-quebrado" — é a que ensina a ignorá-lo.
+The failure mode is the worst kind for a validator: it flags a non-existent file
+while the real file sits right there, and the natural reading — "the validator is
+broken" — is the one that teaches people to ignore it.
 """
 from __future__ import annotations
 
@@ -29,12 +29,12 @@ import pytest
 _REPO = Path(__file__).resolve().parent.parent
 _SCRIPT = _REPO / "scripts" / "check_xrefs.py"
 
-# Todo cycle rule multi-hífen do kit. Um nome novo aqui é um caso novo de graça.
+# Every multi-hyphen cycle rule in the kit. A new name here is a new case for free.
 MULTI_HYPHEN_CYCLES = ["cycle-code-quality", "cycle-auto-plan", "cycle-judge-codex"]
 
 
 def _make_ecosystem(root: Path, cycle: str) -> Path:
-    """Ecossistema mínimo: uma skill cujo contrato cita `cycle`, e o rule que existe."""
+    """Minimal ecosystem: a skill whose contract cites `cycle`, and the rule that exists."""
     eco = root / ".claude"
     skill = cycle.removeprefix("cycle-")
     (eco / "skills" / skill).mkdir(parents=True)
@@ -62,13 +62,13 @@ def _run(eco: Path) -> dict:
 
 @pytest.mark.parametrize("cycle", MULTI_HYPHEN_CYCLES)
 def test_multi_hyphen_cycle_contract_resolves(tmp_path: Path, cycle: str) -> None:
-    # Arrange — a skill cita um cycle multi-hífen que EXISTE em disco.
+    # Arrange — the skill cites a multi-hyphen cycle that EXISTS on disk.
     eco = _make_ecosystem(tmp_path, cycle)
 
     # Act
     report = _run(eco)
 
-    # Assert — nenhum finding pode acusar o contrato de não resolver.
+    # Assert — no finding may claim the contract does not resolve.
     unresolved = [
         f for f in report["findings"] if f["check"] == "skill_cycle_contract_resolves"
     ]
@@ -79,14 +79,14 @@ def test_multi_hyphen_cycle_contract_resolves(tmp_path: Path, cycle: str) -> Non
 
 @pytest.mark.parametrize("cycle", MULTI_HYPHEN_CYCLES)
 def test_multi_hyphen_cycle_is_not_truncated(tmp_path: Path, cycle: str) -> None:
-    # Arrange — mesmo ecossistema, mas agora o rule real é REMOVIDO.
+    # Arrange — same ecosystem, but now the real rule is REMOVED.
     eco = _make_ecosystem(tmp_path, cycle)
     (eco / "rules" / f"{cycle}.md").unlink()
 
     # Act
     report = _run(eco)
 
-    # Assert — o validador deve reclamar do nome COMPLETO, não do prefixo truncado.
+    # Assert — the validator must complain about the FULL name, not the truncated prefix.
     msgs = [
         f["message"]
         for f in report["findings"]
@@ -98,5 +98,5 @@ def test_multi_hyphen_cycle_is_not_truncated(tmp_path: Path, cycle: str) -> None
         f"esperava o nome completo {cycle}.md na mensagem, veio: {msgs}"
     )
     assert not any(f"{truncated}.md" in m for m in msgs), (
-        f"nome truncado {truncated}.md vazou para a mensagem: {msgs}"
+        f"truncated name {truncated}.md leaked into the message: {msgs}"
     )

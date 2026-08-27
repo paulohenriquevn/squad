@@ -1,9 +1,10 @@
-# Nenhum alvo vivo declarado.
+# No live target declared.
 #
-# O kit distribuía aqui o alvo vivo do ecossistema em que foi escrito — uma URL de
-# ambiente dev e dois domínios concretos. Num outro projeto isso é pior que
-# vazio: `/discover-execute (live-test mode)` e `/acceptance` sondariam o produto de outra pessoa e
-# chamariam o resultado de evidência deste projeto. Declare o alvo DESTE sistema.
+# The kit used to ship the live target of the ecosystem it was written in — a dev
+# environment URL and two concrete domains. In another project that is worse than
+# empty: `/discover-execute (live-test mode)` and `/acceptance` would probe someone
+# else's product and call the result this project's evidence. Declare THIS system's
+# target.
 
 # Where /discover-execute (live-test mode) exercises the ecosystem — PER-PROJECT, edit this.
 #

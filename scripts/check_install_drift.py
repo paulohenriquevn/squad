@@ -52,8 +52,8 @@ class Drift(enum.Enum):
     INSTALL_AHEAD = "install_ahead"
     KIT_AHEAD = "kit_ahead"
     DIVERGED = "diverged"
-    #: O install carrega um conteúdo que o kit JÁ TEVE. Está atrasado, não modificado —
-    #: e um `git checkout` do kit resolve sem perder nada.
+    #: The install carries content the kit ONCE HAD. It is behind, not modified —
+    #: and a `git checkout` of the kit resolves it without losing anything.
     STALE = "stale"
 
 
@@ -63,14 +63,14 @@ def _lines(path: Path) -> set[str]:
 
 
 def _historical_contents(kit_root: Path, rel: str) -> set[str]:
-    """Todo conteúdo que este caminho já teve no histórico do kit.
+    """Every content this path has ever had in the kit's history.
 
-    Sem esta pergunta, um consumidor instalado de uma versão antiga aparece como
-    trabalho local em cada arquivo que o kit evoluiu desde então. Medido no
-    `theokit-tui`: 11 arquivos reportados como "precisam de um humano", dos quais 4
-    eram apenas versões antigas do kit — `install.sh`, `check_xrefs.py`,
-    `code-quality-golden-rule.md` e `code-quality-allowlist.txt`. A lição já estava
-    no `sync_consumers` (231 falsos `local-change` viraram 119) e não estava aqui.
+    Without asking this, a consumer installed from an older version shows up as
+    local work in every file the kit has evolved since. Measured on `theokit-tui`:
+    11 files reported as "need a human", of which 4 were merely older kit versions
+    — `install.sh`, `check_xrefs.py`, `code-quality-golden-rule.md` and
+    `code-quality-allowlist.txt`. The lesson was already in `sync_consumers` (231
+    false `local-change` became 119) and was not here.
     """
     try:
         revisions = subprocess.run(  # noqa: PLW1510
@@ -113,19 +113,19 @@ def classify_file(install_file: Path, kit_file: Path,
 # and reporting them would bury the signal under 38 rows of noise (measured on theokit-tui).
 _CONSUMER_LOCAL = ("__pycache__", ".pytest_cache", ".benchmarks", "knowledge-base")
 
-#: Arquivos que pertencem ao PROJETO mesmo vivendo num diretório que o kit também tem.
-#: `agents/<domínio>.md` descreve o repositório do consumidor — colhê-lo para o kit é o
-#: oposto do que ele é (grill kit-domain-agents-install, decisão 5). O `README.md` fica
-#: no escopo: descreve o mecanismo de roteamento, não um domínio.
+#: Files that belong to the PROJECT even while living in a directory the kit also has.
+#: `agents/<domain>.md` describes the consumer's repository — harvesting it into the kit
+#: is the opposite of what it is (grill kit-domain-agents-install, decision 5). The
+#: `README.md` stays in scope: it describes the routing mechanism, not a domain.
 def _is_consumer_owned(rel: str) -> bool:
     parts = Path(rel).parts
     return len(parts) == 2 and parts[0] == "agents" and parts[1] != "README.md"
 
 
-#: O consumidor recebe `settings.plugin.json` COMO `settings.json` — o `settings.json`
-#: do kit é o de desenvolvimento, com outros caminhos de hook. Comparar os dois acusa
-#: DIVERGED em toda instalação, para sempre. Medido no `speculative`: idênticos como
-#: JSON, reportados como divergentes.
+#: The consumer receives `settings.plugin.json` AS `settings.json` — the kit's own
+#: `settings.json` is the development one, with different hook paths. Comparing the two
+#: reports DIVERGED on every install, forever. Measured on `speculative`: identical as
+#: JSON, reported as divergent.
 _INSTALL_TO_KIT_ALIAS = {"settings.json": "settings.plugin.json"}
 
 
@@ -180,8 +180,9 @@ class DriftReport:
 
 def scan(install_root: Path, kit_root: Path) -> DriftReport:
     install, kit = _relevant(install_root), _relevant(kit_root)
-    # O consumidor recebe `settings.plugin.json` COMO `settings.json`; comparar com o
-    # `settings.json` do kit (o de desenvolvimento) acusa DIVERGED em toda instalação.
+    # The consumer receives `settings.plugin.json` AS `settings.json`; comparing it
+    # against the kit's `settings.json` (the development one) reports DIVERGED on
+    # every install.
     resolved_kit = dict(kit)
     for install_name, kit_name in _INSTALL_TO_KIT_ALIAS.items():
         if install_name in install and kit_name in kit:

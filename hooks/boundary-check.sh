@@ -1,16 +1,17 @@
 #!/bin/bash
-# PreToolUse hook para Edit/Write: fronteiras de escrita (agnóstico).
+# PreToolUse hook for Edit/Write: write boundaries (stack-agnostic).
 #
-# Fronteiras defendidas:
-#   1. knowledge-base/references/ (projetos parecidos — inspiração) e
-#      knowledge-base/tools/ (ferramentas das quais dependemos) são material de
-#      estudo read-only. Achados vão para knowledge-base/discoveries/blueprints/.
-#   2. O KIT INSTALADO é read-only quando é dependência do projeto.
+# Boundaries defended here:
+#   1. knowledge-base/references/ (similar projects — inspiration) and
+#      knowledge-base/tools/ (tools we depend on) are read-only study material.
+#      Findings go to knowledge-base/discoveries/blueprints/.
+#   2. THE INSTALLED KIT is read-only when it is a dependency of the project.
 #
-# Fronteiras arquiteturais do projeto (p.ex. DIP entre domínio e adaptadores)
-# são específicas e pertencem a rules/architecture.md, cobradas em code review.
+# The project's own architectural boundaries (e.g. DIP between domain and
+# adapters) are project-specific: they belong to rules/architecture.md and are
+# enforced in code review.
 #
-# Exit 0 = permite, Exit 2 = bloqueia.
+# Exit 0 = allow, Exit 2 = block.
 
 set -euo pipefail
 
@@ -21,28 +22,28 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-# --- 1. knowledge-base/{references,tools}/ são read-only ---------------------
-# Verificada ANTES de resolver o layout: `detect-layout.sh` encerra com exit 0
-# quando não encontra o kit, e esta fronteira não depende de haver kit algum.
-# Casa os dois layouts (knowledge-base/ e .claude/knowledge-base/).
+# --- 1. knowledge-base/{references,tools}/ are read-only ---------------------
+# Checked BEFORE the layout is resolved: `detect-layout.sh` exits 0 when it
+# cannot find the kit, and this boundary does not depend on there being a kit at
+# all. Matches both layouts (knowledge-base/ and .claude/knowledge-base/).
 if echo "$FILE_PATH" | grep -qE '(^|/)(\.claude/)?knowledge-base/(references|tools)/'; then
   echo '{"decision":"block","reason":"BOUNDARY VIOLATION: knowledge-base/references/ (similar projects — inspiration) and knowledge-base/tools/ (tools we depend on) are read-only. Never edit/create files there. Capture findings in knowledge-base/discoveries/blueprints/."}' >&2
   exit 2
 fi
 
-# --- 2. o kit instalado é read-only -----------------------------------------
-# POR QUE ESTA FRONTEIRA EXISTE
-# O kit instalado por cópia vive em `<projeto>/.claude/`, com Edit/Write/Bash(*)
-# liberados, e até 2026-08-26 nenhum hook cobria esse caminho. O resultado está
-# registrado em `scripts/check_install_drift.py`: vinte e duas correções do kit
-# passaram semanas dentro do `.claude/` gitignorado de UM consumidor e em nenhum
-# outro lugar. Uma correção escrita aqui protege exatamente uma máquina e some
-# no próximo `install.sh --force`. O destino dela é o repositório do kit.
+# --- 2. the installed kit is read-only ---------------------------------------
+# WHY THIS BOUNDARY EXISTS
+# A copy-installed kit lives in `<project>/.claude/`, with Edit/Write/Bash(*)
+# allowed, and until 2026-08-26 no hook covered that path. The result is on
+# record in `scripts/check_install_drift.py`: twenty-two kit fixes spent weeks
+# inside ONE consumer's gitignored `.claude/` and nowhere else. A fix written
+# here protects exactly one machine and is erased by the next `install.sh
+# --force`. Its destination is the kit's own repository.
 source "$(dirname "$0")/lib/detect-layout.sh"
 
-# STANDALONE NUNCA É PROTEGIDO. Aí `KIT_DIR` é o próprio repositório do kit
-# aberto para desenvolvimento — bloquear seria impedir o trabalho que este hook
-# existe para preservar. A fronteira vale quando o kit é DEPENDÊNCIA.
+# STANDALONE IS NEVER PROTECTED. There `KIT_DIR` is the kit's own repository
+# opened for development — blocking would prevent the very work this hook exists
+# to preserve. The boundary applies when the kit is a DEPENDENCY.
 [ "$KIT_DIR" = "." ] && exit 0
 
 case "$KIT_DIR" in
@@ -54,40 +55,40 @@ case "$FILE_PATH" in
    *) TARGET_ABS="$PROJECT_DIR/$FILE_PATH" ;;
 esac
 
-# Fora da árvore do kit não há nada a decidir.
+# Outside the kit's tree there is nothing to decide.
 case "$TARGET_ABS" in
   "$KIT_ABS"/*) REL="${TARGET_ABS#"$KIT_ABS"/}" ;;
   *) exit 0 ;;
 esac
 
-# O que é do PROJETO dentro da árvore do kit, e por quê:
+# What belongs to the PROJECT inside the kit's tree, and why:
 #
-#   rules/*.txt          configuração — linguagens habilitadas, alvo vivo,
-#                        allowlists. `install.sh` já a preserva entre instalações.
-#   agents/**            os especialistas que o projeto escreveu sobre os
-#                        próprios repositórios. Não existem em lugar nenhum além
-#                        dali.
-#   knowledge-base/**    a saída do ciclo: planos, reviews, auditorias, ADRs.
-#   settings.json        a fiação deste projeto.
-#   .kit-manifest.txt    reescrito pelo instalador a cada instalação.
+#   rules/*.txt          configuration — enabled languages, live target,
+#                        allowlists. `install.sh` already preserves it across
+#                        installs.
+#   agents/**            the specialists the project wrote about its own
+#                        repositories. They exist nowhere else.
+#   knowledge-base/**    the cycle's output: plans, reviews, audits, ADRs.
+#   settings.json        this project's wiring.
+#   .kit-manifest.txt    rewritten by the installer on every install.
 #
-# Tudo o mais sob a árvore é CONTRATO do kit.
+# Everything else under the tree is the kit's CONTRACT.
 case "$REL" in
   rules/*.txt|agents/*|knowledge-base/*|settings.json|.kit-manifest.txt|.install-backups/*)
     exit 0
     ;;
 esac
 
-# Uma skill que o PROJETO escreveu continua sendo dele. É para isso que
-# `.kit-manifest.txt` existe: sem consultá-lo, a única forma de separar as
-# skills do kit das do projeto seria adivinhar por nome — e foi medido num
-# adotante com 10 skills próprias ao lado das do kit.
+# A skill the PROJECT wrote stays the project's. That is what
+# `.kit-manifest.txt` is for: without reading it, the only way to tell the kit's
+# skills from the project's would be guessing by name — measured on an adopter
+# carrying 10 skills of its own alongside the kit's.
 case "$REL" in
   skills/*)
     SKILL_DIR="skills/$(echo "$REL" | cut -d/ -f2)"
     MANIFEST="$KIT_ABS/.kit-manifest.txt"
     if [ -f "$MANIFEST" ] && ! grep -qxF "$SKILL_DIR" "$MANIFEST"; then
-      exit 0  # não veio do kit — é do projeto
+      exit 0  # not from the kit — it is the project's
     fi
     ;;
 esac

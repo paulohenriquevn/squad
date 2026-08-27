@@ -5,7 +5,7 @@
 #   1. TDD gate (warn-first): for every changed production source file, warn
 #      if no test is detected beside it OR in the owning package's test tree
 #      (heuristic; supports common *_test.* / *.test.* / *.spec.* / test_*.*).
-#   2. CHANGELOG discipline (HARD GATE — Inquebrável Rule 6 + cycle-review BLOCKER):
+#   2. CHANGELOG discipline (HARD GATE — Unbreakable Rule 6 + cycle-review BLOCKER):
 #      if production source changed and neither a CHANGELOG.md (root or package)
 #      nor a .changeset/*.md entry did, BLOCK.
 #   3. Secret leak (HARD GATE — cycle-review BLOCKER): if newly tracked files
@@ -66,27 +66,28 @@ else
   LAST_COMMIT=$(git diff --name-only HEAD~1..HEAD 2>/dev/null || true)
 fi
 
-# `.claude/` é o kit INSTALADO — dependência do projeto, não fonte dele.
-# Medido num adotante recém-instalado: a primeira sessão emitia 107 linhas de
-# aviso sobre `.claude/skills/**/*.py` contra UM achado real no código do
-# usuário. Auditar a própria dependência é o jeito canônico de ensinar alguém a
-# ignorar o gate — e um gate ignorado não protege nada.
+# `.claude/` is the INSTALLED kit — a dependency of the project, not its source.
+# Measured on a freshly installed adopter: the first session emitted 107 warning
+# lines about `.claude/skills/**/*.py` against ONE real finding in the user's own
+# code. Auditing your own dependency is the canonical way to teach someone to
+# ignore the gate — and an ignored gate protects nothing.
 #
-# O filtro serve os dois layouts sem precisar distinguir qual: em plugin-install
-# o kit vive sob `.claude/` e sai; em standalone o repositório do kit tem seus
-# arquivos em `skills/`, `hooks/`, `scripts/`, que seguem auditados normalmente.
+# The filter serves both layouts without needing to tell them apart: under a
+# plugin install the kit lives below `.claude/` and drops out; in standalone the
+# kit's repository keeps its files in `skills/`, `hooks/`, `scripts/`, which stay
+# audited as usual.
 #
-# `knowledge-base/{references,tools}/` sai pela MESMA razão, uma camada acima:
-# não é nem sequer dependência, é código de TERCEIROS que o kit declara material
-# de estudo read-only — `validate-command.sh` bloqueia escrever nele e copiar
-# dele. Auditá-lo é pior que auditar a própria dependência, porque o volume é de
-# outra ordem: medido 2026-08-26 num adotante, 500 arquivos de um projeto par
-# clonado renderam 517 linhas de saída e 16.944 ms, com 500 avisos de TDD sobre
-# código que ninguém neste repositório escreveu. `install.sh` não mexe no
-# `.gitignore` do consumidor por decisão explícita, então esses arquivos chegam
-# aqui como untracked e não-ignorados — o caminho normal, não o excepcional.
-# Extrapolando o linear, ~3.000 arquivos alcançam os 120 s de timeout deste
-# hook, e um hook morto por timeout não bloqueia coisa alguma.
+# `knowledge-base/{references,tools}/` drops out for the SAME reason, one layer
+# up: it is not even a dependency, it is THIRD-PARTY code the kit declares
+# read-only study material — `validate-command.sh` blocks writing to it and
+# copying from it. Auditing it is worse than auditing your own dependency,
+# because the volume is of another order: measured 2026-08-26 on an adopter, 500
+# files from a cloned peer project produced 517 output lines and 16,944 ms, with
+# 500 TDD warnings about code nobody in this repository wrote. `install.sh` does
+# not touch the consumer's `.gitignore` by explicit decision, so those files
+# arrive here untracked and un-ignored — the normal path, not the exceptional
+# one. Extrapolating linearly, ~3,000 files reach this hook's 120s timeout, and
+# a hook killed by timeout blocks nothing at all.
 ALL_FILES=$(echo -e "${UNSTAGED}\n${STAGED}\n${UNTRACKED}\n${LAST_COMMIT}" \
   | sort -u \
   | grep -v '^$' \
@@ -153,20 +154,20 @@ SRC_CHANGED=$(echo "$ALL_FILES" \
 if [ -n "$SRC_CHANGED" ]; then
   MISSING_TESTS=()
 
-  # Índice de nomes de arquivo de teste, UMA varredura por unidade.
+  # Index of test file names, ONE scan per unit.
   #
-  # Antes havia um `find` por arquivo alterado, e o custo é da ÁRVORE, não da
-  # mudança: 39 ms por chamada medidos num repositório de 13 mil arquivos. Com
-  # a zona de estudo entrando no conjunto isso alcançava os 120 s de timeout
-  # deste hook (2026-08-26). Excluir a zona tirou o volume; varrer por unidade
-  # tira a forma que produziu o volume — um `find` a mais custa uma árvore
-  # inteira, e nada além do número de arquivos alterados o limitava.
+  # There used to be one `find` per changed file, and the cost is the TREE's,
+  # not the change's: 39 ms per call measured on a 13,000-file repository. With
+  # the study zone entering the set, that reached this hook's 120s timeout
+  # (2026-08-26). Excluding the zone removed the volume; scanning per unit
+  # removes the SHAPE that produced the volume — one extra `find` costs an entire
+  # tree, and nothing but the number of changed files bounded it.
   #
-  # Sem array associativo de propósito: `bash` 3.2 (o que a Apple ainda envia)
-  # não os tem, e este hook roda na máquina do adotante. Duas listas paralelas
-  # com varredura linear resolvem — o número de unidades distintas é pequeno.
-  # O resultado sai por variável global, não por `$(...)`: uma substituição de
-  # comando é um fork, e um fork por arquivo é exatamente o que se removeu.
+  # No associative array on purpose: `bash` 3.2 (what Apple still ships) does not
+  # have them, and this hook runs on the adopter's machine. Two parallel lists
+  # with a linear scan do the job — the number of distinct units is small. The
+  # result comes out through a global variable, not `$(...)`: a command
+  # substitution is a fork, and a fork per file is exactly what was removed.
   _UNIT_KEYS=("")
   _UNIT_IDX=("")
   _UNIT_IDX_RESULT=""
@@ -208,8 +209,8 @@ if [ -n "$SRC_CHANGED" ]; then
     fi
 
     # Fallback: ANY test-named file in the same package directory.
-    # Glob do shell, não `find`: um único diretório não justifica um fork, e
-    # este trecho roda uma vez por arquivo alterado.
+    # Shell glob, not `find`: a single directory does not justify a fork, and
+    # this stretch runs once per changed file.
     sibling_hit=no
     for _g in "${pkg_dir}"/*_test."${ext}" "${pkg_dir}"/*.test."${ext}" \
               "${pkg_dir}"/*.spec."${ext}" "${pkg_dir}"/test_*."${ext}"; do
@@ -250,9 +251,9 @@ if [ -n "$SRC_CHANGED" ]; then
       for _cand in "${base_no_ext}_test.${ext}" "${base_no_ext}.test.${ext}" \
                    "${base_no_ext}.spec.${ext}" "test_${base_no_ext}.${ext}" \
                    "${base_no_ext}.test.tsx" "${base_no_ext}.spec.tsx"; do
-        # As aspas tornam o candidato literal dentro do padrão de `case`, e as
-        # quebras de linha em volta fazem a comparação ser de linha inteira —
-        # um nome de arquivo não contém quebra de linha.
+        # The quotes make the candidate literal inside the `case` pattern, and
+        # the surrounding newlines make the comparison whole-line — a file name
+        # contains no newline.
         case "$_UNIT_IDX_RESULT" in
           *$'\n'"$_cand"$'\n'*) unit_hit=yes; break ;;
         esac
@@ -266,7 +267,7 @@ if [ -n "$SRC_CHANGED" ]; then
   done <<< "$SRC_CHANGED"
 
   if [ ${#MISSING_TESTS[@]} -gt 0 ]; then
-    msg="TDD gate (warn-first) — Inquebrável Rule 7: the following production source files have no sibling test file detected:"
+    msg="TDD gate (warn-first) — Unbreakable Rule 7: the following production source files have no sibling test file detected:"
     for f in "${MISSING_TESTS[@]}"; do
       msg+="\n    - $f"
     done
@@ -276,7 +277,7 @@ if [ -n "$SRC_CHANGED" ]; then
 fi
 
 # ----------------------------------------------------------------------------
-# 2. CHANGELOG discipline (HARD GATE — Inquebrável Rule 6 + cycle-review BLOCKER)
+# 2. CHANGELOG discipline (HARD GATE — Unbreakable Rule 6 + cycle-review BLOCKER)
 # ----------------------------------------------------------------------------
 if [ -f "CHANGELOG.md" ]; then
   CODE_CHANGED=$(echo "$ALL_FILES" \
@@ -287,23 +288,26 @@ if [ -f "CHANGELOG.md" ]; then
     | grep -vE '(^|/)(node_modules|vendor|dist|build|target|\.venv|__pycache__)/' \
     || true)
 
-  # Colhido do `theokit-tui`, onde esta correção viveu semanas dentro de um `.claude/`
-  # gitignored (2026-08-20). Uma mudança SÓ de comentário não tem NADA a anunciar a um
-  # consumidor, e a Regra 6 manda escrever para o consumidor. Exigir entrada por ela
-  # convida aos dois piores desfechos: uma linha fabricada poluindo o contrato público,
-  # ou o override — e recorrer ao override para satisfazer uma pergunta que o gate não
-  # devia ter feito é como um gate deixa de ser lido.
+  # Harvested from `theokit-tui`, where this fix lived for weeks inside a
+  # gitignored `.claude/` (2026-08-20). A comment-ONLY change has NOTHING to
+  # announce to a consumer, and Rule 6 says to write for the consumer. Demanding
+  # an entry for it invites the two worst outcomes: a fabricated line polluting
+  # the public contract, or the override — and reaching for the override to
+  # satisfy a question the gate should not have asked is how a gate stops being
+  # read.
   #
-  # CONSERVADOR POR CONSTRUÇÃO, e esse é o desenho inteiro: só remove linhas que são
-  # inequivocamente comentário ou branco, então QUALQUER linha alterada carregando código
-  # deixa o arquivo em `CODE_CHANGED`. Falso negativo sobre mudança real é impossível
-  # ENQUANTO o diff lido for o certo — corrigido 2026-08-26, quando não era;
-  # falso positivo (um commit de docs ainda pedir entrada) é apenas inconveniente. A
-  # assimetria é deliberada — a falha que este gate existe para impedir é uma mudança de
-  # comportamento silenciosa, não um commit de documentação barulhento.
+  # CONSERVATIVE BY CONSTRUCTION, and that is the whole design: it only removes
+  # lines that are unambiguously comment or blank, so ANY changed line carrying
+  # code leaves the file in `CODE_CHANGED`. A false negative about a real change
+  # is impossible AS LONG AS the diff being read is the right one — fixed
+  # 2026-08-26, when it was not; a false positive (a docs commit still asking for
+  # an entry) is merely inconvenient. The asymmetry is deliberate — the failure
+  # this gate exists to prevent is a silent behaviour change, not a noisy
+  # documentation commit.
   #
-  # `scripts/` NÃO entra na lista de exclusão acima, embora entre na do `theokit-tui`:
-  # lá é ferramental de build, e aqui é produção — o kit é feito de scripts.
+  # `scripts/` is NOT in the exclusion list above, though it is in
+  # `theokit-tui`'s: there it is build tooling, here it is production — the kit
+  # is made of scripts.
   if [ -n "$CODE_CHANGED" ]; then
     SUBSTANTIVE=""
     while IFS= read -r f; do
@@ -349,7 +353,7 @@ if [ -f "CHANGELOG.md" ]; then
     | grep -vE '^\.changeset/README\.md$' \
     || true)
   if [ -n "$CODE_CHANGED" ] && [ -z "$CHANGELOG_TOUCHED" ]; then
-    msg="CHANGELOG.md not updated despite production source changes (Inquebrável Rule 6; cycle-review BLOCKER). Add an entry to [Unreleased] before stopping. Override with STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg with the rationale documented separately."
+    msg="CHANGELOG.md not updated despite production source changes (Unbreakable Rule 6; cycle-review BLOCKER). Add an entry to [Unreleased] before stopping. Override with STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg with the rationale documented separately."
     if [ "$WARN_ONLY" = "1" ]; then
       WARNINGS+=("$msg")
     else
@@ -357,15 +361,16 @@ if [ -f "CHANGELOG.md" ]; then
     fi
   fi
 else
-  # Sem CHANGELOG.md o gate inteiro sumia em silêncio. Um projeto adotante que
-  # nunca criou o arquivo nunca descobria que o kit esperava um — a disciplina
-  # da Regra 6 era prometida na documentação e não existia na prática, que é o
-  # mesmo formato de falha do trunk `master` (promete e não entrega, calado).
+  # Without a CHANGELOG.md the entire gate vanished silently. An adopting project
+  # that never created the file never discovered the kit expected one — Rule 6's
+  # discipline was promised in the documentation and absent in practice, which is
+  # the same failure shape as the `master` trunk (promising without delivering,
+  # silently).
   #
-  # ADVISORY, não BLOCKER, e a distinção é deliberada: criar o arquivo é decisão
-  # do consumidor, e bloquear toda sessão de um repo recém-adotado até que ele
-  # exista transformaria a primeira instalação numa parede. Avisar uma vez por
-  # sessão em que código mudou é o suficiente para deixar de ser silêncio.
+  # ADVISORY, not BLOCKER, and the distinction is deliberate: creating the file
+  # is the consumer's decision, and blocking every session of a freshly adopted
+  # repo until it exists would turn the first install into a wall. Warning once
+  # per session in which code changed is enough to stop being silence.
   CODE_CHANGED_NO_LOG=$(echo "$ALL_FILES" \
     | grep -E '\.(go|py|ts|tsx|js|jsx|rs|java|kt|rb|cs)$' \
     | grep -vE '(_test|\.test|\.spec)\.[a-z]+$' \

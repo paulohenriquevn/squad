@@ -44,9 +44,9 @@ _VERDICT_RE = re.compile(r"^\*\*Verdict:\*\*\s*(?P<verdict>[A-Z_]+)", re.MULTILI
 _SECTION_RE = re.compile(
     r"^##\s+Dependencies\b(?P<body>.*?)(?=^##\s|\Z)", re.MULTILINE | re.DOTALL | re.IGNORECASE
 )
-#: `(none — ...)`, `(nenhuma)`, `_none_` — as formas de declarar que não há dependência nova.
+#: `(none — ...)`, `(nenhuma)`, `_none_` — the ways of declaring there is no new dependency.
 _EXPLICIT_NONE_RE = re.compile(r"\(\s*(none|nenhuma|no new)\b|^_none_$", re.IGNORECASE | re.MULTILINE)
-#: Um pacote citado em crase numa linha de tabela ou bullet.
+#: A package cited in backticks on a table row or bullet.
 _PACKAGE_RE = re.compile(r"`([A-Za-z0-9@][\w.@/-]*)`")
 
 _CLEAN = frozenset({"PASS", "PASS_WITH_CAVEATS"})
@@ -77,19 +77,19 @@ def _declared_dependencies(plan_body: str) -> list[str]:
     body = section.group("body")
     if _EXPLICIT_NONE_RE.search(body):
         return []
-    # A linha de cabeçalho da tabela e o separador não declaram pacote nenhum.
+    # The table's header row and separator declare no package at all.
     packages: list[str] = []
     for line in body.splitlines():
         stripped = line.strip()
         if not stripped or set(stripped) <= set("|- :"):
             continue
         packages.extend(_PACKAGE_RE.findall(stripped))
-    # dedup preservando ordem
+    # dedup preserving order
     return list(dict.fromkeys(packages))
 
 
 def _project_root(plan_path: Path) -> Path:
-    """Sobe do plano até a raiz que carrega a knowledge-base, nos dois layouts."""
+    """Walk up from the plan to the root carrying the knowledge-base, in both layouts."""
     for parent in plan_path.resolve().parents:
         for kb in _KB_DIRS:
             if (parent / kb).is_dir():
@@ -105,8 +105,8 @@ def _latest_audit(root: Path, slug: str) -> Path | None:
             candidates.extend(audits.glob(f"{slug}-deps-audit-*.md"))
     if not candidates:
         return None
-    # Pelo NOME: ele carrega a data da auditoria. Um mtime reordena com qualquer
-    # cópia ou leitura, sem que auditoria nenhuma tenha acontecido.
+    # By NAME: it carries the audit date. An mtime reshuffles with any copy or read,
+    # without any audit having happened.
     return sorted(candidates, key=lambda p: p.name)[-1]
 
 

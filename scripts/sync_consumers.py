@@ -1,42 +1,44 @@
 #!/usr/bin/env python3
-"""Propaga uma delta do kit para os consumidores SEM apagar melhoria local.
+"""Propagate a kit delta to the consumers WITHOUT erasing local improvement.
 
-POR QUE ESTE SCRIPT EXISTE
---------------------------
-Ao atualizar o `theo` nesta sessão, cinco arquivos tinham divergido da versão
-anterior do kit, e a divergência era **melhoria local**: a convenção
-`ECO=$([ -d .claude/skills ] …)` em 9 skills (que o kit não tem), o
-`_is_test_file` do `check_xrefs` (fixture que cita regra inexistente de propósito
-não é referência quebrada) e a lista de especialistas do projeto. Copiar por cima
-teria apagado as três. Só não apagou porque a comparação foi feita arquivo a
-arquivo, à mão.
+WHY THIS SCRIPT EXISTS
+----------------------
+While updating one adopter, five files had diverged from the previous kit
+version, and the divergence was **local improvement**: the
+`ECO=$([ -d .claude/skills ] …)` convention in 9 skills (which the kit does not
+have), `check_xrefs`'s `_is_test_file` (a fixture citing a non-existent rule on
+purpose is not a broken reference) and the project's specialist list. Copying
+over them would have erased all three. It only did not because the comparison was
+done file by file, by hand.
 
-Medido depois: **42 consumidores** têm o kit instalado. Nesse volume, "comparar
-antes de copiar" não sobrevive como disciplina manual — vira este classificador.
+Measured afterwards: **42 consumers** have the kit installed. At that volume,
+"compare before copying" does not survive as manual discipline — it becomes this
+classifier.
 
 A REGRA
 -------
-Para cada arquivo da delta, três conteúdos entram na conta: o do kit (`source`),
-o da versão base de onde o consumidor veio (`base`) e o do consumidor (`target`).
+For each file in the delta, three contents enter the decision: the kit's
+(`source`), the base version the consumer came from (`base`) and the consumer's
+(`target`).
 
-- `NEW`          — o alvo não tem o arquivo. Copiar.
-- `IDENTICAL`    — o alvo já está na versão nova. Nada a fazer.
-- `UPDATE`       — o alvo está exatamente na versão base. Copiar é seguro.
-- `LOCAL_CHANGE` — o alvo divergiu da base. **Não tocar.** O script nomeia o
-                   arquivo e para; decidir o merge é trabalho humano, e é
-                   exatamente onde uma cópia cega regride uma correção.
+- `NEW`          — the target does not have the file. Copy.
+- `IDENTICAL`    — the target is already on the new version. Nothing to do.
+- `UPDATE`       — the target is exactly on the base version. Copying is safe.
+- `LOCAL_CHANGE` — the target diverged from the base. **Do not touch.** The
+                   script names the file and stops; deciding the merge is human
+                   work, and it is exactly where a blind copy regresses a fix.
 
-O script não faz merge de propósito. Um merge automático sobre 42 repos é a
-forma de espalhar em silêncio o erro que este classificador existe para impedir.
+The script does not merge, on purpose. An automatic merge across 42 repos is the
+way to spread silently the very error this classifier exists to prevent.
 
 Uso:
-    python3 scripts/sync_consumers.py --base <sha> --targets arquivo.txt
-    python3 scripts/sync_consumers.py --base <sha> --targets arquivo.txt --apply
+    python3 scripts/sync_consumers.py --base <sha> --targets targets.txt
+    python3 scripts/sync_consumers.py --base <sha> --targets targets.txt --apply
 
 Exit codes:
-    0 — nada pendente de decisão humana
-    1 — pelo menos um LOCAL_CHANGE (o alvo divergiu; ninguém foi tocado ali)
-    2 — erro de invocação (sha inválido, alvo inexistente)
+    0 — nothing pending a human decision
+    1 — at least one LOCAL_CHANGE (the target diverged; nothing was touched there)
+    2 — invocation error (invalid sha, non-existent target)
 """
 from __future__ import annotations
 
@@ -53,14 +55,14 @@ class Action(enum.Enum):
     IDENTICAL = "identical"
     NEW = "new"
     UPDATE = "update"
-    #: O alvo carrega um conteúdo que o kit JÁ TEVE em algum commit — instalação
-    #: feita de uma versão antiga. É defasagem, não modificação: copiar é seguro.
+    #: The target carries content the kit ONCE HAD in some commit — an install made
+    #: from an older version. It is lag, not modification: copying is safe.
     STALE = "stale"
     LOCAL_CHANGE = "local-change"
 
 
 def classify(*, source: str, base: str | None, target: str | None) -> Action:
-    """Decide o que fazer com um arquivo. Ver § A REGRA."""
+    """Decide what to do with a file. See § THE RULE."""
     if target is None:
         return Action.NEW
     if target == source:
@@ -71,12 +73,12 @@ def classify(*, source: str, base: str | None, target: str | None) -> Action:
 
 
 def historical_versions(repo: Path, rel: str) -> set[str]:
-    """Todo conteúdo que este caminho já teve no histórico do kit.
+    """Every content this path has ever had in the kit's history.
 
-    Sem isto, um consumidor instalado de uma versão antiga aparece como
-    "modificado localmente" em cada arquivo que o kit evoluiu desde então —
-    medido: 231 falsos LOCAL_CHANGE em 40 consumidores, `install.sh` em quase
-    todos. Distinguir atrasado de modificado é o que permite atualizar sem medo.
+    Without this, a consumer installed from an older version shows up as "locally
+    modified" in every file the kit has evolved since — measured: 231 false
+    LOCAL_CHANGE across 40 consumers, `install.sh` in almost all of them. Telling
+    behind from modified is what makes updating without fear possible.
     """
     revisions = subprocess.run(  # noqa: PLW1510
         ["git", "-C", str(repo), "rev-list", "--all", "--", rel],
@@ -95,7 +97,7 @@ def historical_versions(repo: Path, rel: str) -> set[str]:
 
 def classify_with_history(*, source: str, base: str | None, target: str | None,
                           historical: set[str]) -> Action:
-    """`classify`, mais a pergunta que ela não fazia: isto já foi o kit?"""
+    """`classify`, plus the question it did not ask: was this ever the kit?"""
     action = classify(source=source, base=base, target=target)
     if action is Action.LOCAL_CHANGE and target in historical:
         return Action.STALE
@@ -118,17 +120,18 @@ def _read(path: Path) -> str | None:
 
 
 def delta_prefixes() -> tuple[str, ...]:
-    """O que o kit é dono e portanto pode empurrar.
+    """What the kit owns and may therefore push.
 
-    `agents/` saiu (grill kit-domain-agents-install, decisão 5): um especialista de
-    domínio descreve o projeto, não o kit. Enquanto esteve aqui, cada sincronização
-    reinstalava os oito do ecossistema `theo` num consumidor que acabara de removê-los.
+    `agents/` is out (grill kit-domain-agents-install, decision 5): a domain
+    specialist describes the project, not the kit. While it was here, every sync
+    reinstalled the origin ecosystem's eight into a consumer that had just removed
+    them.
     """
     return ("rules/", "skills/", "scripts/", "hooks/", "commands/")
 
 
 def delta_files(repo: Path, base: str) -> list[str]:
-    """Arquivos alterados de `base` até HEAD que o install leva para o consumidor."""
+    """Files changed from `base` to HEAD that the install carries to the consumer."""
     result = subprocess.run(
         ["git", "-C", str(repo), "diff", "--name-only", f"{base}..HEAD"],
         capture_output=True, text=True, check=True,
@@ -144,15 +147,16 @@ _RULES_REF_RE = re.compile(r"(?<![A-Za-z0-9_/-])(?:\.claude/)?rules/([A-Za-z0-9.
 
 
 def missing_rule_dependencies(kit: Path, eco: Path, files: list[str]) -> list[str]:
-    """Regras que os arquivos da delta citam e o consumidor não tem.
+    """Rules the delta's files cite and the consumer does not have.
 
-    A delta precisa ser FECHADA: um `run_validation.py` novo cita
-    `rules/knowledge-base-location.md`, e num consumidor defasado esse arquivo não
-    existe — o `check_xrefs` do alvo passa a reprovar por referência quebrada.
-    Medido na primeira aplicação: 13 dos 40 consumidores ficaram vermelhos assim.
+    The delta must be CLOSED: a new `run_validation.py` cites
+    `rules/knowledge-base-location.md`, and in a lagging consumer that file does
+    not exist — the target's `check_xrefs` then fails on a broken reference.
+    Measured on the first application: 13 of the 40 consumers went red this way.
 
-    Só o que FALTA entra. Regra que o alvo já tem nunca é sobrescrita aqui: os
-    `rules/*.txt` são a configuração do projeto (allowlists, live-target,
+    Only what is MISSING enters. A rule the target already has is never overwritten
+    here: the `rules/*.txt` are the project's configuration (allowlists,
+    live-target,
     thresholds), e copiar por cima destruiria ajuste local.
     """
     missing: list[str] = []
@@ -185,7 +189,7 @@ def sync_target(kit: Path, target_root: Path, files: list[str], base: str,
             target=target_content,
         )
         if action is Action.LOCAL_CHANGE:
-            # Só paga o custo de varrer o histórico quando há divergência.
+            # Only pay the cost of scanning history when there is divergence.
             if target_content in historical_versions(kit, rel):
                 action = Action.STALE
         outcome[action.value].append(rel)
@@ -194,7 +198,7 @@ def sync_target(kit: Path, target_root: Path, files: list[str], base: str,
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(kit / rel, destination)
 
-    # Fecha a delta: as regras que ela cita e o alvo não tem.
+    # Close the delta: the rules it cites that the target does not have.
     for rel in missing_rule_dependencies(kit, eco, files):
         outcome[Action.NEW.value].append(rel)
         if apply:
@@ -207,25 +211,25 @@ def sync_target(kit: Path, target_root: Path, files: list[str], base: str,
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True,
-                        help="primeiro commit da delta (a base é o PAI dele)")
+                        help="first commit of the delta (the base is its PARENT)")
     parser.add_argument("--targets", type=Path, required=True,
-                        help="arquivo com um caminho de consumidor por linha")
+                        help="file with one consumer path per line")
     parser.add_argument("--kit", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--apply", action="store_true",
-                        help="sem isto, apenas classifica (dry-run)")
+                        help="without this, only classifies (dry-run)")
     args = parser.parse_args(argv)
 
     if not args.targets.is_file():
-        print(f"FATAL: lista de alvos não encontrada: {args.targets}", file=sys.stderr)
+        print(f"FATAL: targets list not found: {args.targets}", file=sys.stderr)
         return 2
     try:
         files = delta_files(args.kit, f"{args.base}^")
     except subprocess.CalledProcessError:
-        print(f"FATAL: sha inválido: {args.base}", file=sys.stderr)
+        print(f"FATAL: invalid sha: {args.base}", file=sys.stderr)
         return 2
 
     print(f"delta: {len(files)} arquivos desde {args.base}^")
-    print(f"modo : {'APLICANDO' if args.apply else 'dry-run (nada é escrito)'}\n")
+    print(f"mode : {'APPLYING' if args.apply else 'dry-run (nothing is written)'}\n")
 
     needs_human: dict[str, list[str]] = {}
     totals = {action.value: 0 for action in Action}
@@ -236,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         root = Path(target).expanduser()
         if not (root / ".claude").is_dir():
-            print(f"  {target}: sem .claude/ — ignorado")
+            print(f"  {target}: no .claude/ — skipped")
             continue
 
         outcome = sync_target(args.kit, root, files, args.base, apply=args.apply)
@@ -252,8 +256,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\ntotais: {totals}")
     if needs_human:
-        print("\nDivergiram do kit — NINGUÉM foi tocado nestes arquivos. "
-              "Decidir o merge é trabalho humano:")
+        print("\nDiverged from the kit — NOTHING was touched in these files. "
+              "Deciding the merge is human work:")
         for target, items in needs_human.items():
             print(f"  {target}")
             for rel in items:

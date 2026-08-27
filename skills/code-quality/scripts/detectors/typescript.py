@@ -254,7 +254,7 @@ class TypescriptDetector(BaseDetector):
                 # Patch 2026-08-03 — Sibling workspace package (declared `workspace:*`, unpublished by design)
                 if self._is_workspace_reference(module, ws_names):
                     continue
-                # Patch 2026-08-03 — tsconfig path alias (`@/components/...`), nao pacote npm
+                # Patch 2026-08-03 — tsconfig path alias (`@/components/...`), not an npm package
                 if self._is_path_alias(module, aliases):
                     continue
                 # Package name for npm lookup. `top` already collapses a scoped module to

@@ -237,16 +237,16 @@ _SURFACE_BY_LANGUAGE = {
 # Consumption
 # ---------------------------------------------------------------------------
 
-#: Linhas que DEFINEM um símbolo em vez de CONSUMI-LO. Um arquivo cujas únicas
-#: ocorrências do símbolo casam estas formas é o site de definição, não um
-#: consumidor — e sem esta distinção um re-export em `__init__.py` sempre acha
-#: "consumidor": o próprio módulo onde a função é escrita.
+#: Lines that DEFINE a symbol rather than CONSUME it. A file whose only occurrences
+#: of the symbol match these shapes is the definition site, not a consumer — and
+#: without this distinction a re-export in `__init__.py` always finds a "consumer":
+#: the very module where the function is written.
 #:
-#: Mesmo conhecimento que `skills/implement/scripts/check_wiring.py` codifica para
-#: o pilar (a) da tríade. As duas cópias existem porque uma skill importando
-#: scripts de outra criaria um ciclo entre pacotes que o instalador trata como
-#: independentes; a duplicação é de PADRÃO (sintaxe de definição), não de regra
-#: de negócio, e cada lado tem os seus testes.
+#: Same knowledge `skills/implement/scripts/check_wiring.py` encodes for pillar (a)
+#: of the triad. The two copies exist because one skill importing another's scripts
+#: would create a cycle between packages the installer treats as independent; the
+#: duplication is of PATTERN (definition syntax), not of business rule, and each
+#: side has its own tests.
 _DEFINITION_PATTERNS = (
     r"^\s*(?:async\s+)?def\s+{sym}\b",
     r"^\s*class\s+{sym}\b",
@@ -262,7 +262,7 @@ _DEFINITION_PATTERNS = (
 
 
 def _is_definition_only(body: str, symbol: str) -> bool:
-    """True quando toda menção ao símbolo neste texto é a definição dele."""
+    """True when every mention of the symbol in this text is its definition."""
     pattern = re.compile(rf"\b{re.escape(symbol)}\b")
     definitions = [re.compile(p.format(sym=re.escape(symbol))) for p in _DEFINITION_PATTERNS]
     saw_mention = False
@@ -275,9 +275,9 @@ def _is_definition_only(body: str, symbol: str) -> bool:
     return saw_mention
 
 
-#: Assinaturas de export público, por linguagem. Um símbolo citado numa delas é
-#: alcançável por quem chama aquela export — vive através dela, mesmo sem
-#: importador próprio.
+#: Public export signatures, per language. A symbol named in one of them is
+#: reachable by whoever calls that export — it lives through it, even without an
+#: importer of its own.
 _PUBLIC_SIGNATURE_RE = re.compile(
     r"^(?:export\s+)?(?:pub(?:\s*\([^)]*\))?\s+)?(?:async\s+)?"
     r"(?:def|function|func|fn)\s+(?P<name>[A-Za-z_$][\w$]*)\s*(?P<sig>\([^\n]*\)[^\n:{]*)",
@@ -286,17 +286,18 @@ _PUBLIC_SIGNATURE_RE = re.compile(
 
 
 def _reachable_through_a_public_signature(symbol: str, body: str, surface_names: set[str]) -> bool:
-    """True quando outra export do mesmo módulo nomeia o símbolo na assinatura.
+    """True when another export of the same module names the symbol in its signature.
 
-    Medido no próprio kit: `AllowlistEntry` é o tipo de retorno de `load_allowlist`
-    e nenhum arquivo o importa por nome — quem chama a função recebe a instância.
-    Chamá-lo de órfão empurraria o projeto a removê-lo da superfície, quebrando quem
-    quisesse anotar o retorno. Um falso positivo em SOFT_CAP custa o mesmo que em
-    HARD: gera allowlist espúria e ensina a ignorar o gate.
+    Measured on the kit itself: `AllowlistEntry` is `load_allowlist`'s return type
+    and no file imports it by name — whoever calls the function receives the
+    instance. Calling it an orphan would push the project to remove it from the
+    surface, breaking anyone who wanted to annotate the return. A false positive at
+    SOFT_CAP costs the same as at HARD: it generates a spurious allowlist entry and
+    teaches people to ignore the gate.
 
-    A regra exige que a assinatura seja de OUTRA EXPORT. Se bastasse qualquer função
-    do módulo, uma helper interna anotando o tipo o apagaria do relatório, e o gate
-    deixaria de enxergar superfície morta.
+    The rule requires the signature to belong to ANOTHER EXPORT. If any function in
+    the module were enough, an internal helper annotating the type would erase it
+    from the report, and the gate would stop seeing dead surface.
     """
     mention = re.compile(rf"\b{re.escape(symbol)}\b")
     for match in _PUBLIC_SIGNATURE_RE.finditer(body):

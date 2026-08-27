@@ -26,7 +26,7 @@ Two measurements, both from this ecosystem:
 
 2. `usetheo-labs/agent-builder`, 2026-08-06. Its `.dependency-cruiser.cjs` records the same class
    in prose: dissolving `tui/lib` into seven capability folders would leave a `forbidden` rule
-   written against the old literal path matching nothing — *"uma regra `forbidden` que nao casa
+   written against the old literal path matching nothing — *"a `forbidden` rule that matches
    nada produz ZERO violacoes, ou seja, VERDE. O invariante evaporaria em silencio."*
 
 The shape is identical in both: the rule names a directory, the directory moves, the gate goes

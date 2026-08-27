@@ -10,13 +10,13 @@ argument-hint: "<topic or description>"
 
 # Excalidraw Diagram Creator
 
-> **INQUEBRÁVEL — 95% Confidence Gate**
+> **UNBREAKABLE — 95% Confidence Gate**
 >
-> NÃO FAÇA NADA SE NÃO TIVER 95% DE CONFIANÇA.
-> SEMPRE QUE PRECISAR DE UMA DECISÃO DO USUÁRIO, APRESENTE
-> OPÇÕES PARA ELE ESCOLHER.
+> DO NOTHING WITHOUT 95% CONFIDENCE.
+> WHENEVER A USER DECISION IS NEEDED, PRESENT
+> OPTIONS FOR THEM TO CHOOSE FROM.
 >
-> Ver `~/.claude/CLAUDE.md` § 1 (95% Confidence).
+> See `~/.claude/CLAUDE.md` § 1 (95% Confidence).
 
 **Project rules consumed:** if `.claude/rules/public-copy.md` exists, slides/diagrams derived from this output that may surface in README/PITCH are bound by its voice rules. `.claude/rules/dogfood-golden-rule.md` blocks any "production-ready" diagram label without dogfood evidence.
 

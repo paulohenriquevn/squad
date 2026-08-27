@@ -1,8 +1,8 @@
 """`_ts_sources` poda na travessia em vez de filtrar depois.
 
 Mesmo defeito medido em `run_code_quality._enumerate_source_files`: 326 ms
-contra 0,4 ms num repositório de 56 mil arquivos. Aqui pesa mais, porque um
-monorepo TypeScript é justamente onde `node_modules` é grande.
+against 0.4 ms on a 56,000-file repository. It weighs more here, because a
+TypeScript monorepo is exactly where `node_modules` is large.
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def test_does_not_traverse_skipped_trees(tmp_path, monkeypatch):
 
     def forbidden(self, *args, **kwargs):
         raise AssertionError(
-            "rglob sobre a árvore inteira: a poda voltou a acontecer depois da travessia"
+            "rglob over the whole tree: pruning went back to happening after the walk"
         )
 
     monkeypatch.setattr(pathlib.Path, "rglob", forbidden)

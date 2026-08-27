@@ -61,21 +61,22 @@ AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "
 
 
 def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:
-    """Skills que o PROJETO declara como auxiliares, em `rules/auxiliary-skills.txt`.
+    """Skills the PROJECT declares as auxiliary, in `rules/auxiliary-skills.txt`.
 
-    `AUXILIARY_SKILLS` acima é a lista do kit. Um consumidor com skills de domínio
-    próprias só tinha uma saída: editar esta constante — e uma edição no corpo do
-    validador é o que a próxima sincronização do kit sobrescreve. O `theo` fez
-    exatamente isso, e a edição só sobreviveu porque alguém comparou arquivo a
-    arquivo antes de copiar.
+    `AUXILIARY_SKILLS` above is the kit's list. A consumer with domain skills of
+    its own had exactly one way out: editing this constant — and an edit inside
+    the validator's body is what the kit's next sync overwrites. One adopter did
+    exactly that, and the edit survived only because someone compared file by file
+    before copying.
 
-    Medido no `speculative` (2026-08-20): 9 skills próprias, 18 WARN — 100% dos
-    avisos do checker — e como `install.sh` invoca com `--strict`, a instalação
+    Measured on `speculative` (2026-08-20): 9 own skills, 18 WARN — 100% of the
+    checker's warnings — and since `install.sh` invokes it with `--strict`, the
+    installation
     inteira era reportada como falha por causa do desenho do consumidor.
 
-    Formato: um nome por linha; `#` comenta. Nome que não existe em disco é
-    ignorado em silêncio de propósito: a lista é declaração de intenção, não
-    inventário, e uma skill removida do projeto não deve quebrar o validador.
+    Format: one name per line; `#` comments. A name that does not exist on disk
+    is ignored silently on purpose: the list is a declaration of intent, not an
+    inventory, and a skill removed from the project must not break the validator.
     """
     rule = ecosystem_dir / "rules" / "auxiliary-skills.txt"
     if not rule.is_file():
@@ -106,17 +107,18 @@ def _is_auto_generated(skill: str) -> bool:
 # Patterns to detect file references in markdown
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 BACKTICK_PATH_RE = re.compile(r"`(\.?[a-zA-Z0-9_./\-]+\.(?:md|py|sh|json|txt|yml|yaml))`")
-# `[a-z]+(?:-[a-z]+)*` e não `[a-z]+`: três dos doze cycle rules do kit são
-# multi-hífen (cycle-code-quality, cycle-auto-plan, cycle-judge-codex), e um
-# grupo sem hífen os truncava para cycle-code / cycle-auto / cycle-judge — nomes
-# que não existem. O validador então acusava como ausente um arquivo presente.
+# `[a-z]+(?:-[a-z]+)*` and not `[a-z]+`: three of the kit's twelve cycle rules
+# are multi-hyphen (cycle-code-quality, cycle-auto-plan, cycle-judge-codex), and a
+# group without the hyphen truncated them to cycle-code / cycle-auto /
+# cycle-judge — names that do not exist. The validator then reported a present
+# file as missing.
 CYCLE_REF_RE = re.compile(r"`?cycle-([a-z]+(?:-[a-z]+)*)`?")
-# Trechos entre crases — onde uma citação a um cycle é uma referência, não prosa.
+# Backticked spans — where a citation of a cycle is a reference, not prose.
 BACKTICK_SPAN_RE = re.compile(r"`([^`\n]+)`")
-# Mantido em sincronia com detect_domains.UNREVIEWED_MARKER — duplicar a string é
-# aceitável aqui: importar cross-slice acoplaria o validador a uma skill.
-UNREVIEWED_MARKER = "<!-- POR PREENCHER: só um humano sabe isto -->"
-# `cycle-<nome>` dentro de um trecho de código, com o sufixo .md opcional.
+# Kept in sync with detect_domains.UNREVIEWED_MARKER — duplicating the string is
+# acceptable here: importing cross-slice would couple the validator to a skill.
+UNREVIEWED_MARKER = "<!-- TO BE FILLED IN: only a human knows this -->"
+# `cycle-<name>` inside a code span, with the .md suffix optional.
 CYCLE_NAME_RE = re.compile(r"\bcycle-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)")
 SKILL_REF_RE = re.compile(r"`?(?:\.claude/)?skills/([a-z0-9\-]+)/SKILL\.md`?")
 # Detect rules references in SKILL bodies and Python scripts.
@@ -272,9 +274,9 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 })
 
     # Check 2: each SKILL.md points to an existing cycle
-    # A isenção vale para os DOIS checks. O docstring de `_is_auto_generated` registra
-    # por quê: a primeira versão isentou só `no_orphan_skills` e deixou este cobrando —
-    # meia isenção, que trocou 26 WARN por 3 e parecia um fix.
+    # The exemption applies to BOTH checks. `_is_auto_generated`'s docstring records
+    # why: the first version exempted only `no_orphan_skills` and left this one
+    # enforcing — half an exemption, which traded 26 WARN for 3 and looked like a fix.
     project_auxiliary = _declared_auxiliary_skills(ecosystem_dir)
     skill_to_cycle: dict[str, str | None] = {}
     for skill in existing_skills:
@@ -375,7 +377,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
         if skill_md.is_file():
             _scan_for_rule_refs(skill_md)
     # Uma regra citando outra regra era o ponto cego: o scan cobria skills e
-    # scripts e pulava `rules/` inteiro, que é onde as âncoras normativas moram.
+    # scripts and skipped all of `rules/`, which is where the normative anchors live.
     for rule_md in rules_dir.glob("*.md") if rules_dir.exists() else []:
         if rule_md.is_file():
             _scan_for_rule_refs(rule_md)
@@ -386,17 +388,17 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
         if py.is_file() and "__pycache__" not in py.parts:
             _scan_for_rule_refs(py)
 
-    # Check 8: `cycle-<nome>` citado em código/regra tem de resolver para um
-    # cycle rule (`rules/cycle-<nome>.md`) ou para uma skill (`skills/cycle-<nome>/`).
-    # Motivo: `rules/cycle-acceptance.md` e `rules/cycle-release.md` ancoravam o
-    # single-flip invariant em "cycle-roadmap § Hard gates" DEPOIS que o
-    # cycle-roadmap virou cycle-maintenance. Nenhum check via: o Check 7 casa
-    # caminhos do tipo rules/<arquivo>.md, e uma citação por nome não é um caminho.
-    # Só conta o que está entre crases — texto solto ("a cycle-level decision")
-    # produziria ruído sem nomear nada.
-    # Existência em disco, não a lista de cycles: `cycle-rule-schema.md` é meta-
-    # documentação e fica FORA de `cycle_rules` de propósito — mas citá-la é
-    # legítimo, o arquivo está lá.
+    # Check 8: `cycle-<name>` cited in code/rules must resolve to a cycle rule
+    # (`rules/cycle-<name>.md`) or to a skill (`skills/cycle-<name>/`).
+    # Why: `rules/cycle-acceptance.md` and `rules/cycle-release.md` anchored the
+    # single-flip invariant at "cycle-roadmap § Hard gates" AFTER cycle-roadmap had
+    # become cycle-maintenance. No check saw it: Check 7 matches paths shaped like
+    # rules/<file>.md, and a citation by name is not a path. Only backticked text
+    # counts — loose prose ("a cycle-level decision") would produce noise while
+    # naming nothing.
+    # Existence on disk, not the cycle list: `cycle-rule-schema.md` is meta
+    # documentation and stays OUT of `cycle_rules` on purpose — but citing it is
+    # legitimate, the file is there.
     cycle_skill_names = {s for s in existing_skills if s.startswith("cycle-")}
 
     def _scan_for_cycle_refs(path: Path) -> None:
@@ -425,12 +427,12 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
         if skill_md.is_file():
             _scan_for_cycle_refs(skill_md)
 
-    # Check 9: especialista DERIVADO que ninguém revisou.
-    # `detect_domains.py` gera um esqueleto para que a rota deixe de ser BROKEN, com as
-    # seções de julgamento (comandos, achados reais, falsos positivos, invariantes)
-    # vazias e marcadas. Um esqueleto silencioso é pior que rota quebrada: a rota
-    # quebrada avisa, e ele parece um especialista pronto. WARN enquanto o marcador
-    # existir — some sozinho quando alguém preencher.
+    # Check 9: a DERIVED specialist nobody reviewed.
+    # `detect_domains.py` generates a skeleton so the route stops being BROKEN, with
+    # the judgement sections (commands, real findings, false positives, invariants)
+    # empty and marked. A silent skeleton is worse than a broken route: the broken
+    # route warns, and this one looks like a finished specialist. WARN while the
+    # marker exists — it disappears on its own when someone fills it in.
     agents_dir = ecosystem_dir / "agents"
     if agents_dir.is_dir():
         for agent_md in sorted(agents_dir.glob("*.md")):
@@ -445,8 +447,8 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 "severity": "WARN",
                 "check": "specialist_unreviewed",
                 "agent": agent_md.stem,
-                "message": f"agents/{agent_md.name} é um esqueleto derivado com {pending} "
-                           "seção(ões) por preencher — o roteamento funciona, o julgamento não",
+                "message": f"agents/{agent_md.name} is a derived skeleton with {pending} "
+                           "section(s) left to fill — the routing works, the judgement does not",
             })
 
     # Check 4: orphan skills (not in any cycle, not auxiliary)
@@ -454,14 +456,14 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     for skills_set in cycle_to_skills.values():
         skills_in_cycles.update(skills_set)
 
-    # Skills AUTO-GERADAS pelos proprios cycles nao sao fases de cycle nenhum: sao
+    # Skills AUTO-GENERATED by the cycles themselves are phases of no cycle: they are
     # ARTEFATOS de uma execucao. `/review` escreve `review-{slug}-{dimensao}-knowledge`
     # e o discover escreve `*-sepa-knowledge`. O patch_install ja as trata como tal
     # ("Auto-generated skills (SEPA-knowledge, review-*-knowledge) preserved"), mas
-    # este validador as acusava de orfas -- entao todo consumidor que rodasse /review
+    # this validator reported them as orphans -- so every consumer that ran /review
     # passava a falhar --strict, e a falha aparecia longe da causa.
     # Medido em 2026-08-03: os tres consumidores monitorados falharam exatamente assim
-    # depois de rodarem review, com 26 WARN e nenhum defeito real.
+    # after running review, with 26 WARN and no real defect.
     auto_generated = {s for s in existing_skills if _is_auto_generated(s)}
     orphan_skills = (existing_skills - skills_in_cycles - AUXILIARY_SKILLS
                      - project_auxiliary - auto_generated)
@@ -526,14 +528,16 @@ def main() -> int:
     if override:
         ecosystem_dir = override.resolve()
     else:
-        # A raiz vem de ONDE O SCRIPT MORA, nao do cwd. A versao anterior partia de
-        # Path.cwd(), e o efeito era um validador que mente: rodar
+        # The root comes from WHERE THE SCRIPT LIVES, not from the cwd. The previous
+        # version started at Path.cwd(), and the effect was a validator that lies:
+        # running
         # `python3 <outro-projeto>/.claude/scripts/check_xrefs.py` de um cwd qualquer
         # auditava silenciosamente o ecossistema DO CWD e imprimia o veredito dele.
         # Medido em 2026-08-03: tres consumidores reportados PASS estavam, na verdade,
         # com 3, 0 e 11 findings -- o PASS era o repo do kit se auto-validando.
-        # Um validador que audita o alvo errado e pior que nenhum, porque produz
-        # confianca infundada. O caminho do proprio arquivo e a unica ancora que nao
+        # A validator that audits the wrong target is worse than none, because it
+        # produces unfounded confidence. The script's own path is the only anchor
+        # that does not
         # depende de quem chamou.
         ecosystem_dir = _find_ecosystem_dir(Path(__file__).resolve().parent)
         if ecosystem_dir is None:

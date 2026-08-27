@@ -1,22 +1,22 @@
 #!/bin/bash
 # Tests for hooks/post-edit-check.sh
 #
-# O que estes testes fixam é o ESCOPO dos comandos, não a duração deles. Este
-# hook roda em TODA edição, de forma síncrona — o agente espera por ele. Um
-# comando que verifica o projeto inteiro transforma cada Edit numa build:
-# medido por leitura de código em 2026-08-26, o caminho TypeScript rodava
+# What these tests pin is the SCOPE of the commands, not their duration. This
+# hook runs on EVERY edit, synchronously — the agent waits for it. A command that
+# checks the whole project turns every Edit into a build: measured by code reading
+# on 2026-08-26, the TypeScript path ran
 # `tsc --noEmit -p tsconfig.json` (projeto inteiro, inclusive ao editar um
 # `.js`), o Rust rodava `cargo check` (crate inteiro) e o Go rodava
-# `go vet <dir>/...` (módulo inteiro quando o arquivo está na raiz). Sem
-# debounce, dez edições seguidas eram dez builds completas, com timeout de 60 s
-# à espreita — ou o turno trava, ou o hook morre no meio e o feedback que ele
-# existe para dar nunca chega.
+# `go vet <dir>/...` (the whole module when the file sits at the root). With no
+# debounce, ten edits in a row were ten full builds, with a 60s timeout lurking —
+# either the turn stalls, or the hook dies halfway and the feedback it exists to
+# give never arrives.
 #
-# A verificação de projeto inteiro não sumiu: virou opt-in por
-# POST_EDIT_FULL_TYPECHECK=1, e há teste para os dois lados.
+# The whole-project check did not vanish: it became opt-in via
+# POST_EDIT_FULL_TYPECHECK=1, and there is a test for both sides.
 #
-# Método: shims em PATH que registram o argv recebido. Nenhuma toolchain real é
-# necessária, e a asserção é sobre o comando que o hook MONTA.
+# Method: PATH shims that record the argv they receive. No real toolchain is
+# needed, and the assertion is about the command the hook BUILDS.
 
 set -uo pipefail
 
@@ -81,7 +81,7 @@ echo "=== post-edit-check.sh ==="
 echo ""
 
 # ---------------------------------------------------------------------------
-# Go — o pacote, não o módulo inteiro
+# Go — the package, not the whole module
 # ---------------------------------------------------------------------------
 setup
 shim go
@@ -90,12 +90,12 @@ printf 'module x\n' > "$TMPDIR_TEST/go.mod"
 mkdir -p "$TMPDIR_TEST/internal/auth"
 printf 'package auth\n' > "$TMPDIR_TEST/internal/auth/a.go"
 run_hook "internal/auth/a.go"
-assert_log "go vet recebe o pacote do arquivo editado" contains "vet $TMPDIR_TEST/internal/auth"
-assert_log "go vet NÃO recorre com /... (módulo inteiro)" absent "/..."
+assert_log "go vet receives the edited file's package" contains "vet $TMPDIR_TEST/internal/auth"
+assert_log "go vet does NOT recurse with /... (whole module)" absent "/..."
 teardown
 
 # ---------------------------------------------------------------------------
-# TypeScript — escopo de arquivo por padrão
+# TypeScript — file scope by default
 # ---------------------------------------------------------------------------
 setup
 mkdir -p "$TMPDIR_TEST/node_modules/.bin" "$TMPDIR_TEST/src"
@@ -107,11 +107,11 @@ shim tsc
 shim eslint
 BIN_DIR="$BIN_DIR_SAVE"
 run_hook "src/a.ts"
-assert_log "tsc de projeto inteiro NÃO roda por padrão" absent "-p tsconfig.json"
-assert_log "eslint roda escopado ao arquivo editado" contains "eslint $TMPDIR_TEST/src/a.ts"
+assert_log "whole-project tsc does NOT run by default" absent "-p tsconfig.json"
+assert_log "eslint runs scoped to the edited file" contains "eslint $TMPDIR_TEST/src/a.ts"
 teardown
 
-# ---- opt-in restaura a verificação de projeto inteiro ----
+# ---- opt-in restores the whole-project check ----
 setup
 mkdir -p "$TMPDIR_TEST/node_modules/.bin" "$TMPDIR_TEST/src"
 printf '{}' > "$TMPDIR_TEST/tsconfig.json"
@@ -125,7 +125,7 @@ assert_log "POST_EDIT_FULL_TYPECHECK=1 restaura o tsc de projeto" contains "-p t
 teardown
 
 # ---------------------------------------------------------------------------
-# Rust — formato do arquivo por padrão, build da crate só sob opt-in
+# Rust — file formatting by default, crate build only under opt-in
 # ---------------------------------------------------------------------------
 setup
 shim cargo
@@ -134,8 +134,8 @@ printf '[package]\nname="x"\n' > "$TMPDIR_TEST/Cargo.toml"
 mkdir -p "$TMPDIR_TEST/src"
 printf 'fn main() {}\n' > "$TMPDIR_TEST/src/main.rs"
 run_hook "src/main.rs"
-assert_log "cargo check NÃO roda por padrão" absent "cargo check"
-assert_log "rustfmt roda escopado ao arquivo editado" contains "rustfmt --check $TMPDIR_TEST/src/main.rs"
+assert_log "cargo check does NOT run by default" absent "cargo check"
+assert_log "rustfmt runs scoped to the edited file" contains "rustfmt --check $TMPDIR_TEST/src/main.rs"
 teardown
 
 setup
@@ -149,7 +149,7 @@ assert_log "POST_EDIT_FULL_TYPECHECK=1 restaura o cargo check da crate dona" con
 teardown
 
 # ---------------------------------------------------------------------------
-# Python — já era escopado ao arquivo; regressão
+# Python — was already file-scoped; regression
 # ---------------------------------------------------------------------------
 setup
 shim ruff
@@ -157,14 +157,14 @@ printf '[project]\nname="x"\n' > "$TMPDIR_TEST/pyproject.toml"
 mkdir -p "$TMPDIR_TEST/src"
 printf 'x = 1\n' > "$TMPDIR_TEST/src/a.py"
 run_hook "src/a.py"
-assert_log "ruff segue escopado ao arquivo editado" contains "ruff check $TMPDIR_TEST/src/a.py"
+assert_log "ruff stays scoped to the edited file" contains "ruff check $TMPDIR_TEST/src/a.py"
 teardown
 
 # ---------------------------------------------------------------------------
-# Sem marcador de projeto, nada roda e o hook sai limpo
+# With no project marker, nothing runs and the hook exits clean
 # ---------------------------------------------------------------------------
-# A promessa do cabeçalho do hook é ser no-op quando a toolchain não é do
-# projeto. Sem `go.mod` nenhum comando deve ser montado, mesmo com `go` no PATH.
+# The promise in the hook's header is to be a no-op when the toolchain is not the
+# project's. Without `go.mod` no command should be built, even with `go` on PATH.
 setup
 shim go
 shim gofmt
@@ -175,10 +175,10 @@ printf '{"tool_input":{"file_path":"internal/a.go"}}' \
   | (cd "$TMPDIR_TEST" && PATH="$BIN_DIR:$PATH" bash "$HOOK") >/dev/null 2>&1 || rc=$?
 TOTAL=$((TOTAL + 1))
 if [ "$rc" -eq 0 ] && [ ! -s "$ARGV_LOG" ]; then
-  echo "  PASS  sem go.mod nada roda e o hook sai 0 (advisory, nunca bloqueia)"
+  echo "  PASS  without go.mod nothing runs and the hook exits 0 (advisory, never blocks)"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL  sem go.mod o hook saiu $rc e montou: $(tr '\n' '|' < "$ARGV_LOG")"
+  echo "  FAIL  without go.mod the hook exited $rc and built: $(tr '\n' '|' < "$ARGV_LOG")"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 teardown

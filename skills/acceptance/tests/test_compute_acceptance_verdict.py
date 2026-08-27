@@ -58,7 +58,7 @@ class TestRejected:
     def test_defeito_blocker_reprova_mesmo_com_todos_os_criterios_verdes(
         self, criteria_m2: list[dict], passing_results: list[dict]
     ) -> None:
-        defects = [{"severity": "blocker", "summary": "vaza sessão de outro usuário"}]
+        defects = [{"severity": "blocker", "summary": "leaks another user's session"}]
 
         outcome = compute(criteria_m2, passing_results, defects)
 
@@ -104,7 +104,7 @@ class TestNotValidated:
         assert compute(criteria_m2, results, [])["verdict"] == NOT_VALIDATED
 
     def test_nao_validado_tem_precedencia_sobre_reprovado(self, criteria_m2: list[dict]) -> None:
-        """'Não conseguimos checar' e 'checamos e quebrou' são fatos diferentes."""
+        """'We could not check' and 'we checked and it broke' are different facts."""
         results = [
             {"id": "AC1", "status": "failed", "note": "quebrou"},
             {"id": "AC2", "status": "not_exercised"},

@@ -211,10 +211,10 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.roadmap.exists():
-        # NÃO sugerir um comando aqui: ROADMAP.md é escrito à mão e nenhuma skill
+        # Do NOT suggest a command here: ROADMAP.md is hand-written and no skill
         # o gera. A mensagem antiga mandava rodar `roadmap-init`, aposentada junto
-        # com a cycle-roadmap — remédio impresso na falha que leva a lugar nenhum.
-        # `backlog-init` também não serve: cria BACKLOG.md, outro registro.
+        # with cycle-roadmap — a remedy printed in the failure that leads nowhere.
+        # `backlog-init` does not serve either: it creates BACKLOG.md, another registry.
         print(
             f"file not found: {args.roadmap} — it is hand-authored and no skill "
             "generates it. See rules/cycle-acceptance.md § The ROADMAP.md contract "

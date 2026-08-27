@@ -100,7 +100,7 @@ def _build_detector(language: str, thresholds: dict | None = None):
         return None
     detector = cls()
     # Os knobs do projeto chegam ao detector. Antes, `load_thresholds()` era chamado
-    # pelo efeito colateral de validar o arquivo e o resultado era descartado — todo
+    # for the side effect of validating the file and the result was discarded — every
     # `vulture.min_confidence` ou `mutation.score_floor_low` declarado em
     # `code-quality-thresholds.txt` era inerte.
     detector.thresholds = thresholds or {}
@@ -150,11 +150,10 @@ def _safe_call(label: str, func, *args, language: str = "") -> tuple[list[Findin
 def _enumerate_source_files(repo_root: Path, language: str) -> list[Path]:
     """Delega a `_shared.enumerate_source_files`.
 
-    A implementação morava aqui e os detectores passaram a precisar dela (D3
-    procura consumidores no repositório inteiro). Duas cópias da mesma travessia
-    divergem na primeira vez que alguém corrige a poda de uma só — que é
-    exatamente o defeito que o CHANGELOG registra entre `check_wiring.py` e este
-    arquivo.
+    The implementation lived here and the detectors came to need it (D3 looks for
+    consumers across the whole repository). Two copies of the same walk diverge the
+    first time someone fixes the pruning in only one — which is exactly the defect
+    the CHANGELOG records between `check_wiring.py` and this file.
     """
     from scripts._shared import enumerate_source_files
 
@@ -265,9 +264,9 @@ def main(argv: list[str] | None = None) -> int:
             findings.append(d3_crash)
         findings.extend(d3_findings)
 
-        # D4 — mutation score. O escopo é o que o PROJETO declarou na config do runner
-        # (`[mutmut] source_paths`, `stryker.config.json`); nenhum dos dois aceita lista de
-        # arquivos como escopo, e a lista que era montada aqui nunca chegava a lugar nenhum.
+        # D4 — mutation score. The scope is what the PROJECT declared in the runner's
+        # config (`[mutmut] source_paths`, `stryker.config.json`); neither accepts a file
+        # list as scope, and the list built here never reached anywhere.
         d4_findings, d4_crash = _safe_call(
             "d4", detector.detect_mutation_score, manifest_dir, language=language
         )

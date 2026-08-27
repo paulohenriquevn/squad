@@ -10,13 +10,13 @@ argument-hint: "[plan-slug] (optional — bind analysis to a plan's architecture
 
 # Analysis — PhD-Level Trajectory Validation
 
-> **INQUEBRÁVEL — 95% Confidence Gate**
+> **UNBREAKABLE — 95% Confidence Gate**
 >
-> NÃO FAÇA NADA SE NÃO TIVER 95% DE CONFIANÇA.
-> SEMPRE QUE PRECISAR DE UMA DECISÃO DO USUÁRIO, APRESENTE
-> OPÇÕES PARA ELE ESCOLHER.
+> DO NOTHING WITHOUT 95% CONFIDENCE.
+> WHENEVER A USER DECISION IS NEEDED, PRESENT
+> OPTIONS FOR THEM TO CHOOSE FROM.
 >
-> Ver `~/.claude/CLAUDE.md` § 1 (95% Confidence).
+> See `~/.claude/CLAUDE.md` § 1 (95% Confidence).
 
 Single entry-point for [`cycle-analysis`](../../rules/cycle-analysis.md). Validates whether a project is on the correct trajectory using the scientific method: hypotheses → measurements → evidence → verdict.
 

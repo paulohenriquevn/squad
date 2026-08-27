@@ -65,7 +65,7 @@ def _latest_audit(project_root: Path, slug: str) -> Path | None:
         return None
     # By NAME, not mtime: the name carries the audit date, and a re-read or a copy
     # would reshuffle mtimes without any new audit having happened.
-    return sorted(candidates, key=lambda p: p.name)[-1]
+    return max(candidates, key=lambda p: p.name)
 
 
 def _dismissal_corpus(project_root: Path, slug: str) -> str:

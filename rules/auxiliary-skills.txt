@@ -1,20 +1,20 @@
-# Skills DO PROJETO CONSUMIDOR que não são fase de nenhum cycle.
+# CONSUMER PROJECT skills that are a phase of no cycle.
 #
-# Este arquivo chega vazio de propósito: as skills auxiliares DO KIT vivem na
-# constante `AUXILIARY_SKILLS`, dentro do `check_xrefs.py`, e continuam lá —
-# são inventário do kit, versionadas junto com ele. O que este arquivo adiciona
-# é a extensão: um projeto que escreveu suas próprias skills de domínio declara
-# aqui, sem tocar no corpo do validador.
+# This file arrives empty on purpose: the KIT's auxiliary skills live in the
+# `AUXILIARY_SKILLS` constant inside `check_xrefs.py`, and they stay there — they
+# are the kit's inventory, versioned along with it. What this file adds is the
+# extension: a project that wrote its own domain skills declares them here,
+# without touching the validator's body.
 #
-# `check_xrefs.py` avisa quando uma skill não é referenciada por cycle-*.md nem
-# declara `## Cycle contract`. Para as skills do próprio kit isso é um defeito
-# real; para um especialista de domínio que o projeto escreveu e invoca sob
-# demanda, é o desenho — e o aviso, repetido, ensina a ignorar o validador.
+# `check_xrefs.py` warns when a skill is referenced by no cycle-*.md and declares
+# no `## Cycle contract`. For the kit's own skills that is a real defect; for a
+# domain specialist the project wrote and invokes on demand, it is the design —
+# and the warning, repeated, teaches people to ignore the validator.
 #
-# Antes deste arquivo a única saída era editar a constante AUXILIARY_SKILLS
-# dentro do check_xrefs.py, e uma edição no corpo do validador é exatamente o
-# que a próxima sincronização do kit sobrescreve.
+# Before this file the only way out was editing the AUXILIARY_SKILLS constant
+# inside check_xrefs.py, and an edit in the validator's body is exactly what the
+# kit's next sync overwrites.
 #
-# Formato: um nome de diretório de skill por linha; `#` comenta.
-# Um nome que não existe em disco é ignorado: isto é declaração de intenção,
-# não inventário.
+# Format: one skill directory name per line; `#` comments.
+# A name that does not exist on disk is ignored: this is a declaration of intent,
+# not an inventory.

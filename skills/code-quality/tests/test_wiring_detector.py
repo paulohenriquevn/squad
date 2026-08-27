@@ -1,7 +1,7 @@
 """D3 — cross-package wiring: a public export nobody imports.
 
-O DEFEITO QUE ISTO FIXA
------------------------
+THE DEFECT THIS FIXES
+---------------------
 `code-quality-golden-rule.md § 5` lista D3 como contrato LOCKED — "ast-grep |
 All enabled | Public exports have at least one importer (soft cap)". Os quatro
 detectores devolviam a mesma string:
@@ -9,22 +9,23 @@ detectores devolviam a mesma string:
     return self.unavailable("d3", "orphan_export", "cross-package wiring is not configured")
 
 Como `unavailable()` emite SOFT_CAP, todo audit nascia com um soft cap permanente
-e `PASS` era inalcançável por construção — em qualquer projeto, para sempre. Um
-gate que não pode ser satisfeito não é um gate: é um imposto que o `/implement`
-converte em WARN e ninguém lê.
+and `PASS` was unreachable by construction — in any project, forever. A gate that
+cannot be satisfied is not a gate: it is a tax `/implement` converts into a WARN
+nobody reads.
 
-POR QUE A SUPERFÍCIE PÚBLICA É DECLARADA, NUNCA INFERIDA
---------------------------------------------------------
-A tentação é chamar de "export público" todo nome sem underscore. Num kit de
-scripts isso produz centenas de findings: uma função chamada só dentro do próprio
-arquivo é interna de fato, e listá-la como órfã transforma o detector em ruído —
-que é a forma mais eficiente de desligar um gate sem removê-lo.
+WHY THE PUBLIC SURFACE IS DECLARED, NEVER INFERRED
+--------------------------------------------------
+The temptation is to call every name without an underscore a "public export". In
+a repository of scripts that produces hundreds of findings: a function called only
+inside its own file is internal in fact, and listing it as an orphan turns the
+detector into noise — the most efficient way to switch a gate off without removing
+it.
 
-Então D3 audita o que o projeto DECLAROU como superfície: `__all__` e re-exports
-de `__init__.py` em Python, os arquivos que `package.json` aponta em TypeScript,
-`pub` em `src/lib.rs` no Rust, identificadores exportados fora de `internal/` no
-Go. Um projeto que não declara superfície nenhuma recebe INFO dizendo isso — não
-um veredito fabricado sobre uma superfície que o detector inventou.
+So D3 audits what the project DECLARED as surface: `__all__` and `__init__.py`
+re-exports in Python, the files `package.json` points at in TypeScript, `pub` in
+`src/lib.rs` in Rust, exported identifiers outside `internal/` in Go. A project
+that declares no surface at all gets an INFO saying exactly that — not a fabricated
+verdict about a surface the detector invented.
 """
 from __future__ import annotations
 
@@ -43,7 +44,7 @@ def _write(root: Path, rel: str, body: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Python — a superfície é `__all__` e o que `__init__.py` re-exporta
+# Python — the surface is `__all__` and what `__init__.py` re-exports
 # ---------------------------------------------------------------------------
 
 def test_python_export_with_no_importer_is_an_orphan(tmp_path: Path) -> None:
@@ -70,11 +71,11 @@ def test_python_export_with_an_importer_is_not_an_orphan(tmp_path: Path) -> None
 
 
 def test_a_test_file_is_not_a_consumer(tmp_path: Path) -> None:
-    """Um símbolo que só o teste dele exercita não está integrado.
+    """A symbol only its own test exercises is not integrated.
 
-    É o mesmo raciocínio do pilar (a) da tríade de wiring: o teste prova que o
-    código FUNCIONA, não que alguém o USA. Contar o teste como importador é como
-    o gate de cobertura contava o exit code do runner.
+    Same reasoning as pillar (a) of the wiring triad: the test proves the code
+    WORKS, not that anything USES it. Counting the test as an importer is how the
+    coverage gate used to count a runner's exit code.
     """
     _write(tmp_path, "pkg/__init__.py", "")
     _write(tmp_path, "pkg/api.py", '__all__ = ["so_o_teste_usa"]\n\n\ndef so_o_teste_usa():\n    return 1\n')
@@ -83,11 +84,11 @@ def test_a_test_file_is_not_a_consumer(tmp_path: Path) -> None:
     orphans = [f for f in _wiring.detect_orphan_exports("python", tmp_path, tmp_path)
                if f.detector == "d3_orphan_export"]
 
-    assert len(orphans) == 1, "o teste do próprio símbolo não é consumidor"
+    assert len(orphans) == 1, "a symbol's own test is not a consumer"
 
 
 def test_a_definition_site_is_not_its_own_consumer(tmp_path: Path) -> None:
-    """O arquivo que define o símbolo o menciona por definição — literalmente."""
+    """The file defining the symbol mentions it by definition — literally."""
     _write(tmp_path, "pkg/__init__.py", "")
     _write(tmp_path, "pkg/api.py",
            '__all__ = ["solitaria"]\n\n\ndef solitaria():\n    return interna()\n\n\ndef interna():\n    return solitaria\n')
@@ -110,10 +111,10 @@ def test_init_reexport_counts_as_declared_surface(tmp_path: Path) -> None:
 
 
 def test_a_project_with_no_declared_surface_reports_info_not_a_verdict(tmp_path: Path) -> None:
-    """Sem superfície declarada não há o que auditar — e dizer isso é a resposta.
+    """With no declared surface there is nothing to audit — and saying so is the answer.
 
-    O caminho errado seria inferir uma superfície e emitir SOFT_CAP sobre ela:
-    produziria um veredito sobre um contrato que ninguém escreveu.
+    The wrong path would be to infer a surface and emit SOFT_CAP against it: that
+    would produce a verdict about a contract nobody wrote.
     """
     _write(tmp_path, "solto.py", "def qualquer():\n    return 1\n")
 
@@ -126,7 +127,7 @@ def test_a_project_with_no_declared_surface_reports_info_not_a_verdict(tmp_path:
 
 
 # ---------------------------------------------------------------------------
-# TypeScript — a superfície é o que `package.json` aponta
+# TypeScript — the surface is what `package.json` points at
 # ---------------------------------------------------------------------------
 
 def test_typescript_barrel_export_with_no_importer_is_an_orphan(tmp_path: Path) -> None:
@@ -174,7 +175,7 @@ def test_go_exported_identifier_with_a_consumer_is_not_an_orphan(tmp_path: Path)
 
 
 def test_go_internal_package_is_not_public_surface(tmp_path: Path) -> None:
-    """`internal/` é inacessível de fora do módulo — por regra do compilador."""
+    """`internal/` is unreachable from outside the module — by compiler rule."""
     _write(tmp_path, "go.mod", "module exemplo\n")
     _write(tmp_path, "internal/secreto/api.go", "package secreto\n\nfunc NaoExportavel() int {\n\treturn 1\n}\n")
 
@@ -212,13 +213,14 @@ def test_findings_carry_a_wellformed_allowlist_key(tmp_path: Path, language: str
 
 
 def test_a_type_named_in_another_public_signature_is_not_an_orphan(tmp_path: Path) -> None:
-    """Um tipo alcançável pela assinatura de outra export vive através dela.
+    """A type reachable through another export's signature lives through it.
 
-    Medido no próprio kit: `AllowlistEntry` é o tipo de retorno de `load_allowlist`,
-    e nenhum arquivo o importa por nome — quem chama a função recebe a instância. Um
-    detector que o chamasse de órfão empurraria o projeto a removê-lo de `__all__`,
-    quebrando quem quisesse anotar o retorno. Falso positivo em SOFT_CAP é caro do
-    mesmo jeito: gera allowlist espúria e ensina a ignorar o gate.
+    Measured on the kit itself: `AllowlistEntry` is `load_allowlist`'s return type,
+    and no file imports it by name — whoever calls the function receives the
+    instance. A detector calling it an orphan would push the project to remove it
+    from `__all__`, breaking anyone who wanted to annotate the return. A false
+    positive at SOFT_CAP is expensive all the same: it generates a spurious
+    allowlist entry and teaches people to ignore the gate.
     """
     _write(tmp_path, "pkg/__init__.py", "")
     _write(
@@ -237,10 +239,10 @@ def test_a_type_named_in_another_public_signature_is_not_an_orphan(tmp_path: Pat
 
 
 def test_a_type_in_a_private_signature_is_still_an_orphan(tmp_path: Path) -> None:
-    """A regra é assinatura de outra EXPORT — não de qualquer função do módulo.
+    """The rule is another EXPORT's signature — not any function in the module.
 
-    Sem esta, bastaria uma função interna anotar o tipo para o símbolo desaparecer
-    do relatório, e o gate deixaria de enxergar superfície morta.
+    Without this, an internal helper annotating the type would be enough to make the
+    symbol vanish from the report, and the gate would stop seeing dead surface.
     """
     _write(tmp_path, "pkg/__init__.py", "")
     _write(

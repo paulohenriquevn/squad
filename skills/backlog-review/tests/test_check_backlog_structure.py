@@ -78,7 +78,7 @@ def test_invalid_mode_is_flagged(tmp_path: Path) -> None:
 
 
 def test_missing_field_is_flagged(tmp_path: Path) -> None:
-    block = item_block().replace("why_now: o dashboard passou a carregar 30d por padrão\n", "")
+    block = item_block().replace("why_now: the dashboard started loading 30d by default\n", "")
     report = check_backlog(write_backlog(tmp_path, block))
     assert "missing_field" in _checks(report)
 

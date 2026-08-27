@@ -1,11 +1,11 @@
-"""Os gates G1 e G2 do intake eram mecanizáveis e não eram mecanizados.
+"""Intake gates G1 and G2 were mechanizable and were not mechanized.
 
-`/backlog-item` declara cinco hard gates e não embarcava um único script. G3
-(domínio único), G4 (DoD verificável) e G5 (sem prior-art) são julgamento e
-seguem conversacionais, cobertos por eval. G1 (repo resolve) e G2 (a busca de
-dedup rodou) não são: o `scripts/route_domain.py` já existia, com 23 testes, e a
-skill não o chamava — instruía um `python3 -c` inline e um `grep` que ninguém
-verificava. Um gate cuja execução depende de o agente lembrar não é um gate.
+`/backlog-item` declares five hard gates and shipped not a single script. G3
+(single domain), G4 (verifiable DoD) and G5 (no prior art) are judgement and stay
+conversational, covered by evals. G1 (the repo resolves) and G2 (the dedup search
+ran) are not: `scripts/route_domain.py` already existed, with 23 tests, and the
+skill did not call it — it instructed an inline `python3 -c` and a `grep` nobody
+verified. A gate whose execution depends on the agent remembering is not a gate.
 """
 from __future__ import annotations
 
@@ -17,11 +17,12 @@ from pathlib import Path
 SCRIPT = Path(__file__).parent.parent / "scripts" / "check_intake_gates.py"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# G1 roteia pela tabela do projeto, e por isso o projeto é MONTADO aqui em vez de
-# apontar para este repositório. Enquanto apontava, o teste media a configuração da
-# máquina: passou verde por meses porque `rules/cycle-backlog.md` carregava a tabela
-# do ecossistema em que o kit foi escrito, e quebrou no dia em que ela saiu — sem que
-# nada em `check_intake_gates.py` tivesse mudado.
+# G1 routes through the project's table, which is why the project is BUILT here
+# instead of pointing at this repository. While it pointed, the test measured the
+# machine's configuration: it stayed green for months because
+# `rules/cycle-backlog.md` carried the table of the ecosystem the kit was written
+# in, and broke the day that table left — with nothing in `check_intake_gates.py`
+# having changed.
 
 BACKLOG = """# Backlog
 
@@ -32,7 +33,7 @@ BACKLOG = """# Backlog
 domain: ingest
 repo: alpha-lens
 status: raw
-why_now: o ingest ficou lento depois do último deploy
+why_now: ingest got slow after the last deploy
 
 ## B-008 — Explorer de traces com p95 alto   [x]
 
@@ -40,7 +41,7 @@ domain: ingest
 repo: alpha-lens
 status: shipped
 
-## B-009 — Cache de sessão que ninguém mediu   [ ]
+## B-009 — Session cache nobody measured   [ ]
 
 domain: ingest
 repo: alpha-lens
@@ -49,7 +50,7 @@ status: killed
 
 
 def _project(tmp_path: Path) -> Path:
-    """Um projeto com tabela de roteamento própria e os especialistas que ela nomeia."""
+    """A project with a routing table of its own and the specialists it names."""
     root = tmp_path / "projeto"
     (root / "scripts").mkdir(parents=True)
     (root / "rules").mkdir()
@@ -94,7 +95,7 @@ def _backlog(tmp_path: Path) -> Path:
 
 
 def test_unknown_repo_is_refused_by_g1(tmp_path: Path) -> None:
-    rc, data = _run(_backlog(tmp_path), "repo-que-nao-existe", ["cache"])
+    rc, data = _run(_backlog(tmp_path), "repo-that-does-not-exist", ["cache"])
     assert rc == 1
     assert data["verdict"] == "ITEM_REJECTED"
     assert data["g1"]["routed"] is False
@@ -108,7 +109,7 @@ def test_known_repo_routes_and_names_the_specialist(tmp_path: Path) -> None:
 
 
 def test_no_dedup_hit_passes_both_gates(tmp_path: Path) -> None:
-    """Repo sem item algum no registro: G1 roteia, G2 buscou e não achou nada."""
+    """A repo with no item in the registry: G1 routes, G2 searched and found nothing."""
     rc, data = _run(_backlog(tmp_path), "alpha-rag", ["nada-casa-aqui"])
     assert rc == 0
     assert data["verdict"] == "GATES_PASS"
@@ -138,13 +139,13 @@ def test_killed_item_hit_recommends_supersedes(tmp_path: Path) -> None:
 
 
 def test_the_repo_name_itself_is_always_a_search_term(tmp_path: Path) -> None:
-    """A skill manda buscar os substantivos MAIS o repo; deixar isso a cargo de
-    quem chama é como o repo saía da busca sem ninguém notar."""
+    """The skill says to search the nouns PLUS the repo; leaving that to the caller
+    is how the repo dropped out of the search with nobody noticing."""
     _rc, data = _run(_backlog(tmp_path), "alpha-lens", [])
     assert "alpha-lens" in data["g2"]["terms"]
     assert data["g2"]["candidates"], data
 
 
 def test_missing_backlog_fails_loudly(tmp_path: Path) -> None:
-    rc, _data = _run(tmp_path / "nao-existe.md", "alpha-lens", ["x"])
+    rc, _data = _run(tmp_path / "does-not-exist.md", "alpha-lens", ["x"])
     assert rc == 2

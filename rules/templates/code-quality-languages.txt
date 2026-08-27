@@ -1,9 +1,10 @@
-# Nenhuma linguagem habilitada até que ESTE projeto declare as suas.
+# No language enabled until THIS project declares its own.
 #
-# O kit distribuía aqui a própria configuração — `python | pyproject.toml | ENABLED`,
-# porque o repositório do kit é Python. Todo consumidor nascia com Python habilitado,
-# inclusive os que não têm `pyproject.toml`: o detector apontava para um manifesto
-# ausente e o cycle parava numa suposição de caminho. Descomente o que este projeto
+# The kit used to ship its own configuration here — `python | pyproject.toml |
+# ENABLED`, because the kit's repository is Python. Every consumer was born with
+# Python enabled, including those with no `pyproject.toml`: the detector pointed at a
+# missing manifest and the cycle stopped on a path assumption. Uncomment what this
+# project
 # realmente usa, com o MANIFEST-MARKER medido em disco.
 
 # Languages enabled for /code-quality and post-edit-check.sh.

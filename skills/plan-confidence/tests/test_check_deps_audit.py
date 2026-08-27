@@ -1,37 +1,37 @@
-"""O gate de CVE deixa de depender de alguém lembrar de honrá-lo.
+"""The CVE gate stops depending on someone remembering to honour it.
 
-O DEFEITO QUE ISTO FIXA
------------------------
-`cycle-plan.md § Phase contracts` lista, entre os hard gates da fase, "no critical
-CVE on a planned dependency" — e diz, na linha seguinte, o que nenhum outro gate do
-ciclo precisa dizer:
+THE DEFECT THIS FIXES
+---------------------
+`cycle-plan.md § Phase contracts` lists, among the phase's hard gates, "no critical
+CVE on a planned dependency" — and says, on the next line, what no other gate in
+the cycle needs to say:
 
     **The `deps-audit` gate is the one gate in this cycle nothing mechanizes.**
     Every other hard gate above is checked by a script that can fail the phase.
     This one is not.
 
-`skills/deps-audit/SKILL.md § 35` repete: "Its gate is human-enforced, not
+`skills/deps-audit/SKILL.md § 35` repeats: "Its gate is human-enforced, not
 mechanized. `/plan-confidence` does not read this audit's verdict."
 
-O motivo declarado era procedural: ligar o gate ESTENDE o contrato do
-`plan-confidence-golden-rule.md`, e estender contrato exige registro. O registro
-está escrito na golden rule (§ "Rules that cannot be bent"), no formato que este
-repositório de fato usa — os arquivos sob `knowledge-base/adrs/` são gitignored e
-não alcançam quem clona.
+The declared reason was procedural: wiring the gate EXTENDS
+`plan-confidence-golden-rule.md`'s contract, and extending a contract requires a
+record. The record is written in the golden rule (§ "Rules that cannot be bent"), in the format this
+repository actually uses — the files under `knowledge-base/adrs/` are gitignored
+and do not reach whoever clones.
 
-O QUE ESTE CHECK ASSEVERA, E O QUE ELE SE RECUSA A ASSEVERAR
--------------------------------------------------------------
-Ele NÃO procura CVE: quem faz isso é `/deps-audit`, com os scanners. Ele lê o
-VEREDITO que aquele run deixou em disco e o transforma em cap. Três estados:
+WHAT THIS CHECK ASSERTS, AND WHAT IT REFUSES TO ASSERT
+-------------------------------------------------------
+It does NOT look for CVEs: `/deps-audit` does that, with the scanners. It reads
+the VERDICT that run left on disk and turns it into a cap. Three states:
 
-| Estado                                              | Efeito |
+| State                                              | Effect |
 |---|---|
-| Plano não declara dependência nova                  | não se aplica |
-| Declara, e nenhum relatório existe                  | soft floor (≤ 89) — ninguém verificou |
-| Relatório com CVE CRITICAL/HIGH em dep declarada    | hard cap (≤ 49) |
+| Plan declares no new dependency                    | does not apply |
+| Declares one, and no report exists                 | soft floor (≤ 89) — nobody checked |
+| Report with a CRITICAL/HIGH CVE in a declared dep  | hard cap (≤ 49) |
 
-Ausência de auditoria não vira "sem CVE". É a mesma regra do denominador zero em
-D4 e do relatório de cobertura ilegível: não medido é não medido, nunca aprovado.
+Absence of an audit never becomes "no CVE". Same rule as a zero denominator in D4
+and an unreadable coverage report: not measured is not measured, never approved.
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from check_deps_audit import check_deps_audit  # noqa: E402
 
-_PLAN_WITH_DEPS = """# Plano
+_PLAN_WITH_DEPS = """# Plan
 
 ## Dependencies
 
@@ -55,7 +55,7 @@ _PLAN_WITH_DEPS = """# Plano
 ## Phase 1
 """
 
-_PLAN_NO_DEPS = """# Plano
+_PLAN_NO_DEPS = """# Plan
 
 ## Dependencies
 
@@ -64,11 +64,11 @@ _PLAN_NO_DEPS = """# Plano
 ## Phase 1
 """
 
-_PLAN_WITHOUT_SECTION = """# Plano
+_PLAN_WITHOUT_SECTION = """# Plan
 
 ## Phase 1
 
-Nada sobre dependências.
+Nothing about dependencies.
 """
 
 
@@ -93,7 +93,7 @@ def _audit(root: Path, verdict: str, slug: str = "demo", caps: str = "") -> Path
 
 
 # ---------------------------------------------------------------------------
-# Quando o check NÃO se aplica
+# When the check does NOT apply
 # ---------------------------------------------------------------------------
 
 def test_a_plan_with_no_dependencies_section_is_untouched(tmp_path: Path) -> None:
@@ -105,18 +105,18 @@ def test_a_plan_with_no_dependencies_section_is_untouched(tmp_path: Path) -> Non
 
 
 def test_an_explicit_none_is_untouched(tmp_path: Path) -> None:
-    """`(none — no new dependency)` é uma declaração, e o gate a respeita."""
+    """`(none — no new dependency)` is a declaration, and the gate respects it."""
     plan = _plan(tmp_path, _PLAN_NO_DEPS)
     report = check_deps_audit(plan)
     assert report.applies is False
 
 
 # ---------------------------------------------------------------------------
-# Quando ninguém auditou
+# When nobody audited
 # ---------------------------------------------------------------------------
 
 def test_declared_dependencies_without_an_audit_are_a_soft_floor(tmp_path: Path) -> None:
-    """Não posso afirmar que há CVE. Posso afirmar que ninguém olhou."""
+    """I cannot assert there is a CVE. I can assert nobody looked."""
     plan = _plan(tmp_path, _PLAN_WITH_DEPS)
     report = check_deps_audit(plan)
     assert report.applies is True
@@ -127,7 +127,7 @@ def test_declared_dependencies_without_an_audit_are_a_soft_floor(tmp_path: Path)
 
 
 # ---------------------------------------------------------------------------
-# Quando o audit existe
+# When the audit exists
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("verdict", ["PASS", "PASS_WITH_CAVEATS"])
@@ -141,7 +141,7 @@ def test_a_clean_audit_clears_the_gate(tmp_path: Path, verdict: str) -> None:
 
 
 def test_an_insecure_audit_is_a_hard_cap(tmp_path: Path) -> None:
-    """O gate que `cycle-plan.md` declarava e nada cobrava."""
+    """The gate `cycle-plan.md` declared and nothing enforced."""
     plan = _plan(tmp_path, _PLAN_WITH_DEPS)
     _audit(tmp_path, "FAIL_INSECURE", caps="critical_cve_in_declared_dep")
     report = check_deps_audit(plan)
@@ -169,15 +169,15 @@ def test_an_audit_with_no_verdict_line_does_not_count_as_clean(tmp_path: Path) -
     plan = _plan(tmp_path, _PLAN_WITH_DEPS)
     audits = tmp_path / "knowledge-base" / "audits"
     audits.mkdir(parents=True, exist_ok=True)
-    (audits / "demo-deps-audit-2026-08-26.md").write_text("# vazio\n", encoding="utf-8")
+    (audits / "demo-deps-audit-2026-08-26.md").write_text("# empty\n", encoding="utf-8")
 
     report = check_deps_audit(plan)
 
-    assert report.soft_floor is True, "relatório ilegível é ausência de veredito"
+    assert report.soft_floor is True, "an unreadable report is an absent verdict"
 
 
 def test_the_newest_audit_wins(tmp_path: Path) -> None:
-    """Auditar de novo depois de bumpar a dependência tem de contar."""
+    """Re-auditing after bumping the dependency must count."""
     plan = _plan(tmp_path, _PLAN_WITH_DEPS)
     _audit(tmp_path, "FAIL_INSECURE")
     audits = tmp_path / "knowledge-base" / "audits"

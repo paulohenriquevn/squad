@@ -1,33 +1,33 @@
-"""O kit instalado não é território gravável do consumidor.
+"""The installed kit is not the consumer's writable territory.
 
-O DEFEITO QUE ISTO FIXA
------------------------
-Instalado por cópia, o kit vive em `<projeto>/.claude/`, e `settings.plugin.json`
-libera `Edit`, `Write` e `Bash(*)`. Nenhum hook cobria esse caminho:
-`boundary-check.sh` protegia apenas `knowledge-base/references/` e
-`knowledge-base/tools/`, e `validate-command.sh` não mencionava
-`.claude/skills`, `.claude/rules` nem `.claude/hooks`. O `.kit-manifest.txt`,
-escrito pelo instalador justamente para dizer o que veio do kit, não era lido
-por hook nenhum.
+THE DEFECT THIS FIXES
+---------------------
+Installed by copy, the kit lives in `<project>/.claude/`, and
+`settings.plugin.json` allows `Edit`, `Write` and `Bash(*)`. No hook covered that
+path: `boundary-check.sh` protected only `knowledge-base/references/` and
+`knowledge-base/tools/`, and `validate-command.sh` mentioned neither
+`.claude/skills`, nor `.claude/rules`, nor `.claude/hooks`. The
+`.kit-manifest.txt`, written by the installer precisely to say what came from the
+kit, was read by no hook at all.
 
-O resultado está registrado pelo próprio repositório, em
+The result is on record in the repository itself, in
 `scripts/check_install_drift.py`:
 
     "Twenty-two fixes to this kit lived for weeks inside one consumer's
      gitignored `.claude/` install and nowhere else. Nobody hid them.
      Nothing looked."
 
-Uma correção escrita dentro do kit instalado protege exatamente uma máquina, e
-some no próximo `install.sh --force`.
+A fix written inside the installed kit protects exactly one machine, and vanishes
+with the next `install.sh --force`.
 
-O QUE CONTINUA GRAVÁVEL, E POR QUÊ
-----------------------------------
-A fronteira não é `.claude/` inteiro — isso quebraria o uso normal. O que é do
-PROJETO permanece gravável e está enumerado abaixo em
-`test_project_owned_paths_stay_writable`: a configuração (`rules/*.txt`), os
-especialistas de domínio (`agents/`), tudo sob `knowledge-base/`, e o
-`settings.json`. O que é CONTRATO do kit — skills, regras normativas, hooks,
-scripts — é read-only.
+WHAT STAYS WRITABLE, AND WHY
+----------------------------
+The boundary is not all of `.claude/` — that would break normal use. What belongs
+to the PROJECT stays writable and is enumerated below in
+`test_project_owned_paths_stay_writable`: the configuration (`rules/*.txt`), the
+domain specialists (`agents/`), everything under `knowledge-base/`, and
+`settings.json`. What is the kit's CONTRACT — skills, normative rules, hooks,
+scripts — is read-only.
 """
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def _run(file_path: str, project: Path, plugin_root: Path | None = None) -> int:
 
 @pytest.fixture()
 def copy_install(tmp_path: Path) -> Path:
-    """Um projeto com o kit instalado por cópia, como `install.sh` o escreve."""
+    """A project with the kit installed by copy, as `install.sh` writes it."""
     project = tmp_path / "consumer"
     eco = project / ".claude"
     for d in ("skills/review", "rules", "hooks/lib", "scripts", "commands",
@@ -77,7 +77,7 @@ def copy_install(tmp_path: Path) -> Path:
 
 
 # --------------------------------------------------------------------------
-# o que o kit possui — read-only
+# what the kit owns — read-only
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "rel",
@@ -91,50 +91,50 @@ def copy_install(tmp_path: Path) -> Path:
     ],
 )
 def test_kit_owned_paths_are_blocked(copy_install: Path, rel: str):
-    """Editar o kit instalado precisa ser recusado, não aceito em silêncio."""
+    """Editing the installed kit must be refused, not silently accepted."""
     assert _run(str(copy_install / rel), copy_install) == BLOCK, (
-        f"{rel} aceitou escrita — uma correção feita aqui protege uma máquina "
-        "e some no próximo install --force"
+        f"{rel} accepted a write — a fix made here protects one machine and "
+        "vanishes with the next install --force"
     )
 
 
 def test_relative_paths_are_blocked_too(copy_install: Path):
-    """O agente cita caminho relativo com a mesma frequência que absoluto."""
+    """The agent cites relative paths as often as absolute ones."""
     assert _run(".claude/skills/review/SKILL.md", copy_install) == BLOCK
 
 
 # --------------------------------------------------------------------------
-# o que o projeto possui — gravável
+# what the project owns — writable
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "rel",
     [
-        ".claude/rules/code-quality-languages.txt",  # configuração do projeto
-        ".claude/agents/meu-dominio.md",             # especialista do projeto
-        ".claude/knowledge-base/plans/x-plan.md",    # saída do ciclo
-        ".claude/settings.json",                     # fiação do projeto
-        "src/app.py",                                # o código do consumidor
+        ".claude/rules/code-quality-languages.txt",  # the project's configuration
+        ".claude/agents/my-domain.md",               # the project's specialist
+        ".claude/knowledge-base/plans/x-plan.md",    # the cycle's output
+        ".claude/settings.json",                     # the project's wiring
+        "src/app.py",                                # the consumer's code
         "README.md",
     ],
 )
 def test_project_owned_paths_stay_writable(copy_install: Path, rel: str):
-    """A fronteira é o CONTRATO do kit, não o diretório `.claude/` inteiro."""
+    """The boundary is the kit's CONTRACT, not the whole `.claude/` directory."""
     assert _run(str(copy_install / rel), copy_install) == ALLOW, (
         f"{rel} foi bloqueado, mas pertence ao projeto"
     )
 
 
 def test_a_project_skill_is_not_the_kits(copy_install: Path):
-    """Uma skill que o PROJETO escreveu continua sendo dele.
+    """A skill the PROJECT wrote stays the project's.
 
-    É para isso que o `.kit-manifest.txt` existe: sem ele, a única forma de
+    That is what `.kit-manifest.txt` is for: without it, the only way to
     separar seria adivinhar por nome.
     """
     own = copy_install / ".claude/skills/placement-algorithms/SKILL.md"
     own.parent.mkdir(parents=True, exist_ok=True)
     own.write_text("do projeto\n", encoding="utf-8")
     assert _run(str(own), copy_install) == ALLOW, (
-        "uma skill do projeto foi tratada como do kit — o manifesto não foi lido"
+        "a project skill was treated as the kit's — the manifest was not read"
     )
 
 
@@ -142,7 +142,7 @@ def test_a_project_skill_is_not_the_kits(copy_install: Path):
 # modo nativo
 # --------------------------------------------------------------------------
 def test_native_plugin_root_is_read_only(tmp_path: Path):
-    """No modo nativo o kit está fora do projeto — e segue read-only."""
+    """In native mode the kit sits outside the project — and stays read-only."""
     kit = tmp_path / "plugin-root"
     for d in ("skills", "rules", "hooks"):
         (kit / d).mkdir(parents=True)
@@ -152,7 +152,7 @@ def test_native_plugin_root_is_read_only(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------
-# regressão: a fronteira que já existia
+# regression: the boundary that already existed
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "rel",
@@ -163,7 +163,7 @@ def test_study_zone_stays_read_only(copy_install: Path, rel: str):
 
 
 def test_a_project_without_the_kit_allows_everything(tmp_path: Path):
-    """Sem kit instalado, este hook não tem fronteira nenhuma a defender."""
+    """With no kit installed, this hook has no boundary to defend."""
     plain = tmp_path / "plain"
     plain.mkdir()
     assert _run(str(plain / "src" / "app.py"), plain) == ALLOW

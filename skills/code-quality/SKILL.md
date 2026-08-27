@@ -10,13 +10,13 @@ argument-hint: "[plan-slug] (optional — bind audit to a plan's Critical paths 
 
 # Code Quality
 
-> **INQUEBRÁVEL — 95% Confidence Gate**
+> **UNBREAKABLE — 95% Confidence Gate**
 >
-> NÃO FAÇA NADA SE NÃO TIVER 95% DE CONFIANÇA.
-> SEMPRE QUE PRECISAR DE UMA DECISÃO DO USUÁRIO, APRESENTE
-> OPÇÕES PARA ELE ESCOLHER.
+> DO NOTHING WITHOUT 95% CONFIDENCE.
+> WHENEVER A USER DECISION IS NEEDED, PRESENT
+> OPTIONS FOR THEM TO CHOOSE FROM.
 >
-> Ver `~/.claude/CLAUDE.md` § 1 (95% Confidence).
+> See `~/.claude/CLAUDE.md` § 1 (95% Confidence).
 
 Audit project code for dead symbols, fabricated APIs, cross-package orphan exports, and weak test quality. Multi-ecosystem (Python, TypeScript, Rust, Go) with auto-detection + declarative language enablement. **Read-only** by design: NEVER edits source code; produces findings + verdict for human application.
 

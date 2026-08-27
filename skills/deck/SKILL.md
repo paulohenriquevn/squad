@@ -10,11 +10,11 @@ argument-hint: "<topic, audience, or file>"
 
 # Deck — Full Presentation Pipeline
 
-> **INQUEBRÁVEL — 95% Confidence Gate**
+> **UNBREAKABLE — 95% Confidence Gate**
 >
-> NÃO FAÇA NADA SE NÃO TIVER 95% DE CONFIANÇA.
-> SEMPRE QUE PRECISAR DE UMA DECISÃO DO USUÁRIO, APRESENTE
-> OPÇÕES PARA ELE ESCOLHER.
+> DO NOTHING WITHOUT 95% CONFIDENCE.
+> WHENEVER A USER DECISION IS NEEDED, PRESENT
+> OPTIONS FOR THEM TO CHOOSE FROM.
 >
 > See `~/.claude/CLAUDE.md` § 1 (95% Confidence).
 
@@ -174,7 +174,7 @@ Deck has ONE set of orchestration checks. Slide-quality and diagram-quality chec
 
 ### Minimal invocation
 ```
-/deck Memoria e Contexto para Agentes de IA
+/deck Memory and Context for AI Agents
 ```
 → Infers intermediate audience, pt-BR, 10-16 slides, tech theme.
 
@@ -186,6 +186,6 @@ Deck has ONE set of orchestration checks. Slide-quality and diagram-quality chec
 
 ### From existing content
 ```
-/deck baseado no domain.md, versao simplificada para gestores
+/deck based on domain.md, simplified version for managers
 ```
 → Reads domain.md, creates simple version with conceptual diagrams.

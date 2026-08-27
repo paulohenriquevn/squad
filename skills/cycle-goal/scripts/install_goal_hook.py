@@ -31,15 +31,15 @@ from pathlib import Path
 HOOK_MARKER = "cycle-goal/scripts/check_goal_met.py"
 DEFAULT_MAX_BLOCKS = 40
 #: Canonico: o knowledge-base mora DENTRO de .claude/ (plugin install). O layout
-#: standalone -- o proprio repo do kit -- e o unico onde ele fica na raiz. Escolher
-#: errado nao quebra ruidosamente: cria um segundo knowledge-base vazio ao lado do
+#: standalone -- the kit's own repo -- is the only one where it sits at the root.
+#: Choosing wrong does not break loudly: it creates a second empty knowledge-base beside the
 #: real, e os artefatos passam a se perder entre os dois.
 PLUGIN_ACCEPTANCE_DIR = ".claude/knowledge-base/acceptance"
 STANDALONE_ACCEPTANCE_DIR = "knowledge-base/acceptance"
 
 
 def default_acceptance_dir(root: Path) -> str:
-    """Resolve o knowledge-base canonico para o layout deste projeto."""
+    """Resolve the canonical knowledge-base for this project's layout."""
     if (root / ".claude" / "knowledge-base").exists():
         return PLUGIN_ACCEPTANCE_DIR
     if (root / ".claude").exists():
@@ -90,7 +90,7 @@ def _acceptance_path_declared(root: Path) -> tuple[bool, str]:
     """
     declaration = root / ".claude" / "rules" / "acceptance-target.txt"
     if not declaration.exists():
-        return False, f"{declaration} não existe — declare como a entrega publicada é alcançada."
+        return False, f"{declaration} does not exist — declare how the published delivery is reached."
 
     keys = {}
     for line in declaration.read_text(encoding="utf-8").splitlines():
@@ -102,8 +102,8 @@ def _acceptance_path_declared(root: Path) -> tuple[bool, str]:
     missing = [k for k in ("kind", "target") if not keys.get(k)]
     if missing:
         return False, (
-            f"{declaration} não declara {' e '.join(missing)}. Sem isso /acceptance não tem "
-            "como alcançar a entrega, e a meta seria insatisfazível."
+            f"{declaration} does not declare {' and '.join(missing)}. Without that /acceptance "
+            "has no way to reach the delivery, and the goal would be unsatisfiable."
         )
     return True, f"{keys['kind']} → {keys['target']}"
 
@@ -114,7 +114,7 @@ def _milestones_have_dod(roadmap_path: Path, milestones: list[str]) -> list[str]
 
     text = roadmap_path.read_text(encoding="utf-8")
     headers = list(re.finditer(r"^###\s+(M\d+)\s+[—\-]{1,2}\s+\[[ x]\]", text, re.MULTILINE))
-    sem = []
+    without = []
     for wanted in milestones:
         for index, match in enumerate(headers):
             if match.group(1) != wanted:
@@ -123,11 +123,11 @@ def _milestones_have_dod(roadmap_path: Path, milestones: list[str]) -> list[str]
             block = text[match.end():end]
             if not re.search(r"^\*\*Definition of done[^*]*:\*\*", block, re.MULTILINE) or \
                not re.search(r"^-\s+\[[ x]\]", block, re.MULTILINE):
-                sem.append(wanted)
+                without.append(wanted)
             break
         else:
-            sem.append(wanted)
-    return sem
+            without.append(wanted)
+    return without
 
 
 def main() -> int:
@@ -177,9 +177,9 @@ def main() -> int:
         print("nothing to arm — pass --milestones M<N> [...] or --clear.", file=sys.stderr)
         return 2
 
-    # Resolver ANTES de armar. Um gate apontando para um roadmap ou um diretorio de
-    # aceitacao que nao existe bloqueia para sempre por um motivo falso ("acceptance
-    # never ran") que parece um veredito legitimo. Descobrir isso depois custa uma
+    # Resolve BEFORE arming. A gate pointing at a roadmap or an acceptance directory
+    # that does not exist blocks forever for a false reason ("acceptance never ran")
+    # that reads as a legitimate verdict. Discovering that later costs a
     # sessao inteira; descobrir agora custa uma linha.
     acceptance_rel = args.acceptance_dir or default_acceptance_dir(root)
     roadmap_path = (root / args.roadmap).resolve()
@@ -187,45 +187,45 @@ def main() -> int:
 
     problems = []
 
-    # Autonomia: cada projeto tem o SEU knowledge-base e o SEU roadmap. Um gate que
-    # aponta para fora acopla dois repos autonomos e faz o milestone de um depender
-    # do estado do outro -- exatamente o que a arquitetura proibe.
-    for label, path in (("roadmap", roadmap_path), ("diretório de aceitação", acceptance_path)):
+    # Autonomy: each project has ITS OWN knowledge-base and ITS OWN roadmap. A gate
+    # pointing outside couples two autonomous repos and makes one's milestone depend
+    # on the other's state -- exactly what the architecture forbids.
+    for label, path in (("roadmap", roadmap_path), ("acceptance directory", acceptance_path)):
         if root not in path.parents and path != root:
             problems.append(
-                f"{label} está FORA do projeto: {path}. Os consumidores são autônomos — "
-                "cada um tem o próprio ROADMAP.md e o próprio .claude/knowledge-base/."
+                f"{label} is OUTSIDE the project: {path}. Consumers are autonomous — "
+                "each has its own ROADMAP.md and its own .claude/knowledge-base/."
             )
     if not roadmap_path.exists():
-        problems.append(f"roadmap não existe: {roadmap_path}")
+        problems.append(f"roadmap does not exist: {roadmap_path}")
     if not acceptance_path.exists():
         problems.append(
-            f"diretório de aceitação não existe: {acceptance_path} "
-            "(use --acceptance-dir quando os artefatos do ciclo moram em outro repo)"
+            f"acceptance directory does not exist: {acceptance_path} "
+            "(use --acceptance-dir when the cycle's artifacts live in another repo)"
         )
 
     # Uma meta so pode ser armada se houver rota ate ACCEPTED. Duas condicoes
     # mecanicamente verificaveis: a entrega tem caminho declarado, e cada milestone
-    # tem Definition of done (que e de onde /acceptance tira os criterios).
+    # has a Definition of done (which is where /acceptance takes the criteria from).
     if roadmap_path.exists():
-        sem_dod = _milestones_have_dod(roadmap_path, args.milestones)
-        if sem_dod:
+        without_dod = _milestones_have_dod(roadmap_path, args.milestones)
+        if without_dod:
             problems.append(
-                f"sem Definition of done: {', '.join(sem_dod)}. /acceptance lê esses bullets COMO "
-                "critérios de aceite — sem eles o milestone nunca pode ser aceito."
+                f"no Definition of done: {', '.join(without_dod)}. /acceptance reads those bullets "
+                "AS acceptance criteria — without them the milestone can never be accepted."
             )
 
-    declarado, detalhe = _acceptance_path_declared(root)
-    if not declarado:
-        problems.append(f"sem rota até ACCEPTED — {detalhe}")
+    declared, detail = _acceptance_path_declared(root)
+    if not declared:
+        problems.append(f"no route to ACCEPTED — {detail}")
 
     if problems and not args.force:
         for problem in problems:
             print(f"BLOCKED cycle-goal: {problem}", file=sys.stderr)
         print(
-            "Nada foi armado. Uma meta sem rota até ACCEPTED é uma armadilha: ela bloqueia "
-            "toda tentativa de parada até o teto, e cada bloqueio parece um veredito legítimo. "
-            "Corrija o que está acima, ou passe --force assumindo esse risco conscientemente.",
+            "Nothing was armed. A goal with no route to ACCEPTED is a trap: it blocks every "
+            "attempt to stop until the ceiling, and each block reads as a legitimate verdict. "
+            "Fix what is above, or pass --force taking that risk knowingly.",
             file=sys.stderr,
         )
         return 2
@@ -257,11 +257,11 @@ def main() -> int:
     settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
 
     print(f"armed: {' '.join(args.milestones)}")
-    print(f"  roadmap    : {roadmap_path}{'' if roadmap_path.exists() else '   <== NÃO EXISTE (--force)'}")
-    print(f"  acceptance : {acceptance_path}{'' if acceptance_path.exists() else '   <== NÃO EXISTE (--force)'}")
+    print(f"  roadmap    : {roadmap_path}{'' if roadmap_path.exists() else '   <== DOES NOT EXIST (--force)'}")
+    print(f"  acceptance : {acceptance_path}{'' if acceptance_path.exists() else '   <== DOES NOT EXIST (--force)'}")
     print(f"  state      : {state_path}")
     print(f"  hook       : {settings_path}")
-    print(f"  alvo       : {detalhe}")
+    print(f"  target     : {detail}")
     print(f"  ceiling    : {args.max_blocks} blocks")
     return 0
 

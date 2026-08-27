@@ -1,35 +1,35 @@
-"""O consumidor não herda o mapa de repositórios de outro ecossistema.
+"""The consumer does not inherit another ecosystem's repository map.
 
-O DEFEITO QUE ISTO FIXA
------------------------
-`rules/cycle-backlog.md` carrega a tabela de roteamento por domínio, e a versão
-versionada aqui já foi a do ecossistema `theo`: oito domínios apontando para
-`theo-cloud`, `theo-rag`, `theo-contracts` e mais doze repositórios.
+THE DEFECT THIS FIXES
+---------------------
+`rules/cycle-backlog.md` carries the per-domain routing table, and the version
+versioned here was once the origin ecosystem's: eight domains pointing at
+`theo-cloud`, `theo-rag`, `theo-contracts` and twelve more repositories.
 
-O próprio arquivo já descrevia a consequência, com medição:
+The file itself already described the consequence, with a measurement:
 
     "A consumer that keeps this table inherits a map of repos it does not have,
      and gate G1 then refuses every item it files. Measured on `theokit-sdk`
      (2026-08-18): 88 items with measured file:line evidence, all
      BLOCKER/unroutable_repo."
 
-Saber e continuar entregando é a parte que este teste encerra. `install.sh` já
-preservava a tabela DERIVADA de um consumidor no modo `--merge`; o que faltava
-era o caso da instalação limpa, onde não há tabela anterior a preservar e a do
-ecossistema de origem seguia por padrão.
+Knowing and shipping anyway is the part this test ends. `install.sh` already
+preserved a consumer's DERIVED table in `--merge` mode; what was missing was the
+clean-install case, where there is no previous table to preserve and the origin
+ecosystem's went out by default.
 
-POR QUE O TESTE MEDE A INSTALAÇÃO, NÃO O REPOSITÓRIO
------------------------------------------------------
-A tabela de um repositório está correta PARA ELE — quem a derivou realmente
-mantém aqueles repos, e `route_domain.py` depende dela para rodar ali. O defeito
-nunca foi tê-la; foi entregá-la. Então a asserção é sobre o que sai do
-instalador, e cada repositório segue livre para descrever o próprio ecossistema.
+WHY THE TEST MEASURES THE INSTALL, NOT THE REPOSITORY
+------------------------------------------------------
+A repository's table is correct FOR IT — whoever derived it really maintains those
+repos, and `route_domain.py` depends on it to run there. The defect was never
+having it; it was shipping it. So the assertion is about what leaves the
+installer, and each repository stays free to describe its own ecosystem.
 
 Este aqui deixou de exercer essa liberdade em 2026-08-26: a tabela e os oito
-especialistas que ela nomeava saíram, e a seção passou a nascer vazia também na
-fonte. O teste continua valendo, e continua sendo o que garante a propriedade —
-a fonte pode voltar a descrever um ecossistema a qualquer momento, e a entrega
-não pode.
+specialists it named left, and the section began being born empty in the source
+too. The test still holds, and is still what guarantees the property — the source
+may go back to describing an ecosystem at any moment, and the shipped copy may
+not.
 """
 from __future__ import annotations
 
@@ -41,9 +41,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 
-#: Nomes que só fazem sentido no ecossistema de origem. Deliberadamente
-#: específicos: `control-plane` ou `engine-go` sozinhos são termos genéricos que
-#: um consumidor pode legitimamente usar como nome de domínio próprio.
+#: Names that only make sense in the origin ecosystem. Deliberately specific:
+#: `control-plane` or `engine-go` on their own are generic terms a consumer may
+#: legitimately use as a domain name of their own.
 ORIGIN_MARKERS = (
     "theo-cloud",
     "theo-rag",
@@ -80,27 +80,27 @@ def _leaks(text: str) -> list[str]:
 
 
 def test_routing_table_ships_empty(installed_rules: Path):
-    """A instalação limpa não pode nomear repositórios de outro ecossistema."""
+    """A clean install must not name another ecosystem's repositories."""
     backlog = installed_rules / "cycle-backlog.md"
     assert backlog.is_file()
     found = _leaks(backlog.read_text(encoding="utf-8"))
     assert not found, (
-        f"cycle-backlog.md entregue nomeia repositórios do ecossistema de origem: {found}. "
-        "Todo item filado pelo consumidor será recusado por G1 como unroutable_repo."
+        f"the shipped cycle-backlog.md names origin-ecosystem repositories: {found}. "
+        "Every item the consumer files will be refused by G1 as unroutable_repo."
     )
 
 
 def test_routing_table_still_tells_the_consumer_what_to_do(installed_rules: Path):
-    """Esvaziar sem instruir apenas troca uma falha por outra.
+    """Emptying without instructing merely trades one failure for another.
 
-    A seção precisa continuar existindo e apontar o comando que a deriva — do
-    contrário o consumidor encontra um vazio sem saber que é ele quem o preenche.
+    The section must still exist and point at the command that derives it —
+    otherwise the consumer finds a void without knowing they are the one to fill it.
     """
     body = (installed_rules / "cycle-backlog.md").read_text(encoding="utf-8")
     section = re.search(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", body, re.MULTILINE | re.DOTALL)
-    assert section, "a seção `## Domain routing` sumiu do arquivo entregue"
+    assert section, "the `## Domain routing` section vanished from the shipped file"
     assert "detect_domains.py" in section.group(0), (
-        "a seção não nomeia o script que deriva a tabela para o projeto"
+        "the section does not name the script that derives the table for the project"
     )
 
 
@@ -108,23 +108,23 @@ def test_routing_table_still_tells_the_consumer_what_to_do(installed_rules: Path
 def test_target_declarations_ship_undeclared(installed_rules: Path, name: str):
     """Um alvo herdado faz o kit sondar o produto de outra pessoa.
 
-    `/discover-execute` em live-test e `/acceptance` exercitam o que estes
-    arquivos declaram. Herdar a declaração de origem não é só ruído: produz
-    "evidência" sobre um sistema que não é o do consumidor.
+    `/discover-execute` in live-test mode and `/acceptance` exercise what these
+    files declare. Inheriting the origin declaration is not just noise: it produces
+    "evidence" about a system that is not the consumer's.
     """
     found = _leaks((installed_rules / name).read_text(encoding="utf-8"))
     assert not found, f"{name} entregue cita o ecossistema de origem: {found}"
 
 
 def test_every_shipped_config_file_is_clean(installed_rules: Path):
-    """Varredura sobre TODA a configuração entregue, não só os arquivos conhecidos.
+    """A sweep over ALL shipped configuration, not only the known files.
 
     Um `rules/*.txt` novo criado depois deste teste entra na varredura sozinho —
-    é a diferença entre um teste que fixa a lista de hoje e um que fixa a regra.
+    that is the difference between a test that pins today's list and one that pins the rule.
     """
     dirty = {
         p.name: _leaks(p.read_text(encoding="utf-8", errors="replace"))
         for p in sorted(installed_rules.glob("*.txt"))
     }
     dirty = {k: v for k, v in dirty.items() if v}
-    assert not dirty, f"configuração entregue citando o ecossistema de origem: {dirty}"
+    assert not dirty, f"shipped configuration citing the origin ecosystem: {dirty}"

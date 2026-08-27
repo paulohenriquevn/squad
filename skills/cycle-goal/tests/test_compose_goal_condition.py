@@ -37,7 +37,7 @@ class TestParseRoadmap:
             parse_roadmap(text)
 
     def test_cabecalho_em_outro_nivel_nao_e_lido_como_milestone(self) -> None:
-        """cycle-release só flipa `### M<N>`; ler `## M<N>` aqui esconderia a divergência."""
+        """cycle-release only flips `### M<N>`; reading `## M<N>` here would hide the divergence."""
         text = "## M2 — [ ] Streaming\n\n**Objective:** sse.\n"
 
         assert parse_roadmap(text) == {}
@@ -54,7 +54,7 @@ class TestSelect:
             select(parse_roadmap(roadmap_text), ["M9"])
 
     def test_recusa_milestone_ja_lancado(self, roadmap_text: str) -> None:
-        """Uma meta sobre trabalho concluído já nasce satisfeita — inútil e enganosa."""
+        """A goal about finished work is born satisfied — useless and misleading."""
         with pytest.raises(GateViolation, match="already released"):
             select(parse_roadmap(roadmap_text), ["M1"])
 
@@ -109,7 +109,7 @@ class TestCompose:
         assert "ROADMAP.md" in condition
 
     def test_exige_evidencia_por_criterio_na_aceitacao(self, roadmap_text: str) -> None:
-        """RELEASED não basta: o checkbox só é honesto se a entrega foi exercida."""
+        """RELEASED is not enough: the checkbox is only honest if the delivery was exercised."""
         condition = compose(select(parse_roadmap(roadmap_text), ["M2"]))
 
         assert "ACCEPTED" in condition
@@ -117,7 +117,7 @@ class TestCompose:
 
 
 class TestStopCriterion:
-    """A aceitação é O critério de parada — regra inquebrável, não um item da lista."""
+    """Acceptance is THE stop criterion — an unbreakable rule, not one item on a list."""
 
     def test_declara_a_aceitacao_como_o_unico_criterio_de_parada(self, roadmap_text: str) -> None:
         condition = compose(select(parse_roadmap(roadmap_text), ["M2"]))
@@ -138,7 +138,7 @@ class TestStopCriterion:
         assert "REJECTED and NOT_VALIDATED never satisfy this goal" in condition
 
     def test_fecha_as_tres_saidas_pela_tangente(self, roadmap_text: str) -> None:
-        """Re-rodar sem corrigir, mexer no DoD e inventar veredito são violações."""
+        """Re-running without fixing, touching the DoD and inventing a verdict are violations."""
         condition = compose(select(parse_roadmap(roadmap_text), ["M2"]))
 
         assert "without fixing what it found" in condition
@@ -158,7 +158,7 @@ class TestStopCriterion:
         assert "never a direct commit to develop or main" in condition
 
     def test_cabe_no_limite_de_4000_chars_com_o_roadmap_cheio(self) -> None:
-        """M0-M8 é o teto do /roadmap-init — a condição precisa caber nesse pior caso."""
+        """M0-M8 is /roadmap-init's ceiling — the condition must fit that worst case."""
         ordered = [
             Milestone(milestone_id=f"M{n}", name=f"Milestone number {n}", done=False, dependencies=())
             for n in range(9)

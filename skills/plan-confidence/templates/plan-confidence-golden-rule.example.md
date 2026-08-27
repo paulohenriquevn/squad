@@ -1,4 +1,4 @@
-# Plan-Confidence Golden Rule (INQUEBRÁVEL) — TEMPLATE
+# Plan-Confidence Golden Rule (UNBREAKABLE) — TEMPLATE
 
 > Copy this file to `.claude/rules/plan-confidence-golden-rule.md` in your project.
 

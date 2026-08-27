@@ -69,7 +69,7 @@ A plan caps at 70 (SHIPPABLE_WITH_CAVEATS at most) when:
 - **ADR without alternatives** listed in Rationale. Stable identifier: `adr_without_alternatives`.
 - **Bug-fix task without explicit TDD** (RED-GREEN-REFACTOR block). Stable identifier: `tdd_in_bugfix`.
 
-These caps are INQUEBRÁVEIS. See `.claude/rules/plan-confidence-golden-rule.md` for full enforcement contract. The stable identifiers above are what appears in the JSON output's `hard_caps_triggered` list.
+These caps are UNBREAKABLE. See `.claude/rules/plan-confidence-golden-rule.md` for full enforcement contract. The stable identifiers above are what appears in the JSON output's `hard_caps_triggered` list.
 
 ## Conservative Bias (fail-closed)
 
