@@ -43,7 +43,7 @@ layout reveals and no detector should guess.
 Uso:
     python3 detect_domains.py                       # imprime a tabela proposta
     python3 detect_domains.py --from-backlog BACKLOG.md
-    python3 detect_domains.py --write rules/cycle-backlog.md
+    python3 detect_domains.py --write rules/domain-routing.txt
     python3 detect_domains.py --json
 
 Exit codes:
@@ -345,6 +345,77 @@ def render_table(domains: list[Domain]) -> str:
     return "\n".join(lines)
 
 
+#: Header for a routing file that does not have one yet. Kept out of the rows so
+#: a re-derive replaces data and leaves the explanation standing — losing it on
+#: every `--write` would repeat, one file over, the defect that moved this table
+#: out of `cycle-backlog.md` in the first place.
+_ROUTING_HEADER = """\
+# Domain routing — WHICH REPOSITORIES EXIST HERE, and who owns each.
+#
+# This file is the PROJECT'S, not the kit's. It lives in `rules/*.txt` for that
+# reason: the boundary guard allows the project to edit it, and a reinstall
+# preserves it. It used to be a section inside `rules/cycle-backlog.md`, which is
+# the kit's contract — so the kit prescribed writing to a file its own guard
+# blocked, and the section had to be replaced by regex, which took the invariants
+# next to it along.
+#
+# Format:  domain | repo[, repo...] | agents/<specialist>.md
+#
+# Derive it:
+#   python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \\
+#     --write .claude/rules/domain-routing.txt
+#
+# Edit by hand when ownership does not follow the directory layout — that case is
+# why this is a file you own rather than one the kit overwrites.
+#
+# The invariants this table must satisfy are NOT repeated here. They are the
+# kit's contract and live in `rules/cycle-backlog.md` under `## Routing
+# invariants` — `scripts/route_domain.py` enforces them and its own header calls
+# that rule the source of truth it refuses to copy. This file is yours and could
+# be edited to say anything; the rule that governs it is not.
+#
+# In short: one repo belongs to exactly one domain, and a repo the inventory
+# names but disk does not have stays listed rather than deleted. Read the rule
+# for why each is so.
+"""
+
+
+def render_rows(domains: list[Domain]) -> str:
+    """The data lines — `domain | repos | specialist`, aligned."""
+    if not domains:
+        return "# (no domain yet — run detect_domains.py --write)\n"
+    width = max(len(d.name) for d in domains)
+    lines = []
+    for domain in domains:
+        repos = ", ".join(domain.repos)
+        if domain.missing_on_disk:
+            repos += "".join(f", {r} (no checkout)" for r in domain.missing_on_disk)
+        lines.append(f"{domain.name:<{width}} | {repos} | {domain.agent}")
+    return "\n".join(lines) + "\n"
+
+
+def write_routing_table(path: Path, domains: list[Domain]) -> None:
+    """Write the derived rows to the project's own routing file.
+
+    The comment header is preserved when the file already has one, so re-deriving
+    replaces DATA and leaves the explanation. No regex, no adjacent section: the
+    file holds one thing, which is the whole point of moving it here.
+    """
+    header = ""
+    if path.is_file():
+        kept = []
+        for line in path.read_text(encoding="utf-8-sig").splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#"):
+                break
+            kept.append(line)
+        header = "\n".join(kept).rstrip("\n")
+    if not header.strip():
+        header = _ROUTING_HEADER.rstrip("\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{header}\n\n{render_rows(domains)}", encoding="utf-8")
+
+
 def rewrite_routing_section(rule_path: Path, domains: list[Domain]) -> None:
     """Replace the `## Domain routing` section, preserving the rest of the file."""
     content = rule_path.read_text(encoding="utf-8-sig")
@@ -364,7 +435,9 @@ def main(argv: list[str] | None = None) -> int:
                              "declare — use it when the registry exists: the semantics of "
                              "ownership live there, and no directory layout reveals them")
     parser.add_argument("--write", type=Path, default=None,
-                        help="caminho de rules/cycle-backlog.md a atualizar")
+                        help="path of rules/domain-routing.txt to write. A `.md` path is "
+                             "still accepted and rewrites the legacy section, for a consumer "
+                             "that has not migrated")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
@@ -407,12 +480,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  - {agent}")
 
     if args.write:
+        # Dispatch on the target's format. A `.txt` is the project's own file and
+        # is written whole; a `.md` is the legacy section and is replaced in
+        # place, so a consumer that has not migrated is not broken by an upgrade.
         try:
-            rewrite_routing_section(args.write, domains)
+            if args.write.suffix == ".md":
+                rewrite_routing_section(args.write, domains)
+                where = "`## Domain routing` rewritten in"
+            else:
+                write_routing_table(args.write, domains)
+                where = "routing table written to"
         except (ValueError, OSError) as exc:
             print(f"FATAL: {exc}", file=sys.stderr)
             return 2
-        print(f"\n==> `## Domain routing` reescrita em {args.write}", file=sys.stderr)
+        print(f"\n==> {where} {args.write}", file=sys.stderr)
     return 0
 
 

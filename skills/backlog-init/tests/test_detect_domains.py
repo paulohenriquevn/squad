@@ -14,7 +14,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from detect_domains import detect_domains, render_table, rewrite_routing_section
+from detect_domains import (  # noqa: E402
+    detect_domains,
+    render_table,
+    rewrite_routing_section,
+    write_routing_table,
+)
 
 
 def _repo(root: Path, name: str, *, git: bool = True) -> Path:
@@ -328,3 +333,55 @@ def test_write_does_not_destroy_the_invariants_the_code_enforces(tmp_path: Path)
         "route_domain.py enforces this; the rule must keep stating it"
     )
     assert "Record the divergence instead of deleting it" in survived
+
+
+def test_write_targets_the_projects_own_file(tmp_path: Path) -> None:
+    """`--write` writes `rules/domain-routing.txt`, not a section of the kit's rule.
+
+    This is what closes the contradiction rather than working around it. The kit
+    prescribed `--write .claude/rules/cycle-backlog.md` while `boundary-check.sh`
+    blocked `rules/*.md` as the kit's own — and the write went through anyway,
+    via `Path.write_text`, which no hook intercepts. So the kit told you to
+    write where it forbade writing, through a channel its own guard does not
+    watch.
+
+    `rules/*.txt` is already the allowlisted home for project configuration and
+    is already preserved across a reinstall. Writing there means no regex
+    replaces a section, so nothing adjacent can be destroyed by the write.
+    """
+    root = _repo(tmp_path, "svc-a")
+    routing = root / "rules" / "domain-routing.txt"
+    routing.parent.mkdir(parents=True)
+    routing.write_text("# empty\n", encoding="utf-8")
+
+    write_routing_table(routing, detect_domains(root))
+
+    body = routing.read_text(encoding="utf-8")
+    assert "svc-a" in body
+    assert "|" in body, "keeps the pipe-delimited convention of every rules/*.txt"
+    assert body.lstrip().startswith("#"), "the header explaining the file survives a rewrite"
+
+
+def test_write_replaces_rows_and_keeps_the_header(tmp_path: Path) -> None:
+    """Re-deriving replaces the rows; the comment header is not data.
+
+    The header carries why the file exists and how to regenerate it. Losing it on
+    every `--write` would repeat the defect this whole change is fixing, one
+    file over.
+    """
+    root = _repo(tmp_path, "svc-a")
+    routing = root / "rules" / "domain-routing.txt"
+    routing.parent.mkdir(parents=True)
+    routing.write_text(
+        "# Derived by detect_domains.py. Edit by hand when ownership\n"
+        "# does not follow the directory layout.\n"
+        "stale | gone | agents/stale.md\n",
+        encoding="utf-8",
+    )
+
+    write_routing_table(routing, detect_domains(root))
+
+    body = routing.read_text(encoding="utf-8")
+    assert "Derived by detect_domains.py" in body, "header kept"
+    assert "stale" not in body, "old rows replaced"
+    assert "svc-a" in body

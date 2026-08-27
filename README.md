@@ -103,7 +103,9 @@ measured on an adopter in 2026-08-18: 88 items with real `file:line` evidence,
 all `unroutable_repo`.
 
 ```bash
-python3 skills/backlog-init/scripts/detect_domains.py --root . --write rules/cycle-backlog.md
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)   # plugin vs standalone
+python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
+  --write "$ECO/rules/domain-routing.txt"
 ```
 
 The script reads the topology from disk and writes the table; then write one

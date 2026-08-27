@@ -40,7 +40,12 @@ ROW_RE = re.compile(r"^\|\s*`([a-z0-9-]+)`\s*\|(.+?)\|(.+?)\|\s*$", re.MULTILINE
 # (`theo-cloud/dashboard`). Without it that row parsed to an EMPTY repo list and the
 # domain became silently unreachable — every other check still passed.
 REPO_RE = re.compile(r"`([A-Za-z0-9_./-]+)`")
-AGENT_RE = re.compile(r"`(agents/[a-z0-9-]+\.md)`")
+# `.claude/` is accepted and stripped: in a plugin install that IS the correct
+# path, and it is what `/backlog-init` prints there. Requiring the bare form read
+# every such specialist as absent — measured on `theokit-tui`, two domains whose
+# specialist files were on disk and parsed as `agent: None`, which is the same
+# signal as a table nobody finished.
+AGENT_RE = re.compile(r"`(?:\.claude/)?(agents/[a-z0-9-]+\.md)`")
 # `/` is accepted for the same reason as in REPO_RE: a monorepo is addressed by
 # path (`packages/sdk`, `alpha-cloud/dashboard`). Without it the extractor stopped
 # at the slash and returned `packages`, routing by a repo nobody wrote.
@@ -56,20 +61,88 @@ def _find_project_root(start: Path) -> Path:
     return start.resolve()
 
 
+#: Where the routing table lives, newest first. `rules/domain-routing.txt` is the
+#: project's own file; `cycle-backlog.md` is the kit's contract, which used to
+#: carry the table as a section.
+#:
+#: Readers fall back and writers do not — the rule this repository already
+#: follows for the wiki migration, for the same reason: the kit cannot run
+#: anything inside another project's repository, so a hard cut would break every
+#: consumer that updates without migrating.
+_TABLE_LOCATIONS = (
+    ("rules", "domain-routing.txt"),
+    (".claude/rules", "domain-routing.txt"),
+    ("rules", "cycle-backlog.md"),
+    (".claude/rules", "cycle-backlog.md"),
+)
+
+
 def _routing_table_path(project_root: Path) -> Path | None:
-    for candidate in (
-        project_root / "rules" / "cycle-backlog.md",
-        project_root / ".claude" / "rules" / "cycle-backlog.md",
-    ):
+    for parent, name in _TABLE_LOCATIONS:
+        candidate = project_root.joinpath(*parent.split("/")) / name
         if candidate.is_file():
             return candidate
     return None
 
 
-def parse_routing_table(rule_path: Path) -> dict[str, dict[str, Any]]:
-    """Return {domain: {"repos": [...], "agent": "agents/x.md"}} from the rule's table."""
-    content = rule_path.read_text(encoding="utf-8-sig")
+#: A line that LOOKS like a routing row: `| `name` | … |`. Deliberately looser
+#: than ROW_RE — the point is to count what a reader would call a domain row,
+#: including the ones the strict parser rejects.
+_CANDIDATE_ROW_RE = re.compile(r"^\|\s*`([a-z0-9-]+)`\s*\|", re.MULTILINE)
 
+
+def count_candidate_rows(content: str) -> int:
+    """How many rows of the section's FIRST table look like domain rows.
+
+    Exists so a caller can tell a complete parse from a partial one. Migration
+    makes that a correctness question: measured on `website`, a four-domain table
+    parsed to one, and writing that one out would have presented a third of a map
+    as the whole of it.
+
+    Only the first contiguous run of `|` lines under the heading is counted. A
+    second table below it — exclusions, most commonly — is not a failed routing
+    table, and counting its rows would refuse migrations that are complete.
+    """
+    section = re.search(
+        r"^##\s+Domain routing\b(.*?)(?=^##\s|\Z)", content, re.MULTILINE | re.DOTALL
+    )
+    if not section:
+        return 0
+    block: list[str] = []
+    for line in section.group(1).splitlines():
+        if line.lstrip().startswith("|"):
+            block.append(line)
+        elif block:
+            break   # the first table ended
+    return len(_CANDIDATE_ROW_RE.findall("\n".join(block)))
+
+
+def _rows_from_txt(content: str) -> dict[str, dict[str, Any]]:
+    """`domain | repos | specialist`, one per line, `#` starts a comment.
+
+    The same shape every other `rules/*.txt` uses. One convention across the
+    kit's configuration files, not two.
+    """
+    table: dict[str, dict[str, Any]] = {}
+    for raw in content.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        parts = [cell.strip() for cell in line.split("|")]
+        if len(parts) < 3:
+            continue
+        domain, repos_cell, agent_cell = parts[0], parts[1], parts[2]
+        if not domain:
+            continue
+        table[domain] = {
+            "repos": [r.strip() for r in repos_cell.split(",") if r.strip()],
+            "agent": agent_cell or None,
+        }
+    return table
+
+
+def _rows_from_markdown(content: str, rule_path: Path) -> dict[str, dict[str, Any]]:
+    """The legacy `## Domain routing` section, for consumers that have not migrated."""
     section = re.search(
         r"^##\s+Domain routing\b(.*?)(?=^##\s|\Z)", content, re.MULTILINE | re.DOTALL
     )
@@ -86,9 +159,33 @@ def parse_routing_table(rule_path: Path) -> dict[str, dict[str, Any]]:
             "repos": REPO_RE.findall(repos_cell),
             "agent": agent.group(1) if agent else None,
         }
+    return table
+
+
+def parse_routing_table(rule_path: Path) -> dict[str, dict[str, Any]]:
+    """Return {domain: {"repos": [...], "agent": "agents/x.md"}} from the table.
+
+    Two formats, one invariant check. `rules/domain-routing.txt` is the project's
+    own file; a `.md` is the legacy section, still read so a consumer that has
+    not migrated keeps routing.
+    """
+    content = rule_path.read_text(encoding="utf-8-sig")
+    # Dispatch on CONTENT, not on the filename. A `.md` copied to a temp path
+    # loses its suffix, and the `.txt` parser then reads a markdown document as
+    # pipe-delimited rows — every example table in the file becomes a domain.
+    # Measured during the migration: it recovered a domain named `bug` from the
+    # kit's own contract file and reported it as the consumer's routing.
+    table = (_rows_from_markdown(content, rule_path)
+             if re.search(r"^##\s+Domain routing\b", content, re.MULTILINE)
+             else _rows_from_txt(content))
 
     if not table:
-        raise ValueError(f"{rule_path}: '## Domain routing' parsed to zero rows")
+        # Name what the reader will actually open. Telling someone their `.txt`
+        # has an unparseable `## Domain routing` section sends them looking for a
+        # markdown heading that is not in the file.
+        where = ("'## Domain routing' parsed to zero rows" if rule_path.suffix == ".md"
+                 else "has no routing row — derive one with detect_domains.py --write")
+        raise ValueError(f"{rule_path}: {where}")
 
     # One repo, one domain — enforced HERE rather than in tests/, for the same reason exit 3
     # moved into the tool (see the module docstring). `install.sh` does not copy `tests/`, so a

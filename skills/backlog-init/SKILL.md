@@ -78,19 +78,28 @@ A repo on disk that the detector did not reach is a finding, not a rounding erro
 
 The specialist file is NOT derived. `detect_domains.py` names `agents/<domain>.md`, and writing it is human work: `route_domain.py` exits 3 when the table names an agent that is not on disk, so a generated table with no specialist trades one blocker for another.
 
-### Step 2 — Confirm the routing table
+### Step 2 — Confirm the routing table, then WRITE it
 
-Print the derived table and ask for confirmation before writing. The routing table decides which specialist owns which code for the life of the registry; a wrong mapping here is a wrong mapping in every item that follows.
+Print the derived table and ask for confirmation. The routing table decides which specialist owns which code for the life of the registry; a wrong mapping here is a wrong mapping in every item that follows.
 
+Once confirmed, write it — this step is not optional and not cosmetic:
+
+```bash
+python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
+  --write "$ECO/rules/domain-routing.txt"
 ```
-Domain               Repos (verified on disk)
--------------------  ------------------------------------------
-engine                acme-engine
-control-plane         acme-cloud · acme-proxy
-data-plane            acme-memory · acme-rag · acme-lens · …
-…
-Excluded              acme-scratch (0 commits) · acme-workspace (nested clone)
+
+**Skipping this leaves routing FATAL, and the failure does not look like a missing step.** `route_domain.py` reads `rules/domain-routing.txt` (falling back to `rules/cycle-backlog.md`) and nothing else. A table written anywhere else — including into `BACKLOG.md`, which earlier versions of this skill prescribed — is a table nothing reads.
+
+Measured across five consumers on 2026-08-27: four had the routing file at its empty placeholder and a real, human-checked table in `BACKLOG.md` (one of them with fourteen path-addressed entries). `route_domain` exited 2 FATAL in four of four, over **165 registered items**. Every one of those registries was built by following this skill exactly.
+
+Then write the specialist file the table names, under `$ECO/agents/`. A derived table routes to `agents/<domain>.md`, and `route_domain.py` exits 3 while that file is absent: the table existing and the routing resolving are different facts, and the run is not done until both hold. Verify:
+
+```bash
+python3 "$ECO/scripts/route_domain.py" <a-repo-from-the-table>; echo "exit $?"
 ```
+
+Exit 0 is the only acceptable outcome of this step.
 
 ### Step 3 — Write `BACKLOG.md`
 
@@ -98,7 +107,7 @@ Structure, in this order:
 
 1. **Header** — what the registry is, and the one-line rule that governs it: *ids are monotonic and never renumbered*.
 2. **How an item gets here** — the two producers (`/backlog-item` human, `/discover-execute --sweep` measured), pointing at `cycle-backlog.md` for the schema rather than restating it. The registry is data; the contract lives in the rule.
-3. **Domain routing table** — as confirmed in Step 2, with the exclusions and their reasons.
+3. **Where routing lives** — one line pointing at `rules/domain-routing.txt`, plus the exclusions and their reasons. Do **not** copy the table itself here. `scripts/route_domain.py`'s own header states why — *"One table, one truth: a copy in code drifts from the rule the moment…"* — and a copy in the registry drifts the same way. Measured: the consumers that followed the older wording ended up with the real table in `BACKLOG.md`, where nothing reads it, and FATAL routing; the one consumer that refused to duplicate ended up with neither table, and FATAL routing. Obeying and disobeying reached the same place, which is the signal that the instruction was the defect.
 4. **`## Index`** — the three-bucket summary (`cycle-backlog.md § The index that opens the
    registry`). Do **not** hand-write it; run it, even on an empty registry:
 

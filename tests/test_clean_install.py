@@ -215,16 +215,16 @@ def test_reinstalling_never_empties_the_derived_routing_table(
     subprocess.run(["bash", *install], capture_output=True, check=True)
     subprocess.run(  # noqa: PLW1510
         [sys.executable, ".claude/skills/backlog-init/scripts/detect_domains.py",
-         "--root", ".", "--write", ".claude/rules/cycle-backlog.md"],
+         "--root", ".", "--write", ".claude/rules/domain-routing.txt"],
         cwd=target, capture_output=True, text=True,
     )
-    rule = target / ".claude" / "rules" / "cycle-backlog.md"
-    assert "`svc-a`" in rule.read_text(encoding="utf-8"), "fixture did not derive a table"
+    rule = target / ".claude" / "rules" / "domain-routing.txt"
+    assert "svc-a" in rule.read_text(encoding="utf-8"), "fixture did not derive a table"
 
     subprocess.run(["bash", *install, mode], capture_output=True, check=True)
 
     after = rule.read_text(encoding="utf-8")
-    assert "`svc-a`" in after, (
+    assert "svc-a" in after, (
         f"{mode} replaced the consumer's derived table with the empty template — "
         "the project can no longer route items about its own repository"
     )
@@ -347,3 +347,41 @@ def test_reinstalling_keeps_the_projects_permissions(
     )
     assert "Bash(npx vitest *)" in perms.get("allow", [])
     assert after.get("hooks"), f"{mode} must still refresh the kit's own wiring"
+
+
+def test_a_consumer_with_a_markdown_table_is_migrated_once(
+    versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A consumer whose table is still a `.md` section gets it moved, not lost.
+
+    The kit cannot run anything inside another project's repository, so a
+    migration that asks the consumer to act is a migration most consumers never
+    perform — and the ones that skip it are exactly the ones whose table is
+    oldest. Doing it at install time is the only moment the kit is inside the
+    consumer with permission to write.
+
+    Once, and only from a NON-empty section: migrating the empty placeholder
+    would fabricate a derived table the project never derived, and the emptiness
+    is what makes `/backlog-item` refuse items — which is the correct behaviour
+    when nobody has said who owns what.
+    """
+    target = tmp_path_factory.mktemp("migrate")
+    subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
+    install = [str(versioned_kit / "scripts" / "install.sh"), str(target)]
+    subprocess.run(["bash", *install], capture_output=True, check=True)
+
+    rules = target / ".claude" / "rules"
+    (rules / "domain-routing.txt").unlink(missing_ok=True)
+    (rules / "cycle-backlog.md").write_text(
+        "# x\n\n## Domain routing\n\n"
+        "| Domain | Repos | Specialist |\n|---|---|---|\n"
+        "| `api` | `svc-a`, `svc-b` | `agents/api.md` |\n\n## Verdicts\n\nx\n",
+        encoding="utf-8",
+    )
+
+    subprocess.run(["bash", *install, "--force"], capture_output=True, check=True)
+
+    migrated = (rules / "domain-routing.txt").read_text(encoding="utf-8")
+    assert "api" in migrated and "svc-a" in migrated and "svc-b" in migrated, (
+        "the consumer's derived table did not survive the migration"
+    )

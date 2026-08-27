@@ -23,7 +23,11 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
-from route_domain import parse_routing_table, route  # noqa: E402
+from route_domain import (  # noqa: E402
+    count_candidate_rows,
+    parse_routing_table,
+    route,
+)
 
 RULE = PROJECT_ROOT / "rules" / "cycle-backlog.md"
 AGENTS_DIR = PROJECT_ROOT / "agents"
@@ -185,17 +189,23 @@ def test_empty_table_raises(tmp_path: Path) -> None:
         parse_routing_table(rule)
 
 
-def test_the_shipped_empty_section_parses_to_zero_rows() -> None:
-    """O template entregue ao consumidor tem de cair no caminho 'zero rows'.
+def test_the_shipped_routing_file_parses_to_zero_rows() -> None:
+    """The routing file the consumer receives must carry no domain of the kit's.
 
-    It carries a table row with the text `_(empty — run …)_` precisely so the
-    section still looks like a table. If that row PARSED, the consumer would be born
-    with a ghost domain that accepts no item and reports success.
+    It used to be a section template with a placeholder ROW — `_(empty — run …)_`
+    — kept table-shaped so the section still read as a table. The file replaced
+    it: `rules/domain-routing.txt` ships with a header and no data line, which
+    means the same thing without needing a fake row to say it.
+
+    Either way the assertion is the one that matters: if the shipped file parsed
+    to a domain, every consumer would be born with a ghost that accepts no item
+    and reports success — the defect measured on an adopter in 2026-08-18, 88
+    items refused as `unroutable_repo` against a map from another ecosystem.
     """
-    template = PROJECT_ROOT / "rules" / "templates" / "domain-routing.md"
-    assert template.is_file()
-    with pytest.raises(ValueError, match="zero rows"):
-        parse_routing_table(template)
+    shipped = PROJECT_ROOT / "rules" / "domain-routing.txt"
+    assert shipped.is_file(), "the kit must ship the routing file, empty"
+    with pytest.raises(ValueError, match="no routing row"):
+        parse_routing_table(shipped)
 
 
 def test_a_domain_naming_a_missing_specialist_exits_3(tmp_path, capsys) -> None:
@@ -293,3 +303,133 @@ def test_the_same_repo_twice_in_ONE_domain_is_not_a_duplicate(tmp_path: Path) ->
     )
 
     assert parse_routing_table(rule)["alpha"]["repos"].count("pkg-one") == 2
+
+
+# ── The table moved out of the kit's contract file ───────────────────────────
+
+
+def test_the_table_is_read_from_the_projects_own_file(tmp_path: Path) -> None:
+    """`rules/domain-routing.txt` is where the routing table lives.
+
+    It used to be a section inside `rules/cycle-backlog.md`, which holds fifteen
+    sections of the KIT's contract and exactly one thing belonging to the
+    project. Everything that went wrong followed from that mixture:
+
+    - `boundary-check.sh` blocks `rules/*.md` as the kit's, so the kit invited an
+      edit to a file it forbade editing — and `detect_domains.py --write` wrote
+      there anyway, through `Path.write_text`, which no hook intercepts.
+    - The section had to be replaced by regex, and the regex took the invariants
+      with it.
+    - The installer had to perform surgery to keep the consumer's table across a
+      reinstall, in one of its two modes.
+
+    `rules/*.txt` is already the allowlisted home for project configuration, and
+    is already preserved by a reinstall. Moving the table there deletes all three
+    problems rather than guarding against them.
+    """
+    routing = tmp_path / "domain-routing.txt"
+    routing.write_text(
+        "# comment ignored\n"
+        "api      | svc-a, svc-b | agents/api.md\n"
+        "frontend | web          | agents/frontend.md\n",
+        encoding="utf-8",
+    )
+    table = parse_routing_table(routing)
+    assert table == {
+        "api": {"repos": ["svc-a", "svc-b"], "agent": "agents/api.md"},
+        "frontend": {"repos": ["web"], "agent": "agents/frontend.md"},
+    }
+
+
+def test_a_markdown_table_still_parses(tmp_path: Path) -> None:
+    """Consumers who have not migrated keep working.
+
+    Readers fall back, writers do not — the same rule `resolve_knowledge_dir`
+    follows for the wiki migration, and for the same reason: the kit cannot run
+    anything inside another project's repository, so a hard cut breaks every
+    consumer that updates without migrating.
+    """
+    rule = tmp_path / "cycle-backlog.md"
+    rule.write_text(
+        "# x\n\n## Domain routing\n\n"
+        "| Domain | Repos | Specialist |\n|---|---|---|\n"
+        "| `api` | `svc-a` | `agents/api.md` |\n\n## Verdicts\n",
+        encoding="utf-8",
+    )
+    assert parse_routing_table(rule) == {"api": {"repos": ["svc-a"], "agent": "agents/api.md"}}
+
+
+def test_one_repo_one_domain_still_holds_in_the_new_format(tmp_path: Path) -> None:
+    """The invariant is enforced regardless of which file the table came from.
+
+    It is the reason the gate exists: a repo in two rows makes `route()` depend
+    on dict iteration order, so the same item routes to a different specialist
+    between runs with nothing having changed. Moving the table must not move the
+    check out of its way.
+    """
+    routing = tmp_path / "domain-routing.txt"
+    routing.write_text(
+        "api      | shared | agents/api.md\n"
+        "frontend | shared | agents/frontend.md\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="two domains"):
+        parse_routing_table(routing)
+
+
+def test_a_specialist_path_in_plugin_layout_is_recognised(tmp_path: Path) -> None:
+    """`.claude/agents/x.md` is the same specialist as `agents/x.md`.
+
+    `AGENT_RE` required the path to start with `agents/`, so a consumer that
+    wrote the plugin-layout path — which is the correct path in a plugin
+    install, and what `/backlog-init` prints there — had its specialist read as
+    absent. Measured on `theokit-tui`: two domains, both with a specialist file
+    on disk, both parsed with `agent: None`.
+
+    A markdown link wrapping it is the same again. The consumers that wrote
+    their table by hand all used `[`path`](path)`, because that is what makes it
+    clickable in the registry they read.
+    """
+    rule = tmp_path / "cycle-backlog.md"
+    rule.write_text(
+        "## Domain routing\n\n"
+        "| Domain | Repos | Specialist |\n|---|---|---|\n"
+        "| `tui-library` | `theokit-tui` | [`.claude/agents/tui-library.md`](.claude/agents/tui-library.md) |\n"
+        "| `plain` | `svc-b` | `agents/plain.md` |\n\n## Verdicts\n",
+        encoding="utf-8",
+    )
+    table = parse_routing_table(rule)
+    assert table["tui-library"]["agent"] == "agents/tui-library.md"
+    assert table["plain"]["agent"] == "agents/plain.md"
+
+
+def test_rows_the_parser_skipped_are_countable(tmp_path: Path) -> None:
+    """A partial parse must be distinguishable from a complete one.
+
+    Migration turns this into a correctness question. Measured on `website`: a
+    table of four domains — one repository, so domains are areas of
+    responsibility and the second column lists PATHS — parsed to exactly one, and
+    the migration wrote it out as if it were the whole map. A consumer would open
+    `domain-routing.txt`, see one authoritative-looking row, and have lost three.
+
+    Refusing to migrate is the correct answer there. But refusing requires
+    KNOWING the parse was partial, which requires counting the rows that looked
+    like data and did not become domains.
+
+    Only the first contiguous table of the section counts. A second table under
+    the same heading — `theokit-tui` keeps `| Domain | Reason |` for exclusions
+    right below — is not a failed routing table, and counting its rows would
+    refuse a migration that is complete.
+    """
+    rule = tmp_path / "cycle-backlog.md"
+    rule.write_text(
+        "## Domain routing\n\n"
+        "| Domain | Covers |\n|---|---|\n"
+        "| `assistant` | `agents/` — the agent |\n"
+        "| `site` | `app/` — pages |\n"
+        "\n"
+        "| Excluded | Reason |\n|---|---|\n"
+        "| `other` | not maintained |\n\n## Verdicts\n",
+        encoding="utf-8",
+    )
+    assert count_candidate_rows(rule.read_text(encoding="utf-8")) == 2

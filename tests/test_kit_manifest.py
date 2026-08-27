@@ -182,14 +182,22 @@ def test_the_removed_flag_is_refused_instead_of_ignored(tmp_path: Path) -> None:
     assert "unknown flag" in proc.stderr
 
 
-def test_merge_preserves_the_derived_routing_table(tmp_path: Path) -> None:
-    """The routing table is project CONFIGURATION living inside a kit `.md`.
+def test_merge_migrates_the_derived_routing_table_instead_of_losing_it(tmp_path: Path) -> None:
+    """A legacy consumer's table survives the move — it changes file, not existence.
 
-    Measured on `speculative`: the reinstall restored the origin ecosystem's table
-    over the derived one, and `route_domain speculative` went from exit 0 to exit 1
-    — the project lost the ability to route items about itself. The rest of
-    `cycle-backlog.md` is the kit's contract and keeps being updated; only the
-    `## Domain routing` section is the consumer's.
+    It used to be a section inside `cycle-backlog.md`, which is the kit's
+    contract and gets replaced on every install. Keeping the consumer's data
+    there required the installer to cut the section out and paste it back, and it
+    did that in one of its two modes: measured on `speculative`, the reinstall
+    restored the origin ecosystem's table over the derived one and
+    `route_domain speculative` went from exit 0 to exit 1 — the project lost the
+    ability to route items about itself.
+
+    The table now lives in `rules/domain-routing.txt`, which is the project's and
+    is preserved like every other `rules/*.txt`. What this pins is the bridge: a
+    consumer that still has the section gets it MIGRATED, once, at the only
+    moment the kit is inside their repository with permission to write. A
+    migration that asks the consumer to act is one the oldest tables never get.
     """
     target = tmp_path / "consumidor"
     rules = target / ".claude" / "rules"
@@ -204,10 +212,12 @@ def test_merge_preserves_the_derived_routing_table(tmp_path: Path) -> None:
     )
     _install(target, "--merge")
 
+    migrated = (rules / "domain-routing.txt").read_text(encoding="utf-8")
+    assert "meu-dominio" in migrated, "the consumer's derived table was lost in the move"
+    assert "meu-repo" in migrated
+
     body = (rules / "cycle-backlog.md").read_text(encoding="utf-8")
-    assert "`meu-dominio`" in body, "a tabela derivada foi sobrescrita"
-    assert "_(empty" not in body, "o template vazio sobrescreveu a tabela derivada"
-    assert "## Hard gates" in body, "o resto da regra tem de vir atualizado do kit"
+    assert "## Hard gates" in body, "the rest of the rule must arrive updated from the kit"
 
 
 # ---------------------------------------------------------------------------

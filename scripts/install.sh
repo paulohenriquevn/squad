@@ -137,33 +137,6 @@ prune_caches() {
 }
 
 # --- tabela de roteamento: entregue VAZIA ------------------------------------
-# `rules/cycle-backlog.md` is the kit's contract and ships whole, with one
-# exception: the `## Domain routing` section describes WHICH REPOSITORIES EXIST,
-# and this repository's is the one from the ecosystem the kit was written in.
-# Shipping it makes the consumer inherit a map of repos it does not have —
-# measured 2026-08-18 on an adopter: 88 items with real `file:line` evidence, all
-# refused by G1 as `unroutable_repo`. The gate was right; the configuration was
-# somebody else's.
-#
-# `rules/templates/domain-routing.md` is a SECTION template, not a file one:
-# hence it is excluded from the loop that copies `templates/*` over `rules/*`.
-apply_routing_template() {
-  local target="$ECO/rules/cycle-backlog.md"
-  local tpl="$SRC_DIR/rules/templates/domain-routing.md"
-  [ -f "$target" ] && [ -f "$tpl" ] || return 0
-  python3 - "$target" "$tpl" <<'PYEOF'
-import re, sys
-target, tpl = sys.argv[1], sys.argv[2]
-body = open(target, encoding="utf-8-sig").read()
-section = open(tpl, encoding="utf-8").read().rstrip("\n") + "\n\n"
-patched, n = re.subn(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", lambda _: section,
-                     body, count=1, flags=re.MULTILINE | re.DOTALL)
-if n:
-    open(target, "w", encoding="utf-8").write(patched)
-PYEOF
-  echo "    rules/cycle-backlog.md § Domain routing: entregue vazia (derive com detect_domains.py)"
-}
-
 # --- copy ecosystem code ---
 # Two modes, because a target with a `.claude/` of its own has no correct answer in one of them.
 # Measured on `theo-data-cells`: 598 files under `skills/` — 5 of the kit's, 10 the project wrote
@@ -188,56 +161,19 @@ kit_owns_txt() {
   esac
 }
 
-# The derived routing table is PROJECT configuration living inside a kit `.md`,
-# and it is the one thing in that file the consumer cannot get back: the kit
-# cannot know which repositories exist there. So it is saved before the copy and
-# put back after — in EVERY mode.
-#
-# It used to be saved inside the `--merge` branch only. `--force` is the flag a
-# reinstall actually uses, and it did exactly what the comment at
-# `apply_routing_template` forbids: traded a correct map for an empty one.
-# Measured on a consumer with `svc-a` and `svc-b` derived — both gone, and
-# `route_domain` on either went from exit 0 to unroutable. The same defect the
-# merge branch cites as already measured on `speculative`, fixed once, in one of
-# the two paths.
-save_routing_section() {
-  local target="$ECO/rules/cycle-backlog.md"
-  [ -f "$target" ] || return 0
-  ROUTING_KEEP="$(mktemp)"
-  python3 - "$target" "$ROUTING_KEEP" <<'PYEOF'
-import re, sys
-src, out = sys.argv[1], sys.argv[2]
-body = open(src, encoding="utf-8-sig").read()
-m = re.search(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", body, re.MULTILINE | re.DOTALL)
-section = m.group(0) if m else ""
-# An empty table is not worth preserving: the consumer never derived one, and
-# re-injecting it would skip the template that tells them how.
-open(out, "w", encoding="utf-8").write("" if "_(empty" in section else section)
-PYEOF
-}
-
-restore_routing_section() {
-  [ -n "${ROUTING_KEEP:-}" ] && [ -s "$ROUTING_KEEP" ] || return 0
-  python3 - "$ECO/rules/cycle-backlog.md" "$ROUTING_KEEP" <<'PYEOF'
-import re, sys
-target, keep = sys.argv[1], sys.argv[2]
-body = open(target, encoding="utf-8-sig").read()
-section = open(keep, encoding="utf-8").read()
-patched = re.sub(r"^##\s+Domain routing\b.*?(?=^##\s|\Z)", lambda _: section,
-                 body, count=1, flags=re.MULTILINE | re.DOTALL)
-open(target, "w", encoding="utf-8").write(patched)
-PYEOF
-  echo "    kept (yours): rules/cycle-backlog.md § Domain routing"
-  ROUTING_PRESERVED=1
-  rm -f "$ROUTING_KEEP"
-}
 
 mkdir -p "$ECO"
 # Becomes 1 when the consumer's DERIVED table was preserved — in that case the
 # empty template must not be applied on top of it.
-ROUTING_PRESERVED=0
-ROUTING_KEEP=""
-save_routing_section
+# Capture the pre-move routing table before the copy loop replaces the file it
+# lives in. Read after the loop and you read the kit's own fresh copy, which has
+# no table — the migration would find nothing and say nothing.
+LEGACY_TABLE=""
+if [ -f "$ECO/rules/cycle-backlog.md" ]; then
+  LEGACY_TABLE="$(mktemp)"
+  cp "$ECO/rules/cycle-backlog.md" "$LEGACY_TABLE"
+fi
+
 for item in skills rules hooks commands scripts; do
   if [ "$MERGE" -eq 1 ]; then
     echo "==> Merging $item/ (adding, deleting nothing)"
@@ -322,14 +258,144 @@ for item in skills rules hooks commands scripts; do
   fi
 done
 
-restore_routing_section
 
-# The routing table is only born empty when there is no derived one to preserve.
-# Overwriting the consumer's would trade a correct map for an empty one — the
-# exact opposite of the defect this template fixes.
-if [ "$ROUTING_PRESERVED" -eq 0 ]; then
-  apply_routing_template
-fi
+# --- migrate a pre-move routing table -----------------------------------------
+# The table used to be a `## Domain routing` section inside the kit's own
+# `cycle-backlog.md`. Consumers installed before the move still have it there.
+#
+# This runs at install time because that is the only moment the kit is inside the
+# consumer with permission to write: a migration that asks the consumer to act is
+# one most consumers never perform, and the ones that skip it are exactly those
+# whose table is oldest.
+#
+# Only a NON-empty section migrates. Carrying the empty placeholder over would
+# fabricate a derived table the project never derived — and the emptiness is what
+# makes `/backlog-item` refuse items, which is correct while nobody has said who
+# owns what.
+migrate_routing_table() {
+  local target="$ECO/rules/domain-routing.txt"
+  python3 - "${LEGACY_TABLE:-}" "$target" "$SRC_DIR" "$TARGET" <<'PYEOF'
+import sys
+from pathlib import Path
+
+legacy_arg, target, kit, project = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])
+sys.path.insert(0, str(kit / "scripts"))
+sys.path.insert(0, str(kit / "skills" / "backlog-init" / "scripts"))
+
+from route_domain import count_candidate_rows, parse_routing_table  # noqa: E402
+from detect_domains import (  # noqa: E402
+    Domain,
+    domains_from_backlog,
+    write_routing_table,
+)
+
+PARTIAL = []   # files whose table parsed only in part; reported, never written
+
+
+def rows_from(path):
+    """Domains from `path`, or [] — and [] also when the parse was PARTIAL.
+
+    All or nothing per file. Measured on `website`: four domains — one
+    repository, so the second column lists paths rather than checkouts — parsed
+    to one, and writing that one out would have handed the consumer a third of
+    their map in a file that reads as authoritative. Losing three rows silently
+    is worse than migrating nothing, because nothing is visibly nothing.
+    """
+    if not path or not Path(path).is_file():
+        return []
+    content = Path(path).read_text(encoding="utf-8-sig", errors="replace")
+    try:
+        table = parse_routing_table(Path(path))
+    except (ValueError, OSError):
+        if count_candidate_rows(content):
+            PARTIAL.append(Path(path).name)
+        return []
+    rows = [
+        Domain(name=name, repos=entry["repos"], agent=entry["agent"] or f"agents/{name}.md")
+        for name, entry in table.items()
+        if entry["repos"]
+    ]
+    candidates = count_candidate_rows(content)
+    if candidates and len(rows) < candidates:
+        PARTIAL.append(Path(path).name)
+        return []
+    return rows
+
+
+# Already migrated? The consumer's file wins; never overwrite a derived table.
+if rows_from(target):
+    raise SystemExit(0)
+
+# Source 1: the `## Domain routing` section as it stood before this install.
+rows, origin = rows_from(legacy_arg), "cycle-backlog.md"
+
+# Source 2: BACKLOG.md. Measured across five consumers: four had the rule's
+# section at the `_(empty)_` placeholder and their REAL table — human-written,
+# one of them 14 path-addressed entries — in BACKLOG.md, because
+# `backlog-init`'s Step 3 told them to put it there while `route_domain.py`
+# reads only the rule. `route_domain` exited 2 FATAL in four of four, over 165
+# registered items.
+#
+# Migrating only from the rule would find nothing in exactly those four and hand
+# them a fresh empty `domain-routing.txt` that READS as authoritative: broken by
+# one mechanism becomes broken by two.
+backlog = project / "BACKLOG.md"
+
+# Source 2: the routing TABLE written into BACKLOG.md. Measured across five
+# consumers: four had the rule at its empty placeholder and their real,
+# human-checked table here — one with fourteen path-addressed entries — because
+# `backlog-init`'s Step 3 said to put it here while `route_domain.py` reads only
+# the rule. Four of four exited 2 FATAL, over 165 registered items.
+if not rows and backlog.is_file():
+    rows, origin = rows_from(backlog), "BACKLOG.md"
+
+# Source 3: the (domain, repo) pairs the ITEMS declare. Weaker than a written
+# table — it reports what has been FILED, not what exists — so it runs last.
+#
+# And never when a table was found and could not be fully read. Measured on
+# `website`: four declared domains, five filed items, and deriving from the
+# items produced ONE. Substituting the weaker source there presents a quarter of
+# a declared map as the whole of it, which is the same failure as the partial
+# parse, arriving through a different door.
+if not rows and not PARTIAL and backlog.is_file():
+    try:
+        rows = domains_from_backlog(backlog, project)
+        origin = "the items in BACKLOG.md"
+    except (ValueError, OSError):
+        rows = []
+
+if not rows:
+    # Nothing recognisable — but a table the parser cannot read is NOT the same
+    # as no table, and treating them alike is how a consumer ends up with a fresh
+    # empty file that reads as authoritative. Measured on `website`: a real,
+    # human-written table in a shape the kit does not define (one repository, so
+    # domains are areas of responsibility; two columns, no specialist). Inferring
+    # a repo and a specialist from it would fabricate routing nobody wrote.
+    if PARTIAL:
+        print(f"    NOT migrated: {', '.join(sorted(set(PARTIAL)))} carries a routing table "
+              "the kit can only read in part, and a partial map is worse than none")
+        print("      derive it instead: python3 "
+              ".claude/skills/backlog-init/scripts/detect_domains.py --root . \\")
+        print("        --write .claude/rules/domain-routing.txt")
+    raise SystemExit(0)
+
+write_routing_table(target, rows)
+print(f"    migrated: rules/domain-routing.txt — {len(rows)} domain(s) recovered from {origin}")
+# A derived table routes to `agents/<domain>.md`, and route_domain exits 3 while
+# that file is absent. "The migration found data" and "routing works" are
+# different questions; say which one this answered.
+missing = [d.agent for d in rows
+           if not (project / ".claude" / d.agent).is_file() and not (project / d.agent).is_file()]
+if missing:
+    print("    routing is NOT yet resolvable — write these specialists (route_domain exits 3):")
+    for agent in missing:
+        print(f"      - {agent}")
+PYEOF
+  [ -n "${LEGACY_TABLE:-}" ] && rm -f "$LEGACY_TABLE"
+  return 0
+}
+
+migrate_routing_table
 
 # `rules/templates/` is installer input, not a rule. Leaving it in the consumer
 # would make check_xrefs sweep files that govern nothing.
@@ -572,7 +638,7 @@ Next steps for the target project:
   2. Derive the domain routing table FOR THIS PROJECT (it ships EMPTY, and gate
      G1 refuses every item until this runs):
        python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \
-         --write .claude/rules/cycle-backlog.md
+         --write .claude/rules/domain-routing.txt
      Then write the specialist file(s) it names under .claude/agents/.
 
   3. Configure project-specific gates (defaults are no-op until set):

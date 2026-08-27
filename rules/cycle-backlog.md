@@ -97,23 +97,42 @@ raw ──/discover-execute measures──┬──> triaged ──/to-plan─�
 
 ## Domain routing
 
-`domain` is what assigns the item to a specialist. **This table is derived from the project it lives in** — nothing here can be copied from another ecosystem, because it describes which repositories exist in this one.
+`domain` is what assigns an item to a specialist. The table itself is **not in
+this file** — it lives in `rules/domain-routing.txt`, and that separation is the
+point.
 
-**It starts empty, and that is deliberate.** The kit used to ship the table of the ecosystem it was written in: eight domains pointing at twenty repositories a consumer does not have. The effect was measured on an adopter in 2026-08-18 — 88 items filed with real `file:line` evidence, every one refused by gate G1 as `BLOCKER/unroutable_repo`. The gate was right: it genuinely could not tell who owned the work. Inheriting the wrong map is worse than having no map, because the refusal looks like a problem with the item rather than with the configuration.
+This file is the kit's contract: fifteen sections describing what the intake
+cycle produces and which gates block it, identical in every install. The routing
+table is the opposite — it names WHICH REPOSITORIES EXIST in one project, so it
+cannot be copied from anywhere and must be derived where it lives.
+
+Keeping the two in one file cost three defects, all of the same shape:
+
+- `hooks/boundary-check.sh` blocks `rules/*.md` as the kit's, so the kit
+  prescribed writing to a file it forbade editing — and the write landed anyway,
+  through `Path.write_text`, which no hook watches.
+- The section had to be replaced by regex on every re-derive, and the regex took
+  the invariants written beside it. Measured on an adopter: 45 lines to 12, while
+  `route_domain.py` went on enforcing a rule no file stated.
+- A reinstall had to perform surgery to keep the consumer's table, and did it in
+  one of its two modes.
+
+`rules/*.txt` is already where project configuration lives: the boundary guard
+allows it, and a reinstall preserves it. Moving the table there deletes all three
+problems instead of guarding against each.
 
 ### Derive yours
 
 ```bash
-python3 skills/backlog-init/scripts/detect_domains.py --root . --write rules/cycle-backlog.md
+python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \
+  --write .claude/rules/domain-routing.txt
 ```
 
-The script reads the topology from disk — not from an inventory, not from a `CLAUDE.md` — and fills in the table below. Then write the specialist file it names, under `agents/`.
+The script reads the topology from disk — not from an inventory, not from a
+`CLAUDE.md`. Then write the specialist file it names, under `.claude/agents/`.
 
-While this section is empty, `/backlog-item` refuses every item. That refusal is the correct behaviour: without a table, routing would be a guess.
-
-| Domain | Repos (present on disk) | Specialist |
-|---|---|---|
-| _(empty — run `detect_domains.py --write`)_ | | |
+While the table is empty, `/backlog-item` refuses every item. That refusal is
+correct: with no table, routing would be a guess.
 
 ## Routing invariants
 
