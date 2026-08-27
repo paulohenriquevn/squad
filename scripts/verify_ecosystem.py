@@ -45,7 +45,7 @@ def _find_ecosystem_dir() -> Path:
 
 
 _SYNTAX_SKIP_DIRS = frozenset({
-    "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".hypothesis",
     ".git", "node_modules", ".venv", "venv",
 })
 

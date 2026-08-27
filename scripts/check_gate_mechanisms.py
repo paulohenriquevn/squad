@@ -50,6 +50,12 @@ from pathlib import Path
 #: An executable named in backticks. Bare prose mentions do not count: a gate
 #: that merely says "vulture" has not told the reader what to run.
 #:
+#: The corollary matters as much: backticks around a filename in these rules
+#: assert *this repository enforces it here*. Referring to a sibling kit's
+#: module — "the Squad closed this with a per-language suite runner" — is prose
+#: and must stay unbackticked, or the check correctly reports a mechanism that
+#: does not exist. It caught exactly that during the port.
+#:
 #: Trailing arguments stay inside the citation — `flip_milestone_checkbox.py
 #: --commit` names the mechanism better than the bare filename, because the flip
 #: is only atomic under that flag. Refusing the fuller form would push the author
