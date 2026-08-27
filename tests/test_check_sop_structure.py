@@ -338,3 +338,28 @@ def test_this_repository_has_structurally_sound_sops() -> None:
     assert report.findings == [], "\n".join(
         f"{f.sop}: [{f.kind}] {f.detail}" for f in report.findings
     )
+
+
+def test_okf_reserved_filenames_are_not_concepts(tmp_path: Path) -> None:
+    """`index.md` and `log.md` are navigation and history, never procedures.
+
+    Found the moment the SOPs moved into an OKF bundle: the sweep read the
+    bundle's own `index.md` as a malformed SOP and reported three findings
+    against a file that is correct by the spec. A checker that fails on correct
+    input is the false positive this ecosystem treats as worse than no checker.
+    """
+    sops = tmp_path / "wiki" / "sops"
+    sops.mkdir(parents=True)
+    (sops / "index.md").write_text("# Operating procedures\n\n- a listing\n", encoding="utf-8")
+    (sops / "log.md").write_text("# Change log\n\n## 2026-08-27\n\n**Creation**\n", encoding="utf-8")
+    (sops / "real.md").write_text(
+        "---\ntype: SOP\nsop: real\nversion: 1.0.0\nowner: someone\n"
+        "last_reviewed: 2026-08-20\n---\n\n"
+        "## Steps\n1. **Run** it.\n\n## Escalation\n- **It breaks** → ask.\n",
+        encoding="utf-8",
+    )
+
+    report = check_sop_structure(tmp_path, today="2026-08-27")
+
+    assert report.sops_read == 1, "only the concept is a SOP"
+    assert report.findings == []

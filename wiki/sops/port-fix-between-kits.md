@@ -1,4 +1,28 @@
 ---
+type: SOP
+title: Port a fix between the Squad and the Cycle
+description: The steps for moving a change between the two sibling kits without propagating promises the receiving kit cannot keep.
+tags: [procedure, kit-maintenance, porting]
+
+# OKF provenance and trust (spec §5). `verified` is deliberately ABSENT: this
+# procedure was written by an agent from a run it performed, and no human has
+# confirmed it line by line. Writing `human:` here would raise the bundle's
+# trust tier for content nobody checked, which is the one way to make the whole
+# trust layer meaningless.
+generated:
+  by: claude/opus-5
+  at: 2026-08-27
+status: stable
+stale_after: 2027-02-23
+sources:
+  - id: run-1
+    resource: ../../knowledge-base/sop-runs/port-fix-between-kits-2026-08-27.md
+  - id: run-2
+    resource: ../../knowledge-base/sop-runs/port-fix-between-kits-2026-08-27-sop.md
+
+# Kit-specific keys, kept so `check_sop_structure.py` keeps reading this file.
+# OKF preserves unknown keys rather than rejecting them, which is what lets one
+# document serve both contracts instead of being written twice.
 sop: port-fix-between-kits
 version: 1.0.0
 owner: kit maintainer (whoever holds the branch)
@@ -13,6 +37,9 @@ review_interval_days: 180
 The two kits share ancestry and have diverged; copying a change between them
 without checking what each one actually has propagates promises the receiving
 kit cannot keep.
+
+This procedure and its run records live in different places on purpose — see
+[where knowledge lives](/decisions/where-knowledge-lives.md).
 
 ## Prerequisites
 - [ ] Both repositories are on `workspace` with a clean tree — `git -C <repo> status --short`.
@@ -69,3 +96,6 @@ flowchart TD
 | Reading a gate's verdict and its residue | anyone on the kit | ran `/code-quality` end to end and can say what a soft cap means |
 | Telling divergence from regression | kit maintainer | ported one change with a failing test and diagnosed it correctly under review |
 | Deciding a gate is not mechanizable here | kit maintainer | wrote one `_(not mechanized: …)_` marker that survived review |
+
+[^run-1]: First run — the three pipeline movements, Squad → Cycle.
+[^run-2]: Second run — the SOP family itself, performed by following this document.

@@ -57,6 +57,13 @@ jobs:
       # check the shape of the procedures and whether each run record accounts
       # for the procedure it claims to have followed — the split
       # rules/sop-schema.md exists to keep.
+      # NOT here: the OKF conformance gate. `okf-validate.mjs` ships inside a
+      # personal skill under ~/.claude, which is neither versioned in this
+      # repository nor present on the runner — wiring it here would name a
+      # mechanism CI cannot reach. Vendoring it (MIT, with attribution) is a
+      # decision of its own; until then the bundle is validated locally and
+      # `check_sop_structure.py` below is what CI actually enforces.
+
       - name: SOP structure
         run: python3 scripts/check_sop_structure.py
 

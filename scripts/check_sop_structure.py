@@ -48,12 +48,15 @@ from sop_format import (
     bullets,
     excerpt,
     has_content,
-    knowledge_base_dir,
+    resolve_knowledge_dir,
     section,
     split_frontmatter,
 )
 
 _SOPS_DIR = "sops"
+
+#: OKF reserved filenames: navigation and history, never concepts.
+_RESERVED_FILENAMES = frozenset({"index.md", "log.md"})
 
 _REQUIRED_FIELDS = ("sop", "version", "owner", "last_reviewed")
 _DEFAULT_REVIEW_INTERVAL = 180
@@ -112,13 +115,19 @@ def check_sop_structure(project_root: Path, *, today: str | None = None) -> SopR
     """Sweep `knowledge-base/sops/` and report every structural defect."""
     project_root = Path(project_root)
     report = SopReport()
-    directory = knowledge_base_dir(project_root, _SOPS_DIR)
+    directory = resolve_knowledge_dir(project_root, _SOPS_DIR)
     if directory is None:
         return report
 
     reference = date.fromisoformat(today) if today else date.today()
 
     for path in sorted(directory.glob("*.md")):
+        # `index.md` and `log.md` are OKF reserved filenames at any level of the
+        # hierarchy — a directory listing and a change history, never concepts.
+        # Reading them as SOPs reported the bundle's own navigation as a
+        # malformed procedure.
+        if path.name in _RESERVED_FILENAMES:
+            continue
         report.sops_read += 1
         text = path.read_text(encoding="utf-8", errors="replace")
         fields, body = split_frontmatter(text)

@@ -18,7 +18,9 @@ one implementation.
 
 WHAT BELONGS HERE
 -----------------
-Only the reading. Which findings a malformed document earns is each checker's
+Only the reading, plus where to read from — `resolve_knowledge_dir` is the one
+place that knows the bundle comes before the knowledge-base. Which findings a
+malformed document earns is each checker's
 judgement, and folding that in would put the structural gate and the execution
 gate back into one artifact — the same collapse `rules/sop-schema.md` keeps the
 SOP and its run record apart to avoid.
@@ -31,14 +33,58 @@ from pathlib import Path
 #: Both install layouts. A checker that sees only one is half a checker.
 KB_DIRS = (".claude/knowledge-base", "knowledge-base")
 
+#: The OKF bundle, checked before the knowledge-base. Writers only ever write
+#: here; readers fall back, so a consumer that has not migrated keeps working
+#: and migrates the moment it runs.
+WIKI_DIRS = (".claude/wiki", "wiki")
+
+#: What moved into the bundle, and nothing else. `sop-runs/`, `audits/`,
+#: `reviews/` and the rest of the dated trail stay in the knowledge-base: a
+#: record of one execution on one day is not a concept that evolves, and OKF's
+#: own fields (`status`, `stale_after`, `verified`) mean nothing for one.
+DURABLE_LEAVES = frozenset({"sops", "decisions", "references", "opportunities"})
+
 
 def knowledge_base_dir(project_root: Path, leaf: str) -> Path | None:
-    """`<project>/{.claude/,}knowledge-base/<leaf>`, whichever exists."""
+    """`<project>/{.claude/,}knowledge-base/<leaf>`, whichever exists.
+
+    The dated trail only. For knowledge that may have migrated to the bundle,
+    call `resolve_knowledge_dir`.
+    """
     for relative in KB_DIRS:
         candidate = Path(project_root) / relative / leaf
         if candidate.is_dir():
             return candidate
     return None
+
+
+def wiki_dir(project_root: Path, leaf: str) -> Path | None:
+    """`<project>/{.claude/,}wiki/<leaf>`, whichever exists."""
+    for relative in WIKI_DIRS:
+        candidate = Path(project_root) / relative / leaf
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def resolve_knowledge_dir(project_root: Path, leaf: str) -> Path | None:
+    """Where this project's `<leaf>` knowledge lives — bundle first.
+
+    Order matters and is the whole migration strategy: 42 consumers already have
+    `knowledge-base/` on disk, a hard cut would break every one that updates
+    without migrating, and the kit cannot run anything inside another project's
+    repository. So readers fall back and writers do not.
+
+    A leaf outside `DURABLE_LEAVES` never resolves to the bundle. Accepting
+    `wiki/sop-runs/` because someone created it would invite exactly the mixing
+    the split exists to prevent.
+    """
+    project_root = Path(project_root)
+    if leaf in DURABLE_LEAVES:
+        found = wiki_dir(project_root, leaf)
+        if found is not None:
+            return found
+    return knowledge_base_dir(project_root, leaf)
 
 
 def split_frontmatter(text: str) -> tuple[dict[str, str], str]:

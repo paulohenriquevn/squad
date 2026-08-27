@@ -40,6 +40,7 @@ from sop_format import (
     bullets,
     excerpt,
     knowledge_base_dir,
+    resolve_knowledge_dir,
     section,
     split_frontmatter,
 )
@@ -112,8 +113,12 @@ def check_sop_runs(project_root: Path) -> RunReport:
     """Sweep `knowledge-base/sop-runs/` and bind each record to its procedure."""
     project_root = Path(project_root)
     report = RunReport()
+    # The trail stays in the knowledge-base; the procedures may have moved to
+    # the bundle. Two different resolutions on purpose — a record of one
+    # execution is not a concept, and the split is the decision this migration
+    # rests on (wiki/decisions/where-knowledge-lives.md).
     runs_dir = knowledge_base_dir(project_root, "sop-runs")
-    sops_dir = knowledge_base_dir(project_root, "sops")
+    sops_dir = resolve_knowledge_dir(project_root, "sops")
     if runs_dir is None:
         return report
 
