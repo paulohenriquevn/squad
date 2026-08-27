@@ -57,7 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # - skill-creator: standalone skill-authoring tool (the official Anthropic skill-creator);
 #   invoked on demand to create/improve any skill at skills/{purpose}/. Deliberately decoupled
 #   from every cycle (replaced the retired skill-writer/validator/register discover tail).
-AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "backlog-init", "backlog-review", "cycle-goal", "plan-help", "quality-init", "skill-creator", "frontend-design", "cap-theorem-specialist", "backpressure-specialist", "resilience-specialist", "arch-check"}
+AUXILIARY_SKILLS = {"ast-grep", "deck", "marp-slide", "excalidraw", "dogfood", "backlog-init", "backlog-review", "cycle-goal", "plan-help", "quality-init", "skill-creator", "frontend-design", "cap-theorem-specialist", "backpressure-specialist", "resilience-specialist", "arch-check", "sop-author", "sop-run", "sop-review"}
 
 
 def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:
@@ -71,8 +71,8 @@ def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:
 
     Measured on `speculative` (2026-08-20): 9 own skills, 18 WARN — 100% of the
     checker's warnings — and since `install.sh` invokes it with `--strict`, the
-    installation
-    inteira era reportada como falha por causa do desenho do consumidor.
+    whole installation was reported as a failure because of the consumer's own
+    design.
 
     Format: one name per line; `#` comments. A name that does not exist on disk
     is ignored silently on purpose: the list is a declaration of intent, not an

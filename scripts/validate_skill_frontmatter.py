@@ -14,6 +14,7 @@ Exit codes:
 """
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -31,12 +32,40 @@ FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 FIELD_RE = re.compile(r"^([a-z][a-z0-9_-]*):\s*(.+)$", re.MULTILINE)
 
 
+class UnparseableFrontmatter(ValueError):
+    """The block exists and no YAML parser can read it."""
+
+
 def parse_frontmatter(content: str) -> dict[str, str]:
-    """Extract frontmatter fields from SKILL.md content."""
+    """Extract frontmatter fields from SKILL.md content.
+
+    The regex extraction stays — it is what tolerates the fields this validator
+    cares about — but the block is first handed to a real YAML parser, because
+    the regex happily reads a block Claude Code cannot load.
+
+    Found 2026-08-27: a `description:` containing an unquoted colon passed here
+    ("39 skills, 0 errors") while `test_e2e_smoke.py`, which uses `yaml.safe_load`
+    on the same block, reported `mapping values are not allowed here`. Two
+    validators over one artifact, disagreeing about whether it is readable at
+    all — and the one named after the job was the blind one. A consumer running
+    it and seeing green has a skill that will not load.
+    """
     match = FRONTMATTER_RE.match(content)
     if not match:
         return {}
-    return {m.group(1): m.group(2).strip() for m in FIELD_RE.finditer(match.group(1))}
+
+    block = match.group(1)
+    try:
+        import yaml
+    except ImportError:  # pyyaml genuinely absent — report inability, not absence
+        pass
+    else:
+        try:
+            yaml.safe_load(block)
+        except yaml.YAMLError as error:
+            raise UnparseableFrontmatter(str(error).splitlines()[0]) from error
+
+    return {m.group(1): m.group(2).strip() for m in FIELD_RE.finditer(block)}
 
 
 def validate_all(ecosystem_dir: Path, strict: bool = False) -> int:
@@ -59,7 +88,13 @@ def validate_all(ecosystem_dir: Path, strict: bool = False) -> int:
             continue
 
         content = skill_md.read_text(encoding="utf-8")
-        fields = parse_frontmatter(content)
+        try:
+            fields = parse_frontmatter(content)
+        except UnparseableFrontmatter as error:
+            errors.append(
+                f"ERROR: {skill_dir.name}/SKILL.md YAML frontmatter is invalid: {error}"
+            )
+            continue
 
         if not fields:
             errors.append(f"ERROR: {skill_dir.name}/SKILL.md has no frontmatter (missing --- markers)")
@@ -102,10 +137,20 @@ def validate_all(ecosystem_dir: Path, strict: bool = False) -> int:
     return 0
 
 
-def main() -> int:
-    eco = find_ecosystem_dir(require=True)
-    strict = "--strict" in sys.argv
-    return validate_all(eco, strict=strict)  # type: ignore[arg-type]
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--ecosystem-dir", type=Path, default=None,
+        help="the ecosystem to validate. Without it the root is resolved from the "
+             "cwd — which is how `check_xrefs.py` used to audit whichever project "
+             "the shell happened to sit in and print ITS verdict under another "
+             "project's name.",
+    )
+    parser.add_argument("--strict", action="store_true")
+    args = parser.parse_args(argv)
+
+    eco = args.ecosystem_dir or find_ecosystem_dir(require=True)
+    return validate_all(eco, strict=args.strict)  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

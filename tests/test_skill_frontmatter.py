@@ -101,7 +101,7 @@ def test_skill_names_match_directory() -> None:
 
 
 def test_skill_count() -> None:
-    """Sanity check: we expect exactly 34 SKILL.md files.
+    """Sanity check: we expect exactly 39 SKILL.md files.
 
     Retired the in-cycle skill-distillation tail (skill-writer + skill-validator
     + skill-register, -3), adopted the standalone official skill-creator (+1),
@@ -115,9 +115,11 @@ def test_skill_count() -> None:
     34 -> 32. Added the cap-theorem-specialist, backpressure-specialist and
     resilience-specialist auxiliary skills (+3): 32 -> 35. Added arch-check,
     the boundary proposer/verifier that pairs with the D5 detector (+1): 35 -> 36.
+    Added the SOP family — sop-author (the static script), sop-run (the judgement
+    that ran it) and sop-review (whether either is still true) (+3): 36 -> 39.
     """
     files = _get_skill_files()
-    assert len(files) == 36, (
-        f"Expected 36 SKILL.md files, found {len(files)}. "
+    assert len(files) == 39, (
+        f"Expected 39 SKILL.md files, found {len(files)}. "
         f"Update this test if skills were added or removed."
     )

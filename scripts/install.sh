@@ -363,6 +363,8 @@ KB_DIRS=(
   "discoveries/opportunities"   # /discover-execute outputs
   "discoveries/snapshots"       # hash-verified snapshots cited by opportunities
   "progress"                    # per-slug progress.md (read by hooks + session-catchup)
+  "sops"                        # /sop-author output — the procedures, versioned by the project
+  "sop-runs"                    # /sop-run output — what one machine did following them
 )
 for d in "${KB_DIRS[@]}"; do
   mkdir -p "$ECO/knowledge-base/$d"

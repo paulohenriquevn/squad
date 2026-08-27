@@ -71,6 +71,10 @@ knowledge-base/judge-codex/**
 # repository's cycles did here says nothing to whoever clones it, and committing
 # it would put one machine's run history in everyone's diff.
 knowledge-base/cycle-events.jsonl
+# SOP run records: per-run and per-machine, like the phase-event stream. The
+# PROCEDURE travels with the kit (knowledge-base/sops/ stays versioned); what
+# one machine did while following it does not.
+knowledge-base/sop-runs/**
 !knowledge-base/**/.gitkeep
 !knowledge-base/backlog.md
 

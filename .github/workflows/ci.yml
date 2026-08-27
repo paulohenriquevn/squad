@@ -53,6 +53,16 @@ jobs:
       - name: Every hard gate names its mechanism
         run: python3 scripts/check_gate_mechanisms.py
 
+      # A SOP that stops describing the work keeps being followed. These two
+      # check the shape of the procedures and whether each run record accounts
+      # for the procedure it claims to have followed — the split
+      # rules/sop-schema.md exists to keep.
+      - name: SOP structure
+        run: python3 scripts/check_sop_structure.py
+
+      - name: SOP run records account for their procedure
+        run: python3 scripts/check_sop_run.py
+
       - name: Generated settings are synchronized
         run: python3 scripts/generate-plugin-settings.py --check
 
@@ -62,7 +72,7 @@ jobs:
       - name: Python static analysis
         run: ruff check scripts skills hooks tests conftest.py
 
-      # O kit cobrava este gate de todo consumidor e nunca o rodava sobre si.
+      # The kit demanded this gate of every consumer and never ran it on itself.
       # Measured 2026-08-26, on the first run: FAIL_HARD from an `unused variable`
       # in an argparse-mandated signature, with an empty allowlist — the false
       # positive had been there all along and nobody had seen it, because nobody had
