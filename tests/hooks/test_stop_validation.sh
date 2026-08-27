@@ -24,8 +24,8 @@ setup() {
   TMPDIR_TEST="$(mktemp -d)"
   mkdir -p "$TMPDIR_TEST/skills" "$TMPDIR_TEST/rules" "$TMPDIR_TEST/hooks"
   # Copy detect-layout.sh so the hook can source it
-  mkdir -p "$TMPDIR_TEST/hooks/lib"
-  cp "$REPO_ROOT/hooks/lib/detect-layout.sh" "$TMPDIR_TEST/hooks/lib/detect-layout.sh"
+  mkdir -p "$TMPDIR_TEST/hooks/environment"
+  cp "$REPO_ROOT/hooks/environment/detect-layout.sh" "$TMPDIR_TEST/hooks/environment/detect-layout.sh"
 
   export CLAUDE_PROJECT_DIR="$TMPDIR_TEST"
   unset STOP_VALIDATION_WARN_ONLY 2>/dev/null || true

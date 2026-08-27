@@ -6,8 +6,8 @@ is the path prefix: settings.json uses ``$CLAUDE_PROJECT_DIR/`` (standalone)
 while settings.plugin.json uses ``$CLAUDE_PROJECT_DIR/.claude/`` (plugin install).
 
 Usage:
-    python3 scripts/generate-plugin-settings.py          # writes settings.plugin.json
-    python3 scripts/generate-plugin-settings.py --check   # exit 1 if out of sync
+    python3 scripts/generate_plugin_settings.py          # writes settings.plugin.json
+    python3 scripts/generate_plugin_settings.py --check   # exit 1 if out of sync
 """
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def main() -> int:
         if current != generated:
             print(
                 f"OUT OF SYNC: {target} differs from generated version. "
-                f"Run: python3 scripts/generate-plugin-settings.py",
+                f"Run: python3 scripts/generate_plugin_settings.py",
                 file=sys.stderr,
             )
             return 1

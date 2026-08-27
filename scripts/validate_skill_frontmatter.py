@@ -44,7 +44,7 @@ def parse_frontmatter(content: str) -> dict[str, str]:
     the regex happily reads a block Claude Code cannot load.
 
     Found 2026-08-27: a `description:` containing an unquoted colon passed here
-    ("39 skills, 0 errors") while `test_e2e_smoke.py`, which uses `yaml.safe_load`
+    ("39 skills, 0 errors") while `verify_ecosystem.py`, which uses `yaml.safe_load`
     on the same block, reported `mapping values are not allowed here`. Two
     validators over one artifact, disagreeing about whether it is readable at
     all — and the one named after the job was the blind one. A consumer running

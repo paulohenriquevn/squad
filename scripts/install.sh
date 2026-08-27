@@ -410,7 +410,7 @@ if [ -n "$BACKUP_DIR" ]; then
 fi
 
 # --- Validation ---
-# Run FROM THE TARGET. test_e2e_smoke.py resolves the ecosystem from the CWD, and the normal way
+# Run FROM THE TARGET. verify_ecosystem.py resolves the ecosystem from the CWD, and the normal way
 # to invoke this script is `cd squad && bash scripts/install.sh <target>` — so it was validating
 # the source repo and printing OK for the installation it never opened. Measured: with a routed
 # specialist and a cycle rule deleted from a fresh install, it answered
@@ -449,10 +449,10 @@ else
   echo "    check_xrefs.py: FAIL (re-run manually)"
 fi
 
-if (cd "$TARGET" && python3 .claude/scripts/test_e2e_smoke.py > /dev/null 2>&1); then
-  echo "    test_e2e_smoke.py: OK"
+if (cd "$TARGET" && python3 .claude/scripts/verify_ecosystem.py > /dev/null 2>&1); then
+  echo "    verify_ecosystem.py: OK"
 else
-  echo "    test_e2e_smoke.py: FAIL (re-run manually)"
+  echo "    verify_ecosystem.py: FAIL (re-run manually)"
 fi
 
 # The two validators above import modules from the target, and the interpreter

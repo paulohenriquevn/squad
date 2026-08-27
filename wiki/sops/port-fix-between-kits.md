@@ -59,7 +59,7 @@ This procedure and its run records live in different places on purpose — see
 5. **Verify** every mechanism a rule names exists in the receiving kit —
    `python3 scripts/check_gate_mechanisms.py`.
 6. **Run** the full battery — slice suite, `check_xrefs.py --strict`,
-   `test_e2e_smoke.py`.
+   `verify_ecosystem.py`.
 7. **Install** into a throwaway project and exercise the change for real —
    `bash scripts/install.sh <tmpdir>`.
 8. **Record** the port in `CHANGELOG.md`, naming what diverged and what did not.

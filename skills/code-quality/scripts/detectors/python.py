@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 from scripts import _registry
-from scripts._shared import (
+from scripts._detector_contract import (
     DEFAULT_SKIP_DIRS,
     Finding,
     sanitize_symbol,
@@ -49,7 +49,7 @@ class PythonDetector(BaseDetector):
             allowlist_key containing `auditor_unavailable_vulture`.
         """
         # `--exclude` rather than the bare directory: vulture walks everything
-        # below what it is handed, and `_shared.DEFAULT_SKIP_DIRS` — which
+        # below what it is handed, and `_detector_contract.DEFAULT_SKIP_DIRS` — which
         # `enumerate_source_files` already honours — exists to keep this gate on
         # the PRODUCT. Measured in a fresh install at min_confidence 60: 44
         # findings, 42 of them inside `.claude/` (the kit itself) and 2 in the

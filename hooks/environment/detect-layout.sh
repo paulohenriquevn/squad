@@ -2,7 +2,7 @@
 # Layout resolution shared by the hooks.
 #
 # Usage, from any hook:
-#   source "$(dirname "$0")/lib/detect-layout.sh"
+#   source "$(dirname "$0")/environment/detect-layout.sh"
 #
 # Once sourced, TWO paths are defined — and the distinction between them is the
 # whole point of this file:

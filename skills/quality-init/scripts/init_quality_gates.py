@@ -33,7 +33,7 @@ from pathlib import Path
 # Allow importing sibling lib modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from lib.calibrate import (
+from gate_authoring.calibrate import (
     FLOOR_COMPLEXITY,
     FLOOR_FILE_LINES,
     FLOOR_FUNCTION_LINES,
@@ -49,7 +49,7 @@ from lib.calibrate import (
     calibrate_thresholds,
     measure_blocking_rate,
 )
-from lib.detect import (
+from gate_authoring.detect import (
     LanguageInfo,
     _log,
     detect_existing_linters,
@@ -58,7 +58,7 @@ from lib.detect import (
     detect_test_dirs,
     validate_target,
 )
-from lib.emit import generate_hook_scripts, patch_settings_json
+from gate_authoring.emit import generate_hook_scripts, patch_settings_json
 
 # Re-exports above keep the public import surface stable for tests, which
 # import these symbols directly from init_quality_gates.

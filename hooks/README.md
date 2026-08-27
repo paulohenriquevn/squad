@@ -6,7 +6,7 @@ in `settings.json`.
 
 ## Shared Library
 
-`lib/detect-layout.sh` — sourced by all hooks that need the ecosystem path.
+`environment/detect-layout.sh` — sourced by all hooks that need the ecosystem path.
 Sets `$ECO` (`.claude` or `.`) and `$PROJECT_DIR`.
 
 ## Hook Inventory
@@ -32,7 +32,7 @@ Sets `$ECO` (`.claude` or `.`) and `$PROJECT_DIR`.
 ## Adding a New Hook
 
 1. Create `hooks/{name}.sh` with `#!/bin/bash` and `set -euo pipefail`
-2. Source `lib/detect-layout.sh` for ecosystem detection
+2. Source `environment/detect-layout.sh` for ecosystem detection
 3. Wire in `settings.json` under the appropriate event
 4. Add tests in `tests/hooks/test_{name}.sh`
 5. Document exit codes in the script header

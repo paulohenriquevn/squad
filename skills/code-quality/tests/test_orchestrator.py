@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts._shared import Finding, compute_verdict
+from scripts._detector_contract import Finding, compute_verdict
 from scripts.run_code_quality import (
     _enumerate_source_files,
     _resolve_plan_path,

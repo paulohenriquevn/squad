@@ -172,6 +172,6 @@ Derive the domain routing table into `rules/cycle-backlog.md` (`detect_domains.p
 ## Maintenance notes
 
 - `python3 scripts/check_xrefs.py` validates that every cross-reference resolves.
-- `python3 scripts/test_e2e_smoke.py` validates cycle-rule structure and skill frontmatter.
+- `python3 scripts/verify_ecosystem.py` validates cycle-rule structure and skill frontmatter.
 - `bash scripts/run_slice_tests.sh` runs each slice in its own process — slices ship colliding module basenames, so a single wide pytest process is unsound.
 - Adding a domain? The routing table, the specialist file and `tests/test_route_domain.py` must agree; two guards fail loudly if they do not.

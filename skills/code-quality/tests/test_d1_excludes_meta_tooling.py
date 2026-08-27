@@ -2,7 +2,7 @@
 
 THE DEFECT THIS CLOSES
 ----------------------
-`_shared.DEFAULT_SKIP_DIRS` has carried `.claude` since it was written, with the
+`_detector_contract.DEFAULT_SKIP_DIRS` has carried `.claude` since it was written, with the
 comment stating the intent outright:
 
     ".claude",  # meta-tooling — /code-quality audits the PRODUCT, not its own skills

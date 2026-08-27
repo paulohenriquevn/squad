@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts._shared import Finding
+from scripts._detector_contract import Finding
 
 
 class BaseDetector:

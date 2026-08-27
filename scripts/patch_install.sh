@@ -159,7 +159,7 @@ skills/plan-confidence/tests/test_real_plans_snapshot.py
 skills/plan-confidence/tests/test_golden_rule.py
 
 # === Bug fix: e2e smoke now validates YAML frontmatter structurally ===
-scripts/test_e2e_smoke.py
+scripts/verify_ecosystem.py
 CHANGELOG.md
 
 # === Squad domain routing (the mechanism; specialists are derived per project) ===

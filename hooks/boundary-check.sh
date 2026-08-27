@@ -39,7 +39,7 @@ fi
 # inside ONE consumer's gitignored `.claude/` and nowhere else. A fix written
 # here protects exactly one machine and is erased by the next `install.sh
 # --force`. Its destination is the kit's own repository.
-source "$(dirname "$0")/lib/detect-layout.sh"
+source "$(dirname "$0")/environment/detect-layout.sh"
 
 # STANDALONE IS NEVER PROTECTED. There `KIT_DIR` is the kit's own repository
 # opened for development — blocking would prevent the very work this hook exists

@@ -41,7 +41,7 @@ believed.
 """
 from __future__ import annotations
 
-from scripts._shared import Finding
+from scripts._detector_contract import Finding
 
 D5 = "d5_architecture"
 

@@ -21,8 +21,8 @@
 
 set -eu
 
-# shellcheck source=lib/detect-layout.sh
-source "$(dirname "$0")/lib/detect-layout.sh"
+# shellcheck source=environment/detect-layout.sh
+source "$(dirname "$0")/environment/detect-layout.sh"
 
 SLUG_RE='^[A-Za-z0-9_][A-Za-z0-9._-]*$'
 

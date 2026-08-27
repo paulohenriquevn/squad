@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from scripts._shared import write_atomic
+from scripts._detector_contract import write_atomic
 
 _CACHE_DIR_ENV = "CODE_QUALITY_CACHE_DIR"
 _CACHE_TTL_SECONDS = 24 * 3600  # 24h per thresholds default

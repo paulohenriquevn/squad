@@ -39,7 +39,7 @@ _SKILL_ROOT = Path(__file__).resolve().parent.parent
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-from scripts._shared import (  # noqa: E402
+from scripts._detector_contract import (  # noqa: E402
     Finding,
     compute_verdict,
     emit_json_summary,
@@ -148,14 +148,14 @@ def _safe_call(label: str, func, *args, language: str = "") -> tuple[list[Findin
 
 
 def _enumerate_source_files(repo_root: Path, language: str) -> list[Path]:
-    """Delega a `_shared.enumerate_source_files`.
+    """Delega a `_detector_contract.enumerate_source_files`.
 
     The implementation lived here and the detectors came to need it (D3 looks for
     consumers across the whole repository). Two copies of the same walk diverge the
     first time someone fixes the pruning in only one — which is exactly the defect
     the CHANGELOG records between `check_wiring.py` and this file.
     """
-    from scripts._shared import enumerate_source_files
+    from scripts._detector_contract import enumerate_source_files
 
     return enumerate_source_files(repo_root, language)
 
@@ -318,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
 def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path) -> list[Finding]:
     from datetime import date as _date
 
-    from scripts._shared import AllowlistMatch, is_allowlisted
+    from scripts._detector_contract import AllowlistMatch, is_allowlisted
 
     today = _date.today()
     downgrade = {"HARD": "SOFT_CAP", "SOFT_CAP": "SOFT_FLOOR", "SOFT_FLOOR": "INFO", "INFO": "INFO"}

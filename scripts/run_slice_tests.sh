@@ -66,7 +66,7 @@ done
 # measured value with a narrow margin, enough to lock regression without
 # demanding work this commit did not do. The target is still 80, the same number
 # charged to the consumer. What is missing to get there is concentrated in three
-# files with no test at all: `session-catchup.py`,
+# files with no test at all: `session_catchup.py`,
 # `validate_skill_frontmatter.py` and `test_check_install_drift.py` (0% each).
 #
 # THE SCOPE is narrow too and worth saying: `--cov=scripts` measures `scripts/`,

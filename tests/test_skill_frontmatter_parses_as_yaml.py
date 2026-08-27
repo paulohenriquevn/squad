@@ -4,7 +4,7 @@ THE DEFECT THIS CLOSES
 ----------------------
 Found 2026-08-27 while adding a skill whose `description:` contained a colon.
 `validate_skill_frontmatter.py` reported **"Validated 39 skills: 0 errors, 0
-warnings"** over that file, and `test_e2e_smoke.py` — which loads the same block
+warnings"** over that file, and `verify_ecosystem.py` — which loads the same block
 with a real YAML parser — reported:
 
     sop-run/SKILL.md YAML frontmatter is invalid: mapping values are not allowed here

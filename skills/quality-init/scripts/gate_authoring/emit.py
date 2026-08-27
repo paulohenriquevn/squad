@@ -7,7 +7,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from lib.calibrate import (
+from gate_authoring.calibrate import (
     FLOOR_COMPLEXITY,
     FLOOR_FILE_LINES,
     FLOOR_FUNCTION_LINES,
@@ -15,8 +15,8 @@ from lib.calibrate import (
     FLOOR_PARAMETERS,
     ThresholdCalibration,
 )
-from lib.detect import SKIP_DIRS, _log
-from lib.yaml_safe import merge_hook_into_settings, write_json
+from gate_authoring.detect import SKIP_DIRS, _log
+from gate_authoring.yaml_safe import merge_hook_into_settings, write_json
 
 # ── Constants ─────────────────────────────────────────────────────────
 

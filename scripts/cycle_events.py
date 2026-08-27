@@ -69,7 +69,7 @@ _KIT_PARTS = ("skills", "rules", "hooks")
 
 
 def _holds_the_kit(directory: Path) -> bool:
-    """`hooks/lib/detect-layout.sh`'s `_squad_has_kit`, in Python.
+    """`hooks/environment/detect-layout.sh`'s `_squad_has_kit`, in Python.
 
     One definition of "this directory is the kit" already exists and is the one
     every hook resolves against. A second, subtly different one here would be

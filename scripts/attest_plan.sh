@@ -1,7 +1,7 @@
 #!/bin/bash
 # Attest a plan file — compute SHA256, write to .attestations/{slug}.sha256
 #
-# Adapted from planning-with-files v2.43.0 attest-plan.sh. Provides tamper
+# Adapted from planning-with-files v2.43.0 attest_plan.sh. Provides tamper
 # detection for plan files: the next UserPromptSubmit hook reads the stored
 # hash and compares against the live file. Mismatch → injection blocked +
 # tamper warning to the agent.
@@ -11,15 +11,15 @@
 #   - Plugin install — CWD has .claude/ or .claude/plugins/cycle/ subdir.
 #
 # Workflow:
-#   1. After editing a plan file, run: bash scripts/attest-plan.sh {slug}
+#   1. After editing a plan file, run: bash scripts/attest_plan.sh {slug}
 #   2. This writes .attestations/{slug}.sha256 atomically (temp + rename).
 #   3. Subsequent prompts validate against this stored hash.
 #   4. If the plan is edited again without re-attesting, hooks block injection.
 #
 # Usage:
-#   bash scripts/attest-plan.sh {slug}             # attest plan file by slug
-#   bash scripts/attest-plan.sh --all              # attest all plans in plans/
-#   bash scripts/attest-plan.sh --verify {slug}    # verify (read-only) without re-writing
+#   bash scripts/attest_plan.sh {slug}             # attest plan file by slug
+#   bash scripts/attest_plan.sh --all              # attest all plans in plans/
+#   bash scripts/attest_plan.sh --verify {slug}    # verify (read-only) without re-writing
 
 set -eu
 

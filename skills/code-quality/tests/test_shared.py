@@ -1,4 +1,4 @@
-"""T0.4 — _shared.py utilities tests.
+"""T0.4 — _detector_contract.py utilities tests.
 
 Tests for the cross-detector helpers: config loaders, allowlist parser with
 sunset validation, Finding dataclass invariants, atomic writes, safe JSON
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts._shared import (
+from scripts._detector_contract import (
     DEFAULT_SKIP_DIRS,
     AllowlistEntry,
     AllowlistMatch,

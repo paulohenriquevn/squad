@@ -7,7 +7,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
-from lib.detect import SKIP_DIRS, _log, _walk_source_files
+from gate_authoring.detect import SKIP_DIRS, _log, _walk_source_files
 
 # ── Constants ─────────────────────────────────────────────────────────
 

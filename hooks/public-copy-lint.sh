@@ -35,8 +35,8 @@
 
 set -uo pipefail
 
-# shellcheck source=lib/detect-layout.sh
-source "$(dirname "$0")/lib/detect-layout.sh"
+# shellcheck source=environment/detect-layout.sh
+source "$(dirname "$0")/environment/detect-layout.sh"
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.filePath // empty')

@@ -46,7 +46,7 @@ REPO = Path(__file__).resolve().parents[1]
 MANIFEST = REPO / ".claude-plugin" / "plugin.json"
 HOOKS_JSON = REPO / "hooks" / "hooks.json"
 LEGACY_SETTINGS = REPO / "settings.plugin.json"
-DETECT = REPO / "hooks" / "lib" / "detect-layout.sh"
+DETECT = REPO / "hooks" / "environment" / "detect-layout.sh"
 
 
 # --------------------------------------------------------------------------
@@ -144,7 +144,7 @@ def test_native_and_copy_layouts_wire_the_same_events():
 # detect-layout.sh
 # --------------------------------------------------------------------------
 def _resolve(project_dir: Path, env: dict | None = None) -> tuple[str, str, str]:
-    """Executa detect-layout.sh e devolve (KIT_DIR, ECO, stderr)."""
+    """Run detect-layout.sh and return (KIT_DIR, ECO, stderr)."""
     script = f'source "{DETECT}"; echo "KIT=${{KIT_DIR:-}}"; echo "ECO=${{ECO:-}}"'
     full_env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)}
     full_env.pop("CLAUDE_PLUGIN_ROOT", None)
@@ -175,7 +175,7 @@ def test_plugin_root_supplies_the_kit_and_the_project_supplies_the_data(tmp_path
     (project / ".claude").mkdir(parents=True)
 
     kit_dir, eco, _ = _resolve(project, {"CLAUDE_PLUGIN_ROOT": str(kit)})
-    assert kit_dir == str(kit), "KIT_DIR deveria vir de CLAUDE_PLUGIN_ROOT"
+    assert kit_dir == str(kit), "KIT_DIR must come from CLAUDE_PLUGIN_ROOT"
     assert eco not in ("", str(kit)), "the cycle's DATA must not land inside the kit"
 
 

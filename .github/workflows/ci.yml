@@ -53,6 +53,13 @@ jobs:
       - name: Every hard gate names its mechanism
         run: python3 scripts/check_gate_mechanisms.py
 
+      # A name is the first documentation anyone reads. This catches the
+      # structurally empty ones — the bin directory, the mixed convention, the
+      # misfiled test, the script that states no purpose. Whether a name is
+      # merely vague stays a human judgement, and the checker says so.
+      - name: Folder and file names state their purpose
+        run: python3 scripts/check_semantic_names.py
+
       # A SOP that stops describing the work keeps being followed. These two
       # check the shape of the procedures and whether each run record accounts
       # for the procedure it claims to have followed — the split
@@ -71,10 +78,10 @@ jobs:
         run: python3 scripts/check_sop_run.py
 
       - name: Generated settings are synchronized
-        run: python3 scripts/generate-plugin-settings.py --check
+        run: python3 scripts/generate_plugin_settings.py --check
 
       - name: End-to-end smoke
-        run: python3 scripts/test_e2e_smoke.py
+        run: python3 scripts/verify_ecosystem.py
 
       - name: Python static analysis
         run: ruff check scripts skills hooks tests conftest.py
@@ -131,6 +138,6 @@ jobs:
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: Shell static analysis
-        run: shellcheck -x -P hooks --severity=warning hooks/*.sh hooks/lib/*.sh scripts/*.sh tests/hooks/*.sh
+        run: shellcheck -x -P hooks --severity=warning hooks/*.sh hooks/environment/*.sh scripts/*.sh tests/hooks/*.sh
       - name: Hook behavior suites
         run: for test_file in tests/hooks/test_*.sh; do bash "$test_file"; done

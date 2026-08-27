@@ -35,7 +35,7 @@ affect any project using this plugin.
 - **`stop-validation.sh`** blocks secret file commits (`.env`, `*.pem`, `*.key`).
 - **`boundary-check.sh`** enforces read-only access on `knowledge-base/references/` and `knowledge-base/tools/`.
 - **`check_xrefs.py`** validates all internal references exist (anti-hallucination).
-- **`attest-plan.sh`** uses SHA256 for plan tamper detection.
+- **`attest_plan.sh`** uses SHA256 for plan tamper detection.
 
 ## Known Limitations
 

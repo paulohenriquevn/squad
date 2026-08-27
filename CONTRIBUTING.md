@@ -39,8 +39,8 @@ the short checklist.
    ```bash
    python3 scripts/validate_skill_frontmatter.py
    python3 scripts/check_xrefs.py
-   python3 scripts/test_e2e_smoke.py
-   python3 scripts/generate-plugin-settings.py --check
+   python3 scripts/verify_ecosystem.py
+   python3 scripts/generate_plugin_settings.py --check
    ```
 5. **CHANGELOG.** Record every user-visible change under `## [Unreleased]` in
    [`CHANGELOG.md`](CHANGELOG.md), following Keep a Changelog. One line per change,

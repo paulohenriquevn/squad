@@ -16,8 +16,8 @@ Validates:
   7. Smoke chain: detect_domain → spawn_reviewers → consolidate_findings works in sequence
 
 Run from any directory inside the layout:
-    python3 scripts/test_e2e_smoke.py                # standalone
-    python3 .claude/scripts/test_e2e_smoke.py        # plugin install
+    python3 scripts/verify_ecosystem.py                # standalone
+    python3 .claude/scripts/verify_ecosystem.py        # plugin install
 
 Exit codes:
   0 — All checks passed

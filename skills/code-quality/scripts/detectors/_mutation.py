@@ -48,7 +48,7 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
-from scripts._shared import Finding
+from scripts._detector_contract import Finding
 
 #: Defaults from `skills/code-quality/defaults/thresholds.txt`. The CALLER passes
 #: the project's values; these exist so a direct call is still well-defined.

@@ -37,7 +37,12 @@ import json
 import re
 from pathlib import Path
 
-from scripts._shared import Finding, enumerate_source_files, make_relative, sanitize_symbol
+from scripts._detector_contract import (
+    Finding,
+    enumerate_source_files,
+    make_relative,
+    sanitize_symbol,
+)
 
 #: Directory names whose contents exercise code rather than consume it.
 _TEST_DIR_NAMES = frozenset({"test", "tests", "__tests__", "spec", "testdata", "e2e"})

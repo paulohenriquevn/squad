@@ -62,7 +62,7 @@ def copy_install(tmp_path: Path) -> Path:
     """A project with the kit installed by copy, as `install.sh` writes it."""
     project = tmp_path / "consumer"
     eco = project / ".claude"
-    for d in ("skills/review", "rules", "hooks/lib", "scripts", "commands",
+    for d in ("skills/review", "rules", "hooks/environment", "scripts", "commands",
               "agents", "knowledge-base/plans"):
         (eco / d).mkdir(parents=True, exist_ok=True)
     (eco / "skills/review/SKILL.md").write_text("kit\n", encoding="utf-8")
@@ -85,7 +85,7 @@ def copy_install(tmp_path: Path) -> Path:
         ".claude/skills/review/SKILL.md",
         ".claude/rules/cycle-review.md",
         ".claude/hooks/stop-validation.sh",
-        ".claude/hooks/lib/detect-layout.sh",
+        ".claude/hooks/environment/detect-layout.sh",
         ".claude/scripts/check_xrefs.py",
         ".claude/commands/plan-goal.md",
     ],

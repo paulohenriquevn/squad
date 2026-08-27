@@ -12,13 +12,13 @@ Steps:
    - Prefer `${PLAN_SLUG}` env var if set
    - Then `.active_plan` pointer file contents
    - Then newest file in `knowledge-base/plans/*-plan.md` by mtime
-2. Run `bash scripts/attest-plan.sh {slug}` to write the hash atomically (temp file + rename).
+2. Run `bash scripts/attest_plan.sh {slug}` to write the hash atomically (temp file + rename).
 3. Print confirmation: `attested {slug} -> {hash}`.
 4. Remind the user: "Any future edit to `knowledge-base/plans/{slug}-plan.md` will cause the next UserPromptSubmit hook to block injection. Re-run `/plan-attest {slug}` after intentional edits to refresh the hash."
 
 If the slug cannot be resolved AND no plans exist, refuse with "no plans found".
 
-If the user wants to attest ALL plans at once: `/plan-attest --all` (forwards to `attest-plan.sh --all`).
+If the user wants to attest ALL plans at once: `/plan-attest --all` (forwards to `attest_plan.sh --all`).
 If the user wants to verify (read-only) without rewriting: `/plan-attest --verify {slug}`.
 
 ## Why this exists
@@ -31,7 +31,7 @@ EXPLICITLY approves (by re-running `/plan-attest`) refresh the hash. All other
 edits are surfaced as "PLAN TAMPERED" and the plan content is NOT injected
 into context until the user approves.
 
-The implementation under `scripts/attest-plan.sh` uses atomic temp-rename +
+The implementation under `scripts/attest_plan.sh` uses atomic temp-rename +
 optional `flock` for parallel-session safety.
 
 ## Notes

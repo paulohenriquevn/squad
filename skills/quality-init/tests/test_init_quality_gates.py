@@ -14,6 +14,12 @@ import pytest
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
+from gate_authoring.path_safety import confine, confine_or_none  # noqa: E402
+from gate_authoring.yaml_safe import (  # noqa: E402
+    merge_hook_into_settings,
+    read_json,
+    write_json,
+)
 from init_quality_gates import (  # noqa: E402
     FLOOR_COMPLEXITY,
     FLOOR_FILE_LINES,
@@ -29,8 +35,6 @@ from init_quality_gates import (  # noqa: E402
     detect_test_dirs,
     validate_target,
 )
-from lib.path_safety import confine, confine_or_none  # noqa: E402
-from lib.yaml_safe import merge_hook_into_settings, read_json, write_json  # noqa: E402
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

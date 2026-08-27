@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Session catchup — rebuild context after /clear or fresh session.
 
-Adapted from planning-with-files v2.43.0's session-catchup.py pattern. Reads:
+Adapted from planning-with-files v2.43.0's session_catchup.py pattern. Reads:
 
 - git status + git diff --stat (what changed since last known commit)
 - Active plan file (via .active_plan pointer or newest)
@@ -14,7 +14,7 @@ Supports dual-mode layouts:
   - Plugin install — <root>/.claude/ or <root>/.claude/plugins/cycle/.
 
 Usage:
-  python3 scripts/session-catchup.py [project_dir]
+  python3 scripts/session_catchup.py [project_dir]
 
 Exit codes:
   0 — catchup report printed (may be empty if no signals found)

@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 from scripts import _registry
-from scripts._shared import Finding, safe_parse_json, sanitize_symbol, to_rel_path
+from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_imports_and_calls
 
 from . import BaseDetector, _arch, _mutation, _wiring

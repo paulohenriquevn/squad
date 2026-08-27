@@ -9,8 +9,8 @@
 
 set -eu
 
-# shellcheck source=lib/detect-layout.sh
-source "$(dirname "$0")/lib/detect-layout.sh"
+# shellcheck source=environment/detect-layout.sh
+source "$(dirname "$0")/environment/detect-layout.sh"
 
 echo "[precompact-preserve] Context compaction about to occur. Preserving state."
 

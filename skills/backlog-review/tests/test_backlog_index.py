@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from backlog_fixtures import item_block, write_backlog
 from backlog_index import (
     BUCKETS,
     END,
@@ -18,7 +19,6 @@ from backlog_index import (
     render_index,
 )
 from check_backlog_structure import LEGAL_STATUS, _parse_items
-from helpers import item_block, write_backlog
 
 
 def _indexed(tmp_path: Path, *blocks: str) -> tuple[Path, str]:
