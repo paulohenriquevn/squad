@@ -272,3 +272,36 @@ def test_reinstalling_never_overwrites_the_projects_own_config(
         f"{mode} overwrote rules/code-quality-languages.txt with the empty template — "
         "the project's enabled languages died on a reinstall"
     )
+
+
+@pytest.mark.parametrize("mode", ["--force", "--merge"])
+def test_the_kit_can_still_update_its_own_contract(
+    versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory, mode: str
+) -> None:
+    """A `.txt` the kit OWNS must keep being updated by a reinstall.
+
+    `rules/*.txt` was a fine proxy for "the project's configuration" while every
+    `.txt` under `rules/` was one. `rules/cycle-phases.txt` broke it: it declares
+    the pipeline's phase chain, which is the kit's contract — the consumer never
+    edits it and must receive its corrections. Preserving it by extension freezes
+    a stale contract in every consumer, and `check_phase_drift.py` then measures
+    the run against a chain the kit no longer ships.
+
+    So the rule is stated by name rather than inferred from the suffix. Guessing
+    ownership from a filename is what produced this pair of defects in the first
+    place.
+    """
+    target = tmp_path_factory.mktemp(f"contract{mode.strip('-')}")
+    subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
+    install = [str(versioned_kit / "scripts" / "install.sh"), str(target)]
+    subprocess.run(["bash", *install], capture_output=True, check=True)
+
+    phases = target / ".claude" / "rules" / "cycle-phases.txt"
+    phases.write_text("stale-contract-from-an-older-kit\n", encoding="utf-8")
+
+    subprocess.run(["bash", *install, mode], capture_output=True, check=True)
+
+    assert "stale-contract" not in phases.read_text(encoding="utf-8"), (
+        f"{mode} preserved rules/cycle-phases.txt as if it were the project's — "
+        "the kit can no longer correct its own phase chain in a consumer"
+    )

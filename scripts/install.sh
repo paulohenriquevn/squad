@@ -170,6 +170,24 @@ PYEOF
 # (`architecture-debate-table`, `placement-algorithms`, `quota-isolation`, …) — plus 13 named
 # architect agents and their memory. The `rm -rf` below would have deleted every one of them, and
 # a snapshot in `.install-backups/` is a consolation prize, not a correct install.
+# Which `rules/*.txt` belong to the KIT rather than to the project.
+#
+# The suffix was a fine proxy while every `.txt` under `rules/` was the
+# consumer's — enabled languages, allowlists, thresholds. `cycle-phases.txt`
+# broke it: it declares the pipeline's phase chain, the consumer never edits it,
+# and `check_phase_drift.py` measures runs against it. Preserved by extension, a
+# stale chain freezes in every consumer and the drift gate starts comparing
+# against a contract the kit stopped shipping.
+#
+# Stated by name, because guessing ownership from a filename is what produced
+# this defect.
+kit_owns_txt() {
+  case "$1" in
+    cycle-phases.txt) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # The derived routing table is PROJECT configuration living inside a kit `.md`,
 # and it is the one thing in that file the consumer cannot get back: the kit
 # cannot know which repositories exist there. So it is saved before the copy and
@@ -242,7 +260,7 @@ for item in skills rules hooks commands scripts; do
         base="$(basename "$f")"
         case "$base" in
           *.txt)
-            if [ -f "$ECO/rules/$base" ]; then
+            if [ -f "$ECO/rules/$base" ] && ! kit_owns_txt "$base"; then
               echo "    kept (yours): rules/$base"
               continue
             fi
@@ -276,7 +294,7 @@ for item in skills rules hooks commands scripts; do
     if [ "$item" = "rules" ] && [ -d "$ECO/rules" ]; then
       CONFIG_KEEP="$(mktemp -d)"
       for f in "$ECO/rules"/*.txt; do
-        [ -f "$f" ] && cp "$f" "$CONFIG_KEEP/"
+        [ -f "$f" ] && ! kit_owns_txt "$(basename "$f")" && cp "$f" "$CONFIG_KEEP/"
       done
     fi
     rm -rf "${ECO:?}/$item"
