@@ -388,12 +388,49 @@ if [ ! -f "$SRC_DIR/settings.plugin.json" ]; then
   echo "ERROR: $SRC_DIR/settings.plugin.json missing — required for plugin install layout." >&2
   exit 1
 fi
-if [ "$MERGE" -eq 1 ] && [ -f "$ECO/settings.json" ]; then
-  # It wires this project's hooks. Replacing it is the one thing a merge must never do — a
-  # settings.json is the most project-specific file in the tree, and losing it costs more than
-  # every skill combined.
-  cp "$SRC_DIR/settings.plugin.json" "$ECO/settings.json.kit-reference"
-  echo "==> settings.json KEPT (yours). The kit's is at settings.json.kit-reference — diff it in."
+if [ -f "$ECO/settings.json" ]; then
+  # One file, two owners — and replacing it wholesale was wrong in both
+  # directions. `boundary-check.sh` allowlists `settings.json` as "this project's
+  # wiring", so the kit invites the consumer to edit it; then `--force` copied
+  # its own over the top. Measured across four npm consumers: `deny:
+  # Read(**/.env*)` gone, along with their `vitest`/`tsc` allowances. The kit
+  # widened what an agent may read in someone else's repository, silently.
+  #
+  # Keeping the consumer's file whole — what `--merge` did — has the opposite
+  # failure: `hooks` points at the kit's scripts, and a stale hook stops
+  # enforcing without ever saying so.
+  #
+  # So ownership is split by key. The kit owns its wiring; the project owns its
+  # permissions; a key the kit does not know is the consumer's and survives.
+  python3 - "$ECO/settings.json" "$SRC_DIR/settings.plugin.json" <<'PYEOF'
+import json, sys
+
+target, source = sys.argv[1], sys.argv[2]
+mine = json.load(open(target, encoding="utf-8-sig"))
+kit = json.load(open(source, encoding="utf-8"))
+
+# Keys the KIT owns: they wire the kit's own scripts, and a stale copy is a gate
+# that quietly stopped running.
+for key in ("hooks", "statusLine", "env", "$schema", "_comment_"):
+    if key in kit:
+        mine[key] = kit[key]
+
+# `permissions` is the project's. The kit's are a floor, not a replacement:
+# union, with the consumer's kept. `deny` goes first because an entry that
+# forbids must be read before one that allows.
+merged = mine.setdefault("permissions", {})
+for key, items in kit.get("permissions", {}).items():
+    if not isinstance(items, list):
+        continue
+    target_list = merged.setdefault(key, [])
+    for item in items:
+        if item not in target_list:
+            target_list.insert(0, item) if key == "deny" else target_list.append(item)
+
+json.dump(mine, open(target, "w", encoding="utf-8"), indent=2)
+open(target, "a", encoding="utf-8").write("\n")
+PYEOF
+  echo "==> settings.json merged (kit wiring refreshed, your permissions kept)"
 else
   cp "$SRC_DIR/settings.plugin.json" "$ECO/settings.json"
   echo "==> settings.json written (plugin install variant)"

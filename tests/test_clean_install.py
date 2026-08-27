@@ -305,3 +305,45 @@ def test_the_kit_can_still_update_its_own_contract(
         f"{mode} preserved rules/cycle-phases.txt as if it were the project's — "
         "the kit can no longer correct its own phase chain in a consumer"
     )
+
+
+@pytest.mark.parametrize("mode", ["--force", "--merge"])
+def test_reinstalling_keeps_the_projects_permissions(
+    versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory, mode: str
+) -> None:
+    """`settings.json` carries the kit's wiring AND the project's permissions.
+
+    `boundary-check.sh` allowlists `settings.json` as *"this project's wiring"* —
+    the consumer is explicitly allowed to edit it. The installer then copied its
+    own over the top, so the kit invited an edit and destroyed it on the next
+    reinstall.
+
+    The cost is not symmetric. `hooks` and `statusLine` are the kit's and must be
+    refreshed; a stale hook silently stops enforcing. `permissions` is the
+    project's, and one of the entries measured lost across four npm consumers was
+    `deny: Read(**/.env*)` — reinstalling the kit widened what an agent may read
+    in someone else's repository, with no line of output saying so.
+    """
+    import json
+
+    target = tmp_path_factory.mktemp(f"perms{mode.strip('-')}")
+    subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
+    install = [str(versioned_kit / "scripts" / "install.sh"), str(target)]
+    subprocess.run(["bash", *install], capture_output=True, check=True)
+
+    settings = target / ".claude" / "settings.json"
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    data.setdefault("permissions", {}).setdefault("deny", []).insert(0, "Read(**/.env*)")
+    data["permissions"].setdefault("allow", []).append("Bash(npx vitest *)")
+    settings.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    subprocess.run(["bash", *install, mode], capture_output=True, check=True)
+
+    after = json.loads(settings.read_text(encoding="utf-8"))
+    perms = after.get("permissions", {})
+    assert "Read(**/.env*)" in perms.get("deny", []), (
+        f"{mode} dropped the project's deny rule — reinstalling the kit widened "
+        "what an agent may read in someone else's repository"
+    )
+    assert "Bash(npx vitest *)" in perms.get("allow", [])
+    assert after.get("hooks"), f"{mode} must still refresh the kit's own wiring"
