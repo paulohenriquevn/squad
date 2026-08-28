@@ -34,10 +34,10 @@ from check_english_only import find_markers, is_exempt, scan_text  # noqa: E402
 
 
 @pytest.mark.parametrize("line", [
-    "Este arquivo não é lido por ninguém.",
-    "A razão é que o gate está quebrado.",
-    "Você deve rodar o comando três vezes.",
-    "O plano foi aceito, porém sem evidência.",
+    "Este arquivo não é lido por ninguém.",  # english-only: the gate must name what it detects
+    "A razão é que o gate está quebrado.",  # english-only: the gate must name what it detects
+    "Você deve rodar o comando três vezes.",  # english-only: the gate must name what it detects
+    "O plano foi aceito, porém sem evidência.",  # english-only: the gate must name what it detects
 ])
 def test_portuguese_prose_is_caught(line: str) -> None:
     """Sentences a maintainer would actually write."""
@@ -75,8 +75,8 @@ def test_an_exemption_needs_a_written_reason() -> None:
     assert is_exempt("O plano não existe  # english-only: quoting the tool's own output")
     assert is_exempt("não  <!-- english-only: the consumer's verbatim finding -->")
     assert not is_exempt("O plano não existe  # english-only:")
-    assert not is_exempt("O plano não existe  # TODO translate")
-    assert not is_exempt("O plano não existe")
+    assert not is_exempt("O plano não existe  # TODO translate")  # english-only: the gate must name what it detects
+    assert not is_exempt("O plano não existe")  # english-only: the gate must name what it detects
 
 
 def test_scan_reports_line_numbers_and_the_words_found() -> None:
@@ -85,12 +85,12 @@ def test_scan_reports_line_numbers_and_the_words_found() -> None:
     Naming the line and the exact markers is the difference between "this file
     has Portuguese somewhere" and a fix that takes ten seconds.
     """
-    text = "line one is fine\nesta linha não está em inglês\nand this one is fine\n"
+    text = "line one is fine\nesta linha não está em inglês\nand this one is fine\n"  # english-only: the gate must name what it detects
     findings = scan_text(text)
     assert len(findings) == 1
     line_no, markers = findings[0]
     assert line_no == 2
-    assert "não" in markers
+    assert "não" in markers  # english-only: the gate must name what it detects
 
 
 def test_a_file_with_only_english_scans_clean() -> None:

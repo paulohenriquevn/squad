@@ -86,3 +86,11 @@ See [the porting procedure](/sops/port-fix-between-kits.md) for how a change
 like that would reach the sibling kit.
 
 [^okf-spec]: OKF v0.2, published by Google Cloud.
+
+## An instance of the split
+
+[The judgement-gate finding](/references/judgement-gates-are-insurance.md) is the durable half of the 2026-08-28 baseline
+experiment: the finding lives here because it stays true, and the run that produced
+it — scenarios, verbatim outputs, the model tiers used — stays in
+`records/experiments/`, because one execution on one day is not a concept that
+evolves.

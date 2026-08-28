@@ -52,14 +52,14 @@ from pathlib import Path
 _MARKER_RE = re.compile(
     r"(?<![\w-])("
     # accented function words — no English equivalent spelling
-    r"não|são|está|estão|também|então|porém|já|até|três|é|"
-    r"você|vocês|nós|"
+    r"não|são|está|estão|também|então|porém|já|até|três|é|"  # english-only: the gate must name what it detects
+    r"você|vocês|nós|"  # english-only: the gate must name what it detects
     # unambiguous unaccented function words
-    r"isso|essa|esse|aquele|aquilo|nenhum|nenhuma|porque|"
-    r"deve|pode|precisa|foi|serão|fica|ficou|"
+    r"isso|essa|esse|aquele|aquilo|nenhum|nenhuma|porque|"  # english-only: the gate must name what it detects
+    r"deve|pode|precisa|foi|serão|fica|ficou|"  # english-only: the gate must name what it detects
     # nouns that would be written in English in this codebase
-    r"arquivo|arquivos|pasta|linha|razão|motivo|erro|"
-    r"exemplo|somente|apenas|sempre|nunca\s+é"
+    r"arquivo|arquivos|pasta|linha|razão|motivo|erro|"  # english-only: the gate must name what it detects
+    r"exemplo|somente|apenas|sempre|nunca\s+é"  # english-only: the gate must name what it detects
     r")(?![\w-])",
     re.IGNORECASE,
 )

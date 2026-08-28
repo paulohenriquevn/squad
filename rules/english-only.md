@@ -22,8 +22,8 @@ Two checkers had gone past tolerating it and were *accepting* it as input:
 
 | Checker | Accepted |
 |---|---|
-| `check_adr_completeness.py` | `"por que não"`, `"considerada"`, `"considerado"` |
-| `check_deps_audit.py` | `(nenhuma)` as a valid "no new dependency" declaration |
+| `check_adr_completeness.py` | `"por que não"`, `"considerada"`, `"considerado"` |  <!-- english-only: the gate must name what it detects -->
+| `check_deps_audit.py` | `(nenhuma)` as a valid "no new dependency" declaration |  <!-- english-only: the gate must name what it detects -->
 
 A kit whose gates read a second language has decided its own policy is advisory —
 a plan written in Portuguese passed *those* gates while breaking the rule that
