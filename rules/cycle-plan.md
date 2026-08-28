@@ -31,8 +31,9 @@ Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requiremen
 /shared-understanding {slug}               [Phase 0.5 — grill + draw, scored]
      ↓ (produces: records/alignment/{slug}-alignment.md + {slug}-walkthrough.html)
      ↓ verdict:
-     ↓   ALIGNED (>= 90%) → proceed to /to-plan
-     ↓   BLOCKED  (< 90%) → the item is NOT built; close the listed gaps and re-score
+     ↓   ALIGNED          → machine >= 90% AND a human signed off → /to-plan
+     ↓   AWAITING_REVIEW  → structure done, nobody signed off yet; ask for the review
+     ↓   BLOCKED          → the item is NOT built; close the listed gaps and re-score
      ↓   NEEDS_SPLIT      → split into items that each align on their own
 /to-plan "{one-sentence feature description}"
      ↓ (Step 0 auto-discovers rules/ + skills/*-patterns/ + grill output if present)
@@ -53,7 +54,7 @@ Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requiremen
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
 | grill-me (opt.) | topic slug | grill log + verdict in records/grills/{slug}-grill.md | every recommended answer offered; ≤ 15 questions; verdict declared |
-| shared-understanding | item + discover evidence | alignment brief + animated walkthrough | `score_alignment.py` >= 90%; below it the item MUST NOT be built (see [`alignment-threshold.md`](alignment-threshold.md)) |
+| shared-understanding | item + discover evidence | alignment brief + animated walkthrough + an unticked reviewer checklist | `score_alignment.py` reports ALIGNED — machine score >= 90% AND a human ticked every `## Reviewer sign-off` box. The agent may never tick one (see [`alignment-threshold.md`](alignment-threshold.md)) |
 | to-plan | feature description (+ grill output if Phase 0 ran) | plan with Goal, Tasks, Risks, Test Plan, Open Questions | Coverage Matrix present (every Goal claim mapped to ≥ 1 task) |
 | edge-case-plan | plan | annotated plan with MUST-FIX | every MUST-FIX has owner + acceptance criterion |
 | deps-audit | plan | dependency report with CVE status | no critical CVE on a planned dependency — **human-enforced, see below** |

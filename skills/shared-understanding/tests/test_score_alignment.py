@@ -118,8 +118,13 @@ def test_a_complete_brief_clears_the_threshold(tmp_path: Path) -> None:
 
     If a brief this thorough could not pass, nobody would ever pass, and the gate
     would be switched off within a week — which is the same as not having it.
+
+    It scores `COMPLETE_V2`, not `COMPLETE`: the v1 fixture carries no stable
+    ids, no scenario classes and no traceability, so under the v2 rubric it is
+    correctly refused. `COMPLETE` survives below as the control that shows each
+    new criterion actually fires.
     """
-    report = score_alignment(_write(tmp_path, COMPLETE))
+    report = score_alignment(_write(tmp_path, COMPLETE_V2))
     assert report.meets_threshold, (
         f"a complete brief scored {report.ratio:.0%}; gaps: "
         f"{[(c.key, c.why) for c in report.gaps]}"
@@ -207,3 +212,201 @@ def test_the_threshold_is_ninety_percent(tmp_path: Path) -> None:
     require >=90%), and changing it changes what the kit refuses to build.
     """
     assert THRESHOLD == 0.90
+
+
+# ── v2: what the five reference implementations do that this one did not ──────
+#
+# Sources read on 2026-08-28, in full:
+#   github/spec-kit                 /clarify, /analyze, /checklist + templates
+#   obra/superpowers                skills/brainstorming
+#   jeffallan/claude-skills         skills/feature-forge
+#   FredAntB/Spec-Driven-Development SKILL.md (generation gate, SDD health metrics)
+#   melodic-software/claude-code-plugins  discovery/blindspot
+#
+# The tests below pin the mechanisms taken from them. Each names its source,
+# because a criterion whose provenance is lost is a criterion nobody can argue
+# with later.
+
+COMPLETE_V2 = COMPLETE.replace(
+    "## Functional Requirements\n"
+    "- A 24h window returns within the latency budget below.\n"
+    "- Windows longer than 24h return a partial result plus an explicit truncation marker.",
+    "## Functional Requirements\n"
+    "- FR-001: The explorer shall return a 24h window within the NFR-001 budget.\n"
+    "- FR-002: When the window exceeds 24h, the explorer shall return a partial\n"
+    "  result plus an explicit truncation marker.",
+).replace(
+    "- p95 under 800ms at 50 rps for a 24h window.\n- Memory under 512MB per query.",
+    "- NFR-001: p95 under 800ms at 50 rps for a 24h window.\n"
+    "- NFR-002: Memory under 512MB per query.",
+).replace(
+    "- `npm run bench:traces -- --window 24h` reports p95 under 800ms.\n"
+    "- `pytest tests/test_truncation.py` exits 0.",
+    "- AC-001 (NFR-001): `npm run bench:traces -- --window 24h` reports p95 under 800ms.\n"
+    "- AC-002 (FR-002): `pytest tests/test_truncation.py` exits 0.",
+).replace(
+    "## Flows\n### Query a 24h window\n",
+    "## Flows\n### Query a 24h window [primary]\n",
+).replace(
+    "## System design",
+    "### Shard returns no rows [alternate]\n"
+    "1. The gateway records an empty shard.\n"
+    "2. The merge proceeds with the shards that answered.\n\n"
+    "### Shard times out at 2s [exception]\n"
+    "1. The gateway cancels the scan.\n"
+    "2. The response carries a partial marker naming the shard.\n\n"
+    "### Gateway restarts mid-query [recovery]\n"
+    "1. The client re-issues with the same cursor.\n"
+    "2. The scan resumes rather than restarting.\n\n"
+    "## System design",
+)
+
+
+def test_stable_ids_are_required(tmp_path: Path) -> None:
+    """Without `FR-001`, nothing can point at anything.
+
+    Every reference implementation converged on this independently — spec-kit's
+    `FR-###`/`SC-###` inventory, feature-forge's EARS ids, FredAntB's sequential
+    `REQ-xxx`. A requirement with no id cannot be cited by an acceptance
+    criterion, a task, a test, or a review comment; the whole traceability chain
+    starts here or it does not start.
+    """
+    report = score_alignment(_write(tmp_path, COMPLETE_V2))
+    ids = next(c for c in report.criteria if c.key == "stable_ids")
+    assert ids.score == 2, ids.why
+
+    without = score_alignment(_write(tmp_path, COMPLETE))
+    assert next(c for c in without.criteria if c.key == "stable_ids").score == 0
+
+
+def test_an_acceptance_criterion_must_cite_the_requirement_it_closes(tmp_path: Path) -> None:
+    """spec-kit's coverage pass: a requirement with zero coverage is CRITICAL.
+
+    An acceptance criterion that names no requirement proves nothing in
+    particular, and a requirement no criterion cites is a requirement that will
+    ship unverified. Both directions are checked because both happen.
+    """
+    report = score_alignment(_write(tmp_path, COMPLETE_V2))
+    trace = next(c for c in report.criteria if c.key == "traceability")
+    assert trace.score == 2, trace.why
+
+    orphaned = COMPLETE_V2.replace("- AC-001 (NFR-001):", "- AC-001:")
+    report = score_alignment(_write(tmp_path, orphaned))
+    assert next(c for c in report.criteria if c.key == "traceability").score < 2
+
+
+def test_the_four_scenario_classes_must_be_covered(tmp_path: Path) -> None:
+    """"Happy path only" was an anti-pattern in prose; now it is a measurement.
+
+    spec-kit's scenario classification — Primary / Alternate / Exception /
+    Recovery — turns "did you think about failure?" from a question somebody
+    remembers to ask into a check that fires. The bugs live in the three classes
+    nobody drew.
+    """
+    report = score_alignment(_write(tmp_path, COMPLETE_V2))
+    classes = next(c for c in report.criteria if c.key == "scenario_classes")
+    assert classes.score == 2, classes.why
+
+    happy_only = score_alignment(_write(tmp_path, COMPLETE))
+    assert next(c for c in happy_only.criteria if c.key == "scenario_classes").score < 2
+
+
+def test_vague_adjectives_are_caught_wherever_they_appear(tmp_path: Path) -> None:
+    """`nfr_measurable` only ever looked at one section.
+
+    spec-kit's ambiguity pass flags "fast, scalable, secure, intuitive, robust"
+    ANYWHERE they carry weight without a number. A functional requirement saying
+    the explorer "shall be responsive" passed every previous check, because the
+    old rubric only demanded numbers from the NFR section.
+    """
+    report = score_alignment(_write(tmp_path, COMPLETE_V2))
+    assert next(c for c in report.criteria if c.key == "no_vague_terms").score == 2
+
+    vague = COMPLETE_V2.replace(
+        "- FR-001: The explorer shall return a 24h window within the NFR-001 budget.",
+        "- FR-001: The explorer shall be fast and provide a seamless experience.")
+    report = score_alignment(_write(tmp_path, vague))
+    term = next(c for c in report.criteria if c.key == "no_vague_terms")
+    assert term.score < 2
+    assert "fast" in term.why
+
+
+def test_placeholders_are_scanned_across_the_whole_brief(tmp_path: Path) -> None:
+    """`UNKNOWN` cost a point only inside `## Questions answered`.
+
+    A `TODO` in the data model or a `TBD` in the acceptance criteria is the same
+    unresolved decision, and it was invisible. superpowers' spec self-review
+    scans the whole document for exactly this reason.
+    """
+    with_todo = COMPLETE_V2.replace("- NFR-002: Memory under 512MB per query.",
+                                    "- NFR-002: Memory ceiling TBD.")
+    report = score_alignment(_write(tmp_path, with_todo))
+    ph = next(c for c in report.criteria if c.key == "no_placeholders")
+    assert ph.score == 0
+    assert "TBD" in ph.why
+
+
+def test_the_machine_score_alone_never_yields_ALIGNED(tmp_path: Path) -> None:
+    """The finding that matters most: the gate was self-assessed.
+
+    The same agent wrote the brief and ran the scorer that approved it. spec-kit
+    separates the two — its checklist is reviewer-owned, generated unchecked, and
+    `/implement` reads the boxes as a gate and MAY NOT touch them.
+
+    So `ALIGNED` now needs two independent things: a machine score the agent CAN
+    reach, and a sign-off only a human can give. A perfect brief with no reviewer
+    is `AWAITING_REVIEW`, never `ALIGNED`.
+    """
+    report = score_alignment(_write(tmp_path, COMPLETE_V2))
+    assert report.meets_machine_threshold, f"{report.machine_ratio:.0%}"
+    assert not report.reviewer_signed_off
+    assert not report.aligned
+    assert report.verdict == "AWAITING_REVIEW"
+
+
+def test_a_reviewer_signs_off_by_checking_every_box(tmp_path: Path) -> None:
+    """And the sign-off is a real artefact, not a claim in prose."""
+    signed = COMPLETE_V2 + """
+## Reviewer sign-off
+- [x] CHK001 The stated problem is the one we actually have. [Judgement]
+- [x] CHK002 The flows drawn are the flows that matter. [Judgement]
+- [x] CHK003 The numbers in the NFRs are the right numbers. [Judgement]
+"""
+    report = score_alignment(_write(tmp_path, signed))
+    assert report.reviewer_signed_off
+    assert report.aligned
+    assert report.verdict == "ALIGNED"
+
+
+def test_one_unchecked_box_withholds_the_sign_off(tmp_path: Path) -> None:
+    """A partially reviewed brief is an unreviewed brief.
+
+    This is the case the mechanism exists for: three boxes, two ticked, and the
+    untouched one is the judgement nobody made.
+    """
+    partial = COMPLETE_V2 + """
+## Reviewer sign-off
+- [x] CHK001 The stated problem is the one we actually have. [Judgement]
+- [x] CHK002 The flows drawn are the flows that matter. [Judgement]
+- [ ] CHK003 The numbers in the NFRs are the right numbers. [Judgement]
+"""
+    report = score_alignment(_write(tmp_path, partial))
+    assert not report.reviewer_signed_off
+    assert report.verdict == "AWAITING_REVIEW"
+    assert "CHK003" in report.pending_review[0]
+
+
+def test_a_section_keeps_its_own_subsections(tmp_path: Path) -> None:
+    """Pinned because the first version of `_section` silently truncated.
+
+    It stopped at `^##+`, so `## Flows` ended at its own `### Query a 24h window`
+    and the criterion scored 0 over a brief containing four flows. The fixture
+    still cleared 90% — two lost points fit inside the tolerance — so nothing
+    failed and the gate reported "no named flow" about a document full of them.
+    A gate reading an empty string still produces a verdict, which is why this
+    is worse than having no gate.
+    """
+    report = score_alignment(_write(tmp_path, COMPLETE_V2))
+    flows = next(c for c in report.criteria if c.key == "flows")
+    assert flows.score == 2, flows.why
+    assert "4 flow(s)" in flows.why

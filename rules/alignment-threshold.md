@@ -4,12 +4,46 @@ An item nobody can draw is an item somebody is about to guess at. Below 90% shar
 
 ## The rule
 
-**No backlog item may be implemented while its alignment score is below 90%.**
+**No backlog item may be implemented until two independent conditions hold.**
 
-The score comes from `skills/shared-understanding/scripts/score_alignment.py`, run
-against `records/alignment/{slug}-alignment.md`. Exit 0 permits the work; exit 1
-forbids it. There is no band in between and no override for urgency — urgency is
-the condition under which guessing is most expensive, not least.
+| Condition | Who satisfies it | Verdict if missing |
+|---|---|---|
+| Machine score ≥ 90% over the structural rubric | The agent | `BLOCKED` |
+| Every box in `## Reviewer sign-off` ticked | **A human, never the agent** | `AWAITING_REVIEW` |
+
+Both come from `skills/shared-understanding/scripts/score_alignment.py`, run against
+`records/alignment/{slug}-alignment.md`. Exit 0 permits the work; exit 1 forbids it.
+There is no band in between and no override for urgency — urgency is the condition
+under which guessing is most expensive, not least.
+
+## The agent may not tick the reviewer's boxes
+
+This is the half of the rule that a script cannot enforce, and it is the more
+important half.
+
+The first version of this gate had one number, and the agent that wrote the brief
+was the same agent that ran the scorer that approved it. That is a gate grading its
+own homework. It looked rigorous — a rubric, a threshold, a report — and measured
+only whether the author had filled in the author's own form.
+
+Five reference implementations were read on 2026-08-28 looking for how anyone else
+had solved it. Only one had: `github/spec-kit` makes its requirements checklist
+**reviewer-owned** — generated unticked, ticked only by a human, and its
+`/implement` reads the boxes as a gate and *may not modify the markers*.
+
+So:
+
+- The agent **generates** `## Reviewer sign-off`, always unticked, one item per
+  thing the script cannot decide.
+- The agent **may add** items when the work warrants them.
+- The agent **may never tick one, remove one, or delete the section.** Doing so is
+  a Rule 3 (honesty) violation, not a shortcut — it fabricates a human's judgement.
+- A brief with no checklist is not signed off either. An absent gate is not a
+  passed one.
+
+`AWAITING_REVIEW` is a normal, expected state. It means the structure is done and
+the judgement has not been made yet. It is not a failure and it is not an
+invitation to proceed.
 
 ## Why 90%, and why a score at all
 
@@ -26,10 +60,11 @@ its twelve criteria hollow, and the three hollow ones are never the harmless one
 
 ## What the rubric measures, and what it refuses to claim
 
-Twelve criteria, scored on structure: a section exists, a requirement carries a
-number, a flow has steps, an acceptance criterion names a command that can fail,
-the boundary is written down, no question is left `UNKNOWN`, an animated
-walkthrough exists.
+Seventeen criteria, scored on structure: a section exists, a requirement carries a
+number and a stable id, every acceptance criterion cites the requirement it closes,
+all four scenario classes are drawn, no unquantified quality adjective survives in a
+requirement, no placeholder survives anywhere, the boundary is written down, and an
+animated walkthrough exists.
 
 Three things are **not** scored, and the report names them every time:
 
@@ -69,9 +104,13 @@ paragraph plus a rewrite plus the review that found it.
 
 ## Anti-patterns
 
+- **Ticking the reviewer's boxes.** The one anti-pattern that defeats the whole
+  gate, and the only one that is dishonest rather than merely lazy.
 - **Reaching 90% by rewording.** Adding "measurable" to a requirement with no
   number. The rubric is a proxy for whether somebody can fail the work; beating
   the proxy beats nobody else.
+- **Treating `AWAITING_REVIEW` as a pass.** It is the state where the machine has
+  finished and the human has not started.
 - **Treating 90% as a target rather than a floor.** The score exists to refuse
   work. An item at 91% is barely permitted, not certified.
 - **A single flow.** A brief describing only the happy path has not been thought

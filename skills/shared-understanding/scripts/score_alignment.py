@@ -9,29 +9,56 @@ same thing from the other direction — shared understanding cannot be measured
 directly, but **ambiguity can**, and ambiguity is its inverse. So this scores the
 artefact rather than the feeling.
 
-THE RUBRIC, AND WHERE IT COMES FROM
------------------------------------
-Each criterion scores 0 (absent), 1 (partial), 2 (complete). The threshold is
-**90% of the maximum**, which is the figure the Definition-of-Ready literature
-uses for the same purpose — score 0/1/2 per criterion, require >=90% to accept.
+WHY TWO VERDICTS AND NOT ONE
+----------------------------
+The first version of this script had one number, and the agent that wrote the
+brief was the same agent that ran the scorer that approved it. That is a gate
+grading its own homework.
 
-Below the threshold the item does not get built. That is the whole point: an item
-nobody can explain to a diagram is an item somebody is about to guess at.
+Five reference implementations were read in full on 2026-08-28. Only one had
+solved it, and its solution is adopted here: `github/spec-kit` makes its
+requirements checklist **reviewer-owned** — generated unchecked, and
+`/implement` reads the boxes as a gate and *may not modify the markers*.
+
+So there are two independent conditions, and `ALIGNED` needs both:
+
+    machine score >= 90%   — structure. The agent can and should reach this.
+    reviewer sign-off      — judgement. Only a human can give it.
+
+A perfect machine score with no sign-off is `AWAITING_REVIEW`, never `ALIGNED`.
+This is not ceremony: the three things the script explicitly cannot decide are
+the three that decide whether the work is worth doing at all.
+
+WHERE THE RUBRIC COMES FROM
+---------------------------
+Each criterion scores 0 (absent), 1 (partial), 2 (complete). The threshold is
+**90% of the maximum**, the figure the Definition-of-Ready literature uses for
+the same purpose. Individual criteria carry their source in a comment; the ones
+added in v2 come from:
+
+    spec-kit /analyze     stable ids, requirement->criterion coverage, vague-term
+                          detection, terminology and placeholder scanning
+    spec-kit /checklist   scenario classes (primary/alternate/exception/recovery),
+                          "test the requirements, not the implementation",
+                          reviewer-owned sign-off
+    superpowers           whole-document placeholder scan (spec self-review)
+    feature-forge         EARS-shaped requirements with measurable responses
+    FredAntB SDD          sequential ids, every requirement carries a criterion
 
 WHAT IS MECHANISED AND WHAT IS NOT
 ----------------------------------
-Structure is mechanised — a section exists, a requirement carries a number, a
-flow has steps, an acceptance criterion names a command. Whether the content is
-*right* is not, and this script says so rather than pretending: `judgement_items`
-lists the criteria a human still has to sign off, and they are excluded from the
-computed score instead of being silently marked as passing.
+Structure is mechanised. Whether the content is *right* is not, and this script
+says so rather than pretending: `judgement_items` lists what a human still has to
+sign off, and they are excluded from the computed score instead of being silently
+marked as passing. They are the same three items the reviewer checklist asks.
 
 Usage:
-    python3 score_alignment.py <alignment-brief.md> [--json]
+    python3 score_alignment.py <alignment-brief.md> [--json] [--machine-only]
 
 Exit codes:
-    0 — at or above the threshold; the item may be built
-    1 — below the threshold; the item must not be built yet
+    0 — ALIGNED (machine score met AND a reviewer signed off), or, with
+        --machine-only, the machine score alone was met
+    1 — BLOCKED or AWAITING_REVIEW; the item must not be built yet
     2 — the brief could not be read
 """
 from __future__ import annotations
@@ -63,8 +90,38 @@ _EXECUTABLE_RE = re.compile(
     re.IGNORECASE,
 )
 
-#: An open question the grill never closed.
-_UNRESOLVED_RE = re.compile(r"\b(UNKNOWN|TBD|TODO|to be decided|\?\?\?)\b", re.IGNORECASE)
+#: An unresolved decision, in whatever coat it is wearing. Scanned across the
+#: WHOLE brief since v2 — a `TBD` in the data model is the same open question as
+#: an `UNKNOWN` in the answers, and it used to be invisible.
+_UNRESOLVED_RE = re.compile(
+    r"\b(UNKNOWN|TBD|TKTK|TODO|FIXME|to be decided|\?\?\?)\b|\{\{[A-Z_]+\}\}",
+    re.IGNORECASE,
+)
+
+#: Stable identifiers. Without them nothing can cite anything: not an acceptance
+#: criterion, not a task, not a test, not a review comment.
+_FR_ID_RE = re.compile(r"\bFR-(\d{3})\b")
+_NFR_ID_RE = re.compile(r"\bNFR-(\d{3})\b")
+_AC_ID_RE = re.compile(r"\bAC-(\d{3})\b")
+
+#: The four scenario classes. "Did you think about failure?" stops being a
+#: question somebody remembers to ask and becomes a check that fires.
+_SCENARIO_CLASSES = ("primary", "alternate", "exception", "recovery")
+
+#: Adjectives that sound like requirements and cannot be failed. Kept to words
+#: that are unambiguously claims about quality — a gate that fires on ordinary
+#: prose is a gate somebody disables, and this one runs in every consumer.
+_VAGUE_TERMS = (
+    "fast", "slow", "quick", "snappy", "responsive", "performant",
+    "scalable", "robust", "reliable", "seamless", "intuitive", "user-friendly",
+    "simple to use", "easy to use", "efficient", "lightweight", "secure",
+    "modern", "clean", "flexible", "as needed", "if necessary", "etc",
+)
+_VAGUE_RE = re.compile(r"\b(" + "|".join(re.escape(t) for t in _VAGUE_TERMS) + r")\b",
+                       re.IGNORECASE)
+
+#: A reviewer-owned checkbox. Generated `[ ]`, ticked only by a human.
+_CHECKBOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.+?)\s*$", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -79,7 +136,12 @@ class Criterion:
 class AlignmentReport:
     criteria: tuple[Criterion, ...]
     judgement_items: tuple[str, ...]
+    #: Reviewer checklist items still unticked. Empty AND non-empty checklist
+    #: means signed off; an absent checklist is not a sign-off either.
+    pending_review: tuple[str, ...] = ()
+    reviewer_items_total: int = 0
 
+    # ── the machine half: structure the agent can and should reach ──────────
     @property
     def earned(self) -> int:
         return sum(c.score for c in self.criteria)
@@ -89,12 +151,31 @@ class AlignmentReport:
         return 2 * len(self.criteria)
 
     @property
-    def ratio(self) -> float:
+    def machine_ratio(self) -> float:
         return self.earned / self.maximum if self.maximum else 0.0
 
     @property
-    def meets_threshold(self) -> bool:
-        return self.ratio >= THRESHOLD
+    def meets_machine_threshold(self) -> bool:
+        return self.machine_ratio >= THRESHOLD
+
+    #: Kept so callers written against v1 keep working.
+    ratio = machine_ratio
+    meets_threshold = meets_machine_threshold
+
+    # ── the human half: judgement only a reviewer can supply ───────────────
+    @property
+    def reviewer_signed_off(self) -> bool:
+        return self.reviewer_items_total > 0 and not self.pending_review
+
+    @property
+    def aligned(self) -> bool:
+        return self.meets_machine_threshold and self.reviewer_signed_off
+
+    @property
+    def verdict(self) -> str:
+        if not self.meets_machine_threshold:
+            return "BLOCKED"
+        return "ALIGNED" if self.reviewer_signed_off else "AWAITING_REVIEW"
 
     @property
     def gaps(self) -> tuple[Criterion, ...]:
@@ -102,14 +183,27 @@ class AlignmentReport:
 
 
 def _section(body: str, *titles: str) -> str | None:
-    """The body of the first matching `## <title>` section."""
+    """The body of the first matching `## <title>` section, subsections included.
+
+    The stop condition must match the OPENING heading's level or shallower. The
+    first version stopped at `^##+`, so `## Flows` ended at its own first
+    `### Query a 24h window` and every flow section came back empty — the
+    criterion scored 0 on a brief that had four flows, and the fixture still
+    cleared 90% because two lost points fit inside the tolerance. A gate reading
+    an empty string and reporting "no named flow" is worse than no gate: it
+    produces a verdict.
+    """
     for title in titles:
         m = re.search(
-            rf"^##+\s+{re.escape(title)}\s*$\n(.*?)(?=^##+\s|\Z)",
-            body, re.MULTILINE | re.DOTALL | re.IGNORECASE,
+            rf"^(#{{2,}})\s+{re.escape(title)}\s*$\n",
+            body, re.MULTILINE | re.IGNORECASE,
         )
-        if m:
-            return m.group(1)
+        if not m:
+            continue
+        depth = len(m.group(1))
+        rest = body[m.end():]
+        stop = re.search(rf"^#{{1,{depth}}}\s", rest, re.MULTILINE)
+        return rest[:stop.start()] if stop else rest
     return None
 
 
@@ -140,13 +234,15 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
             problem.split()) < 30 else "stated"))
 
     # 2 — Functional requirements.
-    fr = _bullets(_section(body, "Functional Requirements", "Functional requirements"))
+    fr_section = _section(body, "Functional Requirements", "Functional requirements")
+    fr = _bullets(fr_section)
     add("functional_requirements", "Functional requirements enumerated",
         _tri(bool(fr), len(fr) >= 2),
         f"{len(fr)} listed" if fr else "no `## Functional Requirements` section")
 
     # 3 — Non-functional requirements, WITH numbers.
-    nfr = _bullets(_section(body, "Non-Functional Requirements", "Non-functional requirements"))
+    nfr_section = _section(body, "Non-Functional Requirements", "Non-functional requirements")
+    nfr = _bullets(nfr_section)
     measurable = [b for b in nfr if _MEASURABLE_RE.search(b)]
     add("nfr_measurable", "Non-functional requirements carry numbers",
         _tri(bool(nfr), bool(nfr) and len(measurable) == len(nfr)),
@@ -156,13 +252,24 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     # 4 — Flows, named and stepped.
     flows = _section(body, "Flows", "Flow", "User flows")
     flow_names = re.findall(r"^###\s+(.+)$", flows or "", re.MULTILINE)
-    stepped = [n for n in flow_names if True] if flows and re.search(
-        r"^\s*\d+\.", flows, re.MULTILINE) else []
+    stepped = bool(flows and re.search(r"^\s*\d+\.", flows, re.MULTILINE))
     add("flows", "Flows named, each broken into steps",
-        _tri(bool(flow_names), bool(flow_names) and bool(stepped)),
+        _tri(bool(flow_names), bool(flow_names) and stepped),
         f"{len(flow_names)} flow(s)" if flow_names else "no named flow")
 
-    # 5 — A system-level picture.
+    # 5 — spec-kit /checklist: the four scenario classes.
+    # "Happy path only" was an anti-pattern in prose. Naming the classes makes it
+    # a measurement — the defects live in the three nobody drew.
+    covered = [c for c in _SCENARIO_CLASSES
+               if re.search(rf"\[{c}\]|\b{c}\s+(flow|path|scenario)\b",
+                            flows or "", re.IGNORECASE)]
+    add("scenario_classes", "Primary, alternate, exception and recovery flows drawn",
+        _tri(bool(covered), len(covered) == len(_SCENARIO_CLASSES)),
+        f"{len(covered)}/4 classes: {', '.join(covered) or 'none'}"
+        + ("" if len(covered) == 4
+           else f" — missing {', '.join(c for c in _SCENARIO_CLASSES if c not in covered)}"))
+
+    # 6 — A system-level picture.
     has_system = bool(re.search(r"```mermaid|<svg|flowchart|C4Context|graph (TB|LR)", body))
     system_sec = _section(body, "System design", "Architecture", "System Design")
     add("system_diagram", "A system-level diagram exists",
@@ -170,7 +277,7 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
         "diagram + section" if (has_system and system_sec)
         else ("diagram only" if has_system else "neither"))
 
-    # 6 — How the pieces interact.
+    # 7 — How the pieces interact.
     has_interaction = bool(re.search(
         r"sequenceDiagram|classDiagram|participant\s|\bclass\s+\w+\s*\{", body))
     add("interaction_model", "Interaction between the parts is drawn",
@@ -178,14 +285,66 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
             "class ") >= 3),
         "present" if has_interaction else "no sequence or class diagram")
 
-    # 7 — Acceptance criteria that can fail.
-    ac = _bullets(_section(body, "Acceptance Criteria", "Acceptance criteria"))
+    # 8 — Acceptance criteria that can fail.
+    ac_section = _section(body, "Acceptance Criteria", "Acceptance criteria")
+    ac = _bullets(ac_section)
     executable = [b for b in ac if _EXECUTABLE_RE.search(b)]
     add("acceptance_executable", "Acceptance criteria name something that runs",
         _tri(bool(ac), bool(ac) and len(executable) == len(ac)),
         f"{len(executable)}/{len(ac)} executable" if ac else "no acceptance criteria")
 
-    # 8 — Dependencies, named or explicitly none.
+    # 9 — spec-kit /analyze: stable ids. Every reference implementation converged
+    # on this independently — FR-###/SC-### there, EARS ids in feature-forge,
+    # sequential REQ-xxx in FredAntB. Without one the traceability chain has no
+    # first link.
+    fr_ids = set(_FR_ID_RE.findall(fr_section or ""))
+    nfr_ids = set(_NFR_ID_RE.findall(nfr_section or ""))
+    ac_ids = set(_AC_ID_RE.findall(ac_section or ""))
+    id_coverage = [
+        bool(fr_ids) and len(fr_ids) == len(fr),
+        bool(nfr_ids) and len(nfr_ids) == len(nfr),
+        bool(ac_ids) and len(ac_ids) == len(ac),
+    ]
+    add("stable_ids", "Requirements and criteria carry stable ids",
+        _tri(any(id_coverage), all(id_coverage)),
+        f"FR {len(fr_ids)}/{len(fr)} · NFR {len(nfr_ids)}/{len(nfr)} · AC {len(ac_ids)}/{len(ac)}"
+        if any(id_coverage) else "no FR-/NFR-/AC- ids — nothing can cite anything")
+
+    # 10 — spec-kit /analyze coverage pass, both directions. A criterion citing
+    # nothing proves nothing in particular; a requirement no criterion cites
+    # ships unverified.
+    cited = set(_FR_ID_RE.findall(ac_section or "")) | set(_NFR_ID_RE.findall(ac_section or ""))
+    declared = fr_ids | nfr_ids
+    ac_citing = [b for b in ac if _FR_ID_RE.search(b) or _NFR_ID_RE.search(b)]
+    uncovered = sorted(declared - cited)
+    traced = bool(ac) and len(ac_citing) == len(ac) and not uncovered
+    add("traceability", "Every criterion cites a requirement, and none is uncovered",
+        _tri(bool(ac_citing), traced),
+        (f"{len(ac_citing)}/{len(ac)} criteria cite a requirement"
+         + (f"; uncovered: {', '.join(uncovered)}" if uncovered else ""))
+        if ac else "no acceptance criteria to trace")
+
+    # 11 — spec-kit /analyze ambiguity pass. The old rubric demanded numbers from
+    # the NFR section alone, so "the explorer shall be responsive" passed as a
+    # functional requirement.
+    weighted = "\n".join(filter(None, (fr_section, nfr_section, ac_section)))
+    hits = sorted({m.group(1).lower() for m in _VAGUE_RE.finditer(weighted)})
+    unquantified = [h for h in hits
+                    if not any(_MEASURABLE_RE.search(ln)
+                               for ln in weighted.splitlines()
+                               if re.search(rf"\b{re.escape(h)}\b", ln, re.IGNORECASE))]
+    add("no_vague_terms", "No unquantified quality adjective in a requirement",
+        _tri(True, not unquantified),
+        "none" if not unquantified
+        else f"{len(unquantified)} unquantified: {', '.join(unquantified)}")
+
+    # 12 — superpowers' spec self-review, applied to the whole document.
+    placeholders = sorted({m.group(0).upper() for m in _UNRESOLVED_RE.finditer(body)})
+    add("no_placeholders", "No unresolved placeholder anywhere in the brief",
+        2 if not placeholders else 0,
+        "none" if not placeholders else f"{len(placeholders)} found: {', '.join(placeholders)}")
+
+    # 13 — Dependencies, named or explicitly none.
     deps = _section(body, "Dependencies", "Depends on")
     deps_bullets = _bullets(deps)
     explicit_none = bool(deps and re.search(r"\b(none|no dependenc)\b", deps, re.IGNORECASE))
@@ -193,45 +352,55 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
         _tri(bool(deps), bool(deps_bullets) or explicit_none),
         "declared" if (deps_bullets or explicit_none) else "section missing or empty")
 
-    # 9 — What this is NOT. The boundary nobody writes and everybody assumes.
+    # 14 — What this is NOT. The boundary nobody writes and everybody assumes.
     scope_out = _section(body, "Out of scope", "Not in scope", "What this does not do")
     add("out_of_scope", "What the item does NOT cover is written down",
         _tri(bool(scope_out), len(_bullets(scope_out)) >= 1),
         "declared" if _bullets(scope_out) else "absent — the boundary is being assumed")
 
-    # 10 — The questions the grill asked, and their answers.
-    grill = _section(body, "Questions answered", "Open questions", "Grill")
-    unresolved = _UNRESOLVED_RE.findall(grill or "")
+    # 15 — The questions the grill asked, and their answers.
+    grill = _section(body, "Questions answered", "Clarifications", "Open questions", "Grill")
     add("questions_closed", "Every question raised was answered",
-        _tri(bool(grill), bool(grill) and not unresolved),
-        f"{len(unresolved)} still open" if unresolved else (
-            "all closed" if grill else "no record of questions"))
+        _tri(bool(grill), bool(grill) and not _UNRESOLVED_RE.search(grill)),
+        "all closed" if (grill and not _UNRESOLVED_RE.search(grill))
+        else ("open answers remain" if grill else "no record of questions"))
 
-    # 11 — How it will be demonstrated.
+    # 16 — How it will be demonstrated.
     demo = _section(body, "Demonstration", "How to demo", "Demo")
     add("demonstration", "How the result gets demonstrated is written",
         _tri(bool(demo), len(_bullets(demo)) >= 1),
         "declared" if _bullets(demo) else "absent")
 
-    # 12 — The interactive artefact.
+    # 17 — The interactive artefact.
     html = re.search(r"`([^`]*\.html)`|\]\(([^)]*\.html)\)", body)
     add("interactive_artefact", "An interactive walkthrough was produced",
         _tri(bool(html), bool(html)),
         html.group(0) if html else "no .html referenced")
 
-    # What a script cannot decide, said out loud rather than scored as passing.
+    # ── the reviewer's half ────────────────────────────────────────────────
+    # Generated unchecked by the agent; ticked only by a human. The agent MUST
+    # NOT tick these — see rules/alignment-threshold.md. Adopted from spec-kit,
+    # whose checklist carries the same instruction to its own /implement.
+    signoff = _section(body, "Reviewer sign-off", "Reviewer signoff", "Sign-off")
+    boxes = _CHECKBOX_RE.findall(signoff or "")
+    pending = tuple(text for mark, text in boxes if mark == " ")
+
     judgement = (
         "whether the stated problem is the real one",
         "whether the flows drawn are the flows that matter",
         "whether the numbers in the NFRs are the right numbers",
     )
-    return AlignmentReport(tuple(criteria), judgement)
+    return AlignmentReport(tuple(criteria), judgement, pending, len(boxes))
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("brief", type=Path)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--machine-only", action="store_true",
+        help="exit on the structural score alone, so the agent can iterate before "
+             "asking a human to review. NEVER the gate on building the item.")
     args = parser.parse_args(argv)
 
     try:
@@ -240,35 +409,56 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
 
+    ok = report.meets_machine_threshold if args.machine_only else report.aligned
+
     if args.json:
         print(json.dumps({
+            "verdict": report.verdict,
+            "aligned": report.aligned,
             "earned": report.earned,
             "maximum": report.maximum,
-            "ratio": round(report.ratio, 4),
+            "machine_ratio": round(report.machine_ratio, 4),
             "threshold": THRESHOLD,
-            "meets_threshold": report.meets_threshold,
+            "meets_machine_threshold": report.meets_machine_threshold,
+            "reviewer_signed_off": report.reviewer_signed_off,
+            "reviewer_items_total": report.reviewer_items_total,
+            "pending_review": list(report.pending_review),
             "criteria": [
                 {"key": c.key, "label": c.label, "score": c.score, "why": c.why}
                 for c in report.criteria
             ],
             "judgement_items": list(report.judgement_items),
         }, indent=2, ensure_ascii=False))
-        return 0 if report.meets_threshold else 1
+        return 0 if ok else 1
 
-    pct = report.ratio * 100
-    verdict = "ALIGNED" if report.meets_threshold else "NOT ALIGNED"
-    print(f"{verdict}  {report.earned}/{report.maximum}  ({pct:.0f}%, threshold {THRESHOLD:.0%})\n")
+    pct = report.machine_ratio * 100
+    print(f"{report.verdict}   machine {report.earned}/{report.maximum} "
+          f"({pct:.0f}%, threshold {THRESHOLD:.0%})\n")
     for c in report.criteria:
         mark = {0: "✗", 1: "~", 2: "✓"}[c.score]
-        print(f"  {mark} {c.label:<52} {c.why}")
-    if not report.meets_threshold:
+        print(f"  {mark} {c.label:<58} {c.why}")
+
+    if not report.meets_machine_threshold:
         print("\nThis item must NOT be built yet. Close these first:")
         for c in report.gaps:
             print(f"  - {c.label} — {c.why}")
-    print("\nNot scored, and still yours to judge:")
-    for item in report.judgement_items:
-        print(f"  - {item}")
-    return 0 if report.meets_threshold else 1
+
+    print()
+    if report.reviewer_signed_off:
+        print(f"Reviewer sign-off: all {report.reviewer_items_total} items ticked.")
+    elif report.reviewer_items_total:
+        print(f"Reviewer sign-off: {len(report.pending_review)} of "
+              f"{report.reviewer_items_total} still unticked —")
+        for item in report.pending_review:
+            print(f"  [ ] {item}")
+    else:
+        print("Reviewer sign-off: no `## Reviewer sign-off` checklist in the brief.")
+        print("  Generate it UNTICKED. Ticking it is the reviewer's act, never yours —")
+        print("  the three items below are what a script cannot decide:")
+        for item in report.judgement_items:
+            print(f"    - [ ] {item}")
+
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

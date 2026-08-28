@@ -1,8 +1,8 @@
 ---
 name: shared-understanding
-version: 0.1.0
+version: 0.2.0
 requires: []
-description: Bring one backlog item to ~90% shared understanding BEFORE any of it is built, by interrogating it and drawing it in the same pass. Produces an alignment brief (problem, functional and non-functional requirements, flows, system design, interaction model, acceptance criteria, out-of-scope, closed questions) plus an animated HTML walkthrough of every flow, then scores the result against a 12-criterion rubric. Below 90% the item MUST NOT be implemented. Use after DISCOVER has evidence and before /to-plan writes the plan, on any item where two people could read the description and picture different systems — which is most of them.
+description: Bring one backlog item to ~90% shared understanding BEFORE any of it is built, by interrogating it and drawing it in the same pass. Produces an alignment brief (problem, functional and non-functional requirements with stable ids, four scenario classes, system design, interaction model, traceable acceptance criteria, out-of-scope, closed questions) plus an animated HTML walkthrough of every flow, then scores the result on seventeen criteria and hands a human an unticked review checklist. Below 90% machine score the item MUST NOT be implemented; without the reviewer's sign-off it is not aligned either. Use after DISCOVER has evidence and before /to-plan writes the plan, on any item where two people could read the description and picture different systems — which is most of them.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 argument-hint: "{item-slug or B-NNN}"
@@ -19,7 +19,7 @@ The method is one pass with two halves that feed each other:
 
 | Half | What it does | Why it cannot be dropped |
 |---|---|---|
-| **Grill** | Interrogates the item one question at a time, codebase-first | A diagram of a misunderstanding is a confident misunderstanding |
+| **Grill** | Interrogates the item, one question at a time, codebase-first | A diagram of a misunderstanding is a confident misunderstanding |
 | **Draw** | Renders every flow as an animated walkthrough somebody can watch | A question nobody thought to ask is a gap prose never reveals |
 
 Drawing generates the questions the interview would not have reached: to place an
@@ -38,158 +38,281 @@ it gets built. **Read `cycle-plan.md § Chain` before invoking.**
 /discover-plan B-NNN        → evidence found, status: triaged
      ↓
 /shared-understanding B-NNN → records/alignment/{slug}-alignment.md + {slug}-walkthrough.html
-     ├── score ≥ 90% → ALIGNED  → /to-plan
-     └── score <  90% → BLOCKED → the item is NOT built; close the gaps and re-score
+     ├── ALIGNED         → /to-plan
+     ├── AWAITING_REVIEW → structure is done; a human has not signed off yet
+     └── BLOCKED         → the item is NOT built; close the gaps and re-score
      ↓
 /to-plan → /plan-confidence → /implement
 ```
 
-The threshold and what it blocks are defined once, in
-[`rules/alignment-threshold.md`](../../rules/alignment-threshold.md). Read it before
-invoking. This file carries the protocol; that file carries the gate.
+The threshold, and the rule that the agent may never tick the reviewer's boxes,
+are defined once in [`rules/alignment-threshold.md`](../../rules/alignment-threshold.md).
+This file carries the protocol; that file carries the gate.
 
-### When to skip
+## Step 0 — Classify the path, out loud
 
-Skip when the item is genuinely small enough that no two readers could differ: a
-single-line fix, a typo, a dependency bump, a revert. Everything else runs it. If
-you are arguing about whether an item is small enough, it is not.
+Say the classification before the first question, so the human can override it.
+Taken from `obra/superpowers`' brainstorming skill, whose framing is the one that
+resolves the tension between rigour and KISS: **the ceremony scales with the task;
+the approval gate never does.**
 
-## Process
+| Path | What it is | What this skill produces |
+|---|---|---|
+| **Spike** | A feasibility question whose output is an answer, not code you keep | The question and the probe, in 2–3 sentences. No brief, no walkthrough |
+| **Bounded** | A change to a flow that **already exists in this repo** and can be read | A short brief, one flow drawn, reviewer sign-off still required |
+| **Architectural** | A new subsystem, a new interface others depend on, or anything restructuring how components fit | The full brief, every scenario class drawn, reviewer sign-off |
 
-### Step 1 — Read the evidence, then the code
+Two rules make the classification honest:
+
+- **Bounded measures the repo, not your familiarity.** If there is no existing flow
+  to open and read, the item is not bounded, however well you understand the domain.
+- **The ratchet is one-way.** Hidden complexity found mid-pass upgrades the path —
+  stop, say so, step up. Nothing ever downgrades, and reaching for a lighter label
+  to skip work *is* the doubt that should have upgraded it.
+
+**Decompose before refining.** If the item describes independent subsystems, say so
+immediately rather than spending questions on the details of something that has to
+be split first. Each piece gets its own alignment.
+
+## Step 1 — Read the evidence, then the code
 
 Read the `B-NNN` block and whatever `cycle-discover` attached to it. Then read the
 code the item touches. Every question you can answer from the repository is a
-question you must not spend on the human — the same codebase-first rule
-`/grill-me` enforces, for the same reason.
+question you must not spend on the human — the same codebase-first rule `/grill-me`
+enforces, for the same reason.
 
-### Step 2 — Draft the brief from what you already know
+## Step 2 — Draft the brief from what you already know
 
 Write `records/alignment/{slug}-alignment.md` **before** asking anything, filling
-in every section you can and marking the rest `UNKNOWN`. A draft with honest holes
-is a better interview instrument than a blank page: the human corrects a wrong
-guess faster than they answer an open question.
+in every section you can. A draft with honest holes is a better interview
+instrument than a blank page: a human corrects a wrong guess faster than they
+answer an open question.
 
-Required sections, which are exactly what the scorer measures:
+**Never fabricate to fill a hole.** Do not invent plausible requirements from a
+product category, and do not ship `{{PLACEHOLDER}}` tokens. A brief that reads
+complete and was partly guessed is the worst artefact this skill can produce,
+because the guess is now written down in the reader's voice. This is the same
+failure a baseline run measured on 2026-08-28: refusing a bad justification and
+then **manufacturing a local one** to replace it. If you do not know, mark it and
+ask. `score_alignment.py` scores any placeholder as 0 outright.
+
+Required sections — exactly what the scorer measures:
 
 ```markdown
 # Alignment: B-NNN — {title}
 
-## Problem              # observed here, with a measurement and a date
-## Functional Requirements    # >= 2, what the system must do
-## Non-Functional Requirements # every one carries a NUMBER and a unit
-## Flows                # `### {name}` each, broken into numbered steps
-## System design        # mermaid flowchart: the components and what connects them
-## Interaction          # mermaid sequenceDiagram or classDiagram: who calls whom
-## Acceptance Criteria  # each names a command that can FAIL
-## Dependencies         # named, or the words "none"
-## Out of scope         # the boundary everybody otherwise assumes differently
-## Questions answered   # every question raised, with its answer — no UNKNOWN left
-## Demonstration        # how the result gets shown to somebody
-## Walkthrough          # link to the .html
+## Problem                     # observed HERE, with a measurement and a date
+## Functional Requirements     # `- FR-001: <actor> shall <verb> <object>.`
+## Non-Functional Requirements # `- NFR-001: p95 under 800ms at 50 rps.`  numbers, always
+## Flows                       # `### <name> [primary|alternate|exception|recovery]`
+## System design               # mermaid flowchart: components and what connects them
+## Interaction                 # mermaid sequenceDiagram / classDiagram: who calls whom
+## Acceptance Criteria         # `- AC-001 (FR-002): \`pytest …\` exits 0.`
+## Dependencies                # named, or the word "none"
+## Out of scope                # the boundary everybody otherwise assumes differently
+## Questions answered          # `### Session YYYY-MM-DD` then `- Q: … → A: …`
+## Demonstration               # how the result gets shown to somebody
+## Walkthrough                 # link to the .html
+## Reviewer sign-off           # generated UNTICKED. See Step 6.
 ```
 
-### Step 3 — Grill the holes, one question per turn
+**Stable ids are not decoration.** Every reference implementation converged on
+them independently (spec-kit's `FR-###`/`SC-###`, feature-forge's EARS ids,
+FredAntB's sequential `REQ-xxx`). Without an id, an acceptance criterion cannot
+cite the requirement it closes, a task cannot cite either, and nothing traces.
+Ids are sequential from `001` and never reused.
 
-For each `UNKNOWN`, ask one question, with your recommended answer and its
-reasoning. Wait. Never batch questions. Prefer the questions whose answers change
-the drawing — an unanswered "what happens when the vendor times out?" is a missing
-flow, not a missing sentence.
+**Every requirement gets a criterion, and every criterion names its requirement.**
+The scorer checks both directions, because both fail: a criterion citing nothing
+proves nothing in particular, and a requirement no criterion cites ships unverified.
 
-Two question classes earn their turn above all others:
+## Step 3 — Grill the holes, five questions, one per turn
 
-- **Failure**: what happens when this step does not succeed? Most briefs describe
-  only the happy path, and most defects live in the other one.
-- **Boundary**: what is deliberately NOT covered? Two people can agree completely
-  on what a thing does and disagree completely on what it does not.
+The old budget was fifteen. spec-kit's `/clarify` caps at **five**, and the cap is
+what forces the selection: a question that does not change the architecture, the
+data model, the task breakdown, the test design or the operational posture is a
+question you do not get to ask. Rank candidates by **Impact × Uncertainty** and
+spend the budget from the top.
 
-### Step 4 — Draw every flow
+Scan for holes across these categories, marking each Clear / Partial / Missing —
+they are the categories briefs are actually missing, not the ones they visibly lack:
+
+| Category | What goes wrong when it is missing |
+|---|---|
+| Functional scope & roles | Two readers with different pictures of who does what |
+| Domain & data model | Entities, identity, **state transitions**, volume assumptions |
+| Interaction & UX flow | Error, empty and loading states nobody drew |
+| Non-functional attributes | Latency, throughput, availability, observability, security |
+| Integrations | External services and **their failure modes** |
+| Edge cases | Negative paths, throttling, concurrent-edit conflicts |
+| Constraints & tradeoffs | Rejected alternatives nobody wrote down |
+| Terminology | The same concept under two names in two sections |
+| Completion signals | Acceptance criteria that cannot fail |
+
+Question form is part of the contract:
+
+- A full interrogative ending in `?`, readable on its own. **A topic label is not
+  a question** — `Acceptance device matrix (FR-023)` is invalid.
+- One plain-language **"Why it matters"** sentence immediately after it, naming the
+  stake for shipping.
+- Your **recommended answer** with reasoning, so the human can nod instead of compose.
+- One question per turn. Never a numbered list — that reads as a form, and a person
+  facing three bullets answers the first.
+
+**Two classes earn their turn above all others.** *Failure*: what happens when this
+step does not succeed — most briefs describe only the happy path and most defects
+live in the other one. *Boundary*: what is deliberately not covered — two people can
+agree completely on what a thing does and disagree completely on what it does not.
+
+**Stop early** when the remaining questions would not change the work, and say which
+categories you are **deferring** and why. A quota reached with high-impact categories
+unresolved must be flagged, not quietly dropped.
+
+## Step 4 — Integrate each answer immediately
+
+Write to disk after **every** accepted answer, not at the end. Two reasons, both
+observed: context is lost between turns, and an answer held in memory is an answer
+that gets paraphrased.
+
+For each answer:
+
+1. Append `- Q: <question> → A: <answer>` under `### Session YYYY-MM-DD` in
+   `## Questions answered`. That section is the audit trail of the interview.
+2. **Then apply it to the section it changes.** A functional answer edits the FR; a
+   number edits the NFR; an edge case adds a flow.
+3. **Replace the ambiguous statement — never leave it beside the answer.** A brief
+   holding both the vague original and its clarification has two readings again,
+   which is the state this whole skill exists to leave.
+
+## Step 5 — Draw every flow, all four classes
 
 Copy `templates/alignment-walkthrough.html` to
-`records/alignment/{slug}-walkthrough.html` and fill in **only** `NODES` and
-`FLOWS` at the top — the file is self-contained, has no build step and no
-dependencies, and everything below the marked line is machinery.
+`records/alignment/{slug}-walkthrough.html` and fill in **only** `NODES` and `FLOWS`
+at the top — the file is self-contained, no build step and no dependencies, and
+everything below the marked line is machinery.
 
 ```javascript
 NODES  id -> { label, kind: actor|service|store|external, x, y }   // x/y in % of the stage
 FLOWS  name -> [ { from, to, label, payload, note } ]
 ```
 
-Draw the failure flows as their own entries, not as footnotes on the happy path.
-A reader clicks between "Happy path" and "Vendor timeout" and sees the difference;
-in prose that difference is a subordinate clause.
+The four scenario classes are each their own flow, tagged in the heading:
 
-`note` is where the thing a reader would get wrong goes. That sentence is the
-point of the artefact — the animation shows what happens, the note says what
-people assume instead. A walkthrough whose notes only restate the arrows has
-drawn the system without surfacing a single disagreement, and has not earned its
-place.
+| Class | The question it answers |
+|---|---|
+| `[primary]` | What happens when everything works |
+| `[alternate]` | The legitimate other route — empty result, cached hit, second tier |
+| `[exception]` | A step fails: timeout, rejection, malformed input |
+| `[recovery]` | The system comes back: retry, resume, rollback, reconciliation |
 
-### Step 5 — Score, and obey the score
+A reader clicks between them and sees the difference; in prose that difference is a
+subordinate clause. A brief with one flow has not been thought about, and the scorer
+now says so instead of leaving it to the anti-pattern list.
+
+`note` is where the thing a reader would get wrong goes. That sentence is the point
+of the artefact — the animation shows what happens, the note says what people assume
+instead. A walkthrough whose notes only restate the arrows has drawn the system
+without surfacing a single disagreement.
+
+## Step 6 — Score, then hand the judgement to a human
 
 ```bash
 python3 skills/shared-understanding/scripts/score_alignment.py \
     records/alignment/{slug}-alignment.md
 ```
 
-Exit 0 is ALIGNED and the item may be planned. Exit 1 is BLOCKED: the report lists
-every criterion below 2 and why. Close them and re-run. Do not argue with the
-score by rewording — a criterion scores on what is checkable, so "responsive"
-becomes "p95 under 800ms at 50 rps" or it stays at 0.
+Two independent conditions, and the verdict needs both:
 
-The scorer also prints what it did **not** measure — whether the stated problem is
-the real one, whether the flows drawn are the flows that matter, whether the
-numbers are the right numbers. Those are yours to judge, and a passing score never
-claims them.
+| Condition | Who satisfies it |
+|---|---|
+| Machine score ≥ 90% over seventeen structural criteria | **You.** Iterate with `--machine-only` until it clears |
+| Reviewer sign-off — every box in `## Reviewer sign-off` ticked | **A human. Never you.** |
 
-### Step 6 — Walk it with the human
+Generate the checklist **unticked**, one item per thing a script cannot decide:
+
+```markdown
+## Reviewer sign-off
+- [ ] CHK001 The stated problem is the one we actually have. [Judgement]
+- [ ] CHK002 The flows drawn are the flows that matter. [Judgement]
+- [ ] CHK003 The numbers in the NFRs are the right numbers. [Judgement]
+```
+
+**You must never tick a box.** The mechanism exists because the first version of
+this skill had the agent writing the brief and running the scorer that approved it
+— a gate grading its own homework. Ticking your own checklist restores exactly
+that, with a checkbox drawn over it. Add items when the item warrants them; never
+remove one, and never mark one.
+
+Do not argue with the machine score by rewording. A criterion scores on what is
+checkable, so "responsive" becomes "p95 under 800ms at 50 rps" or it stays at 0.
+
+## Step 7 — Walk it with the human
 
 Open the walkthrough and step through each flow together. This is the falsifiable
 moment the whole skill exists for: the instant a packet takes an edge the reader
 did not expect, the gap is on screen and nobody has to be persuaded it exists.
 
-Record every correction back into `## Questions answered`, then re-score.
+Record every correction back into `## Questions answered`, apply it to the section
+it changes, and re-score. On the re-score, **report regressions explicitly** — a
+criterion that was at 2 and is now lower is a fact about the last edit, and a
+before/after that only counts improvements hides it.
 
 ## Verdicts
 
 | Verdict | Meaning | Downstream action |
 |---|---|---|
-| `ALIGNED` | Score ≥ 90%, walkthrough exists, every question closed | `/to-plan {slug}` |
-| `BLOCKED` | Score < 90% | The item is **not** built. Close the listed gaps and re-run |
-| `NEEDS_SPLIT` | Three or more flows, or the brief cannot converge in 15 questions | Split into items that each align on their own |
+| `ALIGNED` | Machine score ≥ 90% **and** every reviewer box ticked | `/to-plan {slug}` |
+| `AWAITING_REVIEW` | Structure is complete; no human has signed off | Ask for the review. Do not proceed |
+| `BLOCKED` | Machine score < 90% | The item is **not** built. Close the listed gaps and re-run |
+| `NEEDS_SPLIT` | The item describes independent subsystems, or cannot converge in five questions | Split; each piece aligns on its own |
 
 There is no "aligned with caveats". A caveat is an open question, and an open
 question is what this skill exists to close.
 
 ## Anti-patterns
 
-1. **Drawing before grilling.** A diagram of a vague brief looks rigorous and is
+1. **Ticking your own review boxes.** The single failure the sign-off exists to
+   prevent. A gate you can satisfy alone is not a gate.
+2. **Drawing before grilling.** A diagram of a vague brief looks rigorous and is
    the most expensive kind of wrong: it makes the misunderstanding legible and
    therefore convincing.
-2. **Grilling without drawing.** The interview stops at the questions somebody
+3. **Grilling without drawing.** The interview stops at the questions somebody
    thought to ask. The drawing asks the ones nobody did, by refusing to place an
    arrow with no destination.
-3. **Wording around the scorer.** Adding the word "measurable" to a requirement
-   with no number. The rubric is a proxy for whether somebody can fail the work;
-   defeating the proxy defeats only yourself.
-4. **Happy path only.** The flow list that contains exactly one flow has not been
-   thought about. Ask what happens when each step fails.
-5. **`UNKNOWN` left in the brief.** An open question wearing a closed coat. It
-   costs the point precisely because it will otherwise be resolved by a guess
-   during implementation.
-6. **Skipping the walkthrough because "the mermaid diagram is enough".** A static
-   diagram is read; an animated one is watched, and disagreement surfaces on a
-   step, not on a picture.
-7. **Treating the 90% as a target to reach rather than a floor to clear.** The
-   score exists to refuse work, not to decorate it.
+4. **Filling a hole with a plausible guess.** Inventing requirements from a product
+   category, or a local problem to replace a rejected justification. Mark it and ask.
+5. **Wording around the scorer.** Adding "measurable" to a requirement with no
+   number. The rubric is a proxy for whether somebody can fail the work; defeating
+   the proxy defeats only yourself.
+6. **One flow.** Four classes exist because the defects live in three of them.
+7. **Leaving the clarification beside the ambiguity.** The brief now has two
+   readings, which is where it started.
+8. **Batching questions, or asking one as a topic label.** Both turn an interview
+   into a form, and a form gets the first answer only.
+9. **Calling it bounded to skip the work.** Reaching for the lighter label is the
+   doubt that should have upgraded the path.
+10. **Treating 90% as a target rather than a floor.** The score exists to refuse
+    work, not to decorate it.
 
 ## What this skill does NOT do
 
 - It does NOT write the plan — that is `/to-plan`, which reads this brief.
 - It does NOT decide whether the item is worth doing — that is `cycle-discover`,
-  upstream, and an item arriving here already has evidence.
+  upstream; an item arriving here already has evidence.
 - It does NOT judge whether the content is right. It measures whether the content
-  is *checkable*, and says so.
+  is *checkable*, says so, and hands the rest to a named human.
+
+## Where the mechanisms came from
+
+Read in full on 2026-08-28, and adopted rather than paraphrased:
+
+| Source | What was taken |
+|---|---|
+| [`github/spec-kit`](https://github.com/github/spec-kit) | The five-question cap ranked by Impact × Uncertainty; the ambiguity taxonomy; dated clarification sessions written incrementally; "test the requirements, not the implementation"; the four scenario classes; and the **reviewer-owned checklist the agent may not mark** |
+| [`obra/superpowers`](https://github.com/obra/superpowers) | Spike / bounded / architectural with a one-way ratchet; "the ceremony scales with the task, the approval gate never does"; the whole-document placeholder scan |
+| [`jeffallan/claude-skills`](https://github.com/jeffallan/claude-skills) (`feature-forge`) | EARS-shaped requirements; the PM/Dev dual pass over the same brief |
+| [`FredAntB/Spec-Driven-Development`](https://github.com/FredAntB/Spec-Driven-Development) | Sequential ids; the generation gate that lists the exact phrasings that do **not** license skipping it; the ban on fabricating requirements from a product category |
+| [`melodic-software/claude-code-plugins`](https://github.com/melodic-software/claude-code-plugins) (`discovery/blindspot`) | Output calibrated to the human's disclosed starting point, not to a fixed depth |
 
 ## Related
 
