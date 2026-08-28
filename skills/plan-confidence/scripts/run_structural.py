@@ -35,6 +35,7 @@ from check_criterion_executability import ExecutabilityReport, check_criterion_e
 from check_deps_audit import check_deps_audit
 from check_drawbacks_section import check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
+from check_task_interfaces import check_task_interfaces
 from check_failure_scenarios import check_failure_scenarios
 from check_patterns_consumption import PatternsConsumptionReport, check_patterns_consumption
 from check_spec_smells import SmellReport, check_spec_smells
@@ -309,6 +310,10 @@ def run_structural(
     concurrency = check_concurrency_tests(plan_path)
     failure_scenarios = check_failure_scenarios(plan_path)
     deps_audit = check_deps_audit(plan_path)
+    # Pre-flight: producer/consumer coherence across tasks, while both are
+    # still prose. `check_wiring.py` asks this after /implement, when the
+    # mismatched calls are already written.
+    interfaces = check_task_interfaces(plan_path)
     patterns_consumption = check_patterns_consumption(plan_path, _find_repo_root_from_plan(plan_path))
 
     # Compute per-dimension scores
@@ -540,6 +545,18 @@ def run_structural(
                 "ignored": list(patterns_consumption.ignored),
                 "is_clean": patterns_consumption.is_clean,
                 "reasons": list(patterns_consumption.reasons),
+            },
+            # Pre-flight, reported alongside the other structural checks. It is
+            # advisory by design: the signature block the plan template calls
+            # optional is what it reads, so a finding is a question for the
+            # author rather than a verdict about the plan.
+            "task_interfaces": {
+                "tasks_total": interfaces.tasks_total,
+                "tasks_with_signatures": interfaces.tasks_with_signatures,
+                "tasks_unchecked": interfaces.tasks_total - interfaces.tasks_with_signatures,
+                "produced_never_consumed": list(interfaces.produced_never_consumed),
+                "consumed_never_produced": list(interfaces.consumed_never_produced),
+                "consumed_before_produced": list(interfaces.consumed_before_produced),
             },
             "failure_scenarios": {
                 "deps_audit": {

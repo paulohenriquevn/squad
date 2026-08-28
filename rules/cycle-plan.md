@@ -89,6 +89,32 @@ A BLOCKED report blocks downstream: `/plan-confidence` MUST NOT honor the plan a
 - Decision tree has < 3 branches — just write the plan.
 - A grill output already exists for the same slug and is < 7 days old.
 
+## Pre-flight: task interfaces
+
+Before any task is implemented, `skills/plan-confidence/scripts/check_task_interfaces.py`
+cross-checks what each task DECLARES it produces against what later tasks call, reading only
+the `#### Pseudo-code / Signatures` blocks. It reports three things:
+
+| Finding | Why it matters |
+|---|---|
+| produced and never consumed | a helper with no caller — D1 flags it one phase later, after it was written |
+| consumed and never produced | a call to something no task declares; this one breaks at runtime |
+| consumed before produced | the symbol resolves, but the plan cannot run in its own order |
+
+**Why here and not in `check_wiring.py`.** That checker asks the same question after
+`/implement`, when the mismatched calls already exist. Two tasks disagreeing about a
+signature are cheapest to reconcile while both are still prose.
+
+**Advisory, not a cap** _(not mechanized: judgement, by decision — the signature block is
+optional by template, so an absent one is unknown rather than wrong, and capping on silence
+would push authors to write blocks that satisfy a parser)_. Tasks with no block are counted
+and reported as **unchecked**, never as clean.
+
+The method comes from an observed run of `obra/superpowers`' `subagent-driven-development`
+(2026-08-28): its pre-flight pass cross-checked 14 producer/consumer pairs before any code
+and found six defects in the plan — including `assert.throws` returning `undefined` at eight
+call sites, which would have failed every test in two files.
+
 ## Verdicts
 
 - `INVALID` — hard cap blew (e.g., Coverage Matrix incomplete, fabricated citation). Return to `/to-plan`. **`/plan-improve` does not fix hard caps.**

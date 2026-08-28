@@ -69,6 +69,8 @@ class ADRReport:
     with_alternatives: int
     completeness_ratio: float
     missing_alternatives: tuple[str, ...] = field(default_factory=tuple)
+    #: Decisions that never say what being wrong would cost.
+    missing_cost_if_wrong: tuple[str, ...] = ()
 
 
 def _extract_adrs_section(content: str) -> str:
@@ -92,6 +94,35 @@ def _split_into_adr_blocks(section: str) -> dict[str, str]:
         end = matches[i + 1].start() if i + 1 < len(matches) else len(section)
         blocks[adr_id] = section[start:end]
     return blocks
+
+
+#: How a decision states what happens if it turns out wrong.
+#:
+#: Borrowed from an observed `subagent-driven-development` run (obra/superpowers,
+#: 2026-08-28), where every ruling ended with one: *"Cost if wrong: cosmetic
+#: only"*, *"Cost if wrong: none — the helper asserts strictly more"*, *"Cost if
+#: wrong: the skill carries a figure whose guarded arm describes an engine
+#: crash"*. That last one is why it matters: naming the cost is what separated
+#: the six fixes applied immediately from the two recorded-not-fixed and the one
+#: escalated to a human.
+#:
+#: Listing pros and cons argues the choice is right. This asks what happens when
+#: it is not — and a cost the author cannot name is a decision they have not
+#: finished making.
+COST_KEYWORDS = (
+    "cost if wrong",
+    "custo se errado",
+    "if this is wrong",
+    "if wrong:",
+    "blast radius",
+    "cost of being wrong",
+)
+
+
+def _has_cost_if_wrong(adr_body: str) -> bool:
+    """True when the decision states what it costs to be wrong."""
+    lower = adr_body.lower()
+    return any(kw in lower for kw in COST_KEYWORDS)
 
 
 def _has_alternative_mention(adr_body: str) -> bool:
@@ -135,7 +166,13 @@ def check_adr_completeness(plan_path: Path) -> ADRReport:
             with_alternatives=0,
             completeness_ratio=1.0,
             missing_alternatives=(),
+            missing_cost_if_wrong=(),
         )
+
+    # `cost if wrong` is per-decision by nature: a global section can hold the
+    # rejected alternatives for the whole plan, but the cost of being wrong
+    # belongs to one decision and cannot be shared.
+    no_cost = tuple(sorted(i for i, b in blocks.items() if not _has_cost_if_wrong(b)))
 
     if _has_global_alternatives_section(content.lower()):
         return ADRReport(
@@ -143,6 +180,7 @@ def check_adr_completeness(plan_path: Path) -> ADRReport:
             with_alternatives=total,
             completeness_ratio=1.0,
             missing_alternatives=(),
+            missing_cost_if_wrong=no_cost,
         )
 
     missing: list[str] = []
@@ -158,4 +196,5 @@ def check_adr_completeness(plan_path: Path) -> ADRReport:
         with_alternatives=with_alt,
         completeness_ratio=with_alt / total,
         missing_alternatives=tuple(sorted(missing)),
+        missing_cost_if_wrong=no_cost,
     )
