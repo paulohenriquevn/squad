@@ -397,6 +397,56 @@ def _find_progress(project_root: Path, slug: str) -> Path | None:
     return None
 
 
+def check_implementation_log(project_root: Path, slug: str) -> dict[str, Any]:
+    """`records/implementations/{slug}-implementation.md` exists and carries something.
+
+    `rules/cycle-implement.md § Output` declares this file a deliverable of the cycle. Nothing
+    read it. Measured in a consumer on 2026-08-28: six logs for eight completed slugs, and the
+    log for one of them opens by recording that `/review` had to ask for it, that the same gap
+    had appeared one item earlier, and — in those words — that it would not recur. It recurred
+    twice more.
+
+    FAIL rather than SKIP when absent, and the distinction is the whole gate. SKIP is what a
+    check says when it had nothing to look at; here the cycle declares there is something, so
+    absence is the finding rather than the reason to stay quiet. This is the shape the
+    `deps-audit` gate took on 2026-08-26, for the same reason: a gate believed to be automatic
+    is one nobody runs, and a deliverable nobody checks is one that goes missing three times
+    while everyone believes the process covers it.
+
+    Emptiness counts as absence. A `touch` satisfies the letter and defeats the reason — the
+    log carries what a diff cannot: what was measured, what lied, and what was rejected.
+    """
+    # No plan for this slug means the cycle never ran, so there is no log to be missing. That is a
+    # genuine SKIP — the one shape of "nothing to check" this gate accepts, and it is why the
+    # pre-code-phase path stays quiet rather than being loosened for it.
+    if _find_plan(project_root, slug) is None:
+        return {"name": "implementation_log", "status": "SKIP",
+                "reason": f"no plan for {slug} — implement did not run"}
+
+    for base in (project_root / ".claude" / "records" / "implementations",
+                 project_root / "records" / "implementations"):
+        candidate = base / f"{slug}-implementation.md"
+        if candidate.exists():
+            try:
+                body = candidate.read_text(encoding="utf-8")
+            except OSError as e:
+                return {"name": "implementation_log", "status": "FAIL",
+                        "reason": f"{candidate} exists but could not be read: {e}"}
+            if not body.strip():
+                return {"name": "implementation_log", "status": "FAIL",
+                        "reason": f"{candidate} is empty — a touched file is not a log"}
+            return {"name": "implementation_log", "status": "PASS",
+                    "detail": str(candidate.relative_to(project_root))}
+    return {
+        "name": "implementation_log",
+        "status": "FAIL",
+        "reason": (
+            f"no records/implementations/{slug}-implementation.md — "
+            "cycle-implement declares it a deliverable, and it has gone missing three times"
+        ),
+    }
+
+
 _PATTERNS_SKILL_RE = re.compile(r"\b([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*-patterns)\b")
 
 
@@ -643,6 +693,7 @@ def main() -> int:
         check_phase_review_gate(project_root, args.slug),
         check_acceptance_criteria_gate(project_root, args.slug),
         check_test_obligations_gate(project_root, args.slug),
+        check_implementation_log(project_root, args.slug),
         check_patterns_advisory(project_root, args.slug),
         check_code_quality(project_root, args.slug, skip=args.no_code_quality),
     ]
