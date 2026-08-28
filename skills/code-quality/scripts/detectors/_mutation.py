@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -56,11 +57,67 @@ DEFAULT_FLOOR_LOW = 60
 DEFAULT_FLOOR_HIGH = 80
 DEFAULT_TIMEOUT_MINUTES = 5
 
+#: How old a mutation report may be and still be READ instead of re-measured.
+#: 24h by default. Mutation testing is a periodic deep check, not a per-invocation
+#: gate: measured in a consumer on 2026-08-27, `npx stryker run` took 1347s, and
+#: `run_structural.py` invokes /code-quality internally — so every plan gate in that
+#: repository cost 22.5 minutes. A 22-minute gate is a gate people bypass, which is
+#: the failure this whole kit exists to prevent. Set to 0 to always re-measure.
+DEFAULT_MAX_REPORT_AGE_MINUTES = 1440
+
+#: Directories whose mtimes say nothing about the code under test.
+_NOT_SOURCE = frozenset({".git", "node_modules", "reports", "mutants", ".mutmut-cache",
+                         "__pycache__", ".venv", "dist", "build", ".stryker-tmp"})
+
 #: Stryker mutant states, per the mutation-testing-elements schema.
 _STRYKER_DETECTED = frozenset({"Killed", "Timeout"})
 _STRYKER_EXCLUDED = frozenset({"Ignored", "CompileError", "RuntimeError"})
 
 Runner = Callable[..., "tuple[int, str, str]"]
+
+
+def _sources_changed_since(manifest_dir: Path, when: float) -> int:
+    """How many source files are newer than `when`.
+
+    Age alone is not freshness: a report can be four minutes old and already grade a
+    tree two commits behind. The age bounds how stale a reused score gets; this count
+    is what stops it LOOKING current. Reported, never used to invalidate — re-running
+    on every edit would restore the 22-minute gate this exists to remove.
+    """
+    changed = 0
+    for path in manifest_dir.rglob("*"):
+        if any(part in _NOT_SOURCE or part.startswith(".") for part in path.relative_to(manifest_dir).parts[:-1]):
+            continue
+        if path.name in _NOT_SOURCE or not path.is_file():
+            continue
+        try:
+            if path.stat().st_mtime > when:
+                changed += 1
+        except OSError:
+            continue
+    return changed
+
+
+def _reuse_report(report_path: Path, manifest_dir: Path, max_age_minutes: int) -> str | None:
+    """A provenance sentence when the report may be reused, else None.
+
+    Returning the SENTENCE rather than a boolean is deliberate: a caller cannot reuse
+    the report without also carrying the words that say how old it is. The number on
+    its own is a claim about now.
+    """
+    if max_age_minutes <= 0 or not report_path.is_file():
+        return None
+    try:
+        mtime = report_path.stat().st_mtime
+    except OSError:
+        return None
+    age_minutes = (time.time() - mtime) / 60
+    if age_minutes > max_age_minutes:
+        return None
+    age = f"{age_minutes:.0f}m" if age_minutes < 90 else f"{age_minutes / 60:.1f}h"
+    changed = _sources_changed_since(manifest_dir, mtime)
+    since = f", {changed} source file(s) changed since" if changed else ", no source changed since"
+    return f" — read from a report {age} old{since}, not re-measured"
 
 
 def _run(cmd: list[str], cwd: Path, timeout_seconds: int) -> tuple[int, str, str]:
@@ -97,7 +154,8 @@ def _unavailable(language: str, reason: str) -> list[Finding]:
     ]
 
 
-def _score_findings(language: str, killed: int, valid: int, floor_low: int, floor_high: int) -> list[Finding]:
+def _score_findings(language: str, killed: int, valid: int, floor_low: int, floor_high: int,
+                    provenance: str = "") -> list[Finding]:
     if valid <= 0:
         return [
             _finding(
@@ -109,7 +167,7 @@ def _score_findings(language: str, killed: int, valid: int, floor_low: int, floo
             )
         ]
     score = round(killed * 100 / valid, 1)
-    detail = f"mutation score {score}% ({killed}/{valid} mutants detected)"
+    detail = f"mutation score {score}% ({killed}/{valid} mutants detected){provenance}"
     if score < floor_low:
         return [
             _finding(language, "SOFT_CAP", "d4",
@@ -153,7 +211,8 @@ def _mutmut_configured(manifest_dir: Path) -> bool:
 
 
 def _python_mutation(manifest_dir: Path, floor_low: int, floor_high: int,
-                     timeout_seconds: int, runner: Runner) -> list[Finding]:
+                     timeout_seconds: int, runner: Runner,
+                     max_report_age_minutes: int = DEFAULT_MAX_REPORT_AGE_MINUTES) -> list[Finding]:
     if not _mutmut_configured(manifest_dir):
         return [
             _finding(
@@ -166,9 +225,11 @@ def _python_mutation(manifest_dir: Path, floor_low: int, floor_high: int,
         ]
 
     stats_path = manifest_dir / _MUTMUT_STATS
+    provenance = _reuse_report(stats_path, manifest_dir, max_report_age_minutes)
     try:
-        runner(["mutmut", "run"], manifest_dir, timeout_seconds)
-        runner(["mutmut", "export-cicd-stats"], manifest_dir, timeout_seconds)
+        if provenance is None:
+            runner(["mutmut", "run"], manifest_dir, timeout_seconds)
+            runner(["mutmut", "export-cicd-stats"], manifest_dir, timeout_seconds)
     except FileNotFoundError:
         return _unavailable("python", "mutmut not found in PATH")
     except subprocess.TimeoutExpired:
@@ -190,7 +251,7 @@ def _python_mutation(manifest_dir: Path, floor_low: int, floor_high: int,
 
     killed = int(stats.get("killed", 0)) + int(stats.get("timeout", 0))
     valid = int(stats.get("total", 0)) - int(stats.get("skipped", 0))
-    return _score_findings("python", killed, valid, floor_low, floor_high)
+    return _score_findings("python", killed, valid, floor_low, floor_high, provenance or "")
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +264,8 @@ _STRYKER_REPORT = Path("reports") / "mutation" / "mutation.json"
 
 
 def _typescript_mutation(manifest_dir: Path, floor_low: int, floor_high: int,
-                         timeout_seconds: int, runner: Runner) -> list[Finding]:
+                         timeout_seconds: int, runner: Runner,
+                         max_report_age_minutes: int = DEFAULT_MAX_REPORT_AGE_MINUTES) -> list[Finding]:
     if not any((manifest_dir / name).is_file() for name in _STRYKER_CONFIGS):
         return [
             _finding(
@@ -215,8 +277,10 @@ def _typescript_mutation(manifest_dir: Path, floor_low: int, floor_high: int,
         ]
 
     report_path = manifest_dir / _STRYKER_REPORT
+    provenance = _reuse_report(report_path, manifest_dir, max_report_age_minutes)
     try:
-        runner(["npx", "stryker", "run", "--reporters", "json"], manifest_dir, timeout_seconds)
+        if provenance is None:
+            runner(["npx", "stryker", "run", "--reporters", "json"], manifest_dir, timeout_seconds)
     except FileNotFoundError:
         return _unavailable("typescript", "npx/stryker not found in PATH")
     except subprocess.TimeoutExpired:
@@ -243,7 +307,7 @@ def _typescript_mutation(manifest_dir: Path, floor_low: int, floor_high: int,
             valid += 1
             if status in _STRYKER_DETECTED:
                 killed += 1
-    return _score_findings("typescript", killed, valid, floor_low, floor_high)
+    return _score_findings("typescript", killed, valid, floor_low, floor_high, provenance or "")
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +338,7 @@ def detect_mutation_score(
     floor_low: int = DEFAULT_FLOOR_LOW,
     floor_high: int = DEFAULT_FLOOR_HIGH,
     timeout_minutes: int = DEFAULT_TIMEOUT_MINUTES,
+    max_report_age_minutes: int = DEFAULT_MAX_REPORT_AGE_MINUTES,
     runner: Runner | None = None,
 ) -> list[Finding]:
     """Measure the project's mutation score, or say honestly why it could not."""
@@ -287,4 +352,4 @@ def detect_mutation_score(
         return _unavailable(language, f"no D4 runner for language {language!r}")
 
     return handler(manifest_dir, floor_low, floor_high,
-                   int(timeout_minutes * 60), runner or _run)
+                   int(timeout_minutes * 60), runner or _run, max_report_age_minutes)

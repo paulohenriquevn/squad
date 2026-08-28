@@ -34,6 +34,12 @@ mutation.critical_paths_required = true
 mutation.score_floor_high = 80
 mutation.score_floor_low = 60
 mutation.timeout_minutes = 5
+# How old a mutation report may be and still be READ rather than re-measured. Mutation
+# testing is a periodic deep check, not a per-invocation gate: measured in a consumer on
+# 2026-08-27, a Stryker run took 1347s, and `run_structural.py` invokes /code-quality
+# internally — so every plan gate in that repository cost 22.5 minutes. A reused score
+# always carries its age and how many source files changed since. 0 = always re-measure.
+mutation.max_report_age_minutes = 1440
 
 # Orchestrator
 orchestrator.no_network_disables_d2 = true

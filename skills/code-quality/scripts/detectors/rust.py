@@ -277,6 +277,8 @@ class RustDetector(BaseDetector):
             floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
             timeout_minutes=self.threshold(
                 "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
+            max_report_age_minutes=self.threshold(
+                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
         )
 
     # ------------------------------------------------------------------

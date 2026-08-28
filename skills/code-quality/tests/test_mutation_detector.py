@@ -38,6 +38,8 @@ TWO MUTMUT BEHAVIOURS THE DETECTOR CANNOT IGNORE
 """
 from __future__ import annotations
 
+import os
+import time
 import json
 from pathlib import Path
 
@@ -254,3 +256,97 @@ def test_findings_carry_a_wellformed_allowlist_key(tmp_path: Path) -> None:
     _python_project(tmp_path, _STATS_WEAK)
     for finding in _mutation.detect_mutation_score("python", tmp_path, runner=_runner_ok):
         assert finding.allowlist_key.count("|") == 3, finding.allowlist_key
+
+
+# ---------------------------------------------------------------------------
+# B-012 — a 22-minute gate is a gate people bypass
+# ---------------------------------------------------------------------------
+#
+# Measured in `theokit-skills` on 2026-08-27: `npx stryker run` took 1347s, and
+# `run_structural.py` calls /code-quality internally, so EVERY /plan-confidence in
+# that repository cost 22.5 minutes. The detector re-ran the tool on every
+# invocation and read no existing report — mutation testing is a periodic deep
+# check, and D4 was treating it as a per-invocation gate.
+
+
+def _stryker_report(tmp_path, killed=9, survived=1):
+    cfg = tmp_path / "stryker.config.json"
+    cfg.write_text("{}", encoding="utf-8")
+    report = tmp_path / "reports" / "mutation" / "mutation.json"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    mutants = [{"status": "Killed"}] * killed + [{"status": "Survived"}] * survived
+    report.write_text(json.dumps({"files": {"a.ts": {"mutants": mutants}}}), encoding="utf-8")
+    return report
+
+
+def test_a_fresh_report_is_reused_instead_of_rerunning_the_tool(tmp_path):
+    _stryker_report(tmp_path)
+    calls = []
+
+    def runner(cmd, cwd, timeout):
+        calls.append(cmd)
+        return (0, "", "")
+
+    findings = _mutation.detect_mutation_score(
+        "typescript", tmp_path, runner=runner, max_report_age_minutes=1440)
+
+    assert calls == [], f"a fresh report must not trigger a re-run, ran: {calls}"
+    assert findings[0].message.startswith("mutation score 90.0%")
+
+
+def test_reusing_a_report_states_its_age_rather_than_hiding_it(tmp_path):
+    # The DoD's second bullet: reading a cached score without knowing its age is
+    # exactly the drift this kit fights elsewhere. The number alone is a claim
+    # about NOW; the number plus its age is a claim about when it was true.
+    _stryker_report(tmp_path)
+    findings = _mutation.detect_mutation_score(
+        "typescript", tmp_path, runner=lambda *a, **k: (0, "", ""),
+        max_report_age_minutes=1440)
+
+    assert "read from a report" in findings[0].message
+    assert "old" in findings[0].message
+
+
+def test_a_stale_report_is_re_measured(tmp_path):
+    report = _stryker_report(tmp_path)
+    old = time.time() - 60 * 60 * 48
+    os.utime(report, (old, old))
+    calls = []
+
+    def runner(cmd, cwd, timeout):
+        calls.append(cmd)
+        return (0, "", "")
+
+    _mutation.detect_mutation_score(
+        "typescript", tmp_path, runner=runner, max_report_age_minutes=1440)
+
+    assert calls, "a report older than the window must be re-measured, not trusted"
+
+
+def test_a_report_older_than_the_sources_it_grades_says_so(tmp_path):
+    # Age alone is not freshness. A report can be four minutes old and already
+    # describe a tree two commits behind. The window bounds how stale it gets;
+    # this sentence is what stops it looking current.
+    _stryker_report(tmp_path)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "later.ts").write_text("export const x = 1;\n", encoding="utf-8")
+
+    findings = _mutation.detect_mutation_score(
+        "typescript", tmp_path, runner=lambda *a, **k: (0, "", ""),
+        max_report_age_minutes=1440)
+
+    assert "changed since" in findings[0].message
+
+
+def test_no_report_still_runs_the_tool(tmp_path):
+    (tmp_path / "stryker.config.json").write_text("{}", encoding="utf-8")
+    calls = []
+
+    def runner(cmd, cwd, timeout):
+        calls.append(cmd)
+        return (0, "", "")
+
+    _mutation.detect_mutation_score("typescript", tmp_path, runner=runner)
+
+    assert calls, "with no report at all there is nothing to reuse — measure"

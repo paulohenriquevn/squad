@@ -99,6 +99,17 @@ permanent soft caps — making `PASS` unreachable by construction and turning th
   contract nobody wrote. A test is not a consumer, for the same reason pillar (a) of
   the wiring triad does not count one. A type named in another public export's
   signature IS consumed — it lives through that export.
+- **D4 READS a recent report instead of re-running the tool.** Mutation testing is a
+  periodic deep check and D4 was treating it as a per-invocation gate: measured in a
+  consumer on 2026-08-27, `npx stryker run` took 1347s, and `run_structural.py` invokes
+  `/code-quality` internally — so **every plan gate in that repository cost 22.5 minutes**.
+  A 22-minute gate is a gate people bypass, which is the failure this kit exists to
+  prevent. A report younger than `mutation.max_report_age_minutes` (default 1440) is read;
+  anything older is re-measured; with no report there is nothing to reuse and the tool
+  runs. A reused score NEVER appears bare — it carries its age and how many source files
+  changed since it was written, because a number without its age is a claim about now.
+  Setting the threshold to 0 restores unconditional re-measurement.
+
 - **D4 is scoped by the project's own runner config**, not by a file list: neither
   mutmut nor Stryker accepts an arbitrary list as scope, and the orchestrator was
   building one and dropping it. The stats FILE is the evidence, never the exit code —
