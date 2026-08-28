@@ -1,4 +1,4 @@
-<title>Alignment Walkthrough</title>
+<title>Alignment Gate</title>
 
 <!--
   Alignment walkthrough — one self-contained file, no build step, no dependencies.
@@ -179,8 +179,8 @@
 </style>
 
 <header>
-  <h1>Alignment Walkthrough</h1>
-  <p class="sub">Watch the flow. Where a packet goes somewhere you did not expect, that is the gap.</p>
+  <h1>The alignment gate</h1>
+  <p class="sub">Four scenario classes for one gate. Where a packet goes somewhere you did not expect, that is the gap.</p>
 </header>
 
 <main>
@@ -210,33 +210,62 @@
 <script>
 // ── EDIT ONLY THIS BLOCK ─────────────────────────────────────────────────────
 const NODES = {
-  ui:     { label: "Browser",     kind: "actor",    x: 11, y: 52 },
-  api:    { label: "API gateway", kind: "service",  x: 36, y: 52 },
-  worker: { label: "Worker",      kind: "service",  x: 64, y: 16 },
-  db:     { label: "Postgres",    kind: "store",    x: 52, y: 88 },
-  vendor: { label: "Payments",    kind: "external", x: 89, y: 16 },
+  agent:    { label: "Agent",          kind: "service",  x: 12, y: 50 },
+  brief:    { label: "Alignment brief",kind: "store",    x: 39, y: 14 },
+  scorer:   { label: "score_alignment",kind: "service",  x: 39, y: 86 },
+  reviewer: { label: "Reviewer",       kind: "actor",    x: 68, y: 14 },
+  plan:     { label: "/to-plan",       kind: "external", x: 90, y: 55 },
 };
 
 const FLOWS = {
-  "Happy path": [
-    { from: "ui", to: "api", label: "POST /orders", payload: '{ "sku": "A-12", "qty": 2 }',
-      note: "Readers assume this stays synchronous to the end. It does not — see step 3." },
-    { from: "api", to: "db", label: "INSERT order", payload: "status = 'pending'",
-      note: "The row exists before payment. A crash here leaves a pending order, which is why step 4 is idempotent." },
-    { from: "api", to: "worker", label: "enqueue", payload: '{ "order_id": 8814 }',
-      note: "Here the request stops being synchronous. The browser already has its 202." },
-    { from: "worker", to: "vendor", label: "charge", payload: '{ "amount": 4200, "idem_key": "8814" }',
-      note: "The idempotency key is the order id, so a retry cannot double-charge." },
-    { from: "worker", to: "db", label: "UPDATE order", payload: "status = 'paid'",
-      note: "Only now is the order real to the rest of the system." },
+  "Aligned [primary]": [
+    { from: "agent", to: "brief", label: "write brief", payload: "17 sections · sign-off UNTICKED",
+      note: "The checklist is generated HERE, and generated unticked. That single fact is the whole mechanism — everything else in this diagram follows from it." },
+    { from: "agent", to: "scorer", label: "score --machine-only", payload: "records/alignment/b-014.md",
+      note: "The agent iterates against structure alone. This loop is his to close, and closing it is not permission to proceed." },
+    { from: "scorer", to: "agent", label: "machine 34/34", payload: "verdict: AWAITING_REVIEW",
+      note: "100% and still not aligned. Readers expect the arrow to go to /to-plan here — it does not. The number the agent controls was never the gate." },
+    { from: "agent", to: "reviewer", label: "request review", payload: "3 unticked judgement boxes",
+      note: "The three things a script cannot decide: is this the real problem, are these the flows that matter, are these the right numbers." },
+    { from: "reviewer", to: "brief", label: "tick CHK001-003", payload: "[x] [x] [x]",
+      note: "The only arrow in this diagram the agent cannot draw. Drawing it anyway is fabricating a human's judgement, not taking a shortcut." },
+    { from: "agent", to: "scorer", label: "re-score", payload: "same brief, boxes now ticked",
+      note: "Same command, different answer — because the input changed in the half the agent does not own." },
+    { from: "scorer", to: "plan", label: "ALIGNED · exit 0", payload: "machine 34/34 + 3/3 signed",
+      note: "Both conditions, or neither. There is no aligned-with-caveats." },
   ],
-  "Vendor timeout": [
-    { from: "worker", to: "vendor", label: "charge — attempt 1", payload: '{ "idem_key": "8814" }',
-      note: "Times out at 3s. The vendor may or may not have taken the money — this is the case people forget." },
-    { from: "worker", to: "vendor", label: "charge — attempt 2", payload: "same idem_key",
-      note: "Same key, so the vendor replays the ORIGINAL result instead of charging again." },
-    { from: "worker", to: "db", label: "UPDATE order", payload: "status = 'paid'",
-      note: "Reached by both paths. Without idempotency the retry would be a second charge." },
+
+  "Awaiting review [alternate]": [
+    { from: "agent", to: "brief", label: "write brief", payload: "every section complete",
+      note: "Nothing is wrong with this brief. It is the good case, stopped." },
+    { from: "agent", to: "scorer", label: "score", payload: "",
+      note: "" },
+    { from: "scorer", to: "agent", label: "AWAITING_REVIEW · exit 1", payload: "machine 34/34 · 0/3 signed",
+      note: "Not a failure and not an invitation. The machine finished and the human has not started — the state most likely to be misread as a pass." },
+  ],
+
+  "Blocked [exception]": [
+    { from: "agent", to: "brief", label: "write brief", payload: "no ids · one flow · 'responsive'",
+      note: "Looks complete to a skim: every section present, nothing checkable in them." },
+    { from: "agent", to: "scorer", label: "score", payload: "",
+      note: "" },
+    { from: "scorer", to: "agent", label: "BLOCKED · 24/34 (71%)", payload: "stable_ids 0 · scenario_classes 0",
+      note: "The gate names the criteria, never a rewrite. 'Responsive' becomes a number or it stays at zero — wording around the rubric defeats only yourself." },
+  ],
+
+  "Reviewer refuses [recovery]": [
+    { from: "reviewer", to: "brief", label: "leaves CHK002 unticked", payload: "[x] [ ] [x]",
+      note: "The flows drawn are not the flows that matter. A machine score of 100% cannot see this, which is why the box exists." },
+    { from: "agent", to: "brief", label: "add exception + recovery flows", payload: "vendor timeout · resume-on-cursor",
+      note: "The correction goes into the brief AND into the walkthrough. A note added without an arrow is a claim nobody can watch fail." },
+    { from: "agent", to: "reviewer", label: "re-request review", payload: "CHK002 reopened",
+      note: "The reviewer re-reads only what changed. Sign-off never carries over from a previous version." },
+    { from: "reviewer", to: "brief", label: "tick CHK002", payload: "[x] [x] [x]",
+      note: "" },
+    { from: "agent", to: "scorer", label: "re-score", payload: "",
+      note: "Report regressions here: a criterion that was at 2 and is now lower is a fact about the last edit." },
+    { from: "scorer", to: "plan", label: "ALIGNED · exit 0", payload: "",
+      note: "" },
   ],
 };
 // ── NOTHING BELOW NEEDS EDITING ──────────────────────────────────────────────
