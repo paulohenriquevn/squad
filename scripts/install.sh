@@ -239,13 +239,13 @@ for item in skills rules hooks commands scripts; do
     # `$MANIFEST` is only assigned much later in this script, so it is spelled
     # out here rather than referenced — reading it before assignment made the
     # guard silently false and deleted the skills it exists to keep.
-    if [ "$item" = "skills" ] && [ -d "$ECO/skills" ] \
-       && [ -f "$ECO/.kit-manifest.txt" ]; then
+    if [ "$item" = "skills" ] && [ -d "$ECO/skills" ]; then
       SKILLS_KEEP="$(mktemp -d)"
       for d in "$ECO/skills"/*/; do
         [ -d "$d" ] || continue
         name="$(basename "$d")"
-        grep -qx "skills/$name" "$ECO/.kit-manifest.txt" 2>/dev/null && continue
+        # In the source kit => the kit ships it => the fresh copy replaces it.
+        [ -d "$SRC_DIR/skills/$name" ] && continue
         cp -r "$d" "$SKILLS_KEEP/"
       done
     fi
@@ -253,8 +253,19 @@ for item in skills rules hooks commands scripts; do
     CONFIG_KEEP=""
     if [ "$item" = "rules" ] && [ -d "$ECO/rules" ]; then
       CONFIG_KEEP="$(mktemp -d)"
-      for f in "$ECO/rules"/*.txt; do
-        [ -f "$f" ] && ! kit_owns_txt "$(basename "$f")" && cp "$f" "$CONFIG_KEEP/"
+      for f in "$ECO/rules"/*; do
+        [ -f "$f" ] || continue
+        base="$(basename "$f")"
+        case "$base" in
+          *.txt) kit_owns_txt "$base" && continue ;;
+          # A `rules/*.md` the manifest does not list was written by the project.
+          # `boundary-check.sh` calls `rules/*.md` the kit's, which is true of the
+          # ones the kit ships — and two consumers keep a `theokit-conventions.md`
+          # of their own beside them. Measured 2026-08-28: `--force` deleted it in
+          # both, a versioned file in each case.
+          *) [ -f "$SRC_DIR/rules/$base" ] && continue ;;
+        esac
+        cp "$f" "$CONFIG_KEEP/"
       done
     fi
     rm -rf "${ECO:?}/$item"
@@ -284,7 +295,7 @@ for item in skills rules hooks commands scripts; do
       done
       # Back on top of the template: the consumer's tuning outranks the blank.
       if [ -n "$CONFIG_KEEP" ]; then
-        for f in "$CONFIG_KEEP"/*.txt; do
+        for f in "$CONFIG_KEEP"/*; do
           [ -f "$f" ] || continue
           cp "$f" "$ECO/rules/$(basename "$f")"
           echo "    kept (yours): rules/$(basename "$f")"
