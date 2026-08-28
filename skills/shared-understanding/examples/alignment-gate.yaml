@@ -1,0 +1,140 @@
+# The alignment gate, drawn by the skill about itself.
+#
+# This file is the whole authoring surface: no coordinates, no curves, no lanes.
+# Graphviz decides where everything goes, which is why three layout defects that
+# were hand-patched in the previous version cannot recur here.
+#
+#   python3 ../scripts/build_walkthrough.py alignment-gate.yaml -o alignment-gate.html
+
+title: The alignment gate
+subtitle: >-
+  Four scenario classes for one gate. Watch where each packet goes — the step a
+  reader gets wrong is step 3 of the primary flow, where a perfect machine score
+  does NOT open the way to /to-plan.
+direction: LR
+
+nodes:
+  agent:    { label: Agent,           kind: service }
+  brief:    { label: Alignment brief, kind: store }
+  scorer:   { label: score_alignment, kind: service }
+  reviewer: { label: Reviewer,        kind: actor }
+  plan:     { label: /to-plan,        kind: external }
+
+flows:
+  "Aligned [primary]":
+    - from: agent
+      to: brief
+      label: write brief
+      payload: 17 sections · sign-off UNTICKED
+      note: >-
+        The checklist is generated HERE, and generated unticked. That single fact
+        is the whole mechanism — everything else in this diagram follows from it.
+    - from: agent
+      to: scorer
+      label: score --machine-only
+      payload: records/alignment/b-014.md
+      note: >-
+        The agent iterates against structure alone. This loop is his to close,
+        and closing it is not permission to proceed.
+    - from: scorer
+      to: agent
+      label: machine 34/34
+      payload: "verdict: AWAITING_REVIEW"
+      note: >-
+        100% and still not aligned. Readers expect this arrow to reach /to-plan.
+        It does not. The number the agent controls was never the gate.
+    - from: agent
+      to: reviewer
+      label: request review
+      payload: 3 unticked judgement boxes
+      note: >-
+        The three things a script cannot decide: is this the real problem, are
+        these the flows that matter, are these the right numbers.
+    - from: reviewer
+      to: brief
+      label: tick CHK001-003
+      payload: "[x] [x] [x]"
+      note: >-
+        The only arrow here the agent cannot draw. Drawing it anyway fabricates a
+        human's judgement; it is not a shortcut.
+    - from: agent
+      to: scorer
+      label: re-score
+      payload: same brief, boxes now ticked
+      note: >-
+        Same command, different answer — the input changed in the half the agent
+        does not own.
+    - from: scorer
+      to: plan
+      label: ALIGNED · exit 0
+      payload: machine 34/34 + 3/3 signed
+      note: Both conditions, or neither. There is no aligned-with-caveats.
+
+  "Awaiting review [alternate]":
+    - from: agent
+      to: brief
+      label: write brief
+      payload: every section complete
+      note: Nothing is wrong with this brief. It is the good case, stopped.
+    - from: agent
+      to: scorer
+      label: score
+    - from: scorer
+      to: agent
+      label: AWAITING_REVIEW · exit 1
+      payload: machine 34/34 · 0/3 signed
+      note: >-
+        Not a failure and not an invitation. The machine finished and the human
+        has not started — the state most likely to be misread as a pass.
+
+  "Blocked [exception]":
+    - from: agent
+      to: brief
+      label: write brief
+      payload: no ids · one flow · "responsive"
+      note: >-
+        Looks complete to a skim: every section present, nothing checkable in them.
+    - from: agent
+      to: scorer
+      label: score
+    - from: scorer
+      to: agent
+      label: BLOCKED · 24/34 (71%)
+      payload: stable_ids 0 · scenario_classes 0
+      note: >-
+        The gate names the criteria, never a rewrite. "Responsive" becomes a
+        number or it stays at zero.
+
+  "Reviewer refuses [recovery]":
+    - from: reviewer
+      to: brief
+      label: leaves CHK002 unticked
+      payload: "[x] [ ] [x]"
+      note: >-
+        The flows drawn are not the flows that matter. A machine score of 100%
+        cannot see this, which is why the box exists.
+    - from: agent
+      to: brief
+      label: add exception + recovery flows
+      payload: vendor timeout · resume-on-cursor
+      note: >-
+        The correction goes into the brief AND into the walkthrough. A note added
+        without an arrow is a claim nobody can watch fail.
+    - from: agent
+      to: reviewer
+      label: re-request review
+      payload: CHK002 reopened
+      note: Sign-off never carries over from a previous version.
+    - from: reviewer
+      to: brief
+      label: tick CHK002
+      payload: "[x] [x] [x]"
+    - from: agent
+      to: scorer
+      label: re-score
+      note: >-
+        Report regressions here: a criterion that was at 2 and is now lower is a
+        fact about the last edit.
+    - from: scorer
+      to: plan
+      label: ALIGNED · exit 0

@@ -1,6 +1,6 @@
 ---
 name: shared-understanding
-version: 0.2.0
+version: 0.3.0
 requires: []
 description: Bring one backlog item to ~90% shared understanding BEFORE any of it is built, by interrogating it and drawing it in the same pass. Produces an alignment brief (problem, functional and non-functional requirements with stable ids, four scenario classes, system design, interaction model, traceable acceptance criteria, out-of-scope, closed questions) plus an animated HTML walkthrough of every flow, then scores the result on seventeen criteria and hands a human an unticked review checklist. Below 90% machine score the item MUST NOT be implemented; without the reviewer's sign-off it is not aligned either. Use after DISCOVER has evidence and before /to-plan writes the plan, on any item where two people could read the description and picture different systems — which is most of them.
 user-invocable: true
@@ -186,15 +186,39 @@ For each answer:
 
 ## Step 5 — Draw every flow, all four classes
 
-Copy `templates/alignment-walkthrough.html` to
-`records/alignment/{slug}-walkthrough.html` and fill in **only** `NODES` and `FLOWS`
-at the top — the file is self-contained, no build step and no dependencies, and
-everything below the marked line is machinery.
+**Write a spec. Do not place anything.**
 
-```javascript
-NODES  id -> { label, kind: actor|service|store|external, x, y }   // x/y in % of the stage
-FLOWS  name -> [ { from, to, label, payload, note } ]
+```bash
+# records/alignment/{slug}-walkthrough.yaml
+python3 skills/shared-understanding/scripts/build_walkthrough.py \
+    records/alignment/{slug}-walkthrough.yaml \
+    -o records/alignment/{slug}-walkthrough.html
 ```
+
+```yaml
+title: ...
+subtitle: ...              # what to WATCH for, not what the diagram contains
+direction: LR
+nodes:
+  api: { label: API gateway, kind: service }   # actor | service | store | external
+flows:
+  "Happy path [primary]":
+    - { from: ui, to: api, label: POST /orders, payload: "...", note: "..." }
+```
+
+Read [`references/spec-format.md`](references/spec-format.md) before writing one.
+
+**Never hand-place a node and never hand-draw a curve.** The first version of this
+artefact asked its author for `x`/`y` percentages and shipped five layout defects
+in one afternoon — nodes in a corner, three steps sharing one arc, labels stacked
+16px apart, a lane fix that cancelled itself out, an edge crossing a node with its
+label on that node's title. None of them were testable while a person chose the
+coordinates: there is no invariant to violate, only an appearance to dislike in
+the one case you happened to open. Graphviz owns the geometry now and the
+invariants are asserted in `tests/`.
+[`references/layout-engines.md`](references/layout-engines.md) has the reasoning
+and the two-pass method; [`references/animation.md`](references/animation.md) has
+what the page animates and why those three layers together.
 
 The four scenario classes are each their own flow, tagged in the heading:
 
@@ -205,9 +229,15 @@ The four scenario classes are each their own flow, tagged in the heading:
 | `[exception]` | A step fails: timeout, rejection, malformed input |
 | `[recovery]` | The system comes back: retry, resume, rollback, reconciliation |
 
-A reader clicks between them and sees the difference; in prose that difference is a
-subordinate clause. A brief with one flow has not been thought about, and the scorer
-now says so instead of leaving it to the anti-pattern list.
+Tag them in the flow name — the generator and `score_alignment.py` both read the
+tag. A reader clicks between them and sees the difference; in prose that
+difference is a subordinate clause. A brief with one flow has not been thought
+about, and the scorer says so rather than leaving it to the anti-pattern list.
+
+`--check` validates the spec and lays it out without writing, and names every
+problem at once. A worked example lives in
+[`examples/alignment-gate.yaml`](examples/alignment-gate.yaml): the gate drawn by
+the skill about itself, in all four classes.
 
 `note` is where the thing a reader would get wrong goes. That sentence is the point
 of the artefact — the animation shows what happens, the note says what people assume
@@ -313,6 +343,21 @@ Read in full on 2026-08-28, and adopted rather than paraphrased:
 | [`jeffallan/claude-skills`](https://github.com/jeffallan/claude-skills) (`feature-forge`) | EARS-shaped requirements; the PM/Dev dual pass over the same brief |
 | [`FredAntB/Spec-Driven-Development`](https://github.com/FredAntB/Spec-Driven-Development) | Sequential ids; the generation gate that lists the exact phrasings that do **not** license skipping it; the ban on fabricating requirements from a product category |
 | [`melodic-software/claude-code-plugins`](https://github.com/melodic-software/claude-code-plugins) (`discovery/blindspot`) | Output calibrated to the human's disclosed starting point, not to a fixed depth |
+
+## Files
+
+| Path | What it is |
+|---|---|
+| `scripts/build_walkthrough.py` | Spec → self-contained animated HTML. Two Graphviz passes, no hand-placed coordinates |
+| `scripts/score_alignment.py` | The 17-criterion machine score and the reviewer sign-off |
+| `templates/walkthrough-shell.html` | The page the generator fills in. Animation and reading order only |
+| `references/spec-format.md` | The YAML grammar — read before writing a spec |
+| `references/layout-engines.md` | Why Graphviz, the two passes, and the traps in each |
+| `references/animation.md` | Draw-on, motion path, arrival pulse, reduced motion |
+| `examples/alignment-gate.yaml` | The skill drawn by itself, four scenario classes |
+
+Requires Graphviz (`apt install graphviz` / `brew install graphviz`). The
+generated page requires nothing.
 
 ## Related
 
