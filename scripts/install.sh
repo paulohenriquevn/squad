@@ -226,6 +226,30 @@ for item in skills rules hooks commands scripts; do
     # erased what that guard exists to protect. Measured while reinstalling the
     # kit across 19 consumers: four npm projects lost `deny: Read(**/.env*)`
     # along with their enabled languages, and the loss was silent.
+    # The PROJECT's own skills sit in the same directory as the kit's, and this
+    # branch is about to `rm -rf` it. `.kit-manifest.txt` is what tells the two
+    # apart — it exists precisely because guessing by name is the alternative.
+    # The merge branch never deletes; this one did, and measured on 2026-08-28
+    # it took six `theokit-*` skills out of `appteste` and six more out of
+    # `website`, every one a versioned file the project wrote.
+    #
+    # Same shape as rules/*.txt, settings.json and the routing table before it:
+    # a rule stated once and implemented on one of the two paths.
+    SKILLS_KEEP=""
+    # `$MANIFEST` is only assigned much later in this script, so it is spelled
+    # out here rather than referenced — reading it before assignment made the
+    # guard silently false and deleted the skills it exists to keep.
+    if [ "$item" = "skills" ] && [ -d "$ECO/skills" ] \
+       && [ -f "$ECO/.kit-manifest.txt" ]; then
+      SKILLS_KEEP="$(mktemp -d)"
+      for d in "$ECO/skills"/*/; do
+        [ -d "$d" ] || continue
+        name="$(basename "$d")"
+        grep -qx "skills/$name" "$ECO/.kit-manifest.txt" 2>/dev/null && continue
+        cp -r "$d" "$SKILLS_KEEP/"
+      done
+    fi
+
     CONFIG_KEEP=""
     if [ "$item" = "rules" ] && [ -d "$ECO/rules" ]; then
       CONFIG_KEEP="$(mktemp -d)"
@@ -235,6 +259,19 @@ for item in skills rules hooks commands scripts; do
     fi
     rm -rf "${ECO:?}/$item"
     copy_tree "$SRC_DIR/$item" "$ECO/$item"
+
+    # Restored right after the copy, outside every per-item conditional: an
+    # earlier version sat inside `if [ "$item" = "rules" ]`, so it ran on the
+    # wrong iteration and the skills were saved and never put back.
+    if [ -n "${SKILLS_KEEP:-}" ]; then
+      for d in "$SKILLS_KEEP"/*/; do
+        [ -d "$d" ] || continue
+        cp -r "$d" "$ECO/skills/"
+        echo "    kept (yours): skills/$(basename "$d")"
+      done
+      rm -rf "$SKILLS_KEEP"
+      SKILLS_KEEP=""
+    fi
     if [ "$item" = "rules" ]; then
       # Even on a clean install: project-specific config is born blank. Without
       # this, the non-merge branch copied the kit's own configuration (Python

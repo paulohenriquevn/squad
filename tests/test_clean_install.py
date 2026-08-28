@@ -385,3 +385,42 @@ def test_a_consumer_with_a_markdown_table_is_migrated_once(
     assert "api" in migrated and "svc-a" in migrated and "svc-b" in migrated, (
         "the consumer's derived table did not survive the migration"
     )
+
+
+@pytest.mark.parametrize("mode", ["--force", "--merge"])
+def test_reinstalling_keeps_the_projects_own_skills(
+    versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory, mode: str
+) -> None:
+    """A skill the project wrote must survive a reinstall in every mode.
+
+    `skills/` holds the kit's and the project's side by side, and the non-merge
+    branch `rm -rf`s the directory. `.kit-manifest.txt` exists precisely to tell
+    them apart — without it the only alternative is guessing by name.
+
+    Measured on 2026-08-28 while reinstalling across the consumers: six
+    `theokit-*` skills disappeared from `appteste` and six more from `website`,
+    every one a versioned file the project had written. They were recovered with
+    `git restore`; a project that had not committed them would have lost them.
+
+    This is the fourth instance of one defect — after rules/*.txt, settings.json
+    and the routing table — where the rule was stated once and implemented on
+    one of the two paths.
+    """
+    target = tmp_path_factory.mktemp(f"skills{mode.strip('-')}")
+    subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
+    install = [str(versioned_kit / "scripts" / "install.sh"), str(target)]
+    subprocess.run(["bash", *install], capture_output=True, check=True)
+
+    mine = target / ".claude" / "skills" / "project-owned-skill"
+    mine.mkdir(parents=True)
+    (mine / "SKILL.md").write_text("# Written by the project\n", encoding="utf-8")
+
+    subprocess.run(["bash", *install, mode], capture_output=True, check=True)
+
+    assert (mine / "SKILL.md").is_file(), (
+        f"{mode} deleted a skill the project wrote — the manifest is what "
+        "distinguishes it from the kit's, and it was not consulted"
+    )
+    assert (target / ".claude" / "skills" / "review").is_dir(), (
+        "the kit's own skills must still be refreshed"
+    )
