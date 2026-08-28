@@ -9,6 +9,7 @@ Execute a confidence-approved plan into code, tests, and commits. TDD-discipline
 ## Pre-conditions
 
 - A plan exists at `records/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
+- The item the plan implements scored `ALIGNED` — `records/alignment/{slug}-alignment.md` exists and `score_alignment.py` exits 0 on it. Below 90% the item is not built at all; see [`alignment-threshold.md`](alignment-threshold.md).
 - The repository is on `workspace` (per Unbreakable Rule 4 — work is born on `workspace` and promoted to `develop` via PR; see `git-safety.md` § 1).
 - The project bootstrapped its language toolchain (e.g., `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`).
 
