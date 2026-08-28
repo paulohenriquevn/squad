@@ -183,3 +183,29 @@ def test_go_module_is_explicitly_tag_only(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert "tag-only Go module" in result.stdout
+
+
+def test_a_claude_plugin_manifest_is_a_declared_version_site(tmp_path: Path) -> None:
+    """It refused three consecutive releases in a consumer before being declared.
+
+    `.claude-plugin/plugin.json` carries its own `version` and is published alongside the
+    package, so every release stopped on it as an undeclared stray and the operator bumped
+    it by hand. A refusal that is correct and unfixable trains people to work around the
+    gate — which is the failure this kit exists to prevent, arriving through the gate
+    rather than around it.
+    """
+    root = _tree(tmp_path)
+    plugin = root / ".claude-plugin"
+    plugin.mkdir()
+    (plugin / "plugin.json").write_text(
+        json.dumps({"name": "x", "version": OLD}, indent=2) + "\n", encoding="utf-8")
+    env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t", "PATH": "/usr/bin:/bin", "HOME": str(root)}
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True, env=env)
+
+    result = _run(root)
+
+    assert result.returncode == 0, result.stderr
+    written = (plugin / "plugin.json").read_text(encoding="utf-8")
+    assert f'"version": "{NEW}"' in written
+    assert OLD not in written

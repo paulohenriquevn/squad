@@ -53,6 +53,17 @@ KNOWN_SITES: tuple[Site, ...] = (
         r'export const VERSION = "([^"]+)"',
         "the constant a consumer reads at runtime",
     ),
+    # A Claude Code plugin manifest, published alongside the package and carrying its own
+    # `version`. Added after it refused three consecutive releases in a consumer: the file is
+    # a real site, so every release stopped on it, and the operator bumped it by hand each
+    # time. A refusal that is correct and unfixable trains people to work around the gate —
+    # which is the failure mode this whole kit exists to prevent, arriving through the gate
+    # rather than around it.
+    Site(
+        ".claude-plugin/plugin.json",
+        r'"version":\s*"([^"]+)"',
+        "the Claude Code plugin manifest",
+    ),
 )
 
 # Occurrences here are expected and are not sites: the CHANGELOG records every version by design,
