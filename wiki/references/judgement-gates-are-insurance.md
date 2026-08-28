@@ -42,6 +42,12 @@ read, and rewrote an unfalsifiable DoD rather than register it.
 Read alone, that is an argument for **deleting** all four: prose that costs maintenance and
 changes no behaviour.
 
+## Sonnet holds; Haiku does not
+
+Sonnet refused the item and turned it into a spike, writing *"no incident or defect
+currently traces to goroutine lifecycle bugs"* and offering "none found" as a legitimate
+result. The cut line is between Sonnet and Haiku, not between Opus and everything else.
+
 ## On Haiku 4.5, one of them caught a fabrication
 
 Same G5 scenario. The model also refused the item — and then rewrote its justification into
@@ -66,7 +72,8 @@ current wording of G5 addresses the second.
 
 # What this does not establish
 
-One run per scenario, four of sixteen gates, two model tiers, and scenarios written by
+One run per scenario, four of sixteen gates, three model tiers with one scenario each below
+Opus, and scenarios written by
 someone who already knew the rules — which half-announces the rule being tested. The
 baseline also is not "no instruction": a subagent inherits `~/.claude/CLAUDE.md`, whose own
 rules already forbid inventing information. This measured the kit's rules **on top of** that,
