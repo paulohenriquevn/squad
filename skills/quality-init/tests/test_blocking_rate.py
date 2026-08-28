@@ -11,7 +11,7 @@ It does, and nobody measured it. Measured 2026-08-26 by running `/quality-init`
 against this repository and then passing every file through the generated hook:
 
     limiares: complexity=10, function_lines=29, nesting=3, params=4, file_lines=367
-    resultado: 156 de 256 arquivos versionados seriam BLOQUEADOS (61%)
+    result: 156 of 256 versioned files would be BLOCKED (61%)
 
 The arithmetic is simple and the p90 does not cover it: it is computed PER METRIC
 — the 90th percentile of the project's functions — while the gate rejects a FILE

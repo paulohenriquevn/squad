@@ -78,7 +78,7 @@ def test_merge_never_overwrites_an_existing_rules_txt(tmp_path: Path) -> None:
     )
 
     kept = (rules / "code-quality-languages.txt").read_text(encoding="utf-8")
-    assert "python | pyproject.toml | ENABLED" in kept, "config do projeto foi sobrescrita"
+    assert "python | pyproject.toml | ENABLED" in kept, "the project's config was overwritten"
     assert (rules / "cycle-backlog.md").is_file(), "as regras .md seguem sendo instaladas"
 
 

@@ -6,7 +6,7 @@ a validator that lies by omission: running
     python3 <outro-projeto>/.claude/scripts/check_xrefs.py
 
 de um cwd qualquer auditava silenciosamente o ecossistema DO CWD e imprimia o
-veredito dele — com o nome do outro projeto na linha de comando. Medido em
+its verdict — with the other project's name on the command line. Measured on
 2026-08-03: three consumers reported as `PASS` actually had 3, 0 and 11 findings;
 the `PASS` was the kit's own repo validating itself three times.
 

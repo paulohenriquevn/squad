@@ -12,7 +12,12 @@ A plan has the structure:
   ...
 
 An ADR is "complete" iff its Rationale section explicitly mentions
-alternatives (Portuguese: "alternativa", "rejeitada", "rejected", "instead of").
+alternatives ("rejected", "instead of", "considered", "trade-off").
+
+    Portuguese terms were accepted here until 2026-08-27. A checker that
+    reads a second language has decided the English-only policy is
+    advisory, and a plan written in Portuguese passed this gate while
+    failing the one that governs the repository.
 
 Returns ADRReport with total, with_alternatives, completeness_ratio, missing IDs.
 """
@@ -49,12 +54,8 @@ ALTERNATIVE_KEYWORDS = (
     "trade-offs",
     # Why-not pattern
     "why not",
-    "por que não",
-    "por que nao",
     # "Considered X" pattern
     "considered ",
-    "considerada",
-    "considerado",
     # Alt A/B/C inline
     " alt a",
     " alt b",

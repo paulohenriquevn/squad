@@ -25,7 +25,7 @@ repos, and `route_domain.py` depends on it to run there. The defect was never
 having it; it was shipping it. So the assertion is about what leaves the
 installer, and each repository stays free to describe its own ecosystem.
 
-Este aqui deixou de exercer essa liberdade em 2026-08-26: a tabela e os oito
+This repository stopped exercising that freedom on 2026-08-26: the table and the eight
 specialists it named left, and the section began being born empty in the source
 too. The test still holds, and is still what guarantees the property — the source
 may go back to describing an ecosystem at any moment, and the shipped copy may

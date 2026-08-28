@@ -42,7 +42,7 @@ def test_gives_up_after_consecutive_failures(monkeypatch):
 
     assert all(r is None for r in results), "falha de rede virou veredito"
     assert len(attempts) <= _registry._MAX_CONSECUTIVE_FAILURES, (
-        f"a rede foi consultada {len(attempts)} vezes depois de falhar seguidamente"
+        f"the network was queried {len(attempts)} times after consecutive failures"
     )
 
 

@@ -110,7 +110,7 @@ M2_ACTIVE_DIMENSIONS = ["completeness", "structural_risk"]
 
 
 @dataclass
-class Motivo:
+class Reason:
     sign: str  # 'positive' | 'negative' | 'neutral'
     label: str
     weight: float
@@ -130,7 +130,7 @@ class StructuralScoreReport:
     hard_caps_triggered: list[str]
     final_score_after_caps: float
     verdict: str
-    reasons: dict[str, list[Motivo]]
+    reasons: dict[str, list[Reason]]
     sub_reports: dict[str, Any] = field(default_factory=dict)
 
 
@@ -187,7 +187,7 @@ def _lookup_verdict(score: float, bands: list[tuple[str, int]]) -> str:
     return "INVALID"
 
 
-def _compute_completude(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> tuple[float, list[Motivo]]:
+def _compute_completude(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> tuple[float, list[Reason]]:
     """v1.1 EC-1 fix: single formula (rubric weights 0.6/0.2/0.2 per Phase 4.3 algorithm)."""
     coverage_int = 1.0 if cov.is_complete else 0.0
     coverage_score = 60.0 * coverage_int  # weight 0.6 * 100
@@ -195,24 +195,24 @@ def _compute_completude(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> 
     tdd_score = 20.0 * tdd.coverage_ratio
     completeness = coverage_score + adr_score + tdd_score
 
-    reasons: list[Motivo] = []
+    reasons: list[Reason] = []
     sign_cov = "positive" if cov.is_complete else "negative"
-    reasons.append(Motivo(sign=sign_cov, label=f"Coverage Matrix {'100%' if cov.is_complete else f'{cov.coverage_ratio:.0%}'}", weight=coverage_score))
+    reasons.append(Reason(sign=sign_cov, label=f"Coverage Matrix {'100%' if cov.is_complete else f'{cov.coverage_ratio:.0%}'}", weight=coverage_score))
     sign_adr = "positive" if adr.completeness_ratio >= 1.0 else "negative"
-    reasons.append(Motivo(sign=sign_adr, label=f"ADR alternatives ({adr.with_alternatives}/{adr.total_adrs})", weight=adr_score))
+    reasons.append(Reason(sign=sign_adr, label=f"ADR alternatives ({adr.with_alternatives}/{adr.total_adrs})", weight=adr_score))
     sign_tdd = "positive" if tdd.coverage_ratio >= 1.0 else "negative"
-    reasons.append(Motivo(sign=sign_tdd, label=f"TDD in bug-fix ({tdd.with_tdd}/{tdd.total_bugfix_tasks})", weight=tdd_score))
+    reasons.append(Reason(sign=sign_tdd, label=f"TDD in bug-fix ({tdd.with_tdd}/{tdd.total_bugfix_tasks})", weight=tdd_score))
 
     return completeness, reasons
 
 
-def _compute_risco(smells: SmellReport) -> tuple[float, list[Motivo]]:
+def _compute_risco(smells: SmellReport) -> tuple[float, list[Reason]]:
     risco = max(0.0, 100.0 + smells.total_penalty)
     # Top 3 categories by hit count
     sorted_cats = sorted(smells.by_category.items(), key=lambda x: x[1], reverse=True)
-    reasons: list[Motivo] = []
+    reasons: list[Reason] = []
     for cat, count in sorted_cats[:3]:
-        reasons.append(Motivo(sign="negative" if count > 0 else "neutral", label=f"{count} {cat} hits", weight=-float(count)))
+        reasons.append(Reason(sign="negative" if count > 0 else "neutral", label=f"{count} {cat} hits", weight=-float(count)))
     return risco, reasons
 
 
@@ -403,23 +403,23 @@ def run_structural(
     ):
         verdict = "INVALID"
 
-    evidence_motivos: list[Motivo] = []
+    evidence_motivos: list[Reason] = []
     if evidence.total_citations > 0:
         resolved_count = evidence.total_citations - len(evidence.unresolved_citations)
         if resolved_count > 0:
             evidence_motivos.append(
-                Motivo(sign="positive", label=f"{resolved_count} citations resolved", weight=float(resolved_count))
+                Reason(sign="positive", label=f"{resolved_count} citations resolved", weight=float(resolved_count))
             )
         if evidence.unresolved_citations:
             evidence_motivos.append(
-                Motivo(
+                Reason(
                     sign="negative",
                     label=f"{len(evidence.unresolved_citations)} fabricated citation(s)",
                     weight=-float(len(evidence.unresolved_citations)),
                 )
             )
 
-    motivos_map: dict[str, list[Motivo]] = {
+    motivos_map: dict[str, list[Reason]] = {
         "completeness": completude_motivos,
         "evidence": evidence_motivos,
         "calibration": [],  # M5 future

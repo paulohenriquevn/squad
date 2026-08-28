@@ -86,20 +86,20 @@ def _kit_repo_with_history(tmp_path: Path) -> tuple[Path, str, str]:
         return subprocess.run(["git", "-C", str(kit), *a], check=True,
                                         capture_output=True, text=True, env=env)
     run("init", "-q")
-    velho = "linha A\nlinha ANTIGA\n"
-    (kit / "rules" / "x.md").write_text(velho, encoding="utf-8")
+    older = "line A\nline OLD\n"
+    (kit / "rules" / "x.md").write_text(older, encoding="utf-8")
     run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")  # noqa: E702
-    newer = "linha A\nlinha NOVA\n"
+    newer = "line A\nline NEW\n"
     (kit / "rules" / "x.md").write_text(newer, encoding="utf-8")
     run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")  # noqa: E702
-    return kit, velho, newer
+    return kit, older, newer
 
 
 def test_an_old_kit_version_is_reported_as_stale_not_as_local_work(tmp_path: Path) -> None:
-    kit, velho, _novo = _kit_repo_with_history(tmp_path)
+    kit, older, _newer = _kit_repo_with_history(tmp_path)
     install = tmp_path / "install"
     (install / "rules").mkdir(parents=True)
-    (install / "rules" / "x.md").write_text(velho, encoding="utf-8")
+    (install / "rules" / "x.md").write_text(older, encoding="utf-8")
 
     out = _run(install, kit)
     assert "stale" in out.lower(), out
@@ -108,7 +108,7 @@ def test_an_old_kit_version_is_reported_as_stale_not_as_local_work(tmp_path: Pat
 
 def test_genuinely_local_work_is_still_flagged(tmp_path: Path) -> None:
     """What was never the kit's still requires a human — that is the detector's point."""
-    kit, _velho, newer = _kit_repo_with_history(tmp_path)
+    kit, _older, newer = _kit_repo_with_history(tmp_path)
     install = tmp_path / "install"
     (install / "rules").mkdir(parents=True)
     (install / "rules" / "x.md").write_text(newer + "a fix that exists only here\n", encoding="utf-8")

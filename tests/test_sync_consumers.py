@@ -83,11 +83,11 @@ def test_the_base_version_is_still_a_plain_update() -> None:
 
 
 # ---------------------------------------------------------------------------
-# A delta tem de ser FECHADA. Os arquivos sincronizados citam outras regras do
+# The delta must be CLOSED. Synced files cite other rules from the
 # kit; in a lagging consumer those rules may not exist, and the target's
 # check_xrefs starts failing on a broken reference — measured: 13 of the 40
 # consumers went red after the first application, citing
-# `rules/records-location.md` e `rules/live-target.txt`.
+# `rules/records-location.md` and `rules/live-target.txt`.
 # ---------------------------------------------------------------------------
 
 from sync_consumers import missing_rule_dependencies  # noqa: E402

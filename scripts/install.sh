@@ -587,7 +587,7 @@ fi
 # printed the same word for two different amounts of verification.
 # --- manifest: what came from the kit ----------------------------------------
 # A consumer with an auditor of its own needs to tell what it wrote from what
-# foi instalado. Medido no `speculative`: seu `scripts/audit.py` percorre
+# was installed. Measured on `speculative`: its `scripts/audit.py` walks
 # `.claude/skills/*/SKILL.md` exigindo a spec Agent Skills; com o kit instalado
 # it went from PASS to FAIL, auditing 37 skills that are not the project's
 # against the standard of the 9 that are. Without a manifest, the only way out

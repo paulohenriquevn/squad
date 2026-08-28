@@ -98,9 +98,10 @@ smells:
     pattern: '\b(should|could|may|might|deveria|deveriam|deveriamos|deveríamos|poderia|poderiam|poderiamos|poderíamos|talvez|provavelmente)\b'
   vague_pronouns:
     # EN: This/That/These/Those at the start of a sentence.
-    # PT-BR: Isso/Isto/Aquilo/Esses/Estes/Aqueles/Aquele at the start.
+    # english-only: this rule DETECTS Portuguese demonstratives, so it must name them.
+    # PT-BR: Isso/Isto/Aquilo/Esses/Estes/Aqueles/Aquele at the start.  # english-only: names the demonstratives this rule detects
     pattern_type: regex
-    pattern: '(^|\. )(This|That|These|Those|Isso|Isto|Aquilo|Aqueles|Aqueles|Esses|Estes|Aquele|Aqueles)\b'
+    pattern: '(^|\. )(This|That|These|Those|Isso|Isto|Aquilo|Aqueles|Aqueles|Esses|Estes|Aquele|Aqueles)\b'  # english-only: the pattern lists the words it looks for  # english-only: the pattern lists the demonstratives it detects
   loopholes:
     pattern_type: dictionary
     phrases:

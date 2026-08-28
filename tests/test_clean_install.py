@@ -148,7 +148,7 @@ def test_installed_payload_is_not_dominated_by_noise(installed, versioned_kit):
     )
     installed_files = sum(1 for p in (target / ".claude").rglob("*") if p.is_file())
     assert installed_files <= versioned * 1.25, (
-        f"instalados {installed_files} arquivos contra {versioned} versionados — "
+        f"installed {installed_files} files against {versioned} versioned — "
         "the excess is not the system."
     )
 

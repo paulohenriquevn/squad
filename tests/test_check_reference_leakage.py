@@ -229,5 +229,5 @@ def test_zone_traversal_skips_vendored_trees(tmp_path):
     found = {p.name for p in leak.zone_files_from(leak.zone_roots(repo))}
 
     assert "real.py" in found
-    assert "index.py" not in found, "node_modules da zona foi percorrido"
-    assert "thing.py" not in found, ".git da zona foi percorrido"
+    assert "index.py" not in found, "the zone's node_modules was walked"
+    assert "thing.py" not in found, "the zone's .git was walked"

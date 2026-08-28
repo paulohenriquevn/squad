@@ -2,7 +2,9 @@
 
 WHY THIS GATE EXISTS
 --------------------
-`~/.claude/CLAUDE.md` § 5 makes it a rule of the house: *"Escolha sempre o nome
+`~/.claude/CLAUDE.md` § 5 makes it a rule of the house — quoted verbatim below,
+in the language it is written in:  <!-- english-only: verbatim quotation -->
+*"Escolha sempre o nome  <!-- english-only: verbatim quote of CLAUDE.md -->
 mais específico e descritivo. Melhor um nome longo e claro do que um nome curto
 e problemático."* It names the anti-pattern too — *"Classes 'Manager', 'Helper'
 ou 'Utils' que viram lixeira de métodos sem relação"* — and the same failure

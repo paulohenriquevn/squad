@@ -60,6 +60,16 @@ jobs:
       - name: Folder and file names state their purpose
         run: python3 scripts/check_semantic_names.py
 
+      # The kit and every repository that installs it are English by policy, and
+      # nothing enforced it until 2026-08-27: 334 Portuguese markers across 21
+      # versioned files here, 93 across 17 in the sibling. Two checkers had gone
+      # further and ACCEPTED Portuguese input, which is a kit deciding its own
+      # policy is advisory. A line may keep Portuguese by saying why on the line
+      # — a verbatim quote, a fixture that must be Portuguese to trip the rule
+      # it tests — and an exemption with no reason does not count.
+      - name: English only
+        run: python3 scripts/check_english_only.py
+
       # A SOP that stops describing the work keeps being followed. These two
       # check the shape of the procedures and whether each run record accounts
       # for the procedure it claims to have followed — the split

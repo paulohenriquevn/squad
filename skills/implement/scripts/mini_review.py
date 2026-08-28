@@ -201,7 +201,7 @@ def _check_delta_audit_coverage(files: tuple[str, ...], project_root: Path) -> d
     if not uncovered:
         return {
             "status": "PASS",
-            "reason": f"toda fonte do delta cai em linguagem ENABLED ({', '.join(sorted(enabled)) or 'nenhuma'})",
+            "reason": f"every source in the delta falls under an ENABLED language ({', '.join(sorted(enabled)) or 'none'})",
             "uncovered_files": [],
             "findings": [],
         }

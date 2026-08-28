@@ -180,7 +180,7 @@ def main() -> int:
     # Resolve BEFORE arming. A gate pointing at a roadmap or an acceptance directory
     # that does not exist blocks forever for a false reason ("acceptance never ran")
     # that reads as a legitimate verdict. Discovering that later costs a
-    # sessao inteira; descobrir agora custa uma linha.
+    # whole session; finding out now costs one line.
     acceptance_rel = args.acceptance_dir or default_acceptance_dir(root)
     roadmap_path = (root / args.roadmap).resolve()
     acceptance_path = (root / acceptance_rel).resolve()
@@ -204,7 +204,7 @@ def main() -> int:
             "(use --acceptance-dir when the cycle's artifacts live in another repo)"
         )
 
-    # Uma meta so pode ser armada se houver rota ate ACCEPTED. Duas condicoes
+    # A goal can only be armed when a route to ACCEPTED exists. Two conditions
     # mecanicamente verificaveis: a entrega tem caminho declarado, e cada milestone
     # has a Definition of done (which is where /acceptance takes the criteria from).
     if roadmap_path.exists():

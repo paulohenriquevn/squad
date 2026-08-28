@@ -166,9 +166,9 @@ def test_rust_pub_in_lib_with_no_consumer_is_an_orphan(tmp_path: Path) -> None:
 
 
 def test_go_exported_identifier_with_a_consumer_is_not_an_orphan(tmp_path: Path) -> None:
-    _write(tmp_path, "go.mod", "module exemplo\n")
+    _write(tmp_path, "go.mod", "module example\n")
     _write(tmp_path, "pkg/api.go", "package pkg\n\nfunc Usada() int {\n\treturn 1\n}\n")
-    _write(tmp_path, "cmd/main.go", 'package main\n\nimport "exemplo/pkg"\n\nfunc main() {\n\tpkg.Usada()\n}\n')
+    _write(tmp_path, "cmd/main.go", 'package main\n\nimport "example/pkg"\n\nfunc main() {\n\tpkg.Usada()\n}\n')
 
     assert [f for f in _wiring.detect_orphan_exports("go", tmp_path, tmp_path)
             if f.detector == "d3_orphan_export"] == []
@@ -176,7 +176,7 @@ def test_go_exported_identifier_with_a_consumer_is_not_an_orphan(tmp_path: Path)
 
 def test_go_internal_package_is_not_public_surface(tmp_path: Path) -> None:
     """`internal/` is unreachable from outside the module — by compiler rule."""
-    _write(tmp_path, "go.mod", "module exemplo\n")
+    _write(tmp_path, "go.mod", "module example\n")
     _write(tmp_path, "internal/secreto/api.go", "package secreto\n\nfunc NaoExportavel() int {\n\treturn 1\n}\n")
 
     assert [f for f in _wiring.detect_orphan_exports("go", tmp_path, tmp_path)
@@ -202,7 +202,7 @@ def test_findings_carry_a_wellformed_allowlist_key(tmp_path: Path, language: str
     _write(tmp_path, "src/index.ts", "export function orfa(): number {\n  return 1;\n}\n")
     _write(tmp_path, "Cargo.toml", '[package]\nname = "p"\n')
     _write(tmp_path, "src/lib.rs", "pub fn orfa_rs() -> u8 {\n    1\n}\n")
-    _write(tmp_path, "go.mod", "module exemplo\n")
+    _write(tmp_path, "go.mod", "module example\n")
     _write(tmp_path, "pkg/api.go", "package pkg\n\nfunc Orfa() int {\n\treturn 1\n}\n")
     _write(tmp_path, "pkg/__init__.py", "")
     _write(tmp_path, "pkg/api.py", '__all__ = ["orfa_py"]\n\n\ndef orfa_py():\n    return 1\n')

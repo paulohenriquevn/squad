@@ -44,8 +44,11 @@ _VERDICT_RE = re.compile(r"^\*\*Verdict:\*\*\s*(?P<verdict>[A-Z_]+)", re.MULTILI
 _SECTION_RE = re.compile(
     r"^##\s+Dependencies\b(?P<body>.*?)(?=^##\s|\Z)", re.MULTILINE | re.DOTALL | re.IGNORECASE
 )
-#: `(none — ...)`, `(nenhuma)`, `_none_` — the ways of declaring there is no new dependency.
-_EXPLICIT_NONE_RE = re.compile(r"\(\s*(none|nenhuma|no new)\b|^_none_$", re.IGNORECASE | re.MULTILINE)
+#: `(none — ...)`, `_none_` — the ways of declaring there is no new dependency.
+#: `(nenhuma)` was accepted until 2026-08-27  # english-only: naming the term that was dropped
+#: — a gate that reads Portuguese
+#: lets a plan pass here while failing the repository's english-only check.
+_EXPLICIT_NONE_RE = re.compile(r"\(\s*(none|no new)\b|^_none_$", re.IGNORECASE | re.MULTILINE)
 #: A package cited in backticks on a table row or bullet.
 _PACKAGE_RE = re.compile(r"`([A-Za-z0-9@][\w.@/-]*)`")
 

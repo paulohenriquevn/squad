@@ -96,7 +96,7 @@ def test_run_structural_weak_imperatives_penalty() -> None:
 def test_run_structural_emits_valid_json_compatible_data() -> None:
     """Verify the report can be serialized to valid JSON."""
     report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
-    # dataclass to dict (no Motivo nesting issue here since list is empty for M2 evidence/calibration)
+    # dataclass to dict (no Reason nesting issue here since list is empty for M2 evidence/calibration)
     from dataclasses import asdict
     d = asdict(report)
     d["reasons"] = {k: [asdict(m) for m in v] for k, v in report.reasons.items()}

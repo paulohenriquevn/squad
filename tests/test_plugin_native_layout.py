@@ -93,7 +93,7 @@ def _hook_commands(doc: dict) -> list[str]:
 def test_hooks_json_exists_and_is_valid():
     assert HOOKS_JSON.is_file(), (
         "without hooks/hooks.json the native plugin registers no hook at all — "
-        "todo gate fica desligado e silencioso"
+        "every gate is off and silent"
     )
     json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
 

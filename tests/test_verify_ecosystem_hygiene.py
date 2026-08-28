@@ -4,7 +4,7 @@
 `__pycache__` as a side effect. Two consequences, both measured on
 2026-08-26:
 
-1. Custo. Compilar-e-gravar 259 arquivos levava 267 ms dos 693 ms do smoke, e o
+1. Cost. Compiling-and-writing 259 files took 267 ms of the smoke's 693 ms, and the
    smoke is called by `install.sh` — which accounts for 21 runs in the root suite
    alone (1,071 ms each). Checking syntax requires writing nothing.
 2. Hygiene. `install.sh`'s header promises not to carry cache to the consumer, and

@@ -17,7 +17,7 @@ def test_adr_with_inline_alternativa_keyword(tmp_path: Path) -> None:
         tmp_path,
         "# Plan\n\n## ADRs\n\n"
         "### D1 — toy\n"
-        "- Rationale: A alternativa de hooks foi rejeitada.\n"
+        "- Rationale: The hooks alternative was rejected.\n"
         "- Consequences: OK\n",
     )
     report = check_adr_completeness(plan)
@@ -62,7 +62,7 @@ def test_adr_with_pt_em_vez_de(tmp_path: Path) -> None:
         tmp_path,
         "# Plan\n\n## ADRs\n\n"
         "### D1 — toy\n"
-        "- Rationale: Usamos X em vez de Y porque.\n",
+        "- Rationale: We use X instead of Y because.\n",
     )
     report = check_adr_completeness(plan)
     assert report.with_alternatives == 1
@@ -91,7 +91,7 @@ def test_adr_global_section_takes_precedence(tmp_path: Path) -> None:
         "### D2 — toy\n- Rationale: short.\n\n"
         "## Alternativas Rejeitadas\n\n"
         "### Alt A: Some option\n"
-        "Rejeitada por D1 porque...\n",
+        "Rejected by D1 because...\n",
     )
     report = check_adr_completeness(plan)
     assert report.completeness_ratio == 1.0

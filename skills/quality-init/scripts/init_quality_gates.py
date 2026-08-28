@@ -265,7 +265,7 @@ def _format_report(result: InitResult) -> str:
             lines.append(f"  {rate.verdict} — {rate.advice}")
         else:
             lines.append(
-                f"  {rate.files_blocked}/{rate.files_measured} arquivos ({rate.percent}%) "
+                f"  {rate.files_blocked}/{rate.files_measured} file(s) ({rate.percent}%) "
                 f"-> {rate.verdict}"
             )
             lines.append(f"  {rate.advice}")

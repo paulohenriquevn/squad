@@ -228,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: invalid sha: {args.base}", file=sys.stderr)
         return 2
 
-    print(f"delta: {len(files)} arquivos desde {args.base}^")
+    print(f"delta: {len(files)} file(s) since {args.base}^")
     print(f"mode : {'APPLYING' if args.apply else 'dry-run (nothing is written)'}\n")
 
     needs_human: dict[str, list[str]] = {}

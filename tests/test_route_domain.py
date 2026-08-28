@@ -177,7 +177,7 @@ def test_missing_section_raises(tmp_path: Path) -> None:
 
 
 def test_empty_table_raises(tmp_path: Path) -> None:
-    """Zero linhas tem de ser erro, nunca um dict vazio.
+    """Zero rows must be an error, never an empty dict.
 
     An empty dict would leave every repo silently unreachable while the script exits
     0 — the same shape as the thresholds file that parsed to zero bands and sent

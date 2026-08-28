@@ -120,7 +120,7 @@ def test_relative_paths_are_blocked_too(copy_install: Path):
 def test_project_owned_paths_stay_writable(copy_install: Path, rel: str):
     """The boundary is the kit's CONTRACT, not the whole `.claude/` directory."""
     assert _run(str(copy_install / rel), copy_install) == ALLOW, (
-        f"{rel} foi bloqueado, mas pertence ao projeto"
+        f"{rel} was blocked, but it belongs to the project"
     )
 
 
