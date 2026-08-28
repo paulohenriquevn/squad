@@ -133,6 +133,11 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/public-copy-lint.sh\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/english-only-check.sh\"",
+            "timeout": 30
           }
         ]
       }
