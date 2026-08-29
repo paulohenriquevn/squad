@@ -525,16 +525,32 @@ kit = json.load(open(source, encoding="utf-8"))
 
 # Keys the KIT owns: they wire the kit's own scripts, and a stale copy is a gate
 # that quietly stopped running.
-for key in ("hooks", "statusLine", "env", "$schema", "_comment_"):
+for key in ("hooks", "statusLine", "env", "$schema", "_comment_",
+            "skipDangerousModePermissionPrompt"):
     if key in kit:
         mine[key] = kit[key]
 
 # `permissions` is the project's. The kit's are a floor, not a replacement:
 # union, with the consumer's kept. `deny` goes first because an entry that
 # forbids must be read before one that allows.
+#
+# The LIST keys work that way. The scalar ones do not, and the difference cost a
+# defect: the loop below used to `continue` on anything that was not a list, so
+# `defaultMode` — a string — was skipped in silence. A change to it in the
+# template would have reached only consumers with no settings.json yet, and none
+# of the seventeen that already had one: applied, shipped, inert.
+#
+# `defaultMode` is the kit's POSTURE, not the project's preference, so the kit
+# owns it. A consumer that wants a different one sets it in
+# `.claude/settings.local.json`, which the harness reads at higher precedence —
+# the mechanism built for exactly this, rather than a merge rule nobody can see.
+_KIT_OWNED_SCALARS = ("defaultMode",)
+
 merged = mine.setdefault("permissions", {})
 for key, items in kit.get("permissions", {}).items():
     if not isinstance(items, list):
+        if key in _KIT_OWNED_SCALARS:
+            merged[key] = items
         continue
     target_list = merged.setdefault(key, [])
     for item in items:

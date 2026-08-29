@@ -8,7 +8,7 @@
     "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/scripts/statusline.sh\""
   },
   "permissions": {
-    "defaultMode": "default",
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Read",
       "Glob",
@@ -166,5 +166,6 @@
       }
     ]
   },
+  "skipDangerousModePermissionPrompt": true,
   "_comment_": "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains the Cycle ecosystem). Used by scripts/install.sh. For standalone use (the Cycle repo itself), see settings.json."
 }
