@@ -76,8 +76,36 @@ _SHARED_UNDERSTANDING = (
 if str(_SHARED_UNDERSTANDING) not in sys.path:
     sys.path.insert(0, str(_SHARED_UNDERSTANDING))
 
-#: A backlog item id, as `cycle-backlog.md § Item schema` writes them.
+#: How the two kits NAME committed work, which is not the same string.
+#:
+#: The Squad writes `B-NNN` in the plan's prose (`cycle-backlog.md § Item
+#: schema`). The Cycle writes `milestone_id: M<N>` in the plan's FRONTMATTER
+#: (`cycle-roadmap.md § Plan metadata contract`) and never writes a `B-NNN` at
+#: all. A detector matching only the first lands in the "not applicable" branch
+#: for every plan in the second — soft floor, never a hard cap, gate inert.
+#:
+#: Copying a script between kits and copying the gate it implements are not the
+#: same act, and this is the fourth time that distinction has cost a defect here.
 _ITEM_RE = re.compile(r"\bB-(\d{3,})\b")
+
+#: Read ONLY from the frontmatter. Matching `milestone_id` anywhere would fire on
+#: a plan explaining why it is NOT part of a milestone — the substring defect
+#: `detect_domain.py` shipped, where 13 of 13 `lock` matches were `lockfile`.
+_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+_MILESTONE_RE = re.compile(r"^milestone_id:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def _committed_work_id(content: str) -> str | None:
+    """The id this plan is answerable to, in whichever kit's vocabulary."""
+    items = sorted(set(_ITEM_RE.findall(content)))
+    if items:
+        return f"B-{items[0]}"
+    fm = _FRONTMATTER_RE.match(content)
+    if fm:
+        m = _MILESTONE_RE.search(fm.group(1))
+        if m and m.group(1).lower() not in ("null", "none", "~", '""', "''"):
+            return m.group(1)
+    return None
 
 #: The cap values the rest of plan-confidence already speaks in.
 HARD_CAP = 49       # INVALID — the plan cannot enter /implement
@@ -109,19 +137,18 @@ def _brief_for(plan_path: Path) -> Path:
 def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
     """Read the alignment verdict for this plan's item and turn it into a cap."""
     content = Path(plan_path).read_text(encoding="utf-8-sig", errors="replace")
-    items = sorted(set(_ITEM_RE.findall(content)))
+    cited = _committed_work_id(content)
     brief = _brief_for(Path(plan_path))
-    cited = f"B-{items[0]}" if items else None
 
-    if not items and not brief.exists():
+    if cited is None and not brief.exists():
         # The boundary the script cannot decide. Named, not hidden.
         return AlignmentGateReport(
             applies=False, verdict=None,
-            reason=("plan cites no backlog item and no alignment brief exists for its "
-                    "slug — this may be a legitimate ad-hoc fix, or an item that "
-                    "skipped intake to skip this gate. No check separates those; "
-                    "a human decides. Run /shared-understanding if it came from "
-                    "the backlog."),
+            reason=("plan names no backlog item and no milestone, and no alignment "
+                    "brief exists for its slug — this may be a legitimate ad-hoc "
+                    "fix, or committed work that skipped intake to skip this gate. "
+                    "No check separates those; a human decides. Run "
+                    "/shared-understanding if it came from the registry."),
             soft_floor=SOFT_FLOOR)
 
     if not brief.exists():
@@ -129,7 +156,9 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
             applies=True, verdict="MISSING",
             reason=(f"plan implements {cited} and no alignment brief exists at "
                     f"{brief}. The alignment never happened, so the item is not "
-                    f"built. Run /shared-understanding {cited}."),
+                    f"built. Run /shared-understanding {cited}."
+                    if cited else
+                    f"an alignment brief was expected at {brief} and is absent."),
             hard_cap=HARD_CAP, brief_path=str(brief))
 
     try:

@@ -172,3 +172,68 @@ def test_the_reason_always_names_what_to_do_next(tmp_path: Path) -> None:
         report = check_alignment_gate(_plan(tmp_path))
         assert "shared-understanding" in report.reason or "sign-off" in report.reason, \
             report.reason
+
+
+# ── the port defect: the same file, inert in the sibling kit ─────────────────
+
+CYCLE_PLAN = """---
+slug: streaming-cursor
+milestone_id: M2
+created_at: 2026-08-29
+goal: Stream shard results instead of buffering them.
+---
+
+# Plan: Streaming cursor
+
+## Context
+
+Implements milestone M2 from the roadmap.
+
+## Tasks
+
+### T1.1 — Add the cursor
+"""
+
+
+def test_a_cycle_style_plan_is_recognised_as_committed_work(tmp_path: Path) -> None:
+    """The file ported cleanly and the BEHAVIOUR did not come with it.
+
+    The Squad names its unit of work `B-NNN` in the plan's prose. The Cycle names
+    it `milestone_id: M<N>` in the plan's frontmatter — `cycle-roadmap.md § Plan
+    metadata contract` — and never writes a `B-NNN` at all. A detector matching
+    only `B-\\d{3,}` therefore lands in the "not applicable" branch for EVERY plan
+    in that kit: soft floor 89, never a hard cap, gate permanently inert.
+
+    Copying a script between kits and copying the gate it implements are not the
+    same act. This is the fourth time that distinction has cost this kit a defect,
+    and the first time a test was written for it before the port rather than after.
+    """
+    d = tmp_path / "records" / "plans"
+    d.mkdir(parents=True, exist_ok=True)
+    plan = d / "streaming-cursor-plan.md"
+    plan.write_text(CYCLE_PLAN, encoding="utf-8")
+
+    report = check_alignment_gate(plan)
+    assert report.applies, "a plan carrying milestone_id is committed work, not an ad-hoc fix"
+    assert report.hard_cap == 49
+    assert "M2" in report.reason
+
+
+def test_frontmatter_identity_is_read_only_from_the_frontmatter(tmp_path: Path) -> None:
+    """`milestone_id` mentioned in prose is a discussion, not a declaration.
+
+    Matching it anywhere would fire on a plan that merely explains why it is NOT
+    part of a milestone — and a gate that misreads prose as a commitment is the
+    substring defect `detect_domain.py` shipped, where 13 of 13 `lock` matches were
+    the word `lockfile`.
+    """
+    d = tmp_path / "records" / "plans"
+    d.mkdir(parents=True, exist_ok=True)
+    plan = d / "hotfix-plan.md"
+    plan.write_text(
+        "# Plan: hotfix\n\n## Context\n\n"
+        "This carries no milestone_id: M2 belongs to the streaming work, not here.\n",
+        encoding="utf-8")
+    report = check_alignment_gate(plan)
+    assert not report.applies
+    assert report.soft_floor == 89
