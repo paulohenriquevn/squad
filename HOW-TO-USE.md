@@ -34,7 +34,7 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "Check the released thing works for its user" | `cycle-acceptance` | `/acceptance M<N>` (milestones only — see below) |
 | "Hold the session to the process until acceptance is green" | `cycle-acceptance` | `/session-goal M<N> [M<N> ...]` |
 | "What has rotted in the registry?" | auxiliary | `/backlog-review` |
-| "Which specialist owns this repo?" | auxiliary | `python3 scripts/route_domain.py {repo}` |
+| "Which specialist owns this repo?" | auxiliary | `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/route_domain.py" {repo}` |
 | "Just locate something in the code" | (no cycle) | Glob/Grep, or `/ast-grep` for structural queries |
 | "Is this operation CP or AP?" | auxiliary | `/cap-theorem-specialist` |
 | "The queue never drains / we OOM under load" | auxiliary | `/backpressure-specialist` |
@@ -126,7 +126,7 @@ Chains plan → implement → code-quality → review → release, pausing at ea
 Routing is deterministic: the item declares `repo`, and a repo belongs to exactly one domain.
 
 ```bash
-python3 scripts/route_domain.py my-service
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/route_domain.py" my-service
 # repo   : my-service
 # domain : backend
 # agent  : agents/backend.md
@@ -171,7 +171,7 @@ Derive the domain routing table into `rules/cycle-backlog.md` (`detect_domains.p
 
 ## Maintenance notes
 
-- `python3 scripts/check_xrefs.py` validates that every cross-reference resolves.
-- `python3 scripts/verify_ecosystem.py` validates cycle-rule structure and skill frontmatter.
-- `bash scripts/run_slice_tests.sh` runs each slice in its own process — slices ship colliding module basenames, so a single wide pytest process is unsound.
+- `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_xrefs.py"` validates that every cross-reference resolves.
+- `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/verify_ecosystem.py"` validates cycle-rule structure and skill frontmatter.
+- `bash "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/run_slice_tests.sh"` runs each slice in its own process — slices ship colliding module basenames, so a single wide pytest process is unsound.
 - Adding a domain? The routing table, the specialist file and `tests/test_route_domain.py` must agree; two guards fail loudly if they do not.

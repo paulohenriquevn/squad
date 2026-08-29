@@ -39,13 +39,40 @@ _BLIND = re.compile(
 )
 
 #: Markdown the kit ships and an agent is expected to follow.
-_SHIPPED = ("skills/*/SKILL.md", "rules/*.md", "commands/*.md", "skills/*/reference/*.md")
+#:
+#: The ecosystem-root files were missing from the first sweep, and a consumer's
+#: gate found five more invocations in `HOW-TO-USE.md` — the file a person opens
+#: FIRST to learn the kit. That omission is the same shape as the defect being
+#: fixed: a sweep declared complete while covering the directories the author
+#: happened to think of.
+_SHIPPED = (
+    "skills/*/SKILL.md", "skills/*/reference/*.md",
+    "rules/*.md", "commands/*.md",
+    "*.md",  # HOW-TO-USE, README, CONTRIBUTING, SECURITY
+)
+
+#: Two root files are exempt, for different reasons, and both are measured rather
+#: than assumed — `install.sh` copies `HOW-TO-USE.md` and `README.md` into a
+#: consumer and does not copy these:
+#:
+#: `CHANGELOG.md` QUOTES the broken form as evidence — "the freshly written Step 2
+#: invoked `python3 skills/backlog-item/…`" is a record of a defect, not an
+#: instruction to follow. Rewriting it would edit history to make a checker quiet,
+#: which is the one thing a changelog must never do.
+#:
+#: `CONTRIBUTING.md` addresses someone working ON the kit, in its own repository,
+#: where `bash scripts/run_slice_tests.sh` is the correct command and the layout
+#: expression would be noise. It never reaches a consumer, so it cannot mislead
+#: one.
+_EXEMPT = {"CHANGELOG.md", "CONTRIBUTING.md"}
 
 
 def _offenders() -> list[tuple[Path, int, str]]:
     out: list[tuple[Path, int, str]] = []
     for pattern in _SHIPPED:
         for path in ROOT.glob(pattern):
+            if path.name in _EXEMPT:
+                continue
             for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if _BLIND.search(line):
                     out.append((path.relative_to(ROOT), n, line.strip()))
