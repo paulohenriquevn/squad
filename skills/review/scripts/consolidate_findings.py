@@ -125,7 +125,12 @@ def _normalize_finding(f: dict[str, Any], agent_role: str) -> dict[str, Any]:
         "file": str(f.get("file", "")),
         "line": f.get("line"),
         "plan_ref": str(f.get("plan_ref", "")),
-        "summary": str(f.get("summary", "")),
+        # `title` is what the GATE findings carry — `check_upstream_gate` writes
+        # title/evidence/remediation and no summary. Dropping it here is where a
+        # BLOCKER lost its name: counted, decisive, and rendered as `### : `.
+        # Normalising at the entry point fixes every consumer of the field at
+        # once, which the renderer alone could not.
+        "summary": str(f.get("summary") or f.get("title") or ""),
         "evidence": str(f.get("evidence", "")),
         "recommended_action": str(f.get("recommended_action", "")),
         "domain_anchor": str(f.get("domain_anchor", "")),
@@ -263,6 +268,26 @@ def _project_root_for(findings_dir: Path) -> Path:
     return current
 
 
+def _heading(f: dict[str, Any]) -> str:
+    """`### <id>: <summary>` — for findings that HAVE an id and a summary.
+
+    Gate findings do not. `check_upstream_gate` writes `title` / `evidence` /
+    `remediation` and no id, so the heading rendered as `### : ` — a BLOCKER that
+    is counted, is decisive, and does not say what it is. Measured on 2026-08-29:
+    a consumer's smoke validator failed on it and could report only
+    "consolidate_findings exit 1:" with nothing after the colon.
+
+    A gate whose reason cannot be read is a gate people route around, so the
+    heading falls back through what the finding actually carries and, failing
+    everything, names its source rather than rendering empty.
+    """
+    ident = str(f.get("id") or "").strip()
+    label = str(f.get("summary") or f.get("title") or "").strip()
+    if not label:
+        label = str(f.get("category") or f.get("source") or "unnamed finding").strip()
+    return f"### {ident}: {label}" if ident else f"### {label}"
+
+
 def _classify_verdict(
     findings: list[dict[str, Any]],
     coverage_ratio: float | None,
@@ -336,7 +361,7 @@ def _render_markdown(
         md.append(f"## {sev} findings ({len(items)})")
         md.append("")
         for f in items:
-            md.append(f"### {f['id']}: {f['summary']}")
+            md.append(_heading(f))
             md.append("")
             md.append(f"- **Found by:** {', '.join(f.get('found_by_list', [f['found_by']]))}")
             # B-049 — name what this row absorbed. A merged finding used to vanish entirely, so a
@@ -399,7 +424,7 @@ def _render_markdown(
         )
         md.append("")
         for f in closed:
-            md.append(f"### {f['id']}: {f['summary']}")
+            md.append(_heading(f))
             md.append("")
             md.append(f"- **Was:** {f['severity']}")
             if f["file"]:
@@ -713,6 +738,19 @@ def main() -> int:
         findings=len(deduped),
     )
 
+    # The verdict JSON goes to STDOUT, and a caller that redirects stdout is left
+    # with an exit code and silence — which is how this arrived from a consumer on
+    # 2026-08-29, described as "exit 1 with empty stderr", indistinguishable from
+    # a crash. A non-zero exit now states its reason on stderr as well, naming the
+    # findings that decided it.
+    if verdict in ("NEEDS_FIXES", "NEEDS_DEEPER"):
+        blockers = [f for f in open_findings if f["severity"] == "BLOCKER"]
+        detail = "; ".join(
+            _heading(f).lstrip("# ").strip() for f in blockers[:3]
+        ) or f"edge-case coverage {args.edge_case_coverage_ratio}"
+        print(f"{verdict}: {len(blockers)} BLOCKER(s), "
+              f"{sum(1 for f in open_findings if f['severity'] == 'HIGH')} HIGH — {detail}",
+              file=sys.stderr)
     if verdict == "NEEDS_FIXES":
         return 1
     if verdict == "NEEDS_DEEPER":

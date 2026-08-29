@@ -13,6 +13,9 @@
       "Read",
       "Glob",
       "Grep",
+      "Edit(*)",
+      "Write(*)",
+      "Bash(*)",
       "Bash(ls *)",
       "Bash(tree *)",
       "Bash(wc *)",
@@ -41,14 +44,7 @@
       "Bash(git ls-files *)",
       "Bash(git switch *)"
     ],
-    "ask": [
-      "Bash(curl *)",
-      "Bash(wget *)",
-      "Bash(npm *)",
-      "Bash(npx *)",
-      "Bash(pnpm *)",
-      "Bash(node *)"
-    ],
+    "ask": [],
     "deny": [
       "Bash(rm -rf /)",
       "Bash(rm -rf ~)",

@@ -130,3 +130,74 @@ def test_a_file_the_kit_DOES_ship_is_refreshed(tmp_path: Path) -> None:
 
     assert stale.read_text(encoding="utf-8") != "stale copy\n", \
         f"{shipped.name} is the kit's and was not refreshed"
+
+# ── the seventh face: whole directories with no preservation at all ──────────
+
+#: Every directory `--force` deletes and re-copies. The preservation rule applies
+#: to all of them; until 2026-08-29 it was implemented for two.
+_COPIED_ITEMS = ("skills", "rules", "hooks", "commands", "scripts", "agents")
+
+
+@pytest.mark.parametrize("rel", [
+    "hooks/delivery-gate.sh",
+    "hooks/lib/detect-layout.sh",
+    "scripts/check-allowlist-sunsets.py",
+    "scripts/test_e2e_smoke.py",
+    "commands/their-command.md",
+])
+def test_project_files_survive_in_every_copied_directory(tmp_path: Path, rel: str) -> None:
+    """`hooks/` and `scripts/` had NO preservation pass, not a narrow one.
+
+    Measured by a consumer session on 2026-08-29 in `theo-platform`: the installer
+    removed four files that do not exist in the source kit at all —
+    `hooks/delivery-gate.sh`, `hooks/lib/detect-layout.sh`,
+    `scripts/check-allowlist-sunsets.py`, `scripts/test_e2e_smoke.py`. Not kit
+    parts being retired; the kit never had them. Two of the four were gates that
+    repository's pre-push depends on.
+
+    Seventh face of one defect, and the first where the answer was not "widen a
+    glob" but "this directory was never covered". The parametrisation runs over
+    the copied set so the next directory added to `_COPIED_ITEMS` inherits the
+    rule instead of waiting to be discovered by a consumer.
+    """
+    root = _consumer(tmp_path)
+    target = root / ".claude" / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("written by the project\n", encoding="utf-8")
+
+    _install(root)
+
+    assert target.is_file(), f"{rel} was deleted by --force"
+    assert target.read_text(encoding="utf-8") == "written by the project\n"
+
+
+def test_the_manifest_does_not_claim_more_than_it_covers(tmp_path: Path) -> None:
+    """The header says "Anything not here is the project's" — for three prefixes.
+
+    Measured: 92 entries, all under `agents/`, `rules/` and `skills/`; zero for
+    `hooks/` or `scripts/`. A consumer trusting that sentence draws the wrong
+    conclusion in both directions, and the peer session that reported this defect
+    said it had done exactly that — marking four files as the project's by
+    ABSENCE of coverage rather than by decision.
+
+    A manifest that answers by omission is worse than one that does not answer.
+    Either it covers every copied directory, or it stops claiming to.
+    """
+    root = _consumer(tmp_path)
+    _install(root)
+
+    manifest = root / ".claude" / ".kit-manifest.txt"
+    if not manifest.is_file():
+        pytest.skip("this kit writes no manifest, so it makes no claim to check — "
+                    "ownership there is decided by presence in the source kit alone")
+    text = manifest.read_text(encoding="utf-8")
+    header = "\n".join(l for l in text.splitlines() if l.startswith("#"))
+    covered = {l.split("/")[0] for l in text.splitlines()
+               if l and not l.startswith("#") and "/" in l}
+
+    if "Anything not here is the project's" in header:
+        missing = [i for i in _COPIED_ITEMS
+                   if (Path(__file__).resolve().parents[1] / i).is_dir() and i not in covered]
+        assert not missing, (
+            f"the header makes a claim the manifest does not support: no entries for "
+            f"{missing}. Cover them, or narrow the sentence.")

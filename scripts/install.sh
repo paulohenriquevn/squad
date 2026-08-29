@@ -280,8 +280,57 @@ for item in skills rules hooks commands scripts; do
         cp "$f" "$CONFIG_KEEP/"
       done
     fi
+    # ── the project's files, in ANY copied directory ────────────────────────
+    #
+    # This runs for every `item`, not for a chosen few, because the rule is not
+    # about skills: whatever the SOURCE kit does not ship is the project's,
+    # wherever it sits. That rule has now been stated once and implemented one
+    # shape at a time seven times over — the routing table, `rules/*.txt`,
+    # `settings.json` by key, project skill directories, `theokit-conventions.md`,
+    # loose files in `skills/`, and finally `hooks/` and `scripts/`, which had no
+    # preservation pass at all.
+    #
+    # Measured by a consumer session on 2026-08-29 in `theo-platform`: the
+    # installer removed `hooks/delivery-gate.sh`, `hooks/lib/detect-layout.sh`,
+    # `scripts/check-allowlist-sunsets.py` and `scripts/test_e2e_smoke.py`, none
+    # of which exist in the kit. Two were gates that repository's pre-push
+    # depends on. Nothing warned, and the install reported success.
+    #
+    # Ownership is decided by the SOURCE kit and not by `.kit-manifest.txt`,
+    # which covers only `agents/`, `rules/` and `skills/` — for `hooks/` and
+    # `scripts/` it is blind, so consulting it would answer by omission.
+    OWN_KEEP=""
+    if [ -d "$ECO/$item" ]; then
+      OWN_KEEP="$(mktemp -d)"
+      ( cd "$ECO/$item" && find . -mindepth 1 \( -type f -o -type l \) -print ) \
+      | while IFS= read -r rel; do
+          rel="${rel#./}"
+          # In the source kit => the kit owns it => the fresh copy replaces it.
+          [ -e "$SRC_DIR/$item/$rel" ] && continue
+          mkdir -p "$OWN_KEEP/$(dirname "$rel")"
+          cp -p "$ECO/$item/$rel" "$OWN_KEEP/$rel"
+        done
+    fi
+
     rm -rf "${ECO:?}/$item"
     copy_tree "$SRC_DIR/$item" "$ECO/$item"
+
+    # Put them back, preserving their sub-paths. `hooks/lib/detect-layout.sh` is
+    # two levels down, and a flat restore would have dropped it while reporting
+    # success — the same class of half-fix as the glob before it.
+    if [ -n "${OWN_KEEP:-}" ]; then
+      if [ -n "$(ls -A "$OWN_KEEP" 2>/dev/null)" ]; then
+        ( cd "$OWN_KEEP" && find . -mindepth 1 \( -type f -o -type l \) -print ) \
+        | while IFS= read -r rel; do
+            rel="${rel#./}"
+            mkdir -p "$ECO/$item/$(dirname "$rel")"
+            cp -p "$OWN_KEEP/$rel" "$ECO/$item/$rel"
+            echo "    kept (yours): $item/$rel"
+          done
+      fi
+      rm -rf "$OWN_KEEP"
+      OWN_KEEP=""
+    fi
 
     # Restored right after the copy, outside every per-item conditional: an
     # earlier version sat inside `if [ "$item" = "rules" ]`, so it ran on the
@@ -673,10 +722,22 @@ fi
 # would be guessing by name. The PROJECT's skills never enter here — the list
 # comes from the kit's tree.
 MANIFEST="$ECO/.kit-manifest.txt"
+# The header used to promise "anything not here is the project's" while listing
+# only `agents/`, `rules/` and `skills/` — 92 entries, none for `hooks/` or
+# `scripts/`. For those two the manifest answered by OMISSION, which is worse
+# than not answering: a reader concludes the project owns a kit file, or the kit
+# owns a project file, and both readings look supported. A peer session reviewing
+# this on 2026-08-29 reported doing exactly that.
+#
+# Now it lists every file of every copied directory, so the sentence is true.
 {
   echo "# Written by scripts/install.sh — what THIS kit brought into .claude/."
   echo "# One path per line, relative to .claude/. Anything not here is the project's."
+  echo "# Covers every directory the installer copies; nothing answers by omission."
   echo "# Regenerated on every install; do not edit by hand."
+  # `skills/` stays one entry per SKILL and `rules/` one per file — that is the
+  # granularity every existing reader expects, and changing it broke three tests
+  # that had nothing to do with the gap being closed.
   for d in "$SRC_DIR"/skills/*/; do
     [ -f "$d/SKILL.md" ] && echo "skills/$(basename "$d")"
   done
@@ -684,6 +745,15 @@ MANIFEST="$ECO/.kit-manifest.txt"
     [ -f "$f" ] && echo "rules/$(basename "$f")"
   done
   [ -f "$SRC_DIR/agents/README.md" ] && echo "agents/README.md"
+  # `hooks/`, `commands/` and `scripts/` had NO entries at all, so for those the
+  # manifest answered by omission — the gap this closes. Listed per file, because
+  # they have no unit above the file the way a skill does.
+  for item in hooks commands scripts; do
+    [ -d "$SRC_DIR/$item" ] || continue
+    ( cd "$SRC_DIR/$item" && find . -mindepth 1 \( -type f -o -type l \) \
+        -not -path "*/__pycache__/*" -print ) \
+    | sed "s|^\./|$item/|" | sort
+  done
 } > "$MANIFEST"
 echo "==> Manifest written: $(grep -vc '^#' "$MANIFEST") paths from the kit"
 
