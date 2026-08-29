@@ -134,6 +134,21 @@ def _brief_for(plan_path: Path) -> Path:
     return plan_path.parent.parent / "alignment" / f"{slug}-alignment.md"
 
 
+def _registry_exists(plan_path: Path) -> bool:
+    """Does this repository keep a backlog or roadmap the plan could have come from?
+
+    Walks up from the plan rather than trusting the process's cwd, which is
+    whatever invoked the scorer and says nothing about the project under test.
+    """
+    for parent in [plan_path.resolve(), *plan_path.resolve().parents]:
+        for name in ("BACKLOG.md", "ROADMAP.md"):
+            if (parent / name).is_file():
+                return True
+        if (parent / ".git").exists():
+            break  # repository root reached; do not escape into a sibling project
+    return False
+
+
 def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
     """Read the alignment verdict for this plan's item and turn it into a cap."""
     content = Path(plan_path).read_text(encoding="utf-8-sig", errors="replace")
@@ -141,7 +156,24 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
     brief = _brief_for(Path(plan_path))
 
     if cited is None and not brief.exists():
-        # The boundary the script cannot decide. Named, not hidden.
+        # The boundary the script cannot decide — but only where there is a
+        # boundary to cross. The floor closes a one-line bypass: omit the `B-NNN`
+        # and skip the gate. That bypass exists only where there is a registry to
+        # skip. In a repository with neither BACKLOG.md nor ROADMAP.md there is
+        # nowhere the item could have come from, so ad-hoc is not a suspicion, it
+        # is the only possibility.
+        #
+        # Measured on 2026-08-29, reported from a consumer: without this
+        # distinction the floor fired on the kit's own `fixtures/good-plan.md` and
+        # turned `test_fixture_good_plan_does_not_trigger_caps` red across seven
+        # parametrisations. A gate that taxes every hotfix in every repository
+        # that does not run this cycle is a gate somebody switches off.
+        if not _registry_exists(Path(plan_path)):
+            return AlignmentGateReport(
+                applies=False, verdict=None,
+                reason=("plan names no backlog item and this repository has no registry "
+                        "(no BACKLOG.md, no ROADMAP.md) — there is nowhere the item could "
+                        "have come from, so nothing is being skipped"))
         return AlignmentGateReport(
             applies=False, verdict=None,
             reason=("plan names no backlog item and no milestone, and no alignment "

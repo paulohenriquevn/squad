@@ -5,6 +5,7 @@ fixture cases plus auditor_unavailable handling plus min-confidence threshold.
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -16,10 +17,33 @@ from scripts.detectors.python import PythonDetector
 pytestmark = pytest.mark.python
 
 
-def test_python_detector_flags_unused_function(fixtures_dir: Path) -> None:
-    """Vulture on the positive fixture MUST report ≥ 1 dead-code Finding."""
+def test_python_detector_flags_unused_function(tmp_path: Path, fixtures_dir: Path) -> None:
+    """Vulture on the positive fixture MUST report >= 1 dead-code Finding.
+
+    The fixture is COPIED out of the skill tree first, and that is the whole
+    point of this test's shape. `.claude` is in `DEFAULT_SKIP_DIRS` on purpose —
+    `/code-quality` audits the product, not its own tooling — and the detector
+    passes that list to vulture as `--exclude`. In the kit's standalone
+    repository the fixture sits at `skills/code-quality/fixtures/...` and is
+    scanned; in every consumer the same file sits at
+    `.claude/skills/code-quality/fixtures/...` and the exclude swallows it.
+
+    Reported from a consumer on 2026-08-29 as "the detector returns zero on a
+    known positive", which reads as the worst kind of defect — green over
+    unmeasured. Measured here: vulture reports all three symbols from either
+    copy of the file, and the detector reports three from the standalone tree
+    and zero from the consumer's. The detector was right both times; the test
+    was asking it to scan a directory it is designed to skip.
+
+    Copying to `tmp_path` makes the assertion hermetic in any layout, which is
+    what a unit test of a detector should have been from the start.
+    """
+    src = fixtures_dir / "python" / "dead_code_present"
+    target = tmp_path / "dead_code_present"
+    shutil.copytree(src, target)
+
     detector = PythonDetector(min_confidence=60)
-    findings = detector.detect_dead_code(fixtures_dir / "python" / "dead_code_present")
+    findings = detector.detect_dead_code(target)
     dead_findings = [f for f in findings if f.detector == "d1_dead_code"]
     assert len(dead_findings) >= 1, (
         f"Expected at least 1 dead-code Finding on positive fixture; got {len(dead_findings)}: "

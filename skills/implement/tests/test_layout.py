@@ -103,13 +103,27 @@ def test_no_script_defaults_to_the_standalone_layout() -> None:
     )
 
 
-def test_the_scan_does_not_flag_a_reader_that_lists_both_layouts() -> None:
-    # Pins the exemption. Without it, tightening the scan would turn run_validation.py red for
-    # doing the right thing, and the scan would be loosened or deleted.
-    source = (SCRIPTS / "run_validation.py").read_text(encoding="utf-8")
+def test_the_reader_resolves_every_layout_a_consumer_may_keep() -> None:
+    """Pins the exemption by BEHAVIOUR, not by a literal in the source.
 
-    assert 'project_root / "records" / "plans"' in source
-    assert '".claude" / "records" / "plans"' in source
+    The original form grepped `run_validation.py` for the two path expressions.
+    It broke on 2026-08-29 when those literals were replaced by a table —
+    `_ARTEFACT_ROOTS` — that resolves the same two layouts and a third, and it
+    broke while the behaviour it exists to protect got strictly better. A test
+    that fails when a refactor preserves its intent is a test that gets deleted,
+    which would take the exemption with it.
+
+    The third layout is why the table exists at all: `theo-platform` declares
+    `<project>/.claude/knowledge-base/` canonical in a rule of its own and holds
+    32 plans there with none in `records/plans/`, so every `_find_plan` call site
+    answered SKIP for that repository.
+    """
+    import run_validation as rv
+
+    resolved = {"/".join(parts) for parts in rv._ARTEFACT_ROOTS}
+    for expected in (".claude/records", "records",
+                     ".claude/knowledge-base", "knowledge-base"):
+        assert expected in resolved, f"{expected} is not a layout this reader resolves"
 
 
 def test_an_explicit_output_dir_still_wins(tmp_path: Path) -> None:

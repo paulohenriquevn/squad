@@ -52,6 +52,10 @@ ALIGNED_BRIEF = """
 def _plan(tmp_path: Path, body: str = PLAN, slug: str = "b-014-trace-p95") -> Path:
     d = tmp_path / "records" / "plans"
     d.mkdir(parents=True, exist_ok=True)
+    # A registry, because the soft floor only fires where one exists — there is no
+    # bypass to close in a repository the item could not have come from. Tests
+    # that need its ABSENCE build their own tree.
+    (tmp_path / "BACKLOG.md").write_text("## B-001 — a registry exists here\n", encoding="utf-8")
     p = d / f"{slug}-plan.md"
     p.write_text(body, encoding="utf-8")
     return p
@@ -229,6 +233,7 @@ def test_frontmatter_identity_is_read_only_from_the_frontmatter(tmp_path: Path) 
     """
     d = tmp_path / "records" / "plans"
     d.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "ROADMAP.md").write_text("## M2 — streaming\n", encoding="utf-8")
     plan = d / "hotfix-plan.md"
     plan.write_text(
         "# Plan: hotfix\n\n## Context\n\n"
@@ -237,3 +242,42 @@ def test_frontmatter_identity_is_read_only_from_the_frontmatter(tmp_path: Path) 
     report = check_alignment_gate(plan)
     assert not report.applies
     assert report.soft_floor == 89
+
+
+def test_a_repo_with_no_registry_at_all_is_not_penalised(tmp_path: Path) -> None:
+    """The soft floor was firing on every ad-hoc plan, including the kit's own fixture.
+
+    Reported from a consumer on 2026-08-29: `alignment_not_applicable` capped
+    `fixtures/good-plan.md`, and `test_fixture_good_plan_does_not_trigger_caps`
+    went red across seven parametrisations. The fixture is correct — the floor
+    was wrong.
+
+    The floor exists to close a one-line bypass: omit the `B-NNN` and skip the
+    gate. That bypass only EXISTS where there is a registry to skip. In a
+    repository with no `BACKLOG.md` and no `ROADMAP.md` there is nowhere the item
+    could have come from, so ad-hoc is not a suspicion — it is the only
+    possibility, and penalising it taxes every hotfix in every repository that
+    does not run this cycle at all.
+    """
+    d = tmp_path / "records" / "plans"
+    d.mkdir(parents=True)
+    p = d / "hotfix-plan.md"
+    p.write_text("# Plan: fix a typo\n\nNo backlog item.\n", encoding="utf-8")
+
+    report = check_alignment_gate(p)
+    assert not report.applies
+    assert report.soft_floor is None, report.reason
+    assert "no registry" in report.reason.lower()
+
+
+def test_the_bypass_is_still_closed_where_a_registry_exists(tmp_path: Path) -> None:
+    """And the floor still fires where omitting the id would actually skip something."""
+    (tmp_path / "BACKLOG.md").write_text("## B-001 — something\n", encoding="utf-8")
+    d = tmp_path / "records" / "plans"
+    d.mkdir(parents=True)
+    p = d / "hotfix-plan.md"
+    p.write_text("# Plan: fix a typo\n\nNo backlog item.\n", encoding="utf-8")
+
+    report = check_alignment_gate(p)
+    assert not report.applies
+    assert report.soft_floor == 89, report.reason
