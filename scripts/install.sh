@@ -239,13 +239,25 @@ for item in skills rules hooks commands scripts; do
     # `$MANIFEST` is only assigned much later in this script, so it is spelled
     # out here rather than referenced — reading it before assignment made the
     # guard silently false and deleted the skills it exists to keep.
+    # The glob below is `*` and not `*/` on purpose. The first version matched
+    # DIRECTORIES only, so a project keeping a `SKILLS.md` index beside its skill
+    # folders lost it on every reinstall while the folders survived. Measured
+    # 2026-08-29 in `speculative`: 207 versioned lines, gone. It came back with
+    # `git restore` only because that repository versions `.claude/`; a project
+    # following the policy of not versioning it would have lost the file.
+    #
+    # Sixth face of one defect. The rule has been stated once and implemented for
+    # one shape at a time — the routing table, `rules/*.txt`, `settings.json` by
+    # key, project skill directories, `theokit-conventions.md`, and now loose
+    # files. Each fix was right and none generalised. The rule is: whatever the
+    # SOURCE kit does not ship is the project's, whatever its shape.
     if [ "$item" = "skills" ] && [ -d "$ECO/skills" ]; then
       SKILLS_KEEP="$(mktemp -d)"
-      for d in "$ECO/skills"/*/; do
-        [ -d "$d" ] || continue
+      for d in "$ECO/skills"/* "$ECO/skills"/.[!.]*; do
+        [ -e "$d" ] || continue
         name="$(basename "$d")"
         # In the source kit => the kit ships it => the fresh copy replaces it.
-        [ -d "$SRC_DIR/skills/$name" ] && continue
+        [ -e "$SRC_DIR/skills/$name" ] && continue
         cp -r "$d" "$SKILLS_KEEP/"
       done
     fi
@@ -275,8 +287,11 @@ for item in skills rules hooks commands scripts; do
     # earlier version sat inside `if [ "$item" = "rules" ]`, so it ran on the
     # wrong iteration and the skills were saved and never put back.
     if [ -n "${SKILLS_KEEP:-}" ]; then
-      for d in "$SKILLS_KEEP"/*/; do
-        [ -d "$d" ] || continue
+      # `*` and `.[!.]*`, not `*/` — the same glob that dropped loose files on
+      # the way OUT would drop them on the way back IN. Both ends of one pass had
+      # the same assumption, so fixing either alone still lost the file.
+      for d in "$SKILLS_KEEP"/* "$SKILLS_KEEP"/.[!.]*; do
+        [ -e "$d" ] || continue
         cp -r "$d" "$ECO/skills/"
         echo "    kept (yours): skills/$(basename "$d")"
       done

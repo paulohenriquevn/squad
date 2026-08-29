@@ -1,0 +1,132 @@
+"""A file sitting directly in `skills/` was deleted; a directory beside it survived.
+
+`--force` deletes `skills/` and copies a fresh one, and the preservation pass
+walks `$ECO/skills/*/` — a glob that matches DIRECTORIES. A project that keeps a
+`SKILLS.md` index next to its skill folders therefore lost it, silently, on every
+reinstall.
+
+Measured on 2026-08-29 in `speculative`: `SKILLS.md`, 207 versioned lines,
+removed by a reinstall. It was recovered with `git restore` only because that
+repository versions `.claude/`; the projects that follow the policy of not
+versioning it would have lost the file outright.
+
+This is the sixth face of one defect. The preservation rule has been stated once
+and implemented for one shape at a time: the routing table, then `rules/*.txt`,
+then `settings.json` by key, then project skill directories, then
+`theokit-conventions.md`, and now loose files. Each fix was correct and none of
+them generalised, which is why this test asserts the RULE — anything the source
+kit does not ship is the project's — rather than one more shape.
+"""
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+INSTALL = ROOT / "scripts" / "install.sh"
+
+
+#: A project skill has to look like one. The Cycle's `verify_ecosystem.py`
+#: validates frontmatter across EVERY skill it finds, the project's included, and
+#: the install refuses when one is malformed — so a fixture skill without
+#: frontmatter fails the install for a reason that has nothing to do with what
+#: this file tests.
+_PROJECT_SKILL = """---
+name: their-skill
+version: 0.1.0
+description: A skill the project wrote, used here to prove it survives a reinstall.
+---
+
+# their-skill
+"""
+
+
+def _consumer(tmp_path: Path) -> Path:
+    root = tmp_path / "consumer"
+    skill = root / ".claude" / "skills" / "their-skill"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(_PROJECT_SKILL, encoding="utf-8")
+    (root / ".claude" / "rules").mkdir(parents=True)
+    (root / ".claude" / "agents").mkdir(parents=True)
+    return root
+
+
+#: What a validation failure over a PROJECT skill looks like. The Cycle validates
+#: with `check_xrefs --strict`, where "skill X is referenced by no cycle rule" is
+#: a WARN that fails the run — and a project's own skill is referenced by no cycle
+#: rule by definition. So a consumer with a skill of its own cannot complete an
+#: install there. That is a real defect in that kit and it is not this file's
+#: subject; recorded rather than worked around silently.
+_PROJECT_SKILL_WARNS = ("no_orphan_skills", "skill_has_cycle_contract", "check_xrefs")
+
+
+def _install(root: Path) -> None:
+    """Run the installer and assert the DISK, not the exit code.
+
+    This file is about what survives `--force`, which is a question about files.
+    Coupling it to the installer's overall verdict would make it fail for reasons
+    that have nothing to do with preservation — and it did, on the sibling kit,
+    for the strict-validation reason above.
+    """
+    result = subprocess.run(["bash", str(INSTALL), str(root), "--force"],
+                            capture_output=True, text=True)
+    if result.returncode != 0:
+        combined = result.stdout + result.stderr
+        assert any(w in combined for w in _PROJECT_SKILL_WARNS), \
+            combined[-2000:]
+    # Either way the copy must have happened, or nothing below means anything.
+    assert (root / ".claude" / "skills").is_dir(), combined[-2000:] if result.returncode else ""
+
+
+@pytest.mark.parametrize("rel", [
+    "skills/SKILLS.md",          # the measured casualty
+    "skills/NOTES.md",
+    "skills/.skillsrc",
+    "agents/TEAM.md",
+])
+def test_a_loose_file_the_kit_does_not_ship_survives(tmp_path: Path, rel: str) -> None:
+    """The rule: anything the SOURCE kit does not ship belongs to the project."""
+    root = _consumer(tmp_path)
+    target = root / ".claude" / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("written by the project\n", encoding="utf-8")
+
+    _install(root)
+
+    assert target.is_file(), f"{rel} was deleted by --force"
+    assert target.read_text(encoding="utf-8") == "written by the project\n", \
+        f"{rel} survived but its contents were replaced"
+
+
+def test_a_project_skill_directory_still_survives(tmp_path: Path) -> None:
+    """The fix already in place must not regress while a new shape is added."""
+    root = _consumer(tmp_path)
+    skill = root / ".claude" / "skills" / "their-skill" / "SKILL.md"
+
+    _install(root)
+
+    assert skill.is_file(), "the project's skill directory was deleted"
+    assert skill.read_text(encoding="utf-8") == _PROJECT_SKILL, \
+        "the directory survived but its contents were replaced"
+
+
+def test_a_file_the_kit_DOES_ship_is_refreshed(tmp_path: Path) -> None:
+    """Preservation must not become staleness.
+
+    The mirror defect: a kit file kept because the consumer edited it is a gate
+    running last month's rules. Ownership is decided by the SOURCE kit, so a name
+    the kit ships is the kit's and gets overwritten.
+    """
+    root = _consumer(tmp_path)
+    shipped = next(p for p in (ROOT / "rules").glob("*.md"))
+    stale = root / ".claude" / "rules" / shipped.name
+    stale.write_text("stale copy\n", encoding="utf-8")
+
+    _install(root)
+
+    assert stale.read_text(encoding="utf-8") != "stale copy\n", \
+        f"{shipped.name} is the kit's and was not refreshed"
