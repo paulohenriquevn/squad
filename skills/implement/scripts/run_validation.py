@@ -366,14 +366,66 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
     }
 
 
-def _find_plan(project_root: Path, slug: str) -> Path | None:
-    """Locate the plan file in either the plugin (.claude/) or standalone layout."""
-    for base in (project_root / ".claude" / "records" / "plans",
-                 project_root / "records" / "plans"):
-        candidate = base / f"{slug}-plan.md"
+#: Every root a consumer may keep its audit trail under, most specific first.
+#:
+#: The kit ships `records/` in two layouts. A consumer measured on 2026-08-29 uses
+#: neither: `theo-platform` declares `<project>/.claude/knowledge-base/` canonical
+#: in a rule of its own, written after an audit read the wrong directory and
+#: reported a repository as having "0 implementations, 0 reviews, 0 releases" when
+#: it had 6, 12 and 8. That repository holds **32 plans in `knowledge-base/plans/`
+#: and zero in `records/plans/`**, so all nine `_find_plan` call sites answered
+#: SKIP there — including an alignment gate installed minutes earlier, inert on
+#: arrival for the third time in this family of defects.
+#:
+#: Widening the search cannot produce a false finding. It can only stop a false
+#: SKIP, and a SKIP caused by looking in the wrong place is indistinguishable in
+#: the report from one that legitimately had nothing to check.
+_ARTEFACT_ROOTS = (
+    (".claude", "records"),
+    ("records",),
+    (".claude", "knowledge-base"),
+    ("knowledge-base",),
+)
+
+
+def _artefact_dirs(project_root: Path, kind: str):
+    """Every directory a `kind` of artefact could live in, in precedence order."""
+    for parts in _ARTEFACT_ROOTS:
+        yield project_root.joinpath(*parts, kind)
+
+
+def _find_artefact(project_root: Path, kind: str, filename: str) -> Path | None:
+    for base in _artefact_dirs(project_root, kind):
+        candidate = base / filename
         if candidate.exists():
             return candidate
     return None
+
+
+def _artefact_write_dir(project_root: Path, kind: str) -> Path:
+    """Where to WRITE a new artefact: the root this project already uses.
+
+    Reading from the wrong directory goes quiet; writing to it does damage. The
+    consumer that prompted this carries a rule of its own on the point —
+    *"an audit trail split across two directories is worse than none: a reader
+    who checks the wrong one reports absence where evidence exists"* — written
+    after exactly that happened across three repositories, all of which ended up
+    with both directories present.
+
+    So the choice is made by evidence, not by default: the first root that already
+    holds artefacts of ANY kind wins. Only a project with no audit trail at all
+    falls through to the kit's own layout, and then there is nothing to split.
+    """
+    for parts in _ARTEFACT_ROOTS:
+        root = project_root.joinpath(*parts)
+        if root.is_dir() and any(root.iterdir()):
+            return root / kind
+    return project_root / ".claude" / "records" / kind
+
+
+def _find_plan(project_root: Path, slug: str) -> Path | None:
+    """Locate the plan file in whichever layout this consumer keeps."""
+    return _find_artefact(project_root, "plans", f"{slug}-plan.md")
 
 
 def _find_progress(project_root: Path, slug: str) -> Path | None:
@@ -389,8 +441,7 @@ def _find_progress(project_root: Path, slug: str) -> Path | None:
     A gate that reports SKIP because it looked in the wrong directory is indistinguishable in
     the report from one that legitimately had nothing to check, which is why this survived.
     """
-    for base in (project_root / ".claude" / "records" / "implementations",
-                 project_root / "records" / "implementations"):
+    for base in _artefact_dirs(project_root, "implementations"):
         candidate = base / f".progress-{slug}.json"
         if candidate.exists():
             return candidate
@@ -423,8 +474,7 @@ def check_implementation_log(project_root: Path, slug: str) -> dict[str, Any]:
         return {"name": "implementation_log", "status": "SKIP",
                 "reason": f"no plan for {slug} — implement did not run"}
 
-    for base in (project_root / ".claude" / "records" / "implementations",
-                 project_root / "records" / "implementations"):
+    for base in _artefact_dirs(project_root, "implementations"):
         candidate = base / f"{slug}-implementation.md"
         if candidate.exists():
             try:
@@ -542,7 +592,7 @@ def check_progress_schema_gate(project_root: Path, slug: str) -> dict[str, Any]:
     # Falls back to the plugin path when neither layout holds a checkpoint, so the schema
     # check still reports "missing" against a concrete path rather than crashing on None.
     path = _find_progress(project_root, slug) or (
-        project_root / ".claude" / "records" / "implementations" / f".progress-{slug}.json"
+        _artefact_write_dir(project_root, "implementations") / f".progress-{slug}.json"
     )
     from check_progress_schema import check_progress_schema
 
@@ -642,8 +692,7 @@ def check_phase_review_gate(project_root: Path, slug: str) -> dict[str, Any]:
     from check_phase_review import check_phase_review
 
     review_dirs = [
-        project_root / ".claude" / "records" / "mini-reviews",
-        project_root / "records" / "mini-reviews",
+        *_artefact_dirs(project_root, "mini-reviews"),
     ]
     report = check_phase_review(plan, progress, slug, review_dirs)
     return {
@@ -768,7 +817,7 @@ def main() -> int:
     print(json.dumps(report, indent=2))
 
     if not args.no_write_report:
-        review_dir = project_root / ".claude" / "records" / "reviews"
+        review_dir = _artefact_write_dir(project_root, "reviews")
         review_dir.mkdir(parents=True, exist_ok=True)
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         md_path = review_dir / f"{args.slug}-implement-validate-{today}.md"
