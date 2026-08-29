@@ -45,6 +45,21 @@ def _find_project_root(start: Path) -> Path:
     return start.resolve().parent if start.is_file() else start.resolve()
 
 
+def _target_exists(project_root: Path, target: str) -> bool:
+    """Does this path exist, in whichever layout the consumer installed?
+
+    Tried at the project root first, then under `.claude/`. This file already
+    resolved `live-target.txt` that way twenty lines above; the measurement-target
+    check did not, so a plan citing a kit path was called unresolvable in every
+    plugin install — a rule stated once and implemented on one of two paths, which
+    is the shape this kit keeps measuring.
+
+    Widening WHERE a target may resolve does not weaken WHETHER it resolves: a
+    path nobody wrote is still `path_not_found`.
+    """
+    return (project_root / target).exists() or (project_root / ".claude" / target).exists()
+
+
 def _resolves_as_module(project_root: Path, target: str) -> bool:
     """Does `target` name an installed npm module rather than a repo path?
 
@@ -127,7 +142,7 @@ def check_measurement_targets(plan_path: Path) -> dict[str, Any]:
         if _is_explicitly_blocked(raw, match.end()):
             blocked.add(target)
             continue
-        if (project_root / target).exists() or _resolves_as_module(project_root, target):
+        if _target_exists(project_root, target) or _resolves_as_module(project_root, target):
             verified.add(target)
         else:
             fabricated[target] = "path_not_found"

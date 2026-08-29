@@ -134,6 +134,23 @@ def _brief_for(plan_path: Path) -> Path:
     return plan_path.parent.parent / "alignment" / f"{slug}-alignment.md"
 
 
+def _is_kit_tooling(plan_path: Path) -> bool:
+    """Is this plan part of the INSTALLED KIT rather than the project's work?
+
+    The rule is already written down elsewhere in this kit, in
+    `DEFAULT_SKIP_DIRS`: *meta-tooling — /code-quality audits the PRODUCT, not its
+    own skills*. The alignment gate is the same kind of gate and had not learned
+    it, so in a consumer that has a `BACKLOG.md` it judged
+    `.claude/skills/plan-confidence/fixtures/good-plan.md` as if the project had
+    written it — eight tests red, none of them about the project's plans.
+
+    A project's plans live in `records/` or `knowledge-base/`. Anything under the
+    tooling directory belongs to the kit.
+    """
+    parts = plan_path.resolve().parts
+    return ".claude" in parts and "skills" in parts
+
+
 def _registry_exists(plan_path: Path) -> bool:
     """Does this repository keep a backlog or roadmap the plan could have come from?
 
@@ -151,6 +168,12 @@ def _registry_exists(plan_path: Path) -> bool:
 
 def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
     """Read the alignment verdict for this plan's item and turn it into a cap."""
+    if _is_kit_tooling(Path(plan_path)):
+        return AlignmentGateReport(
+            applies=False, verdict=None,
+            reason=("this plan is part of the installed kit's tooling, not the "
+                    "project's work — the kit does not audit itself"))
+
     content = Path(plan_path).read_text(encoding="utf-8-sig", errors="replace")
     cited = _committed_work_id(content)
     brief = _brief_for(Path(plan_path))

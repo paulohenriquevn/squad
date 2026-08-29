@@ -281,3 +281,31 @@ def test_the_bypass_is_still_closed_where_a_registry_exists(tmp_path: Path) -> N
     report = check_alignment_gate(p)
     assert not report.applies
     assert report.soft_floor == 89, report.reason
+
+
+def test_the_kit_does_not_judge_its_own_fixtures(tmp_path: Path) -> None:
+    """A plan inside the installed kit is tooling, not the project's work.
+
+    `theo-platform` has a `BACKLOG.md`, so the registry check above passes and the
+    floor fired on `.claude/skills/plan-confidence/fixtures/good-plan.md` — the
+    kit's own fixture, judged as if the project had written it. Eight tests red in
+    that consumer, none of them about the project's plans.
+
+    The rule already exists elsewhere in this kit and is written down in
+    `DEFAULT_SKIP_DIRS`: *meta-tooling — /code-quality audits the PRODUCT, not its
+    own skills*. The alignment gate is the same kind of gate and had not learned
+    it. A plan under `.claude/` belongs to the installed kit; the project's plans
+    live in `records/` or `knowledge-base/`, never inside the tooling directory.
+    """
+    kit_fixture = tmp_path / ".claude" / "skills" / "plan-confidence" / "fixtures"
+    kit_fixture.mkdir(parents=True)
+    (tmp_path / "BACKLOG.md").write_text("## B-001 — the project has a registry\n",
+                                         encoding="utf-8")
+    plan = kit_fixture / "good-plan.md"
+    plan.write_text("# Plan: a fixture\n\nNo backlog item, by design.\n", encoding="utf-8")
+
+    report = check_alignment_gate(plan)
+    assert not report.applies
+    assert report.soft_floor is None, report.reason
+    assert report.hard_cap is None, report.reason
+    assert "tooling" in report.reason.lower()

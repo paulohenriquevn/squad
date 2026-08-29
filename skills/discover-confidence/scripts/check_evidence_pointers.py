@@ -72,10 +72,31 @@ def _is_explicitly_blocked(raw: str, match_end: int) -> bool:
 
 
 def _resolve_code_pointer(project_root: Path, rel_path: str, line: int) -> tuple[bool, str]:
-    """Return (ok, reason). Reason is '' when ok."""
+    """Return (ok, reason). Reason is '' when ok.
+
+    A pointer is tried at the project root first, then under `.claude/`. In the
+    kit's standalone repository `rules/` and `skills/` sit at the root and the
+    first attempt wins. In a plugin install they sit one directory down, so
+    without the second attempt every pointer to a kit rule or script came back
+    `missing_file` and the gate raised `fabricated_evidence` over paths that are
+    on disk.
+
+    Measured in `theo-platform` on 2026-08-29: the kit's own `good-opportunity.md`
+    scored `evidence_pointers 0.0`, hard-capped to 49, verdict INVALID — four
+    pointers, four "missing", all four present one directory down. The fixture was
+    the visible casualty; the defect reaches any opportunity a consumer writes
+    that cites a kit file.
+
+    Widening WHERE a pointer may resolve does not weaken WHETHER it resolves: a
+    citation to a file nobody wrote is still a fabrication, and the line number is
+    still range-checked against whichever copy was found.
+    """
     path = project_root / rel_path
     if not path.is_file():
-        return False, "missing_file"
+        fallback = project_root / ".claude" / rel_path
+        if not fallback.is_file():
+            return False, "missing_file"
+        path = fallback
     try:
         total_lines = sum(1 for _ in path.open("r", encoding="utf-8", errors="replace"))
     except OSError as e:
