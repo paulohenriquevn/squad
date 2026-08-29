@@ -302,14 +302,27 @@ for item in skills rules hooks commands scripts; do
     OWN_KEEP=""
     if [ -d "$ECO/$item" ]; then
       OWN_KEEP="$(mktemp -d)"
-      ( cd "$ECO/$item" && find . -mindepth 1 \( -type f -o -type l \) -print ) \
-      | while IFS= read -r rel; do
-          rel="${rel#./}"
-          # In the source kit => the kit owns it => the fresh copy replaces it.
-          [ -e "$SRC_DIR/$item/$rel" ] && continue
-          mkdir -p "$OWN_KEEP/$(dirname "$rel")"
-          cp -p "$ECO/$item/$rel" "$OWN_KEEP/$rel"
+      # Descend only where the kit also has a directory. A subtree the kit does
+      # not ship is copied WHOLE and not walked — which is both correct and the
+      # difference between finishing and not: one consumer keeps a `.venv` inside
+      # a project skill, and walking it file by file made the install hang past
+      # every timeout. `-maxdepth 1` per level, recursing by hand.
+      _keep_own() {  # $1 = path relative to $item, "" at the top
+        local rel="$1" src dst entry base
+        src="$ECO/$item${rel:+/$rel}"
+        for entry in "$src"/* "$src"/.[!.]*; do
+          [ -e "$entry" ] || continue
+          base="$(basename "$entry")"
+          dst="${rel:+$rel/}$base"
+          if [ ! -e "$SRC_DIR/$item/$dst" ]; then
+            mkdir -p "$OWN_KEEP/$(dirname "$dst")"
+            cp -a "$entry" "$OWN_KEEP/$dst"     # whole subtree, links intact
+          elif [ -d "$entry" ] && [ ! -L "$entry" ]; then
+            _keep_own "$dst"                     # the kit has it too — look inside
+          fi
         done
+      }
+      _keep_own ""
     fi
 
     rm -rf "${ECO:?}/$item"
@@ -320,13 +333,13 @@ for item in skills rules hooks commands scripts; do
     # success — the same class of half-fix as the glob before it.
     if [ -n "${OWN_KEEP:-}" ]; then
       if [ -n "$(ls -A "$OWN_KEEP" 2>/dev/null)" ]; then
-        ( cd "$OWN_KEEP" && find . -mindepth 1 \( -type f -o -type l \) -print ) \
-        | while IFS= read -r rel; do
-            rel="${rel#./}"
-            mkdir -p "$ECO/$item/$(dirname "$rel")"
-            cp -p "$OWN_KEEP/$rel" "$ECO/$item/$rel"
-            echo "    kept (yours): $item/$rel"
-          done
+        # `cp -a` the top-level entries back: each is either a loose file or a
+        # whole subtree the kit does not ship, and both restore as one unit.
+        for entry in "$OWN_KEEP"/* "$OWN_KEEP"/.[!.]*; do
+          [ -e "$entry" ] || continue
+          cp -a "$entry" "$ECO/$item/"
+          echo "    kept (yours): $item/$(basename "$entry")"
+        done
       fi
       rm -rf "$OWN_KEEP"
       OWN_KEEP=""
