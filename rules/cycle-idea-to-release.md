@@ -69,6 +69,7 @@ Ad-hoc (`/idea-to-release {topic-slug}` with arbitrary slug):
 ## Confidence gates between phases
 
 - Before PLAN starts: a discovery opportunity exists OR the user explicitly confirms no measurement is needed (deterministic; pre-recorded via `--no-discover`).
+- **Before PLAN starts, for anything from `BACKLOG.md`: the item is `ALIGNED`.** `check_alignment_gate.py` hard-caps an unaligned plan at 49, so an item that skipped `/shared-understanding` cannot clear the next gate anyway. This one is different from every other gate in this list: it **cannot be satisfied by the pipeline**, because `ALIGNED` requires a human to tick `## Reviewer sign-off` and the agent may never tick a box. The orchestrator therefore **halts at `AWAITING_REVIEW` by design** and asks for the review. That is not a limitation to route around — an autonomous chain that could align an item with itself would be the failure the gate exists to prevent.
 - Before IMPLEMENT starts: plan-confidence verdict ≥ SHIPPABLE_WITH_CAVEATS.
 - Before CODE-QUALITY starts: implementation emitted `IMPLEMENTATION_COMPLETE`.
 - Before REVIEW starts: code-quality verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`}.

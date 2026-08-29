@@ -101,7 +101,7 @@ def test_skill_names_match_directory() -> None:
 
 
 def test_skill_count() -> None:
-    """Sanity check: we expect exactly 39 SKILL.md files.
+    """Sanity check: we expect exactly 40 SKILL.md files.
 
     Retired the in-cycle skill-distillation tail (skill-writer + skill-validator
     + skill-register, -3), adopted the standalone official skill-creator (+1),
@@ -117,9 +117,10 @@ def test_skill_count() -> None:
     the boundary proposer/verifier that pairs with the D5 detector (+1): 35 -> 36.
     Added the SOP family — sop-author (the static script), sop-run (the judgement
     that ran it) and sop-review (whether either is still true) (+3): 36 -> 39.
+    shared-understanding, the alignment gate between DISCOVER and PLAN (+1): 39 -> 40.
     """
     files = _get_skill_files()
-    assert len(files) == 39, (
-        f"Expected 39 SKILL.md files, found {len(files)}. "
+    assert len(files) == 40, (
+        f"Expected 40 SKILL.md files, found {len(files)}. "
         f"Update this test if skills were added or removed."
     )

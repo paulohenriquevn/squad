@@ -32,6 +32,7 @@ from check_baseline_context import check_baseline_context
 from check_concurrency_tests import check_concurrency_tests
 from check_coverage_matrix import CoverageReport, check_coverage_matrix
 from check_criterion_executability import ExecutabilityReport, check_criterion_executability
+from check_alignment_gate import check_alignment_gate
 from check_deps_audit import check_deps_audit
 from check_drawbacks_section import check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
@@ -310,6 +311,7 @@ def run_structural(
     concurrency = check_concurrency_tests(plan_path)
     failure_scenarios = check_failure_scenarios(plan_path)
     deps_audit = check_deps_audit(plan_path)
+    alignment = check_alignment_gate(plan_path)
     # Pre-flight: producer/consumer coherence across tasks, while both are
     # still prose. `check_wiring.py` asks this after /implement, when the
     # mismatched calls are already written.
@@ -398,6 +400,21 @@ def run_structural(
         hard_cap_ids.append(deps_audit.stable_id)
         final_score = min(final_score, 89.0)
 
+    # The 90% alignment threshold, mechanised. Until this line existed the rule
+    # was PROSE in three documents — `alignment-threshold.md`, a pre-condition in
+    # `cycle-implement.md`, a phase contract in `cycle-plan.md` — and a grep for
+    # anything READING `records/alignment/` returned nothing. Three documents said
+    # the item must not be built; no code could stop it.
+    #
+    # Unlike every other cap here there is no dismissing ADR and no `--skip`.
+    # An escape hatch on this one is an escape hatch on the reason it exists.
+    if alignment.hard_cap:
+        hard_cap_ids.append("alignment_not_reached")
+        final_score = min(final_score, float(alignment.hard_cap))
+    elif alignment.soft_floor:
+        hard_cap_ids.append("alignment_not_applicable")
+        final_score = min(final_score, float(alignment.soft_floor))
+
     verdict = _lookup_verdict(final_score, bands)
     # Hard caps "coverage_lt_100" and "fabricated_citation" force INVALID regardless of bands.
     if (
@@ -405,6 +422,7 @@ def run_structural(
         or "fabricated_citation" in hard_cap_ids
         or "patterns_skill_ignored" in hard_cap_ids
         or "deps_audit_insecure" in hard_cap_ids
+        or "alignment_not_reached" in hard_cap_ids
     ):
         verdict = "INVALID"
 
@@ -559,6 +577,13 @@ def run_structural(
                 "consumed_before_produced": list(interfaces.consumed_before_produced),
             },
             "failure_scenarios": {
+                "alignment_gate": {
+                    "applies": alignment.applies,
+                    "verdict": alignment.verdict,
+                    "reason": alignment.reason,
+                    "machine_ratio": alignment.machine_ratio,
+                    "brief_path": alignment.brief_path,
+                },
                 "deps_audit": {
                     "applies": deps_audit.applies,
                     "verdict": deps_audit.verdict,

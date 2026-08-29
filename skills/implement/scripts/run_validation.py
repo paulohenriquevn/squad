@@ -447,6 +447,50 @@ def check_implementation_log(project_root: Path, slug: str) -> dict[str, Any]:
     }
 
 
+def check_alignment_gate(project_root: Path, slug: str) -> dict[str, Any]:
+    """The item this slug implements reached 90% shared understanding, and a human said so.
+
+    `rules/alignment-threshold.md` says an item below the threshold is not built, and
+    `cycle-implement.md § Pre-conditions` repeats it. Both were prose: nothing in this
+    suite read `records/alignment/`, so the rule held exactly as long as somebody
+    remembered it — the same shape as the implementation log above, which went missing
+    three times while everyone believed the process covered it.
+
+    This is the LAST line, not the first. `plan-confidence` caps an unaligned plan at 49
+    and `cycle-plan` requires >= 70 to enter this cycle, so by the time this runs the code
+    already exists. It fires when somebody reached `/implement` without passing through
+    that gate — which is precisely the path a rule written only in prose leaves open.
+
+    FAIL rather than SKIP when the brief is absent, for the reason `check_implementation_log`
+    gives: SKIP is what a check says when it had nothing to look at, and here the cycle
+    declares there is. The one genuine SKIP is no plan for the slug — then the cycle never
+    ran and there is nothing to be missing.
+    """
+    plan = _find_plan(project_root, slug)
+    if plan is None:
+        return {"name": "alignment_gate", "status": "SKIP",
+                "reason": f"no plan for {slug} — implement did not run"}
+
+    scripts = Path(__file__).resolve().parents[2] / "plan-confidence" / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    try:
+        from check_alignment_gate import check_alignment_gate as _gate
+        report = _gate(plan)
+    except Exception as exc:  # noqa: BLE001 — a gate that cannot run is not a gate that passed
+        return {"name": "alignment_gate", "status": "FAIL",
+                "reason": f"the alignment gate could not run ({exc.__class__.__name__}: {exc})"}
+
+    if report.verdict == "ALIGNED":
+        return {"name": "alignment_gate", "status": "PASS", "detail": report.reason}
+    if not report.applies:
+        # No backlog item and no brief: the boundary no check can decide. WARN, so it is
+        # visible without failing every legitimate ad-hoc fix.
+        return {"name": "alignment_gate", "status": "WARN", "reason": report.reason}
+    return {"name": "alignment_gate", "status": "FAIL",
+            "reason": f"{report.verdict}: {report.reason}"}
+
+
 _PATTERNS_SKILL_RE = re.compile(r"\b([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*-patterns)\b")
 
 
@@ -693,6 +737,7 @@ def main() -> int:
         check_phase_review_gate(project_root, args.slug),
         check_acceptance_criteria_gate(project_root, args.slug),
         check_test_obligations_gate(project_root, args.slug),
+        check_alignment_gate(project_root, args.slug),
         check_implementation_log(project_root, args.slug),
         check_patterns_advisory(project_root, args.slug),
         check_code_quality(project_root, args.slug, skip=args.no_code_quality),

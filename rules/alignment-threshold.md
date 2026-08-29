@@ -76,6 +76,37 @@ A script cannot decide those. Scoring them silently would make the number claim
 more than it measured — the exact failure this kit calls evidence theatre. They
 stay a human judgement, stated out loud rather than counted as passing.
 
+## What enforces it
+
+Two layers, and the rule was PROSE in three documents until they existed —
+`alignment-threshold.md`, a pre-condition in `cycle-implement.md`, a phase
+contract in `cycle-plan.md`. A grep for anything reading `records/alignment/`
+returned nothing. Three documents said the item must not be built; no code
+could stop it.
+
+| Layer | Where | Effect |
+|---|---|---|
+| `skills/plan-confidence/scripts/check_alignment_gate.py` | inside `run_structural.py` | Hard cap 49 → `INVALID`. `cycle-plan` needs ≥ 70 to enter `/implement`, so an unaligned plan cannot get there |
+| the same check, re-run in `skills/implement/scripts/run_validation.py` | end of `/implement` | `FAIL`. The last line, for the path that reached `/implement` without passing through `plan-confidence` |
+
+There is **no `--skip` and no dismissing ADR** on this cap, unlike every other
+one in `plan-confidence`. An escape hatch here is an escape hatch on the reason
+the gate exists.
+
+## The bypass that remains, stated rather than hidden
+
+A plan citing no `B-NNN`, with no alignment brief for its slug, may be a
+legitimate ad-hoc fix — or an item that skipped intake precisely to skip this
+gate. **No check separates those.** Claiming otherwise would be the fabricated
+precision this kit refuses elsewhere.
+
+So that case takes a soft floor of 89 (`plan-confidence`) and a `WARN`
+(`/implement`), both naming the reason. It stays out of `SHIPPABLE` and lands in
+front of a human, which is where the same kind of judgement lives in
+`cycle-backlog.md` § Hard gates. Closing it mechanically would mean refusing every
+one-line hotfix, and a gate that fires on ordinary work is a gate somebody
+disables.
+
 ## Where the gate sits in the chain
 
 ```
