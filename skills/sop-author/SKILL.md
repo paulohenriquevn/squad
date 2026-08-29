@@ -45,7 +45,7 @@ that produced it, and that nobody would have predicted from a desk.
    and say how each competency is verified — a matrix listing who may act
    without saying how anyone knows they can is a training record with the
    training left out.
-7. **Run** `python3 scripts/check_sop_structure.py` and fix what it names.
+7. **Run** `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_sop_structure.py"` and fix what it names.
 
 ## Where to put it
 

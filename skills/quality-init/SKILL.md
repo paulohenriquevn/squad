@@ -67,7 +67,7 @@ The argument is a single line: `TARGET [FLAGS...]`. The first positional token i
 2. **Invoke the initializer.** The Python script does all 10 mandatory stages:
 
    ```bash
-   python3 scripts/init_quality_gates.py \
+   python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/init_quality_gates.py" \
        --target "$TARGET" \
        ${OUT:+--out "$OUT"} \
        ${FORCE:+--force} \

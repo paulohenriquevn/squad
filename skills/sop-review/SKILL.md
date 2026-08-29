@@ -27,8 +27,8 @@ earns the habit of being ignored.
 
 ## Steps
 
-1. **Run** `python3 scripts/check_sop_structure.py` and
-   `python3 scripts/check_sop_run.py`. These are the deterministic floor; do not
+1. **Run** `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_sop_structure.py"` and
+   `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_sop_run.py"`. These are the deterministic floor; do not
    restate by hand what they already computed.
 2. **List** every SOP with no run record. A procedure documented and never
    performed is either dead or a description of hope; both are worth naming.

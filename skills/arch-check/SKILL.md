@@ -68,7 +68,7 @@ reported as a finding instead.
 Run it directly:
 
 ```bash
-python3 skills/arch-check/scripts/propose_rules.py <repo> [--language go|typescript]
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/arch-check/scripts/propose_rules.py" <repo> [--language go|typescript]
 ```
 
 Go builds its graph from `go list -json ./...` — the toolchain resolves imports exactly, so it

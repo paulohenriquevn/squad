@@ -101,7 +101,7 @@ A golden rule is LOCKED. Changing it requires ALL of:
 
 1. An ADR in `records/adrs/` proposing the change.
 2. A CHANGELOG entry under `[Unreleased] § Changed`.
-3. `python3 scripts/check_xrefs.py` and `python3 scripts/verify_ecosystem.py` both PASS.
+3. `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_xrefs.py"` and `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/verify_ecosystem.py"` both PASS.
 
 A change that **softens** a gate (loosening a cap, removing a check) carries the full
 burden above. A change that **extends** the contract (adding a new hard cap) follows the
@@ -122,4 +122,4 @@ each golden rule's own change section.
 2. Add the new cycle's verdict vocabulary row to the matrix above.
 3. Wire the cycle in `README.md` (Project structure + the cycle diagram) and `HOW-TO-USE.md` (Which cycle, when).
 4. Add the new SKILL.md `Cycle contract` section pointing back at the rule.
-5. Run `python3 scripts/check_xrefs.py` and `python3 scripts/verify_ecosystem.py` — both MUST be PASS before the cycle is merged.
+5. Run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_xrefs.py"` and `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/verify_ecosystem.py"` — both MUST be PASS before the cycle is merged.

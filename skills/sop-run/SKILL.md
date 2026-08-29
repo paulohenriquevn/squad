@@ -34,7 +34,7 @@ repeated deviation means the SOP should change.
    teaches the next reader nothing.
 6. **Record** the outcome as `COMPLETED`, `COMPLETED_WITH_DEVIATIONS` or
    `ABORTED`. A `COMPLETED` on a run that deviated contradicts its own body.
-7. **Run** `python3 scripts/check_sop_run.py` and fix what it names.
+7. **Run** `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_sop_run.py"` and fix what it names.
 
 ## The step that is easy to skip and worth the most
 

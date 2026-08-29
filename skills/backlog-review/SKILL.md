@@ -68,8 +68,8 @@ Derived from the findings, never asserted — the same discipline the confidence
 ## Usage
 
 ```bash
-python3 skills/backlog-review/scripts/check_backlog_structure.py BACKLOG.md
-python3 skills/backlog-review/scripts/check_backlog_structure.py --json
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/check_backlog_structure.py" BACKLOG.md
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/check_backlog_structure.py" --json
 ```
 
 Read the output and report it. Do not edit `BACKLOG.md`.

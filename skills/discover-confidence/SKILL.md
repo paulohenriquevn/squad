@@ -98,7 +98,7 @@ Soft caps appear in `hard_caps_triggered` with the `soft_floor_` prefix for audi
 ## Workflow
 
 1. **Resolve the path.** A slug resolves to `.claude/records/discoveries/opportunities/{slug}-opportunity.md`; a `.md` path is used directly.
-2. **Run the scorer.** `python3 scripts/run_opportunity_score.py <opportunity-path>`.
+2. **Run the scorer.** `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/run_opportunity_score.py" <opportunity-path>`.
 3. **Parse the JSON**, matching `templates/score-report.schema.json`.
 4. **Render the report.** Top 3 contributors and detractors per dimension, verdict band marked.
 

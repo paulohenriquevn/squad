@@ -63,7 +63,7 @@ Skip this step in ad-hoc mode.
 ```bash
 # 0.1  Pick target milestone
 if [ -z "$ARG" ] || [[ "$ARG" =~ ^M[0-8]$ ]]; then
-  TARGET_MILESTONE=$(python3 skills/idea-to-release/scripts/select_next_milestone.py \
+  TARGET_MILESTONE=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/idea-to-release/scripts/select_next_milestone.py" \
     --roadmap ROADMAP.md \
     ${ARG:+--prefer "$ARG"} \
     --json)
@@ -142,11 +142,11 @@ If `/discover-confidence` after improve still < SHIPPABLE_WITH_CAVEATS → halt 
 Skill(/to-plan {topic-slug} [--milestone M<N>])   # --milestone forwarded only in roadmap-driven mode
 Skill(/edge-case-plan {topic-slug})
 # AUTO-INJECT MUST-FIX items into the plan (no AskUserQuestion):
-Bash(python3 skills/idea-to-release/scripts/inject_must_fix.py \
+Bash(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/idea-to-release/scripts/inject_must_fix.py" \
        --plan records/plans/{slug}-plan.md \
        --edge-cases records/reviews/{slug}-edge-cases-*.md)
 # INJECT milestone_id into plan frontmatter (roadmap-driven mode only):
-Bash(python3 skills/idea-to-release/scripts/inject_milestone_id.py \
+Bash(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/idea-to-release/scripts/inject_milestone_id.py" \
        --plan records/plans/{slug}-plan.md \
        --milestone-id M<N>)
 Skill(/deps-audit {topic-slug})

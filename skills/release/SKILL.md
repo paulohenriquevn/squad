@@ -52,7 +52,7 @@ If derivation is ambiguous, the skill pauses and asks the human ONCE.
 LATEST_REVIEW=$(ls -t records/reviews/*-review-*.md 2>/dev/null | head -1)
 grep -q '^\*\*Verdict:\*\* READY_TO_MERGE' "$LATEST_REVIEW"
 # CHANGELOG [Unreleased] has content
-python3 skills/release/scripts/changelog_section_nonempty.py --section Unreleased
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/changelog_section_nonempty.py" --section Unreleased
 # gh CLI authenticated
 gh auth status >/dev/null 2>&1
 # No release PR already open
@@ -64,8 +64,8 @@ If any HARD check fails, refuse with the missing piece surfaced honestly.
 ### Step 2 — Detect current version and compute next
 
 ```bash
-CURRENT=$(python3 skills/release/scripts/detect_current_version.py)
-NEXT_VERSION=$(python3 skills/release/scripts/compute_next_version.py \
+CURRENT=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/detect_current_version.py")
+NEXT_VERSION=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/compute_next_version.py" \
   --current "$CURRENT" \
   --bump "${ARGUMENTS:-auto}" \
   --changelog CHANGELOG.md)
@@ -92,7 +92,7 @@ If a tag for `$NEXT_VERSION` already exists, halt — never overwrite a publishe
 ### Step 3 — Rewrite CHANGELOG
 
 ```bash
-python3 skills/release/scripts/promote_unreleased.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/promote_unreleased.py" \
   --changelog CHANGELOG.md \
   --version "$NEXT_VERSION" \
   --date "$(date -u +%Y-%m-%d)"
@@ -106,8 +106,8 @@ This script:
 ### Step 3.5 — Write the version into every site that carries it
 
 ```bash
-CURRENT_VERSION=$(python3 skills/release/scripts/detect_current_version.py --quiet)
-python3 skills/release/scripts/bump_version.py \
+CURRENT_VERSION=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/detect_current_version.py" --quiet)
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/bump_version.py" \
   --root . \
   --from "$CURRENT_VERSION" \
   --to "$NEXT_VERSION"
@@ -150,7 +150,7 @@ NO `Co-Authored-By` trailer (per `hooks/validate-command.sh`). NO `--amend`. The
 ### Step 5 — Open the release PR
 
 ```bash
-RELEASE_NOTES=$(python3 skills/release/scripts/render_release_notes.py \
+RELEASE_NOTES=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/render_release_notes.py" \
   --changelog CHANGELOG.md \
   --version "$NEXT_VERSION")
 

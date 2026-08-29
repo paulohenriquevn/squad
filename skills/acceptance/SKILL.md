@@ -33,7 +33,7 @@ Do NOT trigger when `/release` returned `PR_OPEN_AWAITING_APPROVAL` or `BLOCKED`
 ### 1. Extract the criteria — before looking at the system
 
 ```bash
-python3 skills/acceptance/scripts/extract_acceptance_criteria.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/acceptance/scripts/extract_acceptance_criteria.py" \
     --roadmap ROADMAP.md --milestone M2 > criteria.json
 ```
 
@@ -66,7 +66,7 @@ The frontmatter MUST carry `verdict: <TOKEN>` — `session-goal`'s Stop-hook gat
 ### 5. Compute the verdict — do not name it
 
 ```bash
-python3 skills/acceptance/scripts/compute_acceptance_verdict.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/acceptance/scripts/compute_acceptance_verdict.py" \
     --criteria criteria.json --evidence evidence.json
 ```
 
@@ -77,7 +77,7 @@ Exit 0 → `ACCEPTED` / `ACCEPTED_WITH_CAVEATS`. Exit 1 → `REJECTED` / `NOT_VA
 On a green verdict only, reusing the release slice's script so the single-flip invariant has exactly one implementation:
 
 ```bash
-python3 skills/release/scripts/flip_milestone_checkbox.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/flip_milestone_checkbox.py" \
     --roadmap ROADMAP.md --milestone-id M2 --version {released-version} \
     --plan records/plans/{slug}-plan.md --commit
 ```

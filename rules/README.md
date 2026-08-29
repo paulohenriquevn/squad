@@ -77,4 +77,4 @@ Each `cycle-{name}.md` defines:
 
 - Cycle contracts and golden rules are **locked** — changes require team discussion
 - Thresholds and allowlists are per-project and can be adjusted freely
-- Run `python3 scripts/check_xrefs.py` after any change to validate references
+- Run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_xrefs.py"` after any change to validate references

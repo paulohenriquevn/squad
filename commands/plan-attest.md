@@ -12,7 +12,7 @@ Steps:
    - Prefer `${PLAN_SLUG}` env var if set
    - Then `.active_plan` pointer file contents
    - Then newest file in `records/plans/*-plan.md` by mtime
-2. Run `bash scripts/attest_plan.sh {slug}` to write the hash atomically (temp file + rename).
+2. Run `bash "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/attest_plan.sh" {slug}` to write the hash atomically (temp file + rename).
 3. Print confirmation: `attested {slug} -> {hash}`.
 4. Remind the user: "Any future edit to `records/plans/{slug}-plan.md` will cause the next UserPromptSubmit hook to block injection. Re-run `/plan-attest {slug}` after intentional edits to refresh the hash."
 

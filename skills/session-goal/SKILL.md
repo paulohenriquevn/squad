@@ -76,7 +76,7 @@ The composed condition text is still produced: it goes into the session as the o
 ### 1. Resolve and validate the milestones
 
 ```bash
-python3 skills/session-goal/scripts/compose_goal_condition.py --roadmap ROADMAP.md M2 M3
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/session-goal/scripts/compose_goal_condition.py" --roadmap ROADMAP.md M2 M3
 ```
 
 The script is the deterministic gate. It parses `ROADMAP.md` with the same header shape `cycle-acceptance` flips (`### M<N> — [ ] Name`), then refuses on: unknown id, already-`[x]` milestone, duplicate id, invalid id format, dependency wall, duplicated header, wrong header level, and condition over the cap. On success it prints the condition to stdout and exits 0; every refusal exits 1 with a `BLOCKED session-goal:` line naming the cause.
@@ -90,7 +90,7 @@ Restate the contract below to the user, naming the specific milestones. This is 
 ### 3. Arm the gate
 
 ```bash
-python3 skills/session-goal/scripts/install_goal_hook.py --milestones M2 M3
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/session-goal/scripts/install_goal_hook.py" --milestones M2 M3
 ```
 
 Writes `.claude/session-goal.json` (the goal state) and a `Stop` hook in `.claude/settings.local.json` — personal and gitignored, so arming a goal never lands in a teammate's checkout. Existing settings are merged, never replaced, and re-arming replaces our hook instead of stacking duplicates.
@@ -102,7 +102,7 @@ Two safety properties, both deliberate:
 - **Fail-open.** Any error in the gate allows the stop. A gate that bricks the session is worse than one that misses once.
 - **Bounded, twice over.** Each block increments a counter; past `max_blocks` (default 40) the gate releases with a warning saying plainly the milestone is **not** done. But the ceiling that actually binds is the CLI's: Claude Code overrides a Stop hook after **9 consecutive blocks** (`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`) and ends the turn regardless of what we set. Observed in the field. So `max_blocks` only governs blocks spread across turns — raising it is not a tighter grip, it is theatre. The gate cannot trap a session, and that is a property to rely on rather than a gap to close.
 
-To cancel: `python3 skills/session-goal/scripts/install_goal_hook.py --clear`.
+To cancel: `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/session-goal/scripts/install_goal_hook.py" --clear`.
 
 ### 4. Report
 

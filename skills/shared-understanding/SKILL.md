@@ -190,7 +190,7 @@ For each answer:
 
 ```bash
 # records/alignment/{slug}-walkthrough.yaml
-python3 skills/shared-understanding/scripts/build_walkthrough.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/shared-understanding/scripts/build_walkthrough.py" \
     records/alignment/{slug}-walkthrough.yaml \
     -o records/alignment/{slug}-walkthrough.html
 ```
@@ -247,7 +247,7 @@ without surfacing a single disagreement.
 ## Step 6 — Score, then hand the judgement to a human
 
 ```bash
-python3 skills/shared-understanding/scripts/score_alignment.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/shared-understanding/scripts/score_alignment.py" \
     records/alignment/{slug}-alignment.md
 ```
 

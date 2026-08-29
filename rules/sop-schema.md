@@ -59,7 +59,7 @@ One sentence. Why this procedure exists, not what it does.
 
 ## Steps
 1. **Verify** the working branch is `workspace` — `git branch --show-current`.
-2. **Run** the suite — `bash scripts/run_slice_tests.sh`.
+2. **Run** the suite — `bash "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/run_slice_tests.sh"`.
 
 ## Decisions
 ```mermaid

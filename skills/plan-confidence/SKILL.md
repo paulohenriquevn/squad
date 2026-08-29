@@ -53,7 +53,7 @@ These dimensions return empty `reasons` in M2 output. The composite formula reno
 ## Workflow
 
 1. **Resolve plan path.** If argument is a slug like `plan-confidence-setup`, resolve to `.claude/records/plans/{slug}-plan.md`. If argument is a path (`.md` suffix), use directly.
-2. **Invoke the structural runner.** Call `python3 scripts/run_structural.py <plan-path>` from the skill directory. Pass rubric path and thresholds path as arguments.
+2. **Invoke the structural runner.** Call `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/run_structural.py" <plan-path>` from the skill directory. Pass rubric path and thresholds path as arguments.
 3. **Parse the JSON output.** The runner emits a JSON object matching `templates/score-report-template.md`.
 4. **Render the report.** Render the JSON to the user, highlighting the top 3 contributors and detractors per dimension, with the verdict band clearly marked. If `verdict == INVALID`, display in red. If `verdict == SHIPPABLE`, display in green.
 

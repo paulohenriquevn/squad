@@ -143,7 +143,7 @@ Read `records/plans/{slug}-plan.md`. Extract:
 Before writing the implementation contract, run:
 
 ```bash
-python3 skills/implement/scripts/check_tdd_shape.py --plan records/plans/{slug}-plan.md --json
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/check_tdd_shape.py" --plan records/plans/{slug}-plan.md --json
 ```
 
 This validates that every task has an executable RED-test shape (assertion API, Given/When/Then, OR `test_<behavior>` literal). Tasks whose `#### TDD` section is missing OR contains only prose cannot drive a TDD RED phase.
@@ -208,7 +208,7 @@ Each iteration executes ONE task's complete TDD cycle:
 1. **RED phase:** write the failing test from the plan's TDD section, run it, confirm FAIL
 2. **GREEN phase:** walk the parsimony ladder (`rules/parsimony-ladder.md`), then write minimal production code, run test, confirm PASS
 3. **REFACTOR phase:** review code against SOLID/Clean Code/DRY rules; clean up; tests stay green
-4. **WIRING phase:** run `python3 skills/implement/scripts/check_wiring.py --symbol {symbol-name}` — HALT if any pillar fails
+4. **WIRING phase:** run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/check_wiring.py" --symbol {symbol-name}` — HALT if any pillar fails
 5. **COMMIT phase:** atomic commit with conventional-commit format (`feat(scope): description`, `fix(scope): description`, etc.) referencing plan task ID
 6. **PROGRESS:** update `.progress-{slug}.json` audit trail
 7. **PHASE BOUNDARY CHECK** (Step 4.7 — see below): if this commit closed a phase, run mini review BEFORE accepting the next task
@@ -220,7 +220,7 @@ If a task fails at any phase, the iteration HALTS (no commit), surfaces the fail
 After step 6 (PROGRESS), check whether THIS commit closed a `## Phase N` of the plan (last task of the phase is now `committed`). If yes:
 
 ```bash
-python3 skills/implement/scripts/mini_review.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/mini_review.py" \
   --slug {PLAN_SLUG} \
   --plan records/plans/{PLAN_SLUG}-plan.md \
   --progress records/implementations/.progress-{PLAN_SLUG}.json \
@@ -264,7 +264,7 @@ Key invariant: the skill never asks the user for permission between tasks while 
 After the halt-loop emits `<promise>IMPLEMENTATION_COMPLETE</promise>` (or exhausts), run ONCE:
 
 ```bash
-python3 skills/implement/scripts/run_validation.py {slug}
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/run_validation.py" {slug}
 ```
 
 This script consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-implementation gate into one report:
