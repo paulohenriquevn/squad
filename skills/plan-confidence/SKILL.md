@@ -39,8 +39,7 @@ This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md). The cycl
 
 If `compliance_score < 0.4` AND the plan otherwise scores ≥ 90, a soft cap fires (`soft_floor_low_architecture_compliance`, score capped at 89). Plans that don't show awareness of project rules cannot be SHIPPABLE.
 
-## What This Skill Does NOT Do (Yet)
-
+## Does Not Own
 **Out of scope for M2:**
 
 - **M3 (Evidence verification via SAFE adapted to `ripgrep + tree-sitter`)** — detects citation fabrication.

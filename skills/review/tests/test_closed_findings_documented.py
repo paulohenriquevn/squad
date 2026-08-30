@@ -88,13 +88,43 @@ def test_the_contract_states_how_to_close_a_finding(doc: Path) -> None:
     )
 
 
-def test_the_contract_forbids_the_two_dishonest_ways_past_a_blocker() -> None:
-    """Naming the legitimate path is not enough; the other two must be refused.
+def test_the_two_dishonest_ways_past_a_blocker_are_MECHANISED() -> None:
+    """What this used to be, and why it is not that any more.
 
-    A reader who learns that a closed BLOCKER passes, and is not told that
-    lowering severity also passes and is forbidden, has been handed the cheaper
-    option without the warning.
+    It asserted `"delete" in SKILL.md` and `"lower" in SKILL.md`. The concern was
+    real — `consolidate_findings.py` scores from OPEN findings, so deleting a
+    finding or lowering a BLOCKER to MEDIUM both pass — but a grep over a contract
+    is not a guard. "Removing a finding is forbidden" says the same thing and
+    fails the check; the word `delete` appearing anywhere else satisfies it. It
+    failed when the sentence improved and passed when the thing broke.
+
+    `rules/prompt-text-is-not-behaviour.md` names that shape and says what to do
+    with it: a grep over a contract is a SYMPTOM that the guarantee exists only as
+    prose. So the guarantee moved. `check_finding_continuity.py` compares two
+    consolidated reports for one slug and reports findings that were open and are
+    now neither present nor CLOSED, and findings whose severity dropped.
+
+    This test now asserts the MECHANISM exists and works, which is the thing the
+    sentence was promising. The sentence may be rewritten freely.
     """
-    text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").lower()
-    assert "lower" in text and "severity" in text, "must name severity-lowering as forbidden"
-    assert "delete" in text, "must name deletion as forbidden"
+    import sys
+    sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+    from check_finding_continuity import check_finding_continuity
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        reviews = root / "records" / "reviews"
+        reviews.mkdir(parents=True)
+        (reviews / "s-review-2026-01-01.md").write_text(
+            "## BLOCKER findings (1)\n\n### F-a-1: a real defect\n", encoding="utf-8")
+        (reviews / "s-review-2026-01-02.md").write_text(
+            "## MEDIUM findings (1)\n\n### F-a-1: a real defect\n", encoding="utf-8")
+
+        report = check_finding_continuity(root, "s")
+        assert any("F-a-1" in d for d in report.downgraded), (
+            "the downgrade path is not caught — the contract is alone again")
+
+        (reviews / "s-review-2026-01-02.md").write_text("# nothing\n", encoding="utf-8")
+        report = check_finding_continuity(root, "s")
+        assert "F-a-1" in report.vanished, "the deletion path is not caught"

@@ -324,8 +324,7 @@ question is what this skill exists to close.
 10. **Treating 90% as a target rather than a floor.** The score exists to refuse
     work, not to decorate it.
 
-## What this skill does NOT do
-
+## Does Not Own
 - It does NOT write the plan — that is `/to-plan`, which reads this brief.
 - It does NOT decide whether the item is worth doing — that is `cycle-discover`,
   upstream; an item arriving here already has evidence.

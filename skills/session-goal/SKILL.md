@@ -156,8 +156,7 @@ The fourth phase is the one most process descriptions omit. It is not optional h
 - **Using this instead of `/idea-to-release`.** This binds the session; it does not execute the cycle.
 - **Leaving a goal active after the milestones ship.** `/goal clear` — a stale goal re-prompts against work nobody is doing.
 
-## What this skill does NOT do
-
+## Does Not Own
 - Does not execute any cycle phase — `/idea-to-release M<N>` does that.
 - Does not edit `ROADMAP.md`. The checkbox flip belongs to `cycle-acceptance`, on a green verdict only.
 - Does not create plans, branches, commits or PRs.

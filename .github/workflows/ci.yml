@@ -69,6 +69,11 @@ jobs:
       # it tests — and an exemption with no reason does not count.
       - name: English only
         run: python3 scripts/check_english_only.py
+      # swarm-forge's AGENTS.md is four lines saying this, and this kit paid for
+      # the same lesson: a test that greps shipped prose fails when the sentence
+      # improves and passes when the thing it describes breaks.
+      - name: No test pins the wording of shipped prose
+        run: python3 scripts/check_prose_tests.py
 
       # A SOP that stops describing the work keeps being followed. These two
       # check the shape of the procedures and whether each run record accounts

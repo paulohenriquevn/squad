@@ -133,8 +133,7 @@ Non-negotiable for every measurement plan:
 6. **No premature conclusions.** A measurement plan ASKS. Answers come from `/discover-execute`. A plan that already states the finding has decided the outcome before measuring it.
 7. **No prior art as justification.** "Project X does it this way" is not a reason to measure ours. The reason is in the item's `why_now`, and gate G5 already refused it at intake if it was not.
 
-## What this skill does NOT do
-
+## Does Not Own
 - Run the measurement — `/discover-execute`.
 - Review edge cases in the plan — `/discover-edge-cases`.
 - Score the plan — `/discover-plan-confidence`.

@@ -42,8 +42,7 @@ The four weights sum to 1.0. Composite formula: `final = 0.30·corner_coverage +
 
 When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_active_cap)`.
 
-## What this skill does NOT do (yet)
-
+## Does Not Own
 **Out of scope for M2** (mirrors `/discover-confidence`'s deferred dimensions):
 
 - **M3 (semantic citation faithfulness)** — verifies the cited path contains the claimed symbol/behavior. Future: SAFE adapted to `ripgrep + tree-sitter`.

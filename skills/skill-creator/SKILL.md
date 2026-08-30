@@ -129,6 +129,31 @@ Prefer using the imperative form in instructions.
 
 **Defining output formats** - You can do it like this:
 ```markdown
+## Every skill declares what it does NOT own
+
+Give each new SKILL.md a `## Does Not Own` section, and put the boundary in the
+prompt of whoever could cross it.
+
+Taken from [`unclebob/swarm-forge`](https://github.com/unclebob/swarm-forge),
+where every role prompt carries one. Its `coder` is told, in the coder's own
+prompt, to ignore the specifier's QA suite and not to run mutation, CRAP or DRY
+checks — because those belong to the cleaner, architect and hardender. The
+boundary is not stated once in an architecture document where the person about to
+cross it will not read it; it is stated to that person.
+
+Measured here on 2026-08-29: 13 of 40 skills declared a boundary, under **six
+different section names** for one concept. The name is now `## Does Not Own`
+everywhere, which is the DRY rule this kit applies to knowledge and had not
+applied to its own headings.
+
+Write it only where a boundary genuinely exists — two skills that could each
+plausibly do the work, or a skill a reader would expect to do more than it does.
+An invented boundary is worse than none: it reads as a decision somebody made.
+
+The 27 skills without one are recorded as they are, not filled in. Fabricating 27
+boundaries to make a count look complete is the evidence theatre this kit refuses
+elsewhere.
+
 ## Report structure
 ALWAYS use this exact template:
 # [Title]

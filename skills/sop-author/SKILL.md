@@ -52,8 +52,7 @@ that produced it, and that nobody would have predicted from a desk.
 `records/sops/{slug}.md`. The slug is stable and never renamed: run
 records point at it, and a renamed SOP orphans its own history.
 
-## What this skill will not do
-
+## Does Not Own
 - Judge whether the steps are the RIGHT steps. That is domain knowledge held by
   whoever does the work; this skill shapes what they say, it does not supply it.
 - Write a `standard:` field naming ISO, OSHA or any norm without evidence the

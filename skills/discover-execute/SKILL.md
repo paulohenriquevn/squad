@@ -152,8 +152,7 @@ Registration is not optional. A finding that stays in this run's output and neve
 - **Spawning concurrent ralph-loops** on overlapping state.
 - **Sweeping without registering.**
 
-## What this skill does NOT do
-
+## Does Not Own
 - Write the measurement plan — `/discover-plan`.
 - Review edge cases — `/discover-edge-cases`.
 - Score the opportunity — `/discover-confidence`.

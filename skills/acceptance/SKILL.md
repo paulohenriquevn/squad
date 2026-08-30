@@ -105,8 +105,7 @@ State the target address, the verdict token, per-criterion status, evidence path
 - **Retrying silently until it passes.** Flakiness in the live system is a finding.
 - **Treating `NOT_VALIDATED` as a soft pass.** It blocks the flip exactly as `REJECTED` does.
 
-## What this skill does NOT do
-
+## Does Not Own
 - Does not run unit, integration or e2e suites — `cycle-code-quality` and the plan's Integration Validation phase own those.
 - Does not deploy, roll back, or hotfix. It reports and blocks; the fix re-enters at `/to-plan`.
 - Does not decide production-readiness across releases — that is `/honesty-gate`, which can consume these records as evidence.

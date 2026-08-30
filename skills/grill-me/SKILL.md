@@ -136,8 +136,7 @@ Based on the verdict:
 6. **Grilling trivial topics.** A 1-line fix doesn't need an interview.
 7. **Grilling when the user already wrote a spec.** Read the spec; ask only about gaps.
 
-## What this skill does NOT do
-
+## Does Not Own
 - It does NOT write the plan — that's `/to-plan` reading the grill output.
 - It does NOT explore prior art — that's `/discover-plan` (recommended when verdict is `NEEDS_DISCOVERY`).
 - It does NOT validate technical feasibility — that's `/edge-case-plan` + `/plan-confidence` later in the chain.

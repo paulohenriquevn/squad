@@ -31,7 +31,9 @@ def test_skill_md_frontmatter_parseable(skill_root: Path) -> None:
     assert isinstance(frontmatter["description"], str) and len(frontmatter["description"]) > 50
     assert frontmatter["user-invocable"] is True
     assert "Read" in frontmatter["allowed-tools"]
-    assert "argument-hint" in frontmatter
+    # prose-test: the KEY is the subject, not any wording under it — this asserts
+    # the frontmatter schema, which is structure and survives every rewrite.
+    assert "argument-hint" in frontmatter  # prose-test: schema, not wording
 
 
 def test_portable_md_exists(skill_root: Path) -> None:
