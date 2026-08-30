@@ -127,9 +127,24 @@ Read the agent file content. Invoke:
 Agent(
   subagent_type="general-purpose",
   description=f"Review-{role}",
+  isolation="worktree",
   prompt=<full agent .md content as system prompt + "Run your review now. Output structured findings.">
 )
 ```
+
+**`isolation="worktree"` is not optional.** Without it every reviewer reads and
+writes the same working tree, and each one's scratch files become the others'
+evidence. Measured on the B-025 run, and recorded in the comment above
+`capture_tree_state`: six agents against one tree, `usage-panel.tsx` found
+carrying a mutation marker mid-review, probe files at the repo root, and the
+architecture reviewer filing `reportGuardFailure has zero production call sites`
+against a symbol called at `usage-panel.tsx:115` and `:147`. **Three of six
+reviewers happened to notice the tree was dirty** and re-derived their citations —
+that correctness depended on noticing is the defect, not the dirt.
+
+The tree-state detector stays. It is not made redundant by the isolation: it is
+what proves the isolation is still in force, and isolation that silently stops
+working looks exactly like isolation that works.
 
 Each agent runs its review independently and returns findings in a structured format (see "Findings format" below). Skill collects all findings.
 
