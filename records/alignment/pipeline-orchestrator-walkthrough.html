@@ -1,0 +1,458 @@
+<title>The pipeline orchestrator</title>
+
+<!--
+  GENERATED FILE — do not hand-edit.
+
+  Built by skills/shared-understanding/scripts/build_walkthrough.py from a YAML
+  spec. Node positions and edge routes come from Graphviz; this shell contributes
+  only the animation and the reading order. Edit the spec and rebuild.
+
+  THE ANIMATION, AND WHY THESE THREE THINGS TOGETHER
+  A dot travelling along a line says "something moved". Three coordinated things
+  say what moved, where from, and what it did on arrival:
+    1. the edge DRAWS ITSELF   — stroke-dashoffset, length -> 0
+    2. a packet RIDES it       — CSS offset-path, not SMIL animateMotion
+    3. the destination ANSWERS — a pulse delayed by the travel time
+  prefers-reduced-motion collapses all three to the finished state at once: for
+  someone who cannot use motion this must still be a diagram, not a blank stage.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+  :root {
+    --bg: #f5f7fa; --panel: #fff; --ink: #16202b; --ink-soft: #5c6b7e;
+    --rule: #e0e6ee; --hair: #eef2f7;
+    --actor: #4a72b0; --service: #3f8f74; --store: #9a6b3f; --external: #8a5a9e;
+    --hot: #e0663f; --hot-soft: #f4c3b0;
+    --shadow: 0 1px 2px rgba(22,32,43,.05), 0 12px 32px rgba(22,32,43,.09);
+    --ease: cubic-bezier(.65,0,.35,1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10161e; --panel: #19212b; --ink: #e9eff7; --ink-soft: #94a6bb;
+      --rule: #2a3543; --hair: #212b36;
+      --actor: #7aa3e0; --service: #63c3a2; --store: #cfa06a; --external: #bb8fd0;
+      --hot: #ff8a5c; --hot-soft: #6b3524;
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10161e; --panel: #19212b; --ink: #e9eff7; --ink-soft: #94a6bb;
+    --rule: #2a3543; --hair: #212b36;
+    --actor: #7aa3e0; --service: #63c3a2; --store: #cfa06a; --external: #bb8fd0;
+    --hot: #ff8a5c; --hot-soft: #6b3524;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.4);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: clamp(1rem, 3vw, 2rem);
+    background: var(--bg); color: var(--ink);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif; line-height: 1.5;
+  }
+  header { max-width: 1240px; margin: 0 auto 1.1rem; }
+  h1 { font-size: clamp(1.3rem, 3vw, 1.85rem); margin: 0 0 .2rem; text-wrap: balance; }
+  .sub { color: var(--ink-soft); font-size: .92rem; margin: 0; max-width: 62ch; }
+
+  main { max-width: 1240px; margin: 0 auto; display: grid; gap: 1rem; }
+  @media (min-width: 960px) { main { grid-template-columns: minmax(0,1fr) 20rem; } }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 14px; box-shadow: var(--shadow); padding: .9rem;
+  }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+  .tab {
+    font: 500 .82rem Inter, sans-serif; cursor: pointer;
+    padding: .34rem .8rem; border-radius: 999px;
+    border: 1px solid var(--rule); background: transparent; color: var(--ink-soft);
+    transition: background .18s, color .18s, border-color .18s;
+  }
+  .tab[aria-selected="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+  .tab:focus-visible, .ctl:focus-visible { outline: 2px solid var(--actor); outline-offset: 2px; }
+
+  .controls { display: flex; gap: .4rem; align-items: center; margin-bottom: .5rem; }
+  .ctl {
+    font: 500 .82rem Inter, sans-serif; cursor: pointer;
+    padding: .32rem .7rem; border-radius: 8px;
+    border: 1px solid var(--rule); background: transparent; color: var(--ink);
+  }
+  .ctl[disabled] { opacity: .4; cursor: default; }
+  .counter { font: 500 .76rem "JetBrains Mono", monospace; color: var(--ink-soft); margin-left: auto; }
+
+  /* The stage scales with the container; every coordinate inside it came from
+     Graphviz, so nothing here is positioned by hand. */
+  .stage { width: 100%; display: block; overflow: visible; }
+
+  .node-box {
+    fill: var(--panel); stroke: var(--rule); stroke-width: 1.5;
+    transition: stroke .25s var(--ease), opacity .3s var(--ease), filter .3s var(--ease);
+  }
+  .node[data-kind="actor"]    .node-box { stroke: var(--actor); }
+  .node[data-kind="service"]  .node-box { stroke: var(--service); }
+  .node[data-kind="store"]    .node-box { stroke: var(--store); }
+  .node[data-kind="external"] .node-box { stroke: var(--external); }
+
+  .node-label { font: 500 12.5px Inter, sans-serif; fill: var(--ink); }
+  .node-kind  { font: 400 9px "JetBrains Mono", monospace; fill: var(--ink-soft); }
+  .node { transition: opacity .3s var(--ease), filter .3s var(--ease); }
+
+  /* FOUR node states. A node in this FLOW but not in this STEP must not fade to
+     the same grey as one the flow never touches — the eye needs the whole path
+     and the current hop at the same time. */
+  .node.out       { opacity: .2; filter: saturate(.3); }
+  .node.taking-part { opacity: .72; }
+  .node.from .node-box { stroke: var(--hot); stroke-width: 2; }
+  .node.to   .node-box { stroke: var(--hot); stroke-width: 2.5; }
+
+  /* Arrival is an EVENT. The pulse fires on the destination, delayed by the
+     travel time, so the packet lands on something that reacts. */
+  .node.to .halo {
+    fill: none; stroke: var(--hot); stroke-width: 2;
+    animation: land .62s var(--ease) forwards;
+  }
+  .halo { opacity: 0; }
+  @keyframes land {
+    0%   { opacity: .85; transform: scale(1);    }
+    100% { opacity: 0;   transform: scale(1.14); }
+  }
+
+  /* Wires. THREE states: the rest of this flow stays visible as a dashed
+     preview, so the reader keeps the whole path while one hop is discussed. */
+  .wire { fill: none; stroke: var(--hair); stroke-width: 1.5; opacity: .5;
+          transition: opacity .25s var(--ease); }
+  .wire.preview { stroke: var(--ink-soft); stroke-width: 1.4;
+                  stroke-dasharray: 3 5; opacity: .38; }
+  .wire.on { stroke: var(--hot); stroke-width: 2.5; opacity: 1; }
+
+  /* The draw-on. `--len` is written per wire from getTotalLength(), so the dash
+     budget is the path's own length and nothing has to be kept in sync by hand. */
+  .wire.on.drawing {
+    stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+    animation: draw var(--dur) var(--ease) forwards;
+  }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  .packet {
+    fill: var(--hot); opacity: 0;
+    offset-rotate: 0deg; will-change: offset-distance;
+  }
+  .packet.run {
+    offset-path: var(--track);
+    animation: ride var(--dur) var(--ease) forwards;
+  }
+  @keyframes ride {
+    0%   { offset-distance: 0%;   opacity: 0; }
+    8%   { opacity: 1; }
+    92%  { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+
+  .wire-label {
+    font: 500 10.5px Inter, sans-serif; fill: var(--hot);
+    paint-order: stroke; stroke: var(--panel); stroke-width: 3.5px;
+    stroke-linejoin: round; opacity: 0; transition: opacity .25s var(--ease);
+  }
+  .wire-label.on { opacity: 1; }
+  .wire-num {
+    font: 500 9.5px "JetBrains Mono", monospace; fill: var(--ink-soft);
+    paint-order: stroke; stroke: var(--panel); stroke-width: 3.5px;
+    stroke-linejoin: round;
+  }
+  .wire-num.on { fill: var(--hot); }
+
+  .side { display: flex; flex-direction: column; gap: .75rem; }
+  .side h2 {
+    font: 600 .7rem Inter, sans-serif; text-transform: uppercase;
+    letter-spacing: .09em; color: var(--ink-soft); margin: 0;
+  }
+  .step-title { font-weight: 600; font-size: .95rem; }
+  .payload {
+    font: 400 .76rem "JetBrains Mono", monospace; background: var(--bg);
+    border: 1px solid var(--rule); border-radius: 8px; padding: .5rem .6rem;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .note { font-size: .85rem; border-left: 3px solid var(--hot);
+          padding-left: .65rem; color: var(--ink-soft); }
+  .steps { list-style: none; margin: 0; padding: 0; display: flex;
+           flex-direction: column; gap: .08rem; }
+  .steps li {
+    font-size: .81rem; padding: .3rem .45rem; border-radius: 6px;
+    color: var(--ink-soft); cursor: pointer;
+  }
+  .steps li[aria-current="true"] { background: var(--bg); color: var(--ink); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+    .wire.on.drawing { stroke-dashoffset: 0; }
+    .packet.run { offset-distance: 100%; opacity: 1; }
+  }
+</style>
+
+<header>
+  <h1 id="title"></h1>
+  <p class="sub" id="subtitle"></p>
+</header>
+
+<main>
+  <section class="card">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="controls">
+      <button class="ctl" id="back">‹ Back</button>
+      <button class="ctl" id="play">▶ Play</button>
+      <button class="ctl" id="next">Next ›</button>
+      <span class="counter" id="counter"></span>
+    </div>
+    <svg class="stage" id="stage" role="img" aria-labelledby="title"></svg>
+  </section>
+
+  <aside class="card side">
+    <div>
+      <h2>Current step</h2>
+      <div class="step-title" id="step-title"></div>
+    </div>
+    <div class="payload" id="payload"></div>
+    <div class="note" id="note"></div>
+    <div>
+      <h2>All steps</h2>
+      <ol class="steps" id="step-list"></ol>
+    </div>
+  </aside>
+</main>
+
+<script id="payload-data" type="application/json">{"title": "The pipeline orchestrator", "subtitle": "Many items in flight, one stage each. Watch step 3 of the primary flow — the item that halts does not stop the line, and that is the whole point.", "width": 1042.0, "height": 253.0, "nodes": {"backlog": {"x": 56.0, "y": 46.5, "w": 112.0, "h": 45.0, "label": "BACKLOG.md", "kind": "store"}, "workflow": {"x": 361.0, "y": 46.5, "w": 112.0, "h": 45.0, "label": "pipeline", "kind": "service"}, "judge": {"x": 986.0, "y": 22.5, "w": 112.0, "h": 45.0, "label": "judge agent", "kind": "actor"}, "lane": {"x": 669.0, "y": 104.5, "w": 112.0, "h": 45.0, "label": "lane worktree", "kind": "service"}, "review": {"x": 986.0, "y": 137.5, "w": 112.0, "h": 45.0, "label": "REVIEW fan-out", "kind": "service"}, "pr": {"x": 986.0, "y": 230.5, "w": 112.0, "h": 45.0, "label": "release PR", "kind": "external"}}, "flows": [{"name": "Three items in flight [primary]", "steps": [{"from": "backlog", "to": "workflow", "label": "3 triaged items", "payload": "B-014 · B-022 · B-033", "note": "One consumer has 22 of these waiting. Today they are worked in sequence and every phase is idle whenever it is not the current one.", "d": "M 112.30,46.50 C 163.80,46.50 240.04,46.50 294.52,46.50", "lx": 170.23, "ly": 41.0}, {"from": "workflow", "to": "lane", "label": "3 lanes, not 8", "payload": "min(16, cpus-2)=10 · REVIEW fans out 5-7", "note": "The first draft said 8 and the judge refused it. 8 lanes with one in REVIEW needs 8+7=15 against a cap of 10 — it deadlocks on the very limit it cited. Reserving one review's fan-out leaves 10-7=3.", "d": "M 417.13,57.07 C 469.49,66.93 547.60,81.64 602.94,92.06", "lx": 480.72, "ly": 69.95}, {"from": "lane", "to": "judge", "label": "B-022 needs sign-off", "payload": "brief at 94%, boxes unticked", "note": "Readers expect the line to stop here. It does not. Only B-022 waits; B-014 and B-033 keep moving, which is why the pipeline is worth building at all.", "d": "M 725.07,84.48 C 779.49,68.54 862.08,47.10 919.72,33.89", "lx": 774.38, "ly": 51.19}, {"from": "judge", "to": "lane", "label": "signs or refuses", "payload": "verdict written into the brief", "note": "The judge reads the item's EVIDENCE, not just the brief. It must be able to refuse, or it is a rubber stamp with extra latency.", "d": "M 929.93,42.52 C 875.51,58.46 792.92,79.90 735.28,93.11", "lx": 787.12, "ly": 64.81}, {"from": "lane", "to": "pr", "label": "B-014 reaches release", "payload": "while B-022 is still with the judge", "note": "The throughput is over ITEMS, not over the phases of one item.", "d": "M 725.31,126.88 C 780.00,148.62 862.98,181.60 920.58,204.50", "lx": 771.56, "ly": 162.03}]}, {"name": "One item parked, line moves [alternate]", "steps": [{"from": "lane", "to": "judge", "label": "B-022 alignment", "payload": "brief at 71%", "note": "", "d": "M 725.31,89.93 C 779.88,75.82 862.64,54.41 920.22,39.52", "lx": 785.24, "ly": 57.94}, {"from": "judge", "to": "workflow", "label": "REFUSED — gaps named", "payload": "nfr_measurable, interaction_model", "note": "A refusal is not a failure of the pipeline. It is the gate doing the one thing it exists for, on one item, without touching the other two.", "d": "M 929.99,24.65 C 814.58,29.08 550.80,39.21 427.20,43.96", "lx": 607.24, "ly": 29.01}, {"from": "workflow", "to": "lane", "label": "B-014 and B-033 advance", "payload": "", "note": "The parked item costs one lane, not the line.", "d": "M 417.13,57.07 C 469.49,66.93 547.60,81.64 602.94,92.06", "lx": 449.72, "ly": 80.95}]}, {"name": "REVIEW sends work back [alternate2]", "steps": [{"from": "lane", "to": "review", "label": "B-014 enters REVIEW", "payload": "holds a whole lane — 5-7 reviewers", "note": "REVIEW is the one stage that fans out, so it occupies a lane by itself. Two concurrent reviews need 14 agents against a cap of 10.", "d": "M 725.13,105.04 C 779.59,108.86 862.24,117.34 919.87,124.96", "lx": 883.41, "ly": 108.7}, {"from": "review", "to": "lane", "label": "merge-only handoff back", "payload": "back-one, carries a commit not a task", "note": "Backward propagation — the third thing parallelism-shapes.md says the pipeline needs, and the one the first draft of this brief forgot. The judge caught its absence. Upstream MERGES it; it is not new work.", "d": "M 929.87,136.96 C 875.41,133.14 792.76,124.66 735.13,117.04", "lx": 763.59, "ly": 133.3}]}, {"name": "A stage fails [exception]", "steps": [{"from": "lane", "to": "judge", "label": "/implement returned FAIL", "payload": "validation gate red", "note": "One retry, then PARK AND SURFACE. cycle-idea-to-release:80 halts and asks the HUMAN here; an earlier draft swapped in a judge without saying so. That substitution is now CHK004's subject, not a detail in a flow.", "d": "M 725.31,89.93 C 779.88,75.82 862.64,54.41 920.22,39.52", "lx": 761.24, "ly": 57.94}, {"from": "judge", "to": "workflow", "label": "park with the verdict", "payload": "no other item affected", "note": "", "d": "M 929.99,24.65 C 814.58,29.08 550.80,39.21 427.20,43.96", "lx": 620.24, "ly": 29.01}, {"from": "workflow", "to": "lane", "label": "the other lanes continue", "payload": "", "note": "", "d": "M 417.13,57.07 C 469.49,66.93 547.60,81.64 602.94,92.06", "lx": 452.72, "ly": 80.95}]}, {"name": "The run is interrupted [recovery]", "steps": [{"from": "workflow", "to": "backlog", "label": "state lives on disk", "payload": "queue + per-item lane", "note": "The Workflow tool resumes by runId, but the ITEM state must outlive the process too — otherwise a restart re-runs work that already landed.", "d": "M 304.70,51.88 C 253.20,53.60 176.96,53.70 122.48,52.19", "lx": 162.77, "ly": 58.75}, {"from": "backlog", "to": "workflow", "label": "resume from the queue", "payload": "orphan worktrees reclaimed first", "note": "A worktree left behind by a killed run is indistinguishable from a live one. Reclaim before starting anything new, or the next run inherits a dirty tree — the defect isolation exists to prevent.", "d": "M 112.30,41.12 C 163.80,39.40 240.04,39.30 294.52,40.81", "lx": 238.98, "ly": 45.25}, {"from": "workflow", "to": "lane", "label": "the line restarts", "payload": "", "note": "", "d": "M 417.13,57.07 C 469.49,66.93 547.60,81.64 602.94,92.06", "lx": 474.22, "ly": 69.95}]}]}</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("payload-data").textContent);
+const NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("stage");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Travel time scales with distance, floored and capped: a short hop that takes
+ *  as long as a long one reads as a stall, and a long one at the short one's
+ *  speed is a blur. */
+const duration = len => Math.max(420, Math.min(1500, len * 2.1));
+
+let flowIndex = 0, step = 0, timer = null;
+let wires = [];   // { path, packet, label, num, len }
+
+const el = (tag, attrs = {}) => {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+};
+
+function buildStage() {
+  svg.innerHTML = "";
+  // Graphviz's own bounding box, plus a margin so strokes and labels at the
+  // edge are not clipped by the viewBox.
+  const M = 14;
+  svg.setAttribute("viewBox", `${-M} ${-M} ${DATA.width + M * 2} ${DATA.height + M * 2}`);
+  // No fixed height and no viewport cap: the viewBox carries the aspect
+  // ratio, so the stage fills its column and the type stays at the size the
+  // layout chose. A `max-height` shrinks the whole drawing to fit, which is
+  // how 12.5px labels ended up unreadable.
+  svg.style.aspectRatio = `${DATA.width + M * 2} / ${DATA.height + M * 2}`;
+
+  const defs = el("defs");
+  defs.innerHTML =
+    `<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7"
+             markerHeight="7" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+       <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"/>
+     </marker>`;
+  svg.appendChild(defs);
+
+  const wireLayer = el("g", { id: "wires" });
+  const nodeLayer = el("g", { id: "nodes" });
+  svg.append(wireLayer, nodeLayer);
+
+  for (const [id, n] of Object.entries(DATA.nodes)) {
+    const g = el("g", { class: "node", id: "node-" + id, "data-kind": n.kind });
+    const x = n.x - n.w / 2, y = n.y - n.h / 2;
+    // The halo sits behind and scales about the node's own centre, so the pulse
+    // grows outward rather than drifting toward the origin.
+    g.appendChild(el("rect", {
+      class: "halo", x, y, width: n.w, height: n.h, rx: 9,
+      style: `transform-box: fill-box; transform-origin: center;`,
+    }));
+    g.appendChild(el("rect", { class: "node-box", x, y, width: n.w, height: n.h, rx: 9 }));
+    const label = el("text", {
+      class: "node-label", x: n.x, y: n.y - 1, "text-anchor": "middle",
+    });
+    label.textContent = n.label;
+    const kind = el("text", {
+      class: "node-kind", x: n.x, y: n.y + 12, "text-anchor": "middle",
+    });
+    kind.textContent = n.kind;
+    g.append(label, kind);
+    nodeLayer.appendChild(g);
+  }
+  return wireLayer;
+}
+
+function buildWires(wireLayer) {
+  wireLayer.innerHTML = "";
+  wires = [];
+  DATA.flows[flowIndex].steps.forEach((s, i) => {
+    const path = el("path", { class: "wire", d: s.d, "marker-end": "url(#ah)" });
+    wireLayer.appendChild(path);
+    const len = path.getTotalLength();
+    // Graphviz placed the label and handed back `lp`, having reserved room for
+    // it during layout. Falling back to the curve's midpoint is what the first
+    // version did everywhere, and it is what put "write brief" on top of the
+    // Reviewer box — the midpoint of a curve is not a free spot, it is just a
+    // spot nobody checked.
+    const mid = path.getPointAtLength(len / 2);
+    const lx = s.lx ?? mid.x, ly = s.ly ?? mid.y + 12;
+
+    const num = el("text", {
+      class: "wire-num", x: lx, y: ly - 11, "text-anchor": "middle",
+    });
+    num.textContent = String(i + 1);
+    const label = el("text", {
+      class: "wire-label", x: lx, y: ly, "text-anchor": "middle",
+    });
+    label.textContent = s.label;
+
+    const packet = el("circle", { class: "packet", r: 5, cx: 0, cy: 0 });
+    packet.style.setProperty("--track", `path("${s.d}")`);
+
+    wireLayer.append(num, label, packet);
+    wires.push({ path, packet, label, num, len });
+  });
+}
+
+function render() {
+  const flow = DATA.flows[flowIndex];
+  const s = flow.steps[step];
+  const inFlow = new Set(flow.steps.flatMap(st => [st.from, st.to]));
+
+  wires.forEach((w, i) => {
+    const on = i === step;
+    w.path.classList.toggle("on", on);
+    w.path.classList.toggle("preview", !on);
+    w.num.classList.toggle("on", on);
+    w.label.classList.toggle("on", on);
+
+    // Restarting a CSS animation needs the class removed, the layout flushed,
+    // and the class re-added. Without the reflow the browser coalesces both
+    // mutations into no change at all and the step plays nothing.
+    w.path.classList.remove("drawing");
+    w.packet.classList.remove("run");
+    if (!on) { w.packet.style.opacity = 0; return; }
+
+    const dur = `${Math.round(duration(w.len))}ms`;
+    w.path.style.setProperty("--len", w.len.toFixed(1));
+    w.path.style.setProperty("--dur", dur);
+    w.packet.style.setProperty("--dur", dur);
+    void w.path.getBoundingClientRect();
+    w.path.classList.add("drawing");
+    w.packet.classList.add("run");
+  });
+
+  for (const id of Object.keys(DATA.nodes)) {
+    const n = document.getElementById("node-" + id);
+    n.classList.toggle("from", id === s.from);
+    n.classList.toggle("taking-part", inFlow.has(id) && id !== s.from && id !== s.to);
+    n.classList.toggle("out", !inFlow.has(id));
+    // `to` is re-applied last and after a reflow so the halo animation restarts
+    // on every step, including a step whose destination did not change.
+    n.classList.remove("to");
+    if (id === s.to) {
+      void n.getBoundingClientRect();
+      const w = wires[step];
+      n.querySelector(".halo").style.animationDelay =
+        reduced ? "0ms" : `${Math.round(duration(w.len) * 0.82)}ms`;
+      n.classList.add("to");
+    }
+  }
+
+  document.getElementById("step-title").textContent =
+    `${DATA.nodes[s.from].label} → ${DATA.nodes[s.to].label}: ${s.label}`;
+  const pay = document.getElementById("payload");
+  pay.textContent = s.payload || "—";
+  pay.style.display = s.payload ? "" : "none";
+  const note = document.getElementById("note");
+  note.textContent = s.note || "";
+  note.style.display = s.note ? "" : "none";
+  document.getElementById("counter").textContent = `step ${step + 1} / ${flow.steps.length}`;
+
+  document.querySelectorAll("#step-list li").forEach((li, i) =>
+    li.setAttribute("aria-current", String(i === step)));
+  document.getElementById("back").disabled = step === 0;
+  document.getElementById("next").disabled = step === flow.steps.length - 1;
+}
+
+function buildStepList() {
+  const list = document.getElementById("step-list");
+  list.innerHTML = "";
+  DATA.flows[flowIndex].steps.forEach((s, i) => {
+    const li = document.createElement("li");
+    li.textContent = `${i + 1}. ${s.label}`;
+    li.onclick = () => { stop(); step = i; render(); };
+    list.appendChild(li);
+  });
+}
+
+function selectFlow(i) {
+  stop();
+  flowIndex = i; step = 0;
+  document.querySelectorAll(".tab").forEach((t, j) =>
+    t.setAttribute("aria-selected", String(j === i)));
+  buildWires(document.getElementById("wires"));
+  buildStepList();
+  render();
+}
+
+function stop() {
+  clearTimeout(timer); timer = null;
+  document.getElementById("play").textContent = "▶ Play";
+}
+
+function play() {
+  if (timer) return stop();
+  document.getElementById("play").textContent = "❚❚ Pause";
+  const tick = () => {
+    const flow = DATA.flows[flowIndex];
+    if (step >= flow.steps.length - 1) return stop();
+    step++; render();
+    timer = setTimeout(tick, duration(wires[step].len) + 700);
+  };
+  if (step >= DATA.flows[flowIndex].steps.length - 1) { step = 0; render(); }
+  timer = setTimeout(tick, duration(wires[step].len) + 700);
+}
+
+document.getElementById("title").textContent = DATA.title;
+document.getElementById("subtitle").textContent = DATA.subtitle;
+document.title = DATA.title;
+
+const tabs = document.getElementById("tabs");
+DATA.flows.forEach((f, i) => {
+  const b = document.createElement("button");
+  b.className = "tab"; b.role = "tab"; b.textContent = f.name;
+  b.onclick = () => selectFlow(i);
+  tabs.appendChild(b);
+});
+
+document.getElementById("next").onclick = () => {
+  stop();
+  if (step < DATA.flows[flowIndex].steps.length - 1) { step++; render(); }
+};
+document.getElementById("back").onclick = () => {
+  stop();
+  if (step > 0) { step--; render(); }
+};
+document.getElementById("play").onclick = play;
+addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") document.getElementById("next").click();
+  if (e.key === "ArrowLeft") document.getElementById("back").click();
+  if (e.key === " ") { e.preventDefault(); play(); }
+});
+
+buildStage();
+selectFlow(0);
+</script>

@@ -120,8 +120,19 @@ _VAGUE_TERMS = (
 _VAGUE_RE = re.compile(r"\b(" + "|".join(re.escape(t) for t in _VAGUE_TERMS) + r")\b",
                        re.IGNORECASE)
 
-#: A reviewer-owned checkbox. Generated `[ ]`, ticked only by a human.
+#: A reviewer-owned checkbox. Generated `[ ]`, ticked by a reviewer.
 _CHECKBOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.+?)\s*$", re.MULTILINE)
+
+#: `<!-- signed-by: judge/alignment-judge -->` on the ticked line.
+#:
+#: An unattributed tick reads as a human's, and for most of this file's life that
+#: was the only kind there was. Once an agent may sign, `ALIGNED` stops meaning
+#: one thing — a reader has to be able to tell a human review from an agent's
+#: without opening the file, because the two are worth different amounts.
+# Captures to the closing marker, spaces included: the ROUTE is part of the
+# provenance. `human/paulo (approved in session)` says more than `human`, and
+# a pattern that stopped at the first space silently dropped exactly that.
+_SIGNED_BY_RE = re.compile(r"<!--\s*signed-by:\s*([^>]+?)\s*-->")
 
 
 @dataclass(frozen=True)
@@ -140,6 +151,23 @@ class AlignmentReport:
     #: means signed off; an absent checklist is not a sign-off either.
     pending_review: tuple[str, ...] = ()
     reviewer_items_total: int = 0
+    #: "human", or the judge's identifier, or None when nothing is signed. A
+    #: mixed set reports the WEAKEST signer: a reader deciding how far to trust
+    #: the verdict needs the weakest link, not the majority — the same reason a
+    #: partially reviewed brief counts as unreviewed.
+    signed_by: str | None = None
+
+    @property
+    def signed_by_is_human(self) -> bool:
+        """A NAMED human is still a human.
+
+        Provenance must not cost the distinction it exists to protect: the first
+        cut treated any marker other than the bare word `human` as an agent, so
+        recording WHO signed would have downgraded a person's signature to an
+        agent's. The `human/` prefix keeps both the route and the meaning.
+        """
+        return bool(self.signed_by) and (
+            self.signed_by == "human" or self.signed_by.startswith("human/"))
 
     # ── the machine half: structure the agent can and should reach ──────────
     @property
@@ -385,12 +413,25 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     boxes = _CHECKBOX_RE.findall(signoff or "")
     pending = tuple(text for mark, text in boxes if mark == " ")
 
+    ticked = [text for mark, text in boxes if mark in ("x", "X")]
+    signers = {(_SIGNED_BY_RE.search(t).group(1) if _SIGNED_BY_RE.search(t) else "human")
+               for t in ticked}
+    if not ticked or pending:
+        signed_by = None
+    elif len(signers) == 1:
+        signed_by = signers.pop()
+    else:
+        # Weakest wins: any agent signature makes the whole set an agent's.
+        non_human = sorted(s for s in signers
+                           if s != "human" and not s.startswith("human/"))
+        signed_by = non_human[0] if non_human else sorted(signers)[0]
+
     judgement = (
         "whether the stated problem is the real one",
         "whether the flows drawn are the flows that matter",
         "whether the numbers in the NFRs are the right numbers",
     )
-    return AlignmentReport(tuple(criteria), judgement, pending, len(boxes))
+    return AlignmentReport(tuple(criteria), judgement, pending, len(boxes), signed_by)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -421,6 +462,8 @@ def main(argv: list[str] | None = None) -> int:
             "threshold": THRESHOLD,
             "meets_machine_threshold": report.meets_machine_threshold,
             "reviewer_signed_off": report.reviewer_signed_off,
+            "signed_by": report.signed_by,
+            "signed_by_is_human": report.signed_by_is_human,
             "reviewer_items_total": report.reviewer_items_total,
             "pending_review": list(report.pending_review),
             "criteria": [
@@ -445,7 +488,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print()
     if report.reviewer_signed_off:
-        print(f"Reviewer sign-off: all {report.reviewer_items_total} items ticked.")
+        who = report.signed_by or "human"
+        note = "" if report.signed_by_is_human else "  ← an AGENT signed, not a person"
+        print(f"Reviewer sign-off: all {report.reviewer_items_total} items ticked "
+              f"by `{who}`.{note}")
     elif report.reviewer_items_total:
         print(f"Reviewer sign-off: {len(report.pending_review)} of "
               f"{report.reviewer_items_total} still unticked —")
