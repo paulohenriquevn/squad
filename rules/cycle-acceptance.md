@@ -126,6 +126,7 @@ When a criterion cannot be exercised with any available instrument, its status i
 - `ACCEPTED_WITH_CAVEATS` — every criterion passed with evidence, but non-blocking defects were observed. Each defect is filed as an issue before the flip. Checkbox flips.
 - `REJECTED` — at least one criterion failed in the live system, or a blocker-severity defect was observed. Checkbox stays `[ ]`. The delivery is already public: open the hotfix path immediately, then re-enter at `cycle-plan`.
 - `NOT_VALIDATED` — the run could not establish either outcome: a criterion was never exercised, the target was unreachable, evidence was missing, or the milestone declared no Definition of done. Checkbox stays `[ ]`.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
 `NOT_VALIDATED` is deliberately distinct from `REJECTED`. "We could not check" and "we checked and it is broken" are different facts, and a cycle that collapses them starts reporting untested work as tested.
 

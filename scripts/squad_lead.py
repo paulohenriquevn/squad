@@ -322,10 +322,64 @@ class Lead:
         answer = out.stdout.strip()
         return (answer, "answered") if answer else (None, f"{agent} answered nothing")
 
+    def _last_verdict(self, item: str) -> str | None:
+        """The verdict of the last phase this item ended, or None."""
+        if self.project is None:
+            return None
+        tooling = Path(__file__).resolve().parent
+        if str(tooling) not in sys.path:
+            sys.path.insert(0, str(tooling))
+        try:
+            from cycle_events import read_events
+        except ImportError:
+            return None
+        try:
+            events = read_events(self.project)
+        except (OSError, ValueError):
+            return None
+        for event in reversed(events):
+            if event.get("type") != "cycle:phase:end":
+                continue
+            match = _SLUG_ITEM_RE.search(str(event.get("slug") or ""))
+            if match and f"B-{match.group(1)}" == item.upper():
+                verdict = event.get("verdict")
+                return str(verdict) if verdict else None
+        return None
+
+    def _blocking_verdicts(self) -> frozenset[str]:
+        """The shared list, read from `rules/blocking-verdicts.txt`.
+
+        Empty when unreadable — which only ever costs a retry, never fabricates a
+        reason to stop.
+        """
+        if self.project is None:
+            return frozenset()
+        for relative in ("rules", ".claude/rules"):
+            path = self.project / relative / "blocking-verdicts.txt"
+            if path.is_file():
+                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+                names = {line.split("#", 1)[0].strip().upper() for line in lines}
+                names.discard("")
+                return frozenset(names)
+        return frozenset()
+
     def may_start(self, item: str, now: float) -> tuple[bool, str]:
         """Whether to type this item's command, and the reason either way."""
         if self.interventions.get(item, 0) >= self.max_per_item:
             return False, f"{item} already started {self.max_per_item} times"
+
+        # A phase ran and ended on a verdict that holds the item. Starting it again
+        # reruns what stopped — the same rule SELECT applies to a BLOCKED report, one
+        # level up, and it reads the same shared list.
+        #
+        # Measured on 2026-08-31: B-058 and B-059 were worked, halted at a gate only a
+        # person opens, and emitted nothing. The lead saw no event, concluded the
+        # attempt had not landed, and restarted B-059 — the only conclusion available
+        # to it. `AWAITING_HUMAN` exists so that this branch has something to read.
+        verdict = self._last_verdict(item)
+        if verdict and verdict.upper() in self._blocking_verdicts():
+            return False, (f"{item} last ended `{verdict}`, which holds it; only a "
+                           f"person moves this")
         previous = self.attempts.get(item)
         if previous is None:
             return True, "not tried yet"

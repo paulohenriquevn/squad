@@ -39,6 +39,7 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 
 - `READY_TO_MERGE` — no BLOCKER, ≤ 2 HIGH findings with documented mitigation.
 - `READY_TO_MERGE_WITH_FOLLOWUPS` — no BLOCKER, but MORE than 2 HIGH. The blocking work is closed and provable; the debt is real and named. **Hard gate:** every HIGH is a *registered* followup — an entry in the plan's `## Followups` (matched by finding id) or a filed issue reference (`#NNN`) on the finding — never a mention in prose. A caveat nobody owns is a defect with better manners. Enforced by `consolidate_findings.py --plan`, which fails closed to `NEEDS_FIXES` when the plan is absent.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
   The wording used to read *every HIGH **above the cap***. With 5 HIGH findings that names 3 of them and nothing says which 3 — any subset satisfies it, which is not a gate. `every HIGH` is the strict reading and the one implemented.
 

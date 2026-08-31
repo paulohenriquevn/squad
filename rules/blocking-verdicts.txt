@@ -35,6 +35,13 @@ NEEDS_FIXES
 NEEDS_DEEPER
 NEEDS_REVISION
 NEEDS_SPLIT
+# The phase ran and stopped at a gate only a person opens. It holds the item
+# by definition — nothing downstream may run until that person acts — and it
+# exists so that stopping this way leaves a trace at all. Measured on
+# 2026-08-31: B-058 and B-059 were worked, halted at exactly such a gate, and
+# emitted nothing; the watchdog then restarted B-059 because no event had
+# appeared, which is the only conclusion it could draw.
+AWAITING_HUMAN
 AWAITING_REVIEW
 REJECTED
 NOT_VALIDATED

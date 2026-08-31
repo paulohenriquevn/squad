@@ -108,6 +108,7 @@ The **Blast radius** corner is the one whose shape depends most on the project. 
 | `NEEDS_REVISION` | Recoverable via `/discover-improve` | loop |
 | `INVALID` | Structural — a fabricated pointer, or an empty corner | back to `/discover-plan` |
 | `ITEM_KILLED` | Measured honestly; the hypothesis did not hold | Item → `killed` + `kill_reason`. **Chain ends. This is success.** |
+| `AWAITING_HUMAN` | The phase ran and stopped at a gate only a person opens — a T3 boundary call, a sign-off, a dependency in another repository | **Emit it.** Without the event the work leaves no trace, and every reader sees an item nobody touched |
 
 `ITEM_KILLED` is orthogonal to the other four: they grade a document, it reports an outcome. A killed item produces no opportunity to score.
 

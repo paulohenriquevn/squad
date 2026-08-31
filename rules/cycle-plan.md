@@ -129,6 +129,7 @@ call sites, which would have failed every test in two files.
 - `NEEDS_REVISION` — soft caps blew (risks under-addressed, test plan thin). Use `/plan-improve`.
 - `SHIPPABLE_WITH_CAVEATS` — proceed to `/implement`; caveats are explicit, not hidden.
 - `SHIPPABLE` — green light.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
 ## Anti-patterns
 

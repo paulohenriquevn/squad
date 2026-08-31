@@ -557,3 +557,66 @@ def test_the_prompt_carries_the_constraint_the_agent_inherits(tmp_path: Path) ->
     assert "flow" in prompt
     assert "do not relax any gate" in prompt.lower()
     assert "only a person" in prompt
+
+
+# ── a phase that stopped at a human gate leaves a trace, and the lead reads it ──
+
+
+def _project_with(tmp_path: Path, *events, blocking: str = "AWAITING_HUMAN\nFAIL\n") -> Path:
+    import json
+    (tmp_path / "rules").mkdir(exist_ok=True)
+    (tmp_path / "rules" / "blocking-verdicts.txt").write_text(blocking, encoding="utf-8")
+    (tmp_path / "records").mkdir(exist_ok=True)
+    (tmp_path / "records" / "cycle-events.jsonl").write_text(
+        "".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
+    (tmp_path / "BACKLOG.md").write_text("# Backlog\n", encoding="utf-8")
+    return tmp_path
+
+
+def _end(cycle: str, slug: str, verdict: str) -> dict:
+    return {"type": "cycle:phase:end", "cycle": cycle, "slug": slug,
+            "verdict": verdict, "timestamp": "2026-08-31T20:00:00Z"}
+
+
+def test_an_item_awaiting_a_human_is_not_restarted(tmp_path: Path) -> None:
+    """Measured on 2026-08-31: B-058 and B-059 were worked, halted at a gate only a
+    person opens, and emitted NOTHING. The lead saw no event, concluded the attempt had
+    not landed, and restarted B-059 — the only conclusion available to it.
+
+    `AWAITING_HUMAN` exists so this branch has something to read."""
+    import time
+    project = _project_with(tmp_path, _end("plan", "B-059", "AWAITING_HUMAN"))
+    lead = Lead(session="s", project=project)
+    lead.attempts["B-059"] = (time.time() - 9999, 0)     # old enough to retry
+    allowed, why = lead.may_start("B-059", time.time())
+    assert allowed is False
+    assert "only a person moves this" in why
+
+
+def test_an_item_whose_last_verdict_passed_may_be_started(tmp_path: Path) -> None:
+    """The rule is about verdicts that HOLD, not about having run before."""
+    import time
+    project = _project_with(tmp_path, _end("plan", "B-059", "SHIPPABLE"))
+    lead = Lead(session="s", project=project)
+    lead.attempts["B-059"] = (time.time() - 9999, 0)
+    assert lead.may_start("B-059", time.time())[0] is True
+
+
+def test_an_unreadable_rule_file_costs_a_retry_never_a_false_stop(tmp_path: Path) -> None:
+    """Empty is NOT MEASURED. Treating it as "everything blocks" would let a missing
+    file stop the queue, which is the worse direction."""
+    import time
+    project = _project_with(tmp_path, _end("plan", "B-059", "AWAITING_HUMAN"))
+    (project / "rules" / "blocking-verdicts.txt").unlink()
+    lead = Lead(session="s", project=project)
+    lead.attempts["B-059"] = (time.time() - 9999, 0)
+    assert lead.may_start("B-059", time.time())[0] is True
+
+
+def test_the_lead_reads_the_same_list_the_board_and_the_checker_read(tmp_path: Path) -> None:
+    """Three readers, one file. The fourth copy is where they start disagreeing."""
+    kit = Path(__file__).resolve().parents[1]
+    lead = Lead(session="s", project=kit)
+    names = lead._blocking_verdicts()
+    assert "AWAITING_HUMAN" in names
+    assert "FAIL" in names

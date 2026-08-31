@@ -65,6 +65,7 @@ Consequences for this cycle:
 - `RELEASED` — PR merged, tag created, GitHub release published. Cycle complete.
 - `PR_OPEN_AWAITING_APPROVAL` — chain paused at the human-approval gate. Resume automatically once the PR merges.
 - `BLOCKED` — pre-condition failed OR a hard gate fired during the chain. Surface to human.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
 ## Bump-level derivation
 

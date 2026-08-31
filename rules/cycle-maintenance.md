@@ -224,6 +224,24 @@ An item advanced in error is moved back with a note recording the advance and wh
 - Specialists: `agents/README.md`
 - Branching contract: `rules/git-safety.md`
 
+### Stopping at a human gate is a phase ending, not a phase skipping
+
+A phase that runs and stops because only a person can open the next door ends with
+`AWAITING_HUMAN`, and **the event is emitted**. The work happened; the item is held;
+both are facts, and neither reaches any reader on its own.
+
+Measured on 2026-08-31: B-058 and B-059 were selected, started, worked on, and halted
+at exactly such a gate. Neither emitted anything. Zero events, zero artefacts, status
+still `triaged` — indistinguishable from an item nobody had touched. The board drew
+them as untouched, the drift checker had nothing to compare, the boss had no report to
+read, and the watchdog, seeing no event, concluded the command had not landed and
+started B-059 again. Every one of those readers behaved correctly on the evidence it
+had; the evidence was missing.
+
+`AWAITING_HUMAN` is in `rules/blocking-verdicts.txt`, so an item that ends on it is
+held everywhere the same way — the selector will not hand it out and the watchdog will
+not restart it, both reading that one list.
+
 **A halt is measured, never judged.** `ITEM_HALTED` asserts one thing: a BLOCKED
 report exists on disk for this item. What to DO about the halt — accept the failure
 with a caveat, fix its cause first, change the gate — is content, and stays with
