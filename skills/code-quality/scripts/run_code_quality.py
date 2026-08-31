@@ -180,6 +180,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", default=None)
     args = parser.parse_args(argv)
 
+    # A baseline recorded with the network on is worthless, so it cannot be recorded
+    # that way. Measured on a real repository on 2026-08-31: the Go symbol detector
+    # resolves imports against the module proxy, and with the network reachable it
+    # reported 4777 fabrications; with `--no-network`, ONE. Two consecutive runs even
+    # disagreed with each other — 4818 then 4777 — because the result depends on what
+    # the proxy answered that second.
+    #
+    # Baselining that would have frozen ~4800 network failures into the repository as
+    # if they were debt, hidden a real defect behind them, and still failed the gate,
+    # because the next run produces a slightly different set that the baseline does
+    # not cover. The honest baseline is the deterministic one.
+    if getattr(args, "write_baseline", False):
+        args.no_network = True
+
     repo_root = Path(args.repo_root) if args.repo_root else _find_repo_root(Path.cwd())
 
     rules_dir = repo_root / ".claude" / "rules"
@@ -370,7 +384,18 @@ def _write_baseline(findings: list[Finding], path: Path) -> int:
     itself would absorb every new defect the moment it appeared, which is the failure
     mode that turns a gate into decoration.
     """
-    keys = sorted({f.allowlist_key for f in findings})
+    # Only real code debt. A baseline is a record of findings ABOUT THE CODE, and a run
+    # also emits findings about the GATE — a detector disabled for want of a network, a
+    # linter with no config, a mutation pass deferred, a crash. Measured on a real
+    # repository on 2026-08-31: the first honest baseline held five entries and every
+    # one of them was of that second kind, including `d2_disabled_no_network`.
+    #
+    # Recording those would silence the warnings that say the gate is not working —
+    # the one outcome worse than a gate that fails, because it looks like a gate that
+    # passed. They are identified by what they cannot have: a real file. A finding
+    # about the code names one; a finding about the tooling says `.` or `<unknown>`.
+    skipped = [f for f in findings if f.file_path in (".", "<unknown>", "")]
+    keys = sorted({f.allowlist_key for f in findings if f not in skipped})
     path.parent.mkdir(parents=True, exist_ok=True)
     header = [
         "# Code-quality baseline — findings that already existed.",
@@ -388,6 +413,10 @@ def _write_baseline(findings: list[Finding], path: Path) -> int:
     path.write_text("\n".join(header + keys) + "\n", encoding="utf-8")
     print(f"baseline written: {len(keys)} finding(s) recorded as pre-existing at {path}",
           file=sys.stderr)
+    if skipped:
+        names = ", ".join(sorted({f.allowlist_key.split("|")[-1] for f in skipped}))
+        print(f"  {len(skipped)} finding(s) about the GATE were NOT baselined and still "
+              f"apply: {names}", file=sys.stderr)
     return 0
 
 

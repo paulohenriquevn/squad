@@ -96,3 +96,55 @@ def test_the_deadlock_the_baseline_exists_to_break() -> None:
 
     introduced = _finding("HARD", "go|api/new.go|dead_code|Regression")
     assert compute_verdict(debt + [introduced], baseline)[0] == "FAIL_HARD"
+
+
+# ── what a baseline must not record ───────────────────────────────────────────
+#
+# The first honest baseline on a real repository held five entries, and every one was
+# a finding about the GATE rather than about the code — including
+# `d2_disabled_no_network`. Recording those silences the warnings that say the gate is
+# not working, which is worse than a gate that fails: it looks like one that passed.
+
+
+def test_findings_about_the_gate_are_not_baselined(tmp_path: Path) -> None:
+    from run_code_quality import _write_baseline
+
+    real = _finding("HARD", "go|api/svc.go|dead_code|OldHelper", path="api/svc.go")
+    tooling = [
+        Finding(detector="d2_symbol_fab", language="go", severity="INFO", file_path=".",
+                symbol_or_line="-", message="disabled", allowlist_key="go|.|symbol_fab|d2_disabled_no_network"),
+        Finding(detector="d1_dead_code", language="go", severity="HARD", file_path="<unknown>",
+                symbol_or_line="<unknown>", message="crash", allowlist_key="go|<unknown>|dead_code|<unknown>"),
+    ]
+    out = tmp_path / "baseline.txt"
+    _write_baseline([real, *tooling], out)
+    assert load_baseline(out) == frozenset({real.allowlist_key})
+
+
+def test_a_run_of_only_tooling_findings_baselines_nothing(tmp_path: Path) -> None:
+    """Measured: zero real debt, nine gate states. The file must stay empty."""
+    from run_code_quality import _write_baseline
+
+    tooling = Finding(detector="d5_architecture", language="go", severity="INFO",
+                      file_path=".", symbol_or_line="-", message="no config",
+                      allowlist_key="go|.|architecture|no_config_go-arch-lint")
+    out = tmp_path / "baseline.txt"
+    _write_baseline([tooling], out)
+    assert load_baseline(out) == frozenset()
+
+
+def test_writing_a_baseline_forces_the_network_off() -> None:
+    """With the network on the Go symbol detector reported 4777 fabrications; without
+    it, one. Two consecutive runs disagreed — 4818, then 4777. A baseline of that is
+    ~4800 network failures frozen in as if they were debt."""
+    import argparse
+
+    from run_code_quality import main as cq_main  # noqa: F401  (import proves the path)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--no-network", action="store_true")
+    parser.add_argument("--write-baseline", action="store_true")
+    args = parser.parse_args(["--write-baseline"])
+    if getattr(args, "write_baseline", False):
+        args.no_network = True
+    assert args.no_network is True

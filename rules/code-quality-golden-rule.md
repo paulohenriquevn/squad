@@ -100,6 +100,35 @@ It became worse than that. Every language went `DEFER` or `DISABLED`, the gate t
 audited nothing, `no_languages_audited` fired (§ 3), and every plan came back `INVALID`.
 Each step was correct and the system was deadlocked — a gate nobody could turn on.
 
+### What a baseline may not record
+
+Two limits, both measured on a real repository the day the mechanism shipped, and both
+enforced by `--write-baseline` rather than left to discipline.
+
+**It is written with the network off, always.** The Go symbol detector resolves imports
+against the module proxy. With the network reachable it reported **4777** fabrications;
+with `--no-network`, **one**. Two consecutive runs even disagreed with each other —
+4818, then 4777 — because the result depends on what the proxy answered that second.
+Baselining that freezes ~4800 network failures into the repository as if they were
+debt, hides whatever is real behind them, and still fails the gate, because the next
+run produces a slightly different set the baseline does not cover.
+
+**It records findings about the CODE, never about the GATE.** A run also emits findings
+about the tooling: a detector disabled for want of a network, a linter with no config,
+a mutation pass deferred, a crash. The first honest baseline on that repository held
+five entries and every one was of that kind, including `d2_disabled_no_network`.
+Recording them silences the warnings that say the gate is not working — worse than a
+gate that fails, because it looks like one that passed. They are told apart by what
+they cannot have: a real file. A finding about the code names one; a finding about the
+tooling says `.` or `<unknown>`.
+
+The corollary is worth stating, because it is what the measurement actually found
+there: **a language can be blocked by tooling rather than by debt, and a baseline does
+not help then.** That repository's baselinable debt was ZERO, and its gate still
+returned INVALID — the detector needed fixing and two of its three `go.mod` manifests
+were undeclared. Turn a language on when the gate works, not when the baseline is
+written.
+
 ## § 5 — Detector contract (LOCKED)
 
 Detectors run in fixed order. Each detector MUST be subprocess-isolated, never modify source code, and emit findings as structured JSON.
