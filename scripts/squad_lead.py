@@ -176,12 +176,23 @@ _ESCAPE_OPTIONS = ("type something", "chat about", "cancel", "go back", "none of
 #: matters most: it says out loud that refusing is allowed, which is exactly what the
 #: bare command denied.
 #:
+#: The pointer to the envelope is not decoration. A session carries the rules it read
+#: when it started, and a clause added afterwards reaches nobody already running.
+#: Measured: the envelope was widened to cover the exact case three sessions were
+#: refusing, it was on disk within minutes, and none of the three mentioned it — they
+#: had read the narrower version and no reason to look again.
+#:
+#: The handoff is the one moment the lead speaks to a session, so it is where the
+#: current policy has to be pointed at.
+#:
 #: One line, because a newline in `tmux send-keys` submits.
 _START_TEMPLATE = (
     "[squad-lead] O turno voltou e a fila tem trabalho: rode /idea-to-release {item}. "
     "Por que este item: {why}. {history} "
+    "Antes de decidir que algo precisa de uma pessoa, releia rules/autonomy-envelope.md "  # english-only: the message the session reads; it operates in the operator's language
+    "em disco: ele diz o que o sistema decide sozinho, e muda sem avisar quem já roda. "  # english-only: the message the session reads; it operates in the operator's language
     "Se isto contradiz o que você acabou de reportar, ou se o item precisa de uma "  # english-only: the message the session reads; it operates in the operator's language
-    "decisão antes de rodar, diga isso em vez de executar — não escolha por mim."  # english-only: the message the session reads; it operates in the operator's language
+    "decisão que nem o envelope cobre, diga isso em vez de executar — não escolha por mim."  # english-only: the message the session reads; it operates in the operator's language
 )
 
 #: The bare command, for when the lead has nothing to add. Kept so a caller that wants
