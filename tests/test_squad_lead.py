@@ -414,3 +414,54 @@ def test_the_escalation_names_the_flag_it_refused(tmp_path: Path) -> None:
     decision = lead.decide(screen, idle=200)
     assert decision.action == "escalate"
     assert "--allow" in decision.reason
+
+
+# ── the horizon, and the check that lets it be short ─────────────────────────
+
+
+def test_the_stall_horizon_is_the_measured_one(tmp_path: Path) -> None:
+    """900s came from a belief — "a session thinking hard also looks idle briefly" —
+    that was never measured and is wrong. Measured on 2026-08-31: mid-task the marker
+    read 0s and 3s idle; with the turn handed back it went untouched across 127
+    consecutive samples. The two states are far apart, not close."""
+    assert Lead(session="s").stalled_seconds == 120
+
+
+def test_the_lead_re_reads_the_marker_before_typing(tmp_path: Path) -> None:
+    """Between deciding and typing there is a poll interval. A session that woke up in
+    it would get a command pasted into whatever it was composing."""
+    marker = tmp_path / "run.log"
+    marker.write_text("x", encoding="utf-8")          # just touched: not quiet
+    assert Lead(session="s").still_quiet(marker) is False
+
+
+def test_a_long_quiet_marker_passes_the_second_check(tmp_path: Path) -> None:
+    import os
+    import time
+    marker = tmp_path / "run.log"
+    marker.write_text("x", encoding="utf-8")
+    old = time.time() - 600
+    os.utime(marker, (old, old))
+    assert Lead(session="s").still_quiet(marker) is True
+
+
+def test_no_marker_means_the_lead_does_not_type(tmp_path: Path) -> None:
+    """No marker is NOT MEASURED, and the lead does not type on an unmeasured
+    session — the same rule that keeps an infinite idle from reporting a stall."""
+    assert Lead(session="s").still_quiet(None) is False
+
+
+def test_a_session_that_woke_up_is_not_typed_into(tmp_path: Path) -> None:
+    """End to end through `watch`: the decision was `start`, the marker is fresh, and
+    nothing is sent."""
+    import squad_lead
+    marker = tmp_path / "run.log"
+    marker.write_text("x", encoding="utf-8")
+    log = tmp_path / "lead.jsonl"
+    lead = Lead(session="s", project=tmp_path, stalled_seconds=120)
+    lead.next_item = lambda: ("B-057", "oldest unblocked")
+    lead.capture = lambda: "no menu here"
+    typed: list[str] = []
+    lead.start = lambda d: typed.append(d.item) or True   # never reached
+    watch(lead, marker, log, poll=0, rounds=1)
+    assert typed == []

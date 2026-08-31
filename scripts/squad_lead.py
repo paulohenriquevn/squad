@@ -170,9 +170,26 @@ class Lead:
     project: Path | None = None
     max_per_item: int = 3
     idle_seconds: int = 90
-    #: Silence beyond this, with no menu, is a handed-back turn worth surfacing. Well
-    #: above `idle_seconds`, because a session thinking hard also looks idle briefly.
-    stalled_seconds: int = 900
+    #: Silence beyond this, with no menu, is a handed-back turn.
+    #:
+    #: It was 900 on the belief that "a session thinking hard also looks idle briefly".
+    #: That was never measured, and it is wrong. The marker is the session's terminal
+    #: output, and Claude Code redraws a running counter every second while it works,
+    #: so the two states are not close together — they are far apart:
+    #:
+    #:   working  — measured twice on 2026-08-31, mid-task: idle 0s and 3s
+    #:   returned — measured the same day, marker untouched, gap growing monotonically
+    #:              (259s, 380s, …) across 127 consecutive samples
+    #:
+    #: The cost of the wrong number is in the same log: five handed-back turns, three
+    #: of them waiting out the full 900s, and two — from before the lead could act at
+    #: all — sitting at 7713s and 7905s. Over two hours each.
+    #:
+    #: 120s is 40x the largest silence ever observed under load, and the same number
+    #: `idle_seconds` already uses to answer menus without once interrupting work.
+    #: `_still_quiet` re-reads the marker before typing, so the horizon does not have
+    #: to carry the whole safety margin by itself.
+    stalled_seconds: int = 120
     #: True once a handed-back turn has been reported, so it is not repeated every
     #: poll. Cleared when the session moves again.
     reported_stall: bool = False
@@ -343,6 +360,21 @@ class Lead:
         self.answered.add(f"{decision.item}|{decision.option}")
         return True
 
+    def still_quiet(self, marker: Path | None) -> bool:
+        """Re-read the marker at the moment of typing.
+
+        The horizon says the session HAD been quiet; this says it still is. Between
+        deciding and typing there is a poll interval, and a session that woke up in
+        it would get a command pasted into whatever it was composing.
+
+        Cheap enough to do every time, and it is what lets the horizon be 120s rather
+        than a number chosen to cover the gap by itself. No marker means nothing was
+        measured, and the lead does not type on an unmeasured session.
+        """
+        if marker is None:
+            return False
+        return _idle_seconds(marker) >= self.stalled_seconds
+
     def start(self, decision: Decision) -> bool:
         """Type the start command and send it.
 
@@ -423,7 +455,14 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
         if decision.action == "confirm":
             entry["sent"] = lead.confirm(decision)
         elif decision.action == "start":
-            entry["sent"] = lead.start(decision)
+            # Checked here, not in `decide`: this is the last moment before keystrokes,
+            # and it is the only one where "is it still quiet?" has the right answer.
+            if lead.still_quiet(marker):
+                entry["sent"] = lead.start(decision)
+            else:
+                entry["sent"] = False
+                entry["reason"] = ("the session moved between the decision and the "
+                                   "keystrokes; not typing into a working session")
         _log(log, entry)
 
         if decision.action == "start":
@@ -466,9 +505,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project", type=Path,
                         help="project whose BACKLOG.md SELECT reads. Without it the "
                              "lead reports a handed-back turn and starts nothing")
-    parser.add_argument("--stalled", type=int, default=900,
-                        help="seconds of silence with no menu before reporting a "
-                             "handed-back turn (default 900)")
+    parser.add_argument("--stalled", type=int, default=120,
+                        help="seconds of silence with no menu before treating the turn "
+                             "as handed back (default 120; measured, see the field)")
     parser.add_argument("--once", action="store_true", help="one pass, then exit")
     args = parser.parse_args(argv)
 
