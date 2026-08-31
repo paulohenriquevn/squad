@@ -1,9 +1,10 @@
 """The scheduler that keeps items moving while one of them waits.
 
-Every test here maps to an acceptance criterion in
-`records/alignment/pipeline-orchestrator-alignment.md`, which is ALIGNED at 91%
-after an alignment judge REFUSED an earlier draft. Three of its findings are
-pinned below, because a defect a reviewer caught once is a defect that returns:
+Every test here maps to an acceptance criterion of the alignment brief that took
+this component to 91%, after an alignment judge REFUSED an earlier draft. The brief
+was a run record and run records are not carried in this repository's index, so its
+three findings are pinned below — a defect a reviewer caught once is a defect that
+returns, and the pin is what survives the record:
 
   - the chain is SEVEN stages; a five-stage draft schedules work that never runs
   - backward propagation carries a COMMIT, not a task (FR-006)

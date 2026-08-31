@@ -16,8 +16,9 @@ through.
 
 ALIGNED AT 91%, AFTER A REFUSAL
 -------------------------------
-`records/alignment/pipeline-orchestrator-alignment.md`. An alignment judge refused
-the first draft and three of its findings shaped this file:
+An alignment judge REFUSED the first draft, and three of its findings shaped this
+file. The brief itself was a run record and run records are not carried in this
+repository's index, so the findings are pinned here — where they cannot go missing:
 
   - The chain is SEVEN stages. The draft drew five, omitting CODE-QUALITY and
     ACCEPTANCE — a pipeline missing stages schedules work that never runs.

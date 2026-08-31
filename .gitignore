@@ -51,32 +51,24 @@ specs/
 # Nested repository with its own remote — never a submodule of the cycle
 codex-plugin-cc/
 
-# Generated records content (scaffold dirs are tracked via .gitkeep)
-records/grills/*.md
-records/plans/*.md
-records/implementations/**
-records/reviews/*.md
-records/releases/*.md
-records/roadmap-runs/**
-records/audits/*.md
-records/adrs/*.md
-records/honesty-gate/evidence/*.md
-records/discoveries/plans/*.md
-records/discoveries/blueprints/*.md
-records/discoveries/snapshots/**
-records/references/**
+# Run records. Every artifact under here is the output of one execution on one
+# machine — plans, implementation logs, reviews, alignment briefs, event streams,
+# experiment runs. None of it says anything to whoever clones this repository,
+# and committing it puts one machine's history in everyone's diff. The directory
+# is scaffolded in each consumer by install.sh; it is never carried in the index.
+records/
+
 study-material/**
-records/judge-codex/**
 # The phase-transition stream. Per-session and per-machine by nature: what this
 # repository's cycles did here says nothing to whoever clones it, and committing
 # it would put one machine's run history in everyone's diff.
-records/cycle-events.jsonl
 # SOP run records: per-run and per-machine, like the phase-event stream. The
 # PROCEDURE travels with the kit (records/sops/ stays versioned); what
 # one machine did while following it does not.
-records/sop-runs/**
-!records/**/.gitkeep
-!records/backlog.md
+# Per-agent pipeline output. `/pipeline` writes one directory per item under
+# `--output-dir`, holding whatever the agents produced on that run. It is run
+# output like every entry above it, and it was the one kind that was not listed:
+# nine files from three items reached the index before this line existed.
 
 # Agent run logs (consumer-specific)
 agents/**

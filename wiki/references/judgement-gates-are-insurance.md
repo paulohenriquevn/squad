@@ -17,8 +17,6 @@ sources:
   - id: superpowers-method
     resource: https://github.com/obra/superpowers
     author: "person:obra"
-  - id: run-record
-    resource: ../../records/experiments/judgement-gates-baseline-2026-08-28.md
   - id: backlog-rule
     resource: ../../rules/cycle-backlog.md
 ---
@@ -85,6 +83,6 @@ Enough to stop a deletion. Not enough to call the rules well written.
 
 - Why this finding lives here and its run record does not:
   [where knowledge lives](/decisions/where-knowledge-lives.md)
-- Run record with the scenarios and verbatim outputs:
-  `records/experiments/judgement-gates-baseline-2026-08-28.md`
+- The run record itself — scenarios and verbatim outputs, 2026-08-28 — was a run
+  artifact and is not kept in this repository. What it established is stated above.
 - The method: `obra/superpowers`, `skills/writing-skills/testing-skills-with-subagents.md`

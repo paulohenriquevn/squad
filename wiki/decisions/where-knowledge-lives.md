@@ -90,7 +90,8 @@ like that would reach the sibling kit.
 ## An instance of the split
 
 [The judgement-gate finding](/references/judgement-gates-are-insurance.md) is the durable half of the 2026-08-28 baseline
-experiment: the finding lives here because it stays true, and the run that produced
-it — scenarios, verbatim outputs, the model tiers used — stays in
-`records/experiments/`, because one execution on one day is not a concept that
-evolves.
+experiment, and it is now the only half. The finding lives here because it stays
+true; the run that produced it — scenarios, verbatim outputs, the model tiers used
+— was a run record, and run records are not carried in this repository. That is the
+split taken to its conclusion: one execution on one day is not a concept that
+evolves, so what it taught is written down here and the execution is not kept.
