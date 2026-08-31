@@ -107,6 +107,21 @@ FLOW_MARKERS = (
 #: A menu option only a person can answer, whatever else it says. Checked FIRST, so an
 #: option that mentions both loses — a sponsor decision wrapped in a flow-sounding
 #: sentence is still a sponsor decision.
+#: Flags whose whole purpose is to proceed DESPITE a gate. An option carrying one is
+#: never flow, whatever verb it starts with.
+#:
+#: Measured on 2026-08-31, minutes after the lead gained the power to start items: the
+#: session offered "Rodar /idea-to-release B-057 --allow-dirty-tree até halt natural
+#: (Recommended)" and the lead confirmed it. The classifier read "Rodar", matched a
+#: flow marker, and never looked at the flag. Running the cycle IS flow; running it
+#: with a precondition switched off is a decision to accept the risk that precondition
+#: exists to prevent, and that decision is not a watchdog's.
+#:
+#: Matched as a prefix on a token, so `--allow-dirty-tree` and `--allow-existing-
+#: failures` are both caught without listing either.
+_RELAXING_FLAGS = ("--allow", "--no-", "--skip", "--force", "--ignore", "--unsafe",
+                   "--bypass", "--disable")
+
 CONTENT_MARKERS = (
     # english-only: the session writes its menus in the operator's language, so the
     # markers must match what it actually prints — a marker list in English alone
@@ -222,6 +237,11 @@ class Lead:
         friendly preamble.
         """
         low = _SLASH_COMMAND_RE.sub(" ", option_text.lower())
+        # Checked BEFORE the content markers and before the flow ones: a relaxing flag
+        # is decisive on its own, and reaching either list first would let the verb
+        # decide what the flag already settled.
+        if any(flag in low for flag in _RELAXING_FLAGS):
+            return "content"
         if any(m in low for m in CONTENT_MARKERS):
             return "content"
         if any(m in low for m in FLOW_MARKERS):
@@ -294,7 +314,10 @@ class Lead:
 
         kind = self.classify(option_text)
         if kind == "content":
-            return Decision("escalate", "only a person can answer this", option_text, item)
+            flag = next((f for f in _RELAXING_FLAGS if f in option_text.lower()), "")
+            reason = (f"the option switches off a precondition ({flag}…); accepting that "
+                      f"risk is a person's call" if flag else "only a person can answer this")
+            return Decision("escalate", reason, option_text, item)
         if kind == "unknown":
             return Decision("escalate", "the option does not read as flow; not guessing",
                             option_text, item)

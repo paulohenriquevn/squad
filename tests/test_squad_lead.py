@@ -379,3 +379,38 @@ def test_an_unmeasured_idle_never_starts_anything(tmp_path: Path) -> None:
     on it would be the lead asserting a duration it never observed."""
     lead = _lead_with_select(tmp_path, {"item": "B-057"})
     assert lead.decide("no menu here", idle=float("inf")).action == "wait"
+
+
+# ── a flag that switches off a gate is never flow ────────────────────────────
+
+
+def test_an_option_with_a_relaxing_flag_is_escalated(tmp_path: Path) -> None:
+    """Measured on 2026-08-31, minutes after the lead gained the power to start items:
+    the session offered "Rodar /idea-to-release B-057 --allow-dirty-tree até halt
+    natural (Recommended)" and the lead confirmed it. The classifier read "Rodar",
+    matched a flow marker, and never looked at the flag.
+
+    Running the cycle is flow. Running it with a precondition switched off is a
+    decision to accept the risk that precondition exists to prevent."""
+    lead = Lead(session="s")
+    assert lead.classify("Rodar /idea-to-release B-057 --allow-dirty-tree (Recommended)") == "content"
+    assert lead.classify("continuar com --no-verify") == "content"
+    assert lead.classify("prosseguir --skip-tests") == "content"
+    assert lead.classify("continue --force") == "content"
+
+
+def test_the_same_option_without_the_flag_stays_flow(tmp_path: Path) -> None:
+    """The flag is what decides, not the command. Escalating every cycle invocation
+    would put the lead back to answering nothing."""
+    lead = Lead(session="s")
+    assert lead.classify("Rodar /idea-to-release B-057 (Recommended)") == "flow"
+
+
+def test_the_escalation_names_the_flag_it_refused(tmp_path: Path) -> None:
+    """A lead nobody can contest is a lead nobody should trust — so the log says
+    which precondition it declined to switch off."""
+    lead = Lead(session="s")
+    screen = "❯ 1. Rodar /idea-to-release B-057 --allow-dirty-tree (Recommended)\n"
+    decision = lead.decide(screen, idle=200)
+    assert decision.action == "escalate"
+    assert "--allow" in decision.reason
