@@ -119,7 +119,22 @@ BACKTICK_SPAN_RE = re.compile(r"`([^`\n]+)`")
 # acceptable here: importing cross-slice would couple the validator to a skill.
 UNREVIEWED_MARKER = "<!-- TO BE FILLED IN: only a human knows this -->"
 # `cycle-<name>` inside a code span, with the .md suffix optional.
-CYCLE_NAME_RE = re.compile(r"\bcycle-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)")
+#
+# The trailing lookahead excludes a NON-.md extension. `records/cycle-events.jsonl` is
+# a data file whose name happens to start with the prefix, and without this it was
+# reported as a reference to a cycle rule nobody wrote. `.md` stays allowed because
+# `cycle-plan.md` IS a reference to the rule.
+#
+# Narrow on purpose: the previous time this pattern was widened — accepting `/` so
+# paths would match — it made `records/maintenance-runs/` parse as a skill. A
+# lookahead that only refuses a foreign extension cannot reach anything else.
+CYCLE_NAME_RE = re.compile(
+    r"\bcycle-([a-z][a-z0-9]*(?:-[a-z0-9]+)*)"
+    r"(?![a-z0-9-])"          # the name ends here — without this the group
+                              # backtracks to `cycle-event` so the next lookahead
+                              # passes, and `cycle-events.jsonl` matches anyway
+    r"(?!\.(?!md\b)[a-z0-9]+)"  # ...and is not the stem of a non-.md filename
+)
 SKILL_REF_RE = re.compile(r"`?(?:\.claude/)?skills/([a-z0-9\-]+)/SKILL\.md`?")
 # Detect rules references in SKILL bodies and Python scripts.
 # Examples matched:

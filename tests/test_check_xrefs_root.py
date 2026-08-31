@@ -86,3 +86,25 @@ def test_ecosystem_dir_explicito_continua_mandando(tmp_path: Path) -> None:
     )
     findings = json.loads(proc.stdout)["findings"]
     assert any(f.get("check") == "rules_reference_resolves" for f in findings)
+
+
+def test_a_data_file_named_after_a_cycle_is_not_a_cycle_reference():
+    """`records/cycle-events.jsonl` is a file, not a reference to a rule nobody wrote.
+
+    The first fix backtracked: the name group gave up its last character so the
+    extension lookahead would pass, and `cycle-event` matched instead. The name must
+    be anchored before the extension is judged.
+    """
+    from check_xrefs import CYCLE_NAME_RE
+
+    assert CYCLE_NAME_RE.findall("records/cycle-events.jsonl") == []
+    assert CYCLE_NAME_RE.findall(".claude/records/cycle-events.jsonl") == []
+
+
+def test_a_real_cycle_reference_still_resolves():
+    """The mirror case: narrowing must not silence the check it exists for."""
+    from check_xrefs import CYCLE_NAME_RE
+
+    assert CYCLE_NAME_RE.findall("rules/cycle-plan.md") == ["plan"]
+    assert CYCLE_NAME_RE.findall("cycle-idea-to-release") == ["idea-to-release"]
+    assert CYCLE_NAME_RE.findall("cycle-review.md and cycle-plan") == ["review", "plan"]
