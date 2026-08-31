@@ -132,6 +132,28 @@ On `<promise>ITEM_KILLED</promise>`, verify instead that the `B-NNN` block carri
 | `ITEM_KILLED` | `status: killed`, `kill_reason: <what was measured>` |
 | `OPPORTUNITY_BLOCKED` | unchanged — `raw`, with the blocker surfaced to the human |
 
+The status change is written by the writer that owns it, which refuses the
+transitions the contract forbids:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/backlog_status.py" \
+    BACKLOG.md B-NNN --to triaged            # or --to killed --kill-reason "<what was measured>"
+```
+
+Then record the transition in the stream, carrying the outcome above as the verdict:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+    --cycle discover --slug B-NNN --verdict OPPORTUNITY_COMPLETE
+```
+
+Emit on `ITEM_KILLED` too. A killed item is a **successful** discover — the phase ran
+and reached a conclusion — and a stream that records only the outcomes someone likes
+cannot answer the question it exists for: did this phase run, or was it skipped?
+
+`OPPORTUNITY_BLOCKED` emits as well, with the status left unchanged. The phase still
+ran; what it produced was a blocker.
+
 Report: the opportunity path, iterations used, questions answered / blocked with reasons, pointers verified, runtime observations recorded, and any mode reclassification. Next step: `/discover-confidence {slug}` — except on `ITEM_KILLED`, where the chain ends and there is nothing to score.
 
 ### Step 9 — Sweep mode

@@ -150,13 +150,29 @@ Record the decision (`g5_reformulated` / `g5_false_positive` / `g5_rejected`) in
 
 ### Step 6 — Write
 
-Only after Steps 2–5 pass. Three writes, in this order:
+Only after Steps 2–5 pass. Four writes, in this order:
 
 1. **`BACKLOG.md`** — append one `## B-NNN` block per the schema in `cycle-backlog.md § Item schema`, with `status: raw`, `source: human`, `evidence: none-yet`, and the provenance line:
    `> Registered {{DATE}} by `/backlog-item` (slug: `{{SLUG}}`).`
    Append only. Never reorder, never renumber, never touch another block.
 2. **`CHANGELOG.md`** — one line under `[Unreleased] § Added`, attributed to the target repo per the umbrella convention: `**{repo}:** backlog B-NNN — {title} (#NNN)`.
 3. **`records/backlog/{slug}-intake.md`** — flip the log to `status: completed`.
+
+4. **The phase event** — the transition, into the stream rather than a file someone reconstructs later:
+
+   ```bash
+   python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+       --cycle backlog --slug B-NNN --verdict ITEM_REGISTERED
+   ```
+
+   Last, and only if the `BACKLOG.md` write succeeded. An event for an item that
+   was not written is worse than no event: it is the stream asserting something
+   the registry does not carry.
+
+   Measured on 2026-08-30: `backlog` and `discover` are the cycle's only two
+   `required` phases, and both emitted nothing — as did `release`, whose verdict
+   is what `cycle-maintenance.md`'s ADVANCE consumes. Four of eight phases were
+   silent, and the one real registry examined had no event stream at all.
 
 If the `BACKLOG.md` write fails, do not write the CHANGELOG entry. A changelog line for an item that does not exist is worse than no line.
 

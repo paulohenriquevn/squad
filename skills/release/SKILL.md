@@ -251,6 +251,24 @@ Write `records/releases/v${NEXT_VERSION}-release.md`:
 {rendered notes}
 ```
 
+Then record the transition in the stream, which is what a later phase reads:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+    --cycle release --slug {item-or-milestone} --verdict RELEASED
+```
+
+**After the tag and the GitHub release exist, never before.** The record file above
+and this event assert the same fact, and asserting it early makes the stream claim a
+release that a failing publish step would leave unmade.
+
+This event is the one `cycle-maintenance.md`'s ADVANCE consumes to move an item to
+`shipped`. Until 2026-08-30 nothing emitted it, so the only way to learn that a
+release happened was to reconstruct it from files on disk — which is precisely what
+`cycle_events.py` exists to replace: *a missing file is evidence of nothing in
+particular*. An ADVANCE built on that inference would write `shipped` on a guess,
+into the one artefact that outlives the session.
+
 ### Step 9 — Recommend next step
 
 ```

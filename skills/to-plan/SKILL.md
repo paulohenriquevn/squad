@@ -132,6 +132,21 @@ The plan MUST include:
 - Global DoD with quality-gate entries (lint, complexity, size).
 - File size budget mention (default 500 LoC; see `rules/architecture.md` for project-specific budgets, or `skills/plan-confidence/defaults/loc-limits.md` as fallback).
 
+Once the plan file exists, record the transition in the stream:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+    --cycle plan --slug {slug} --verdict PLAN_WRITTEN
+```
+
+After the file is written, never before — the event asserts that a plan exists, and a
+run that stopped halfway would otherwise leave the stream claiming one that does not.
+
+The plan's own verdict comes later, from `/plan-confidence`. This event records that
+the phase RAN; whether what it produced is shippable is a different question with a
+different emitter, and folding them together would make a plan that scored `INVALID`
+indistinguishable from a plan phase that never happened.
+
 ## Plan Template
 
 Every plan MUST follow the canonical template at [`templates/plan-template.md`](./templates/plan-template.md). It contains the section structure (Context → Objective → ADRs → Dependency Graph → Phases → Coverage Matrix → Global DoD → Final Phase: Integration Validation) and is the single source of truth — never duplicate it elsewhere.
