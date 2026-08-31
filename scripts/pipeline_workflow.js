@@ -21,7 +21,24 @@ export const meta = {
 //
 // Read-only is enforced by the generated frontmatter's tool list, not by a
 // sentence. The first run asked in prose, which the harness does not read.
-const ITEMS = args?.items ?? ['B-001', 'B-022', 'B-033']
+// The queue is NOT a literal here, and must not become one again. Workflow scripts
+// have no filesystem access, so this file cannot read BACKLOG.md — the caller runs
+//
+//   python3 skills/backlog-review/scripts/select_backlog_item.py BACKLOG.md --json
+//
+// and passes `queue` through args. That is what applies the maintenance chain's
+// ranking (triaged before raw, then oldest first) and, crucially, drops blocked
+// items: an item waiting on another reads `triaged` on disk and cannot be worked on.
+//
+// The literal that used to sit here was ['B-001', 'B-022', 'B-033'], and B-001 is
+// blocked on a sponsor decision in the very registry it was pointed at. A hand-kept
+// list cannot know that, and it went unnoticed for a whole run.
+const ITEMS = args?.items ?? args?.queue
+if (!Array.isArray(ITEMS) || ITEMS.length === 0) {
+  throw new Error(
+    'no queue: pass args.queue from `select_backlog_item.py --json`. ' +
+    'A literal list cannot know which items the registry says are blocked.')
+}
 const REPO = args?.repo ?? '/home/paulo/Projetos/theo/theo-platform/theo'
 const AGENTS = args?.agentsDir ?? 'records/pipeline-agents'
 
@@ -48,7 +65,11 @@ const SCORE = {
   properties: {
     slug: { type: 'string' },
     machine_ratio: { type: 'number' },
-    verdict: { type: 'string', enum: ['ALIGNED', 'AWAITING_REVIEW', 'BLOCKED'] },
+    // NEEDS_SPLIT is in the enum because the scorer can now return it. Reported by
+    // an agent during the first run of this pipeline, when the verdict existed in
+    // SKILL.md's table and in no code — a brief needing a split had to be squeezed
+    // into BLOCKED, which tells the reader to close gaps no rewrite can close.
+    verdict: { type: 'string', enum: ['ALIGNED', 'AWAITING_REVIEW', 'BLOCKED', 'NEEDS_SPLIT'] },
     gaps: { type: 'array', items: { type: 'string' } },
   },
 }

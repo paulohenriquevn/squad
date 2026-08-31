@@ -331,3 +331,78 @@ def test_one_refusal_does_not_abort_the_others(tmp_path):
     ])
     assert len(refusals) == 1
     assert backlog.read_text(encoding="utf-8").count("status: planned") == 1
+
+
+# ── eligibility comes from the registry, not from memory ──────────────────────
+#
+# The write-back landed before the read-back: `block()` recorded an impediment and
+# nothing consumed one. A restarted session rebuilt its queue from a literal list and
+# scheduled an item the registry already said could not move.
+
+from pipeline_orchestrator import from_selection
+
+
+def test_a_blocked_item_is_never_scheduled():
+    """Defence in depth: the queue already excludes them, hand-built pipelines do not."""
+    p = Pipeline(items=[Item(slug="b-001", blocked_by=["B-100"]), Item(slug="b-002")], lanes=4)
+    assert [i.slug for i in p.schedule()] == ["b-002"]
+
+
+def test_an_empty_blocker_list_still_blocks():
+    """[] is "blocked by a decision with no item"; only None means not blocked."""
+    p = Pipeline(items=[Item(slug="b-001", blocked_by=[])], lanes=4)
+    assert p.schedule() == []
+
+
+def test_none_is_the_only_unblocked_value():
+    assert Item(slug="b-001").blocked is False
+    assert Item(slug="b-001", blocked_by=[]).blocked is True
+    assert Item(slug="b-001", blocked_by=["B-100"]).blocked is True
+
+
+def test_blocking_mid_flight_marks_the_item_the_same_way():
+    """An impediment discovered during a run must behave like one that arrived with it."""
+    p = Pipeline(items=[Item(slug="b-001")], lanes=4)
+    p.schedule()
+    p.block("b-001", ["B-100"])
+    assert p.item("b-001").blocked_by == ["B-100"]
+    assert p.schedule() == []
+
+
+def test_unparking_clears_the_impediment():
+    """Otherwise an item freed by hand stays ineligible forever."""
+    p = Pipeline(items=[Item(slug="b-001")], lanes=4)
+    p.block("b-001", ["B-100"])
+    p.unpark("b-001")
+    assert [i.slug for i in p.schedule()] == ["b-001"]
+
+
+# ── the bridge from the selector ──────────────────────────────────────────────
+
+
+def test_from_selection_schedules_the_queue_in_order():
+    p = from_selection({"queue": ["B-022", "B-033"], "walls": {}}, lanes=4)
+    assert [i.slug for i in p.schedule()] == ["B-022", "B-033"]
+
+
+def test_from_selection_carries_blocked_items_without_scheduling_them():
+    """Carried, so the pipeline can say why an item is not running and unpark it."""
+    p = from_selection({"queue": ["B-022"], "walls": {"B-001": ["B-100"]}}, lanes=4)
+    assert [i.slug for i in p.schedule()] == ["B-022"]
+    assert p.item("B-001").blocked is True
+
+
+def test_a_carried_blocked_item_can_be_unparked_later():
+    p = from_selection({"queue": [], "walls": {"B-001": ["B-100"]}}, lanes=4)
+    p.unpark("B-001")
+    assert [i.slug for i in p.schedule()] == ["B-001"]
+
+
+def test_a_prose_wall_carries_an_empty_list_not_none():
+    p = from_selection({"queue": [], "walls": {"B-001": []}}, lanes=4)
+    assert p.item("B-001").blocked_by == []
+    assert p.schedule() == []
+
+
+def test_an_empty_selection_yields_an_empty_pipeline():
+    assert from_selection({"queue": [], "walls": {}}).items == []

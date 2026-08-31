@@ -33,6 +33,24 @@ review becomes a batch instead of an interruption.
 
 ## Process
 
+### Step 0 — Ask the registry which items may run
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/select_backlog_item.py" \
+    BACKLOG.md --json > /tmp/queue.json
+```
+
+This applies `cycle-maintenance.md`'s ranking — triaged before raw, then oldest
+first — and drops the blocked. **Do not hand-write the list.** An item waiting on
+another reads `triaged` on disk and cannot be worked on, and no list kept by hand
+knows that: the literal `['B-001', 'B-022', 'B-033']` this workflow shipped with
+began with an item blocked on a sponsor decision, in the very registry it was
+pointed at, and a whole run went by without anyone noticing.
+
+`from_selection()` in `scripts/pipeline_orchestrator.py` turns that JSON into a
+pipeline. Blocked items are carried, not dropped — so the scheduler can say why one
+is not running, and `unpark()` can bring it back when the blocker lands.
+
 ### Step 1 — Materialise the stage agents
 
 ```bash
@@ -56,7 +74,7 @@ explanation.
 
 ```
 Workflow({scriptPath: "scripts/pipeline_workflow.js",
-          args: {items: ["B-014", "B-022"], repo: "<consumer-path>"}})
+          args: {queue: <the "queue" array from Step 0>, repo: "<consumer-path>"}})
 ```
 
 `pipeline()`, never `parallel()` — there is no barrier between stages, so one

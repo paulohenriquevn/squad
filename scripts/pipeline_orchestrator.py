@@ -81,6 +81,17 @@ class Item:
     #: A commit handed back from a later stage. The upstream stage MERGES it and
     #: does not treat it as new work — `back-one` in swarm-forge's terms.
     merge_only: str | None = None
+    #: What the registry says is holding this item, as of the moment the queue was
+    #: built. Carried on the item rather than looked up, because the scheduler must
+    #: not read `BACKLOG.md`: it schedules, and something else decides eligibility.
+    #: An EMPTY LIST means blocked by something with no item to point at — a sponsor
+    #: decision, an external action — which is a real impediment, so `None` is the
+    #: only value that means "not blocked".
+    blocked_by: list[str] | None = None
+
+    @property
+    def blocked(self) -> bool:
+        return self.blocked_by is not None
 
     @property
     def done(self) -> bool:
@@ -132,7 +143,7 @@ class Pipeline:
     def _eligible(self) -> list[Item]:
         busy = {i.slug for i in self.running}
         return [i for i in self.items
-                if not i.parked and not i.done and i.slug not in busy]
+                if not i.parked and not i.done and not i.blocked and i.slug not in busy]
 
     # ── scheduling ─────────────────────────────────────────────────────────
     def schedule(self) -> list[Item]:
@@ -195,6 +206,7 @@ class Pipeline:
         item = self.item(slug)
         item.parked = False
         item.attempts = 0
+        item.blocked_by = None
 
     def block(self, slug: str, blockers: list[str] | None = None, note: str = "") -> None:
         """An item that discovered mid-flight it needs another item.
@@ -215,6 +227,7 @@ class Pipeline:
         item.parked = True
         item.park_reason = note or f"blocked by {', '.join(blockers)}"
         item.surfaced = True
+        item.blocked_by = blockers
         self._release(item)
         self.pending_writes.append(StatusWrite(slug, block_on=blockers, note=note))
 
@@ -253,6 +266,28 @@ class Pipeline:
             self.released_worktrees.add(item.worktree)
             item.worktree = None
 
+
+
+def from_selection(selection: dict, lanes: int | None = None) -> Pipeline:
+    """Build a pipeline from what `select_backlog_item.py --json` produced.
+
+    The bridge is the DATA, not an import. `scripts/` does not import from `skills/`
+    anywhere in this kit — the dependency runs the other way, with skills importing
+    `route_domain.py` — and having the scheduler reach into a skill to read
+    `BACKLOG.md` would both invert that and give it a second job. It schedules;
+    something else decides who is eligible.
+
+    Items named in `walls` are carried too, blocked. Dropping them would make the
+    pipeline unable to report why an item it was asked about is not running, and
+    `unpark()` could never bring one back without rebuilding the whole object.
+    """
+    walls = selection.get("walls") or {}
+    items = [Item(slug=slug) for slug in selection.get("queue") or []]
+    items += [Item(slug=slug, parked=True, surfaced=True, blocked_by=list(blockers),
+                   park_reason=("blocked by " + ", ".join(blockers)) if blockers
+                               else "blocked by something with no item to point at")
+              for slug, blockers in sorted(walls.items())]
+    return Pipeline(items=items, lanes=lanes) if lanes else Pipeline(items=items)
 
 def apply_writes(backlog: Path, writes: list[StatusWrite]) -> list[str]:
     """Apply pending registry changes, returning the refusals rather than raising.
