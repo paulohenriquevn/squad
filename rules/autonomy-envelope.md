@@ -98,8 +98,27 @@ both — and proceed on it.**
 
 There is no separate act of approval to perform. The ADR is the decision and its record
 at once, and it is reviewable afterwards by anyone, which a verbal sign-off is not.
-Where the contract asks for a meeting, the ADR carries what the meeting would have
-produced.
+
+**This holds at every tier the project defines, including the ones whose rules say to
+stop and convene.** A meeting produces a decision, the reasons behind it, and the
+people who were told; an ADR carries all three and outlasts the meeting. So where a
+contract asks for one, the ADR takes its place — and must then carry what the meeting
+would have covered, explicitly:
+
+  - **who is affected.** Every consumer of the surface being changed, listed, found by
+    searching rather than recalled.
+  - **what would break, and what would not.** Additive or breaking, and the evidence
+    for which.
+  - **what was rejected.** The alternatives, and why each was set aside.
+
+Without those three the ADR is a note, not a substitute, and the tier's requirement is
+unmet. With them, nothing the meeting would have produced is missing, and the record
+is better than the meeting's would have been.
+
+Observed before this was explicit: a session refused an item because its rules classify
+the change as needing a meeting, and read this section as covering only the tier that
+asks for an ADR. The refusal was right on the text as written. The text was too narrow —
+the argument for the ADR never depended on which tier asked.
 
 ### The measurement behind the item turned out to be wrong
 
