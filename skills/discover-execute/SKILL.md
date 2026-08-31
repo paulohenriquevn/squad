@@ -124,6 +124,19 @@ On `<promise>OPPORTUNITY_BLOCKED</promise>` the check still runs, plus the block
 
 On `<promise>ITEM_KILLED</promise>`, verify instead that the `B-NNN` block carries a `kill_reason` naming what was measured and what it showed (gate G-K). An unexplained kill is indistinguishable from an abandoned run.
 
+
+Emit the START of this phase before doing the work:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" start \
+    --cycle discover --slug {B-NNN}
+```
+
+Without it the board can only draw what FINISHED. Measured on 2026-08-31: seventeen
+`phase:end` events and one `phase:start`, so an item under active work showed the
+verdict of a phase already over and nothing on the page said anything was running.
+A `start` with no matching `end` is exactly the fact "this is happening now".
+
 ### Step 8 — Update `BACKLOG.md` and report
 
 | Outcome | `B-NNN` becomes |

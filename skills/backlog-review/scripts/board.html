@@ -321,6 +321,7 @@ h1 {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
+.col-head .n.live { color: var(--moving); font-weight: 600; }
 .col-head .n {
   margin-left: auto;
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -361,6 +362,37 @@ h1 {
 .card.shipped  { border-left-color: var(--shipped); }
 .card.killed   { border-left-color: var(--killed); opacity: .72; }
 .card.measured { border-left-color: var(--moving); }
+
+/* Work happening NOW. The board could only draw what had finished, so an item under
+   active work showed the verdict of a phase that was already over and nothing said
+   anything was running. This is the one state that earns motion. */
+.card.running {
+  border-left-color: var(--moving);
+  border-left-width: 3px;
+  background: var(--moving-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--moving) 30%, transparent), var(--shadow);
+}
+.card.running .id::after {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  margin-left: 7px;
+  border-radius: 50%;
+  background: var(--moving);
+  animation: breathe 1.8s ease-in-out infinite;
+  vertical-align: middle;
+}
+@keyframes breathe { 0%, 100% { opacity: 1 } 50% { opacity: .25 } }
+@media (prefers-reduced-motion: reduce) {
+  .card.running .id::after { animation: none; }
+}
+.chip.running {
+  background: var(--moving);
+  color: var(--surface);
+  border: 1px solid var(--moving);
+}
+:root[data-theme="dark"] .chip.running,
+:root:not([data-theme="light"]) .chip.running { color: var(--ground); }
 
 .card .id {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -510,6 +542,9 @@ const PHASE_LABEL = {
 const el = (id) => document.getElementById(id);
 
 function cardClass(item) {
+  // Running outranks everything: what is happening to an item now matters more than
+  // where it got to, and an impeded item cannot be running anyway.
+  if (item.running_phase) return "running";
   if (item.blocked) return "impeded";
   if (item.status === "shipped") return "shipped";
   if (item.status === "killed") return "killed";
@@ -599,6 +634,7 @@ function render(state) {
     ["is-impeded", blocked, "impeded"],
     ["is-shipped", shipped, "shipped"],
     ["is-killed", killed, "killed"],
+    ["", (state.running || []).length, "running"],
     ["", state.event_total || 0, "events"]
   ].map(([cls, n, label]) =>
     `<div class="tally ${cls}"><b>${n}</b><span>${label}</span></div>`
@@ -616,11 +652,18 @@ function render(state) {
   const phases = (state.phases || []).concat(["done", "killed"]);
   const board = el("board");
   board.innerHTML = phases.map((phase, i) => {
-    const inPhase = items.filter(it => it.phase === phase);
+    // An item under active work is drawn in the phase it is RUNNING, not the one it
+    // last finished. Otherwise the board shows it a column behind the truth.
+    const inPhase = items.filter(it => (it.running_phase || it.phase) === phase);
+    const liveHere = inPhase.filter(it => it.running_phase).length;
     const terminal = phase === "killed" || phase === "done";
     const ord = terminal ? "" : `<span class="ord">${String(i + 1).padStart(2, "0")}</span>`;
     const cards = inPhase.length ? inPhase.map(it => {
-      const chips = [`<span class="chip status">${it.status || "?"}</span>`];
+      const chips = [];
+      if (it.running_phase) {
+        chips.push(`<span class="chip running">running ${PHASE_LABEL[it.running_phase] || it.running_phase}</span>`);
+      }
+      chips.push(`<span class="chip status">${it.status || "?"}</span>`);
       if (it.domain) chips.push(`<span class="chip">${it.domain}</span>`);
       if (it.last_verdict) chips.push(`<span class="chip verdict">${it.last_verdict}</span>`);
       // `derived` is only worth saying where the position could have been otherwise.
@@ -646,7 +689,7 @@ function render(state) {
 
     return `<section class="col ${terminal ? "terminal" : ""}">
         <div class="col-head">${ord}<span class="name">${PHASE_LABEL[phase] || phase}</span>
-          <span class="n">${inPhase.length}</span></div>
+          <span class="n${liveHere ? " live" : ""}">${inPhase.length}</span></div>
         <div class="stack">${cards}</div>
       </section>`;
   }).join("");

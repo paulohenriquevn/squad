@@ -308,3 +308,64 @@ def test_a_board_without_a_backlog_still_reports_the_lead(tmp_path: Path) -> Non
     log = _lead_log(tmp_path, {"event": "stalled", "at": "2026-08-31T12:00:00+00:00"})
     state = build_state(tmp_path / "nowhere", log, None)
     assert "error" in state and state["lead"]["decisions"]
+
+
+# ── work happening now, not work that finished ────────────────────────────────
+#
+# The board could only draw what had ended. Measured on 2026-08-31: seventeen
+# `phase:end` events and one `phase:start`, so an item under active work showed the
+# verdict of a phase already over, and nothing on the page said anything was running.
+
+
+def _start(cycle: str, slug: str) -> dict:
+    return {"type": "cycle:phase:start", "cycle": cycle, "slug": slug,
+            "timestamp": "2026-08-31T13:00:00Z"}
+
+
+def test_a_started_phase_with_no_end_is_running(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-001", status="triaged"),
+                       events=[_start("implement", "B-001")])
+    item = _by_id(build_state(project))["B-001"]
+    assert item["running_phase"] == "implement"
+
+
+def test_the_matching_end_clears_it(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-001", status="triaged"),
+                       events=[_start("implement", "B-001"),
+                               _end("implement", "B-001", "VALIDATED")])
+    assert _by_id(build_state(project))["B-001"]["running_phase"] is None
+
+
+def test_an_end_for_a_different_phase_does_not_clear_it(tmp_path: Path) -> None:
+    """Phases overlap in the stream; only the matching end means this one finished."""
+    project = _project(tmp_path, item_block("B-001", status="triaged"),
+                       events=[_start("implement", "B-001"), _end("plan", "B-001")])
+    assert _by_id(build_state(project))["B-001"]["running_phase"] == "implement"
+
+
+def test_a_plan_slug_starts_the_right_item(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-033", status="planned"),
+                       events=[_start("review", "b033-prometheus-url-dev-public")])
+    assert _by_id(build_state(project))["B-033"]["running_phase"] == "review"
+
+
+def test_running_items_are_listed_at_the_top_level(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-001", status="raw"),
+                       item_block("B-002", status="raw"),
+                       events=[_start("discover", "B-001")])
+    assert build_state(project)["running"] == ["B-001"]
+
+
+def test_nothing_running_is_an_empty_list_not_a_missing_key(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-001", status="raw"), events=[])
+    assert build_state(project)["running"] == []
+
+
+def test_blockers_survive_the_running_lookup(tmp_path: Path) -> None:
+    """A regression guard: the first version shadowed the `live` blockers variable and
+    silently emptied every blockers list on the board."""
+    project = _project(tmp_path, item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+                       item_block("B-002", status="raw"),
+                       events=[_start("discover", "B-002")])
+    item = _by_id(build_state(project))["B-001"]
+    assert item["blockers"] == ["B-002"]

@@ -155,6 +155,21 @@ def build_state(project_root: Path, lead_log: Path | None = None,
     statuses = {i.item_id: i.fields.get("status", "") for i in items}
     events = read_events(project_root)
 
+    # A phase that STARTED and has not ended is work happening right now. Without it
+    # the board can only draw what finished, which is a picture of the past: an item
+    # under active work showed the verdict of a phase that was already over, and
+    # nothing on the page said anything was running.
+    running: dict[str, dict] = {}
+    for event in events:
+        slug = item_id_of(event.get("slug") or "")
+        cycle = event.get("cycle") or ""
+        if not slug or cycle not in PHASES:
+            continue
+        if event.get("type") == "cycle:phase:start":
+            running[slug] = {"phase": cycle, "since": event.get("timestamp")}
+        elif event.get("type") == "cycle:phase:end" and running.get(slug, {}).get("phase") == cycle:
+            running.pop(slug, None)
+
     # Last finished phase per item, from the stream.
     reached: dict[str, dict] = {}
     for event in events:
@@ -192,8 +207,15 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             phase = STATUS_PHASE.get(status, "backlog")
             source = "derived"
 
+        # NOT `live`: that name already holds this item's live blockers a few lines up,
+        # and shadowing it silently emptied every `blockers` list on the board.
+        in_flight = running.get(iid)
         out_items.append({
             "id": iid,
+            # The phase being worked on NOW, if any. It outranks `phase` for display:
+            # where an item GOT TO matters less than what is happening to it.
+            "running_phase": (in_flight or {}).get("phase"),
+            "running_since": (in_flight or {}).get("since"),
             "title": item.title,
             "status": status,
             "phase": phase,
@@ -217,6 +239,7 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         "events": events[-200:],
         "event_total": len(events),
         "lead": read_lead(lead_log, lead_marker),
+        "running": sorted(running.keys()),
         "has_stream": _events_path(project_root) is not None,
     }
 

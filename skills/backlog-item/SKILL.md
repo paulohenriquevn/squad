@@ -148,6 +148,19 @@ it — it forbids that being the reason.
 
 Record the decision (`g5_reformulated` / `g5_false_positive` / `g5_rejected`) in the intake log. The keyword heuristic surfaces the question; the human decides. A false positive is a normal outcome, not a failure of the gate.
 
+
+Emit the START of this phase before doing the work:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" start \
+    --cycle backlog --slug {B-NNN}
+```
+
+Without it the board can only draw what FINISHED. Measured on 2026-08-31: seventeen
+`phase:end` events and one `phase:start`, so an item under active work showed the
+verdict of a phase already over and nothing on the page said anything was running.
+A `start` with no matching `end` is exactly the fact "this is happening now".
+
 ### Step 6 — Write
 
 Only after Steps 2–5 pass. Four writes, in this order:

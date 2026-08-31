@@ -231,6 +231,19 @@ fi
 single implementation of the single-flip invariant, and `cycle-acceptance` invokes it from here
 rather than duplicating it. Staying is not the same as being called: **nothing in `/release` runs it.**
 
+
+Emit the START of this phase before doing the work:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" start \
+    --cycle release --slug {B-NNN}
+```
+
+Without it the board can only draw what FINISHED. Measured on 2026-08-31: seventeen
+`phase:end` events and one `phase:start`, so an item under active work showed the
+verdict of a phase already over and nothing on the page said anything was running.
+A `start` with no matching `end` is exactly the fact "this is happening now".
+
 ### Step 8 — Record the release
 
 Write `records/releases/v${NEXT_VERSION}-release.md`:

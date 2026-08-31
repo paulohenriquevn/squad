@@ -147,6 +147,19 @@ the phase RAN; whether what it produced is shippable is a different question wit
 different emitter, and folding them together would make a plan that scored `INVALID`
 indistinguishable from a plan phase that never happened.
 
+
+Emit the START of this phase before doing the work:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" start \
+    --cycle plan --slug {B-NNN}
+```
+
+Without it the board can only draw what FINISHED. Measured on 2026-08-31: seventeen
+`phase:end` events and one `phase:start`, so an item under active work showed the
+verdict of a phase already over and nothing on the page said anything was running.
+A `start` with no matching `end` is exactly the fact "this is happening now".
+
 ## Plan Template
 
 Every plan MUST follow the canonical template at [`templates/plan-template.md`](./templates/plan-template.md). It contains the section structure (Context → Objective → ADRs → Dependency Graph → Phases → Coverage Matrix → Global DoD → Final Phase: Integration Validation) and is the single source of truth — never duplicate it elsewhere.
