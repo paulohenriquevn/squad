@@ -74,6 +74,12 @@ FLOW_MARKERS = (
     "next item", "próximo item", "proximo item",
     "record the impediment", "registrar o impedimento", "adicionar blocked_by",
     "continue", "continuar", "prosseguir", "skip", "pular",
+    # Invoking a cycle command is flow, because the human gates live INSIDE the
+    # skills — `/release` waits at its own Step 6, `/idea-to-release` stops at
+    # PR_OPEN_AWAITING_APPROVAL. The lead does not need to re-implement those gates;
+    # it needs to not answer them when they fire. So "run the cycle" is a decision
+    # about flow, and the approval it eventually reaches is content the lead escalates.
+    "rodar", "run ", "executar", "seguir",
 )
 
 #: A menu option only a person can answer, whatever else it says. Checked FIRST, so an
@@ -91,6 +97,14 @@ _SELECTED_RE = re.compile(r"^\s*❯\s*(\d+)\.\s*(.+?)\s*$", re.MULTILINE)
 _OPTION_RE = re.compile(r"^\s*❯?\s*(\d+)\.\s*(.+?)\s*$", re.MULTILINE)
 _RECOMMENDED_RE = re.compile(r"\(recommended\)", re.IGNORECASE)
 _ITEM_RE = re.compile(r"\bB-\d{3,}\b")
+
+#: Slash commands are stripped before classification. `/idea-to-release` contains
+#: "release", and without this the lead escalated on the single most common option
+#: there is — "run the cycle" — which would have made it useless. Observed on the
+#: live run within minutes of starting it. The command is not the act: the cycle it
+#: names stops by itself at PR_OPEN_AWAITING_APPROVAL, which is where the human gate
+#: already lives.
+_SLASH_COMMAND_RE = re.compile(r"/[a-z][a-z0-9-]*")
 
 
 @dataclass
@@ -129,7 +143,7 @@ class Lead:
         impediment AND to take the sponsor's decision is a sponsor decision with a
         friendly preamble.
         """
-        low = option_text.lower()
+        low = _SLASH_COMMAND_RE.sub(" ", option_text.lower())
         if any(m in low for m in CONTENT_MARKERS):
             return "content"
         if any(m in low for m in FLOW_MARKERS):
@@ -143,8 +157,14 @@ class Lead:
 
         option_text = selected.group(2)
         options = _OPTION_RE.findall(screen)
-        item = (_ITEM_RE.search(screen) or [None]) and (
-            _ITEM_RE.search(screen).group(0) if _ITEM_RE.search(screen) else "")
+
+        # The item comes from the OPTION first. Taking the screen's first `B-NNN` read
+        # an id out of scrollback — observed live, reporting B-022 for an option about
+        # B-033 — which would have charged the per-item ceiling to the wrong item and
+        # let a real loop run past it.
+        in_option = _ITEM_RE.search(option_text)
+        on_screen = _ITEM_RE.search(screen)
+        item = in_option.group(0) if in_option else (on_screen.group(0) if on_screen else "")
 
         # The same question twice is a loop, not progress. Keyed by the option text
         # rather than the item, because a session can loop on one item's one question.

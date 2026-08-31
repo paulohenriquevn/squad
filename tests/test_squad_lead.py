@@ -147,3 +147,35 @@ def test_every_decision_is_logged(tmp_path: Path, monkeypatch) -> None:
     watch(lead, None, log, poll=0, rounds=1)
     entry = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
     assert entry["event"] == "confirm" and entry["item"] == "B-022"
+
+
+# ── both found by watching it run, minutes after it started ───────────────────
+
+
+def test_a_slash_command_is_not_the_act_it_names() -> None:
+    """`/idea-to-release` contains "release"; the cycle it names stops before one.
+
+    Without the strip, the lead escalated on the most common option there is — "run
+    the cycle" — which is the difference between a useful watchdog and a silent one.
+    """
+    assert _lead().classify("Rodar /idea-to-release B-033 no que é autônomo (Recommended)") == "flow"
+
+
+def test_a_real_release_request_is_still_content() -> None:
+    """Stripping commands must not blind it to the act itself."""
+    assert _lead().classify("Fazer o release da v2.1 agora") == "content"
+    assert _lead().classify("Aprovar o merge do PR") == "content"
+
+
+def test_the_item_comes_from_the_option_not_the_scrollback() -> None:
+    screen = (
+        "  contexto antigo sobre B-022 rolando na tela\n"
+        "❯ 1. Rodar /idea-to-release B-033 no que é autônomo (Recommended)\n"
+        "  2. Outra coisa\n"
+    )
+    assert _lead().decide(screen).item == "B-033"
+
+
+def test_the_screen_is_the_fallback_when_the_option_names_no_item() -> None:
+    screen = "  trabalhando em B-022\n❯ 1. Re-run the SELECT and continue (Recommended)\n  2. Parar\n"
+    assert _lead().decide(screen).item == "B-022"
