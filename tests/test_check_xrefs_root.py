@@ -268,3 +268,36 @@ def test_a_kit_rules_file_with_a_broken_reference_still_fails(tmp_path: Path) ->
     report = validate_xrefs(tmp_path, strict=True)
     broken = [f for f in report["findings"] if f.get("check") == "cycle_reference_resolves"]
     assert broken and all(f["severity"] == "FAIL" for f in broken), broken
+
+
+def test_strict_does_not_fail_over_the_projects_own_content(tmp_path: Path) -> None:
+    """`--strict` is rigour about the KIT.
+
+    After the severity fix, three consumers reported zero FAIL and five WARN — and
+    `install.sh --strict` still called every one of them broken, because strict
+    promotes any warning. Promoting a project-owned finding means the kit refuses to
+    install over content it did not write, which is the shape the whole check was
+    corrected for. The finding is unchanged and still printed; what changes is who it
+    can fail.
+    """
+    from check_xrefs import validate_xrefs
+
+    (tmp_path / "rules").mkdir(parents=True)
+    (tmp_path / "rules" / "cycle-plan.md").write_text("# plan\n\n## Hard gates\n", encoding="utf-8")
+    (tmp_path / "rules" / "own-rule.md").write_text("Driven by `cycle-roadmap`.\n", encoding="utf-8")
+    (tmp_path / ".kit-manifest.txt").write_text("rules/cycle-plan.md\n", encoding="utf-8")
+
+    report = validate_xrefs(tmp_path, strict=True)
+    assert report["overall"] == "PASS", report["findings"]
+    assert any(f.get("owner") == "project" for f in report["findings"]), "still reported"
+
+
+def test_strict_still_fails_over_the_kits_own_content(tmp_path: Path) -> None:
+    from check_xrefs import validate_xrefs
+
+    (tmp_path / "rules").mkdir(parents=True)
+    (tmp_path / "rules" / "cycle-plan.md").write_text(
+        "# plan\n\n## Hard gates\n\nSee `cycle-roadmap`.\n", encoding="utf-8")
+    (tmp_path / ".kit-manifest.txt").write_text("rules/cycle-plan.md\n", encoding="utf-8")
+
+    assert validate_xrefs(tmp_path, strict=True)["overall"] == "FAIL"

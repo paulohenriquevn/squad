@@ -544,6 +544,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 own = _kit_owned(path)
                 findings.append({
                     "severity": "FAIL" if own else "WARN",
+                    "owner": "kit" if own else "project",
                     "check": "cycle_reference_resolves",
                     "source": _rel(path),
                     "broken_ref": cycle_id,
@@ -613,8 +614,20 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     for f in findings:
         severity_counts[f["severity"]] += 1
 
+    # `--strict` is rigour about the KIT. A finding tagged `owner: project` describes
+    # a file the kit did not write, and promoting it to a failure means the kit refuses
+    # to install over someone else's content — which is the shape this whole check was
+    # just corrected for. Measured after the severity fix: three consumers reported
+    # zero FAIL and five WARN, and `install.sh --strict` still called every one of them
+    # broken.
+    #
+    # The finding is unchanged and still printed. What changes is who it can fail.
+    strict_warnings = sum(
+        1 for f in findings
+        if f["severity"] == "WARN" and f.get("owner", "kit") != "project"
+    )
     overall = "PASS"
-    if severity_counts.get("FAIL", 0) > 0 or severity_counts.get("WARN", 0) > 0 and strict:
+    if severity_counts.get("FAIL", 0) > 0 or (strict and strict_warnings > 0):
         overall = "FAIL"
 
     return {
