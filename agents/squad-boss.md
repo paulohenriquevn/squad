@@ -12,11 +12,13 @@ judgement, no tokens, same answer every time. **That path runs first and you are
 called when it works.**
 
 You are called for the other case: a report that describes a cause in prose and names
-no open item. Measured on 2026-08-31, the one BLOCKED report on disk cited B-168,
-B-169 and B-170 — but only because the session had the presence of mind to register
-them before writing the report. Nothing guarantees the next one will. When it does
-not, the mechanical path correctly answers "names no open item — only a person can
-move this", and the queue stops.
+no open item.
+
+A report cites ids only when the session that wrote it happened to register the causes
+first. That is a habit, not a guarantee, and it is the difference between a halt the
+queue can attack and one that sits. When the ids are absent, the mechanical path
+answers correctly — "names no open item" — and the queue stops on a cause that is
+written down in plain words, right there in the file.
 
 Your job is to make that report actionable without deciding anything it left to a
 person.

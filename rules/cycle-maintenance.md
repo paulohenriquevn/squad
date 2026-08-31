@@ -224,19 +224,32 @@ An item advanced in error is moved back with a note recording the advance and wh
 - Specialists: `agents/README.md`
 - Branching contract: `rules/git-safety.md`
 
+### Who decides what, when nobody is watching
+
+`rules/autonomy-envelope.md` says which decisions belong to the system and which belong
+to a person, and — for the system's — the doctrine that decides them, so the same
+situation gets the same answer twice.
+
+It matters most exactly here. A chain that halts at every judgement call is correct
+while someone is reading the log and is a stopped queue when nobody is. The envelope is
+what makes the difference a policy a project chooses, rather than an accident of who
+happened to be watching.
+
+Read it before adding a stop to any phase: a gate that waits for an answer nobody will
+give is not a gate.
+
 ### Stopping at a human gate is a phase ending, not a phase skipping
 
 A phase that runs and stops because only a person can open the next door ends with
 `AWAITING_HUMAN`, and **the event is emitted**. The work happened; the item is held;
 both are facts, and neither reaches any reader on its own.
 
-Measured on 2026-08-31: B-058 and B-059 were selected, started, worked on, and halted
-at exactly such a gate. Neither emitted anything. Zero events, zero artefacts, status
-still `triaged` — indistinguishable from an item nobody had touched. The board drew
-them as untouched, the drift checker had nothing to compare, the boss had no report to
-read, and the watchdog, seeing no event, concluded the command had not landed and
-started B-059 again. Every one of those readers behaved correctly on the evidence it
-had; the evidence was missing.
+An item worked this way and left silent is indistinguishable from one nobody touched:
+zero events, zero artefacts, the status it started with. The board draws it as
+underived, the drift checker has nothing to compare, a halt-reader finds no report,
+and a watchdog that sees no event concludes the command never landed and starts it
+again. Every one of those readers behaves correctly on the evidence it has. The
+evidence is what is missing.
 
 `AWAITING_HUMAN` is in `rules/blocking-verdicts.txt`, so an item that ends on it is
 held everywhere the same way — the selector will not hand it out and the watchdog will
@@ -247,10 +260,9 @@ report exists on disk for this item. What to DO about the halt — accept the fa
 with a caveat, fix its cause first, change the gate — is content, and stays with
 whoever the report addresses. SELECT only declines to hand the item out again.
 
-Measured on 2026-08-31: B-033 was `triaged`, nothing in the registry blocked it, and
-it held the oldest id among unblocked items — so SELECT chose it, while a report on
-disk said `/implement` had halted on it needing a sponsor decision. Any caller
-looping on SELECT would have restarted the halt forever.
+The failure it prevents: an item is open, nothing in the registry blocks it, and it is
+the oldest of its status — so SELECT hands it out, while a report on disk says a phase
+already halted on it. Any caller looping on SELECT restarts the halt, forever.
 
 `ITEM_SELECTED`, `ITEM_HALTED` and `BACKLOG_BLOCKED` are emitted by `skills/backlog-review/scripts/select_backlog_item.py`, which is also what makes
 the SELECT phase above a computation rather than a paragraph an agent reads. It was

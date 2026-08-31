@@ -108,10 +108,11 @@ Contract:
 
 **Emitting the milestone:** the event that records Step 4 finishing is emitted with
 `cycle_events.py end --cycle implement --verdict IMPLEMENTATION_COMPLETE --once`. The
-`--once` is not optional here: a phase that CONCLUDES may be recorded once, and on
-2026-08-31 this one was recorded twice for B-169, nineteen seconds apart. A gate that
-iterates — `code-quality` ending `INVALID` three times in fourteen seconds, each a real
-run — omits the flag, which is why the emitter cannot decide this for the caller.
+`--once` is not optional here: a phase that CONCLUDES may be recorded once, and
+without the flag this milestone has been written twice for one item, seconds apart. A
+gate that ITERATES is the opposite case — the same verdict several times in as many
+seconds, each one a real run — which is why the emitter cannot tell the two apart and
+the caller declares which it is.
 
 **Step 4 — TDD halt-loop:**
 
