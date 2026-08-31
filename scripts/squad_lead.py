@@ -126,6 +126,9 @@ class Lead:
     #: Silence beyond this, with no menu, is a handed-back turn worth surfacing. Well
     #: above `idle_seconds`, because a session thinking hard also looks idle briefly.
     stalled_seconds: int = 900
+    #: True once a handed-back turn has been reported, so it is not repeated every
+    #: poll. Cleared when the session moves again.
+    reported_stall: bool = False
     #: How many times each item has been unblocked, and every question already
     #: answered. Both are stopping criteria, not statistics.
     interventions: dict[str, int] = field(default_factory=dict)
@@ -174,7 +177,8 @@ class Lead:
             # A finite measurement only. Without an activity marker `idle` is
             # infinite, which means "not measured" — and reporting a stall from that
             # would be the lead asserting a duration it never observed.
-            if idle != float("inf") and idle >= self.stalled_seconds:
+            if (idle != float("inf") and idle >= self.stalled_seconds
+                    and not self.reported_stall):
                 return Decision("stalled",
                                 f"the session ended its turn and has been idle for "
                                 f"{int(idle // 60)} minute(s); no menu is waiting, so only "
@@ -263,6 +267,9 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
 
         idle = _idle_seconds(marker)
         if idle < lead.idle_seconds:
+            # The session moved. Whatever stall was reported is over, and the next one
+            # is a new fact worth reporting.
+            lead.reported_stall = False
             # Working. A lead that interrupts a session mid-thought is worse than no
             # lead: it answers a menu the session was about to move past on its own.
             time.sleep(poll)
@@ -281,9 +288,17 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
         _log(log, entry)
 
         if decision.action == "stalled":
-            # Reported once, then the watch ends: repeating it every poll would bury
-            # the line in a log nobody reads, which is how a signal stops being one.
-            return 0
+            # Reported once, and the watch CONTINUES. Repeating it every poll would
+            # bury the line in a log nobody reads; exiting would leave the session
+            # unwatched from the first stall onward, which is worse — the next thing
+            # that happens is a menu the lead could have answered.
+            #
+            # Found by shipping the exit: the lead reported a 128-minute stall
+            # correctly and then died, so a restart was needed before it could see
+            # anything again.
+            lead.reported_stall = True
+            time.sleep(poll)
+            continue
 
         if decision.action in ("escalate", "exhausted"):
             # Escalation is terminal by design. Looping here would turn "a person must

@@ -253,3 +253,58 @@ def test_the_stall_says_how_long(monkeypatch, tmp_path: Path) -> None:
     watch(lead, marker, log, poll=0, rounds=1)
     entry = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
     assert entry["event"] == "stalled"
+
+
+def test_the_watch_continues_after_reporting_a_stall(monkeypatch, tmp_path: Path) -> None:
+    """Exiting would leave the session unwatched from the first stall onward, and the
+    next thing that happens is often a menu the lead could have answered.
+
+    Found by shipping the exit: the lead reported a 128-minute stall correctly and then
+    died, so a restart was needed before it could see anything again.
+    """
+    import os
+    import time as _time
+
+    lead = Lead(session="test", stalled_seconds=10)
+    monkeypatch.setattr(lead, "capture", lambda: IDLE_PROMPT)
+    monkeypatch.setattr("squad_lead.time.sleep", lambda s: None)
+    marker = tmp_path / "log"
+    marker.write_text("x", encoding="utf-8")
+    old = _time.time() - 600
+    os.utime(marker, (old, old))
+
+    watch(lead, marker, None, poll=0, rounds=3)
+    assert lead.reported_stall is True
+
+
+def test_the_same_stall_is_not_reported_twice(monkeypatch, tmp_path: Path) -> None:
+    """Repeating it every poll buries the line in a log nobody reads."""
+    import json
+    import os
+    import time as _time
+
+    lead = Lead(session="test", stalled_seconds=10)
+    monkeypatch.setattr(lead, "capture", lambda: IDLE_PROMPT)
+    monkeypatch.setattr("squad_lead.time.sleep", lambda s: None)
+    marker = tmp_path / "log"
+    marker.write_text("x", encoding="utf-8")
+    old = _time.time() - 600
+    os.utime(marker, (old, old))
+    log = tmp_path / "lead.jsonl"
+
+    watch(lead, marker, log, poll=0, rounds=4)
+    stalls = [l for l in log.read_text(encoding="utf-8").splitlines()
+              if json.loads(l)["event"] == "stalled"]
+    assert len(stalls) == 1, stalls
+
+
+def test_a_session_that_moves_again_can_stall_again(monkeypatch, tmp_path: Path) -> None:
+    """The next stall is a new fact, not a repeat of the old one."""
+    lead = Lead(session="test", stalled_seconds=10)
+    lead.reported_stall = True
+    monkeypatch.setattr(lead, "capture", lambda: IDLE_PROMPT)
+    monkeypatch.setattr("squad_lead.time.sleep", lambda s: None)
+    marker = tmp_path / "log"
+    marker.write_text("x", encoding="utf-8")     # mtime = now, so it is working
+    watch(lead, marker, None, poll=0, rounds=1)
+    assert lead.reported_stall is False
