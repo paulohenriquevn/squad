@@ -1094,3 +1094,40 @@ def test_held_reason_names_only_what_cannot_change_by_waiting(tmp_path: Path) ->
     assert lead.held_reason("B-060") is None       # waiting fixes this
     lead.interventions["B-061"] = lead.max_per_item
     assert lead.held_reason("B-061") is not None   # waiting does not
+
+
+# ── a fleet: several sessions, one claim on the work ─────────────────────────
+
+
+def test_two_sessions_are_never_handed_the_same_item(tmp_path: Path) -> None:
+    """One session works one item at a time — that is what a session IS — so a fleet
+    is the only way to work several. And the only harm two members can do each other is
+    to take the same work twice: the same commits attempted from two directions, the
+    same registry line written twice."""
+    from squad_lead import Fleet
+    fleet = Fleet()
+    first = _lead_with_select(tmp_path, {"item": "B-060", "why": "oldest"})
+    first.session, first.fleet, first.queue = "squad1", fleet, ["B-060", "B-067"]
+    second = _lead_with_select(tmp_path, {"item": "B-060", "why": "oldest"})
+    second.session, second.fleet, second.queue = "squad2", fleet, ["B-060", "B-067"]
+
+    fleet.claim("squad1", "B-060")
+    decision = second.decide("no menu here", idle=1000)
+    assert decision.action == "start"
+    assert decision.item == "B-067", "the second session took the first one's item"
+
+
+def test_a_released_item_returns_to_the_fleet(tmp_path: Path) -> None:
+    from squad_lead import Fleet
+    fleet = Fleet()
+    fleet.claim("squad1", "B-060")
+    assert fleet.holder("B-060") == "squad1"
+    fleet.release("squad1")
+    assert fleet.holder("B-060") is None
+
+
+def test_a_lone_lead_has_no_fleet_and_behaves_as_before(tmp_path: Path) -> None:
+    """A fleet of one is a lead. Nothing about the single-session path changes."""
+    lead = _lead_with_select(tmp_path, {"item": "B-060", "why": "oldest"})
+    assert lead.fleet is None
+    assert lead.taken_by_another("B-060") is None

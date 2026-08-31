@@ -344,6 +344,8 @@ class Lead:
     #: The ranked order SELECT last returned, so a head that cannot start does not end
     #: the search.
     queue: list[str] = field(default_factory=list)
+    #: Shared with the other leads of a fleet. None when this lead watches alone.
+    fleet: "Fleet | None" = None
     #: True once a handed-back turn has been reported, so it is not repeated every
     #: poll. Cleared when the session moves again.
     reported_stall: bool = False
@@ -585,6 +587,19 @@ class Lead:
                 return frozenset(names)
         return frozenset()
 
+    def taken_by_another(self, item: str) -> str | None:
+        """The other session working this item, if any.
+
+        Two sessions on one item is the only way members of a fleet can damage each
+        other: the same commits attempted twice, the same registry line written from
+        two directions. It is also the easiest thing to prevent, which is why it is the
+        only thing the coordinator knows.
+        """
+        if self.fleet is None:
+            return None
+        holder = self.fleet.holder(item)
+        return holder if holder and holder != self.session else None
+
     def held_reason(self, item: str) -> str | None:
         """Why nothing can be done with this item until something changes, or None.
 
@@ -598,6 +613,11 @@ class Lead:
         started another item, then came back — three items, zero events between them,
         and the session analysing something else entirely by the end.
         """
+        other = self.taken_by_another(item)
+        if other:
+            # Held for THIS lead, and the clearest case of it: waiting will not free an
+            # item another session is working, and there is nothing here to wait for.
+            return f"{item} is already with session {other}"
         if self.interventions.get(item, 0) >= self.max_per_item:
             return f"{item} already started {self.max_per_item} times"
         verdict = self._last_verdict(item)
@@ -1062,6 +1082,38 @@ class Lead:
         return True
 
 
+@dataclass
+class Fleet:
+    """The sessions a lead watches, and the items they already hold.
+
+    One session is one item at a time — that is what a session IS — so the only way to
+    work more than one item at once is to have more than one session. Measured with a
+    single session: the watchdog started three items in nine minutes, none of them
+    produced an event, and by the end the session was analysing something none of the
+    three had asked for. That was not parallelism; it was a change of subject every few
+    minutes, and the fix for it is not a better timeout.
+
+    The coordinator holds exactly one fact: which item each session is on. Everything
+    else — the menu rules, the doctrine, the guards — stays in `Lead`, one per session,
+    unchanged. A shared set is the whole of the coordination, because the only thing
+    two sessions can do to each other is take the same work twice.
+    """
+    #: session name -> the item it was last handed.
+    taken: dict[str, str] = field(default_factory=dict)
+
+    def holder(self, item: str) -> str | None:
+        for session, held in self.taken.items():
+            if held == item:
+                return session
+        return None
+
+    def claim(self, session: str, item: str) -> None:
+        self.taken[session] = item
+
+    def release(self, session: str) -> None:
+        self.taken.pop(session, None)
+
+
 def _log(path: Path | None, payload: dict) -> None:
     """Append one line. A lead nobody can audit is a lead nobody should trust.
 
@@ -1084,6 +1136,37 @@ def _idle_seconds(marker: Path | None) -> float:
     if marker is None or not marker.exists():
         return float("inf")
     return time.time() - marker.stat().st_mtime
+
+
+def watch_fleet(leads: list[Lead], markers: dict[str, Path | None], log: Path | None,
+                poll: int, rounds: int | None = None) -> int:
+    """Watch several sessions, one lead each, sharing one claim on the work.
+
+    Round-robin rather than threads: each pass gives every session a turn, and a
+    session that is busy costs one screen capture. Nothing here is concurrent, and
+    nothing needs to be — the concurrency is in the SESSIONS, which is where a session
+    can only ever have been.
+
+    A lead that loses its session is dropped and the rest keep watching. One tmux
+    window closing is not a reason for the other five to go unwatched.
+    """
+    served = 0
+    alive = list(leads)
+    while alive and (rounds is None or served < rounds):
+        served += 1
+        for lead in list(alive):
+            if watch_once(lead, markers.get(lead.session), log, poll) != 0:
+                alive.remove(lead)
+                if lead.fleet is not None:
+                    lead.fleet.release(lead.session)
+        if alive:
+            time.sleep(poll)
+    return 0 if leads else 1
+
+
+def watch_once(lead: Lead, marker: Path | None, log: Path | None, poll: int) -> int:
+    """One pass over one session. Returns non-zero when the session is gone."""
+    return watch(lead, marker, log, poll, rounds=1)
 
 
 def watch(lead: Lead, marker: Path | None, log: Path | None,
@@ -1126,6 +1209,11 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             # and it is the only one where "is it still quiet?" has the right answer.
             if lead.still_quiet(marker):
                 entry["sent"] = lead.start(decision)
+                if entry["sent"] and lead.fleet is not None:
+                    # Claimed only once the keystroke landed. Claiming on the decision
+                    # would reserve an item for a session that never received it.
+                    lead.fleet.claim(lead.session, decision.item)
+                    entry["session"] = lead.session
             else:
                 entry["sent"] = False
                 entry["reason"] = ("the session moved between the decision and the "
@@ -1182,7 +1270,14 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--session", default="squad", help="tmux session to watch")
+    parser.add_argument("--session", default="squad",
+                        help="tmux session to watch. Comma-separated for a fleet: each "
+                             "session gets its own lead and no two are handed the same "
+                             "item. One session works one item at a time — that is what "
+                             "a session is — so a fleet is the only way to work several")
+    parser.add_argument("--marker-dir", type=Path,
+                        help="directory holding one activity marker per session, named "
+                             "<session>.log. Used instead of --marker for a fleet")
     parser.add_argument("--marker", type=Path,
                         help="file whose mtime marks activity (the session's log)")
     parser.add_argument("--log", type=Path, help="append decisions here as JSONL")
@@ -1213,12 +1308,27 @@ def main(argv: list[str] | None = None) -> int:
     if project is not None and not (project / "BACKLOG.md").is_file():
         print(f"FATAL: no BACKLOG.md under {project}", file=sys.stderr)
         return 1
-    lead = Lead(session=args.session, project=project, max_per_item=args.max_per_item,
-                idle_seconds=args.idle, stalled_seconds=args.stalled,
-                agents_when_stuck=args.agents_when_stuck,
-                agent_budget_usd=args.agent_budget_usd,
-                agent_cooldown=args.agent_cooldown, log_path=args.log)
-    return watch(lead, args.marker, args.log, args.poll, rounds=1 if args.once else None)
+    names = [n.strip() for n in args.session.split(",") if n.strip()]
+    if not names:
+        print("FATAL: --session named nothing", file=sys.stderr)
+        return 1
+
+    fleet = Fleet() if len(names) > 1 else None
+    leads, markers = [], {}
+    for name in names:
+        leads.append(Lead(session=name, project=project, max_per_item=args.max_per_item,
+                          idle_seconds=args.idle, stalled_seconds=args.stalled,
+                          agents_when_stuck=args.agents_when_stuck,
+                          agent_budget_usd=args.agent_budget_usd,
+                          agent_cooldown=args.agent_cooldown, log_path=args.log,
+                          fleet=fleet))
+        markers[name] = (args.marker_dir / f"{name}.log") if args.marker_dir else args.marker
+
+    if len(leads) == 1:
+        return watch(leads[0], markers[names[0]], args.log, args.poll,
+                     rounds=1 if args.once else None)
+    return watch_fleet(leads, markers, args.log, args.poll,
+                       rounds=1 if args.once else None)
 
 
 if __name__ == "__main__":
