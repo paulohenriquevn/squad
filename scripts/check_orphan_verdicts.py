@@ -58,8 +58,20 @@ from pathlib import Path
 #: single-letter column headers out.
 _VERDICT_RE = re.compile(r"`([A-Z][A-Z0-9_]{3,})`")
 
-_SECTION_RE = re.compile(r"^(#{2,})[^\n]*Verdicts?[^\n]*\n(.*?)(?=^#{1,6} |\Z)",
-                         re.MULTILINE | re.DOTALL)
+#: The Verdicts section, ending at the next heading of the SAME level or higher —
+#: not at any heading at all.
+#:
+#: It used to stop at `^#{1,6} `, so a subsection under Verdicts truncated it and the
+#: sweep silently covered less. Measured on 2026-08-31: adding a `###` under
+#: `cycle-maintenance.md`'s verdict table dropped the swept count from 51 to 49 with
+#: no finding, no warning, and nothing in the output to notice. A coverage gate that
+#: loses coverage without saying so is the failure it exists to prevent, one level up.
+#:
+#: `(?P=level)` requires the closing heading to be at least as shallow: `###` no
+#: longer ends a `##` section, and `##` still does.
+_SECTION_RE = re.compile(
+    r"^(?P<level>#{2,})[^\n]*Verdicts?[^\n]*\n(.*?)(?=^(?P=level)(?!#) |\Z)",
+    re.MULTILINE | re.DOTALL)
 
 #: `_(emitted externally: reason)_` — the escape hatch, and it must carry a reason.
 _EXEMPT_RE = re.compile(r"_\(\s*(?:emitted|verdict)[^:)]*:\s*([^)]+?)\s*\)_", re.IGNORECASE)

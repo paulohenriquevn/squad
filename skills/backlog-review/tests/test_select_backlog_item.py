@@ -237,3 +237,48 @@ def test_without_a_halt_set_nothing_changes(tmp_path: Path) -> None:
     """The parameter defaults to empty, so every existing caller keeps its answer."""
     text = item_block("B-033", status="triaged") + item_block("B-057", status="triaged")
     assert select(text).item_id == "B-033"
+
+
+# ── the queue attacks the cause of a halt ────────────────────────────────────
+
+
+def test_an_item_that_unblocks_a_halt_comes_first(tmp_path: Path) -> None:
+    """Age normally decides, and still decides among equals. An item a halted item's
+    report names as its cause is not an equal: every hour it waits, the halted item
+    waits too.
+
+    Measured on 2026-08-31: B-033 halted on B-168/169/170 and by age alone the queue
+    would have reached them after twenty other items. The halt would have outlived
+    all of them."""
+    text = (item_block("B-057", status="triaged")
+            + item_block("B-058", status="triaged")
+            + item_block("B-168", status="triaged"))
+    result = select(text, unblocking=frozenset({"B-168"}))
+    assert result.item_id == "B-168"
+    assert result.queue == ["B-168", "B-057", "B-058"]
+    assert "names it as a cause" in result.reason
+
+
+def test_priority_changes_order_never_eligibility(tmp_path: Path) -> None:
+    """An unblocking item that is itself halted stays out of the queue. Ordering must
+    not become a way in for something the rules hold."""
+    text = item_block("B-057", status="triaged") + item_block("B-168", status="triaged")
+    result = select(text, halted=frozenset({"B-168"}),
+                    unblocking=frozenset({"B-168"}))
+    assert result.item_id == "B-057"
+    assert result.halted == ["B-168"]
+
+
+def test_a_blocked_unblocking_item_still_waits_on_its_blocker(tmp_path: Path) -> None:
+    text = (item_block("B-057", status="triaged")
+            + item_block("B-168", status="triaged", extra="blocked_by: B-200\n")
+            + item_block("B-200", status="triaged"))
+    result = select(text, unblocking=frozenset({"B-168"}))
+    assert result.item_id == "B-057"
+    assert result.walls == {"B-168": ["B-200"]}
+
+
+def test_without_a_priority_set_the_order_is_unchanged(tmp_path: Path) -> None:
+    """Every existing caller keeps its answer: the parameter defaults to empty."""
+    text = item_block("B-057", status="triaged") + item_block("B-168", status="triaged")
+    assert select(text).item_id == "B-057"

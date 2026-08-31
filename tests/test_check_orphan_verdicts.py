@@ -104,3 +104,33 @@ def test_this_repository_has_no_orphaned_verdict() -> None:
     """The guard, running where it matters. Exemptions are allowed; silence is not."""
     report = check_orphan_verdicts(Path(__file__).resolve().parent.parent)
     assert report.findings == [], [f"{f.rule}: {f.verdict}" for f in report.findings]
+
+
+def test_a_subsection_does_not_truncate_the_verdicts_section(tmp_path: Path) -> None:
+    """A coverage gate that loses coverage without saying so is the failure it exists
+    to prevent, one level up.
+
+    Measured on 2026-08-31: adding a `###` under `cycle-maintenance.md`'s verdict
+    table dropped the swept count from 51 to 49 — no finding, no warning, nothing in
+    the output to notice. Fixing the delimiter raised it to 54, so three verdicts had
+    been outside the sweep before anyone touched the file.
+    """
+    rules = tmp_path / "rules"
+    rules.mkdir(parents=True)
+    (rules / "cycle-demo.md").write_text(
+        "# Demo\n\n"
+        "## Verdicts\n\n"
+        "| `FIRST_ONE` | before the subsection |\n\n"
+        "### A subsection under Verdicts\n\n"
+        "| `SECOND_ONE` | after it, still about verdicts |\n\n"
+        "## Something else\n\n"
+        "| `NOT_A_VERDICT_HERE` | outside the section |\n",
+        encoding="utf-8")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "emit.py").write_text(
+        'print("FIRST_ONE"); print("SECOND_ONE")\n', encoding="utf-8")
+
+    report = check_orphan_verdicts(tmp_path)
+    assert report.total >= 2, "the subsection truncated the section again"
+    assert not report.findings

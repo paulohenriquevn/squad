@@ -89,28 +89,21 @@ LOOP BACK to SELECT
 | `BACKLOG_BLOCKED` | Selectable items remain and **every one is blocked** | Surface the wall. **Not `BACKLOG_EMPTY`** — a sweep would add items beside a wall instead of clearing it |
 | `ITEM_HALTED` | A phase stopped on this item and wrote `{slug}-BLOCKED.md` | Read the report. SELECT holds the item out of the queue until the file is gone — handing it out again reruns exactly what halted |
 
-**A halt is measured, never judged.** `ITEM_HALTED` asserts one thing: a BLOCKED
-report exists on disk for this item. What to DO about the halt — accept the failure
-with a caveat, fix its cause first, change the gate — is content, and stays with
-whoever the report addresses. SELECT only declines to hand the item out again.
+### Attacking the cause of a halt
 
-Measured on 2026-08-31: B-033 was `triaged`, nothing in the registry blocked it, and
-it held the oldest id among unblocked items — so SELECT chose it, while a report on
-disk said `/implement` had halted on it needing a sponsor decision. Any caller
-looping on SELECT would have restarted the halt forever.
+A BLOCKED report names the items the phase measured as its cause. Those items get the
+front of the queue: `skills/backlog-review/scripts/squad_boss.py` reads the reports,
+keeps the cited ids the registry still calls open, and SELECT ranks them ahead of
+older work. Finishing them is what lets the halt move.
 
-`ITEM_SELECTED`, `ITEM_HALTED` and `BACKLOG_BLOCKED` are emitted by `skills/backlog-review/scripts/select_backlog_item.py`, which is also what makes
-the SELECT phase above a computation rather than a paragraph an agent reads. It was
-added on 2026-08-30, when a sweep found this rule to be the kit's largest
-contract-without-executor: the chain, the ranking and eight verdicts were written,
-four of the verdicts appeared in no skill and no script, and the only runner over
-backlog items carried a literal list of three ids.
+This changes ORDER, never eligibility. A prioritised item that is itself blocked or
+halted stays held by the rules that hold it, and nothing about the halted item is
+touched — not its status, not `blocked_by`, and never the gate that stopped it. The
+decision the report addresses to a person stays with that person; what stops waiting
+is the work that decision was blocking.
 
-`--check B-NNN` answers the narrow question — may THIS one start? — with the same
-computation that picks, so the gate and the selector cannot disagree. `--queue N`
-returns the head of the order for a caller filling more than one lane.
-
-There is no verdict for "the ecosystem is done".
+A report naming no open item is reported as exactly that. It is the case only a
+person can move, and the one most easily mistaken for handled.
 
 ## ADVANCE runs after the human, never instead of them
 
@@ -230,3 +223,26 @@ An item advanced in error is moved back with a note recording the advance and wh
 - Routing: `scripts/route_domain.py`
 - Specialists: `agents/README.md`
 - Branching contract: `rules/git-safety.md`
+
+**A halt is measured, never judged.** `ITEM_HALTED` asserts one thing: a BLOCKED
+report exists on disk for this item. What to DO about the halt — accept the failure
+with a caveat, fix its cause first, change the gate — is content, and stays with
+whoever the report addresses. SELECT only declines to hand the item out again.
+
+Measured on 2026-08-31: B-033 was `triaged`, nothing in the registry blocked it, and
+it held the oldest id among unblocked items — so SELECT chose it, while a report on
+disk said `/implement` had halted on it needing a sponsor decision. Any caller
+looping on SELECT would have restarted the halt forever.
+
+`ITEM_SELECTED`, `ITEM_HALTED` and `BACKLOG_BLOCKED` are emitted by `skills/backlog-review/scripts/select_backlog_item.py`, which is also what makes
+the SELECT phase above a computation rather than a paragraph an agent reads. It was
+added on 2026-08-30, when a sweep found this rule to be the kit's largest
+contract-without-executor: the chain, the ranking and eight verdicts were written,
+four of the verdicts appeared in no skill and no script, and the only runner over
+backlog items carried a literal list of three ids.
+
+`--check B-NNN` answers the narrow question — may THIS one start? — with the same
+computation that picks, so the gate and the selector cannot disagree. `--queue N`
+returns the head of the order for a caller filling more than one lane.
+
+There is no verdict for "the ecosystem is done".

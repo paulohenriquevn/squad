@@ -136,13 +136,30 @@ def live_blockers(item: Item, statuses: dict[str, str]) -> list[str] | None:
     return open_ids or None
 
 
-def rank(items: list[Item]) -> list[Item]:
-    """The chain's order: triaged before raw, then oldest first."""
-    return sorted(items, key=lambda i: (_RANK.get(i.fields.get("status", ""), 99), _number(i)))
+def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[Item]:
+    """The chain's order: what unblocks a halt first, then triaged before raw, then
+    oldest first.
+
+    Age normally decides, and it still decides among equals. But an item that some
+    halted item's BLOCKED report names as its cause is not an equal: finishing it
+    turns a stopped item back into a moving one, and every hour it waits is an hour
+    the halted item also waits.
+
+    Measured on 2026-08-31: B-033 halted on three named causes — B-168, B-169, B-170,
+    all triaged — and by age alone the queue would have reached them after twenty
+    other items. The halt would have outlived all of them.
+
+    This is ORDER, not eligibility. An unblocking item that is itself blocked or
+    halted is still held by the rules that hold it; it never gets in ahead of them.
+    """
+    return sorted(items, key=lambda i: (i.item_id not in unblocking,
+                                        _RANK.get(i.fields.get("status", ""), 99),
+                                        _number(i)))
 
 
 def select(text: str, requested: str | None = None,
-           halted: frozenset[str] = frozenset()) -> Selection:
+           halted: frozenset[str] = frozenset(),
+           unblocking: frozenset[str] = frozenset()) -> Selection:
     """Choose the next item, or explain why none may start.
 
     `requested` asks the narrower question — may THIS one start? — which is the form
@@ -174,7 +191,7 @@ def select(text: str, requested: str | None = None,
         else:
             walls[item.item_id] = blockers
 
-    ordered = rank(free)
+    ordered = rank(free, unblocking)
     queue = [i.item_id for i in ordered]
 
     if requested:
@@ -216,9 +233,16 @@ def select(text: str, requested: str | None = None,
 
     if ordered:
         chosen = ordered[0]
-        return Selection("ITEM_SELECTED", item_id=chosen.item_id,
-                         reason=(f"{chosen.item_id} is {statuses[chosen.item_id]}, the oldest "
-                                 f"unblocked item of the highest-ranked status"),
+        if chosen.item_id in unblocking:
+            # Said explicitly: the queue departed from age, and a reader who does not
+            # know why will read the pick as a bug.
+            reason = (f"{chosen.item_id} is {statuses[chosen.item_id]} and a halted "
+                      f"item's report names it as a cause, so it comes before older "
+                      f"work — finishing it is what lets the halt move")
+        else:
+            reason = (f"{chosen.item_id} is {statuses[chosen.item_id]}, the oldest "
+                      f"unblocked item of the highest-ranked status")
+        return Selection("ITEM_SELECTED", item_id=chosen.item_id, reason=reason,
                          walls=walls, queue=queue, halted=stopped)
 
     if walls or stopped:
@@ -259,16 +283,22 @@ def main() -> int:
     # the board does. `--ignore-halts` exists for the one caller who has read the
     # report and decided to rerun anyway; it is never the default, because a default
     # that ignores a halt turns every stop into a loop.
+    text = args.backlog.read_text(encoding="utf-8")
+    project = args.backlog.resolve().parent
     halted: frozenset[str] = frozenset()
+    unblocking: frozenset[str] = frozenset()
     if not args.ignore_halts:
         try:
-            from board_state import halted_items
-            halted = frozenset(halted_items(args.backlog.resolve().parent))
+            from squad_boss import halt_reports, unblocking_ids
+            halted = frozenset(halt_reports(project))
+            statuses_for_boss = {i.item_id: i.fields.get("status", "")
+                                 for i in _parse_items(text)}
+            unblocking = frozenset(unblocking_ids(project, statuses_for_boss))
         except ImportError as error:
             print(f"halt detection unavailable ({error}); proceeding without it",
                   file=sys.stderr)
 
-    result = select(args.backlog.read_text(encoding="utf-8"), args.check, halted)
+    result = select(text, args.check, halted, unblocking)
 
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))

@@ -226,20 +226,16 @@ def halted_items(project_root: Path) -> set[str]:
     person declaring an impediment, this is a phase declaring it stopped. Both hold
     the item; different things must be done about them, so the board counts them
     apart rather than folding one into the other.
+
+    The scan itself lives in `scripts/squad_boss.py`, which is the single reader of
+    these files. Two scans of one directory drift the way two copies of a
+    blocking-verdict list already did in this repository.
     """
-    records = _records_dir(project_root)
-    if records is None:
+    try:
+        from squad_boss import halt_reports
+    except ImportError:
         return set()
-    found = set()
-    for base in _PHASE_OF_DIR:
-        directory = records / base
-        if not directory.is_dir():
-            continue
-        for entry in directory.glob("*-BLOCKED.md"):
-            item = item_id_of(entry.name)
-            if item.startswith("B-"):
-                found.add(item)
-    return found
+    return set(halt_reports(project_root))
 
 
 def planned_items(project_root: Path) -> dict[str, str]:
