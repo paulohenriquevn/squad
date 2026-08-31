@@ -56,12 +56,18 @@ def test_a_position_with_no_stream_is_labelled_derived(tmp_path: Path) -> None:
 # ── position from the stream ──────────────────────────────────────────────────
 
 
-def test_an_event_moves_the_item_past_the_phase_that_finished(tmp_path: Path) -> None:
-    """A `phase:end` says a phase FINISHED, so the item sits in the next one."""
+def test_an_ended_phase_places_the_item_THERE_not_in_the_next_one(tmp_path: Path) -> None:
+    """Ending a phase is a fact; entering the next one is a guess.
+
+    It used to advance. Measured on 2026-08-31: an item had sixteen events, all `end`,
+    with `code-quality` appearing TEN times — it was iterating against that gate, not
+    moving past it. The board put it in `review`, which it had never entered, and the
+    operator read the column as where the work was.
+    """
     project = _project(tmp_path, item_block("B-001", status="triaged"),
                        events=[_end("implement", "B-001", "VALIDATED")])
     item = _by_id(build_state(project))["B-001"]
-    assert item["phase"] == "code-quality"
+    assert item["phase"] == "implement"
     assert item["position_from"] == "stream"
 
 
@@ -69,14 +75,14 @@ def test_the_stream_outranks_the_status(tmp_path: Path) -> None:
     """The registry records where an item got to; the stream records what ran."""
     project = _project(tmp_path, item_block("B-001", status="raw"),
                        events=[_end("review", "B-001", "READY_TO_MERGE")])
-    assert _by_id(build_state(project))["B-001"]["phase"] == "release"
+    assert _by_id(build_state(project))["B-001"]["phase"] == "review"
 
 
 def test_the_furthest_phase_wins_not_the_last_line(tmp_path: Path) -> None:
     """Events can arrive out of order; position is how far it got, not what came last."""
     project = _project(tmp_path, item_block("B-001", status="triaged"),
                        events=[_end("review", "B-001"), _end("discover", "B-001")])
-    assert _by_id(build_state(project))["B-001"]["phase"] == "release"
+    assert _by_id(build_state(project))["B-001"]["phase"] == "review"
 
 
 def test_the_last_verdict_is_carried(tmp_path: Path) -> None:
@@ -85,10 +91,11 @@ def test_the_last_verdict_is_carried(tmp_path: Path) -> None:
     assert _by_id(build_state(project))["B-001"]["last_verdict"] == "VALIDATED"
 
 
-def test_an_item_past_the_last_phase_is_done(tmp_path: Path) -> None:
+def test_finishing_the_last_phase_leaves_the_item_in_it(tmp_path: Path) -> None:
+    """There is no `done` column any more: the item is where it was last observed."""
     project = _project(tmp_path, item_block("B-001", status="shipped"),
                        events=[_end(PHASES[-1], "B-001", "ACCEPTED")])
-    assert _by_id(build_state(project))["B-001"]["phase"] == "done"
+    assert _by_id(build_state(project))["B-001"]["phase"] == PHASES[-1]
 
 
 def test_events_for_other_items_do_not_move_this_one(tmp_path: Path) -> None:
@@ -230,7 +237,7 @@ def test_a_plan_slug_positions_its_item(tmp_path: Path) -> None:
                                 "verdict": "VALIDATED", "timestamp": "2026-08-31T12:00:00Z"}])
     item = _by_id(build_state(project))["B-033"]
     assert item["position_from"] == "stream"
-    assert item["phase"] == "code-quality"
+    assert item["phase"] == "implement"
 
 
 # ── the supervisor rail ───────────────────────────────────────────────────────
@@ -327,6 +334,8 @@ def test_a_started_phase_with_no_end_is_running(tmp_path: Path) -> None:
                        events=[_start("implement", "B-001")])
     item = _by_id(build_state(project))["B-001"]
     assert item["running_phase"] == "implement"
+    assert item["phase"] == "implement"
+    assert item["position_from"] == "running"
 
 
 def test_the_matching_end_clears_it(tmp_path: Path) -> None:

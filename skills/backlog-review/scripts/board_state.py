@@ -218,23 +218,32 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         impeded = bool(status in OPEN_STATUS and declares_impediment(raw_block)
                        and (live or not blockers))
 
+        # NOT `live`: that name already holds this item's live blockers a few lines up,
+        # and shadowing it silently emptied every `blockers` list on the board.
+        in_flight = running.get(iid)
         hit = reached.get(iid)
-        if hit:
-            # The stream says a phase finished; the item sits in the one after it.
-            nxt = PHASES.index(hit["phase"]) + 1
-            phase = PHASES[nxt] if nxt < len(PHASES) else "done"
-            source = "stream"
+        if in_flight:
+            # Observed: a phase started and has not ended.
+            phase, source = in_flight["phase"], "running"
+        elif hit:
+            # Observed: a phase ENDED. The item is drawn there, not in the one after.
+            #
+            # It used to advance to the next phase, and that was a prediction dressed as
+            # a fact. Measured on 2026-08-31: an item had sixteen events, all `end`, with
+            # `code-quality` appearing TEN times — it was iterating against that gate,
+            # not moving past it. The board put it in `review`, which it had never
+            # entered, and the operator read the column as where the work was.
+            #
+            # Ending a phase is a fact; entering the next one is a guess, and a board
+            # that guesses is a board nobody can check against reality.
+            phase, source = hit["phase"], "stream"
         else:
             phase = STATUS_PHASE.get(status, "backlog")
             source = "derived"
 
-        # NOT `live`: that name already holds this item's live blockers a few lines up,
-        # and shadowing it silently emptied every `blockers` list on the board.
-        in_flight = running.get(iid)
         out_items.append({
             "id": iid,
-            # The phase being worked on NOW, if any. It outranks `phase` for display:
-            # where an item GOT TO matters less than what is happening to it.
+            # The phase being worked on NOW, if any.
             "running_phase": (in_flight or {}).get("phase"),
             "running_since": (in_flight or {}).get("since"),
             "title": item.title,

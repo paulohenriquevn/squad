@@ -434,6 +434,9 @@ h1 {
 .chip.verdict { background: var(--shipped-bg); color: var(--shipped); }
 /* An inferred position and a measured one must not read alike. */
 .chip.derived { background: transparent; border: 1px dashed var(--line); color: var(--ink-3); }
+/* Ended, not running: the phase finished and nothing has been observed since. Quiet,
+   because it is the ordinary state of a stream that only records completions. */
+.chip.ended { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
 
 /* Impediment notes are prose written by whoever hit the wall, and they run long —
    the one in the measured registry is a full paragraph. Clamped to three lines so a
@@ -528,7 +531,8 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
 <main class="board" id="board"></main>
 
 <footer>
-  <span class="key"><span class="swatch measured"></span>measured by the stream</span>
+  <span class="key"><span class="swatch measured"></span>running now</span>
+  <span class="key">ended here — the phase finished; nothing observed since</span>
   <span class="key"><span class="swatch impeded"></span>impeded</span>
   <span class="key"><span class="swatch shipped"></span>shipped</span>
   <span class="key"><span class="swatch killed"></span>killed — a successful outcome</span>
@@ -681,9 +685,14 @@ function render(state) {
     const terminal = phase === "killed" || phase === "done";
     const ord = terminal ? "" : `<span class="ord">${String(i + 1).padStart(2, "0")}</span>`;
     const cards = inPhase.length ? inPhase.map(it => {
+      // Three states, three labels, and none of them may imply the others. `running`
+      // is observed to be happening; `ended` is observed to have finished and says
+      // nothing about what comes next; `derived` was never observed at all.
       const chips = [];
-      if (it.running_phase) {
-        chips.push(`<span class="chip running">running ${PHASE_LABEL[it.running_phase] || it.running_phase}</span>`);
+      if (it.position_from === "running") {
+        chips.push(`<span class="chip running">running</span>`);
+      } else if (it.position_from === "stream") {
+        chips.push(`<span class="chip ended" title="this phase ended; nothing has been observed since">ended here</span>`);
       }
       chips.push(`<span class="chip status">${it.status || "?"}</span>`);
       if (it.domain) chips.push(`<span class="chip">${it.domain}</span>`);
