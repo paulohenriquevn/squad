@@ -188,6 +188,40 @@ _HEADING_LINES = 5
 #: item, which is exactly how the board once lost half of its own execution.
 _SLUG_ITEM_RE = re.compile(r"\bb-?(\d{3,})\b", re.IGNORECASE)
 
+#: What the lead asks when a menu is a decision the doctrine may already cover.
+#:
+#: The watchdog itself still refuses: it classifies, and a scope call is not flow. What
+#: changed is where the refusal goes. It used to end at a person who had said they
+#: enter at the initial backlog and nowhere else, which turned every such menu into a
+#: permanent stop. Now it goes to the agent that holds `rules/autonomy-envelope.md`,
+#: and comes back either as a rule applied or as a gap in that file.
+#:
+#: The answer must name BOTH an option number and the rule that produced it. A number
+#: without a rule is the agent improvising, which is the thing the envelope exists to
+#: replace — so the lead refuses it and escalates instead.
+_MENU_PROMPT = """A session stopped at a menu and the watchdog will not answer it: the
+option is not flow.
+
+The menu:
+{menu}
+
+Does the doctrine in `rules/autonomy-envelope.md` decide this? Read the file, and read
+the registry and the stream for whatever item the menu is about.
+
+If a rule covers it, answer with exactly two lines:
+OPTION: <the number to choose>
+RULE APPLIED: <the section of the envelope, by name>
+
+If no rule covers it, answer:
+NO RULE: <what the case is, stated so it can be added to the envelope>
+
+Never choose an option that switches off a gate, that merges, or that widens an item
+already executing — those are the envelope's floor and no rule overrides them."""
+
+#: The agent's answer, parsed strictly. Anything that does not match is not an answer.
+_OPTION_RE_ANSWER = re.compile(r"^OPTION:\s*(\d+)\s*$", re.MULTILINE)
+_RULE_RE_ANSWER = re.compile(r"^RULE APPLIED:\s*(\S.*?)\s*$", re.MULTILINE)
+
 #: What the lead asks when the selector has computed everything and the queue is
 #: still stopped. Deliberately states the constraint the agent inherits, because the
 #: agent file states it too and a prompt that contradicts it would be the one place
@@ -205,10 +239,13 @@ which item."""
 
 @dataclass
 class Decision:
-    action: str          # confirm · escalate · wait · exhausted · stalled · start · asked
+    action: str          # confirm · escalate · wait · exhausted · stalled · start
+                         # · asked · choose
     reason: str
     option: str = ""
     item: str = ""
+    #: For `choose`: which numbered option the doctrine selected.
+    option_number: str = ""
 
 
 @dataclass
@@ -313,6 +350,33 @@ class Lead:
         return seen
 
     # ── asking an agent, from outside the session ─────────────────────────
+    def _decide_by_doctrine(self, screen: str, options: list, item: str) -> Decision | None:
+        """Ask the agent whether the envelope decides this menu, and how.
+
+        Returns a `choose` decision when it does, and None when it does not — so the
+        caller escalates exactly as before. The refusal moved; it did not disappear.
+        """
+        menu = "\n".join(f"{n}. {text}" for n, text in options)
+        answer, note = self.ask_agent("squad-lead", _MENU_PROMPT.format(menu=menu))
+        if not answer:
+            return None
+        picked = _OPTION_RE_ANSWER.search(answer)
+        rule = _RULE_RE_ANSWER.search(answer)
+        if not picked or not rule:
+            # A number with no rule is the agent improvising, which is what the
+            # envelope replaced. No rule named, no answer taken.
+            return None
+        number = picked.group(1)
+        if number not in {n for n, _ in options}:
+            return None
+        text = next(t for n, t in options if n == number)
+        if any(f in text.lower() for f in _RELAXING_FLAGS):
+            # The floor again, reached from the other side: the agent may not pick what
+            # the classifier would have refused.
+            return None
+        return Decision("choose", f"envelope decides it — {rule.group(1)}", text, item,
+                        option_number=number)
+
     def ask_agent(self, agent: str, question: str) -> tuple[str | None, str]:
         """Run one headless session so an agent can answer what this cannot compute.
 
@@ -591,14 +655,25 @@ class Lead:
                             option_text, item)
 
         kind = self.classify(option_text)
-        if kind == "content":
+        if kind in ("content", "unknown"):
             flag = next((f for f in _RELAXING_FLAGS if f in option_text.lower()), "")
-            reason = (f"the option switches off a precondition ({flag}…); accepting that "
-                      f"risk is a person's call" if flag else "only a person can answer this")
+            if flag:
+                # The floor. No doctrine reaches it, so there is nothing to ask.
+                return Decision("escalate",
+                                f"the option switches off a precondition ({flag}…); "
+                                f"accepting that risk is nobody's to delegate",
+                                option_text, item)
+            # `unknown` comes here too, and it is the more common case: the markers are
+            # a small vocabulary and a real menu rarely speaks it. "I cannot classify
+            # this" is exactly where a rule that classifies it is worth reading — and
+            # the observed refusal that stopped a queue for forty minutes was an
+            # `unknown`, not a `content`.
+            chosen = self._decide_by_doctrine(screen, options, item)
+            if chosen is not None:
+                return chosen
+            reason = ("only a person can answer this" if kind == "content"
+                      else "the option does not read as flow, and no rule covers it")
             return Decision("escalate", reason, option_text, item)
-        if kind == "unknown":
-            return Decision("escalate", "the option does not read as flow; not guessing",
-                            option_text, item)
 
         # `(Recommended)` is the session stating what it would do. Confirming that is
         # not the lead having an opinion — it is the lead removing a wait.
@@ -663,6 +738,42 @@ class Lead:
         if marker is None:
             return False
         return _idle_seconds(marker) >= self.stalled_seconds
+
+    def choose(self, screen: str, decision: Decision) -> bool:
+        """Move the menu cursor to the chosen option and press Enter.
+
+        Arrow keys rather than typing the number: the number is what the menu SHOWS,
+        and a menu that renumbers between the read and the keystroke would take a
+        different option under the same digit. Moving from where the cursor actually
+        is has no such gap.
+        """
+        selected = _SELECTED_RE.search(screen)
+        if not selected or not decision.option_number:
+            return False
+        try:
+            steps = int(decision.option_number) - int(selected.group(1))
+        except ValueError:
+            return False
+        key = "Down" if steps > 0 else "Up"
+        try:
+            for _ in range(abs(steps)):
+                subprocess.run(["tmux", "send-keys", "-t", self.session, key],
+                               check=True, timeout=15)
+            # Re-read before committing: if the cursor is not where the arrows should
+            # have put it, something else moved the menu and Enter would take the wrong
+            # option.
+            screen_now = self.capture() or ""
+            landed = _SELECTED_RE.search(screen_now)
+            if not landed or landed.group(1) != decision.option_number:
+                return False
+            subprocess.run(["tmux", "send-keys", "-t", self.session, "Enter"],
+                           check=True, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            return False
+        if decision.item:
+            self.interventions[decision.item] = self.interventions.get(decision.item, 0) + 1
+        self.answered.add(f"{decision.item}|{decision.option}")
+        return True
 
     def start(self, decision: Decision) -> bool:
         """Type the start command and send it.
@@ -750,6 +861,9 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
                  "idle_seconds": None if idle == float("inf") else round(idle)}
         if decision.action == "confirm":
             entry["sent"] = lead.confirm(decision)
+        elif decision.action == "choose":
+            entry["sent"] = lead.choose(screen, decision)
+            entry["option_number"] = decision.option_number
         elif decision.action == "start":
             # Checked here, not in `decide`: this is the last moment before keystrokes,
             # and it is the only one where "is it still quiet?" has the right answer.
@@ -769,7 +883,7 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             time.sleep(poll)
             continue
 
-        if decision.action == "start":
+        if decision.action in ("start", "choose"):
             # The session has work again. The next stall is a new fact.
             lead.reported_stall = False
             time.sleep(poll)

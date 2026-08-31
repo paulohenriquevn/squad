@@ -684,3 +684,77 @@ def test_the_watch_survives_an_escalation(tmp_path: Path) -> None:
     entries = [line for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
     assert len(entries) == 1, "the same question was raised more than once"
     assert lead.surfaced, "the lead did not remember what it surfaced"
+
+
+# ── content reaches the doctrine before it reaches a person ──────────────────
+
+
+_MENU = ("Qual escopo o chain deve implementar?\n"  # english-only: a captured screen, quoted verbatim
+         "\n"
+         "❯ 1. Gate + fix nas 8 rotas (Recommended)\n"  # english-only: idem
+         "  2. Gate-only, itens separados\n")           # english-only: idem
+
+
+def test_a_doctrine_answer_selects_the_option(tmp_path: Path) -> None:
+    """The watchdog still refuses — a scope call is not flow. What changed is where the
+    refusal goes: to the file that decides it, instead of to a person who said they
+    enter at the initial backlog and nowhere else."""
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: ("OPTION: 2\nRULE APPLIED: Scope grew during measurement",
+                                   "answered")
+    decision = lead.decide(_MENU, idle=200)
+    assert decision.action == "choose"
+    assert decision.option_number == "2"
+    assert "Scope grew during measurement" in decision.reason
+
+
+def test_a_number_without_a_rule_is_not_an_answer(tmp_path: Path) -> None:
+    """A choice with no rule named is the agent improvising, which is precisely what
+    the envelope replaced."""
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: ("OPTION: 2", "answered")
+    assert lead.decide(_MENU, idle=200).action == "escalate"
+
+
+def test_no_rule_falls_back_to_a_person(tmp_path: Path) -> None:
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: ("NO RULE: nothing here covers a licence question",
+                                   "answered")
+    assert lead.decide(_MENU, idle=200).action == "escalate"
+
+
+def test_an_option_number_the_menu_does_not_have_is_refused(tmp_path: Path) -> None:
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: ("OPTION: 9\nRULE APPLIED: Scope grew", "answered")
+    assert lead.decide(_MENU, idle=200).action == "escalate"
+
+
+def test_the_floor_is_never_reached_by_doctrine(tmp_path: Path) -> None:
+    """A relaxing flag is refused before the agent is asked, and refused again if the
+    agent somehow picks one. The floor is not a decision anyone delegates."""
+    menu = ("❯ 1. Rodar com --allow-dirty-tree (Recommended)\n"  # english-only: a captured screen
+            "  2. Parar\n")                                      # english-only: idem
+    asked = []
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: asked.append(q) or ("OPTION: 1\nRULE APPLIED: x", "answered")
+    decision = lead.decide(menu, idle=200)
+    assert decision.action == "escalate"
+    assert asked == [], "the agent was asked about something on the floor"
+
+
+def test_the_cursor_is_re_read_before_enter(tmp_path: Path) -> None:
+    """Arrow keys, then a re-read. If the cursor is not where the arrows should have put
+    it, something else moved the menu and Enter would take the wrong option."""
+    lead = Lead(session="s")
+    lead.capture = lambda: "❯ 1. still on one\n  2. the target\n"   # never moved
+    sent = []
+    import subprocess as sp
+    original = sp.run
+    sp.run = lambda *a, **k: sent.append(a[0][-1]) or original(["true"], **{k2: v for k2, v in k.items() if k2 != "check"})
+    try:
+        ok = lead.choose("❯ 1. still on one\n  2. the target\n",
+                         Decision("choose", "x", "the target", "B-001", option_number="2"))
+    finally:
+        sp.run = original
+    assert ok is False
+    assert "Enter" not in sent, "Enter was pressed although the cursor had not moved"
