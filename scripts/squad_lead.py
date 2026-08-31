@@ -147,11 +147,39 @@ _ITEM_RE = re.compile(r"\bB-\d{3,}\b")
 _SLASH_COMMAND_RE = re.compile(r"/[a-z][a-z0-9-]*")
 
 
-#: The only shape the lead ever types unprompted. A template with one slot, filled by
-#: an id SELECT returned and this regex re-validates — never free text, so the worst
-#: outcome is starting an item the registry already called ready.
-_START_TEMPLATE = "/idea-to-release {item}"
+#: The only shape the lead ever types unprompted. Two slots, both filled from things
+#: the lead READ — an id SELECT returned and re-validates, and facts from the registry
+#: and the stream. Never free prose: the worst it can compose is a true sentence about
+#: an item the registry already called ready.
+#:
+#: It used to be the bare command, and on 2026-08-31 that produced the failure this
+#: template exists for. The session had just spent ten minutes measuring B-059, found
+#: that the item's recorded scope was wrong, and ended with "aguardando decisão". The
+#: lead typed `/idea-to-release B-059` over it. The session refused — correctly — and
+#: reopened the same question, so a whole turn bought nothing.
+#:
+#: A handoff that carries no state is not a handoff, it is an order. The last sentence
+#: matters most: it says out loud that refusing is allowed, which is exactly what the
+#: bare command denied.
+#:
+#: One line, because a newline in `tmux send-keys` submits.
+_START_TEMPLATE = (
+    "[squad-lead] O turno voltou e a fila tem trabalho: rode /idea-to-release {item}. "
+    "Por que este item: {why}. {history} "
+    "Se isto contradiz o que você acabou de reportar, ou se o item precisa de uma "  # english-only: the message the session reads; it operates in the operator's language
+    "decisão antes de rodar, diga isso em vez de executar — não escolha por mim."  # english-only: the message the session reads; it operates in the operator's language
+)
+
+#: The bare command, for when the lead has nothing to add. Kept so a caller that wants
+#: determinism over context can have it.
+_BARE_TEMPLATE = "/idea-to-release {item}"
 _VALID_ITEM_RE = re.compile(r"^B-\d{3,}$")
+
+#: How far above the first option a menu's own heading reaches. Five lines covers the
+#: question and its preamble; beyond that is the conversation the menu interrupted,
+#: and reading an id from there is how the lead reported an item it was not asked
+#: about — twice.
+_HEADING_LINES = 5
 
 #: An item id anywhere in a slug, with or without the hyphen and in either case.
 #: The stream carries BOTH forms — `B-033` from the registry phases and
@@ -250,6 +278,10 @@ class Lead:
     #: stream answers the first question and the clock answers the second — and
     #: `max_per_item`, which already existed, is the ceiling over both.
     attempts: dict[str, tuple[float, int]] = field(default_factory=dict)
+    #: Questions already raised for a person. Raised once, then the watch goes on
+    #: watching — the alternative was exiting, which kept the log quiet by having no
+    #: lead left to write to it.
+    surfaced: set[str] = field(default_factory=set)
 
     # ── may this item be started again? ────────────────────────────────────
     def _event_count(self, item: str) -> int:
@@ -345,6 +377,29 @@ class Lead:
                 verdict = event.get("verdict")
                 return str(verdict) if verdict else None
         return None
+
+    def handoff(self, item: str, why: str) -> str:
+        """The message the lead types when it starts an item.
+
+        Every clause is read, never inferred: the selector's own reason, the stream's
+        count and last verdict, and whether a phase left a BLOCKED report. The lead
+        states what it knows and stops — telling the session what to conclude would be
+        it deciding content through a sentence instead of through a menu.
+        """
+        count = self._event_count(item)
+        verdict = self._last_verdict(item)
+        if count == 0:
+            history = f"O stream não registra nenhum evento para {item} ainda."  # english-only: the message the session reads; it operates in the operator's language
+        else:
+            ended = f", último veredito `{verdict}`" if verdict else ""
+            history = f"O stream já registra {count} evento(s) para {item}{ended}."  # english-only: the message the session reads; it operates in the operator's language
+        if self.project is not None:
+            for base in (".claude/records", "records"):
+                directory = self.project / base / "implementations"
+                if directory.is_dir() and any(directory.glob(f"*{item[2:]}*-BLOCKED.md")):
+                    history += " Há um laudo BLOCKED em disco para ele — leia antes."
+                    break
+        return _START_TEMPLATE.format(item=item, why=why.rstrip(". "), history=history)
 
     def _blocking_verdicts(self) -> frozenset[str]:
         """The shared list, read from `rules/blocking-verdicts.txt`.
@@ -488,7 +543,7 @@ class Lead:
                         "start", f"the session handed the turn back after "
                                  f"{int(idle // 60)} minute(s); SELECT names {item} as next "
                                  f"({why}); {verdict}",
-                        _START_TEMPLATE.format(item=item), item)
+                        self.handoff(item, why), item)
                 why = f"{verdict}. SELECT still names it: {why}"
 
             if self.reported_stall:
@@ -515,9 +570,7 @@ class Lead:
         # an id out of scrollback — observed live, reporting B-022 for an option about
         # B-033 — which would have charged the per-item ceiling to the wrong item and
         # let a real loop run past it.
-        in_option = _ITEM_RE.search(option_text)
-        on_screen = _ITEM_RE.search(screen)
-        item = in_option.group(0) if in_option else (on_screen.group(0) if on_screen else "")
+        item = self._item_of(option_text, screen)
 
         # The same question twice is a loop, not progress. Keyed by the option text
         # rather than the item, because a session can loop on one item's one question.
@@ -529,6 +582,12 @@ class Lead:
         if item and self.interventions.get(item, 0) >= self.max_per_item:
             return Decision("exhausted",
                             f"{item} already unblocked {self.max_per_item} times",
+                            option_text, item)
+
+        if f"{item}|{option_text}" in self.surfaced:
+            # Already put to a person, and they have not answered. Saying it again adds
+            # nothing except noise to the log this lead exists to keep readable.
+            return Decision("wait", "this question is already with a person",
                             option_text, item)
 
         kind = self.classify(option_text)
@@ -551,6 +610,34 @@ class Lead:
         return Decision("confirm", "flow the session already recommended", option_text, item)
 
     # ── acting ─────────────────────────────────────────────────────────────
+    def _item_of(self, option_text: str, screen: str) -> str:
+        """The item this menu is about — from the MENU, never from the scrollback.
+
+        The option first: it is the thing being answered. Failing that, the menu's own
+        heading, which is the few lines above the first option and is where a session
+        states what it is asking about.
+
+        Never the whole screen. Measured twice on 2026-08-31: first reporting B-022 for
+        an option about B-033, and then — after "read the option first" was supposed to
+        fix it — reporting `escalate B-033` for a menu titled "B-059 scope", because the
+        option carried no id and the fallback found `B-033/B-057` in a paragraph twenty
+        lines up that mentioned them in passing.
+
+        An id that did not come from the menu is a guess, and this lead is built on not
+        guessing. Returning "" is the honest answer: the per-item ceiling then does not
+        apply, and the option fingerprint still stops a real loop.
+        """
+        match = _ITEM_RE.search(option_text)
+        if match:
+            return match.group(0)
+        lines = screen.splitlines()
+        first_option = next((i for i, line in enumerate(lines) if _OPTION_RE.match(line)), None)
+        if first_option is None:
+            return ""
+        heading = "\n".join(lines[max(0, first_option - _HEADING_LINES):first_option])
+        match = _ITEM_RE.search(heading)
+        return match.group(0) if match else ""
+
     def confirm(self, decision: Decision) -> bool:
         try:
             subprocess.run(["tmux", "send-keys", "-t", self.session, "Enter"],
@@ -587,7 +674,12 @@ class Lead:
         """
         if not _VALID_ITEM_RE.match(decision.item):
             return False
-        command = _START_TEMPLATE.format(item=decision.item)
+        command = decision.option or _BARE_TEMPLATE.format(item=decision.item)
+        if f"/idea-to-release {decision.item}" not in command:
+            # The one invariant of what gets typed: it invokes the cycle for the item
+            # the decision names. Checked here because this is where it becomes
+            # keystrokes, not where it was composed.
+            return False
         try:
             # Text and Enter as separate calls: a single send-keys with the command in
             # it would submit whatever the composer already held, appended to ours.
@@ -697,9 +789,22 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             continue
 
         if decision.action in ("escalate", "exhausted"):
-            # Escalation is terminal by design. Looping here would turn "a person must
-            # answer" into a message repeated every poll into a log nobody reads.
-            return 0
+            # Reported once, and the watch CONTINUES.
+            #
+            # It used to `return 0` here, and the reason was sound as far as it went:
+            # repeating "a person must answer" every poll buries the line in a log
+            # nobody reads. But it bought that by killing the watchdog, and a watchdog
+            # that dies at the first ambiguity is a watchdog for the first ambiguity.
+            #
+            # Measured on 2026-08-31 at 20:39: the lead correctly refused a scope
+            # decision — the best call it made all day — and then exited, leaving the
+            # session unwatched from that moment on. The same fix already landed for
+            # `stalled` this morning, for the same reason, and this branch was missed.
+            #
+            # `surfaced` is what keeps the log quiet: the same question is raised once.
+            lead.surfaced.add(f"{decision.item}|{decision.option}")
+            time.sleep(poll)
+            continue
         time.sleep(poll)
     return 0
 

@@ -330,7 +330,12 @@ def test_a_handed_back_turn_starts_the_next_item(tmp_path: Path) -> None:
     decision = lead.decide("no menu here", idle=1000)
     assert decision.action == "start"
     assert decision.item == "B-057"
-    assert decision.option == "/idea-to-release B-057"
+    # The message invokes the cycle AND carries what the lead read. A handoff with no
+    # state is not a handoff, it is an order — and on 2026-08-31 the session refused
+    # one, correctly, after ten minutes of work the bare command ignored.
+    assert "/idea-to-release B-057" in decision.option
+    assert "oldest unblocked" in decision.option
+    assert "não escolha por mim" in decision.option  # english-only: the session's language
 
 
 def test_an_attempt_that_just_happened_is_not_repeated(tmp_path: Path) -> None:
@@ -620,3 +625,62 @@ def test_the_lead_reads_the_same_list_the_board_and_the_checker_read(tmp_path: P
     names = lead._blocking_verdicts()
     assert "AWAITING_HUMAN" in names
     assert "FAIL" in names
+
+
+# ── the menu says which item, the scrollback does not ────────────────────────
+
+
+def test_the_item_comes_from_the_option(tmp_path: Path) -> None:
+    lead = Lead(session="s")
+    assert lead._item_of("Rodar /idea-to-release B-057 (Recommended)", "") == "B-057"
+
+
+def test_the_item_comes_from_the_menu_heading_when_the_option_has_none(tmp_path: Path) -> None:
+    """The heading is where a session states what it is asking about."""
+    screen = ("B-059 registrou 'adicionar gate'. Qual escopo o chain deve implementar?\n"  # english-only: a captured screen, quoted verbatim
+              "\n"
+              "❯ 1. Gate + fix nas 8 rotas (Recommended)\n"
+              "  2. Gate-only\n")
+    assert Lead(session="s")._item_of("Gate + fix nas 8 rotas (Recommended)", screen) == "B-059"
+
+
+def test_an_id_from_the_scrollback_is_never_used(tmp_path: Path) -> None:
+    """Measured twice on 2026-08-31. The second time the lead logged `escalate B-033`
+    for a menu titled "B-059 scope", because the option carried no id and the fallback
+    found `B-033/B-057` in a paragraph twenty lines up that mentioned them in passing.
+
+    An id that did not come from the menu is a guess, and this lead is built on not
+    guessing. Empty is the honest answer."""
+    screen = ("o handoff de B-033/B-057 que está pendente, e o escopo excede o que\n"  # english-only: a captured screen, quoted verbatim
+              + "\n" * 20 +
+              "Qual escopo o chain deve implementar?\n"  # english-only: a captured screen, quoted verbatim
+              "\n"
+              "❯ 1. Gate + fix nas 8 rotas (Recommended)\n")
+    assert Lead(session="s")._item_of("Gate + fix nas 8 rotas (Recommended)", screen) == ""
+
+
+# ── escalating does not kill the watch ───────────────────────────────────────
+
+
+def test_a_question_already_with_a_person_is_not_raised_again(tmp_path: Path) -> None:
+    """Raised once. Repeating it every poll buries the log this lead exists to keep
+    readable — which is what exiting used to buy, at the price of no lead at all."""
+    lead = Lead(session="s")
+    screen = "❯ 1. You take the T3 decision now\n"
+    first = lead.decide(screen, idle=200)
+    assert first.action == "escalate"
+    lead.surfaced.add(f"{first.item}|{first.option}")
+    assert lead.decide(screen, idle=200).action == "wait"
+
+
+def test_the_watch_survives_an_escalation(tmp_path: Path) -> None:
+    """Measured on 2026-08-31 at 20:39: the lead correctly refused a scope decision —
+    the best call it made all day — and then exited, leaving the session unwatched from
+    that moment on."""
+    log = tmp_path / "lead.jsonl"
+    lead = Lead(session="s")
+    lead.capture = lambda: "❯ 1. You take the T3 decision now\n"
+    assert watch(lead, None, log, poll=0, rounds=3) == 0
+    entries = [line for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(entries) == 1, "the same question was raised more than once"
+    assert lead.surfaced, "the lead did not remember what it surfaced"
