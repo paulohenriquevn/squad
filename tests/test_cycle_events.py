@@ -320,3 +320,61 @@ def test_a_file_is_resolved_from_its_directory(tmp_path: Path) -> None:
     criteria.write_text("{}", encoding="utf-8")
 
     assert project_root_for(criteria) == tmp_path
+
+
+# ── the CLI normalises the root, like every Python caller does ────────────────
+#
+# It did not, and the two paths disagreed. Measured on 2026-08-31 in a replica of a
+# consumer layout: emitting from a deep subdirectory with `--project-root .` created a
+# SECOND stream under that subdirectory, invisible to anything reading the project
+# root — and a phase whose event lands in an orphan file reads exactly like a phase
+# that was skipped, which is the one distinction this module exists to make.
+
+
+def _consumer(tmp_path):
+    """A project with the kit installed under `.claude/`, as consumers have it."""
+    (tmp_path / ".claude" / "skills").mkdir(parents=True)
+    (tmp_path / ".claude" / "rules").mkdir(parents=True)
+    (tmp_path / ".claude" / "hooks").mkdir(parents=True)
+    (tmp_path / "records").mkdir()
+    deep = tmp_path / "api" / "internal"
+    deep.mkdir(parents=True)
+    return tmp_path, deep
+
+
+def test_the_cli_emits_to_the_project_root_from_a_deep_subdirectory(tmp_path):
+    from cycle_events import main
+
+    root, deep = _consumer(tmp_path)
+    assert main(["end", "--cycle", "plan", "--slug", "B-014",
+                 "--verdict", "PLAN_WRITTEN", "--project-root", str(deep)]) == 0
+
+    streams = sorted(p.relative_to(root).as_posix() for p in root.rglob("cycle-events.jsonl"))
+    assert streams == ["records/cycle-events.jsonl"], streams
+
+
+def test_the_cli_and_the_python_caller_write_to_the_same_place(tmp_path):
+    """Two entry points writing to two files is the defect, whatever each one does."""
+    from cycle_events import emit_phase_end, main, project_root_for
+
+    root, deep = _consumer(tmp_path)
+    main(["end", "--cycle", "plan", "--verdict", "PLAN_WRITTEN", "--project-root", str(deep)])
+    emit_phase_end(project_root_for(deep), cycle="release", slug="", verdict="RELEASED")
+
+    streams = list(root.rglob("cycle-events.jsonl"))
+    assert len(streams) == 1, [p.as_posix() for p in streams]
+    assert streams[0].read_text(encoding="utf-8").count("\n") == 2
+
+
+def test_an_event_emitted_deep_is_readable_from_the_root(tmp_path):
+    """What ADVANCE does: read the project's stream and find the phase that ran."""
+    from cycle_events import main, read_events
+
+    root, deep = _consumer(tmp_path)
+    main(["end", "--cycle", "release", "--slug", "B-014",
+          "--verdict", "RELEASED", "--project-root", str(deep)])
+
+    released = [e for e in read_events(root)
+                if e.get("cycle") == "release" and e.get("verdict") == "RELEASED"]
+    assert len(released) == 1
+    assert released[0]["slug"] == "B-014"

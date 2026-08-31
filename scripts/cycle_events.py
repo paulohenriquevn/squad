@@ -259,10 +259,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
 
+    # The CLI normalises the root the same way the Python callers do. It did not,
+    # and the two paths disagreed: `consolidate_findings.py` and its three siblings
+    # call `project_root_for(...)` before emitting, while this entry point wrote
+    # wherever it was pointed. Measured on 2026-08-31 in a replica of a consumer
+    # layout — emitting from `api/internal` with `--project-root .` created a SECOND
+    # stream at `api/internal/.claude/records/cycle-events.jsonl`, invisible to
+    # anything reading the project root.
+    #
+    # That is worse than a lost event. `cycle-maintenance.md`'s ADVANCE reads the
+    # stream to learn a phase ran; a phase whose event landed in an orphan file reads
+    # exactly like a phase that was skipped, which is the one distinction this module
+    # exists to make. And the four SKILL.md instructions added the day before all use
+    # this CLI, from wherever the agent happens to be standing.
+    root = project_root_for(args.project_root)
+
     if args.transition == "start":
-        event = emit_phase_start(args.project_root, cycle=args.cycle, slug=args.slug)
+        event = emit_phase_start(root, cycle=args.cycle, slug=args.slug)
     else:
-        event = emit_phase_end(args.project_root, cycle=args.cycle, slug=args.slug,
+        event = emit_phase_end(root, cycle=args.cycle, slug=args.slug,
                                verdict=args.verdict)
 
     if event is None:

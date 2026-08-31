@@ -101,6 +101,31 @@ returns the head of the order for a caller filling more than one lane.
 
 There is no verdict for "the ecosystem is done".
 
+## What ADVANCE may assume about the stream
+
+ADVANCE learns that a release happened by reading `cycle:phase:end` with
+`cycle=release, verdict=RELEASED`. Measured on 2026-08-31, before building it, so the
+limits are known rather than discovered by a wrong `shipped`:
+
+- **The stream is per-machine and per-session, by decision.** `.gitignore` carries the
+  reason: *what this repository's cycles did here says nothing to whoever clones it,
+  and committing it would put one machine's run history in everyone's diff.* So ADVANCE
+  works within a working sequence on one machine; after a clone the stream is empty and
+  every item looks like a phase that never ran.
+- **In an installed consumer the stream lands under `.claude/records/`**, because
+  `install.sh` scaffolds `records/` there and `resolve_events_path` prefers it — and
+  `.claude/` is not versioned. This is consistent with the point above, not a defect,
+  but it means ADVANCE must never treat an absent stream as evidence of anything.
+- **There is no retroactivity, and there must not be.** One registry measured here
+  carries 166 items with 133 shipped and has no event file at all. Those items will
+  never have events, and writing them now would be inventing a history nobody observed.
+  ADVANCE applies from the first item processed after instrumentation, forward only.
+
+The consequence for the verdicts: an item with no `RELEASED` event is **not** thereby
+unreleased. It is unknown, and `ITEM_SHIPPED` must not be emitted from a silence — the
+anti-pattern below (*if nothing was released, nothing shipped*) has a mirror image that
+is just as wrong.
+
 ## Ranking — why triaged outranks raw, and age outranks everything else
 
 **Triaged before raw** because a triaged item already carries measured evidence. Its cost to finish is known; a raw item's is not. Working measured items first also keeps evidence fresh — an opportunity measured months ago describes a system that has since moved.
