@@ -6,6 +6,7 @@ every fresh clone, so the inferred case is the one most viewers see first.
 """
 from __future__ import annotations
 
+import re
 import json
 from pathlib import Path
 
@@ -699,3 +700,36 @@ def test_a_missing_rule_file_does_not_let_the_board_claim_nothing_is_blocked(
     because it found none to check, which the empty panel already says."""
     from board_state import blocking_verdicts
     assert blocking_verdicts(tmp_path) == frozenset()
+
+
+# ── being locked out must not look like being down ───────────────────────────
+
+
+def test_the_grant_cookie_outlives_the_browser_session() -> None:
+    """Without Max-Age this is a session cookie: it dies when the browser closes and
+    the next visit to the bare address answers 401.
+
+    Measured on 2026-08-31 — the board was reported as down while the process was up,
+    serving and streaming. The operator had simply restarted their browser.
+    """
+    import board_server
+    assert board_server._COOKIE_MAX_AGE >= 7 * 24 * 3600
+
+
+def test_the_unauthorised_reply_says_the_board_is_running() -> None:
+    """A bare line of text on a blank page reads as a dead server. The reply has to
+    distinguish "not signed in" from "not there"."""
+    import board_server
+    page = board_server._UNAUTHORISED_PAGE.decode("utf-8")
+    assert page.lstrip().startswith("<!doctype html")
+    assert "running" in page
+    assert "?t=" in page
+
+
+def test_the_unauthorised_page_never_prints_the_token() -> None:
+    """It is the thing being checked. A page that hands it out authenticates nobody."""
+    import board_server
+    page = board_server._UNAUTHORISED_PAGE.decode("utf-8")
+    # The only `t=` on the page is the placeholder, never a value.
+    assert "&lt;token&gt;" in page
+    assert not re.search(r"\bt=[0-9a-f]{8,}", page)

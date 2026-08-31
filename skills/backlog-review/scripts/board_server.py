@@ -71,6 +71,42 @@ _LEAD_MARKER: Path | None = None
 def _state(root: Path) -> dict:
     return build_state(root, _LEAD_LOG, _LEAD_MARKER)
 
+#: How long a granted browser stays granted. Long, because the alternative measured
+#: worse: a session cookie made the board look dead on the next browser start.
+_COOKIE_MAX_AGE = 30 * 24 * 3600
+
+#: What an unauthorised visitor gets. A page, not a line of text: the old plain-text
+#: reply rendered as one sentence on a blank page and was read as the server being
+#: down. It states that the board is running and what is missing.
+#:
+#: It never prints the token. A page that handed out the secret it is checking would
+#: be an authentication that authenticates nobody.
+_UNAUTHORISED_PAGE = b"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cycle Board \xe2\x80\x94 token required</title>
+<style>
+ :root { color-scheme: light dark; }
+ body { margin:0; min-height:100vh; display:flex; align-items:center;
+        justify-content:center; background:#f6f7f6; color:#1a1f1c;
+        font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+ @media (prefers-color-scheme: dark) { body { background:#101512; color:#e6ebe7; } }
+ main { max-width:32rem; padding:2rem; }
+ h1 { font-size:1.1rem; margin:0 0 .75rem; }
+ p { margin:0 0 .75rem; }
+ code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
+ .q { opacity:.7; font-size:.9em; }
+</style></head><body><main>
+<h1>The board is running \xe2\x80\x94 this browser is not signed in.</h1>
+<p>The server is up and serving; what is missing is the access token. Open the board
+   once through the full link, which ends in <code>?t=&lt;token&gt;</code>. It sets a
+   cookie, drops the token from the address bar, and the plain address works from
+   then on.</p>
+<p class="q">The link is printed by the command that started the board. This page
+   does not repeat the token \xe2\x80\x94 it is the thing being checked.</p>
+</main></body></html>
+"""
+
 _PAGE = (Path(__file__).resolve().parent / "board.html")
 
 
@@ -171,7 +207,18 @@ def _handler(root: Path, hub: _Hub, token: str | None):
                 return False
             self.send_response(302)
             self.send_header("Location", path or "/")
-            self.send_header("Set-Cookie", f"board_token={token}; Path=/; HttpOnly; SameSite=Strict")
+            # Max-Age, because without it this is a SESSION cookie: it dies when the
+            # browser closes, and the next visit to the bare address answers 401.
+            # Measured on 2026-08-31 — the operator reported the board as down while
+            # the process was up, serving, and streaming. A dashboard that has to be
+            # re-authorised every time the browser restarts is a dashboard nobody
+            # keeps open. The cookie carries no more authority than the link that
+            # granted it, and stays HttpOnly and SameSite=Strict.
+            self.send_header(
+                "Set-Cookie",
+                f"board_token={token}; Path=/; Max-Age={_COOKIE_MAX_AGE}; "
+                "HttpOnly; SameSite=Strict",
+            )
             self.send_header("Content-Length", "0")
             self.end_headers()
             return True
@@ -180,7 +227,7 @@ def _handler(root: Path, hub: _Hub, token: str | None):
             if not self._authorised():
                 if self._grant():
                     return
-                self._send(401, b"unauthorised: append ?t=<token> once\n", "text/plain")
+                self._send(401, _UNAUTHORISED_PAGE, "text/html; charset=utf-8")
                 return
             self.path = self.path.partition("?")[0] or "/"
             if self.path in ("/", "/index.html"):
