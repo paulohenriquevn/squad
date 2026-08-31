@@ -1112,6 +1112,38 @@ class Fleet:
     #: session name -> the item it was last handed.
     taken: dict[str, str] = field(default_factory=dict)
 
+    @classmethod
+    def restored(cls, log_path: Path | None) -> "Fleet":
+        """Rebuild the claims from the log, so a restart does not hand work out twice.
+
+        The claim lived only in memory, and every restart of the watchdog forgot it.
+        Measured minutes after the fleet first worked: the lead was restarted to pick up
+        a change, and two sessions were handed the same item — the exact collision this
+        class exists to prevent, caused by the class starting empty.
+
+        The log already records which session was handed what, so the state was never
+        actually lost; it was only never read back. The LAST start per session wins,
+        because that is the item that session is on now.
+        """
+        fleet = cls()
+        if log_path is None or not log_path.is_file():
+            return fleet
+        try:
+            lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return fleet
+        for line in lines:
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if (entry.get("event") == "start" and entry.get("sent")
+                    and entry.get("session") and entry.get("item")):
+                fleet.taken[entry["session"]] = entry["item"]
+        return fleet
+
     def holder(self, item: str) -> str | None:
         for session, held in self.taken.items():
             if held == item:
@@ -1324,7 +1356,11 @@ def main(argv: list[str] | None = None) -> int:
         print("FATAL: --session named nothing", file=sys.stderr)
         return 1
 
-    fleet = Fleet() if len(names) > 1 else None
+    fleet = Fleet.restored(args.log) if len(names) > 1 else None
+    if fleet is not None and fleet.taken:
+        print(f"==> restored {len(fleet.taken)} claim(s) from the log: "
+              + ", ".join(f"{s}={i}" for s, i in sorted(fleet.taken.items())),
+              file=sys.stderr)
     leads, markers = [], {}
     for name in names:
         leads.append(Lead(session=name, project=project, max_per_item=args.max_per_item,

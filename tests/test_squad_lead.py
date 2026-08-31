@@ -1131,3 +1131,44 @@ def test_a_lone_lead_has_no_fleet_and_behaves_as_before(tmp_path: Path) -> None:
     lead = _lead_with_select(tmp_path, {"item": "B-060", "why": "oldest"})
     assert lead.fleet is None
     assert lead.taken_by_another("B-060") is None
+
+
+def test_claims_survive_a_restart(tmp_path: Path) -> None:
+    """The claim lived only in memory and every restart forgot it. Measured minutes
+    after the fleet first worked: the watchdog was restarted to pick up a change and
+    two sessions were handed the same item — the exact collision the class exists to
+    prevent, caused by the class starting empty.
+
+    The log already recorded which session was handed what. The state was never lost;
+    it was only never read back."""
+    import json
+    from squad_lead import Fleet
+    log = tmp_path / "lead.jsonl"
+    log.write_text("\n".join(json.dumps(e) for e in [
+        {"event": "start", "item": "B-162", "sent": True, "session": "squad2"},
+        {"event": "start", "item": "B-136", "sent": True, "session": "squad3"},
+        {"event": "start", "item": "B-999", "sent": False, "session": "squad3"},
+    ]) + "\n", encoding="utf-8")
+
+    fleet = Fleet.restored(log)
+    assert fleet.holder("B-162") == "squad2"
+    assert fleet.holder("B-136") == "squad3"
+    assert fleet.holder("B-999") is None, "a claim was restored from a keystroke that never landed"
+
+
+def test_the_last_start_per_session_wins(tmp_path: Path) -> None:
+    """A session is on the item it was handed most recently, not the first one."""
+    import json
+    from squad_lead import Fleet
+    log = tmp_path / "lead.jsonl"
+    log.write_text("\n".join(json.dumps(e) for e in [
+        {"event": "start", "item": "B-100", "sent": True, "session": "squad1"},
+        {"event": "start", "item": "B-200", "sent": True, "session": "squad1"},
+    ]) + "\n", encoding="utf-8")
+    assert Fleet.restored(log).taken == {"squad1": "B-200"}
+
+
+def test_no_log_means_an_empty_fleet_not_a_crash(tmp_path: Path) -> None:
+    from squad_lead import Fleet
+    assert Fleet.restored(None).taken == {}
+    assert Fleet.restored(tmp_path / "absent.jsonl").taken == {}
