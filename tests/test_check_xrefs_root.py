@@ -108,3 +108,88 @@ def test_a_real_cycle_reference_still_resolves():
     assert CYCLE_NAME_RE.findall("rules/cycle-plan.md") == ["plan"]
     assert CYCLE_NAME_RE.findall("cycle-idea-to-release") == ["idea-to-release"]
     assert CYCLE_NAME_RE.findall("cycle-review.md and cycle-plan") == ["review", "plan"]
+
+
+# ── the kit has no standing over the project's own skills ─────────────────────
+#
+# `rules/auxiliary-skills.txt` is the right idea and ships EMPTY, so every consumer
+# starts with all of its own skills flagged. Measured on 2026-08-31 across two live
+# installs: `theo` had the file, empty, and 13 WARN; `theokit` had 102 skills of which
+# 66 are its own, no file at all, and 119 WARN — every warning the checker produced.
+# `install.sh` runs this `--strict`, so both installs reported failure over the
+# consumers' own design, and a validation that always fails is one nobody reads.
+
+
+def _consumer(tmp_path: Path, kit_skills: list[str], own_skills: list[str],
+              manifest: bool = True) -> Path:
+    """A `.claude/`-style tree: some skills from the kit, some the project's."""
+    from check_xrefs import _kit_owned_skills
+
+    (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
+    for skill in kit_skills + own_skills:
+        d = tmp_path / "skills" / skill
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(f"# {skill}\n\nNo cycle contract here.\n", encoding="utf-8")
+    if manifest:
+        body = ["# Written by scripts/install.sh"] + [f"skills/{s}" for s in kit_skills]
+        (tmp_path / ".kit-manifest.txt").write_text("\n".join(body) + "\n", encoding="utf-8")
+    return tmp_path
+
+
+def test_a_skill_the_manifest_does_not_claim_is_the_projects(tmp_path: Path) -> None:
+    from check_xrefs import _kit_owned_skills
+
+    root = _consumer(tmp_path, kit_skills=["acceptance", "review"], own_skills=["cnpg-audit"])
+    assert _kit_owned_skills(root) == {"acceptance", "review"}
+
+
+def test_the_kits_own_repository_has_no_manifest_and_keeps_every_check(tmp_path: Path) -> None:
+    """Without a consumer there is no project half; the checks must apply in full."""
+    from check_xrefs import _kit_owned_skills
+
+    root = _consumer(tmp_path, kit_skills=["acceptance"], own_skills=[], manifest=False)
+    assert _kit_owned_skills(root) is None
+
+
+def test_an_empty_manifest_reads_as_absent(tmp_path: Path) -> None:
+    """A manifest listing no skill cannot mean "every skill is the project's"."""
+    from check_xrefs import _kit_owned_skills
+
+    (tmp_path / ".kit-manifest.txt").write_text("# nothing here\n", encoding="utf-8")
+    assert _kit_owned_skills(tmp_path) is None
+
+
+def test_a_manifest_path_below_the_skill_still_names_the_skill(tmp_path: Path) -> None:
+    from check_xrefs import _kit_owned_skills
+
+    (tmp_path / ".kit-manifest.txt").write_text(
+        "skills/review/SKILL.md\nskills/review/scripts/run.py\n", encoding="utf-8")
+    assert _kit_owned_skills(tmp_path) == {"review"}
+
+
+def test_a_skill_name_containing_cycle_is_not_a_cycle_reference() -> None:
+    """`middleware-life` + `cycle-engineer` is one word, not a rule reference.
+
+    Measured on 2026-08-31 in a live consumer: this produced a hard FAIL claiming the
+    skill referenced `cycle-engineer.md`, a rule nobody wrote, on a skill that names
+    no cycle at all. Reachable because a SKILL.md with no `## Cycle contract` section
+    is scanned whole, and a file always contains its own name.
+    """
+    from check_xrefs import _extract_cycle_contract_ref
+
+    body = "---\nname: middleware-lifecycle-engineer\n---\n\n# Middleware Lifecycle Engineer\n"
+    try:
+        assert _extract_cycle_contract_ref(body) is None
+    except TypeError:                       # the sibling kit passes known skills too
+        assert _extract_cycle_contract_ref(body, set()) is None
+
+
+def test_a_real_cycle_reference_still_resolves() -> None:
+    """The fix must not blind the check it protects."""
+    from check_xrefs import _extract_cycle_contract_ref
+
+    body = "## Cycle contract\n\nOwned by `cycle-plan.md`.\n"
+    try:
+        assert _extract_cycle_contract_ref(body) == "plan"
+    except TypeError:
+        assert _extract_cycle_contract_ref(body, set()) == "plan"

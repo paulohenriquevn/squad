@@ -729,7 +729,7 @@ fi
 # --- manifest: what came from the kit ----------------------------------------
 # A consumer with an auditor of its own needs to tell what it wrote from what
 # was installed. Measured on `speculative`: its `scripts/audit.py` walks
-# `.claude/skills/*/SKILL.md` exigindo a spec Agent Skills; com o kit instalado
+# `.claude/skills/*/SKILL.md` against the Agent Skills spec; with the kit installed
 # it went from PASS to FAIL, auditing 37 skills that are not the project's
 # against the standard of the 9 that are. Without a manifest, the only way out
 # would be guessing by name. The PROJECT's skills never enter here — the list

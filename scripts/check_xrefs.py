@@ -89,6 +89,38 @@ def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:
     return declared
 
 
+def _kit_owned_skills(ecosystem_dir: Path) -> set[str] | None:
+    """Skills the install manifest says the KIT brought, or None in the kit's own repo.
+
+    `.kit-manifest.txt` states the rule in its own header: *anything not here is the
+    project's*. Reading it turns the project/kit distinction from a list somebody has
+    to maintain into a fact the installer already wrote.
+
+    This closes the hole that `rules/auxiliary-skills.txt` left half-open. That file
+    is the right idea — a consumer declaring which of its skills are auxiliary — but
+    it SHIPS EMPTY, so every consumer starts with every one of its own skills flagged.
+    Measured on 2026-08-31 across two live installs: `theo` had the file, empty, and
+    13 WARN; `theokit` had 102 skills of which 66 are its own, no file at all, and
+    119 WARN — every single warning the checker produced. `install.sh` runs this with
+    `--strict`, so both installations reported failure over the consumers' own design,
+    and a validation that always fails is one nobody reads.
+
+    Returning None where the manifest is absent is deliberate: in the kit's own
+    repository there is no consumer, every skill IS the kit's, and the existing
+    checks must keep applying in full.
+    """
+    manifest = ecosystem_dir / ".kit-manifest.txt"
+    if not manifest.is_file():
+        return None
+    owned: set[str] = set()
+    for raw_line in manifest.read_text(encoding="utf-8-sig").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if line.startswith("skills/"):
+            owned.add(line[len("skills/"):].split("/", 1)[0])
+    return owned or None
+
+
+
 def _is_auto_generated(skill: str) -> bool:
     """Skills the cycles THEMSELVES write, not phases anyone maintains.
 
@@ -112,7 +144,13 @@ BACKTICK_PATH_RE = re.compile(r"`(\.?[a-zA-Z0-9_./\-]+\.(?:md|py|sh|json|txt|yml
 # group without the hyphen truncated them to cycle-code / cycle-auto /
 # cycle-judge — names that do not exist. The validator then reported a present
 # file as missing.
-CYCLE_REF_RE = re.compile(r"`?cycle-([a-z]+(?:-[a-z]+)*)`?")
+# `(?<![a-z0-9-])`, or the name of any skill ending in `-lifecycle-engineer`
+# contains a cycle reference. Measured on 2026-08-31: a consumer's
+# `middleware-lifecycle-engineer` was reported as referencing `cycle-engineer.md`,
+# a rule nobody wrote — a hard FAIL, on a skill that names no cycle at all. The
+# fallback below makes it reachable: with no `## Cycle contract` section the
+# whole SKILL.md is scanned, and the file always contains its own name.
+CYCLE_REF_RE = re.compile(r"`?(?<![a-z0-9-])cycle-([a-z]+(?:-[a-z]+)*)`?")
 # Backticked spans — where a citation of a cycle is a reference, not prose.
 BACKTICK_SPAN_RE = re.compile(r"`([^`\n]+)`")
 # Kept in sync with detect_domains.UNREVIEWED_MARKER — duplicating the string is
@@ -312,6 +350,16 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # why: the first version exempted only `no_orphan_skills` and left this one
     # enforcing — half an exemption, which traded 26 WARN for 3 and looked like a fix.
     project_auxiliary = _declared_auxiliary_skills(ecosystem_dir)
+
+    # A skill the install manifest does not claim is the project's, and the kit has no
+    # standing to demand a cycle contract from it. Folded into the SAME variable both
+    # checks already read, for the reason the comment above records: the last time an
+    # exemption reached one check and not the other, it traded 26 WARN for 3 and looked
+    # like a fix.
+    kit_owned = _kit_owned_skills(ecosystem_dir)
+    if kit_owned is not None:
+        project_auxiliary = project_auxiliary | (existing_skills - kit_owned)
+
     skill_to_cycle: dict[str, str | None] = {}
     for skill in existing_skills:
         skill_md = ecosystem_dir / "skills" / skill / "SKILL.md"

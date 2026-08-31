@@ -1,6 +1,20 @@
 #!/usr/bin/env python3
 """Refuse Portuguese in a repository that is English by policy.
 
+WHAT IT CATCHES, AND WHAT IT MISSES
+-----------------------------------
+It matches a list of common Portuguese function words, so it finds prose and misses
+phrases built from words the list does not carry. Demonstrated on 2026-08-31, by this
+kit against itself: `scripts/install.sh` carried the comment *"exigindo a spec Agent
+Skills; com o kit instalado"* and the sweep reported clean — none of `exigindo`,
+`com`, `kit` or `instalado` is on the list.
+
+The file was scanned; the words were not recognised. That is the honest shape of the
+limit, and it is stated here because a gate reporting `clean` over real Portuguese
+gives a confidence it has not earned. Widening the list is an endless game and would
+start matching English; what this check buys is that the ordinary case cannot pass
+quietly, not that nothing can.
+
 WHY THIS EXISTS
 ---------------
 The policy was real and nothing enforced it. Measured on 2026-08-27, before this
