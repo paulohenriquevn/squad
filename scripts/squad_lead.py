@@ -86,7 +86,10 @@ FLOW_MARKERS = (
 #: option that mentions both loses — a sponsor decision wrapped in a flow-sounding
 #: sentence is still a sponsor decision.
 CONTENT_MARKERS = (
-    "you take", "você toma", "voce toma", "you decide", "você decide", "voce decide",
+    # english-only: the session writes its menus in the operator's language, so the
+    # markers must match what it actually prints — a marker list in English alone
+    # would classify every Portuguese question as `unknown` and escalate all of them.
+    "you take", "você toma", "voce toma", "you decide", "você decide", "voce decide",  # english-only: the session prints its menus in the operator's language; the markers must match
     "sponsor", "t3", "approve", "aprovar", "aprovação", "aprovacao",
     "merge", "release", "deploy", "tag", "publish", "publicar",
     "delete", "deletar", "remover", "drop", "revoke", "revogar",

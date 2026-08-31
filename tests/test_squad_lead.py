@@ -16,11 +16,13 @@ from squad_lead import Lead, watch
 
 # The menu, as captured. Option 1 moves the registry; option 2 asks for a decision
 # only the sponsor holds.
+# english-only: captured verbatim from the live session; translating the fixture
+# would test a menu that never appeared and stop testing the one that did.
 REAL_MENU = """\
- B-022 é um T3 governance-blocked (decisão de fronteira de autenticação). Como quer proceder?
+ B-022 é um T3 governance-blocked (decisão de fronteira de autenticação). Como quer proceder?  # english-only: captured verbatim from the live session
 ❯ 1. Adicionar blocked_by em B-022 e re-selecionar (Recommended)
      Escrevo `blocked_by:` no bloco de B-022, re-rodo o SELECT e trabalho o próximo item.
-  2. Você toma a decisão T3 agora
+  2. Você toma a decisão T3 agora  # english-only: captured verbatim from the live session
   3. Parar aqui e relatar
 """
 
@@ -41,14 +43,15 @@ def test_the_recommended_flow_option_is_confirmed() -> None:
 
 
 def test_a_decision_only_a_person_holds_is_escalated() -> None:
-    menu = REAL_MENU.replace("❯ 1.", "  1.").replace("  2. Você toma", "❯ 2. Você toma")
+    # english-only: moving the cursor within the verbatim fixture above.
+    menu = REAL_MENU.replace("❯ 1.", "  1.").replace("  2. Você toma", "❯ 2. Você toma")  # english-only: captured verbatim from the live session
     assert _lead().decide(menu).action == "escalate"
 
 
 @pytest.mark.parametrize("option", [
     "Aprovar o merge do PR",
     "Fazer o release da versão",
-    "Você decide se mantemos a dependência",
+    "Você decide se mantemos a dependência",  # english-only: captured verbatim from the live session
     "Deletar o registro antigo",
     "Revogar a credencial no painel",
 ])
@@ -67,7 +70,7 @@ def test_flow_options_are_recognised(option: str) -> None:
 
 def test_content_wins_over_flow_in_the_same_option() -> None:
     """A sponsor decision wrapped in a flow-sounding sentence is still a decision."""
-    mixed = "Registrar o impedimento e você toma a decisão T3 agora"
+    mixed = "Registrar o impedimento e você toma a decisão T3 agora"  # english-only: captured verbatim from the live session
     assert _lead().classify(mixed) == "content"
 
 
@@ -158,7 +161,7 @@ def test_a_slash_command_is_not_the_act_it_names() -> None:
     Without the strip, the lead escalated on the most common option there is — "run
     the cycle" — which is the difference between a useful watchdog and a silent one.
     """
-    assert _lead().classify("Rodar /idea-to-release B-033 no que é autônomo (Recommended)") == "flow"
+    assert _lead().classify("Rodar /idea-to-release B-033 no que é autônomo (Recommended)") == "flow"  # english-only: the live option, verbatim
 
 
 def test_a_real_release_request_is_still_content() -> None:
@@ -170,7 +173,7 @@ def test_a_real_release_request_is_still_content() -> None:
 def test_the_item_comes_from_the_option_not_the_scrollback() -> None:
     screen = (
         "  contexto antigo sobre B-022 rolando na tela\n"
-        "❯ 1. Rodar /idea-to-release B-033 no que é autônomo (Recommended)\n"
+        "❯ 1. Rodar /idea-to-release B-033 no que é autônomo (Recommended)\n"  # english-only: the live option, verbatim
         "  2. Outra coisa\n"
     )
     assert _lead().decide(screen).item == "B-033"
