@@ -286,17 +286,86 @@ h1 {
 }
 
 /* ── the board ────────────────────────────────────────────────────────────── */
+/* ── the filter bar ───────────────────────────────────────────────────────
+   The registry holds 170 items. Reading it is a matter of narrowing, and a board
+   with no way to narrow answers only the question "what exists". */
+.filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-bottom: 12px; }
+.filters input[type="search"] {
+  flex: 0 1 240px;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 9px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.filters input[type="search"]:focus-visible,
+.filters select:focus-visible { outline: 2px solid var(--moving); outline-offset: 1px; }
+.filters select {
+  font: inherit; font-size: 12px; padding: 5px 7px;
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg button {
+  font: inherit; font-size: 11.5px; padding: 5px 11px;
+  color: var(--ink-2); background: var(--surface);
+  border: 0; border-left: 1px solid var(--line); cursor: pointer;
+}
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed="true"] { background: var(--moving-bg); color: var(--moving); font-weight: 600; }
+.filters .hits { font-size: 11.5px; color: var(--ink-3); margin-left: auto; }
+.filters .hits b { color: var(--ink); font-weight: 600; }
+
+/* ── the two zones ────────────────────────────────────────────────────────
+   Work still in the cycle and work that has left it are different questions, and
+   putting them in one row of columns let 144 finished items crowd out the 26 that
+   were moving. They are separated, both are counted, and neither is hidden. */
 .board {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+}
+.zone { display: flex; flex-direction: column; min-height: 0; }
+.zone.cycle { flex: 1 1 auto; }
+.zone.settled { flex: 0 0 auto; border-top: 1px solid var(--line); }
+.zone.settled.open { flex: 0 1 40%; min-height: 190px; }
+.zone-head {
+  flex: 0 0 auto;
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-soft);
+}
+.zone-head h2 {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .11em; color: var(--ink-2);
+}
+.zone-head .sub { font-size: 11.5px; color: var(--ink-3); }
+.zone-head .sub b { color: var(--ink-2); font-weight: 600; }
+.zone-head button {
+  margin-left: auto;
+  font: inherit; font-size: 11.5px; padding: 3px 10px;
+  color: var(--ink-2); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+}
+.zone-head button:hover { color: var(--ink); border-color: var(--ink-3); }
+.lanes {
   flex: 1 1 auto;
   display: flex;
   gap: 1px;
   overflow-x: auto;
   overflow-y: hidden;
   background: var(--line-soft);
-  border-top: 1px solid var(--line);
+  min-height: 0;
 }
 .col {
-  flex: 0 0 264px;
+  flex: 1 1 258px;
+  max-width: 340px;
   display: flex;
   flex-direction: column;
   background: var(--ground);
@@ -316,8 +385,11 @@ h1 {
   font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: .1em;
+  letter-spacing: .07em;
   color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* The ordinal is information here: these are the cycle's phases, and the order
    is the order work moves through them. */
@@ -336,6 +408,22 @@ h1 {
   color: var(--ink-3);
 }
 .col.terminal .col-head { background: var(--killed-bg); }
+/* An empty column is part of the cycle and stays on the board — but it is not
+   competing for the eye with a column that holds work. */
+/* Two columns sharing the strip: the phase-width cap exists so a lane stays
+   readable next to seven others, and there are only two here. Their cards go in a
+   grid rather than a single file — 144 finished items read as a list nobody
+   scrolls, and as a grid they are scannable at a glance. */
+.zone.settled .col { max-width: none; }
+.zone.settled .stack {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  align-content: start;
+}
+.col.vacant { flex: 1 1 138px; min-width: 138px; max-width: 230px; background: var(--ground); }
+.col.vacant .col-head { opacity: .45; }
+.col.vacant .col-head .n { display: none; }
+.col.vacant .stack { display: none; }
 
 .stack {
   flex: 1 1 auto;
@@ -400,6 +488,13 @@ h1 {
 :root[data-theme="dark"] .chip.running,
 :root:not([data-theme="light"]) .chip.running { color: var(--ground); }
 
+.card .dom {
+  float: right;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  color: var(--ink-3);
+  letter-spacing: .02em;
+}
 .card .id {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 11px;
@@ -431,7 +526,11 @@ h1 {
 }
 .chip.status { color: var(--ink-2); }
 .chip.wall { background: transparent; color: var(--impeded); border: 1px solid var(--impeded); }
-.chip.verdict { background: var(--shipped-bg); color: var(--shipped); }
+/* A verdict is coloured by what it SAYS. `FAIL` drawn in the shipped green read as
+   a pass at a glance, which is the one reading a board must never allow. */
+.chip.verdict { background: var(--surface-2); color: var(--ink-2); }
+.chip.verdict.good { background: var(--shipped-bg); color: var(--shipped); }
+.chip.verdict.bad  { background: var(--impeded-bg); color: var(--impeded); }
 /* An inferred position and a measured one must not read alike. */
 .chip.derived { background: transparent; border: 1px dashed var(--line); color: var(--ink-3); }
 /* Ended, not running: the phase finished and nothing has been observed since. Quiet,
@@ -719,6 +818,17 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
     <span class="live"><span class="dot" id="dot"></span><span id="conn">connecting</span></span>
   </div>
   <div class="tallies" id="tallies"></div>
+  <div class="filters">
+    <input type="search" id="q" placeholder="filter by id or title" aria-label="Filter items">
+    <div class="seg" role="group" aria-label="Scope">
+      <button type="button" data-scope="all" aria-pressed="true">all</button>
+      <button type="button" data-scope="cycle" aria-pressed="false">in the cycle</button>
+      <button type="button" data-scope="impeded" aria-pressed="false">impeded</button>
+      <button type="button" data-scope="observed" aria-pressed="false">observed</button>
+    </div>
+    <select id="dom" aria-label="Domain"><option value="">every domain</option></select>
+    <span class="hits" id="hits"></span>
+  </div>
   <div id="notice"></div>
 </header>
 
@@ -737,7 +847,7 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
   <span class="key"><span class="swatch measured"></span>running now</span>
   <span class="key">ended here — the phase finished; nothing observed since</span>
   <span class="key"><span class="swatch impeded"></span>impeded</span>
-  <span class="key"><span class="swatch shipped"></span>shipped</span>
+  <span class="key"><span class="swatch shipped"></span>done — shipped</span>
   <span class="key"><span class="swatch killed"></span>killed — a successful outcome</span>
   <span class="right" id="stamp">—</span>
   <button class="theme" id="theme" type="button">theme</button>
@@ -753,6 +863,18 @@ const PHASE_LABEL = {
 };
 
 const el = (id) => document.getElementById(id);
+
+// A verdict's tone. Read by both the board and the item panel, so it is declared
+// once, above the first reader. Anything in neither set is drawn neutral — an
+// unrecognised verdict is not evidence of success, and must never be coloured as one.
+const BAD_VERDICTS = new Set([
+  "INVALID", "FAIL", "FAIL_HARD", "FAIL_SOFT", "BLOCKED", "NEEDS_FIXES", "NEEDS_DEEPER",
+  "NEEDS_REVISION", "AWAITING_REVIEW", "NEEDS_SPLIT", "REJECTED", "NOT_VALIDATED",
+]);
+const GOOD_VERDICTS = new Set([
+  "PASS", "SHIPPABLE", "RELEASED", "READY_TO_MERGE", "ACCEPTED", "VALIDATED",
+  "ITEM_REGISTERED", "PLAN_WRITTEN", "OPPORTUNITY_COMPLETE",
+]);
 
 function cardClass(item) {
   // Running outranks everything: what is happening to an item now matters more than
@@ -848,89 +970,186 @@ function renderRail(lead) {
   rail.innerHTML = cells + `<div class="decisions">${cards}</div>`;
 }
 
+// ── the board ────────────────────────────────────────────────────────────────
+// Two zones. Work still inside the cycle gets the room; work that has left it is
+// counted, reachable and out of the way. Everything the registry holds is on this
+// page — the filter narrows what is drawn and always says by how much.
+
+let LAST_STATE = null;
+let SCOPE = "all";
+let QUERY = "";
+let DOMAIN = "";
+let SETTLED_OPEN = false;
+
+const SETTLED = ["done", "killed"];
+
+function matches(it) {
+  if (DOMAIN && it.domain !== DOMAIN) return false;
+  if (SCOPE === "cycle" && SETTLED.includes(it.phase) && !it.running_phase) return false;
+  if (SCOPE === "impeded" && !it.blocked && !(it.blockers || []).length) return false;
+  if (SCOPE === "observed" && it.position_from === "derived") return false;
+  if (QUERY) {
+    const hay = (it.id + " " + (it.title || "") + " " + (it.domain || "")).toLowerCase();
+    if (!hay.includes(QUERY)) return false;
+  }
+  return true;
+}
+
+function cardHtml(it) {
+  // A chip earns its place by telling this card apart from its neighbours. The old
+  // board printed `status` on every card — which just repeats the column it is in —
+  // and `derived` on 165 of 170, so the two loudest marks carried no information.
+  // What is left is what actually varies.
+  const chips = [];
+  if (it.running_phase) {
+    chips.push(`<span class="chip running">running</span>`);
+  } else if (it.position_from === "stream" && !it.last_verdict) {
+    // Only where there is no verdict to say it. A verdict IS the phase ending, and
+    // printing both put "ended here / ITEM_REGISTERED" on every card in the column.
+    chips.push(`<span class="chip ended" title="this phase ended; nothing observed since">ended here</span>`);
+  }
+  if (it.last_verdict) {
+    const v = String(it.last_verdict).toUpperCase();
+    const tone = GOOD_VERDICTS.has(v) ? "good" : BAD_VERDICTS.has(v) ? "bad" : "";
+    chips.push(`<span class="chip verdict ${tone}" title="this phase ended with ${escapeHtml(v)}">${escapeHtml(it.last_verdict)}</span>`);
+  }
+  if (it.blockers && it.blockers.length) {
+    chips.push(`<span class="chip wall">waits on ${it.blockers.join(", ")}</span>`);
+  } else if (it.blocked) {
+    chips.push(`<span class="chip wall">impeded</span>`);
+  }
+  // The registry's own word, but only where it can disagree with the column: a
+  // measured position comes from the stream and the status comes from BACKLOG.md,
+  // and the two parting ways is the one case worth reading.
+  if (it.position_from !== "derived" && it.status) {
+    chips.push(`<span class="chip status">${escapeHtml(it.status)}</span>`);
+  }
+  const note = it.blocked && it.blocked_note
+    ? `<details class="wall-note"><summary>${escapeHtml(it.blocked_note)}</summary></details>` : "";
+  const dom = it.domain ? `<span class="dom">${escapeHtml(it.domain)}</span>` : "";
+  const meta = chips.length ? `<div class="meta">${chips.join("")}</div>` : "";
+  return `<article class="card ${cardClass(it)}" data-item="${it.id}" tabindex="0">
+      ${dom}<div class="id mono">${it.id}</div>
+      <div class="title">${escapeHtml(it.title || "")}</div>
+      ${meta}${note}
+    </article>`;
+}
+
+function columnHtml(phase, items, ordinal) {
+  const here = items.filter(it => (it.running_phase || it.phase) === phase);
+  const liveHere = here.filter(it => it.running_phase).length;
+  const terminal = SETTLED.includes(phase);
+  const ord = ordinal ? `<span class="ord">${String(ordinal).padStart(2, "0")}</span>` : "";
+  // No "nothing here" placeholder: the column head already carries the count, and
+  // five identical notes across the empty phases read as five findings.
+  const body = here.map(cardHtml).join("");
+  return `<section class="col ${terminal ? "terminal" : ""} ${here.length ? "" : "vacant"}">
+      <div class="col-head">${ord}<span class="name">${PHASE_LABEL[phase] || phase}</span>
+        <span class="n${liveHere ? " live" : ""}">${here.length}</span></div>
+      <div class="stack">${body}</div>
+    </section>`;
+}
+
 function render(state) {
+  LAST_STATE = state;
   el("path").textContent = state.project_path || "";
 
-  const items = state.items || [];
-  const blocked = items.filter(i => i.blocked).length;
-  const open = items.filter(i => ["raw", "triaged", "planned"].includes(i.status)).length;
-  const shipped = items.filter(i => i.status === "shipped").length;
-  const killed = items.filter(i => i.status === "killed").length;
+  const all = state.items || [];
+  const blocked = all.filter(i => i.blocked).length;
+  const shipped = all.filter(i => i.status === "shipped").length;
+  const killed = all.filter(i => i.status === "killed").length;
+  const inCycle = all.filter(i => !SETTLED.includes(i.phase) || i.running_phase).length;
 
   el("tallies").innerHTML = [
-    ["", items.length, "items"],
-    ["", open, "open"],
+    ["", all.length, "in the registry"],
+    ["", inCycle, "in the cycle"],
     ["is-impeded", blocked, "impeded"],
-    ["is-shipped", shipped, "shipped"],
+    ["is-shipped", shipped, "done"],
     ["is-killed", killed, "killed"],
-    ["", (state.running || []).length, "running"],
-    ["", state.event_total || 0, "events"]
+    ["", (state.running || []).length, "running now"]
   ].map(([cls, n, label]) =>
     `<div class="tally ${cls}"><b>${n}</b><span>${label}</span></div>`
   ).join("");
 
-  // The absence of a stream is stated, not hidden. Every position on the board is
-  // then an inference from `status`, and a viewer who does not know that will read
-  // the board as a measurement of what ran.
+  // The domain list comes from the data, so a registry that grows a domain gains the
+  // option without anyone editing this page.
+  const domains = [...new Set(all.map(i => i.domain).filter(Boolean))].sort();
+  const sel = el("dom");
+  const wanted = `<option value="">every domain</option>` +
+    domains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
+  if (sel.innerHTML !== wanted) { sel.innerHTML = wanted; sel.value = DOMAIN; }
+
   el("notice").innerHTML = state.has_stream ? "" :
     `<p class="notice"><b>No event stream yet.</b> Every position below is derived from
      each item's <code class="mono">status</code>, not from a phase that was observed
      to run. Positions become measured once the phases emit — the board updates by
      itself when the first event lands.</p>`;
 
-  const phases = (state.phases || []).concat(["done", "killed"]);
-  const board = el("board");
-  board.innerHTML = phases.map((phase, i) => {
-    // An item under active work is drawn in the phase it is RUNNING, not the one it
-    // last finished. Otherwise the board shows it a column behind the truth.
-    const inPhase = items.filter(it => (it.running_phase || it.phase) === phase);
-    const liveHere = inPhase.filter(it => it.running_phase).length;
-    const terminal = phase === "killed" || phase === "done";
-    const ord = terminal ? "" : `<span class="ord">${String(i + 1).padStart(2, "0")}</span>`;
-    const cards = inPhase.length ? inPhase.map(it => {
-      // Three states, three labels, and none of them may imply the others. `running`
-      // is observed to be happening; `ended` is observed to have finished and says
-      // nothing about what comes next; `derived` was never observed at all.
-      const chips = [];
-      if (it.position_from === "running") {
-        chips.push(`<span class="chip running">running</span>`);
-      } else if (it.position_from === "stream") {
-        chips.push(`<span class="chip ended" title="this phase ended; nothing has been observed since">ended here</span>`);
-      }
-      chips.push(`<span class="chip status">${it.status || "?"}</span>`);
-      if (it.domain) chips.push(`<span class="chip">${it.domain}</span>`);
-      if (it.last_verdict) chips.push(`<span class="chip verdict">${it.last_verdict}</span>`);
-      // `derived` is only worth saying where the position could have been otherwise.
-      // A shipped or killed item is where its status says, with nothing to infer, so
-      // the chip there would be 144 repetitions of a fact nobody is weighing.
-      const settled = it.status === "shipped" || it.status === "killed";
-      if (it.position_from === "derived" && !terminal && !settled) {
-        chips.push(`<span class="chip derived" title="position inferred from status, not observed">derived</span>`);
-      }
-      if (it.blockers && it.blockers.length) {
-        chips.push(`<span class="chip wall">waits on ${it.blockers.join(", ")}</span>`);
-      }
-      const note = it.blocked && it.blocked_note
-        ? `<details class="wall-note"><summary>${escapeHtml(it.blocked_note)}</summary></details>`
-        : "";
-      return `<article class="card ${cardClass(it)}" data-item="${it.id}" tabindex="0">
-          <div class="id mono">${it.id}</div>
-          <div class="title">${escapeHtml(it.title || "")}</div>
-          <div class="meta">${chips.join("")}</div>
-          ${note}
-        </article>`;
-    }).join("") : `<div class="empty">nothing here</div>`;
+  const shown = all.filter(matches);
+  // Narrowing is stated. A board that quietly drops 140 items reads as a board with
+  // 30 items on it, and the reader has no way to tell the difference.
+  el("hits").innerHTML = shown.length === all.length
+    ? `showing all <b>${all.length}</b>`
+    : `showing <b>${shown.length}</b> of ${all.length} · <a href="#" id="clearf">clear</a>`;
+  const clear = el("clearf");
+  if (clear) clear.addEventListener("click", e => {
+    e.preventDefault();
+    QUERY = ""; DOMAIN = ""; SCOPE = "all";
+    el("q").value = ""; el("dom").value = "";
+    document.querySelectorAll(".seg button").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.scope === "all")));
+    render(LAST_STATE);
+  });
 
-    return `<section class="col ${terminal ? "terminal" : ""}">
-        <div class="col-head">${ord}<span class="name">${PHASE_LABEL[phase] || phase}</span>
-          <span class="n${liveHere ? " live" : ""}">${inPhase.length}</span></div>
-        <div class="stack">${cards}</div>
-      </section>`;
-  }).join("");
+  const phases = state.phases || [];
+  const settledCount = shown.filter(it => SETTLED.includes(it.phase) && !it.running_phase).length;
+
+  el("board").innerHTML = `
+    <section class="zone cycle">
+      <div class="zone-head">
+        <h2>In the cycle</h2>
+        <span class="sub"><b>${shown.length - settledCount}</b> item(s) still moving through the eight phases</span>
+      </div>
+      <div class="lanes">${phases.map((ph, i) => columnHtml(ph, shown, i + 1)).join("")}</div>
+    </section>
+    <section class="zone settled${SETTLED_OPEN ? " open" : ""}">
+      <div class="zone-head">
+        <h2>Left the cycle</h2>
+        <span class="sub"><b>${settledCount}</b> item(s) · done and killed are outcomes, not phases</span>
+        <button type="button" id="toggle-settled">${SETTLED_OPEN ? "hide" : "show"}</button>
+      </div>
+      ${SETTLED_OPEN
+        ? `<div class="lanes">${SETTLED.map(ph => columnHtml(ph, shown, 0)).join("")}</div>`
+        : ""}
+    </section>`;
+
+  el("toggle-settled").addEventListener("click", () => {
+    SETTLED_OPEN = !SETTLED_OPEN;
+    render(LAST_STATE);
+  });
 
   renderRail(state.lead);
   el("stamp").textContent = "updated " + new Date().toLocaleTimeString();
 }
+
+// ── filter wiring ────────────────────────────────────────────────────────────
+
+el("q").addEventListener("input", e => {
+  QUERY = e.target.value.trim().toLowerCase();
+  if (LAST_STATE) render(LAST_STATE);
+});
+el("dom").addEventListener("change", e => {
+  DOMAIN = e.target.value;
+  if (LAST_STATE) render(LAST_STATE);
+});
+document.querySelectorAll(".seg button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    SCOPE = btn.dataset.scope;
+    document.querySelectorAll(".seg button").forEach(b =>
+      b.setAttribute("aria-pressed", String(b === btn)));
+    if (LAST_STATE) render(LAST_STATE);
+  });
+});
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
@@ -953,14 +1172,6 @@ function taskClass(status) {
   return TASK_CLASS[String(status || "").toLowerCase()] || "";
 }
 
-const BAD_VERDICTS = new Set([
-  "INVALID", "FAIL_HARD", "FAIL_SOFT", "BLOCKED", "NEEDS_FIXES", "NEEDS_DEEPER",
-  "NEEDS_REVISION", "AWAITING_REVIEW", "NEEDS_SPLIT", "REJECTED", "NOT_VALIDATED",
-]);
-const GOOD_VERDICTS = new Set([
-  "PASS", "SHIPPABLE", "RELEASED", "READY_TO_MERGE", "ACCEPTED", "VALIDATED",
-  "ITEM_REGISTERED", "PLAN_WRITTEN", "OPPORTUNITY_COMPLETE",
-]);
 
 function section(title, count, inner, emptyText) {
   const head = `<h3>${title}${count !== null ? ` <span class="count">${count}</span>` : ""}</h3>`;

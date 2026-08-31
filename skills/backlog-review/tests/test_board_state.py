@@ -39,7 +39,7 @@ def _end(cycle: str, slug: str, verdict: str = "PASS") -> dict:
 
 @pytest.mark.parametrize("status, phase", [
     ("raw", "backlog"), ("triaged", "discover"), ("planned", "plan"),
-    ("shipped", "release"), ("killed", "killed"),
+    ("shipped", "done"), ("killed", "killed"),
 ])
 def test_status_implies_a_phase_when_no_stream_exists(tmp_path: Path, status, phase) -> None:
     extra = "kill_reason: measured otherwise\n" if status == "killed" else ""
@@ -603,3 +603,29 @@ def test_the_commit_sha_reaches_the_task(tmp_path: Path) -> None:
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "49194f08b"},
     ]}), encoding="utf-8")
     assert item_detail(root, "B-033")["tasks"][0]["commit"] == "49194f08b"
+
+
+# ── an outcome is not a position ─────────────────────────────────────────────
+
+
+def test_finished_work_does_not_sit_in_the_release_phase(tmp_path: Path) -> None:
+    """`shipped` is where the work ENDED UP, not a phase it is waiting inside.
+
+    Measured on 2026-08-31: 133 of 170 items carried `shipped` and every one of them
+    was drawn in `release`, while `done` — a column the page renders — held nobody.
+    One column carried 78% of the board and the operator could not read it.
+    """
+    project = _project(tmp_path, item_block("B-001", status="shipped"))
+    item = _by_id(build_state(project))["B-001"]
+    assert item["phase"] == "done"
+    assert item["phase"] != "release"
+
+
+def test_a_stream_still_outranks_the_outcome_a_status_implies(tmp_path: Path) -> None:
+    """The change moves where a status POINTS; it does not let a status outvote a
+    measurement. An observed phase remains the position, exactly as before."""
+    project = _project(tmp_path, item_block("B-001", status="shipped"),
+                       events=[_end("review", "b001-thing", "NEEDS_FIXES")])
+    item = _by_id(build_state(project))["B-001"]
+    assert item["phase"] == "review"
+    assert item["position_from"] == "stream"

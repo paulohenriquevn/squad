@@ -49,15 +49,25 @@ from check_backlog_structure import (  # noqa: E402
 PHASES = ("backlog", "discover", "plan", "implement", "code-quality", "review",
           "release", "acceptance")
 
-#: What a registry status implies about position when no stream exists. A status
-#: records the phase that FINISHED, so the item sits in the next one.
+#: What a registry status implies about position when no stream exists: the last
+#: phase the status proves ENDED. Not the next one — entering a phase is a guess.
+#:
+#: `shipped` and `killed` are the exception, and deliberately so. They are not
+#: positions in the cycle, they are OUTCOMES: the work left. Drawing `shipped` in
+#: `release` put 133 of 170 items in one column and left `done` — a column the board
+#: has always rendered — permanently empty. The operator could not read the board,
+#: and the reason was that the column meaning "finished" was never given anyone.
 STATUS_PHASE = {
     "raw": "backlog",
     "triaged": "discover",
     "planned": "plan",
-    "shipped": "release",
+    "shipped": "done",
     "killed": "killed",
 }
+
+#: Outcomes, not phases. Work here has left the cycle, so it is counted and reachable
+#: but never competes for attention with what is still moving.
+SETTLED = ("done", "killed")
 
 
 #: An item id anywhere in a slug, with or without the hyphen.
