@@ -101,6 +101,28 @@ at once, and it is reviewable afterwards by anyone, which a verbal sign-off is n
 Where the contract asks for a meeting, the ADR carries what the meeting would have
 produced.
 
+### The measurement behind the item turned out to be wrong
+
+*Acting on the item revealed that the evidence that justified it does not hold — the
+instrument was faulty, the fixture incomplete, the sample not what it looked like.*
+
+**Re-measure before deciding anything about scope, and register nothing until the new
+measurement exists.** Fixing the instrument is the item's next step, not a new item.
+
+Registering work from contaminated evidence manufactures items that describe nothing,
+each carrying a pointer that will not survive the first reader who follows it. That is
+the floor's fourth rule — an honest stop beats a false completion — reached from the
+side where the falsehood is quiet, because a wrong item looks exactly like a right one
+until someone tries to do it.
+
+This clause outranks "scope grew during measurement". Scope only grew if the
+measurement holds; when it does not, there is no scope to split yet.
+
+Observed before this clause existed: a session measured eight defects, was instructed
+by doctrine to register them, and refused — the fixture had been incomplete, so what
+had been measured was the test's own gap rather than the code's. The refusal was
+correct and the doctrine had no way to have reached it.
+
 ### A case that resembles one already decided
 
 **Decide it the same way, and name the earlier case.** A divergence needs its reason
