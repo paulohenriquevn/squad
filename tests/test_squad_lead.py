@@ -799,7 +799,8 @@ def test_a_real_no_rule_says_so(tmp_path: Path) -> None:
     assert "found no rule" in decision.reason
 
 
-def test_the_budget_is_the_measured_one(tmp_path: Path) -> None:
-    """0.50 was a guess and it silently blocked every consultation. A trivial question
-    in a real project exceeded it; 2.00 answered."""
-    assert Lead(session="s").agent_budget_usd >= 2.00
+def test_the_budget_clears_the_measured_cost(tmp_path: Path) -> None:
+    """Guessed twice, measured once. 0.50 and 3.00 both blocked every consultation
+    silently; the real menu consultation — read the envelope, the registry and the
+    stream, then answer — cost USD 3.67 over two minutes."""
+    assert Lead(session="s").agent_budget_usd >= 3.67

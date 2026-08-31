@@ -284,10 +284,19 @@ class Lead:
     #: answer. Off by default: a daemon that calls a model unattended is a different
     #: thing from a daemon that reads a screen, and the difference should be chosen.
     agents_when_stuck: bool = False
-    #: Measured, not guessed: a one-word question to `claude -p` in a real project
-    #: exceeded 0.50 and answered at 2.00. The cap counts the whole call, and a
-    #: project's own context dominates it long before the question does.
-    agent_budget_usd: float = 3.00
+    #: Measured three times, each one correcting the last guess. A one-word question
+    #: in a real project exceeded 0.50 and answered at 2.00; the actual menu
+    #: consultation — read the envelope, the registry and the stream, then answer —
+    #: cost USD 3.67 over two minutes, and blew a 3.00 cap. The cap counts the whole
+    #: call, and the project's own context dominates it long before the question does.
+    #:
+    #: 6.00 is that measurement with room for a larger project. It is a CEILING, not a
+    #: price: the call stops there rather than spending it.
+    #:
+    #: The rate matters more than the cap. At `agent_cooldown` = 1800s this is at most
+    #: two consultations an hour, and the cooldown is the knob to turn if that is too
+    #: much — not the cap, which only decides whether an answer arrives at all.
+    agent_budget_usd: float = 6.00
     agent_timeout: int = 300
     #: One ask per agent per this many seconds. The queue being stuck is a state, not
     #: an event: without this the lead would re-ask on every poll.
@@ -956,9 +965,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="when the selector has no actionable answer, spend one "
                              "headless `claude -p` call asking the squad-lead agent "
                              "what to do. Off by default")
-    parser.add_argument("--agent-budget-usd", type=float, default=3.00,
-                        help="cap for one agent call (default 3.00; measured — a "
-                             "trivial question in a real project exceeds 0.50)")
+    parser.add_argument("--agent-budget-usd", type=float, default=6.00,
+                        help="ceiling for ONE agent call (default 6.00). Measured: a "
+                             "real menu consultation cost USD 3.67. To spend less, "
+                             "raise --agent-cooldown rather than lowering this")
     parser.add_argument("--agent-cooldown", type=int, default=1800,
                         help="minimum seconds between asks of the same agent")
     parser.add_argument("--project", type=Path,
