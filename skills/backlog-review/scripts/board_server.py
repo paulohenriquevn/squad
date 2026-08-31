@@ -167,10 +167,14 @@ def serve(root: Path, port: int) -> int:
 
     server = ThreadingHTTPServer(("127.0.0.1", port), _handler(root, hub))
     state = build_state(root)
-    print(f"board: {root}")
+    # `flush`, because stdout is block-buffered whenever it is not a terminal: the
+    # first thing anyone does is redirect this to a log and then look for the URL,
+    # and without the flush the log stays empty until the process exits.
+    print(f"board: {root}", flush=True)
     print(f"  {len(state.get('items', []))} item(s) · "
-          f"stream {'present' if state.get('has_stream') else 'absent (positions derived from status)'}")
-    print(f"  http://127.0.0.1:{port}  — Ctrl-C to stop")
+          f"stream {'present' if state.get('has_stream') else 'absent (positions derived from status)'}",
+          flush=True)
+    print(f"  http://127.0.0.1:{port}  — Ctrl-C to stop", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
