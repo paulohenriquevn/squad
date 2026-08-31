@@ -1173,7 +1173,8 @@ function render(state) {
     ["is-impeded", blocked, "impeded"],
     ["is-shipped", shipped, "done"],
     ["is-killed", killed, "killed"],
-    ["", (state.running || []).length, "running now"]
+    ["", (state.running || []).length, "running now"],
+    ["", state.event_total || 0, "events read"]
   ].map(([cls, n, label]) =>
     `<div class="tally ${cls}"><b>${n}</b><span>${label}</span></div>`
   ).join("");
@@ -1186,11 +1187,32 @@ function render(state) {
     domains.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
   if (sel.innerHTML !== wanted) { sel.innerHTML = wanted; sel.value = DOMAIN; }
 
-  el("notice").innerHTML = state.has_stream ? "" :
-    `<p class="notice"><b>No event stream yet.</b> Every position below is derived from
-     each item's <code class="mono">status</code>, not from a phase that was observed
-     to run. Positions become measured once the phases emit — the board updates by
-     itself when the first event lands.</p>`;
+  const notices = [];
+  if (!state.has_stream) {
+    notices.push(`<p class="notice"><b>No event stream yet.</b> Every position below is
+     derived from each item's <code class="mono">status</code>, not from a phase that
+     was observed to run. Positions become measured once the phases emit — the board
+     updates by itself when the first event lands.</p>`);
+  }
+  // Silence about discarded evidence reads as evidence that was never there.
+  const un = state.unplaced || {};
+  const offChain = Object.entries(un.off_chain || {});
+  const dropped = (un.without_item || 0) + offChain.reduce((n, [, c]) => n + c, 0);
+  if (dropped) {
+    const parts = [];
+    if (un.without_item) {
+      parts.push(`<b>${un.without_item}</b> named no item — the phase ran and the
+        stream does not say what it ran on, so nothing here can show it`);
+    }
+    if (offChain.length) {
+      parts.push(`<b>${offChain.reduce((n, [, c]) => n + c, 0)}</b> named a cycle the
+        chain does not declare (${offChain.map(([k, c]) => `<code class="mono">${escapeHtml(k)}</code>&nbsp;×${c}`).join(", ")})
+        — the item panel lists them under every verdict`);
+    }
+    notices.push(`<p class="notice"><b>${dropped} of ${state.event_total} event(s)
+      could not be placed on this board.</b> ${parts.join("; and ")}.</p>`);
+  }
+  el("notice").innerHTML = notices.join("");
 
   const shown = all.filter(matches);
   // Narrowing is stated. A board that quietly drops 140 items reads as a board with

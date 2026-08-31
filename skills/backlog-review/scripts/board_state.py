@@ -527,6 +527,24 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             "plan_slug": plans.get(iid),
         })
 
+    # ── what the stream carries and this board cannot place ──────────────
+    # Measured on 2026-08-31 against theo: 3 of 28 events had `slug: null` and two
+    # more named cycles outside the declared chain. All five were dropped in silence.
+    # A board that discards an eighth of its evidence without saying so is reporting
+    # a stream it did not read — the same defect as predicting a phase, one step
+    # earlier in the pipeline.
+    unplaced_no_item = 0
+    unplaced_off_chain: dict[str, int] = {}
+    for event in events:
+        if event.get("type") != "cycle:phase:end":
+            continue
+        slug = item_id_of(event.get("slug") or "")
+        cycle = event.get("cycle") or ""
+        if not slug or not slug.startswith("B-"):
+            unplaced_no_item += 1
+        elif cycle not in PHASES:
+            unplaced_off_chain[cycle] = unplaced_off_chain.get(cycle, 0) + 1
+
     out_items.sort(key=lambda d: _number(d["id"]))
     return {
         "project": project_root.name,
@@ -538,6 +556,10 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         "lead": read_lead(lead_log, lead_marker),
         "running": sorted(running.keys()),
         "has_stream": _events_path(project_root) is not None,
+        "unplaced": {
+            "without_item": unplaced_no_item,
+            "off_chain": dict(sorted(unplaced_off_chain.items())),
+        },
     }
 
 

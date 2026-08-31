@@ -733,3 +733,42 @@ def test_the_unauthorised_page_never_prints_the_token() -> None:
     # The only `t=` on the page is the placeholder, never a value.
     assert "&lt;token&gt;" in page
     assert not re.search(r"\bt=[0-9a-f]{8,}", page)
+
+
+# ── evidence the board cannot place must still be counted ────────────────────
+
+
+def test_events_with_no_item_are_counted_not_dropped(tmp_path: Path) -> None:
+    """Measured on 2026-08-31 against theo: 3 of 28 events carried `slug: null` —
+    three `code-quality` runs that happened and appeared nowhere. Silence about
+    discarded evidence reads as evidence that was never there."""
+    project = _project(tmp_path, item_block("B-001", status="triaged"), events=[
+        {"type": "cycle:phase:end", "cycle": "code-quality", "slug": None,
+         "verdict": "FAIL_SOFT", "timestamp": "2026-08-31T15:27:50Z"},
+        _end("discover", "b001-thing", "PASS"),
+    ])
+    state = build_state(project)
+    assert state["unplaced"]["without_item"] == 1
+    assert state["unplaced"]["off_chain"] == {}
+
+
+def test_a_cycle_outside_the_chain_is_named_and_counted(tmp_path: Path) -> None:
+    """`deps-audit` runs and emits, and the board draws eight declared phases. The
+    event is real; the column for it does not exist. Saying so is the difference
+    between a board with a gap and a board that hides one."""
+    project = _project(tmp_path, item_block("B-033", status="triaged"), events=[
+        _end("deps-audit", "b033-thing", "PASS"),
+        _end("implement", "b033-thing", "FAIL"),
+    ])
+    state = build_state(project)
+    assert state["unplaced"]["off_chain"] == {"deps-audit": 1}
+    assert state["unplaced"]["without_item"] == 0
+    # And the event that DOES place the item still does.
+    assert _by_id(state)["B-033"]["phase"] == "implement"
+
+
+def test_a_fully_placeable_stream_reports_nothing_unplaced(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-001", status="triaged"),
+                       events=[_end("discover", "b001-thing", "PASS")])
+    unplaced = build_state(project)["unplaced"]
+    assert unplaced == {"without_item": 0, "off_chain": {}}
