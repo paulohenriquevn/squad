@@ -340,11 +340,14 @@ def test_a_handed_back_turn_starts_the_next_item(tmp_path: Path) -> None:
 
 def test_an_attempt_that_just_happened_is_not_repeated(tmp_path: Path) -> None:
     """Immediately after typing, nothing has had time to move. Retrying here would be
-    the loop the ceiling exists to stop."""
+    the loop the ceiling exists to stop — and moving on would abandon work in progress,
+    so the answer is to wait for this one."""
     import time
     lead = _lead_with_select(tmp_path, {"item": "B-057", "why": "oldest unblocked"})
     lead.attempts["B-057"] = (time.time(), 0)
-    assert lead.decide("no menu here", idle=1000).action == "stalled"
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "wait"
+    assert "under way" in decision.reason
 
 
 def test_an_attempt_that_never_landed_is_retried(tmp_path: Path) -> None:
@@ -1058,3 +1061,36 @@ def test_a_queue_entirely_held_is_reported_with_the_reasons(tmp_path: Path) -> N
     assert decision.action == "stalled"
     assert "every item in the queue is held" in decision.reason
     assert "B-059" in decision.reason and "B-060" in decision.reason
+
+
+def test_work_in_progress_is_waited_for_not_walked_past(tmp_path: Path) -> None:
+    """HELD and NOT STARTABLE are different, and conflating them cost real work.
+
+    Measured with one session: the lead started an item, waited out `retry_after`,
+    started the next, then came back — three items, zero events between them, and the
+    session analysing something else by the end. Walking past work in progress is not
+    parallelism when there is one session; it is a change of subject."""
+    import time
+    lead = _lead_with_select(tmp_path, {"item": "B-060", "why": "oldest"})
+    lead.queue = ["B-060", "B-067"]
+    lead.attempts["B-060"] = (time.time(), 0)      # started moments ago, no event yet
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "wait"
+    assert "under way" in decision.reason
+
+
+def test_a_held_head_is_still_walked_past(tmp_path: Path) -> None:
+    """The earlier fix stands: a ceiling reached is held, and the queue moves on."""
+    lead = _lead_with_select(tmp_path, {"item": "B-060", "why": "oldest"})
+    lead.queue = ["B-060", "B-067"]
+    lead.interventions["B-060"] = lead.max_per_item
+    assert lead.decide("no menu here", idle=1000).item == "B-067"
+
+
+def test_held_reason_names_only_what_cannot_change_by_waiting(tmp_path: Path) -> None:
+    import time
+    lead = Lead(session="s", project=tmp_path)
+    lead.attempts["B-060"] = (time.time(), 0)
+    assert lead.held_reason("B-060") is None       # waiting fixes this
+    lead.interventions["B-061"] = lead.max_per_item
+    assert lead.held_reason("B-061") is not None   # waiting does not

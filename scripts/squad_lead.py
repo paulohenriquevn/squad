@@ -585,23 +585,33 @@ class Lead:
                 return frozenset(names)
         return frozenset()
 
-    def may_start(self, item: str, now: float) -> tuple[bool, str]:
-        """Whether to type this item's command, and the reason either way."""
-        if self.interventions.get(item, 0) >= self.max_per_item:
-            return False, f"{item} already started {self.max_per_item} times"
+    def held_reason(self, item: str) -> str | None:
+        """Why nothing can be done with this item until something changes, or None.
 
-        # A phase ran and ended on a verdict that holds the item. Starting it again
-        # reruns what stopped — the same rule SELECT applies to a BLOCKED report, one
-        # level up, and it reads the same shared list.
-        #
-        # Measured on 2026-08-31: B-058 and B-059 were worked, halted at a gate only a
-        # person opens, and emitted nothing. The lead saw no event, concluded the
-        # attempt had not landed, and restarted B-059 — the only conclusion available
-        # to it. `AWAITING_HUMAN` exists so that this branch has something to read.
+        HELD is not the same as NOT STARTABLE, and conflating them cost real work.
+        A ceiling reached and a verdict that blocks are held: no amount of waiting
+        changes them, so the queue should move past. An attempt made four minutes ago
+        that has not produced an event yet is the opposite — it is work in progress,
+        and moving past it throws away the context the session just built.
+
+        Measured: with one session, the lead started B-060, waited out `retry_after`,
+        started another item, then came back — three items, zero events between them,
+        and the session analysing something else entirely by the end.
+        """
+        if self.interventions.get(item, 0) >= self.max_per_item:
+            return f"{item} already started {self.max_per_item} times"
         verdict = self._last_verdict(item)
         if verdict and verdict.upper() in self._blocking_verdicts():
-            return False, (f"{item} last ended `{verdict}`, which holds it; only a "
-                           f"person moves this")
+            return (f"{item} last ended `{verdict}`, which holds it; only a "
+                    f"person moves this")
+        return None
+
+    def may_start(self, item: str, now: float) -> tuple[bool, str]:
+        """Whether to type this item's command, and the reason either way."""
+        held = self.held_reason(item)
+        if held:
+            return False, held
+
         previous = self.attempts.get(item)
         if previous is None:
             return True, "not tried yet"
@@ -726,6 +736,13 @@ class Lead:
                                      f"{int(idle // 60)} minute(s); SELECT names "
                                      f"{candidate} ({reason}); {verdict}",
                             self.handoff(candidate, reason), candidate)
+                    if self.held_reason(candidate) is None:
+                        # Not held — started recently and still working. Walking past
+                        # it would abandon work in progress for the next item, and with
+                        # one session that is not parallelism, it is a change of
+                        # subject. Wait for THIS one.
+                        return Decision("wait", f"{candidate} is under way: {verdict}",
+                                        "", candidate)
                     held.append(f"{candidate}: {verdict}")
                 why = ("every item in the queue is held — " + "; ".join(held[:3]))
 
