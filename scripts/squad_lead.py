@@ -226,7 +226,20 @@ the registry and the stream for whatever item the menu is about.
 OPTION: <the number to choose>
 RULE APPLIED: <the section of the envelope, by name>
 
-If no rule covers it, answer:
+If the action the doctrine prescribes is NOT among the options — the menu offers three
+ways to do something the rule says to do differently — choose the option that opens a
+text field and add a third line saying what to type:
+OPTION: <the number of the field-opening option>
+RULE APPLIED: <the section, by name>
+TYPE: <one line, what to instruct the session to do>
+
+That third form is also how nothing stays stuck. If no option and no instruction can
+carry out the doctrine, the envelope's last clause applies: say to record the
+impediment and move to the next item, and TYPE exactly that. An item waiting is not
+the queue waiting.
+
+Answer NO RULE only when the case itself is missing from the envelope AND you cannot
+say what should happen:
 NO RULE: <what the case is, stated so it can be added to the envelope>
 
 Never choose an option that switches off a gate, that merges, or that widens an item
@@ -235,6 +248,13 @@ already executing — those are the envelope's floor and no rule overrides them.
 #: The agent's answer, parsed strictly. Anything that does not match is not an answer.
 _OPTION_RE_ANSWER = re.compile(r"^OPTION:\s*(\d+)\s*$", re.MULTILINE)
 _RULE_RE_ANSWER = re.compile(r"^RULE APPLIED:\s*(\S.*?)\s*$", re.MULTILINE)
+#: The text to type, when the option chosen is one that opens a field.
+_TYPE_RE_ANSWER = re.compile(r"^TYPE:\s*(\S.*?)\s*$", re.MULTILINE)
+
+#: Longest instruction the lead will type into a session. Long enough for a sentence
+#: naming an action and its reason; short enough that a runaway answer cannot paste an
+#: essay into a prompt nobody is watching.
+_MAX_TYPED = 400
 
 #: What the lead asks when the selector has computed everything and the queue is
 #: still stopped. Deliberately states the constraint the agent inherits, because the
@@ -260,6 +280,8 @@ class Decision:
     item: str = ""
     #: For `choose`: which numbered option the doctrine selected.
     option_number: str = ""
+    #: For `choose` on an option that opens a field: what to type into it.
+    typed: str = ""
 
 
 @dataclass
@@ -412,8 +434,25 @@ class Lead:
             # the classifier would have refused.
             return None, "the agent chose an option that switches off a gate; refused"
         if any(e in lowered for e in _ESCAPE_OPTIONS):
-            return None, (f"the agent chose {number!r} ({text[:40]}), which answers "
-                          f"nothing — it opens a field, not a decision")
+            # An escape opens a field rather than deciding. That is useless on its own
+            # and necessary when the menu contains no option for the action the
+            # doctrine prescribes — which is a real case: an agent correctly reported
+            # "the actual cause is not among the choices offered" and had no way to act
+            # on its own diagnosis, because this branch refused the only door out.
+            #
+            # So it is allowed WITH the text to type, and only then. The instruction is
+            # validated the same way the option is: no relaxing flag, one line, bounded.
+            typed = _TYPE_RE_ANSWER.search(answer)
+            if not typed:
+                return None, (f"the agent chose {number!r} ({text[:40]}), which opens a "
+                              f"field, without saying what to type into it")
+            instruction = typed.group(1).strip()
+            if len(instruction) > _MAX_TYPED:
+                return None, f"the instruction is {len(instruction)} characters; cap is {_MAX_TYPED}"
+            if any(f in instruction.lower() for f in _RELAXING_FLAGS):
+                return None, "the instruction switches off a gate; refused"
+            return (Decision("choose", f"envelope decides it — {rule.group(1)}", text,
+                             item, option_number=number, typed=instruction), "answered")
         return (Decision("choose", f"envelope decides it — {rule.group(1)}", text, item,
                          option_number=number), "answered")
 
@@ -907,6 +946,15 @@ class Lead:
                 return False
             subprocess.run(["tmux", "send-keys", "-t", self.session, "Enter"],
                            check=True, timeout=15)
+            if decision.typed:
+                # The option opened a field. Typing and submitting are separate calls:
+                # one send-keys carrying the text would submit whatever the field
+                # already held, appended to ours.
+                time.sleep(0.4)
+                subprocess.run(["tmux", "send-keys", "-t", self.session, decision.typed],
+                               check=True, timeout=15)
+                subprocess.run(["tmux", "send-keys", "-t", self.session, "Enter"],
+                               check=True, timeout=15)
         except (OSError, subprocess.SubprocessError):
             self._rewind_cursor(back, moved)
             return False
@@ -1035,6 +1083,8 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
         elif decision.action == "choose":
             entry["sent"] = lead.choose(screen, decision)
             entry["option_number"] = decision.option_number
+            if decision.typed:
+                entry["typed"] = decision.typed
         elif decision.action == "start":
             # Checked here, not in `decide`: this is the last moment before keystrokes,
             # and it is the only one where "is it still quiet?" has the right answer.

@@ -110,14 +110,34 @@ This is the clause that keeps doctrine from decaying back into improvisation. It
 also what makes the envelope auditable: consistency can be checked by reading, and
 taste cannot.
 
+### The menu does not offer what the doctrine prescribes
+
+*A rule says what to do, and none of the choices on offer does it.*
+
+**Instruct it.** Where the interface allows free text, say what the rule requires and
+why. A menu is one session's guess at what the answers might be, and it is not the
+contract; the doctrine is.
+
+Observed before this clause existed: an agent correctly diagnosed that the real cause
+of a halt was not among the options offered, and had no way to act on its own
+diagnosis. It reported the gap and the queue stopped — the diagnosis was right and
+worth nothing.
+
+The instruction is held to the same floor as an option: it never switches off a gate,
+never merges, never widens an executing item.
+
 ### Nothing here fits
 
 **Halt on that item, write down what was measured and why no rule covers it, and take
 the next one.**
 
+This is the clause that guarantees nothing stays stuck: when no option and no
+instruction can carry the doctrine out, the action is to record the impediment and
+move on. One item waiting is not the backlog waiting, and a queue that stops entirely
+because one item is hard has converted a local problem into a global one.
+
 An uncovered case is the one thing that goes back to the human — not as a question to
-answer now, but as a gap in this file to close later. The queue does not stop for it:
-one item waiting is not the backlog waiting.
+answer now, but as a gap in this file to close later.
 
 ## The cost, stated
 

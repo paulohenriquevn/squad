@@ -857,18 +857,52 @@ def test_no_cursor_means_no_menu(tmp_path: Path) -> None:
 # ── the same case gets the same answer ───────────────────────────────────────
 
 
-def test_an_escape_option_is_refused(tmp_path: Path) -> None:
-    """"Type something." opens a text field. Choosing it answers nothing and turns the
-    screen into a shape the lead cannot read. Measured: an agent picked it and cited a
-    rule for it."""
-    menu = ("Qual escopo?\n\n"                       # english-only: a captured screen
-            "❯ 1. Gate-only, itens separados\n"      # english-only: idem
-            "  2. Type something.\n")
+_ESCAPE_MENU = ("Qual escopo?\n\n"                      # english-only: a captured screen
+                "❯ 1. Gate-only, itens separados\n"     # english-only: idem
+                "  2. Type something.\n")
+
+
+def test_an_escape_with_no_instruction_is_refused(tmp_path: Path) -> None:
+    """"Type something." opens a field. On its own that answers nothing — the agent
+    picked it once and cited a rule for it, having said nothing to type."""
     lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
     lead.ask_agent = lambda a, q: ("OPTION: 2\nRULE APPLIED: Scope grew", "answered")
-    decision = lead.decide(menu, idle=200)
+    decision = lead.decide(_ESCAPE_MENU, idle=200)
     assert decision.action == "escalate"
-    assert "answers nothing" in decision.reason
+    assert "without saying what to type" in decision.reason
+
+
+def test_an_escape_with_an_instruction_is_taken(tmp_path: Path) -> None:
+    """The door out of a menu that offers nothing the doctrine prescribes. Observed:
+    an agent correctly diagnosed that the real cause was not among the options and had
+    no way to act on its own diagnosis — the diagnosis was right and worth nothing."""
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: (
+        "OPTION: 2\nRULE APPLIED: The menu does not offer what the doctrine prescribes\n"
+        "TYPE: Register the impediment and move to the next item", "answered")
+    decision = lead.decide(_ESCAPE_MENU, idle=200)
+    assert decision.action == "choose"
+    assert decision.typed == "Register the impediment and move to the next item"
+
+
+def test_an_instruction_that_switches_off_a_gate_is_refused(tmp_path: Path) -> None:
+    """The floor holds through the text field too. It would be a poor door that let in
+    what the option check keeps out."""
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: (
+        "OPTION: 2\nRULE APPLIED: x\nTYPE: rode com --allow-dirty-tree", "answered")
+    decision = lead.decide(_ESCAPE_MENU, idle=200)
+    assert decision.action == "escalate"
+    assert "switches off a gate" in decision.reason
+
+
+def test_a_runaway_instruction_is_refused(tmp_path: Path) -> None:
+    """Bounded, so a runaway answer cannot paste an essay into a prompt nobody is
+    watching."""
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: (
+        "OPTION: 2\nRULE APPLIED: x\nTYPE: " + "a" * 500, "answered")
+    assert lead.decide(_ESCAPE_MENU, idle=200).action == "escalate"
 
 
 def test_prior_rulings_reach_the_prompt(tmp_path: Path) -> None:
