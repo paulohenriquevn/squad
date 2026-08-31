@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,15 +52,47 @@ _STREAM_RELATIVE = (".claude/records/cycle-events.jsonl", "records/cycle-events.
 @dataclass
 class Advance:
     shipped: list[str] = field(default_factory=list)
+    verified_local: list[str] = field(default_factory=list)
     refused: list[str] = field(default_factory=list)
     already: list[str] = field(default_factory=list)
     unknown: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict:
-        return {"verdict": "ITEM_SHIPPED" if self.shipped else "NOTHING_TO_ADVANCE",
-                "shipped": self.shipped, "refused": self.refused,
+        verdict = ("ITEM_SHIPPED" if self.shipped
+                   else "ITEM_VERIFIED_LOCAL" if self.verified_local
+                   else "NOTHING_TO_ADVANCE")
+        return {"verdict": verdict,
+                "shipped": self.shipped, "verified_local": self.verified_local,
+                "refused": self.refused,
                 "already_shipped": self.already, "not_in_registry": self.unknown}
 
+
+
+def all_changes_are_untracked(project_root: Path, files: list[str]) -> bool:
+    """The mechanical test `cycle-maintenance.md` defines for `ITEM_VERIFIED_LOCAL`.
+
+        git check-ignore -q <every file the fix changed>
+
+    succeeds for ALL of them. If any changed file IS tracked, the item is not in this
+    state — it has a release and must take it.
+
+    An empty list is False, deliberately: "changed nothing" is not "changed only
+    untracked things", and the state exists for work that was really done.
+
+    This verdict was carried as declared debt with the note that declaring it is
+    judgement. The rule says otherwise in its own words — *the test is mechanical, not
+    rhetorical* — and the exemption was wrong for three weeks because nobody reread the
+    section that defines it.
+    """
+    if not files:
+        return False
+    result = subprocess.run(
+        ["git", "-C", str(project_root), "check-ignore", "-q", "--", *files],
+        capture_output=True, text=True, check=False,
+    )
+    # 0 = every path is ignored · 1 = at least one is not · other = git failed, and a
+    # failure must not read as "all untracked".
+    return result.returncode == 0
 
 def stream_path(project_root: Path) -> Path | None:
     for rel in _STREAM_RELATIVE:

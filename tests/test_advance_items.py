@@ -139,3 +139,51 @@ def test_a_truncated_last_line_does_not_break_it(tmp_path: Path) -> None:
     stream = project / "records" / "cycle-events.jsonl"
     stream.write_text(stream.read_text(encoding="utf-8") + '{"type": "cycle', encoding="utf-8")
     assert released_items(project) == ["B-001"]
+
+
+# ── ITEM_VERIFIED_LOCAL: the test the contract calls mechanical ───────────────
+#
+# This verdict sat on the declared-debt list with the note that declaring it is
+# judgement. The rule says otherwise in its own words — *the test is mechanical, not
+# rhetorical* — and gives the command. The exemption was wrong because nobody reread
+# the section that defines it.
+
+
+def _repo(tmp_path: Path) -> Path:
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text(".claude/\n", encoding="utf-8")
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "hook.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+    return tmp_path
+
+
+def test_a_fix_touching_only_ignored_files_qualifies(tmp_path: Path) -> None:
+    from advance_items import all_changes_are_untracked
+
+    repo = _repo(tmp_path)
+    assert all_changes_are_untracked(repo, [".claude/hook.sh"]) is True
+
+
+def test_one_tracked_file_disqualifies_the_whole_item(tmp_path: Path) -> None:
+    """"It has a release, and it must take it." One is enough."""
+    from advance_items import all_changes_are_untracked
+
+    repo = _repo(tmp_path)
+    assert all_changes_are_untracked(repo, [".claude/hook.sh", "src.py"]) is False
+
+
+def test_changing_nothing_does_not_qualify(tmp_path: Path) -> None:
+    """"Changed nothing" is not "changed only untracked things"."""
+    from advance_items import all_changes_are_untracked
+
+    assert all_changes_are_untracked(_repo(tmp_path), []) is False
+
+
+def test_a_git_failure_does_not_read_as_all_untracked(tmp_path: Path) -> None:
+    """The state is a tempting place to retire work; an error must not open the door."""
+    from advance_items import all_changes_are_untracked
+
+    assert all_changes_are_untracked(tmp_path / "not-a-repo", [".claude/x"]) is False
