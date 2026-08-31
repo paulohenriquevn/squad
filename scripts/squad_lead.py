@@ -443,13 +443,24 @@ class Lead:
                  "--max-budget-usd", str(self.agent_budget_usd),
                  "--no-session-persistence"],
                 capture_output=True, text=True, timeout=self.agent_timeout,
-                cwd=str(self.project))
+                cwd=str(self.project),
+                # Closed, not inherited. `claude -p` reads stdin for piped input and
+                # waits when it is an open pipe that never delivers — which is exactly
+                # what this lead's stdin is, running under tmux through `tee`. Called
+                # by hand over ssh it answered in 27s; called from the daemon it exited
+                # 1 with nothing on either stream. The tool's own warning names the
+                # fix: redirect stdin explicitly.
+                stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
             return None, f"{agent} did not answer in {self.agent_timeout}s"
         except (OSError, subprocess.SubprocessError) as error:
             return None, f"{agent} could not be run ({error})"
         if out.returncode != 0:
-            return None, f"{agent} exited {out.returncode}: {out.stderr.strip()[:200]}"
+            # stdout first: `claude -p` reports its own failures there, and reading only
+            # stderr produced a log line that ended in a colon and said nothing — the
+            # same silence this whole path exists to remove.
+            detail = (out.stdout or "").strip() or (out.stderr or "").strip()
+            return None, f"{agent} exited {out.returncode}: {detail[:200] or 'no output'}"
         answer = out.stdout.strip()
         if not answer:
             return None, f"{agent} answered nothing"

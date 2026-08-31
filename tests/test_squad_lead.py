@@ -916,3 +916,40 @@ def test_a_failed_move_puts_the_cursor_back(tmp_path: Path) -> None:
     assert ok is False
     assert keys.count("Down") == keys.count("Up"), f"cursor left displaced: {keys}"
     assert "Enter" not in keys
+
+
+def test_a_failure_is_reported_from_stdout_when_stderr_is_empty(tmp_path: Path) -> None:
+    """`claude -p` reports its own failures on stdout. Reading only stderr produced a
+    log line that ended in a colon and said nothing — the same silence this path exists
+    to remove."""
+    import subprocess
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    completed = subprocess.CompletedProcess([], 1, "Error: something specific", "")
+    original = subprocess.run
+    try:
+        subprocess.run = lambda *a, **k: completed
+        answer, note = lead.ask_agent("squad-lead", "x")
+    finally:
+        subprocess.run = original
+    assert answer is None
+    assert "something specific" in note
+
+
+def test_the_agent_is_called_with_stdin_closed(tmp_path: Path) -> None:
+    """Under tmux the daemon's stdin is an open pipe that never delivers, and `claude
+    -p` waits on it. By hand over ssh it answered in 27 seconds; from the daemon it
+    exited 1 with nothing on either stream."""
+    import subprocess
+    seen = {}
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    original = subprocess.run
+
+    def capture(*a, **k):
+        seen.update(k)
+        return subprocess.CompletedProcess([], 0, "OK", "")
+    try:
+        subprocess.run = capture
+        lead.ask_agent("squad-lead", "x")
+    finally:
+        subprocess.run = original
+    assert seen.get("stdin") is subprocess.DEVNULL
