@@ -44,7 +44,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Skills documented as "auxiliary" (not bound to any cycle)
 # - ast-grep: structural search utility
-# - slide-deck, marp-slide, excalidraw: presentation skills, project-agnostic
 # - honesty-gate: honesty gate consumed transversally (README/CHANGELOG edits, release decisions)
 # - roadmap-init: single-shot bootstrap at project inception; intentionally isolated
 #   (its ARTIFACTS — ROADMAP.md + records/references/ — are consumed by cycle-roadmap
@@ -57,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # - skill-creator: standalone skill-authoring tool (the official Anthropic skill-creator);
 #   invoked on demand to create/improve any skill at skills/{purpose}/. Deliberately decoupled
 #   from every cycle (replaced the retired skill-writer/validator/register discover tail).
-AUXILIARY_SKILLS = {"ast-grep", "slide-deck", "marp-slide", "excalidraw", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "commands-help", "quality-init", "skill-creator", "frontend-design", "cap-theorem-specialist", "backpressure-specialist", "resilience-specialist", "arch-check", "sop-author", "sop-run", "sop-review"}
+AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "commands-help", "quality-init", "skill-creator", "arch-check", "sop-author", "sop-run", "sop-review"}
 
 
 def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:

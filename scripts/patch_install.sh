@@ -77,18 +77,6 @@ skills/release/scripts/render_release_notes.py
 skills/release/tests/conftest.py
 skills/release/tests/test_flip_milestone_checkbox.py
 skills/backlog-item/SKILL.md
-skills/cap-theorem-specialist/SKILL.md
-skills/backpressure-specialist/SKILL.md
-skills/resilience-specialist/SKILL.md
-skills/resilience-specialist/references/timeouts-retries-idempotency.md
-skills/resilience-specialist/references/isolation.md
-skills/resilience-specialist/references/overload-and-degradation.md
-skills/resilience-specialist/references/recovery-and-operations.md
-skills/resilience-specialist/references/observability-and-anti-patterns.md
-skills/backpressure-specialist/references/strategies.md
-skills/backpressure-specialist/references/scenarios.md
-skills/backpressure-specialist/references/streams-and-queues.md
-skills/backpressure-specialist/references/diagnostics.md
 skills/backlog-item/evals/evals.json
 skills/discover-plan/evals/evals.json
 skills/discover-execute/evals/evals.json
@@ -223,7 +211,6 @@ scripts/ecosystem_utils.py
 skills/ast-grep/
 skills/idea-to-release/
 skills/code-quality/
-skills/slide-deck/
 skills/deps-audit/
 skills/discover-confidence/
 skills/discover-edge-cases/
@@ -233,10 +220,8 @@ skills/discover-plan/
 skills/discover-plan-confidence/
 skills/honesty-gate/
 skills/edge-case-plan/
-skills/excalidraw/
 skills/grill-me/
 skills/implement/
-skills/marp-slide/
 skills/plan-confidence/
 skills/plan-improve/
 skills/release/

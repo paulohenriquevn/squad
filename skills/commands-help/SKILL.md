@@ -143,25 +143,6 @@ Runs against **our** code and runtime. Prior art can never be evidence here.
 | `/skill-creator` | Author, improve and eval any skill |
 | `/commands-help` | This help (you are here) |
 
-### Domain specialists
-
-Invoked on demand; not a phase of any cycle.
-
-| Command | Purpose |
-|---|---|
-| `/cap-theorem-specialist {scenario}` | CP/AP trade-offs. Refuses to classify a product without its configuration |
-| `/backpressure-specialist {symptom}` | Producer/consumer rate mismatch. Refuses unbounded buffers |
-| `/resilience-specialist {incident}` | Timeouts, retries, breakers, bulkheads. Refuses unbounded retries |
-
-### Presentation and design
-
-| Command | Purpose |
-|---|---|
-| `/slide-deck {topic}` | Full presentation — orchestrates `/marp-slide` + `/excalidraw` |
-| `/marp-slide {topic}` | Marp slides only (`.md` + `.html` + `.pptx`) |
-| `/excalidraw {topic}` | Excalidraw diagram JSON that argues visually |
-| `/frontend-design` | Visual direction for new UI that does not read as templated |
-
 ### Prerequisites
 
 ```bash
