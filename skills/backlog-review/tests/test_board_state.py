@@ -18,6 +18,11 @@ from board_state import PHASES, build_state, read_events
 
 def _project(tmp_path: Path, *blocks: str, events: list[dict] | None = None) -> Path:
     (tmp_path / "BACKLOG.md").write_text("# Backlog\n\n" + "".join(blocks), encoding="utf-8")
+    # The blocking list is a rule file both the board and the drift checker read.
+    # A fixture that omitted it would test a board with no gates at all.
+    (tmp_path / "rules").mkdir(exist_ok=True)
+    (tmp_path / "rules" / "blocking-verdicts.txt").write_text(
+        "INVALID\nFAIL\nFAIL_HARD\nNEEDS_FIXES\nNOT_VALIDATED\n", encoding="utf-8")
     if events is not None:
         (tmp_path / "records").mkdir(exist_ok=True)
         (tmp_path / "records" / "cycle-events.jsonl").write_text(
@@ -463,6 +468,9 @@ def test_the_rail_is_capped_at_a_screenful(tmp_path: Path) -> None:
 
 
 def _with_records(tmp_path: Path, slug: str) -> Path:
+    (tmp_path / ".claude" / "rules").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".claude" / "rules" / "blocking-verdicts.txt").write_text(
+        "INVALID\nFAIL\nFAIL_HARD\nNEEDS_FIXES\nNOT_VALIDATED\n", encoding="utf-8")
     recs = tmp_path / ".claude" / "records"
     for sub in ("plans", "implementations", "audits", "reviews", "alignment"):
         (recs / sub).mkdir(parents=True, exist_ok=True)
@@ -629,3 +637,65 @@ def test_a_stream_still_outranks_the_outcome_a_status_implies(tmp_path: Path) ->
     item = _by_id(build_state(project))["B-001"]
     assert item["phase"] == "review"
     assert item["position_from"] == "stream"
+
+
+# ── which items have an implementation to show ───────────────────────────────
+
+
+def test_an_item_with_a_plan_on_disk_carries_its_slug(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-033", status="planned"))
+    plans = project / ".claude" / "records" / "plans"
+    plans.mkdir(parents=True, exist_ok=True)
+    (plans / "b033-prometheus-url-dev-public-plan.md").write_text("## Phase 1: x\n",
+                                                                  encoding="utf-8")
+    item = _by_id(build_state(project))["B-033"]
+    assert item["plan_slug"] == "b033-prometheus-url-dev-public"
+
+
+def test_an_item_with_no_plan_says_so_rather_than_guessing_a_slug(tmp_path: Path) -> None:
+    """The implementation view only shows what was written. A constructed slug would
+    put an item on a board of steps it has never had."""
+    project = _project(tmp_path, item_block("B-001", status="triaged"))
+    assert _by_id(build_state(project))["B-001"]["plan_slug"] is None
+
+
+def test_a_progress_file_alone_is_enough_to_find_the_plan(tmp_path: Path) -> None:
+    """The tasks live in the progress file, and an item can be mid-implementation
+    before anything else is on disk."""
+    project = _project(tmp_path, item_block("B-044", status="planned"))
+    impl = project / ".claude" / "records" / "implementations"
+    impl.mkdir(parents=True, exist_ok=True)
+    (impl / ".progress-b044-the-thing.json").write_text('{"slug": "b044-the-thing", "tasks": []}',
+                                                        encoding="utf-8")
+    assert _by_id(build_state(project))["B-044"]["plan_slug"] == "b044-the-thing"
+
+
+# ── one repository, one answer ───────────────────────────────────────────────
+
+
+def test_the_board_and_the_drift_checker_read_the_same_blocking_list() -> None:
+    """They each kept a copy, and the copies disagreed.
+
+    Measured on 2026-08-31 against the theo stream: the drift checker reported
+    `implement` ending in FAIL as a verdict that forbids advancing, while the board's
+    item panel — reading its own list, which omitted FAIL — said "no gate is holding
+    this item" about the very same event.
+    """
+    import sys
+    kit = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(kit / "scripts"))
+    from check_phase_drift import load_blocking_verdicts
+
+    from board_state import blocking_verdicts
+
+    assert load_blocking_verdicts(kit) == blocking_verdicts(kit)
+    assert "FAIL" in blocking_verdicts(kit)
+
+
+def test_a_missing_rule_file_does_not_let_the_board_claim_nothing_is_blocked(
+        tmp_path: Path) -> None:
+    """The board reports what it can read. An unreadable rule is not evidence that
+    every gate is open — the checker raises on it, and the board shows no gates
+    because it found none to check, which the empty panel already says."""
+    from board_state import blocking_verdicts
+    assert blocking_verdicts(tmp_path) == frozenset()

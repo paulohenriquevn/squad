@@ -46,7 +46,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from check_phase_drift import check_phase_drift, load_declared_phases  # noqa: E402
+from check_phase_drift import load_blocking_verdicts, check_phase_drift, load_declared_phases  # noqa: E402
 from cycle_events import emit_phase_end, emit_phase_start  # noqa: E402
 
 _PLAN = """\
@@ -60,9 +60,17 @@ review        | conditional | absent when implement never ran
 """
 
 
-def _project(tmp_path: Path, plan: str = _PLAN) -> Path:
+#: The real list is shipped in `rules/blocking-verdicts.txt`; a fixture that copied
+#: it would pass while the shipped file said something else, so the file itself is
+#: checked separately (see the shipped-rules tests below).
+_BLOCKING = "FAIL\nFAIL_HARD\nINVALID\nNEEDS_FIXES\nNOT_VALIDATED\n"
+
+
+def _project(tmp_path: Path, plan: str = _PLAN,
+             blocking: str = _BLOCKING) -> Path:
     (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
     (tmp_path / "rules" / "cycle-phases.txt").write_text(plan, encoding="utf-8")
+    (tmp_path / "rules" / "blocking-verdicts.txt").write_text(blocking, encoding="utf-8")
     (tmp_path / ".claude" / "records").mkdir(parents=True, exist_ok=True)
     return tmp_path
 

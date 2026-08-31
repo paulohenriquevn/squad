@@ -157,6 +157,11 @@ prune_caches() {
 kit_owns_txt() {
   case "$1" in
     cycle-phases.txt) return 0 ;;
+    # Same shape as the phase chain: it names the verdicts that hold an item, the
+    # consumer never edits it, and both `check_phase_drift.py` and the board read it
+    # to answer one question. Preserved by extension, a consumer keeps whatever list
+    # it first received while the kit ships a corrected one.
+    blocking-verdicts.txt) return 0 ;;
     *) return 1 ;;
   esac
 }

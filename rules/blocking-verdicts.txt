@@ -1,0 +1,40 @@
+# Verdicts that stop an item where it is.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# This list was written twice, and the two copies disagreed. On 2026-08-31 the
+# drift checker reported `implement` ending in FAIL as a verdict that forbids
+# advancing, while the board's item panel — reading its own copy — said "no gate
+# is holding this item" about the same event. Two answers to one question, from
+# one repository, about one item.
+#
+# `scripts/check_phase_drift.py` reads this file to decide whether the chain
+# advanced over a gate. `skills/backlog-review/scripts/board_state.py` reads it to
+# decide what to show as still holding an item. Neither owns the definition now.
+#
+# WHAT BELONGS HERE
+# -----------------
+# A verdict belongs here when a phase ending with it means the item must NOT move
+# to the next phase until something changes. That is narrower than "not a pass":
+# FAIL_SOFT sends work back to be redone and is deliberately absent — it does not
+# forbid the chain from advancing once the work is redone, and treating it as a
+# wall would report every ordinary rework loop as a violation.
+#
+# Absent file is an error, not an empty list: an empty list makes every stream
+# conform and every item unblocked, so both readers would pass while checking
+# nothing.
+#
+# One verdict per line. `#` starts a comment.
+
+FAIL
+FAIL_HARD
+INVALID
+INVALID_AWAITING_HUMAN
+BLOCKED
+NEEDS_FIXES
+NEEDS_DEEPER
+NEEDS_REVISION
+NEEDS_SPLIT
+AWAITING_REVIEW
+REJECTED
+NOT_VALIDATED

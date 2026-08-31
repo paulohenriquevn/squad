@@ -59,7 +59,7 @@ _PHASES_RULE = "cycle-phases.txt"
 #: set from "forbids advancing".
 #:
 #: `FAIL_SOFT` is the case that made the distinction necessary. It does not forbid
-#: advancing, so it is absent from `_BLOCKING_VERDICTS` and rightly so — but a session
+#: advancing, so it is absent from `rules/blocking-verdicts.txt` and rightly so — but a session
 #: that sees it and goes back to implement is doing the correct thing, and calling that
 #: a defect punishes the chain for working.
 #:
@@ -73,13 +73,36 @@ _CLEAN_VERDICTS = frozenset({
     "OPPORTUNITY_COMPLETE", "PLAN_WRITTEN", "MILESTONE_RELEASED",
 })
 
-_BLOCKING_VERDICTS = frozenset({
-    "FAIL_HARD",
-    "INVALID",
-    "NEEDS_FIXES",
-    "NOT_VALIDATED",
-    "FAIL",
-})
+_VERDICTS_RULE = "blocking-verdicts.txt"
+
+
+def load_blocking_verdicts(project_root: Path) -> frozenset[str]:
+    """Read `rules/blocking-verdicts.txt`.
+
+    Read rather than hard-coded because the board holds the same list, and the two
+    copies had already drifted: this checker called `implement FAIL` a verdict that
+    forbids advancing while the board's panel called the same event unblocked.
+    """
+    project_root = Path(project_root)
+    for relative in ("rules", ".claude/rules"):
+        candidate = project_root / relative / _VERDICTS_RULE
+        if candidate.is_file():
+            path = candidate
+            break
+    else:
+        raise FileNotFoundError(
+            f"{_VERDICTS_RULE} not found under {project_root}. An absent list is not "
+            "an empty one: nothing would ever be found to block, and the gate would "
+            "pass every stream while checking nothing."
+        )
+    verdicts = {
+        line.split("#", 1)[0].strip().upper()
+        for line in path.read_text(encoding="utf-8").splitlines()
+    }
+    verdicts.discard("")
+    if not verdicts:
+        raise ValueError(f"{_VERDICTS_RULE} names no verdict at all")
+    return frozenset(verdicts)
 
 _ANONYMOUS = "(no slug)"
 
@@ -167,6 +190,7 @@ def check_phase_drift(project_root: Path, *, expect_complete: bool = False) -> D
     """Compare the declared chain with the emitted stream, per item."""
     project_root = Path(project_root)
     declared = load_declared_phases(project_root)
+    blocking_verdicts = load_blocking_verdicts(project_root)
     by_name = {phase.name: phase for phase in declared}
 
     events = _events_for(project_root)
@@ -184,7 +208,7 @@ def check_phase_drift(project_root: Path, *, expect_complete: bool = False) -> D
     report.slugs_seen = sorted(per_slug)
 
     for slug, slug_events in per_slug.items():
-        report.findings.extend(_judge_one(slug, slug_events, declared, by_name, expect_complete))
+        report.findings.extend(_judge_one(slug, slug_events, declared, blocking_verdicts, by_name, expect_complete))
     return report
 
 
@@ -192,6 +216,7 @@ def _judge_one(
     slug: str,
     events: list[dict],
     declared: list[DeclaredPhase],
+    blocking_verdicts: frozenset[str],
     by_name: dict[str, DeclaredPhase],
     expect_complete: bool,
 ) -> list[DriftFinding]:
@@ -252,7 +277,7 @@ def _judge_one(
         last_verdict_was_clean = (
             not isinstance(verdict, str) or verdict.upper() in _CLEAN_VERDICTS)
 
-        if isinstance(verdict, str) and verdict.upper() in _BLOCKING_VERDICTS:
+        if isinstance(verdict, str) and verdict.upper() in blocking_verdicts:
             blocking = (cycle, verdict.upper())
 
     if expect_complete:

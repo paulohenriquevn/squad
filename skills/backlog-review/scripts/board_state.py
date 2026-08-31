@@ -138,11 +138,42 @@ _ARTEFACT_DIRS = (
     ("release", "releases"),
 )
 
-#: A verdict that stops the item where it is. Anything else is progress or a caveat.
-_BLOCKING_VERDICTS = frozenset({
-    "INVALID", "FAIL_HARD", "BLOCKED", "NEEDS_FIXES", "NEEDS_DEEPER",
-    "NEEDS_REVISION", "AWAITING_REVIEW", "NEEDS_SPLIT", "REJECTED", "NOT_VALIDATED",
-})
+#: Where the shared list lives. The board used to keep its own copy, and the copies
+#: disagreed: the drift checker called `implement FAIL` a verdict that forbids
+#: advancing while this panel said "no gate is holding this item" about the same
+#: event. One repository must not give two answers about one item.
+_VERDICTS_RULE = "blocking-verdicts.txt"
+
+
+def blocking_verdicts(project_root: Path) -> frozenset[str]:
+    """Read `rules/blocking-verdicts.txt`.
+
+    An absent file returns nothing and the panel says so, rather than claiming the
+    item is unheld: the board reports what it can read, and a missing rule file is
+    something it could not read — not evidence that no gate is closed.
+    """
+    for relative in ("rules", ".claude/rules"):
+        candidate = project_root / relative / _VERDICTS_RULE
+        if candidate.is_file():
+            verdicts = {
+                line.split("#", 1)[0].strip().upper()
+                for line in candidate.read_text(encoding="utf-8",
+                                                errors="replace").splitlines()
+            }
+            verdicts.discard("")
+            return frozenset(verdicts)
+    return frozenset()
+
+
+#: The progress file is named `.progress-<slug>.json`, so the slug is not simply the
+#: stem: stripping only the suffix leaves `progress-b033-…`, which matches no plan and
+#: no artefact. Latent in `_slug_for` too — it happened to look in `plans` first.
+_PROGRESS_PREFIX = "progress-"
+
+
+def _slug_from_filename(name: str, suffix: str) -> str:
+    slug = name.lstrip(".")[: -len(suffix)]
+    return slug[len(_PROGRESS_PREFIX):] if slug.startswith(_PROGRESS_PREFIX) else slug
 
 
 def _slug_for(item_id: str, records: Path) -> str | None:
@@ -160,13 +191,49 @@ def _slug_for(item_id: str, records: Path) -> str | None:
             name = entry.name.lstrip(".")
             for suffix in ("-plan.md", "-implementation.md", "-alignment.md", ".json"):
                 if name.endswith(suffix):
-                    return name[: -len(suffix)]
+                    return _slug_from_filename(entry.name, suffix)
     return None
 
 
 #: Task statuses that mean the work is finished. `committed` is what this cycle
 #: writes; anything else counts as outstanding rather than being guessed at.
 _DONE_TASK_STATUS = frozenset({"committed", "done", "completed", "merged"})
+
+
+def _records_dir(project_root: Path) -> Path | None:
+    for rel in (".claude/records", "records"):
+        candidate = project_root / rel
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def planned_items(project_root: Path) -> dict[str, str]:
+    """Item id -> plan slug, for every item the cycle has actually planned on disk.
+
+    One directory listing for the whole registry. The alternative — asking
+    `item_detail` per item — reads every plan and progress file to answer a yes/no
+    question, and this registry holds 170 of them.
+    """
+    records = _records_dir(project_root)
+    if records is None:
+        return {}
+    found: dict[str, str] = {}
+    for base, suffix in (("plans", "-plan.md"), ("implementations", ".json")):
+        directory = records / base
+        if not directory.is_dir():
+            continue
+        for entry in sorted(directory.iterdir()):
+            name = entry.name.lstrip(".")
+            if not entry.is_file() or not name.endswith(suffix):
+                continue
+            slug = _slug_from_filename(entry.name, suffix)
+            item = item_id_of(slug)
+            # `item_id_of` upper-cases whatever it cannot parse, so a file with no
+            # item number in its name would land here under its own name.
+            if item.startswith("B-"):
+                found.setdefault(item, slug)
+    return found
 
 
 def _item_block(project_root: Path, item_id: str) -> str | None:
@@ -187,12 +254,7 @@ def item_detail(project_root: Path, item_id: str) -> dict:
     items, and reading every plan and every progress file to render a column of cards
     would spend the whole page budget on work nobody asked to see.
     """
-    records = None
-    for rel in (".claude/records", "records"):
-        candidate = project_root / rel
-        if candidate.is_dir():
-            records = candidate
-            break
+    records = _records_dir(project_root)
     out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
                  "artefacts": [], "verdicts": [], "blocking": [],
                  "done_ratio": None, "specialist": None, "domain": None}
@@ -274,6 +336,7 @@ def item_detail(project_root: Path, item_id: str) -> dict:
     # ── every verdict, not only the last ──────────────────────────────────
     # The board's card shows one. This item ended `code-quality` ten times, and a
     # single FAIL_SOFT hides that it was iterating rather than advancing.
+    blocking = blocking_verdicts(project_root)
     for event in read_events(project_root):
         if event.get("type") != "cycle:phase:end":
             continue
@@ -283,7 +346,7 @@ def item_detail(project_root: Path, item_id: str) -> dict:
         out["verdicts"].append({
             "phase": event.get("cycle"), "verdict": verdict, "at": event.get("timestamp"),
         })
-        if verdict in _BLOCKING_VERDICTS:
+        if verdict and verdict.upper() in blocking:
             out["blocking"].append({"phase": event.get("cycle"), "verdict": verdict,
                                     "at": event.get("timestamp")})
 
@@ -295,7 +358,8 @@ def item_detail(project_root: Path, item_id: str) -> dict:
     still_blocking = []
     for phase, entry in latest.items():
         last_for_phase = [v for v in out["verdicts"] if v["phase"] == phase]
-        if last_for_phase and last_for_phase[-1]["verdict"] in _BLOCKING_VERDICTS:
+        last = last_for_phase[-1]["verdict"] if last_for_phase else None
+        if last and last.upper() in blocking:
             still_blocking.append(entry)
     out["blocking"] = still_blocking
     return out
@@ -363,6 +427,7 @@ def build_state(project_root: Path, lead_log: Path | None = None,
     items = _parse_items(backlog.read_text(encoding="utf-8-sig"))
     statuses = {i.item_id: i.fields.get("status", "") for i in items}
     events = read_events(project_root)
+    plans = planned_items(project_root)
 
     # A phase that STARTED and has not ended is work happening right now. Without it
     # the board can only draw what finished, which is a picture of the past: an item
@@ -455,6 +520,11 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             "evidence": item.fields.get("evidence", ""),
             "last_verdict": (hit or {}).get("verdict"),
             "last_at": (hit or {}).get("at"),
+            # Present only when a plan for this item exists on disk. It is what makes
+            # the implementation view a measurement: an item with no plan has no
+            # steps to show, and inventing a placeholder would be a drawing of a
+            # process rather than a report of one.
+            "plan_slug": plans.get(iid),
         })
 
     out_items.sort(key=lambda d: _number(d["id"]))

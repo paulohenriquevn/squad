@@ -318,6 +318,47 @@ h1 {
 .filters .hits { font-size: 11.5px; color: var(--ink-3); margin-left: auto; }
 .filters .hits b { color: var(--ink); font-weight: 600; }
 
+/* ── the tabs ─────────────────────────────────────────────────────────────
+   Three questions, three views: what is moving, how the one thing being built is
+   going, and what has finished. They were three regions of one page competing for
+   the same screen. */
+.tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  padding: 0 14px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--line);
+}
+.tabs button {
+  font: inherit;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  padding: 9px 15px 8px;
+  color: var(--ink-3);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.tabs button:hover { color: var(--ink-2); }
+.tabs button[aria-selected="true"] {
+  color: var(--ink);
+  background: var(--ground);
+  border-bottom-color: var(--moving);
+}
+.tabs button:focus-visible { outline: 2px solid var(--moving); outline-offset: -2px; }
+.tabs .n {
+  margin-left: 7px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.tabs button[aria-selected="true"] .n { color: var(--moving); }
+
 /* ── the two zones ────────────────────────────────────────────────────────
    Work still in the cycle and work that has left it are different questions, and
    putting them in one row of columns let 144 finished items crowd out the 26 that
@@ -329,10 +370,7 @@ h1 {
   min-height: 0;
   border-top: 1px solid var(--line);
 }
-.zone { display: flex; flex-direction: column; min-height: 0; }
-.zone.cycle { flex: 1 1 auto; }
-.zone.settled { flex: 0 0 auto; border-top: 1px solid var(--line); }
-.zone.settled.open { flex: 0 1 40%; min-height: 190px; }
+.zone { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 .zone-head {
   flex: 0 0 auto;
   display: flex; align-items: baseline; gap: 10px;
@@ -439,6 +477,71 @@ h1 {
   font-style: italic;
   padding: 5px 3px;
 }
+
+/* ── the implementation view ──────────────────────────────────────────────
+   One block per item that has a plan on disk: its own header, and the plan's phases
+   as lanes with the tasks inside them. Every number here is read from the plan and
+   the progress file — an item with neither gets no block, rather than an empty
+   drawing of a process. */
+.impl { flex: 1 1 auto; overflow-y: auto; padding: 14px; display: flex;
+        flex-direction: column; gap: 16px; }
+.impl-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.impl-head { padding: 11px 14px 10px; border-bottom: 1px solid var(--line-soft);
+             background: var(--surface-2); }
+.impl-head .line1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.impl-head .iid { font-family: "IBM Plex Mono", ui-monospace, monospace;
+                  font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.impl-head .ttl { font-size: 13px; color: var(--ink); }
+.impl-head .who { margin-left: auto; font-size: 11px; color: var(--ink-3);
+                  font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.impl-head .slug { font-family: "IBM Plex Mono", ui-monospace, monospace;
+                   font-size: 10.5px; color: var(--ink-3); margin-top: 3px;
+                   display: block; }
+.bar { margin-top: 8px; display: flex; align-items: center; gap: 9px; }
+.bar .track { flex: 1 1 auto; height: 5px; border-radius: 3px;
+              background: var(--line); overflow: hidden; }
+.bar .fill { height: 100%; background: var(--shipped); }
+.bar .pct { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px;
+            color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.bar .of { font-size: 11px; color: var(--ink-3); }
+.impl-marks { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.plan-lanes { display: flex; gap: 1px; background: var(--line-soft); overflow-x: auto; }
+.plan-lane { flex: 1 1 250px; min-width: 220px; background: var(--ground);
+             display: flex; flex-direction: column; }
+.plan-lane .lane-head { padding: 8px 11px 7px; border-bottom: 1px solid var(--line-soft); }
+.plan-lane .lane-head .k { font-family: "IBM Plex Mono", ui-monospace, monospace;
+                           font-size: 10px; color: var(--ink-3); letter-spacing: .08em; }
+.plan-lane .lane-head .t { display: block; font-size: 12px; color: var(--ink-2);
+                           margin-top: 2px; }
+.plan-lane .lane-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.task {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 7px 9px;
+}
+.task.done    { border-left-color: var(--shipped); }
+.task.running { border-left-color: var(--moving); }
+.task.blocked { border-left-color: var(--impeded); background: var(--impeded-bg); }
+.task .tid { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px;
+             font-weight: 600; color: var(--ink); }
+.task .tst { float: right; font-family: "IBM Plex Mono", ui-monospace, monospace;
+             font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--ink-3); }
+.task.done .tst    { color: var(--shipped); }
+.task.blocked .tst { color: var(--impeded); }
+.task .files { margin-top: 4px; display: flex; flex-direction: column; gap: 1px; }
+.task .files code { font-family: "IBM Plex Mono", ui-monospace, monospace;
+                    font-size: 10.5px; color: var(--ink-2); word-break: break-all; }
+.task .foot { margin-top: 5px; display: flex; gap: 9px; font-size: 10px;
+              color: var(--ink-3); font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.impl .loading, .impl .none { color: var(--ink-3); font-size: 12.5px; font-style: italic; }
 
 /* ── cards ────────────────────────────────────────────────────────────────── */
 .card {
@@ -822,7 +925,6 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
     <input type="search" id="q" placeholder="filter by id or title" aria-label="Filter items">
     <div class="seg" role="group" aria-label="Scope">
       <button type="button" data-scope="all" aria-pressed="true">all</button>
-      <button type="button" data-scope="cycle" aria-pressed="false">in the cycle</button>
       <button type="button" data-scope="impeded" aria-pressed="false">impeded</button>
       <button type="button" data-scope="observed" aria-pressed="false">observed</button>
     </div>
@@ -833,6 +935,7 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
 </header>
 
 <section class="rail hidden" id="rail"></section>
+<nav class="tabs" id="tabs" role="tablist"></nav>
 <main class="board" id="board"></main>
 <aside class="panel" id="panel" aria-hidden="true">
   <div class="panel-head">
@@ -979,13 +1082,17 @@ let LAST_STATE = null;
 let SCOPE = "all";
 let QUERY = "";
 let DOMAIN = "";
-let SETTLED_OPEN = false;
+let TAB = "cycle";
 
 const SETTLED = ["done", "killed"];
 
+//: An item that has left the cycle, unless something is running on it again.
+function hasSettled(it) {
+  return SETTLED.includes(it.phase) && !it.running_phase;
+}
+
 function matches(it) {
   if (DOMAIN && it.domain !== DOMAIN) return false;
-  if (SCOPE === "cycle" && SETTLED.includes(it.phase) && !it.running_phase) return false;
   if (SCOPE === "impeded" && !it.blocked && !(it.blockers || []).length) return false;
   if (SCOPE === "observed" && it.position_from === "derived") return false;
   if (QUERY) {
@@ -1102,35 +1209,193 @@ function render(state) {
   });
 
   const phases = state.phases || [];
-  const settledCount = shown.filter(it => SETTLED.includes(it.phase) && !it.running_phase).length;
+  const inCycleShown = shown.filter(it => !hasSettled(it));
+  const settledShown = shown.filter(hasSettled);
+  const plannedShown = shown.filter(it => it.plan_slug);
 
-  el("board").innerHTML = `
-    <section class="zone cycle">
-      <div class="zone-head">
-        <h2>In the cycle</h2>
-        <span class="sub"><b>${shown.length - settledCount}</b> item(s) still moving through the eight phases</span>
-      </div>
-      <div class="lanes">${phases.map((ph, i) => columnHtml(ph, shown, i + 1)).join("")}</div>
-    </section>
-    <section class="zone settled${SETTLED_OPEN ? " open" : ""}">
-      <div class="zone-head">
-        <h2>Left the cycle</h2>
-        <span class="sub"><b>${settledCount}</b> item(s) · done and killed are outcomes, not phases</span>
-        <button type="button" id="toggle-settled">${SETTLED_OPEN ? "hide" : "show"}</button>
-      </div>
-      ${SETTLED_OPEN
-        ? `<div class="lanes">${SETTLED.map(ph => columnHtml(ph, shown, 0)).join("")}</div>`
-        : ""}
-    </section>`;
-
-  el("toggle-settled").addEventListener("click", () => {
-    SETTLED_OPEN = !SETTLED_OPEN;
-    render(LAST_STATE);
+  const TABS = [
+    ["cycle", "In the cycle", inCycleShown.length],
+    ["implement", "In implement", plannedShown.length],
+    ["settled", "Left the cycle", settledShown.length],
+  ];
+  el("tabs").innerHTML = TABS.map(([key, label, n]) =>
+    `<button type="button" role="tab" data-tab="${key}" aria-selected="${TAB === key}">
+       ${label}<span class="n">${n}</span></button>`).join("");
+  document.querySelectorAll("#tabs button").forEach(btn => {
+    btn.addEventListener("click", () => { TAB = btn.dataset.tab; render(LAST_STATE); });
   });
+
+  if (TAB === "cycle") {
+    el("board").innerHTML = `<section class="zone">
+        <div class="lanes">${phases.map((ph, i) => columnHtml(ph, inCycleShown, i + 1)).join("")}</div>
+      </section>`;
+  } else if (TAB === "settled") {
+    el("board").innerHTML = `<section class="zone settled">
+        <div class="lanes">${SETTLED.map(ph => columnHtml(ph, settledShown, 0)).join("")}</div>
+      </section>`;
+  } else {
+    renderImplementation(plannedShown);
+  }
 
   renderRail(state.lead);
   el("stamp").textContent = "updated " + new Date().toLocaleTimeString();
 }
+
+// ── the implementation view ──────────────────────────────────────────────────
+// Every step of every planned item: the plan's own phases as lanes, and the tasks
+// the progress file records inside them. Details are fetched per item and cached
+// against what the board already knows changed — the stream fires often, and
+// re-reading every plan on every event would spend the page on nothing.
+
+const DETAIL = new Map();
+
+//: What makes a cached detail stale. If neither the last event nor the running phase
+//: has moved, nothing on disk that this view draws can have moved either.
+function detailKey(it) {
+  return [it.id, it.last_at || "", it.running_since || "", it.plan_slug || ""].join("|");
+}
+
+function fetchDetail(it) {
+  const key = detailKey(it);
+  const held = DETAIL.get(it.id);
+  if (held && held.key === key) return;
+  DETAIL.set(it.id, { key, loading: true, detail: held && held.detail });
+  fetch("/api/item/" + encodeURIComponent(it.id))
+    .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
+    .then(detail => {
+      DETAIL.set(it.id, { key, loading: false, detail });
+      if (TAB === "implement" && LAST_STATE) render(LAST_STATE);
+    })
+    .catch(err => {
+      // Stated, not swallowed. A silently empty block reads as "this item has no
+      // steps", which is a different fact from "the board could not read them".
+      DETAIL.set(it.id, { key, loading: false, error: String(err.message || err) });
+      if (TAB === "implement" && LAST_STATE) render(LAST_STATE);
+    });
+}
+
+function taskHtml(task) {
+  const files = (task.files || []).length
+    ? `<div class="files">${task.files.map(f => `<code>${escapeHtml(f)}</code>`).join("")}</div>`
+    : "";
+  const foot = [];
+  if (task.commit) foot.push(`<span title="commit">${escapeHtml(String(task.commit).slice(0, 8))}</span>`);
+  if (task.iterations) foot.push(`<span>${task.iterations} iteration(s)</span>`);
+  return `<div class="task ${taskClass(task.status)}">
+      <span class="tst">${escapeHtml(task.status || "unknown")}</span>
+      <span class="tid">${escapeHtml(task.id || "—")}</span>
+      ${files}${foot.length ? `<div class="foot">${foot.join("")}</div>` : ""}
+    </div>`;
+}
+
+function planLanes(detail) {
+  const tasks = detail.tasks || [];
+  const lanes = (detail.phases || []).map(ph => ({
+    key: "Phase " + ph.key, title: ph.title,
+    tasks: tasks.filter(t => String(t.phase) === String(ph.key)),
+  }));
+  // A task whose phase the plan does not name still gets drawn. Dropping it would
+  // hide work because a heading was worded differently.
+  const named = new Set((detail.phases || []).map(ph => String(ph.key)));
+  const orphans = tasks.filter(t => !named.has(String(t.phase)));
+  if (orphans.length) {
+    lanes.push({ key: "Unlisted", title: "tasks whose phase the plan does not name",
+                 tasks: orphans });
+  }
+  if (!lanes.length) return null;
+  return `<div class="plan-lanes">${lanes.map(l => `
+    <section class="plan-lane">
+      <div class="lane-head"><span class="k">${escapeHtml(l.key)}</span>
+        <span class="t">${escapeHtml(l.title || "")}</span></div>
+      <div class="lane-body">${l.tasks.length
+        ? l.tasks.map(taskHtml).join("")
+        : `<div class="empty">no task recorded</div>`}</div>
+    </section>`).join("")}</div>`;
+}
+
+function implBlock(it) {
+  const held = DETAIL.get(it.id);
+  const detail = held && held.detail;
+  const where = it.running_phase
+    ? `running ${PHASE_LABEL[it.running_phase] || it.running_phase}`
+    : `${PHASE_LABEL[it.phase] || it.phase}`;
+
+  let body;
+  if (held && held.error) {
+    body = `<div class="impl"><span class="none">could not read this item: ${escapeHtml(held.error)}</span></div>`;
+  } else if (!detail) {
+    body = `<div class="lane-body"><span class="loading">reading the plan…</span></div>`;
+  } else {
+    body = planLanes(detail)
+      || `<div class="lane-body"><span class="none">a plan exists on disk but names no phases yet</span></div>`;
+  }
+
+  // The ratio is counted from task status, so it is only shown once the tasks are in.
+  const ratio = detail && typeof detail.done_ratio === "number" ? detail.done_ratio : null;
+  const doneN = detail ? (detail.tasks || []).filter(t => taskClass(t.status) === "done").length : 0;
+  const totalN = detail ? (detail.tasks || []).length : 0;
+  const bar = ratio === null ? "" : `<div class="bar">
+      <div class="track"><div class="fill" style="width:${Math.round(ratio * 100)}%"></div></div>
+      <span class="pct">${Math.round(ratio * 100)}%</span>
+      <span class="of">${doneN} of ${totalN} task(s) committed</span>
+    </div>`;
+
+  // Committed tasks and an approved item are different facts. B-033 shows 5 of 5
+  // committed while `implement` ended FAIL and a gate still holds it — a bar reading
+  // 100% with nothing beside it says the work is done, and it is not.
+  const marks = [];
+  const gates = (detail && detail.blocking) || [];
+  gates.forEach(b => {
+    marks.push(`<span class="chip wall">${escapeHtml(b.phase)} still holds it: ${escapeHtml(b.verdict)}</span>`);
+  });
+  // The last verdict, unless a gate above already named that same phase and verdict.
+  // "Implement → FAIL" beside "implement still holds it: FAIL" is one fact twice.
+  const named = gates.some(b => b.phase === it.phase &&
+    String(b.verdict).toUpperCase() === String(it.last_verdict).toUpperCase());
+  if (it.last_verdict && !named) {
+    const v = String(it.last_verdict).toUpperCase();
+    const tone = GOOD_VERDICTS.has(v) ? "good" : BAD_VERDICTS.has(v) ? "bad" : "";
+    marks.push(`<span class="chip verdict ${tone}">${escapeHtml(PHASE_LABEL[it.phase] || it.phase)} → ${escapeHtml(it.last_verdict)}</span>`);
+  }
+  if (it.blockers && it.blockers.length) {
+    marks.push(`<span class="chip wall">waits on ${it.blockers.join(", ")}</span>`);
+  }
+  const marksHtml = marks.length ? `<div class="impl-marks">${marks.join("")}</div>` : "";
+
+  const who = detail && detail.specialist
+    ? `${escapeHtml(detail.domain || "")} · ${escapeHtml(detail.specialist)}`
+    : escapeHtml(it.domain || "");
+
+  return `<article class="impl-item" data-item="${it.id}">
+      <div class="impl-head">
+        <div class="line1">
+          <span class="iid">${it.id}</span>
+          <span class="ttl">${escapeHtml(it.title || "")}</span>
+          <span class="who">${who}</span>
+        </div>
+        <span class="slug">${escapeHtml((detail && detail.slug) || it.plan_slug || "")} · ${escapeHtml(where)}</span>
+        ${bar}${marksHtml}
+      </div>
+      ${body}
+    </article>`;
+}
+
+function renderImplementation(items) {
+  if (!items.length) {
+    el("board").innerHTML = `<div class="impl"><span class="none">No item has a plan on
+      disk right now. This view is built from the plan and the progress file the cycle
+      writes, so it stays empty rather than drawing steps nobody has taken.</span></div>`;
+    return;
+  }
+  // What is being built now comes first; the rest is ordered by id.
+  const ordered = [...items].sort((a, b) => {
+    const rank = it => it.running_phase ? 0 : it.phase === "implement" ? 1 : hasSettled(it) ? 3 : 2;
+    return rank(a) - rank(b) || a.id.localeCompare(b.id);
+  });
+  ordered.forEach(fetchDetail);
+  el("board").innerHTML = `<div class="impl">${ordered.map(implBlock).join("")}</div>`;
+}
+
 
 // ── filter wiring ────────────────────────────────────────────────────────────
 
@@ -1163,6 +1428,9 @@ function escapeHtml(s) {
 // page budget on detail nobody asked to see.
 
 const TASK_CLASS = {
+  // `committed` first because it is the one this cycle actually writes: without it
+  // every finished task in every plan was drawn as neutral, which reads as pending.
+  committed: "done", merged: "done",
   done: "done", completed: "done", passed: "done",
   running: "running", in_progress: "running", active: "running",
   blocked: "blocked", failed: "blocked", error: "blocked",
