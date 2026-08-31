@@ -222,7 +222,8 @@ def test_prose_impediments_yield_no_edges_but_still_block():
 
 
 def test_ids_are_extracted_from_prose():
-    raw = "B-075 — e o bloqueio foi CONFIRMADO por medição em 2026-08-12"
+    # The value this parser must handle is the one somebody actually wrote.
+    raw = "B-075 — e o bloqueio foi CONFIRMADO por medição em 2026-08-12"  # english-only: verbatim from B-075 in a real registry
     assert parse_blocked_by(raw) == ["B-075"]
 
 

@@ -30,14 +30,18 @@ Do NOT trigger when:
 
 ```
 SELECT next item:
-     ↓ read BACKLOG.md
+     ↓ read BACKLOG.md                    scripts/select_backlog_item.py
      ↓ filter status ∈ {raw, triaged}
+     ↓ drop the blocked (derived state, not the status field — an item
+     ↓       waiting on another reads `triaged` on disk and cannot be worked)
      ↓ rank: triaged before raw (measured beats unmeasured)
      ↓       then by age (oldest first — a registry that always works the
      ↓       newest item starves the rest and stops being a backlog)
      ↓ pick the first
      ↓
-     ↓ if NO eligible item → emit BACKLOG_EMPTY (a prompt to sweep, not a finish line)
+     ↓ if NO eligible item → BACKLOG_EMPTY (a prompt to sweep, not a finish line)
+     ↓ if all are blocked  → BACKLOG_BLOCKED (surface the wall; a sweep adds
+     ↓                       items beside it and clears nothing)
      ↓
 ROUTE:
      ↓ scripts/route_domain.py <repo> → domain + specialist
@@ -74,19 +78,39 @@ LOOP BACK to SELECT
 
 | Verdict | Meaning | Next |
 |---|---|---|
-| `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT |
+| `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
-| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it | Loop back to SELECT. **A terminal state, not a failure** |
-| `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers |
-| `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move |
+| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it | Loop back to SELECT. **A terminal state, not a failure** | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
+| `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
+| `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it |
 | `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover-execute --sweep {domain}`.** Not a finish line |
+| `ITEM_SELECTED` | SELECT picked an item; nothing blocks it | ROUTE |
+| `BACKLOG_BLOCKED` | Selectable items remain and **every one is blocked** | Surface the wall. **Not `BACKLOG_EMPTY`** — a sweep would add items beside a wall instead of clearing it |
+
+`ITEM_SELECTED` and `BACKLOG_BLOCKED` are emitted by `skills/backlog-review/scripts/select_backlog_item.py`, which is also what makes
+the SELECT phase above a computation rather than a paragraph an agent reads. It was
+added on 2026-08-30, when a sweep found this rule to be the kit's largest
+contract-without-executor: the chain, the ranking and eight verdicts were written,
+four of the verdicts appeared in no skill and no script, and the only runner over
+backlog items carried a literal list of three ids.
+
+`--check B-NNN` answers the narrow question — may THIS one start? — with the same
+computation that picks, so the gate and the selector cannot disagree. `--queue N`
+returns the head of the order for a caller filling more than one lane.
 
 There is no verdict for "the ecosystem is done".
 
 ## Ranking — why triaged outranks raw, and age outranks everything else
 
 **Triaged before raw** because a triaged item already carries measured evidence. Its cost to finish is known; a raw item's is not. Working measured items first also keeps evidence fresh — an opportunity measured months ago describes a system that has since moved.
+
+**Age is the id.** Ids are monotonic and never reused — the contract says so and
+`check_backlog_structure.py` enforces it as `renumbered` — so a lower number was
+registered earlier. The selector reads the id rather than a registration date:
+measured in one real registry, 52 of 166 items carry a date (31%), so ordering by
+it would leave two thirds of the backlog with no key, and it would be a second
+source for a fact the id already carries.
 
 **Then oldest first.** A registry that always works the newest item starves the rest, and the starved items are exactly the ones nobody feels urgency about — which is not the same as the ones that do not matter. Age ordering is what keeps a backlog from becoming a list of whatever was mentioned most recently.
 

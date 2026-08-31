@@ -62,7 +62,7 @@ The plugin uses **this** ecosystem's canonical vocabulary (NOT the binary `appro
 Plus meta-verdicts at the `:final` stage:
 
 - `META_DEFECT_FOUND` — at least one hard-cap meta-defect (silently dropped agent file, verdict inconsistent with findings, fabricated finding location, process drift unlogged).
-- `AGGREGATOR_BUG_SUSPECTED` — used when the inconsistency suggests `consolidate_findings.py` itself has a bug (the fix lives in this `plan` repo, not in the slice).
+- `AGGREGATOR_BUG_SUSPECTED` — used when the inconsistency suggests `consolidate_findings.py` itself has a bug (the fix lives in this `plan` repo, not in the slice). _(emitted externally: the judge-codex plugin ships from `usetheodev/judge-codex-plugin-cc` and writes this verdict; this repository only consumes it)_
 
 ## Disagreement protocol
 
