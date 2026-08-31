@@ -474,10 +474,25 @@ def _emit_and_exit(
     # knows carries its manifest marker, so a marker present for a language nobody audited is a file
     # the gate skipped while the report says PASS.
     if verdict not in ("FAIL_HARD", "INVALID") and cfg:
+        # A language left off WITH A RECORDED REASON is a decision; one left off in
+        # silence is an omission. This check exists for the second — the repository
+        # that audits TypeScript while holding an unaudited `pyproject.toml` nobody
+        # ever thought about. Treating both the same made the gate unusable in the
+        # normal case: measured on 2026-08-31, a project with `typescript | DEFER`
+        # and `python | DISABLED`, each carrying a measured justification, returned
+        # INVALID on every plan — including after its remaining language was fixed
+        # and turned on. The gate could not be satisfied by any amount of work.
+        #
+        # The reason is what makes it a decision, so the reason is what exempts, and
+        # it must be non-empty: `NOTES` was documented as optional and is now required
+        # for DEFER and DISABLED. "Disable it and pass" stays impossible — it now costs
+        # a sentence somebody signs, in a file that is versioned and reviewed.
         unaudited = sorted(
             lang
             for lang, meta in cfg.items()
-            if lang not in (languages_audited or []) and (repo_root / meta["manifest"]).exists()
+            if lang not in (languages_audited or [])
+            and (repo_root / meta["manifest"]).exists()
+            and not (meta.get("status") in ("DEFER", "DISABLED") and meta.get("notes", "").strip())
         )
         if unaudited:
             verdict = "INVALID"
@@ -493,9 +508,10 @@ def _emit_and_exit(
                     symbol_or_line="-",
                     message=(
                         f"{cfg[lang]['manifest']} is present but {lang} was not audited "
-                        f"({(languages_skipped or {}).get(lang, 'not enabled')}). A PASS here would "
-                        "report on the set the gate managed to see, with nothing verifying that set "
-                        "was the right one."
+                        f"({(languages_skipped or {}).get(lang, 'not enabled')}), and no reason is "
+                        f"recorded. A PASS here would report on the set the gate managed to see, "
+                        f"with nothing verifying that set was the right one. Either audit it, or "
+                        f"write in code-quality-languages.txt why it is DEFER or DISABLED."
                     ),
                     allowlist_key=f"unaudited_manifest_present|{cfg[lang]['manifest']}|-|{lang}",
                 )

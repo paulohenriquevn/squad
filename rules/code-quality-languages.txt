@@ -9,7 +9,11 @@
 #                    or a package under `web/` must declare it here or the auditor reports
 #                    itself unavailable and the cycle stalls on a path assumption.
 #   STATUS           ENABLED | DISABLED | DEFER
-#   NOTES            free text; optional, but say WHY when a language is DISABLED or DEFER
+#   NOTES            free text. REQUIRED for DISABLED and DEFER, and it is what makes the
+#                    difference between a decision and an omission: a language left off with a
+#                    recorded reason is exempt from `unaudited_manifest_present`; one left off in
+#                    silence trips it and the verdict is INVALID. "Disable it and pass" therefore
+#                    still cannot happen — it costs a sentence somebody signs, in a versioned file.
 #
 # Lines starting with '#' are comments. Anything with fewer than three '|' fields is a
 # hard error, not a warning — a malformed line means a language you believe is audited is

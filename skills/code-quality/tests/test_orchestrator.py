@@ -484,11 +484,15 @@ def test_a_manifest_nobody_audited_fails_even_when_another_language_was(
     guard only fired when `languages_audited` was EMPTY, so "looked at something, just not at that"
     was indistinguishable from a clean run. The gate reported on the set it managed to see, and
     nothing verified that set was the right one.
+
+    The fixture drops the NOTES field on purpose. Since 2026-08-31 a recorded reason marks a
+    decision and exempts the language; silence is the omission this guard is for, and silence is
+    what it must keep catching.
     """
     rules = tmp_path / ".claude" / "rules"
     rules.mkdir(parents=True)
     (rules / "code-quality-languages.txt").write_text(
-        "python | pyproject.toml | DISABLED | deliberately off\n"
+        "python | pyproject.toml | DISABLED |\n"
         "typescript | package.json | ENABLED |\n"
     )
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
@@ -505,3 +509,33 @@ def test_a_manifest_nobody_audited_fails_even_when_another_language_was(
 
     assert exit_code != 0, data
     assert "unaudited_manifest_present" in data["hard_caps_triggered"], data
+
+
+def test_a_language_left_off_with_a_recorded_reason_is_a_decision(tmp_path: Path, capsys) -> None:
+    """The complement of the guard above, and the reason the gate became usable.
+
+    Treating a recorded decision like a silent omission made the gate unsatisfiable in
+    the ordinary case. Measured on 2026-08-31: a project with `typescript | DEFER` and
+    `python | DISABLED`, each carrying a measured justification, returned INVALID on
+    every plan — including after the one language it did audit was fixed and enabled.
+    No amount of work could clear it.
+
+    "Disable it and pass" is still impossible: it costs a sentence somebody signs, in a
+    versioned and reviewed file.
+    """
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "code-quality-languages.txt").write_text(
+        "python | pyproject.toml | DISABLED | kit tooling synced from upstream, not product code\n"
+        "typescript | package.json | ENABLED |\n"
+    )
+    (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
+    (rules / "code-quality-allowlist.txt").write_text("")
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "package.json").write_text('{"name":"fx","version":"0.0.0"}')
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "fx"\n')
+
+    main(["--repo-root", str(tmp_path), "--no-network"])
+    data = json.loads(capsys.readouterr().out)
+    assert "unaudited_manifest_present" not in data["hard_caps_triggered"], data
