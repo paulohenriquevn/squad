@@ -59,6 +59,27 @@ STATUS_PHASE = {
 }
 
 
+#: An item id anywhere in a slug, with or without the hyphen.
+_SLUG_ITEM_RE = re.compile(r"\bb-?(\d{3,})\b", re.IGNORECASE)
+
+
+def item_id_of(slug: str) -> str:
+    """The `B-NNN` a stream slug refers to, normalised.
+
+    Two conventions reach the stream and both are correct in their own phase. The
+    phases instrumented for the maintenance chain emit the ITEM id — `B-033` — because
+    that is what the registry keys on. The phases that were already emitting
+    (`implement`, `code-quality`, `review`) emit the PLAN slug — `b033-prometheus-url-
+    dev-public` — because that is what names the artefact they produced.
+
+    Matching on the raw string loses the second kind entirely. Measured on the first
+    real run: 12 events, 6 of them plan slugs, and every one of those six invisible on
+    the board — half the execution, missing from the view built to show it.
+    """
+    match = _SLUG_ITEM_RE.search(slug or "")
+    return f"B-{match.group(1)}" if match else (slug or "").upper()
+
+
 def _events_path(project_root: Path) -> Path | None:
     for rel in (".claude/records/cycle-events.jsonl", "records/cycle-events.jsonl"):
         candidate = project_root / rel
@@ -97,7 +118,7 @@ def build_state(project_root: Path) -> dict:
     # Last finished phase per item, from the stream.
     reached: dict[str, dict] = {}
     for event in events:
-        slug = (event.get("slug") or "").upper()
+        slug = item_id_of(event.get("slug") or "")
         cycle = event.get("cycle") or ""
         if not slug or cycle not in PHASES or event.get("type") != "cycle:phase:end":
             continue

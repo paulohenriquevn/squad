@@ -195,3 +195,39 @@ def test_loopback_needs_no_token(tmp_path: Path, monkeypatch, host) -> None:
 
 def test_a_missing_backlog_is_refused_before_any_binding(tmp_path: Path) -> None:
     assert _main([str(tmp_path), "--port", "0"]) == 1
+
+
+# ── two slug conventions, both correct ────────────────────────────────────────
+#
+# Measured on the first real run: 12 events, 6 of them plan slugs, and every one of
+# those six invisible on the board — half the execution missing from the view built
+# to show it.
+
+
+@pytest.mark.parametrize("slug, expected", [
+    ("b033-prometheus-url-dev-public", "B-033"),   # the plan slug an artefact carries
+    ("B-033", "B-033"),                            # the item id the registry keys on
+    ("b-014-trace-p95", "B-014"),
+    ("B-167", "B-167"),
+])
+def test_both_slug_conventions_reach_the_same_item(slug, expected) -> None:
+    from board_state import item_id_of
+
+    assert item_id_of(slug) == expected
+
+
+def test_a_slug_naming_no_item_is_left_alone() -> None:
+    """Not every event belongs to a backlog item; inventing one would be worse."""
+    from board_state import item_id_of
+
+    assert item_id_of("smoke-run") == "SMOKE-RUN"
+
+
+def test_a_plan_slug_positions_its_item(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-033", status="triaged"),
+                       events=[{"type": "cycle:phase:end", "cycle": "implement",
+                                "slug": "b033-prometheus-url-dev-public",
+                                "verdict": "VALIDATED", "timestamp": "2026-08-31T12:00:00Z"}])
+    item = _by_id(build_state(project))["B-033"]
+    assert item["position_from"] == "stream"
+    assert item["phase"] == "code-quality"
