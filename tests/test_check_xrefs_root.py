@@ -193,3 +193,44 @@ def test_a_real_cycle_reference_still_resolves() -> None:
         assert _extract_cycle_contract_ref(body) == "plan"
     except TypeError:
         assert _extract_cycle_contract_ref(body, set()) == "plan"
+
+
+def test_a_broken_reference_in_the_projects_own_file_warns_rather_than_fails(tmp_path: Path) -> None:
+    """The kit cannot fail its own installation over a line it did not write.
+
+    Measured across three consumers on 2026-08-31: each carried skills of its own
+    citing a cycle rule the SIBLING kit ships. They hold one kit's artefacts while
+    installed with the other — worth telling them, and not a reason to call the
+    install broken. `install.sh` runs this `--strict`.
+    """
+    from check_xrefs import validate_xrefs
+
+    (tmp_path / "rules").mkdir(parents=True)
+    (tmp_path / "rules" / "cycle-plan.md").write_text("# plan\n\n## Hard gates\n", encoding="utf-8")
+    own = tmp_path / "skills" / "analysis"
+    own.mkdir(parents=True)
+    own.write_text if False else (own / "SKILL.md").write_text(
+        "---\nname: analysis\ndescription: x\n---\n\nDriven by `cycle-roadmap`.\n", encoding="utf-8")
+    (tmp_path / ".kit-manifest.txt").write_text("skills/plan-confidence\n", encoding="utf-8")
+
+    report = validate_xrefs(tmp_path, strict=True)
+    broken = [f for f in report["findings"] if f.get("check") == "cycle_reference_resolves"]
+    assert broken, "the defect must still be reported"
+    assert all(f["severity"] == "WARN" for f in broken), broken
+
+
+def test_the_same_reference_in_a_kit_file_still_fails(tmp_path: Path) -> None:
+    """Severity depends on authorship, not on the defect being less real."""
+    from check_xrefs import validate_xrefs
+
+    (tmp_path / "rules").mkdir(parents=True)
+    (tmp_path / "rules" / "cycle-plan.md").write_text("# plan\n\n## Hard gates\n", encoding="utf-8")
+    kit = tmp_path / "skills" / "review"
+    kit.mkdir(parents=True)
+    (kit / "SKILL.md").write_text(
+        "---\nname: review\ndescription: x\n---\n\nDriven by `cycle-roadmap`.\n", encoding="utf-8")
+    (tmp_path / ".kit-manifest.txt").write_text("skills/review\n", encoding="utf-8")
+
+    report = validate_xrefs(tmp_path, strict=True)
+    broken = [f for f in report["findings"] if f.get("check") == "cycle_reference_resolves"]
+    assert broken and all(f["severity"] == "FAIL" for f in broken), broken

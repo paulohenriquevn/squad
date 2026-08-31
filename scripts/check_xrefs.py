@@ -483,6 +483,15 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # legitimate, the file is there.
     cycle_skill_names = {s for s in existing_skills if s.startswith("cycle-")}
 
+    def _kit_owned(path: Path) -> bool:
+        """True when the manifest claims this file, or when there is no manifest."""
+        if kit_owned is None:
+            return True
+        rel = _rel(path)
+        if rel.startswith("skills/"):
+            return rel.split("/")[1] in kit_owned
+        return True  # rules/ and elsewhere: the manifest lists files, not skills
+
     def _scan_for_cycle_refs(path: Path) -> None:
         try:
             content = path.read_text(encoding="utf-8-sig")
@@ -493,13 +502,30 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 cycle_id = f"cycle-{name}"
                 if (rules_dir / f"{cycle_id}.md").exists() or cycle_id in cycle_skill_names:
                     continue
+                # A broken reference is a real defect wherever it sits, so it is
+                # always reported. But its SEVERITY depends on who wrote the file:
+                # the kit cannot fail its own installation over a line it did not
+                # write, and `install.sh` runs this `--strict`.
+                #
+                # Measured on 2026-08-31 across three consumers: each carried two
+                # skills and one golden-rule file of its own, all citing a cycle rule
+                # the SIBLING kit ships. They are repositories holding one kit's
+                # artefacts while installed with the other, which is worth telling
+                # them, and is not a reason to call the install broken.
+                #
+                # (The paths are described rather than quoted: this checker also
+                # verifies that a backticked path exists, and citing a consumer's
+                # file here would fail the kit's own sweep.)
+                own = _kit_owned(path)
                 findings.append({
-                    "severity": "FAIL",
+                    "severity": "FAIL" if own else "WARN",
                     "check": "cycle_reference_resolves",
                     "source": _rel(path),
                     "broken_ref": cycle_id,
-                    "message": f"{_rel(path)} references `{cycle_id}` — no rules/{cycle_id}.md "
-                               f"and no skills/{cycle_id}/ exists",
+                    "message": (f"{_rel(path)} references `{cycle_id}` — no rules/{cycle_id}.md "
+                                f"and no skills/{cycle_id}/ exists"
+                                + ("" if own else ". This file is the project's, not the kit's; "
+                                   "the reference may belong to the sibling kit")),
                 })
 
     for rule_md in rules_dir.glob("*.md") if rules_dir.exists() else []:
