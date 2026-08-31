@@ -20,17 +20,34 @@ it never commands. A board that could advance an item would be a second writer r
 `backlog_status.py`, which is exactly the shape this ecosystem removed when it made
 one writer own the status line.
 
-## Bound to localhost, deliberately
+## Bound to localhost by default, and never widened by accident
 
 `BACKLOG.md` carries unreleased plans, kill reasons and sponsor decisions. The server
-binds 127.0.0.1 and refuses another address, because the failure mode of guessing
-wrong here is publishing someone's roadmap to their network.
+binds 127.0.0.1 unless told otherwise, because the failure mode of guessing wrong is
+publishing someone's roadmap to their network.
+
+Widening it takes two explicit flags, and the second is enforced rather than advised:
+
+    --host 0.0.0.0 --token "$(openssl rand -hex 24)"
+
+A non-loopback host with no token is REFUSED at startup. That is deliberate
+fail-closed design — the machine this was first exposed on had `ufw` inactive and
+five ports already open to the internet, so "I will add auth later" would have meant
+serving an unreleased roadmap to anyone who scanned the host.
+
+The token is checked against a cookie; a first visit may carry `?t=<token>` and the
+server exchanges it for the cookie and redirects, so the secret leaves the URL bar
+after one request instead of living in browser history and every access log line.
+Comparison is `compare_digest` — a plain `==` leaks the token's prefix to anyone
+willing to time the responses.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import queue
+import secrets
 import sys
 import threading
 import time
@@ -97,7 +114,7 @@ def _watch(root: Path, hub: _Hub, stop: threading.Event) -> None:
             hub.publish(json.dumps(build_state(root), ensure_ascii=False))
 
 
-def _handler(root: Path, hub: _Hub):
+def _handler(root: Path, hub: _Hub, token: str | None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -112,7 +129,46 @@ def _handler(root: Path, hub: _Hub):
             self.end_headers()
             self.wfile.write(body)
 
+        # ── authentication ────────────────────────────────────────────────
+        def _authorised(self) -> bool:
+            """True when no token is configured, or the request carries it."""
+            if not token:
+                return True
+            cookie = self.headers.get("Cookie") or ""
+            for part in cookie.split(";"):
+                name, _, value = part.strip().partition("=")
+                if name == "board_token" and secrets.compare_digest(value, token):
+                    return True
+            return False
+
+        def _grant(self) -> bool:
+            """Exchange a `?t=` query for the cookie, then redirect without it.
+
+            The redirect matters: it takes the secret out of the address bar, out of
+            browser history, and out of every later line in an access log.
+            """
+            path, _, query = self.path.partition("?")
+            supplied = ""
+            for pair in query.split("&"):
+                key, _, value = pair.partition("=")
+                if key == "t":
+                    supplied = value
+            if not supplied or not token or not secrets.compare_digest(supplied, token):
+                return False
+            self.send_response(302)
+            self.send_header("Location", path or "/")
+            self.send_header("Set-Cookie", f"board_token={token}; Path=/; HttpOnly; SameSite=Strict")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return True
+
         def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's contract
+            if not self._authorised():
+                if self._grant():
+                    return
+                self._send(401, b"unauthorised: append ?t=<token> once\n", "text/plain")
+                return
+            self.path = self.path.partition("?")[0] or "/"
             if self.path in ("/", "/index.html"):
                 try:
                     body = _PAGE.read_bytes()
@@ -159,13 +215,13 @@ def _handler(root: Path, hub: _Hub):
     return Handler
 
 
-def serve(root: Path, port: int) -> int:
+def serve(root: Path, port: int, host: str = "127.0.0.1", token: str | None = None) -> int:
     hub = _Hub()
     stop = threading.Event()
     watcher = threading.Thread(target=_watch, args=(root, hub, stop), daemon=True)
     watcher.start()
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), _handler(root, hub))
+    server = ThreadingHTTPServer((host, port), _handler(root, hub, token))
     state = build_state(root)
     # `flush`, because stdout is block-buffered whenever it is not a terminal: the
     # first thing anyone does is redirect this to a log and then look for the URL,
@@ -174,7 +230,12 @@ def serve(root: Path, port: int) -> int:
     print(f"  {len(state.get('items', []))} item(s) · "
           f"stream {'present' if state.get('has_stream') else 'absent (positions derived from status)'}",
           flush=True)
-    print(f"  http://127.0.0.1:{port}  — Ctrl-C to stop", flush=True)
+    shown = host if host not in ("0.0.0.0", "::") else "<this-host>"
+    suffix = f"/?t={token}" if token else "/"
+    print(f"  http://{shown}:{port}{suffix}  — Ctrl-C to stop", flush=True)
+    if token:
+        print("  token required; the link above sets a cookie and drops the token "
+              "from the URL", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -189,13 +250,27 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Serve a live board of the cycle.")
     parser.add_argument("project", nargs="?", default=".", type=Path)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="bind address; anything but loopback requires --token")
+    parser.add_argument("--token", default=os.environ.get("BOARD_TOKEN", ""),
+                        help="shared secret; also read from BOARD_TOKEN")
     args = parser.parse_args()
 
     root = args.project.resolve()
     if not (root / "BACKLOG.md").is_file():
         print(f"FATAL: no BACKLOG.md under {root}", file=sys.stderr)
         return 1
-    return serve(root, args.port)
+
+    # Fail closed. A registry of unreleased plans reachable by anyone who scans the
+    # host is not a thing to leave to a later flag.
+    loopback = args.host in ("127.0.0.1", "::1", "localhost")
+    if not loopback and not args.token:
+        print("FATAL: --host " + args.host + " would serve BACKLOG.md beyond this "
+              "machine. Pass --token (or set BOARD_TOKEN); generate one with:\n"
+              "  openssl rand -hex 24", file=sys.stderr)
+        return 1
+
+    return serve(root, args.port, args.host, args.token or None)
 
 
 if __name__ == "__main__":

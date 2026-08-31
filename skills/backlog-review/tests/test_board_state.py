@@ -152,3 +152,46 @@ def test_a_missing_backlog_reports_an_error_rather_than_raising(tmp_path: Path) 
 def test_items_come_back_in_id_order(tmp_path: Path) -> None:
     project = _project(tmp_path, item_block("B-010", status="raw"), item_block("B-002", status="raw"))
     assert [i["id"] for i in build_state(project)["items"]] == ["B-002", "B-010"]
+
+
+# ── serving beyond this machine ───────────────────────────────────────────────
+#
+# The registry carries unreleased plans, kill reasons and sponsor decisions. The
+# machine this was first exposed on had `ufw` inactive and five ports already open to
+# the internet, so "add auth later" would have meant serving a roadmap to anyone who
+# scanned the host.
+
+
+def _main(argv: list[str]) -> int:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from board_server import main as server_main
+
+    argv_backup, sys.argv = sys.argv, ["board_server.py", *argv]
+    try:
+        return server_main()
+    finally:
+        sys.argv = argv_backup
+
+
+def test_a_public_host_without_a_token_is_refused(tmp_path: Path, capsys) -> None:
+    (tmp_path / "BACKLOG.md").write_text("# Backlog\n", encoding="utf-8")
+    assert _main([str(tmp_path), "--host", "0.0.0.0", "--port", "0"]) == 1
+    assert "token" in capsys.readouterr().err.lower()
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "::1", "localhost"])
+def test_loopback_needs_no_token(tmp_path: Path, monkeypatch, host) -> None:
+    """The default must stay frictionless, or people work around the gate."""
+    import board_server
+
+    (tmp_path / "BACKLOG.md").write_text("# Backlog\n", encoding="utf-8")
+    seen = {}
+    monkeypatch.setattr(board_server, "serve",
+                        lambda root, port, h="127.0.0.1", t=None: seen.update(host=h, token=t) or 0)
+    assert _main([str(tmp_path), "--host", host, "--port", "0"]) == 0
+    assert seen["token"] is None
+
+
+def test_a_missing_backlog_is_refused_before_any_binding(tmp_path: Path) -> None:
+    assert _main([str(tmp_path), "--port", "0"]) == 1
