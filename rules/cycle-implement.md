@@ -106,6 +106,13 @@ Contract:
 
 ## Stop conditions
 
+**Emitting the milestone:** the event that records Step 4 finishing is emitted with
+`cycle_events.py end --cycle implement --verdict IMPLEMENTATION_COMPLETE --once`. The
+`--once` is not optional here: a phase that CONCLUDES may be recorded once, and on
+2026-08-31 this one was recorded twice for B-169, nineteen seconds apart. A gate that
+iterates — `code-quality` ending `INVALID` three times in fourteen seconds, each a real
+run — omits the flag, which is why the emitter cannot decide this for the caller.
+
 **Step 4 — TDD halt-loop:**
 
 - Hard gate fails twice on the same task → halt-loop pauses, escalate to human.

@@ -71,6 +71,10 @@ _CLEAN_VERDICTS = frozenset({
     "READY_TO_MERGE", "READY_TO_MERGE_WITH_FOLLOWUPS", "RELEASED", "ACCEPTED",
     "ACCEPTED_WITH_CAVEATS", "VALIDATED", "ITEM_REGISTERED", "ITEM_SHIPPED",
     "OPPORTUNITY_COMPLETE", "PLAN_WRITTEN", "MILESTONE_RELEASED",
+    # The Step 4 milestone. Absent from this set, a return after it read as rework
+    # rather than disorder — the conservative error, but by omission rather than by
+    # decision. It appeared in the stream on 2026-08-31 and in twelve rule files.
+    "IMPLEMENTATION_COMPLETE",
 })
 
 _VERDICTS_RULE = "blocking-verdicts.txt"

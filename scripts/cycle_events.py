@@ -301,6 +301,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cycle", required=True)
     parser.add_argument("--slug", default="")
     parser.add_argument("--verdict", default=None)
+    parser.add_argument("--once", action="store_true",
+                        help="refuse if this phase already ended with this verdict for "
+                             "this item and nothing has happened since. For a phase that "
+                             "CONCLUDES (implementation complete, plan written, released); "
+                             "never for a gate that iterates")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
 
@@ -358,6 +363,38 @@ def main(argv: list[str] | None = None) -> int:
                   f"reader can act on. Emit the verdict the contract declares, and put the "
                   f"nuance in the phase's own record.", file=sys.stderr)
             return 1
+
+    # ── a milestone emitted twice is not a milestone that happened twice ──
+    #
+    # Measured on 2026-08-31: `implement` ended `IMPLEMENTATION_COMPLETE` for B-169 at
+    # 20:06:23 and again at 20:06:42. One conclusion, two records.
+    #
+    # This is DECLARED by the caller, not guessed here, and the reason is in the same
+    # stream: `code-quality` ended `INVALID` three times in fourteen seconds for B-033,
+    # and every one of those was a real run of the gate. Nineteen seconds apart, a
+    # repeat and a duplicate look identical — any window that dropped the second
+    # B-169 event would also drop two honest measurements.
+    #
+    # So the caller says which it is. A phase that CONCLUDES — implementation
+    # complete, plan written, released — passes `--once`; a gate that iterates does
+    # not. Refusing rather than silently skipping, because a caller that emitted twice
+    # by accident should learn of it.
+    if args.once and args.transition == "end":
+        previous = read_events(root)
+        if previous:
+            last = previous[-1]
+            same = (last.get("type") == "cycle:phase:end"
+                    and last.get("cycle") == args.cycle
+                    and str(last.get("slug") or "") == str(args.slug or "")
+                    and last.get("verdict") == args.verdict)
+            if same:
+                print(f"REFUSED: `{args.cycle}` already ended `{args.verdict}` for "
+                      f"{args.slug} at {last.get('timestamp')}, with nothing since. "
+                      f"`--once` says this phase concludes rather than iterates, so a "
+                      f"second identical record would report a milestone that happened "
+                      f"twice. Drop the second call, or omit --once if the phase really "
+                      f"ran again.", file=sys.stderr)
+                return 1
 
     if args.transition == "start":
         event = emit_phase_start(root, cycle=args.cycle, slug=args.slug)

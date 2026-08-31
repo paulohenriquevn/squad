@@ -342,3 +342,19 @@ def test_the_forward_chain_is_still_clean_after_the_change(tmp_path: Path) -> No
         _ran(root, cycle)
 
     assert _kinds(check_phase_drift(root)) == []
+
+
+def test_a_return_after_implementation_complete_is_out_of_order(tmp_path: Path) -> None:
+    """`IMPLEMENTATION_COMPLETE` is the Step 4 milestone: the tasks are committed and
+    the ACs verified. Nothing sent the work back, so a phase running earlier again is
+    a step out of sequence, not rework.
+
+    It appeared in the stream on 2026-08-31 — B-169 — and in twelve rule files, but in
+    neither of the two lists that classify verdicts. Absent from `_CLEAN_VERDICTS`, a
+    return after it read as rework: the conservative error, but by omission rather
+    than by decision."""
+    project = _project(tmp_path)
+    _ran(project, "implement", verdict="IMPLEMENTATION_COMPLETE")
+    _ran(project, "discover", verdict="SHIPPABLE")
+    findings = check_phase_drift(project).findings
+    assert [f.kind for f in findings] == ["phase_out_of_order"]

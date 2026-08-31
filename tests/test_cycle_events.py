@@ -488,3 +488,52 @@ def test_an_event_without_a_verdict_is_unaffected(tmp_path):
 
     root = _with_rule(tmp_path, "plan", ["INVALID"])
     assert main(["start", "--cycle", "plan", "--project-root", str(root)]) == 0
+
+
+# ── a milestone emitted twice is not a milestone that happened twice ─────────
+
+
+def test_once_refuses_an_identical_end_with_nothing_since(tmp_path):
+    """Measured on 2026-08-31: `implement` ended `IMPLEMENTATION_COMPLETE` for B-169 at
+    20:06:23 and again at 20:06:42. One conclusion, two records."""
+    from cycle_events import main
+
+    root, deep = _consumer(tmp_path)
+    args = ["end", "--cycle", "implement", "--slug", "B-169",
+            "--verdict", "IMPLEMENTATION_COMPLETE", "--project-root", str(deep)]
+    assert main(args + ["--once"]) == 0
+    assert main(args + ["--once"]) == 1
+    stream = (root / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
+    assert stream.count("IMPLEMENTATION_COMPLETE") == 1
+
+
+def test_without_once_a_repeat_is_recorded(tmp_path):
+    """`code-quality` ended `INVALID` three times in fourteen seconds for B-033, and
+    every one was a real run of the gate. Nineteen seconds apart, a repeat and a
+    duplicate look identical — so the caller declares which it is, and the default
+    records everything."""
+    from cycle_events import main
+
+    root, deep = _consumer(tmp_path)
+    args = ["end", "--cycle", "code-quality", "--slug", "b033-x",
+            "--verdict", "INVALID", "--project-root", str(deep)]
+    assert main(args) == 0
+    assert main(args) == 0
+    stream = (root / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
+    assert stream.count("INVALID") == 2
+
+
+def test_once_allows_the_same_verdict_after_something_else_ran(tmp_path):
+    """The phase really did run again. `--once` catches a double call, not a second
+    execution — which is why it compares against the LAST event, not the whole file."""
+    from cycle_events import main
+
+    root, deep = _consumer(tmp_path)
+    done = ["end", "--cycle", "implement", "--slug", "B-169",
+            "--verdict", "IMPLEMENTATION_COMPLETE", "--project-root", str(deep), "--once"]
+    assert main(done) == 0
+    assert main(["end", "--cycle", "code-quality", "--slug", "B-169",
+                 "--verdict", "FAIL_SOFT", "--project-root", str(deep)]) == 0
+    assert main(done) == 0
+    stream = (root / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
+    assert stream.count("IMPLEMENTATION_COMPLETE") == 2
