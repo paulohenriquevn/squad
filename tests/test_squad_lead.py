@@ -758,3 +758,48 @@ def test_the_cursor_is_re_read_before_enter(tmp_path: Path) -> None:
         sp.run = original
     assert ok is False
     assert "Enter" not in sent, "Enter was pressed although the cursor had not moved"
+
+
+# ── a failure to ask is not an answer ────────────────────────────────────────
+
+
+def test_an_error_on_stdout_is_not_an_answer(tmp_path: Path) -> None:
+    """`claude -p` reports a blown budget on STDOUT and exits 0. Measured: a one-word
+    question exceeded a 0.50 cap, the lead read `Error: Exceeded USD budget` as the
+    agent's reply, found no rule in it, and escalated saying no rule covered the case.
+    It had never been asked."""
+    import subprocess
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    completed = subprocess.CompletedProcess([], 0, "Error: Exceeded USD budget (0.5)", "")
+    lead_run = subprocess.run
+    try:
+        subprocess.run = lambda *a, **k: completed
+        answer, note = lead.ask_agent("squad-lead", "anything")
+    finally:
+        subprocess.run = lead_run
+    assert answer is None
+    assert "could not answer" in note
+
+
+def test_why_the_doctrine_did_not_decide_reaches_the_log(tmp_path: Path) -> None:
+    """"The doctrine has no rule for this" and "nobody was asked" are opposite facts.
+    A log that renders them identically reports a gap in the envelope that is not
+    there — and the gap is the one thing meant to go back to the human."""
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: (None, "squad-lead could not answer: Error: budget")
+    decision = lead.decide(_MENU, idle=200)
+    assert decision.action == "escalate"
+    assert "could not answer" in decision.reason
+
+
+def test_a_real_no_rule_says_so(tmp_path: Path) -> None:
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: ("NO RULE: licence questions are not covered", "answered")
+    decision = lead.decide(_MENU, idle=200)
+    assert "found no rule" in decision.reason
+
+
+def test_the_budget_is_the_measured_one(tmp_path: Path) -> None:
+    """0.50 was a guess and it silently blocked every consultation. A trivial question
+    in a real project exceeded it; 2.00 answered."""
+    assert Lead(session="s").agent_budget_usd >= 2.00

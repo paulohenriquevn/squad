@@ -284,7 +284,10 @@ class Lead:
     #: answer. Off by default: a daemon that calls a model unattended is a different
     #: thing from a daemon that reads a screen, and the difference should be chosen.
     agents_when_stuck: bool = False
-    agent_budget_usd: float = 0.50
+    #: Measured, not guessed: a one-word question to `claude -p` in a real project
+    #: exceeded 0.50 and answered at 2.00. The cap counts the whole call, and a
+    #: project's own context dominates it long before the question does.
+    agent_budget_usd: float = 3.00
     agent_timeout: int = 300
     #: One ask per agent per this many seconds. The queue being stuck is a state, not
     #: an event: without this the lead would re-ask on every poll.
@@ -350,7 +353,8 @@ class Lead:
         return seen
 
     # ── asking an agent, from outside the session ─────────────────────────
-    def _decide_by_doctrine(self, screen: str, options: list, item: str) -> Decision | None:
+    def _decide_by_doctrine(self, screen: str, options: list,
+                           item: str) -> tuple[Decision | None, str]:
         """Ask the agent whether the envelope decides this menu, and how.
 
         Returns a `choose` decision when it does, and None when it does not — so the
@@ -359,23 +363,28 @@ class Lead:
         menu = "\n".join(f"{n}. {text}" for n, text in options)
         answer, note = self.ask_agent("squad-lead", _MENU_PROMPT.format(menu=menu))
         if not answer:
-            return None
+            # Never conflated with "no rule covers it". One is the doctrine speaking and
+            # the other is nobody speaking, and a log that renders them identically
+            # reports a gap in the envelope that does not exist.
+            return None, note
         picked = _OPTION_RE_ANSWER.search(answer)
         rule = _RULE_RE_ANSWER.search(answer)
         if not picked or not rule:
+            if answer.lstrip().upper().startswith("NO RULE"):
+                return None, f"the agent found no rule: {answer.splitlines()[0][:120]}"
             # A number with no rule is the agent improvising, which is what the
             # envelope replaced. No rule named, no answer taken.
-            return None
+            return None, "the agent answered without naming a rule; not acted on"
         number = picked.group(1)
         if number not in {n for n, _ in options}:
-            return None
+            return None, f"the agent chose option {number}, which this menu does not have"
         text = next(t for n, t in options if n == number)
         if any(f in text.lower() for f in _RELAXING_FLAGS):
             # The floor again, reached from the other side: the agent may not pick what
             # the classifier would have refused.
-            return None
-        return Decision("choose", f"envelope decides it — {rule.group(1)}", text, item,
-                        option_number=number)
+            return None, "the agent chose an option that switches off a gate; refused"
+        return (Decision("choose", f"envelope decides it — {rule.group(1)}", text, item,
+                         option_number=number), "answered")
 
     def ask_agent(self, agent: str, question: str) -> tuple[str | None, str]:
         """Run one headless session so an agent can answer what this cannot compute.
@@ -416,7 +425,17 @@ class Lead:
         if out.returncode != 0:
             return None, f"{agent} exited {out.returncode}: {out.stderr.strip()[:200]}"
         answer = out.stdout.strip()
-        return (answer, "answered") if answer else (None, f"{agent} answered nothing")
+        if not answer:
+            return None, f"{agent} answered nothing"
+        # `claude -p` reports a blown budget on STDOUT and exits 0, so the returncode
+        # check above passes and the error text arrives shaped like an answer. Measured:
+        # a one-word question exceeded a 0.50 cap, the lead read `Error: Exceeded USD
+        # budget` as the agent's reply, found no rule in it, and escalated saying no
+        # rule covered the case. It had never been asked.
+        first = answer.splitlines()[0].strip()
+        if first.lower().startswith("error:"):
+            return None, f"{agent} could not answer: {first[:120]}"
+        return answer, "answered"
 
     def _last_verdict(self, item: str) -> str | None:
         """The verdict of the last phase this item ended, or None."""
@@ -668,12 +687,12 @@ class Lead:
             # this" is exactly where a rule that classifies it is worth reading — and
             # the observed refusal that stopped a queue for forty minutes was an
             # `unknown`, not a `content`.
-            chosen = self._decide_by_doctrine(screen, options, item)
+            chosen, why = self._decide_by_doctrine(screen, options, item)
             if chosen is not None:
                 return chosen
-            reason = ("only a person can answer this" if kind == "content"
-                      else "the option does not read as flow, and no rule covers it")
-            return Decision("escalate", reason, option_text, item)
+            base = ("only a person can answer this" if kind == "content"
+                    else "the option does not read as flow")
+            return Decision("escalate", f"{base} — {why}", option_text, item)
 
         # `(Recommended)` is the session stating what it would do. Confirming that is
         # not the lead having an opinion — it is the lead removing a wait.
@@ -937,8 +956,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="when the selector has no actionable answer, spend one "
                              "headless `claude -p` call asking the squad-lead agent "
                              "what to do. Off by default")
-    parser.add_argument("--agent-budget-usd", type=float, default=0.50,
-                        help="cap for one agent call (default 0.50)")
+    parser.add_argument("--agent-budget-usd", type=float, default=3.00,
+                        help="cap for one agent call (default 3.00; measured — a "
+                             "trivial question in a real project exceeds 0.50)")
     parser.add_argument("--agent-cooldown", type=int, default=1800,
                         help="minimum seconds between asks of the same agent")
     parser.add_argument("--project", type=Path,
