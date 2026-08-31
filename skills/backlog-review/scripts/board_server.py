@@ -61,6 +61,15 @@ from board_state import build_state  # noqa: E402
 POLL_SECONDS = 0.5
 WATCHED = ("BACKLOG.md", "records/cycle-events.jsonl", ".claude/records/cycle-events.jsonl")
 
+#: Set by `main()` from the flags, and read by every `build_state` call. Module-level
+#: because the handler and the watcher both need them and neither owns the other.
+_LEAD_LOG: Path | None = None
+_LEAD_MARKER: Path | None = None
+
+
+def _state(root: Path) -> dict:
+    return build_state(root, _LEAD_LOG, _LEAD_MARKER)
+
 _PAGE = (Path(__file__).resolve().parent / "board.html")
 
 
@@ -95,13 +104,17 @@ class _Hub:
 
 def _fingerprint(root: Path) -> tuple:
     out = []
-    for rel in WATCHED:
-        p = root / rel
+    # The lead's log and the session marker are absolute and live outside the project,
+    # so they are appended rather than resolved against the root. Without them a
+    # decision reached the board only when something else happened to change.
+    extra = [p for p in (_LEAD_LOG, _LEAD_MARKER) if p is not None]
+    for rel in list(WATCHED) + extra:
+        p = root / rel if isinstance(rel, str) else rel
         try:
             st = p.stat()
-            out.append((rel, st.st_mtime_ns, st.st_size))
+            out.append((str(rel), st.st_mtime_ns, st.st_size))
         except OSError:
-            out.append((rel, 0, 0))
+            out.append((str(rel), 0, 0))
     return tuple(out)
 
 
@@ -111,7 +124,7 @@ def _watch(root: Path, hub: _Hub, stop: threading.Event) -> None:
         current = _fingerprint(root)
         if current != last:
             last = current
-            hub.publish(json.dumps(build_state(root), ensure_ascii=False))
+            hub.publish(json.dumps(_state(root), ensure_ascii=False))
 
 
 def _handler(root: Path, hub: _Hub, token: str | None):
@@ -177,7 +190,7 @@ def _handler(root: Path, hub: _Hub, token: str | None):
                     return
                 self._send(200, body, "text/html; charset=utf-8")
             elif self.path == "/api/state":
-                body = json.dumps(build_state(root), ensure_ascii=False).encode()
+                body = json.dumps(_state(root), ensure_ascii=False).encode()
                 self._send(200, body, "application/json; charset=utf-8")
             elif self.path == "/api/stream":
                 self._stream()
@@ -194,7 +207,7 @@ def _handler(root: Path, hub: _Hub, token: str | None):
             try:
                 # The first frame is the current state, so a board that connects late
                 # is not blank until something happens to change.
-                self._frame(json.dumps(build_state(root), ensure_ascii=False))
+                self._frame(json.dumps(_state(root), ensure_ascii=False))
                 while True:
                     try:
                         self._frame(q.get(timeout=15))
@@ -222,7 +235,7 @@ def serve(root: Path, port: int, host: str = "127.0.0.1", token: str | None = No
     watcher.start()
 
     server = ThreadingHTTPServer((host, port), _handler(root, hub, token))
-    state = build_state(root)
+    state = _state(root)
     # `flush`, because stdout is block-buffered whenever it is not a terminal: the
     # first thing anyone does is redirect this to a log and then look for the URL,
     # and without the flush the log stays empty until the process exits.
@@ -254,7 +267,15 @@ def main() -> int:
                         help="bind address; anything but loopback requires --token")
     parser.add_argument("--token", default=os.environ.get("BOARD_TOKEN", ""),
                         help="shared secret; also read from BOARD_TOKEN")
+    parser.add_argument("--lead-log", type=Path, default=None,
+                        help="the supervisor's decision log, rendered on the board")
+    parser.add_argument("--lead-marker", type=Path, default=None,
+                        help="file whose mtime says when the executing session last moved")
     args = parser.parse_args()
+
+    global _LEAD_LOG, _LEAD_MARKER
+    _LEAD_LOG = args.lead_log
+    _LEAD_MARKER = args.lead_marker
 
     root = args.project.resolve()
     if not (root / "BACKLOG.md").is_file():

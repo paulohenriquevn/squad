@@ -231,3 +231,80 @@ def test_a_plan_slug_positions_its_item(tmp_path: Path) -> None:
     item = _by_id(build_state(project))["B-033"]
     assert item["position_from"] == "stream"
     assert item["phase"] == "code-quality"
+
+
+# ── the supervisor rail ───────────────────────────────────────────────────────
+#
+# The board showed every item and not whether anything was moving. A session had
+# handed its turn back and sat still for two hours, and the only way to find out was
+# to attach to a tmux pane and read it.
+
+
+def _lead_log(tmp_path: Path, *entries: dict) -> Path:
+    import json as _json
+
+    path = tmp_path / "lead.jsonl"
+    path.write_text("".join(_json.dumps(e) + "\n" for e in entries), encoding="utf-8")
+    return path
+
+
+def test_the_decisions_come_back_newest_first(tmp_path: Path) -> None:
+    """The question of a supervisor's log is always "what just happened"."""
+    from board_state import read_lead
+
+    log = _lead_log(tmp_path,
+                    {"event": "confirm", "item": "B-001", "at": "2026-08-31T10:00:00+00:00"},
+                    {"event": "stalled", "item": "", "at": "2026-08-31T12:00:00+00:00"})
+    assert [d["event"] for d in read_lead(log, None)["decisions"]] == ["stalled", "confirm"]
+
+
+def test_the_marker_says_how_long_the_session_has_been_quiet(tmp_path: Path) -> None:
+    import os
+    import time as _time
+
+    from board_state import read_lead
+
+    marker = tmp_path / "run.log"
+    marker.write_text("x", encoding="utf-8")
+    old = _time.time() - 600
+    os.utime(marker, (old, old))
+    lead = read_lead(None, marker)
+    assert lead["watching"] is True
+    assert 590 <= lead["idle_seconds"] <= 610
+
+
+def test_no_supervisor_yields_empty_fields_not_missing_ones(tmp_path: Path) -> None:
+    """The page renders one way; a board with no lead is the normal case."""
+    from board_state import read_lead
+
+    lead = read_lead(None, None)
+    assert lead == {"decisions": [], "idle_seconds": None, "watching": False}
+
+
+def test_an_absent_marker_is_not_watching(tmp_path: Path) -> None:
+    from board_state import read_lead
+
+    assert read_lead(None, tmp_path / "nope.log")["watching"] is False
+
+
+def test_a_truncated_last_decision_does_not_break_the_rail(tmp_path: Path) -> None:
+    """The log is appended to while the board reads it."""
+    from board_state import read_lead
+
+    log = _lead_log(tmp_path, {"event": "confirm", "item": "B-001"})
+    log.write_text(log.read_text(encoding="utf-8") + '{"event": "sta', encoding="utf-8")
+    assert len(read_lead(log, None)["decisions"]) == 1
+
+
+def test_the_rail_reaches_the_board_state(tmp_path: Path) -> None:
+    project = _project(tmp_path, item_block("B-001", status="raw"))
+    log = _lead_log(tmp_path, {"event": "confirm", "item": "B-001", "at": "2026-08-31T10:00:00+00:00"})
+    state = build_state(project, log, None)
+    assert state["lead"]["decisions"][0]["item"] == "B-001"
+
+
+def test_a_board_without_a_backlog_still_reports_the_lead(tmp_path: Path) -> None:
+    """The error path renders the same page, so it needs the same fields."""
+    log = _lead_log(tmp_path, {"event": "stalled", "at": "2026-08-31T12:00:00+00:00"})
+    state = build_state(tmp_path / "nowhere", log, None)
+    assert "error" in state and state["lead"]["decisions"]

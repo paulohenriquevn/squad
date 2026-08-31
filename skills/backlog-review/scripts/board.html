@@ -176,6 +176,109 @@ h1 {
 }
 .notice b { color: var(--ink); font-weight: 600; }
 
+
+/* ── the supervisor ───────────────────────────────────────────────────────────
+   A rail, not a column: the lead is context for the board, not a ninth phase. It
+   exists because the board could show every item and not whether anything was
+   moving — a session had handed its turn back and sat still for two hours, and the
+   only way to find out was to attach to a tmux pane. */
+.rail {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+}
+.rail.hidden { display: none; }
+.pulse-cell {
+  flex: 0 0 auto;
+  padding: 9px 16px 9px 20px;
+  border-right: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 190px;
+}
+.pulse-cell .label {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: .11em;
+  color: var(--ink-3);
+}
+.pulse-cell .value {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.beat { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.beat.working { background: var(--shipped); }
+.beat.idle    { background: var(--impeded); }
+.beat.stopped { background: var(--killed); }
+.beat.unknown { background: var(--ink-3); }
+.pulse-cell.is-idle .value    { color: var(--impeded); }
+.pulse-cell.is-stopped .value { color: var(--killed); }
+
+/* The decisions scroll sideways, newest first — "what just happened" is the only
+   question anyone asks of a supervisor's log. */
+.decisions {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 9px 16px;
+  align-items: center;
+}
+.decision {
+  flex: 0 0 auto;
+  max-width: 290px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px 9px;
+  background: var(--ground);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.decision.confirm  { border-left-color: var(--shipped);  background: var(--shipped-bg); }
+.decision.escalate { border-left-color: var(--impeded);  background: var(--impeded-bg); }
+.decision.stalled  { border-left-color: var(--impeded);  background: var(--impeded-bg); }
+.decision.exhausted,
+.decision.gone     { border-left-color: var(--killed);   background: var(--killed-bg); }
+.decision .head {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px;
+}
+.decision .act { font-weight: 600; text-transform: uppercase; letter-spacing: .07em; }
+.decision.confirm  .act { color: var(--shipped); }
+.decision.escalate .act,
+.decision.stalled  .act { color: var(--impeded); }
+.decision .when { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.decision .why {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.decisions .none {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
 /* ── the board ────────────────────────────────────────────────────────────── */
 .board {
   flex: 1 1 auto;
@@ -383,6 +486,7 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
   <div id="notice"></div>
 </header>
 
+<section class="rail hidden" id="rail"></section>
 <main class="board" id="board"></main>
 
 <footer>
@@ -411,6 +515,73 @@ function cardClass(item) {
   if (item.status === "killed") return "killed";
   if (item.position_from === "stream") return "measured";
   return "";
+}
+
+
+// ── the supervisor rail ──────────────────────────────────────────────────────
+// Rendered from the lead's own log and the executing session's activity marker.
+// Absent supervisor means an absent rail, not an empty one: a board with no lead is
+// the normal case, and a permanently blank strip reads as something broken.
+
+const ACTION_LABEL = {
+  confirm: "confirmed", escalate: "escalated", stalled: "stalled",
+  exhausted: "gave up", gone: "session gone",
+};
+
+function sessionPulse(lead) {
+  if (!lead.watching || lead.idle_seconds === null) {
+    return { cls: "unknown", text: "not measured", note: "no activity marker" };
+  }
+  const s = lead.idle_seconds;
+  const human = s < 90 ? `${s}s` : s < 5400 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`;
+  // The thresholds mirror the lead's own: it may act after 120s and calls a turn
+  // handed back at 900s. Showing different ones would describe a different watchdog.
+  if (s < 120) return { cls: "working", text: "working", note: `last moved ${human} ago` };
+  if (s < 900) return { cls: "idle", text: `idle ${human}`, note: "within the lead's window" };
+  return { cls: "stopped", text: `stopped ${human}`, note: "turn handed back — needs a person" };
+}
+
+function clock(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return isNaN(d) ? "—" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function renderRail(lead) {
+  const rail = el("rail");
+  if (!lead || (!lead.watching && !(lead.decisions || []).length)) {
+    rail.classList.add("hidden");
+    return;
+  }
+  rail.classList.remove("hidden");
+
+  const pulse = sessionPulse(lead);
+  const decisions = lead.decisions || [];
+  const cells = `
+    <div class="pulse-cell is-${pulse.cls === "working" ? "working" : pulse.cls}">
+      <span class="label">executing session</span>
+      <span class="value"><span class="beat ${pulse.cls}"></span>${pulse.text}</span>
+      <span class="label" style="text-transform:none;letter-spacing:0">${pulse.note}</span>
+    </div>
+    <div class="pulse-cell">
+      <span class="label">lead decisions</span>
+      <span class="value">${decisions.length}</span>
+      <span class="label" style="text-transform:none;letter-spacing:0">${
+        decisions.length ? "newest first" : "nothing to answer yet"}</span>
+    </div>`;
+
+  const cards = decisions.length ? decisions.map(d => `
+      <article class="decision ${d.event}">
+        <div class="head">
+          <span class="act">${ACTION_LABEL[d.event] || d.event}</span>
+          <span>${d.item || ""}</span>
+          <span class="when">${clock(d.at)}</span>
+        </div>
+        <div class="why">${escapeHtml(d.reason || "")}</div>
+      </article>`).join("")
+    : `<span class="none">the lead is watching; it has had nothing to answer</span>`;
+
+  rail.innerHTML = cells + `<div class="decisions">${cards}</div>`;
 }
 
 function render(state) {
@@ -480,6 +651,7 @@ function render(state) {
       </section>`;
   }).join("");
 
+  renderRail(state.lead);
   el("stamp").textContent = "updated " + new Date().toLocaleTimeString();
 }
 

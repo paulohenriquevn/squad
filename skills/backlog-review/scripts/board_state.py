@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -106,10 +107,49 @@ def read_events(project_root: Path) -> list[dict]:
     return events
 
 
-def build_state(project_root: Path) -> dict:
+def read_lead(log_path: Path | None, marker_path: Path | None) -> dict:
+    """What the supervisor decided, and whether the executing session is moving.
+
+    This exists because of a question that had no answer on the board: the session had
+    handed its turn back and sat still for two hours, and the only way to find out was
+    to attach to a tmux pane and read it. A board that shows every item and not whether
+    anything is working shows the shape of the work and not its state.
+
+    Both sources are optional. A board with no supervisor is the normal case — the
+    fields come back empty rather than absent, so the page renders one way.
+    """
+    out: dict = {"decisions": [], "idle_seconds": None, "watching": False}
+
+    if marker_path is not None and marker_path.exists():
+        out["watching"] = True
+        try:
+            out["idle_seconds"] = max(0, int(time.time() - marker_path.stat().st_mtime))
+        except OSError:
+            pass
+
+    if log_path is None or not log_path.is_file():
+        return out
+    entries = []
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    # Newest first: the question is always "what just happened", never "what happened
+    # first". Capped because a long-running lead's log outgrows a page.
+    out["decisions"] = list(reversed(entries))[:40]
+    return out
+
+
+def build_state(project_root: Path, lead_log: Path | None = None,
+                lead_marker: Path | None = None) -> dict:
     backlog = project_root / "BACKLOG.md"
     if not backlog.is_file():
-        return {"error": f"no BACKLOG.md under {project_root}", "items": [], "phases": list(PHASES)}
+        return {"error": f"no BACKLOG.md under {project_root}", "items": [],
+                "phases": list(PHASES), "lead": read_lead(lead_log, lead_marker)}
 
     items = _parse_items(backlog.read_text(encoding="utf-8-sig"))
     statuses = {i.item_id: i.fields.get("status", "") for i in items}
@@ -176,6 +216,7 @@ def build_state(project_root: Path) -> dict:
         "items": out_items,
         "events": events[-200:],
         "event_total": len(events),
+        "lead": read_lead(lead_log, lead_marker),
         "has_stream": _events_path(project_root) is not None,
     }
 

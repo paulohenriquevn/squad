@@ -65,6 +65,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 #: A menu option the lead may confirm: its effect is a registry write the contract
@@ -238,7 +239,13 @@ class Lead:
 
 
 def _log(path: Path | None, payload: dict) -> None:
-    """Append one line. A lead nobody can audit is a lead nobody should trust."""
+    """Append one line. A lead nobody can audit is a lead nobody should trust.
+
+    The timestamp is stamped here rather than by the caller, so no decision can reach
+    the log without one. It was missing at first, and a log of decisions with no time
+    on them cannot answer the question anyone actually asks — *when did it stop?*
+    """
+    payload = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **payload}
     line = json.dumps(payload, ensure_ascii=False)
     print(line, flush=True)
     if path:
