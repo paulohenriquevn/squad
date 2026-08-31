@@ -782,3 +782,70 @@ def test_a_start_the_board_cannot_place_is_counted_too(tmp_path: Path) -> None:
          "slug": "b033-thing", "timestamp": "2026-08-31T15:00:00Z"},
     ])
     assert build_state(project)["unplaced"]["off_chain"] == {"idea-to-release": 1}
+
+
+# ── a phase that stopped and said why ────────────────────────────────────────
+
+
+def test_a_blocked_report_marks_the_item_halted(tmp_path: Path) -> None:
+    """`/implement` writes `{slug}-BLOCKED.md` when it stops and needs a person.
+
+    Measured on 2026-08-31: B-033 had one, naming three pre-existing test failures it
+    cannot fix and three paths for a sponsor to choose between. The board listed the
+    file among seven artefacts and said nothing, and the item sat 85 minutes while
+    the page showed a verdict token.
+    """
+    project = _project(tmp_path, item_block("B-033", status="triaged"))
+    impl = project / ".claude" / "records" / "implementations"
+    impl.mkdir(parents=True, exist_ok=True)
+    (impl / "b033-thing-BLOCKED.md").write_text(
+        "# BLOCKED report\n\n**Emitted by:** /implement halt-loop driver (env missing)\n",
+        encoding="utf-8")
+    assert _by_id(build_state(project))["B-033"]["halted"] is True
+
+
+def test_halted_is_not_folded_into_impeded(tmp_path: Path) -> None:
+    """A person declaring an impediment and a phase declaring it stopped are different
+    facts with different owners. Counting them as one hides which needs which action."""
+    project = _project(tmp_path, item_block("B-033", status="triaged"))
+    impl = project / ".claude" / "records" / "implementations"
+    impl.mkdir(parents=True, exist_ok=True)
+    (impl / "b033-thing-BLOCKED.md").write_text("# BLOCKED\n", encoding="utf-8")
+    item = _by_id(build_state(project))["B-033"]
+    assert item["halted"] is True
+    assert item["blocked"] is False
+
+
+def test_the_report_reason_is_quoted_from_the_file(tmp_path: Path) -> None:
+    from board_state import item_detail
+    root = _with_records(tmp_path, "b033-x")
+    (root / ".claude" / "records" / "implementations" / "b033-x-BLOCKED.md").write_text(
+        "# BLOCKED report\n\n**Emitted by:** /implement halt-loop (pre-existing failures)\n",
+        encoding="utf-8")
+    halted = item_detail(root, "B-033")["halted"]
+    assert halted["phase"] == "implement"
+    assert halted["reason"] == "/implement halt-loop (pre-existing failures)"
+
+
+def test_a_plan_edited_after_attesting_is_reported(tmp_path: Path) -> None:
+    """Attesting exists to catch exactly this, and nothing was checking.
+    B-033 was implemented against 4c7ae5d5…; the plan on disk is now 88e243ab…."""
+    from board_state import item_detail
+    root = _with_records(tmp_path, "b033-x")
+    recs = root / ".claude" / "records"
+    (recs / "implementations" / "b033-x-implementation.md").write_text(
+        "# Implementation\n\n**Attest sha:** `" + "a" * 64 + "`\n", encoding="utf-8")
+    attest = item_detail(root, "B-033")["attest"]
+    assert attest["drifted"] is True
+    assert attest["attested"] == "a" * 64
+
+
+def test_a_plan_untouched_since_attesting_is_not_reported_as_drifted(tmp_path: Path) -> None:
+    import hashlib
+    from board_state import item_detail
+    root = _with_records(tmp_path, "b033-x")
+    recs = root / ".claude" / "records"
+    real = hashlib.sha256((recs / "plans" / "b033-x-plan.md").read_bytes()).hexdigest()
+    (recs / "implementations" / "b033-x-implementation.md").write_text(
+        f"# Implementation\n\n**Attest sha:** `{real}`\n", encoding="utf-8")
+    assert item_detail(root, "B-033")["attest"]["drifted"] is False

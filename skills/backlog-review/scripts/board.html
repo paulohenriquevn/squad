@@ -510,6 +510,19 @@ h1 {
             color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .bar .of { font-size: 11px; color: var(--ink-3); }
 .impl-marks { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.impl-halt {
+  padding: 10px 14px;
+  background: var(--impeded-bg);
+  border-bottom: 1px solid var(--line-soft);
+  border-left: 3px solid var(--impeded);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.impl-halt b { color: var(--impeded); }
+.impl-halt .why { display: block; color: var(--ink-2); margin-top: 2px; }
+.impl-halt code { font-size: 11px; color: var(--ink-2); }
+.impl-halt .when { display: block; font-size: 10.5px; color: var(--ink-3); margin-top: 3px;
+                   font-family: "IBM Plex Mono", ui-monospace, monospace; }
 .plan-lanes { display: flex; gap: 1px; background: var(--line-soft); overflow-x: auto; }
 .plan-lane { flex: 1 1 250px; min-width: 220px; background: var(--ground);
              display: flex; flex-direction: column; }
@@ -1125,6 +1138,12 @@ function cardHtml(it) {
   } else if (it.blocked) {
     chips.push(`<span class="chip wall">impeded</span>`);
   }
+  // A phase stopped on this item and wrote a report saying why. Different from
+  // `impeded`, which is a person declaring it in the registry — and the board had
+  // been showing the verdict token while the explanation sat unread on disk.
+  if (it.halted) {
+    chips.push(`<span class="chip wall" title="a phase wrote a BLOCKED report">halted — needs a person</span>`);
+  }
   // The registry's own word, but only where it can disagree with the column: a
   // measured position comes from the stream and the status comes from BACKLOG.md,
   // and the two parting ways is the one case worth reading.
@@ -1171,6 +1190,7 @@ function render(state) {
     ["", all.length, "in the registry"],
     ["", inCycle, "in the cycle"],
     ["is-impeded", blocked, "impeded"],
+    ["is-impeded", all.filter(i => i.halted).length, "halted"],
     ["is-shipped", shipped, "done"],
     ["is-killed", killed, "killed"],
     ["", (state.running || []).length, "running now"],
@@ -1384,6 +1404,26 @@ function implBlock(it) {
   }
   const marksHtml = marks.length ? `<div class="impl-marks">${marks.join("")}</div>` : "";
 
+  // The phase's own words about why it stopped. Quoted, never paraphrased: the file
+  // is the record, and a summary invented here would be a second version of it.
+  const halted = detail && detail.halted;
+  const haltedHtml = halted ? `<div class="impl-halt">
+      <b>${escapeHtml(PHASE_LABEL[halted.phase] || halted.phase)} halted and wrote a report.</b>
+      ${halted.reason ? `<span class="why">${escapeHtml(halted.reason)}</span>` : ""}
+      <code class="mono">${escapeHtml(halted.path)}</code>
+      <span class="when">${escapeHtml((halted.at || "").replace("T", " ").replace("+00:00", " UTC"))}</span>
+    </div>` : "";
+
+  // Implementing against a plan that has since changed is what attesting exists to
+  // catch. Nothing was checking, so the drift was invisible.
+  const at = detail && detail.attest;
+  const attestHtml = at && at.drifted ? `<div class="impl-halt drift">
+      <b>The plan changed after it was attested.</b>
+      <span class="why">The implementation record was built against
+        <code class="mono">${escapeHtml(at.attested.slice(0, 8))}…</code>; the plan on disk now hashes to
+        <code class="mono">${escapeHtml(at.current.slice(0, 8))}…</code>.</span>
+    </div>` : "";
+
   const who = detail && detail.specialist
     ? `${escapeHtml(detail.domain || "")} · ${escapeHtml(detail.specialist)}`
     : escapeHtml(it.domain || "");
@@ -1398,6 +1438,7 @@ function implBlock(it) {
         <span class="slug">${escapeHtml((detail && detail.slug) || it.plan_slug || "")} · ${escapeHtml(where)}</span>
         ${bar}${marksHtml}
       </div>
+      ${haltedHtml}${attestHtml}
       ${body}
     </article>`;
 }

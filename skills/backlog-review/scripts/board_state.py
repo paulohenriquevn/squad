@@ -27,10 +27,12 @@ at 49 for.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -171,6 +173,15 @@ def blocking_verdicts(project_root: Path) -> frozenset[str]:
 _PROGRESS_PREFIX = "progress-"
 
 
+#: Directory a phase writes into -> the phase's name on the board.
+_PHASE_OF_DIR = {"implementations": "implement", "reviews": "review",
+                 "releases": "release"}
+
+
+def _iso(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat(timespec="seconds")
+
+
 def _slug_from_filename(name: str, suffix: str) -> str:
     slug = name.lstrip(".")[: -len(suffix)]
     return slug[len(_PROGRESS_PREFIX):] if slug.startswith(_PROGRESS_PREFIX) else slug
@@ -206,6 +217,29 @@ def _records_dir(project_root: Path) -> Path | None:
         if candidate.is_dir():
             return candidate
     return None
+
+
+def halted_items(project_root: Path) -> set[str]:
+    """Items a phase stopped on and wrote a BLOCKED report for.
+
+    Separate from the registry's `blocked_by`, and deliberately so: that field is a
+    person declaring an impediment, this is a phase declaring it stopped. Both hold
+    the item; different things must be done about them, so the board counts them
+    apart rather than folding one into the other.
+    """
+    records = _records_dir(project_root)
+    if records is None:
+        return set()
+    found = set()
+    for base in _PHASE_OF_DIR:
+        directory = records / base
+        if not directory.is_dir():
+            continue
+        for entry in directory.glob("*-BLOCKED.md"):
+            item = item_id_of(entry.name)
+            if item.startswith("B-"):
+                found.add(item)
+    return found
 
 
 def planned_items(project_root: Path) -> dict[str, str]:
@@ -257,7 +291,8 @@ def item_detail(project_root: Path, item_id: str) -> dict:
     records = _records_dir(project_root)
     out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
                  "artefacts": [], "verdicts": [], "blocking": [],
-                 "done_ratio": None, "specialist": None, "domain": None}
+                 "done_ratio": None, "specialist": None, "domain": None,
+                 "halted": None, "attest": None}
     if records is None:
         return out
 
@@ -308,6 +343,53 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                     "phase": phase, "path": rel, "name": entry.name,
                     "bytes": entry.stat().st_size,
                 })
+
+    # ── a phase that halted and wrote down why ────────────────────────────
+    # `/implement` writes `{slug}-BLOCKED.md` when it stops and needs a person. That
+    # file is the phase's own statement of what holds the item — stronger evidence
+    # than a verdict token, and the only one that says WHY.
+    #
+    # Measured on 2026-08-31: B-033 had such a report, naming three pre-existing test
+    # failures it cannot fix and three paths for a sponsor to choose between. The
+    # board listed the file among seven artefacts and said nothing. The item sat for
+    # 85 minutes waiting for a person while the page showed a verdict token.
+    if slug:
+        for base in ("implementations", "reviews", "releases"):
+            report = records / base / f"{slug}-BLOCKED.md"
+            if report.is_file():
+                first = ""
+                for line in report.read_text(encoding="utf-8", errors="replace").splitlines():
+                    stripped = line.strip()
+                    # The report's own one-line reason, not a summary invented here.
+                    if stripped.startswith("**Emitted by:**"):
+                        first = stripped[len("**Emitted by:**"):].strip()
+                        break
+                out["halted"] = {
+                    "phase": _PHASE_OF_DIR.get(base, base),
+                    "path": str(report.relative_to(records.parent)),
+                    "reason": first,
+                    "at": _iso(report.stat().st_mtime),
+                }
+                break
+
+    # ── was the plan changed after it was attested? ───────────────────────
+    # The implementation record states the sha it was built against. If the plan on
+    # disk hashes to something else, the work was done against a plan that has since
+    # moved — which is exactly what attesting exists to catch, and nothing was
+    # catching it. B-033: attested 4c7ae5d5…, plan now 88e243ab….
+    if slug:
+        impl = records / "implementations" / f"{slug}-implementation.md"
+        plan_file = records / "plans" / f"{slug}-plan.md"
+        if impl.is_file() and plan_file.is_file():
+            match = re.search(r"\*\*Attest sha:\*\*\s*`?([0-9a-f]{16,})`?",
+                              impl.read_text(encoding="utf-8", errors="replace"))
+            if match:
+                current = hashlib.sha256(plan_file.read_bytes()).hexdigest()
+                out["attest"] = {
+                    "attested": match.group(1),
+                    "current": current,
+                    "drifted": match.group(1) != current,
+                }
 
     # ── how much of the plan is finished ──────────────────────────────────
     # Counted from task status, which is the only place that knows. `committed` is the
@@ -428,6 +510,7 @@ def build_state(project_root: Path, lead_log: Path | None = None,
     statuses = {i.item_id: i.fields.get("status", "") for i in items}
     events = read_events(project_root)
     plans = planned_items(project_root)
+    halted = halted_items(project_root)
 
     # A phase that STARTED and has not ended is work happening right now. Without it
     # the board can only draw what finished, which is a picture of the past: an item
@@ -525,6 +608,8 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             # steps to show, and inventing a placeholder would be a drawing of a
             # process rather than a report of one.
             "plan_slug": plans.get(iid),
+            # A phase stopped here and said so in writing.
+            "halted": iid in halted,
         })
 
     # ── what the stream carries and this board cannot place ──────────────
