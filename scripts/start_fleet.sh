@@ -47,7 +47,18 @@ for i in $(seq 1 "$SIZE"); do
   name="squad$i"
   names+=("$name")
   if tmux has-session -t "$name" 2>/dev/null; then
-    echo "    $name already running — left alone"
+    # Left alone, but NOT left unwatched. A preserved session keeps whatever pipe it
+    # had — a different file, or none — and the watchdog reads the marker by name. A
+    # preserved session with its pipe pointing elsewhere has no marker at all, and the
+    # fleet's lead cannot act on it.
+    #
+    # Closed first, then opened WITHOUT `-o`: that flag only opens a pipe when none
+    # exists, so against a live pipe it toggles the pipe off instead of re-pointing it.
+    # Measured — the marker stayed missing and the session went from mis-piped to
+    # un-piped.
+    tmux pipe-pane -t "$name" 2>/dev/null || true
+    tmux pipe-pane -t "$name" "cat >> $MARKERS/$name.log"
+    echo "    $name already running — left alone, marker re-pointed"
     continue
   fi
   # `claude` with permissions already granted: this session answers to the watchdog,
@@ -56,7 +67,7 @@ for i in $(seq 1 "$SIZE"); do
     "claude --dangerously-skip-permissions"
   # The activity marker: the pane's own output, appended. The watchdog reads its mtime
   # to tell a session that is thinking from one that has handed the turn back.
-  tmux pipe-pane -t "$name" -o "cat >> $MARKERS/$name.log"
+  tmux pipe-pane -t "$name" "cat >> $MARKERS/$name.log"
   echo "    $name started"
 done
 
