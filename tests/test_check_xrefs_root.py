@@ -234,3 +234,37 @@ def test_the_same_reference_in_a_kit_file_still_fails(tmp_path: Path) -> None:
     report = validate_xrefs(tmp_path, strict=True)
     broken = [f for f in report["findings"] if f.get("check") == "cycle_reference_resolves"]
     assert broken and all(f["severity"] == "FAIL" for f in broken), broken
+
+
+def test_a_projects_own_rules_file_is_not_the_kits(tmp_path: Path) -> None:
+    """The manifest lists `rules/` per FILE, so the raw paths answer for it.
+
+    Reading only the skills half left a consumer's own `rules/*.md` looking like the
+    kit's, and its broken references kept failing the kit's install on three
+    repositories after the skills half was already fixed.
+    """
+    from check_xrefs import validate_xrefs
+
+    (tmp_path / "rules").mkdir(parents=True)
+    (tmp_path / "rules" / "cycle-plan.md").write_text("# plan\n\n## Hard gates\n", encoding="utf-8")
+    (tmp_path / "rules" / "analysis-golden-rule.md").write_text(
+        "Driven by `cycle-roadmap`.\n", encoding="utf-8")
+    (tmp_path / ".kit-manifest.txt").write_text(
+        "rules/cycle-plan.md\nskills/review\n", encoding="utf-8")
+
+    report = validate_xrefs(tmp_path, strict=True)
+    broken = [f for f in report["findings"] if f.get("check") == "cycle_reference_resolves"]
+    assert broken and all(f["severity"] == "WARN" for f in broken), broken
+
+
+def test_a_kit_rules_file_with_a_broken_reference_still_fails(tmp_path: Path) -> None:
+    from check_xrefs import validate_xrefs
+
+    (tmp_path / "rules").mkdir(parents=True)
+    (tmp_path / "rules" / "cycle-plan.md").write_text(
+        "# plan\n\n## Hard gates\n\nSee `cycle-roadmap`.\n", encoding="utf-8")
+    (tmp_path / ".kit-manifest.txt").write_text("rules/cycle-plan.md\n", encoding="utf-8")
+
+    report = validate_xrefs(tmp_path, strict=True)
+    broken = [f for f in report["findings"] if f.get("check") == "cycle_reference_resolves"]
+    assert broken and all(f["severity"] == "FAIL" for f in broken), broken

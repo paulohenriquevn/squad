@@ -89,6 +89,25 @@ def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:
     return declared
 
 
+def _kit_manifest_paths(ecosystem_dir: Path) -> set[str] | None:
+    """Every path the manifest lists, verbatim. None when there is no manifest.
+
+    `_kit_owned_skills` answers for skills, where the manifest lists one entry per
+    SKILL. `rules/`, `hooks/`, `commands/` and `scripts/` are listed per FILE, and
+    answering those needs the raw paths — without them a consumer's own
+    `rules/*.md` reads as the kit's and its broken references fail the kit's install.
+    """
+    manifest = ecosystem_dir / ".kit-manifest.txt"
+    if not manifest.is_file():
+        return None
+    paths = {
+        line.split("#", 1)[0].strip()
+        for line in manifest.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        if line.split("#", 1)[0].strip()
+    }
+    return paths or None
+
+
 def _kit_owned_skills(ecosystem_dir: Path) -> set[str] | None:
     """Skills the install manifest says the KIT brought, or None in the kit's own repo.
 
@@ -357,6 +376,7 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # exemption reached one check and not the other, it traded 26 WARN for 3 and looked
     # like a fix.
     kit_owned = _kit_owned_skills(ecosystem_dir)
+    kit_paths = _kit_manifest_paths(ecosystem_dir)
     if kit_owned is not None:
         project_auxiliary = project_auxiliary | (existing_skills - kit_owned)
 
@@ -490,7 +510,12 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
         rel = _rel(path)
         if rel.startswith("skills/"):
             return rel.split("/")[1] in kit_owned
-        return True  # rules/ and elsewhere: the manifest lists files, not skills
+        # `rules/` and the rest are listed per file, so the raw paths answer directly.
+        # Without this a consumer's own `rules/*.md` read as the kit's, and its broken
+        # references kept failing the kit's own install — measured on three of them.
+        if kit_paths is not None:
+            return rel in kit_paths
+        return True
 
     def _scan_for_cycle_refs(path: Path) -> None:
         try:
