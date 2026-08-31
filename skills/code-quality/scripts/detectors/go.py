@@ -25,8 +25,19 @@ class GoDetector(BaseDetector):
     manifest_marker = "go.mod"
 
     def detect_dead_code(self, manifest_dir: Path) -> list[Finding]:
-        """Run `deadcode -json ./...` and parse JSON list into Findings."""
-        cmd = ["deadcode", "-json", "./..."]
+        """Run `deadcode -test -tags=e2e,chaos -json ./...` and parse JSON list into Findings."""
+        # `-test` and `-tags` are not tuning: without them this detector reports
+        # live code as dead. Measured in a consumer on 2026-06-04 and fixed there,
+        # inside its own `.claude/`, where it protected exactly one machine for
+        # three months — found on 2026-08-31 while propagating the kit to it.
+        #
+        # -test          makes test executables analysis entry points. Without it a
+        #                function whose only callers live in `*_test.go` is reported
+        #                dead; the consumer saw this for CanonicalAlerts and
+        #                RenderPrometheusRule, both of them live.
+        # -tags=e2e,chaos  includes build-tagged packages. Without it, helpers called
+        #                only from `//go:build e2e` tests read as dead too.
+        cmd = ["deadcode", "-test", "-tags=e2e,chaos", "-json", "./..."]
         try:
             result = subprocess.run(
                 cmd,
