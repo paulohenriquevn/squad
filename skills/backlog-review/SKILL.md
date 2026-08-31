@@ -74,6 +74,70 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-revie
 
 Read the output and report it. Do not edit `BACKLOG.md`.
 
+## Selecting the next item
+
+```bash
+# which item may start now?
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/select_backlog_item.py" BACKLOG.md
+
+# may THIS one start? — the form the gate takes when a human already picked
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/select_backlog_item.py" BACKLOG.md --check B-014
+
+# the head of the order, for a caller filling more than one lane
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/select_backlog_item.py" BACKLOG.md --queue 5
+```
+
+Implements `rules/cycle-maintenance.md § Chain` — the filter, the ranking (triaged
+before raw, then oldest first) and the verdicts SELECT can reach. All three forms run
+the same computation, so the gate and the selector cannot disagree.
+
+Two things it does that the written chain did not say, because the chain predates them:
+**blocked items are dropped** (an item waiting on another reads `triaged` on disk and
+cannot be worked on, so eligibility uses the derived state), and **`BACKLOG_BLOCKED` is
+not `BACKLOG_EMPTY`** — when items remain and every one is blocked, the sweep the
+latter prescribes would add items beside a wall instead of clearing it.
+
+An item that is `planned`, `shipped` or `killed` comes back `ITEM_IN_FLIGHT`,
+`ITEM_SHIPPED` or `ITEM_KILLED` — not blocked. It is past the point where SELECT hands
+out work, which is a different fact from being held back, and reporting both as one
+verdict told a reader the opposite of the truth.
+
+## The live board
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/board_server.py" . --port 8765
+```
+
+Serves `http://127.0.0.1:8765` — every item, the phase it sits in, and what holds it,
+re-rendering by itself whenever `BACKLOG.md` or `records/cycle-events.jsonl` changes on
+disk. Standard library only; nothing to install.
+
+It reads two sources that answer different questions, and says which one it used:
+
+| Source | Answers | Shown as |
+|---|---|---|
+| `BACKLOG.md` | where each item stands | `derived` — inferred from `status` |
+| `records/cycle-events.jsonl` | which phase actually ran | measured; no qualifier |
+
+**The distinction is on the screen, not in a footnote.** The stream is per-machine and
+starts empty in every clone, so the inferred case is what most viewers see first — and
+a board that renders an inference and a measurement in the same typeface asserts
+knowledge it does not have. With no stream at all, the board says so above the columns
+rather than letting the layout imply something was observed.
+
+**Impediment is a marker on the card, never a column.** `blocked` is derived from
+`status` + `blocked_by`, so an item stalled at `planned` still sits in the Plan column,
+which is where it resumes. A Blocked column would relocate the item and lose that.
+
+**`killed` is not styled as a failure.** The contract calls it a successful outcome, so
+it takes a muted neutral. Colouring it red would misreport eleven honest measurements
+as eleven failures.
+
+**Read-only, bound to `127.0.0.1`.** A board that could advance an item would be a
+second writer racing `backlog_status.py`, which is the shape this kit removed when it
+gave the status line one owner. And `BACKLOG.md` carries unreleased plans, kill reasons
+and sponsor decisions, so binding the wrong address publishes someone's roadmap.
+
 ## When routing cannot be checked
 
 The report carries `routing_table_read`. When it is `false`, the routing table was unreachable and **`unroutable_repo` did not run** — no repo was judged.

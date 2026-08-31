@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cycle Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* ── tokens ──────────────────────────────────────────────────────────────────
+   Light is the base. Dark redefines only the token values, twice: once behind
+   prefers-color-scheme (guarded so an explicit light choice wins) and once
+   behind the data-theme stamp. No component rule lives inside either block. */
+:root {
+  --ground:      #f6f7f6;
+  --surface:     #ffffff;
+  --surface-2:   #eef0ee;
+  --line:        #d8dcd8;
+  --line-soft:   #e6e9e6;
+  --ink:         #1a1f1c;
+  --ink-2:       #4a544d;
+  --ink-3:       #78837a;
+
+  /* Semantic, and separate from any accent. `killed` is deliberately NOT red:
+     the contract calls it a successful outcome, and colouring it as an alarm
+     would misreport eleven honest measurements as eleven failures. */
+  --impeded:     #b3711f;
+  --impeded-bg:  #fdf3e3;
+  --shipped:     #2f6f6b;
+  --shipped-bg:  #e6f0ef;
+  --killed:      #6b7370;
+  --killed-bg:   #edefee;
+  --moving:      #2f5f8f;
+  --moving-bg:   #e7eef6;
+
+  --shadow: 0 1px 2px rgba(26,31,28,.06), 0 3px 8px rgba(26,31,28,.04);
+  --radius: 3px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:    #101512;
+    --surface:   #171d19;
+    --surface-2: #1f2622;
+    --line:      #2b332e;
+    --line-soft: #232b26;
+    --ink:       #e6ebe7;
+    --ink-2:     #a3aea7;
+    --ink-3:     #78837c;
+    --impeded:    #e0a253;
+    --impeded-bg: #2a2116;
+    --shipped:    #6fbdb5;
+    --shipped-bg: #16211f;
+    --killed:     #8b948f;
+    --killed-bg:  #1c2320;
+    --moving:     #7aa9d8;
+    --moving-bg:  #17202a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 3px 10px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:    #101512;
+  --surface:   #171d19;
+  --surface-2: #1f2622;
+  --line:      #2b332e;
+  --line-soft: #232b26;
+  --ink:       #e6ebe7;
+  --ink-2:     #a3aea7;
+  --ink-3:     #78837c;
+  --impeded:    #e0a253;
+  --impeded-bg: #2a2116;
+  --shipped:    #6fbdb5;
+  --shipped-bg: #16211f;
+  --killed:     #8b948f;
+  --killed-bg:  #1c2320;
+  --moving:     #7aa9d8;
+  --moving-bg:  #17202a;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 3px 10px rgba(0,0,0,.25);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ── masthead ─────────────────────────────────────────────────────────────── */
+header {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  padding: 14px 20px 0;
+}
+.top {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.path {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.live {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ink-3);
+  transition: background .2s;
+}
+.dot.on { background: var(--shipped); }
+.dot.pulse { animation: pulse .9s ease-out; }
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--shipped) 60%, transparent); }
+  100% { box-shadow: 0 0 0 9px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dot.pulse { animation: none; }
+}
+
+/* Counters. Digits align, so tabular figures. */
+.tallies { display: flex; gap: 22px; flex-wrap: wrap; padding-bottom: 12px; }
+.tally { display: flex; flex-direction: column; gap: 1px; }
+.tally b {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.tally span {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--ink-3);
+}
+.tally.is-impeded b { color: var(--impeded); }
+.tally.is-shipped b { color: var(--shipped); }
+.tally.is-killed  b { color: var(--killed); }
+
+.notice {
+  margin: 0 0 12px;
+  padding: 8px 11px;
+  border-left: 2px solid var(--impeded);
+  background: var(--impeded-bg);
+  color: var(--ink-2);
+  font-size: 12px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.notice b { color: var(--ink); font-weight: 600; }
+
+/* ── the board ────────────────────────────────────────────────────────────── */
+.board {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 1px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--line-soft);
+  border-top: 1px solid var(--line);
+}
+.col {
+  flex: 0 0 264px;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+  min-height: 0;
+}
+.col-head {
+  flex: 0 0 auto;
+  padding: 10px 12px 9px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.col-head .name {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--ink-2);
+}
+/* The ordinal is information here: these are the cycle's phases, and the order
+   is the order work moves through them. */
+.col-head .ord {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.col-head .n {
+  margin-left: auto;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.col.terminal .col-head { background: var(--killed-bg); }
+
+.stack {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.empty {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  font-style: italic;
+  padding: 5px 3px;
+}
+
+/* ── cards ────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.card.impeded  { border-left-color: var(--impeded); background: var(--impeded-bg); }
+.card.shipped  { border-left-color: var(--shipped); }
+.card.killed   { border-left-color: var(--killed); opacity: .72; }
+.card.measured { border-left-color: var(--moving); }
+
+.card .id {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--ink-2);
+}
+.card .title {
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+.card .meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.chip {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  padding: 2px 5px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.chip.status { color: var(--ink-2); }
+.chip.wall { background: transparent; color: var(--impeded); border: 1px solid var(--impeded); }
+.chip.verdict { background: var(--shipped-bg); color: var(--shipped); }
+/* An inferred position and a measured one must not read alike. */
+.chip.derived { background: transparent; border: 1px dashed var(--line); color: var(--ink-3); }
+
+/* Impediment notes are prose written by whoever hit the wall, and they run long —
+   the one in the measured registry is a full paragraph. Clamped to three lines so a
+   single blocked card cannot own the column; the full text is one click away, because
+   truncating it permanently would hide the only thing that says what to do next. */
+.wall-note {
+  font-size: 11px;
+  color: var(--impeded);
+  line-height: 1.35;
+  border-top: 1px dashed color-mix(in srgb, var(--impeded) 40%, transparent);
+  padding-top: 5px;
+}
+/* The text lives IN the summary, not after it: a <details> hides everything but the
+   summary when closed, so a preview placed in the body vanishes entirely instead of
+   clamping. Opening un-clamps the same element, which keeps one copy of the text. */
+.wall-note summary {
+  cursor: pointer;
+  list-style: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wall-note summary::-webkit-details-marker { display: none; }
+.wall-note[open] summary { -webkit-line-clamp: unset; overflow: visible; }
+.wall-note summary:focus-visible { outline: 2px solid var(--impeded); outline-offset: 2px; }
+/* The affordance renders after the summary, so it is a ::after on the <details>
+   itself — inside the clamped box it would be clipped along with the text. */
+.wall-note::after {
+  display: block;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  opacity: .7;
+  margin-top: 4px;
+  cursor: pointer;
+}
+.wall-note:not([open])::after { content: "full text ▾"; }
+.wall-note[open]::after { content: "less ▴"; }
+.wall-note:hover::after { opacity: 1; }
+
+/* ── footer ───────────────────────────────────────────────────────────────── */
+footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  padding: 7px 20px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  flex-wrap: wrap;
+}
+.key { display: flex; align-items: center; gap: 5px; }
+.swatch { width: 9px; height: 9px; border-radius: 1px; border: 1px solid var(--line); }
+.swatch.impeded { background: var(--impeded); border-color: var(--impeded); }
+.swatch.measured { background: var(--moving); border-color: var(--moving); }
+.swatch.shipped { background: var(--shipped); border-color: var(--shipped); }
+.swatch.killed { background: var(--killed); border-color: var(--killed); }
+footer .right { margin-left: auto; }
+
+button.theme {
+  font: inherit;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  border-radius: 2px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+button.theme:hover { border-color: var(--ink-3); }
+button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <h1>Cycle Board</h1>
+    <span class="path mono" id="path">—</span>
+    <span class="live"><span class="dot" id="dot"></span><span id="conn">connecting</span></span>
+  </div>
+  <div class="tallies" id="tallies"></div>
+  <div id="notice"></div>
+</header>
+
+<main class="board" id="board"></main>
+
+<footer>
+  <span class="key"><span class="swatch measured"></span>measured by the stream</span>
+  <span class="key"><span class="swatch impeded"></span>impeded</span>
+  <span class="key"><span class="swatch shipped"></span>shipped</span>
+  <span class="key"><span class="swatch killed"></span>killed — a successful outcome</span>
+  <span class="right" id="stamp">—</span>
+  <button class="theme" id="theme" type="button">theme</button>
+</footer>
+
+<script>
+"use strict";
+
+const PHASE_LABEL = {
+  "backlog": "Backlog", "discover": "Discover", "plan": "Plan",
+  "implement": "Implement", "code-quality": "Code quality", "review": "Review",
+  "release": "Release", "acceptance": "Acceptance", "done": "Done", "killed": "Killed"
+};
+
+const el = (id) => document.getElementById(id);
+
+function cardClass(item) {
+  if (item.blocked) return "impeded";
+  if (item.status === "shipped") return "shipped";
+  if (item.status === "killed") return "killed";
+  if (item.position_from === "stream") return "measured";
+  return "";
+}
+
+function render(state) {
+  el("path").textContent = state.project_path || "";
+
+  const items = state.items || [];
+  const blocked = items.filter(i => i.blocked).length;
+  const open = items.filter(i => ["raw", "triaged", "planned"].includes(i.status)).length;
+  const shipped = items.filter(i => i.status === "shipped").length;
+  const killed = items.filter(i => i.status === "killed").length;
+
+  el("tallies").innerHTML = [
+    ["", items.length, "items"],
+    ["", open, "open"],
+    ["is-impeded", blocked, "impeded"],
+    ["is-shipped", shipped, "shipped"],
+    ["is-killed", killed, "killed"],
+    ["", state.event_total || 0, "events"]
+  ].map(([cls, n, label]) =>
+    `<div class="tally ${cls}"><b>${n}</b><span>${label}</span></div>`
+  ).join("");
+
+  // The absence of a stream is stated, not hidden. Every position on the board is
+  // then an inference from `status`, and a viewer who does not know that will read
+  // the board as a measurement of what ran.
+  el("notice").innerHTML = state.has_stream ? "" :
+    `<p class="notice"><b>No event stream yet.</b> Every position below is derived from
+     each item's <code class="mono">status</code>, not from a phase that was observed
+     to run. Positions become measured once the phases emit — the board updates by
+     itself when the first event lands.</p>`;
+
+  const phases = (state.phases || []).concat(["done", "killed"]);
+  const board = el("board");
+  board.innerHTML = phases.map((phase, i) => {
+    const inPhase = items.filter(it => it.phase === phase);
+    const terminal = phase === "killed" || phase === "done";
+    const ord = terminal ? "" : `<span class="ord">${String(i + 1).padStart(2, "0")}</span>`;
+    const cards = inPhase.length ? inPhase.map(it => {
+      const chips = [`<span class="chip status">${it.status || "?"}</span>`];
+      if (it.domain) chips.push(`<span class="chip">${it.domain}</span>`);
+      if (it.last_verdict) chips.push(`<span class="chip verdict">${it.last_verdict}</span>`);
+      // `derived` is only worth saying where the position could have been otherwise.
+      // A shipped or killed item is where its status says, with nothing to infer, so
+      // the chip there would be 144 repetitions of a fact nobody is weighing.
+      const settled = it.status === "shipped" || it.status === "killed";
+      if (it.position_from === "derived" && !terminal && !settled) {
+        chips.push(`<span class="chip derived" title="position inferred from status, not observed">derived</span>`);
+      }
+      if (it.blockers && it.blockers.length) {
+        chips.push(`<span class="chip wall">waits on ${it.blockers.join(", ")}</span>`);
+      }
+      const note = it.blocked && it.blocked_note
+        ? `<details class="wall-note"><summary>${escapeHtml(it.blocked_note)}</summary></details>`
+        : "";
+      return `<article class="card ${cardClass(it)}">
+          <div class="id mono">${it.id}</div>
+          <div class="title">${escapeHtml(it.title || "")}</div>
+          <div class="meta">${chips.join("")}</div>
+          ${note}
+        </article>`;
+    }).join("") : `<div class="empty">nothing here</div>`;
+
+    return `<section class="col ${terminal ? "terminal" : ""}">
+        <div class="col-head">${ord}<span class="name">${PHASE_LABEL[phase] || phase}</span>
+          <span class="n">${inPhase.length}</span></div>
+        <div class="stack">${cards}</div>
+      </section>`;
+  }).join("");
+
+  el("stamp").textContent = "updated " + new Date().toLocaleTimeString();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ── the live connection ──────────────────────────────────────────────────────
+let source;
+function connect() {
+  source = new EventSource("/api/stream");
+  source.onopen = () => {
+    el("dot").classList.add("on");
+    el("conn").textContent = "live";
+  };
+  source.onmessage = (event) => {
+    const dot = el("dot");
+    dot.classList.remove("pulse");
+    void dot.offsetWidth;      // restart the animation on a repeat update
+    dot.classList.add("pulse");
+    render(JSON.parse(event.data));
+  };
+  source.onerror = () => {
+    el("dot").classList.remove("on");
+    el("conn").textContent = "reconnecting";
+    // EventSource retries on its own; this only keeps the label honest.
+  };
+}
+connect();
+
+// ── theme ────────────────────────────────────────────────────────────────────
+el("theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const current = root.getAttribute("data-theme");
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const nowDark = current ? current === "dark" : prefersDark;
+  root.setAttribute("data-theme", nowDark ? "light" : "dark");
+});
+</script>
+</body>
+</html>
