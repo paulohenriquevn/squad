@@ -432,3 +432,59 @@ def test_the_declaration_is_found_under_dot_claude_too(tmp_path):
     (tmp_path / ".claude" / "rules" / "cycle-phases.txt").write_text(
         "review | conditional | x\n", encoding="utf-8")
     assert declared_phases(tmp_path) == {"review"}
+
+
+# ── a verdict the phase does not declare ──────────────────────────────────────
+#
+# Measured on the first autonomous run: the plan phase returned INVALID — a real
+# verdict from a real hard cap — and the session recorded `INVALID_AWAITING_HUMAN`, a
+# name in no contract and no skill, invented to express that it was stopping. The
+# stream then said something no reader could act on, about a phase that really ran.
+
+
+def _with_rule(tmp_path, phase: str, verdicts: list[str] | None):
+    (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "records").mkdir(exist_ok=True)
+    body = f"# Cycle: {phase}\n\n"
+    if verdicts is not None:
+        body += "## Verdicts\n\n" + "".join(f"- `{v}` — meaning\n" for v in verdicts)
+    (tmp_path / "rules" / f"cycle-{phase}.md").write_text(body, encoding="utf-8")
+    (tmp_path / "rules" / "cycle-phases.txt").write_text(
+        f"{phase} | conditional | x\n", encoding="utf-8")
+    return tmp_path
+
+
+def test_an_invented_verdict_is_refused(tmp_path):
+    from cycle_events import main
+
+    root = _with_rule(tmp_path, "plan", ["INVALID", "SHIPPABLE"])
+    assert main(["end", "--cycle", "plan", "--verdict", "INVALID_AWAITING_HUMAN",
+                 "--project-root", str(root)]) == 1
+    assert not list(root.rglob("cycle-events.jsonl"))
+
+
+def test_a_declared_verdict_is_written(tmp_path):
+    from cycle_events import main
+
+    root = _with_rule(tmp_path, "plan", ["INVALID", "SHIPPABLE"])
+    assert main(["end", "--cycle", "plan", "--verdict", "INVALID",
+                 "--project-root", str(root)]) == 0
+
+
+def test_a_phase_declaring_no_verdicts_accepts_any(tmp_path):
+    """`implement` and `code-quality` emit real verdicts from rules with no section.
+
+    Refusing those would break honest emitters in order to catch a dishonest one.
+    """
+    from cycle_events import main
+
+    root = _with_rule(tmp_path, "implement", None)
+    assert main(["end", "--cycle", "implement", "--verdict", "VALIDATED",
+                 "--project-root", str(root)]) == 0
+
+
+def test_an_event_without_a_verdict_is_unaffected(tmp_path):
+    from cycle_events import main
+
+    root = _with_rule(tmp_path, "plan", ["INVALID"])
+    assert main(["start", "--cycle", "plan", "--project-root", str(root)]) == 0

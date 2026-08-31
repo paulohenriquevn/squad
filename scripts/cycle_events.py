@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -271,6 +272,27 @@ def declared_phases(project_root: Path) -> set[str]:
     return set()
 
 
+def declared_verdicts(project_root: Path, phase: str) -> set[str]:
+    """Verdicts `rules/cycle-<phase>.md` declares, or empty when it declares none.
+
+    Empty is permission, not refusal, and two phases rely on it: `implement` and
+    `code-quality` emit real verdicts (`VALIDATED`, `PASS`, `FAIL_HARD`) from rules
+    that carry no `## Verdicts` section. Refusing those would break honest emitters to
+    catch a dishonest one.
+    """
+    for base in ("rules", ".claude/rules"):
+        rule = project_root / base / f"cycle-{phase}.md"
+        if not rule.is_file():
+            continue
+        body = rule.read_text(encoding="utf-8-sig", errors="replace")
+        section = re.search(r"^##+[^\n]*Verdicts?[^\n]*\n(.*?)(?=^##\s|\Z)",
+                            body, re.MULTILINE | re.DOTALL)
+        if not section:
+            return set()
+        return set(re.findall(r"`([A-Z][A-Z0-9_]{3,})`", section.group(1)))
+    return set()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Emit a cycle phase event. Callable from shell hooks.",
@@ -319,6 +341,23 @@ def main(argv: list[str] | None = None) -> int:
               f"written and then dropped by every reader. Declare the phase, or emit "
               f"under the one that owns this work.", file=sys.stderr)
         return 1
+
+    # A verdict the phase's own contract does not declare is the same defect as an
+    # undeclared phase, one level down: it is written, and every reader that switches
+    # on the verdict drops it.
+    #
+    # Measured on the first autonomous run. The plan phase returned `INVALID` — a real
+    # verdict, from a real hard cap — and the session recorded `INVALID_AWAITING_HUMAN`,
+    # a name in no contract and no skill, invented to express that it was stopping. The
+    # stream then said something no reader could act on, about a phase that really ran.
+    if args.verdict:
+        allowed = declared_verdicts(root, args.cycle)
+        if allowed and args.verdict not in allowed:
+            print(f"REFUSED: `{args.verdict}` is not a verdict of the `{args.cycle}` phase "
+                  f"({', '.join(sorted(allowed))}). Inventing one records a decision no "
+                  f"reader can act on. Emit the verdict the contract declares, and put the "
+                  f"nuance in the phase's own record.", file=sys.stderr)
+            return 1
 
     if args.transition == "start":
         event = emit_phase_start(root, cycle=args.cycle, slug=args.slug)

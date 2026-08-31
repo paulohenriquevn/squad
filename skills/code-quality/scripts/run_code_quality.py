@@ -44,6 +44,7 @@ from scripts._detector_contract import (  # noqa: E402
     compute_verdict,
     emit_json_summary,
     load_allowlist,
+    load_baseline,
     load_languages_config,
     load_thresholds,
 )
@@ -169,6 +170,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--languages-rule", default=None)
     parser.add_argument("--thresholds-rule", default=None)
     parser.add_argument("--allowlist", default=None)
+    parser.add_argument("--baseline", default=None,
+                        help="findings recorded as pre-existing; removed from the verdict, "
+                             "kept in the report (default: .claude/rules/code-quality-baseline.txt)")
+    parser.add_argument("--write-baseline", action="store_true",
+                        help="record every finding of this run as pre-existing and exit. "
+                             "An explicit act: the baseline never grows by itself.")
     parser.add_argument("--no-network", action="store_true")
     parser.add_argument("--repo-root", default=None)
     args = parser.parse_args(argv)
@@ -309,10 +316,15 @@ def main(argv: list[str] | None = None) -> int:
     # Apply allowlist (downgrade severities by 1 level when ACTIVE entry matches)
     findings = _apply_allowlist(findings, allowlist, repo_root)
 
+    baseline_path = Path(args.baseline) if args.baseline else _default_baseline(repo_root)
+    if args.write_baseline:
+        return _write_baseline(findings, baseline_path)
+
     return _emit_and_exit(findings, args, repo_root, plan_path,
                           languages_audited=languages_audited,
                           languages_skipped=languages_skipped,
-                          cfg=cfg)
+                          cfg=cfg,
+                          baseline=load_baseline(baseline_path))
 
 
 def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path) -> list[Finding]:
@@ -342,6 +354,43 @@ def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path) 
     return out
 
 
+def _default_baseline(repo_root: Path) -> Path:
+    """Where the baseline lives, in either layout."""
+    for rel in (".claude/rules/code-quality-baseline.txt", "rules/code-quality-baseline.txt"):
+        candidate = repo_root / rel
+        if candidate.is_file():
+            return candidate
+    return repo_root / ".claude/rules/code-quality-baseline.txt"
+
+
+def _write_baseline(findings: list[Finding], path: Path) -> int:
+    """Record this run's findings as pre-existing, and say what was recorded.
+
+    An explicit act, never a side effect of a normal run. A baseline that grew by
+    itself would absorb every new defect the moment it appeared, which is the failure
+    mode that turns a gate into decoration.
+    """
+    keys = sorted({f.allowlist_key for f in findings})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = [
+        "# Code-quality baseline — findings that already existed.",
+        "#",
+        "# Written by `run_code_quality.py --write-baseline`. One `allowlist_key` per line.",
+        "# A key here is REMOVED FROM THE VERDICT and still reported: the debt stays",
+        "# countable, and a change is not failed for debt it did not cause.",
+        "#",
+        "# This is a FACT, not a decision — that is what separates it from",
+        "# `code-quality-allowlist.txt`, where a person exempts one finding with a reason",
+        "# and a sunset. Regenerating this file is an explicit act; it never grows by",
+        "# itself, so a NEW finding in a baselined file still fails.",
+        "",
+    ]
+    path.write_text("\n".join(header + keys) + "\n", encoding="utf-8")
+    print(f"baseline written: {len(keys)} finding(s) recorded as pre-existing at {path}",
+          file=sys.stderr)
+    return 0
+
+
 def _emit_and_exit(
     findings: list[Finding],
     args,
@@ -353,8 +402,11 @@ def _emit_and_exit(
     # happened to look at. Optional so existing callers keep working; absent means the tree cannot
     # be consulted, and the guard falls back to the narrower "audited nothing at all" question.
     cfg: dict | None = None,
+    #: Finding keys recorded as pre-existing. Removed from the verdict, kept in the report.
+    baseline: frozenset[str] = frozenset(),
 ) -> int:
-    verdict, stable_ids = compute_verdict(findings)
+    verdict, stable_ids = compute_verdict(findings, baseline)
+    baselined = [f for f in findings if f.allowlist_key in baseline] if baseline else []
 
     # B-084 / B-092 — an audit that ran zero detectors is not a clean audit.
     #
@@ -423,6 +475,9 @@ def _emit_and_exit(
 
     summary = emit_json_summary(findings, verdict, stable_ids)
     summary["languages_audited"] = languages_audited or []
+    # Reported, always. A baseline that silences findings without saying how many it is
+    # holding is indistinguishable from a gate that found nothing.
+    summary["baselined"] = len(baselined)
     summary["languages_skipped"] = list((languages_skipped or {}).keys())
     summary["skip_reasons"] = languages_skipped or {}
     summary["mode"] = "plan-bound" if plan_path else "standalone"

@@ -458,7 +458,28 @@ def _verdict_to_cap(verdict: str) -> int:
     }.get(verdict, 49)
 
 
-def compute_verdict(findings: list[Finding]) -> tuple[str, list[str]]:
+def load_baseline(path: Path | str | None) -> frozenset[str]:
+    """Finding keys recorded as pre-existing. Empty when there is no baseline.
+
+    One `allowlist_key` per line, `#` comments. The key is reused rather than invented
+    because it is already the stable, sanitized identity of a finding — a second
+    identity scheme would drift from the first.
+    """
+    if path is None:
+        return frozenset()
+    file = Path(path)
+    if not file.is_file():
+        return frozenset()
+    keys = set()
+    for raw in file.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            keys.add(line)
+    return frozenset(keys)
+
+
+def compute_verdict(findings: list[Finding],
+                    baseline: frozenset[str] = frozenset()) -> tuple[str, list[str]]:
     """Compute the verdict + stable_identifiers list from a list of Findings.
 
     Returns:
@@ -470,7 +491,34 @@ def compute_verdict(findings: list[Finding]) -> tuple[str, list[str]]:
       2. Else any SOFT_CAP -> FAIL_SOFT (70)
       3. Else any SOFT_FLOOR -> PASS_WITH_CAVEATS (89)
       4. Else -> PASS (100)
+
+    ## Why a baseline exists
+
+    A verdict is one per language, and the gate had no way to tell debt that was
+    already there from a defect the change introduced. A consumer wrote the
+    consequence into its own config on 2026-08-19, as the reason Go stayed disabled:
+
+        the D1 pass brings 36 REAL dead-code findings, and the verdict is one per
+        language — turning it on before paying them fails the delivery over legitimate
+        debt, which is how a gate becomes something people work around
+
+    That is exactly what happened. Every language ended up DEFER or DISABLED, the gate
+    then audited nothing, `no_languages_audited` fired, and every plan came back
+    INVALID. The gate was right at each step and the system was deadlocked.
+
+    A baselined finding is REMOVED FROM THE VERDICT and kept in the report. It is not
+    forgiven and not hidden — the run still names it, and `run_code_quality.py` prints
+    how many the baseline is holding, so the debt stays countable. What it stops doing
+    is failing a change that did not cause it.
+
+    The baseline is a FACT, not a decision, which is what separates it from the
+    allowlist next door: that one is a person exempting a specific finding with a
+    reason and a sunset, one entry at a time. This is a generated record of what was
+    already true, and regenerating it is an explicit act — it never grows by itself,
+    so a new finding in a baselined file still fails.
     """
+    if baseline:
+        findings = [f for f in findings if f.allowlist_key not in baseline]
     severities = {f.severity for f in findings}
     stable_ids: list[str] = []
     for f in findings:

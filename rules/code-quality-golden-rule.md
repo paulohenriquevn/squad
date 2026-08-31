@@ -71,6 +71,35 @@ A finding flagged as hard cap MAY only be downgraded via:
 | Adding an entry | Requires CHANGELOG entry under `[Unreleased] § Changed` |
 | Bypassing the allowlist (e.g., `# noqa: code-quality`) | FORBIDDEN — every exemption goes through this file |
 
+## § 4.1 — Baseline mechanism (LOCKED)
+
+A verdict is one per language, and until 2026-08-31 the gate could not tell debt that
+was already there from a defect the change introduced.
+
+`rules/code-quality-baseline.txt` records finding keys that already existed. A key
+listed there is **removed from the verdict and kept in the report** — the run still
+names the finding, and the summary carries `baselined: N`, so the debt stays countable.
+It is not forgiven and not hidden; what it stops doing is failing a change that did not
+cause it.
+
+**A baseline is a FACT; the allowlist next door is a DECISION.** § 4 is a person
+exempting one finding, with a reason and a sunset, one entry at a time. This is a
+generated record of what was already true, written by
+`run_code_quality.py --write-baseline` — an explicit act, never a side effect of a
+normal run. It never grows by itself, so a NEW finding in a baselined file still fails,
+and the key is the finding rather than the file.
+
+**Why it was needed**, in the words of the consumer that hit it, written into its own
+config on 2026-08-19 as the reason Go stayed disabled:
+
+> the D1 pass brings 36 REAL dead-code findings, and the verdict is one per language —
+> turning it on before paying them fails the delivery over legitimate debt, **which is
+> how a gate becomes something people work around**
+
+It became worse than that. Every language went `DEFER` or `DISABLED`, the gate then
+audited nothing, `no_languages_audited` fired (§ 3), and every plan came back `INVALID`.
+Each step was correct and the system was deadlocked — a gate nobody could turn on.
+
 ## § 5 — Detector contract (LOCKED)
 
 Detectors run in fixed order. Each detector MUST be subprocess-isolated, never modify source code, and emit findings as structured JSON.
