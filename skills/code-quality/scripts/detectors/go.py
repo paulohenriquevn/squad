@@ -91,7 +91,9 @@ class GoDetector(BaseDetector):
         Imports under `vendor/` are also skipped (vendored deps).
         """
         findings: list[Finding] = []
-        self_module = self._read_go_mod_module(changed_files)
+        own_modules = self._workspace_modules(changed_files)
+        #: Imports the proxy could not answer for. Reported ONCE, at the end.
+        unresolved: set[str] = set()
         for src_file in changed_files:
             if not src_file.exists():
                 continue
@@ -105,8 +107,8 @@ class GoDetector(BaseDetector):
                 module = sym.module
                 if not module:
                     continue
-                if self_module and (module == self_module or module.startswith(f"{self_module}/")):
-                    continue  # EC-17 analog — self-module imports
+                if any(module == own or module.startswith(f"{own}/") for own in own_modules):
+                    continue  # EC-17 analog — this workspace's own modules
                 exists = _registry.module_exists_on_go_proxy(module)
                 if exists is True:
                     continue
@@ -124,38 +126,103 @@ class GoDetector(BaseDetector):
                         )
                     )
                 else:
-                    findings.append(
-                        Finding(
-                            detector="d2_symbol_fab",
-                            language="go",
-                            severity="SOFT_FLOOR",
-                            file_path=rel,
-                            symbol_or_line=f'import "{module}"',
-                            message=f"Could not verify Go module '{module}' (ambiguous response)",
-                            allowlist_key=f"go|{rel}|symbol_fab|symbol_fab_unverifiable_{sanitized}",
-                        )
-                    )
+                    # Collected, not emitted. See the aggregate below.
+                    unresolved.add(module)
+
+        # One finding for every module the proxy could not answer for, instead of one
+        # per import. The old shape scaled with the repository rather than with the
+        # problem: measured on a real one, an unreachable proxy produced 4777 findings
+        # where the honest statement is a single "could not verify N modules".
+        #
+        # It also made the detector non-deterministic in a way a baseline cannot
+        # absorb. Two consecutive runs reported 4818 and then 4777, because each import
+        # is a separate query and the set that fails depends on what the proxy answered
+        # that second — so every run produces findings the previous baseline does not
+        # cover. Aggregated, the finding is stable: same key, whatever the count.
+        if unresolved:
+            findings.append(
+                Finding(
+                    detector="d2_symbol_fab",
+                    language="go",
+                    severity="SOFT_FLOOR",
+                    file_path=".",
+                    symbol_or_line=f"{len(unresolved)} module(s)",
+                    message=(f"Could not verify {len(unresolved)} Go module(s) against the "
+                             f"proxy (ambiguous or unreachable). Verification did not run; "
+                             f"this is not evidence of fabrication. First: "
+                             f"{', '.join(sorted(unresolved)[:3])}"),
+                    allowlist_key="go|.|symbol_fab|symbol_fab_unverifiable",
+                )
+            )
         return findings
 
     @staticmethod
     def _read_go_mod_module(changed_files: list[Path]) -> str | None:
-        """Walk up from any changed file looking for go.mod; extract `module X` line."""
+        """The nearest module path. Kept for callers that want a single answer."""
+        modules = GoDetector._workspace_modules(changed_files)
+        return sorted(modules)[0] if modules else None
+
+    @staticmethod
+    def _module_of(go_mod: Path) -> str | None:
+        try:
+            for line in go_mod.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if stripped.startswith("module "):
+                    return stripped.removeprefix("module ").strip()
+        except OSError:
+            return None
+        return None
+
+    @staticmethod
+    def _workspace_modules(changed_files: list[Path]) -> set[str]:
+        """Every module path this workspace owns — all of them, not the nearest one.
+
+        A multi-module repository is the normal shape for Go, and reading only the
+        nearest `go.mod` makes every SIBLING module look like a third-party import. The
+        proxy answers 404 for those, `false_statuses` turns 404 into "does not exist",
+        and the detector reports a HARD fabrication for code that lives in the same
+        checkout.
+
+        Measured on a real repository on 2026-08-31: three `go.mod` files (api, pkg,
+        operators) plus a `go.work` naming a fourth outside the tree, and the run
+        produced 2459 HARD findings. The note in that project's own config had named
+        the shape a year earlier — *sibling modules of the go.work treated as external*
+        — and the fix had only reached the nearest-module case.
+
+        `go.work` is read when present, because it names modules that live OUTSIDE the
+        repository root and no upward walk can find those.
+        """
+        modules: set[str] = set()
+        roots: set[Path] = set()
+
         for src in changed_files:
             current = src.resolve().parent if src.is_file() else src.resolve()
-            for _ in range(10):  # walk up at most 10 levels
-                candidate = current / "go.mod"
-                if candidate.is_file():
-                    try:
-                        for line in candidate.read_text(encoding="utf-8").splitlines():
-                            stripped = line.strip()
-                            if stripped.startswith("module "):
-                                return stripped.removeprefix("module ").strip()
-                    except OSError:
-                        return None
+            for _ in range(10):
+                if (current / "go.mod").is_file():
+                    roots.add(current)
+                if (current / "go.work").is_file():
+                    roots.add(current)
+                    for line in (current / "go.work").read_text(
+                            encoding="utf-8", errors="replace").splitlines():
+                        entry = line.strip().strip("()").strip()
+                        if entry.startswith("./") or entry.startswith("../"):
+                            roots.add((current / entry).resolve())
                 if current == current.parent:
                     break
                 current = current.parent
-        return None
+
+        for root in roots:
+            go_mod = root / "go.mod"
+            if go_mod.is_file():
+                name = GoDetector._module_of(go_mod)
+                if name:
+                    modules.add(name)
+            # A workspace root usually has no `go.mod` of its own; its members do.
+            for nested in sorted(root.glob("*/go.mod")):
+                name = GoDetector._module_of(nested)
+                if name:
+                    modules.add(name)
+        return modules
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
         return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
@@ -175,16 +242,33 @@ class GoDetector(BaseDetector):
     # ------------------------------------------------------------------
 
     def _parse_deadcode_json(self, data) -> list[Finding]:
+        """Turn `deadcode -json` output into one finding per unreachable function.
+
+        The shape the tool actually emits is a list of PACKAGES, each with a `Funcs`
+        list, and every key capitalised:
+
+            [{"Name": "...", "Path": "...", "Funcs": [
+                {"Name": "Reader.ID",
+                 "Position": {"File": "internal/x.go", "Line": 42, "Col": 7},
+                 "Generated": false, "Marker": false}]}]
+
+        This read `entry["position"]` and `entry["name"]` — lower case, and flat. Both
+        missed, so every entry defaulted to `<unknown>`: one finding per PACKAGE
+        instead of per function, each naming no file. Measured on a real repository on
+        2026-08-31, that produced five findings with `file_path` of `<unknown>`, which
+        no baseline can record and no reader can act on — the gate said "dead code
+        here" and could not say where.
+
+        The flat shape is still accepted, because some version emitted it and a
+        detector that only reads today's output breaks on the day the tool changes
+        again.
+        """
         findings: list[Finding] = []
         if not isinstance(data, list):
             return findings
-        for entry in data:
-            if not isinstance(entry, dict):
-                continue
-            position = entry.get("position", "<unknown>:0:0")
-            name = entry.get("name", "<unknown>")
+
+        def _emit(name: str, position: str) -> None:
             file_part = position.split(":", 1)[0] if ":" in position else position
-            sanitized = sanitize_symbol(name)
             findings.append(
                 Finding(
                     detector="d1_dead_code",
@@ -193,9 +277,32 @@ class GoDetector(BaseDetector):
                     file_path=file_part,
                     symbol_or_line=f"{name} @ {position}",
                     message=f"Unreachable Go symbol '{name}' at {position}",
-                    allowlist_key=f"go|{file_part}|dead_code|{sanitized}",
+                    allowlist_key=f"go|{file_part}|dead_code|{sanitize_symbol(name)}",
                 )
             )
+
+        for entry in data:
+            if not isinstance(entry, dict):
+                continue
+            funcs = entry.get("Funcs") or entry.get("funcs")
+            if isinstance(funcs, list):
+                for fn in funcs:
+                    if not isinstance(fn, dict):
+                        continue
+                    # `Generated` marks compiler-written code: reporting it as dead
+                    # asks someone to delete a file they do not own.
+                    if fn.get("Generated") or fn.get("generated"):
+                        continue
+                    pos = fn.get("Position") or fn.get("position") or {}
+                    if isinstance(pos, dict):
+                        where = f"{pos.get('File', '<unknown>')}:{pos.get('Line', 0)}:{pos.get('Col', 0)}"
+                    else:
+                        where = str(pos)
+                    _emit(str(fn.get("Name") or fn.get("name") or "<unknown>"), where)
+                continue
+            # The flat shape, kept for older output.
+            _emit(str(entry.get("name", "<unknown>")),
+                  str(entry.get("position", "<unknown>:0:0")))
         return findings
 
     def _auditor_unavailable(self, reason: str) -> Finding:

@@ -288,20 +288,58 @@ def module_exists_on_go_proxy(import_path: str) -> bool | None:
     cached = _cache_get("go", import_path)
     if cached is not None:
         return cached
-    if "/" not in import_path:
-        # stdlib package — proxy doesn't index it. Treat as True (exists) to avoid FP.
+    # Go's own rule for telling the standard library from a module: if the FIRST path
+    # element contains no dot, it is stdlib. The dot is what makes the element a domain,
+    # and every module path starts with one.
+    #
+    # The old test was `"/" not in import_path`, which is true of `fmt` and `os` and
+    # false of most of the library: `net/http`, `encoding/json`, `log/slog`,
+    # `path/filepath`, `net/http/httptest`. Those all went to the proxy, which answered
+    # 404 — it does not index stdlib — and 404 is `false_statuses`, so the detector
+    # called the Go standard library fabricated.
+    #
+    # Measured on a real repository on 2026-08-31, over 400 files: 88 findings for
+    # `net/http`, 72 for `encoding/json`, 69 for `log/slog`. Whole-repository run: 1739
+    # HARD findings, the gate reporting FAIL_HARD, and the language kept off for a year
+    # partly on the strength of it.
+    first = import_path.split("/", 1)[0]
+    if "." not in first:
         _cache_set("go", import_path, True)
         return True
-    encoded = _go_proxy_encode(import_path)
-    result = _lookup(
-        f"https://proxy.golang.org/{encoded}/@v/list",
-        false_statuses=(404, 410),
-        require_json=False,
-    )
+    # The proxy indexes MODULES; an import names a PACKAGE, which usually sits inside
+    # one. `github.com/jackc/pgx/v5/pgxpool` is a package of the module
+    # `github.com/jackc/pgx/v5`, and asking for the package path returns 404 — which
+    # `false_statuses` reads as "does not exist".
+    #
+    # So a 404 on the full path is not an answer yet. Trim one element at a time down
+    # to the domain and ask again; only when no prefix resolves is the import
+    # unaccounted for. A found prefix caches the FULL path, because it is the full path
+    # the next call will ask about.
+    candidates = [import_path]
+    parts = import_path.split("/")
+    while len(parts) > 2:
+        parts = parts[:-1]
+        candidates.append("/".join(parts))
+
+    result: bool | None = None
+    for candidate in candidates:
+        answer = _lookup(
+            f"https://proxy.golang.org/{_go_proxy_encode(candidate)}/@v/list",
+            false_statuses=(404, 410),
+            require_json=False,
+        )
+        if answer is True:
+            _cache_set("go", import_path, True)
+            return True
+        if answer is None:
+            # Ambiguity anywhere in the chain makes the whole question ambiguous: a
+            # later 404 would otherwise be reported as absence on incomplete evidence.
+            return None
+        result = False
     if result is None:
         return None
-    _cache_set("go", import_path, result)
-    return result
+    _cache_set("go", import_path, False)
+    return False
 
 
 # This module's public surface is the four registry queries. The state helpers

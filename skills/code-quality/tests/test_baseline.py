@@ -148,3 +148,71 @@ def test_writing_a_baseline_forces_the_network_off() -> None:
     if getattr(args, "write_baseline", False):
         args.no_network = True
     assert args.no_network is True
+
+
+# ── the Go detector defects that kept a language off for a year ───────────────
+#
+# Four, all measured on a real repository on 2026-08-31, all reported as fabricated
+# code by a gate that was reading its inputs wrong.
+
+
+@pytest.mark.parametrize("import_path", [
+    "net/http", "encoding/json", "log/slog", "path/filepath", "net/http/httptest",
+])
+def test_the_standard_library_is_not_a_fabricated_module(import_path: str) -> None:
+    """Go's rule: first path element without a dot is stdlib. The old test was
+    `"/" not in path`, true of `fmt` and false of most of the library — so these went
+    to the proxy, which 404s on stdlib, and 404 was read as "does not exist".
+    Measured over 400 files: 88 findings for net/http, 72 for encoding/json."""
+    import _registry
+
+    assert "." not in import_path.split("/", 1)[0]
+    assert _registry.module_exists_on_go_proxy(import_path) is True
+
+
+def test_every_workspace_module_counts_as_own(tmp_path: Path) -> None:
+    """Reading only the nearest go.mod makes sibling modules look third-party; the
+    proxy 404s on them and the detector calls same-checkout code fabricated."""
+    from detectors.go import GoDetector
+
+    for name in ("api", "pkg", "operators"):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "go.mod").write_text(f"module example.com/repo/{name}\n", encoding="utf-8")
+    (tmp_path / "go.work").write_text("use (\n\t./api\n\t./pkg\n\t./operators\n)\n", encoding="utf-8")
+
+    mods = GoDetector._workspace_modules([tmp_path / "api" / "main.go"])
+    assert mods == {f"example.com/repo/{n}" for n in ("api", "pkg", "operators")}
+
+
+def test_the_deadcode_parser_reads_the_shape_the_tool_emits() -> None:
+    """Packages with a capitalised `Funcs` list, not flat lower-case entries. Reading
+    the wrong shape produced one finding per PACKAGE, each with file `<unknown>` — a
+    gate saying "dead code here" that could not say where, and nothing a baseline can
+    record."""
+    from detectors.go import GoDetector
+
+    data = [{"Name": "aggregator", "Path": "example.com/x/aggregator", "Funcs": [
+        {"Name": "Reader.ID", "Position": {"File": "internal/x.go", "Line": 42, "Col": 7},
+         "Generated": False, "Marker": False}]}]
+    findings = GoDetector()._parse_deadcode_json(data)
+    assert len(findings) == 1
+    assert findings[0].file_path == "internal/x.go"
+    assert "Reader.ID" in findings[0].symbol_or_line
+
+
+def test_generated_code_is_not_reported_as_dead() -> None:
+    """Reporting it asks someone to delete a file they do not own."""
+    from detectors.go import GoDetector
+
+    data = [{"Name": "p", "Funcs": [
+        {"Name": "Gen", "Position": {"File": "zz_generated.go", "Line": 1}, "Generated": True}]}]
+    assert GoDetector()._parse_deadcode_json(data) == []
+
+
+def test_the_flat_shape_is_still_accepted() -> None:
+    """A detector that only reads today's output breaks when the tool changes again."""
+    from detectors.go import GoDetector
+
+    findings = GoDetector()._parse_deadcode_json([{"name": "Old", "position": "a/b.go:1:1"}])
+    assert len(findings) == 1 and findings[0].file_path == "a/b.go"
