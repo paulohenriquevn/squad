@@ -386,7 +386,7 @@ def test_an_unmeasured_idle_never_starts_anything(tmp_path: Path) -> None:
 
 def test_an_option_with_a_relaxing_flag_is_escalated(tmp_path: Path) -> None:
     """Measured on 2026-08-31, minutes after the lead gained the power to start items:
-    the session offered "Rodar /idea-to-release B-057 --allow-dirty-tree até halt
+    the session offered "Rodar /idea-to-release B-057 --allow-dirty-tree até halt  # english-only: the menu quoted verbatim
     natural (Recommended)" and the lead confirmed it. The classifier read "Rodar",
     matched a flow marker, and never looked at the flag.
 

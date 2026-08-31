@@ -111,7 +111,7 @@ FLOW_MARKERS = (
 #: never flow, whatever verb it starts with.
 #:
 #: Measured on 2026-08-31, minutes after the lead gained the power to start items: the
-#: session offered "Rodar /idea-to-release B-057 --allow-dirty-tree até halt natural
+#: session offered "Rodar /idea-to-release B-057 --allow-dirty-tree até halt natural  # english-only: the session's menu, quoted verbatim
 #: (Recommended)" and the lead confirmed it. The classifier read "Rodar", matched a
 #: flow marker, and never looked at the flag. Running the cycle IS flow; running it
 #: with a precondition switched off is a decision to accept the risk that precondition
