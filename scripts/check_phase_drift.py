@@ -22,7 +22,7 @@ THE FOUR FINDINGS
 | Finding | Question it answers |
 |---|---|
 | `phase_ran_undeclared` | a phase emitted that the chain does not know |
-| `phase_out_of_order` | a phase emitted before one it depends on |
+| `phase_out_of_order` | a phase emitted before one it depends on, with no failed gate to send it back |
 | `phase_advanced_over_blocking_verdict` | work continued past a FAIL |
 | `phase_declared_never_ran` | a `required` phase left no event (`--expect-complete` only) |
 
@@ -54,6 +54,25 @@ _PHASES_RULE = "cycle-phases.txt"
 #: `cycle-review.md` blocks on NEEDS_FIXES. FAIL_SOFT is deliberately absent —
 #: `check_upstream_gate.py` judges it with the ADRs in hand, which is more
 #: information than a stream has.
+#: Verdicts that mean a phase approved cleanly. Anything else — including a soft cap —
+#: is a reason to work the phase again, which is why "sends work back" is a DIFFERENT
+#: set from "forbids advancing".
+#:
+#: `FAIL_SOFT` is the case that made the distinction necessary. It does not forbid
+#: advancing, so it is absent from `_BLOCKING_VERDICTS` and rightly so — but a session
+#: that sees it and goes back to implement is doing the correct thing, and calling that
+#: a defect punishes the chain for working.
+#:
+#: Defined by what passes rather than by listing every failure, because the failures
+#: are open-ended and the approvals are not: a verdict nobody has enumerated should
+#: count as a reason to redo, not as a clean pass.
+_CLEAN_VERDICTS = frozenset({
+    "PASS", "SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "PASS_WITH_CAVEATS",
+    "READY_TO_MERGE", "READY_TO_MERGE_WITH_FOLLOWUPS", "RELEASED", "ACCEPTED",
+    "ACCEPTED_WITH_CAVEATS", "VALIDATED", "ITEM_REGISTERED", "ITEM_SHIPPED",
+    "OPPORTUNITY_COMPLETE", "PLAN_WRITTEN", "MILESTONE_RELEASED",
+})
+
 _BLOCKING_VERDICTS = frozenset({
     "FAIL_HARD",
     "INVALID",
@@ -178,6 +197,9 @@ def _judge_one(
 ) -> list[DriftFinding]:
     findings: list[DriftFinding] = []
     highest_position = -1
+    #: Whether the phase before this one approved cleanly. A return after anything else
+    #: is rework, not disorder.
+    last_verdict_was_clean = True
     blocking: tuple[str, str] | None = None
     ran: set[str] = set()
 
@@ -205,13 +227,30 @@ def _judge_one(
                 "gate either did not run or its answer was overridden.",
             ))
 
-        if phase.position < highest_position:
+        # Going BACK is not the same as going out of order, and treating them alike
+        # reports the cycle working correctly as a defect.
+        #
+        # A gate that fails sends the work back: `code-quality` returns FAIL_SOFT and
+        # `implement` runs again. That is the chain doing its job. What this check
+        # exists for is the other shape — `review` running before anything was ever
+        # implemented, a step skipped rather than repeated.
+        #
+        # The two are told apart by what came before the return: a blocking verdict
+        # makes it rework, its absence makes it disorder. Measured on 2026-08-31, an
+        # item went code-quality(FAIL_SOFT) -> implement, and the earlier rule would
+        # have called that a defect.
+        if phase.position < highest_position and last_verdict_was_clean:
             earlier = next(p.name for p in declared if p.position == highest_position)
             findings.append(DriftFinding(
                 "phase_out_of_order", slug,
-                f"`{cycle}` ran after `{earlier}`, which comes later in the chain.",
+                f"`{cycle}` ran after `{earlier}`, which comes later in the chain, "
+                "and no gate had failed — so this is a step out of sequence rather "
+                "than work sent back to be redone.",
             ))
         highest_position = max(highest_position, phase.position)
+
+        last_verdict_was_clean = (
+            not isinstance(verdict, str) or verdict.upper() in _CLEAN_VERDICTS)
 
         if isinstance(verdict, str) and verdict.upper() in _BLOCKING_VERDICTS:
             blocking = (cycle, verdict.upper())

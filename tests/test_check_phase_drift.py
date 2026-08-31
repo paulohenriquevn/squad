@@ -297,3 +297,40 @@ def test_this_repository_declares_a_readable_phase_plan() -> None:
 
     assert [p.name for p in phases][:3] == ["backlog", "discover", "plan"]
     assert any(p.required for p in phases), "a plan where nothing is required checks nothing"
+
+
+# ── going back is not going out of order ──────────────────────────────────────
+#
+# A gate that fails sends the work back: `code-quality` returns FAIL_SOFT and
+# `implement` runs again. That is the chain doing its job. Measured on 2026-08-31, an
+# item went code-quality(FAIL_SOFT) -> implement and the rule called it a defect.
+
+
+def test_work_sent_back_by_a_failed_gate_is_not_out_of_order(tmp_path: Path) -> None:
+    root = _project(tmp_path)
+    for cycle in ("backlog", "discover", "plan", "implement"):
+        _ran(root, cycle)
+    _ran(root, "code-quality", verdict="FAIL_SOFT")
+    _ran(root, "implement", verdict="FAIL")
+
+    assert "phase_out_of_order" not in _kinds(check_phase_drift(root))
+
+
+def test_going_back_with_no_failed_gate_is_still_out_of_order(tmp_path: Path) -> None:
+    """The shape this check exists for: a step repeated with nothing sending it back."""
+    root = _project(tmp_path)
+    for cycle in ("backlog", "discover", "plan", "implement"):
+        _ran(root, cycle)
+    _ran(root, "code-quality", verdict="PASS")
+    _ran(root, "implement")
+
+    assert "phase_out_of_order" in _kinds(check_phase_drift(root))
+
+
+def test_the_forward_chain_is_still_clean_after_the_change(tmp_path: Path) -> None:
+    """The fix must not blind the check by making every order acceptable."""
+    root = _project(tmp_path)
+    for cycle in ("backlog", "discover", "plan", "implement", "code-quality", "review"):
+        _ran(root, cycle)
+
+    assert _kinds(check_phase_drift(root)) == []
