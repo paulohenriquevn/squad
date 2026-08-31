@@ -57,7 +57,7 @@ DELEGATE:
      ↓ status triaged → /idea-to-release B-NNN
      ↓                  (cycle-plan → implement → code-quality → review → release)
      ↓
-ADVANCE:
+ADVANCE:                              scripts/advance_items.py --apply
      ↓ RELEASED → status shipped, with the release artifact linked
      ↓ blocked  → status unchanged, blocker surfaced, LOOP BACK to SELECT
      ↓
@@ -78,9 +78,9 @@ LOOP BACK to SELECT
 
 | Verdict | Meaning | Next |
 |---|---|---|
-| `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT |
+| `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT. Written by `scripts/advance_items.py` |
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
-| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it | Loop back to SELECT. **A terminal state, not a failure** | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
+| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it | Loop back to SELECT. **A terminal state, not a failure** | _(emitted externally: deciding that untracked work is a terminal state is judgement — the git facts are measurable, the declaration is a person's)_
 | `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it |
@@ -100,6 +100,23 @@ computation that picks, so the gate and the selector cannot disagree. `--queue N
 returns the head of the order for a caller filling more than one lane.
 
 There is no verdict for "the ecosystem is done".
+
+## ADVANCE runs after the human, never instead of them
+
+Measured on the first autonomous run: the executing session's own plan ends at
+*/release (stops at PR_OPEN_AWAITING_APPROVAL)*. A session driving this cycle
+unattended **will never emit `RELEASED`** — the approval, the merge and the tag are
+all past a gate it cannot pass.
+
+That is what makes ADVANCE safe to mechanise, and it is the opposite of how it
+first read. It is not the autonomous loop closing its own items; it is the
+bookkeeping that follows a decision somebody already made. By the time it acts,
+every judgement it might have needed has been made by a person.
+
+It moves an item only on an explicit `cycle:phase:end` with `cycle=release` and
+`verdict=RELEASED`, and writes through `backlog_status.py` — so a blocked, killed
+or already-shipped item is refused, and the refusal is reported rather than
+swallowed. Running it twice changes nothing the first run did.
 
 ## What ADVANCE may assume about the stream
 
