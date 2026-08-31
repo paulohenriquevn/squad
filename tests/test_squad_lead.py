@@ -852,3 +852,67 @@ def test_the_option_chosen_is_the_menu_one_not_the_paragraph_one(tmp_path: Path)
 def test_no_cursor_means_no_menu(tmp_path: Path) -> None:
     """Numbered lines with nothing selected are a list, not a menu."""
     assert Lead(session="s")._menu_options("  1. first\n  2. second\n") == []
+
+
+# ── the same case gets the same answer ───────────────────────────────────────
+
+
+def test_an_escape_option_is_refused(tmp_path: Path) -> None:
+    """"Type something." opens a text field. Choosing it answers nothing and turns the
+    screen into a shape the lead cannot read. Measured: an agent picked it and cited a
+    rule for it."""
+    menu = ("Qual escopo?\n\n"                       # english-only: a captured screen
+            "❯ 1. Gate-only, itens separados\n"      # english-only: idem
+            "  2. Type something.\n")
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: ("OPTION: 2\nRULE APPLIED: Scope grew", "answered")
+    decision = lead.decide(menu, idle=200)
+    assert decision.action == "escalate"
+    assert "answers nothing" in decision.reason
+
+
+def test_prior_rulings_reach_the_prompt(tmp_path: Path) -> None:
+    """Every consultation is a fresh process with no memory of the last. Measured: the
+    same menu answered twice, five minutes apart, with different options AND different
+    rules — the incoherence the envelope exists to prevent, produced by the mechanism
+    meant to enforce it."""
+    import json
+    log = tmp_path / "lead.jsonl"
+    log.write_text(json.dumps({
+        "event": "choose", "item": "B-059", "option_number": "2",
+        "reason": "envelope decides it — Scope grew during measurement"}) + "\n",
+        encoding="utf-8")
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True, log_path=log)
+    seen = []
+    lead.ask_agent = lambda a, q: seen.append(q) or (None, "stub")
+    # The heading names the item; without it there is no item to look rulings up by.
+    lead.decide("B-059 scope: qual escopo?\n\n❯ 1. um\n  2. dois\n", idle=200)  # english-only: a screen
+    assert seen, "the agent was not asked"
+    assert "ruled on before" in seen[0]
+    assert "Scope grew during measurement" in seen[0]
+    assert "the SAME answer" in seen[0]
+
+
+def test_no_prior_ruling_adds_nothing_to_the_prompt(tmp_path: Path) -> None:
+    lead = Lead(session="s", project=tmp_path, log_path=tmp_path / "absent.jsonl")
+    assert lead._prior_rulings("B-059") == ""
+
+
+def test_a_failed_move_puts_the_cursor_back(tmp_path: Path) -> None:
+    """A move that is not confirmed must leave nothing behind. Measured: two failed
+    attempts walked the cursor down to "Type something." and left it there, so the next
+    reader saw a menu pointing at something nobody chose."""
+    import subprocess as sp
+    lead = Lead(session="s")
+    lead.capture = lambda: "❯ 1. still here\n  2. target\n  3. other\n"   # never moves
+    keys = []
+    original = sp.run
+    sp.run = lambda *a, **k: keys.append(a[0][-1]) or original(["true"])
+    try:
+        ok = lead.choose("❯ 1. still here\n  2. target\n  3. other\n",
+                         Decision("choose", "x", "target", "B-001", option_number="3"))
+    finally:
+        sp.run = original
+    assert ok is False
+    assert keys.count("Down") == keys.count("Up"), f"cursor left displaced: {keys}"
+    assert "Enter" not in keys

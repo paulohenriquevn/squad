@@ -147,6 +147,15 @@ _ITEM_RE = re.compile(r"\bB-\d{3,}\b")
 _SLASH_COMMAND_RE = re.compile(r"/[a-z][a-z0-9-]*")
 
 
+#: Menu entries that are not decisions. They open a text field, a conversation or a
+#: way out — choosing one answers nothing and changes the screen into a shape the lead
+#: cannot read. Measured: an agent picked "Type something." and cited a rule for it.
+#:
+#: Matched on the option TEXT, lower-cased, as a substring. Short and explicit rather
+#: than clever: a menu entry that genuinely decides something never reads like these.
+_ESCAPE_OPTIONS = ("type something", "chat about", "cancel", "go back", "none of these",
+                   "escrever", "conversar", "voltar", "cancelar")
+
 #: The only shape the lead ever types unprompted. Two slots, both filled from things
 #: the lead READ — an id SELECT returned and re-validates, and facts from the registry
 #: and the stream. Never free prose: the worst it can compose is a true sentence about
@@ -208,7 +217,7 @@ The menu:
 Does the doctrine in `rules/autonomy-envelope.md` decide this? Read the file, and read
 the registry and the stream for whatever item the menu is about.
 
-If a rule covers it, answer with exactly two lines:
+{history}If a rule covers it, answer with exactly two lines:
 OPTION: <the number to choose>
 RULE APPLIED: <the section of the envelope, by name>
 
@@ -302,6 +311,9 @@ class Lead:
     #: an event: without this the lead would re-ask on every poll.
     agent_cooldown: int = 1800
     agent_asked: dict[str, float] = field(default_factory=dict)
+    #: Where decisions are written. Read back to the agent so consecutive consultations
+    #: about one item cannot contradict each other.
+    log_path: Path | None = None
     #: True once a handed-back turn has been reported, so it is not repeated every
     #: poll. Cleared when the session moves again.
     reported_stall: bool = False
@@ -370,7 +382,8 @@ class Lead:
         caller escalates exactly as before. The refusal moved; it did not disappear.
         """
         menu = "\n".join(f"{n}. {text}" for n, text in options)
-        answer, note = self.ask_agent("squad-lead", _MENU_PROMPT.format(menu=menu))
+        answer, note = self.ask_agent(
+            "squad-lead", _MENU_PROMPT.format(menu=menu, history=self._prior_rulings(item)))
         if not answer:
             # Never conflated with "no rule covers it". One is the doctrine speaking and
             # the other is nobody speaking, and a log that renders them identically
@@ -388,10 +401,14 @@ class Lead:
         if number not in {n for n, _ in options}:
             return None, f"the agent chose option {number}, which this menu does not have"
         text = next(t for n, t in options if n == number)
-        if any(f in text.lower() for f in _RELAXING_FLAGS):
+        lowered = text.lower()
+        if any(f in lowered for f in _RELAXING_FLAGS):
             # The floor again, reached from the other side: the agent may not pick what
             # the classifier would have refused.
             return None, "the agent chose an option that switches off a gate; refused"
+        if any(e in lowered for e in _ESCAPE_OPTIONS):
+            return None, (f"the agent chose {number!r} ({text[:40]}), which answers "
+                          f"nothing — it opens a field, not a decision")
         return (Decision("choose", f"envelope decides it — {rule.group(1)}", text, item,
                          option_number=number), "answered")
 
@@ -713,6 +730,43 @@ class Lead:
         return Decision("confirm", "flow the session already recommended", option_text, item)
 
     # ── acting ─────────────────────────────────────────────────────────────
+    def _prior_rulings(self, item: str) -> str:
+        """What the doctrine already decided about this item, for the prompt.
+
+        Every consultation is a fresh process with no memory of the last one. Measured:
+        the same menu was answered twice, five minutes apart, with different options
+        AND different rules — which is the incoherence the envelope was written to
+        prevent, produced by the mechanism meant to enforce it.
+
+        The envelope's own clause says a case resembling one already decided gets the
+        same answer. An agent cannot honour that without being told what was decided,
+        so the log is read back to it. Read from disk, not from memory, so a restarted
+        lead does not forget what it already ruled.
+        """
+        if not item or self.log_path is None or not self.log_path.is_file():
+            return ""
+        past = []
+        try:
+            for line in self.log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if entry.get("event") == "choose" and entry.get("item") == item:
+                    past.append(f"- option {entry.get('option_number')} — "
+                                f"{entry.get('reason', '')}")
+        except OSError:
+            return ""
+        if not past:
+            return ""
+        recent = "\n".join(past[-3:])
+        return (f"This item has been ruled on before:\n{recent}\n\n"
+                f"The envelope says a case resembling one already decided gets the SAME "
+                f"answer, and a divergence needs its reason written beside it. If you "
+                f"depart from the above, say why on the RULE APPLIED line.\n\n")
+
     def _menu_options(self, screen: str) -> list[tuple[str, str]]:
         """The options of the MENU, not every numbered line on screen.
 
@@ -815,25 +869,45 @@ class Lead:
         except ValueError:
             return False
         key = "Down" if steps > 0 else "Up"
+        back = "Up" if steps > 0 else "Down"
+        moved = 0
         try:
             for _ in range(abs(steps)):
                 subprocess.run(["tmux", "send-keys", "-t", self.session, key],
                                check=True, timeout=15)
+                moved += 1
             # Re-read before committing: if the cursor is not where the arrows should
             # have put it, something else moved the menu and Enter would take the wrong
             # option.
             screen_now = self.capture() or ""
             landed = _SELECTED_RE.search(screen_now)
             if not landed or landed.group(1) != decision.option_number:
+                self._rewind_cursor(back, moved)
                 return False
             subprocess.run(["tmux", "send-keys", "-t", self.session, "Enter"],
                            check=True, timeout=15)
         except (OSError, subprocess.SubprocessError):
+            self._rewind_cursor(back, moved)
             return False
         if decision.item:
             self.interventions[decision.item] = self.interventions.get(decision.item, 0) + 1
         self.answered.add(f"{decision.item}|{decision.option}")
         return True
+
+    def _rewind_cursor(self, key: str, steps: int) -> None:
+        """Put the cursor back where the session left it.
+
+        A move that is not confirmed must leave nothing behind. Measured: two failed
+        attempts walked the cursor from the option the session had highlighted down to
+        "Type something.", and left it there — so the next reader, human or agent, saw
+        a menu pointing at something nobody chose.
+        """
+        for _ in range(steps):
+            try:
+                subprocess.run(["tmux", "send-keys", "-t", self.session, key],
+                               check=True, timeout=15)
+            except (OSError, subprocess.SubprocessError):
+                return
 
     def start(self, decision: Decision) -> bool:
         """Type the start command and send it.
@@ -1020,7 +1094,7 @@ def main(argv: list[str] | None = None) -> int:
                 idle_seconds=args.idle, stalled_seconds=args.stalled,
                 agents_when_stuck=args.agents_when_stuck,
                 agent_budget_usd=args.agent_budget_usd,
-                agent_cooldown=args.agent_cooldown)
+                agent_cooldown=args.agent_cooldown, log_path=args.log)
     return watch(lead, args.marker, args.log, args.poll, rounds=1 if args.once else None)
 
 
