@@ -178,3 +178,156 @@ def test_the_chain_is_the_seven_stages_the_cycle_declares() -> None:
     ACCEPTANCE schedules work that never runs."""
     assert STAGES == ("DISCOVER", "PLAN", "IMPLEMENT", "CODE-QUALITY",
                       "REVIEW", "RELEASE", "ACCEPTANCE")
+
+
+# ── the registry write-back ───────────────────────────────────────────────────
+#
+# Measured on 2026-08-30: the pipeline's item state had no mapping to BACKLOG.md's
+# `status:` field at all, so an item parked in a lane still read `triaged` on disk —
+# and the disk is the only copy that outlives the session.
+
+from pipeline_orchestrator import STAGES, StatusWrite, apply_writes
+
+
+def _one(slug: str = "b-001") -> Pipeline:
+    return Pipeline(items=[Item(slug=slug)], lanes=4)
+
+
+def test_finishing_discover_records_triaged():
+    p = _one()
+    p.schedule()
+    p.complete("b-001")
+    assert [(w.slug, w.status) for w in p.drain_writes()] == [("b-001", "triaged")]
+
+
+def test_finishing_plan_records_planned():
+    """The transition that was in the contract and in zero items anywhere."""
+    p = _one()
+    p.force_stage("b-001", "PLAN")
+    p.schedule()
+    p.complete("b-001")
+    assert [w.status for w in p.drain_writes()] == ["planned"]
+
+
+def test_finishing_the_last_stage_records_shipped():
+    p = _one()
+    p.force_stage("b-001", STAGES[-1])
+    p.schedule()
+    p.complete("b-001")
+    assert [w.status for w in p.drain_writes()] == ["shipped"]
+
+
+def test_stages_that_do_not_move_the_registry_write_nothing():
+    p = _one()
+    p.force_stage("b-001", "IMPLEMENT")
+    p.schedule()
+    p.complete("b-001")
+    assert p.drain_writes() == []
+
+
+def test_draining_twice_yields_nothing_the_second_time():
+    p = _one()
+    p.schedule()
+    p.complete("b-001")
+    p.drain_writes()
+    assert p.drain_writes() == []
+
+
+def test_a_send_back_demotes_the_registry():
+    """An item whose plan review rejected is no longer `planned`."""
+    p = _one()
+    p.force_stage("b-001", "REVIEW")
+    p.schedule()
+    p.send_back("b-001", "PLAN", commit="abc1234")
+    assert [w.status for w in p.drain_writes()] == ["triaged"]
+
+
+# ── the impediment ────────────────────────────────────────────────────────────
+
+
+def test_blocking_frees_the_lane_and_records_the_edge():
+    p = _one()
+    p.force_stage("b-001", "IMPLEMENT")
+    p.schedule()
+    assert p.running
+    p.block("b-001", ["B-100"])
+    assert p.running == []
+    write = p.drain_writes()[0]
+    assert write.block_on == ["B-100"]
+
+
+def test_a_blocked_item_keeps_its_stage():
+    """The stage is exactly the fact needed to resume; a status would destroy it."""
+    p = _one()
+    p.force_stage("b-001", "IMPLEMENT")
+    p.schedule()
+    p.block("b-001", ["B-100"])
+    assert p.item("b-001").stage == "IMPLEMENT"
+
+
+def test_a_blocked_item_is_surfaced():
+    p = _one()
+    p.force_stage("b-001", "IMPLEMENT")
+    p.block("b-001", ["B-100"])
+    assert p.item("b-001").surfaced is True
+
+
+def test_a_blocked_item_holds_no_lane():
+    p = Pipeline(items=[Item(slug="b-001"), Item(slug="b-002")], lanes=1)
+    p.schedule()
+    p.block("b-001", ["B-100"])
+    assert [i.slug for i in p.schedule()] == ["b-002"]
+
+
+def test_blocking_on_a_reason_with_no_item_is_allowed():
+    p = _one()
+    p.block("b-001", note="the sponsor must decide")
+    assert p.drain_writes()[0].note == "the sponsor must decide"
+
+
+def test_blocking_on_neither_is_refused():
+    with pytest.raises(ValueError):
+        _one().block("b-001")
+
+
+# ── applying the writes ───────────────────────────────────────────────────────
+
+
+def _backlog(tmp_path, *rows):
+    body = "# BACKLOG\n\n"
+    for item_id, status in rows:
+        body += (f"## {item_id} — Thing   [ ]\n\ndomain: p\nrepo: r\nsuggested_mode: review\n"
+                 f"source: human\nevidence: none-yet\nwhy_now: x\nstatus: {status}\n"
+                 "dod:\n  - measurable\n\n")
+    path = tmp_path / "BACKLOG.md"
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def test_apply_writes_moves_the_status_on_disk(tmp_path):
+    backlog = _backlog(tmp_path, ("B-001", "raw"))
+    assert apply_writes(backlog, [StatusWrite("b-001", status="triaged")]) == []
+    assert "status: triaged" in backlog.read_text(encoding="utf-8")
+
+
+def test_apply_writes_records_the_impediment_on_disk(tmp_path):
+    backlog = _backlog(tmp_path, ("B-001", "planned"), ("B-100", "raw"))
+    assert apply_writes(backlog, [StatusWrite("b-001", block_on=["B-100"])]) == []
+    assert "blocked_by: B-100" in backlog.read_text(encoding="utf-8")
+
+
+def test_an_illegal_transition_is_returned_not_raised(tmp_path):
+    backlog = _backlog(tmp_path, ("B-001", "raw"))
+    refusals = apply_writes(backlog, [StatusWrite("b-001", status="planned")])
+    assert len(refusals) == 1 and refusals[0].startswith("b-001:")
+
+
+def test_one_refusal_does_not_abort_the_others(tmp_path):
+    """A run that learns three things and can record two should record two."""
+    backlog = _backlog(tmp_path, ("B-001", "raw"), ("B-002", "triaged"))
+    refusals = apply_writes(backlog, [
+        StatusWrite("b-001", status="planned"),   # illegal: raw -> planned
+        StatusWrite("b-002", status="planned"),   # legal
+    ])
+    assert len(refusals) == 1
+    assert backlog.read_text(encoding="utf-8").count("status: planned") == 1

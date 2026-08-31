@@ -159,3 +159,93 @@ class TestUnknownStatus:
         index = render_index(body, _parse_items(body))
         assert "B-001" in index
         assert "status this index does not know" in index
+
+
+# ── impediment links, both directions ─────────────────────────────────────────
+#
+# Only one direction is stored. `blocks` is derived, so the two halves cannot drift.
+
+from backlog_index import impediment_graph
+
+
+def _items(*blocks: str) -> list:
+    from check_backlog_structure import _parse_items
+    return _parse_items("".join(blocks))
+
+
+def test_the_reverse_edge_is_derived(tmp_path: Path) -> None:
+    items = _items(
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    blocked_by, blocks = impediment_graph(items)
+    assert blocked_by["B-001"] == ["B-002"]
+    assert blocks["B-002"] == ["B-001"]
+
+
+def test_one_blocker_holding_two_items_lists_both() -> None:
+    items = _items(
+        item_block("B-001", status="triaged", extra="blocked_by: B-100\n"),
+        item_block("B-002", status="triaged", extra="blocked_by: B-100\n"),
+        item_block("B-100", status="raw"),
+    )
+    _, blocks = impediment_graph(items)
+    assert blocks["B-100"] == ["B-001", "B-002"]
+
+
+def test_a_shipped_blocker_produces_no_edge() -> None:
+    """Resolution needs no second edit — the edge disappears when the blocker closes."""
+    items = _items(
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="shipped"),
+    )
+    blocked_by, blocks = impediment_graph(items)
+    assert blocked_by == {} and blocks == {}
+
+
+def test_a_prose_impediment_blocks_with_no_edge() -> None:
+    items = _items(item_block("B-001", status="triaged", extra="blocked_by: the sponsor must decide\n"))
+    blocked_by, blocks = impediment_graph(items)
+    assert blocked_by["B-001"] == []
+    assert blocks == {}
+
+
+def test_a_shipped_item_is_never_listed_as_blocked() -> None:
+    items = _items(
+        item_block("B-001", status="shipped", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    blocked_by, _ = impediment_graph(items)
+    assert "B-001" not in blocked_by
+
+
+def test_the_rendered_index_shows_the_derived_state_and_the_stage(tmp_path: Path) -> None:
+    """A reader needs both: the state to know it is stuck, the stage to know where it resumes."""
+    from backlog_index import render_index
+
+    content = "".join([
+        item_block("B-001", status="planned", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    ])
+    rendered = render_index(content, _parse_items(content))
+    row = next(line for line in rendered.splitlines() if line.startswith("| [`B-001`]"))
+    assert "blocked" in row and "planned" in row and "B-002" in row
+
+
+def test_the_rendered_index_counts_blocked_items(tmp_path: Path) -> None:
+    from backlog_index import render_index
+
+    content = "".join([
+        item_block("B-001", status="planned", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    ])
+    rendered = render_index(content, _parse_items(content))
+    assert "**Blocked** 1" in rendered
+
+
+def test_an_unblocked_backlog_shows_no_blocked_count(tmp_path: Path) -> None:
+    from backlog_index import render_index
+
+    content = item_block("B-001", status="planned")
+    rendered = render_index(content, _parse_items(content))
+    assert "Blocked" not in rendered

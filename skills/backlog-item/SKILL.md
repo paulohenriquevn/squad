@@ -175,6 +175,38 @@ Next step:  /discover-plan B-028 --mode {mode}
 
 For `ITEM_MERGED`, report the absorbing id and what was appended to it. For `ITEM_REJECTED`, report the gate that fired and what would make the item acceptable — a rejection that does not say how to fix it just gets re-filed verbatim tomorrow.
 
+## Filing from inside another item
+
+Work in progress is the most common source of new items: an item reaches IMPLEMENT
+and only there turns out to need something else — a migration nobody scoped, a
+decision nobody made, a repo that has to move first.
+
+That discovery is filed, not absorbed. Absorbing it grows the item past what was
+aligned on, and the growth is invisible to every gate that measured the original.
+
+```
+1. File the dependency as its own item        /backlog-item   (this skill, in full)
+2. Record the edge on the item that stalled   scripts/backlog_status.py B-014 --block-on B-100
+3. Leave the stage alone                      it resumes where it stopped
+```
+
+The stage is deliberately untouched. `blocked` is derived from status + `blocked_by`,
+so an item that stalls at `planned` comes back at `planned` — and the moment B-100
+ships, B-014 stops being blocked with nobody clearing a flag.
+
+Not every impediment has an item to file. When the blocker is a decision or an action
+outside the repository, record it as prose and say so:
+
+```
+scripts/backlog_status.py BACKLOG.md B-014 --block-on --because "the sponsor must pick the cell map"
+```
+
+That edge cannot be resolved by any gate here, which is the honest outcome — nothing
+in this repository knows whether a sponsor has decided. A human clears the line.
+
+See `rules/cycle-backlog.md § Impediments` for the field, the derived state, and why
+the reverse edge is never written.
+
 ## Anti-patterns
 
 Cycle-level anti-patterns live in `cycle-backlog.md § Anti-patterns`. Specific to this skill:
@@ -183,6 +215,7 @@ Cycle-level anti-patterns live in `cycle-backlog.md § Anti-patterns`. Specific 
 - **Writing to `BACKLOG.md` before the grill completes.** An aborted grill must leave the registry untouched.
 - **Auto-resolving a dedup hit.** The grep finds candidates; the human confirms whether it is the same problem. A wrong merge buries an item forever.
 - **Treating a G5 hit as a refusal to do the work.** The gate rejects a *justification*, never an idea. The correct move is to ask for the local reason, not to close the conversation.
+- **Growing the current item instead of filing the dependency.** The item then covers work nobody aligned on, and every gate that measured the original is now measuring something else.
 - **Deriving `domain` from the slug.** Route from the repo via the table in `cycle-backlog.md § Domain routing`, not from what the slug sounds like.
 
 ## Cross-references

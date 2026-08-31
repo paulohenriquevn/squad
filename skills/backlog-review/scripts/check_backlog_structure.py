@@ -3,8 +3,14 @@
 
 Sibling of the retired `check_roadmap_structure.py`. Written fresh rather than ported:
 a roadmap is a finite, ordered, dependency-linked scope, and a backlog is none of those.
-Cycle detection, the M0-M8 cap and ordering checks have no meaning over independent
-items, so carrying them across would have produced checks that always pass.
+The M0-M8 cap and ordering checks have no meaning over independent items, so carrying
+them across would have produced checks that always pass.
+
+Cycle detection was dropped for the same reason and came back on 2026-08-30, when
+`blocked_by` gave items edges. Backlog items are no longer independent: B-014 may wait
+on B-100, and a ring of those is a deadlock in which nothing can ever ship. The check
+returned because the premise that retired it stopped being true — not because the
+original reasoning was wrong.
 
 What it checks instead — the ways a maintenance registry actually rots:
 
@@ -19,6 +25,11 @@ What it checks instead — the ways a maintenance registry actually rots:
     unroutable_repo         repo in no domain (gate G1)
     invalid_mode            suggested_mode outside the four
     renumbered              ids not monotonic — a reused id destroys traceability
+    blocker_missing         blocked_by points at an id no block defines
+    blocker_cycle           a ring of impediments — every item waits, none can ship
+    self_block              an item declaring itself its own blocker
+    stale_block             every blocker closed, the edge still written
+    closed_but_blocked      shipped while an open blocker is still declared
 
   HEURISTIC (a reader decides; labelled as such in every finding)
     vague_dod               a DoD bullet nothing could falsify
@@ -176,6 +187,69 @@ def _known_repos(backlog_dir: Path) -> set[str] | None:
         return None
 
 
+_ID_IN_TEXT_RE = re.compile(r"\bB-\d{3,}\b")
+_NO_IMPEDIMENT = {"none", "-", "none-yet", "nothing"}
+
+
+def declares_impediment(raw: str) -> bool:
+    cleaned = raw.strip()
+    return bool(cleaned) and cleaned.lower() not in _NO_IMPEDIMENT
+
+
+def parse_blocked_by(raw: str) -> list[str]:
+    """The item ids named anywhere in a `blocked_by` value. Mirrors the writer.
+
+    Duplicated on purpose: this gate must review a registry written by anything —
+    a human, an older kit, a hand edit — so it cannot import the writer and inherit
+    its assumptions about what produced the file.
+
+    Ids are extracted from prose rather than parsed from a fixed shape, because the
+    field was in use before it was specified: of the eight items carrying it when it
+    was measured, seven named a sponsor decision or an external action and only one
+    named an item. Demanding `B-NNN` would have reported seven honest impediments as
+    malformed.
+    """
+    if not declares_impediment(raw):
+        return []
+    return _ID_IN_TEXT_RE.findall(raw)
+
+
+def _find_cycles(edges: dict[str, list[str]]) -> list[list[str]]:
+    """Every distinct ring in the impediment graph, each reported once.
+
+    Rings are keyed by their sorted membership so a three-item cycle is not reported
+    three times — once per entry point — which would read as three deadlocks.
+    """
+    rings: dict[frozenset[str], list[str]] = {}
+    for start in edges:
+        stack: list[tuple[str, list[str]]] = [(start, [start])]
+        while stack:
+            node, path = stack.pop()
+            for nxt in edges.get(node, []):
+                if nxt == start:
+                    rings.setdefault(frozenset(path), path + [nxt])
+                elif nxt not in path and nxt in edges:
+                    stack.append((nxt, path + [nxt]))
+    return list(rings.values())
+
+
+
+def _effective_counts(items: list[Item]) -> dict[str, int]:
+    statuses = {i.item_id: i.fields.get("status", "") for i in items}
+    counts: dict[str, int] = {}
+    for item in items:
+        status = item.fields.get("status", "")
+        raw = item.fields.get("blocked_by", "")
+        state = status
+        if status in OPEN_STATUS and declares_impediment(raw):
+            ids = parse_blocked_by(raw)
+            if not ids or any(statuses.get(b, "") in OPEN_STATUS for b in ids):
+                state = "blocked"
+        counts[state] = counts.get(state, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+
 def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
     content = backlog_path.read_text(encoding="utf-8-sig")
@@ -291,6 +365,58 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
             "the index at the top does not match the items below it (or is absent). "
             "Regenerate with `python3 backlog_index.py BACKLOG.md --write`."))
 
+    # ── impediment edges ──────────────────────────────────────────────────────
+    #
+    # `blocked_by` is written on the blocked side only; the reverse edge is derived by
+    # the index and never typed, so the two halves cannot drift apart. What CAN rot is
+    # the edge itself, in four ways, and all four are deterministic.
+    raw_values = {i.item_id: i.fields.get("blocked_by", "") for i in items}
+    edges = {iid: parse_blocked_by(raw) for iid, raw in raw_values.items()}
+    statuses = {i.item_id: i.fields.get("status", "") for i in items}
+
+    for item in items:
+        iid = item.item_id
+        blockers = edges.get(iid, [])
+        if not declares_impediment(raw_values.get(iid, "")):
+            continue
+
+        if iid in blockers:
+            findings.append(Finding("self_block", "deterministic", "blocker", iid,
+                f"`{iid}` names itself in `blocked_by`. It can never be resolved."))
+
+        unknown = [b for b in blockers if b not in statuses]
+        if unknown:
+            findings.append(Finding("blocker_missing", "deterministic", "blocker", iid,
+                f"`blocked_by` names {', '.join(unknown)}, which no block in this file defines. "
+                "An edge pointing at nothing never resolves; file the item or drop the edge."))
+
+        known = [b for b in blockers if b in statuses]
+        # Only an all-ids impediment can be called stale. A value that also states a
+        # reason ("B-075, and the sponsor must ratify") outlives its item edge, and
+        # nothing in this repository can tell whether the sponsor has ratified.
+        prose_only = raw_values.get(iid, "")
+        carries_prose = bool(_ID_IN_TEXT_RE.sub("", prose_only).strip(" ,—-"))
+        if known and not carries_prose and all(statuses[b] not in OPEN_STATUS for b in known) and not unknown:
+            findings.append(Finding("stale_block", "deterministic", "minor", iid,
+                f"every blocker ({', '.join(known)}) is closed, but the edge is still written. "
+                "The derived state already reads unblocked; the line is now noise."))
+
+        if statuses.get(iid) not in OPEN_STATUS:
+            open_blockers = [b for b in known if statuses[b] in OPEN_STATUS]
+            if open_blockers:
+                findings.append(Finding("closed_but_blocked", "deterministic", "major", iid,
+                    f"`{iid}` is {statuses[iid]} while {', '.join(open_blockers)} is still open. "
+                    "Either the item did not really close, or the edge was never cleared."))
+            elif not known:
+                findings.append(Finding("closed_but_blocked", "deterministic", "minor", iid,
+                    f"`{iid}` is {statuses[iid]} but still states an impediment. "
+                    "A closed item declaring a live block reads as unfinished to everyone after you."))
+
+    for ring in _find_cycles(edges):
+        findings.append(Finding("blocker_cycle", "deterministic", "blocker", ring[0],
+            f"impediment cycle: {' -> '.join(ring)}. Every item in the ring waits for another "
+            "in it, so none can ever ship. Break it by splitting one item or dropping one edge."))
+
     counts = {"blocker": 0, "major": 0, "minor": 0}
     for f in findings:
         counts[f.severity] += 1
@@ -310,6 +436,10 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
         "items_by_status": {
             s: sum(1 for i in items if i.fields.get("status") == s) for s in sorted(LEGAL_STATUS)
         },
+        # The state a reader should act on. `blocked` is DERIVED here and stored
+        # nowhere, which is what stops it from going stale: an item whose blockers
+        # all shipped stops being blocked without anyone remembering to edit it.
+        "items_by_effective_state": _effective_counts(items),
         "routing_table_read": known_repos is not None,
         "findings": [f.__dict__ for f in findings],
         "severity_counts": counts,

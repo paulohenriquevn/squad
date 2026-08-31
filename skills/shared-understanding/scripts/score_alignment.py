@@ -58,7 +58,7 @@ Usage:
 Exit codes:
     0 — ALIGNED (machine score met AND a reviewer signed off), or, with
         --machine-only, the machine score alone was met
-    1 — BLOCKED or AWAITING_REVIEW; the item must not be built yet
+    1 — BLOCKED, AWAITING_REVIEW or NEEDS_SPLIT; the item must not be built yet
     2 — the brief could not be read
 """
 from __future__ import annotations
@@ -146,6 +146,15 @@ _CHECKBOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.+?)\s*$", re.MULTILINE)
 # a pattern that stopped at the first space silently dropped exactly that.
 _SIGNED_BY_RE = re.compile(r"<!--\s*signed-by:\s*([^>]+?)\s*-->")
 
+#: A reviewer declaring the item is not one item. The scorer TRANSPORTS this rather
+#: than inferring it: deciding that a description spans independent subsystems is
+#: judgement, and the same judgement is left unmechanized at intake (gate G3) for
+#: the same reason. A regex over a brief would produce verdicts about language.
+#: Without this marker `NEEDS_SPLIT` was documented in SKILL.md and unreachable in
+#: code, so an item needing a split came out as a generic `BLOCKED` and the most
+#: actionable thing the reviewer knew was lost between the review and the caller.
+_NEEDS_SPLIT_RE = re.compile(r"<!--\s*verdict:\s*NEEDS_SPLIT\s*(?::\s*([^>]*?))?\s*-->", re.IGNORECASE)
+
 
 @dataclass(frozen=True)
 class Criterion:
@@ -168,6 +177,10 @@ class AlignmentReport:
     #: the verdict needs the weakest link, not the majority — the same reason a
     #: partially reviewed brief counts as unreviewed.
     signed_by: str | None = None
+
+    #: Set when a reviewer marked the brief `<!-- verdict: NEEDS_SPLIT -->`.
+    needs_split: bool = False
+    split_reason: str = ""
 
     @property
     def signed_by_is_human(self) -> bool:
@@ -213,6 +226,12 @@ class AlignmentReport:
 
     @property
     def verdict(self) -> str:
+        # Checked before the score, because a low score is a CONSEQUENCE of the item
+        # being two items: neither half's flows, criteria or measurements converge
+        # while they share one brief. Reporting `BLOCKED` here would send the reviewer
+        # to close gaps that no amount of writing can close.
+        if self.needs_split:
+            return "NEEDS_SPLIT"
         if not self.meets_machine_threshold:
             return "BLOCKED"
         return "ALIGNED" if self.reviewer_signed_off else "AWAITING_REVIEW"
@@ -443,7 +462,12 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
         "whether the flows drawn are the flows that matter",
         "whether the numbers in the NFRs are the right numbers",
     )
-    return AlignmentReport(tuple(criteria), judgement, pending, len(boxes), signed_by)
+    split = _NEEDS_SPLIT_RE.search(body)
+    return AlignmentReport(
+        tuple(criteria), judgement, pending, len(boxes), signed_by,
+        needs_split=bool(split),
+        split_reason=(split.group(1) or "").strip() if split else "",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -463,6 +487,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     ok = report.meets_machine_threshold if args.machine_only else report.aligned
+    if report.needs_split:
+        ok = False
 
     if args.json:
         print(json.dumps({
@@ -476,6 +502,8 @@ def main(argv: list[str] | None = None) -> int:
             "reviewer_signed_off": report.reviewer_signed_off,
             "signed_by": report.signed_by,
             "signed_by_is_human": report.signed_by_is_human,
+            "needs_split": report.needs_split,
+            "split_reason": report.split_reason,
             "reviewer_items_total": report.reviewer_items_total,
             "pending_review": list(report.pending_review),
             "criteria": [

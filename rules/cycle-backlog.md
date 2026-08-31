@@ -83,6 +83,7 @@ dod:
 | `status` | yes | `raw` \| `triaged` \| `planned` \| `shipped` \| `killed` |
 | `dod` | yes | ≥ 1 verifiable criterion (G4) |
 | `kill_reason` | when `killed` | why the measurement did not support the hypothesis |
+| `blocked_by` | when impeded | what stops the item from advancing — see below (G6, G7) |
 
 `suggested_mode` being non-binding is deliberate. A hunch filed as a `bug` that measurement reveals to be a `evolve` must change mode without leaving the backlog — reclassification is a DISCOVER outcome, not a re-intake.
 
@@ -90,10 +91,66 @@ dod:
 
 ```
 raw ──/discover-execute measures──┬──> triaged ──/to-plan──> planned ──/release──> shipped
-                          └──> killed (kill_reason mandatory)
+                                  │        ▲                    │
+                                  │        └──── send-back ─────┘
+                                  └──> killed (kill_reason mandatory)
 ```
 
-`raw → planned` is forbidden. Nothing reaches a plan without passing DISCOVER's measurement.
+`raw → planned` is forbidden. Nothing reaches a plan without passing DISCOVER's
+measurement. `planned → triaged` is the send-back: a plan that did not survive
+review returns to the stage that produces plans, not to intake.
+
+`shipped` and `killed` are terminal. A killed item keeps its number forever.
+
+**These transitions are written by `scripts/backlog_status.py`, not by hand.** That
+script exists because of a measurement on 2026-08-30: `planned` was in this contract
+and in zero items across every install — 22 `triaged`, 133 `shipped`, 11 `killed` in
+one project, 3 `raw` and 2 `triaged` in another, and not one `planned` anywhere. The
+cause was not discipline. Nothing wrote to `BACKLOG.md` at all, so every transition
+was a human editing a line, and the middle one quietly stopped happening. No gate
+could see it either: an item that skipped `planned` is indistinguishable from one
+that has not reached it yet.
+
+### Impediments
+
+An item that discovers mid-flight that it needs another item — new or already filed —
+files that item and records the dependency:
+
+```markdown
+status: planned
+blocked_by: B-100
+```
+
+**`blocked` is a derived state, not a sixth status.** The stage stays where it was,
+because the stage is what is needed to resume: an item that stalls at `planned` must
+come back at `planned`, and a status that overwrote it would have destroyed the only
+copy of that fact. A reader asking "what is the state of B-014" gets `blocked`; the
+registry stores `planned` plus an edge, and computes the rest.
+
+Deriving it also means it cannot rot. An item whose blockers have all shipped stops
+being blocked at that instant, with nobody remembering to clear a flag.
+
+**The edge is written on the blocked side only.** `blocks` — the reverse edge — is
+computed by the index and never typed. Storing both directions stores one fact twice,
+and the two copies diverge the first time someone edits in a hurry.
+
+**Not every impediment is an item.** The value is prose that MAY name ids. When it
+names them, they become verifiable edges; when it does not, it is still an
+impediment — just one nothing here can resolve. This is the field as it was already
+being used before it was specified: of the eight items carrying `blocked_by` when it
+was measured, seven named a sponsor decision, a ratification, or a revocation in a
+hosting panel, and exactly one named an item. A parser demanding `B-NNN` would have
+called seven honest impediments malformed.
+
+| Value | Edge | Resolves when |
+|---|---|---|
+| `B-100` | yes, verified | B-100 reaches `shipped` or `killed` |
+| `B-100 — and the sponsor must ratify` | yes, plus prose | a human clears the line |
+| `the sponsor must decide` | none | a human clears the line |
+| `none` (or an absent line) | none | already unblocked |
+
+An item may not ship while an impediment is live. `backlog_status.py` refuses it, and
+`check_backlog_structure.py` reports the ones that got in by hand.
 
 ## Domain routing
 
@@ -162,9 +219,11 @@ There is no "with caveats" band: an item is either in the registry or it is not.
 | G2 | **Dedup search ran** (`check_intake_gates.py`; running it IS the evidence) | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
 | G3 | **Single domain** _(not mechanized: judgement, by decision — deciding that a description spans two domains is not something a regex settles, and the evals cover it instead)_ | The description spans two domains. Split it; one item, one specialist. |
 | G4 | **Verifiable DoD** _(not mechanized: judgement, by decision — `check_criterion_executability.py` does the equivalent one phase later, against a plan; at intake an item is a hypothesis and a strict falsifiability check would silence the hunch)_ | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |
+| G6 | **Impediment edges resolve** (`check_backlog_structure.py`) | `blocked_by` names an id no block defines, or an item names itself. An edge pointing at nothing never resolves. |
+| G7 | **No impediment cycle** (`check_backlog_structure.py`) | A ring of `blocked_by` edges. Every item in it waits for another in it, so none can ever ship. This gate did not exist while items were independent; `blocked_by` gave them edges and brought it back. |
 | G5 | **No prior-art justification, and no fabricated local one** _(not mechanized: judgement, by decision — the keyword heuristic raises the question and the human decides; automating the refusal would reject an item that merely mentions another project)_ | `why_now` justifies the item by what another project does rather than by something that changed in our system. This is the Squad signature rule (Unbreakable Rule: evidence is ours or it is not evidence). Reject and ask for the local reason. **The second half was measured on 2026-08-28 and is the harder case:** given this item under time pressure, a smaller model refused the prior-art justification and then wrote a local one it had invented — *"shutdown is scattered, error propagation is unclear, testing is brittle"*, none of it observed. A fabricated local problem passes review more easily than a cited blog post, so refusing the appeal to authority is not enough: the replacement must name something someone measured, or the item becomes a spike that measures it. See `wiki/references/judgement-gates-are-insurance.md`. |
 
-G1 and G2 are mechanizable and are now mechanized; G3, G4 and G5 are judgement and stay conversational, covered by the skill's eval battery — automating them would produce verdicts about language, not about the work.
+G1, G2, G6 and G7 are mechanizable and are now mechanized; G3, G4 and G5 are judgement and stay conversational, covered by the skill's eval battery — automating them would produce verdicts about language, not about the work.
 
 G5 does not forbid *knowing* how others solved a problem — it forbids that knowledge from being the **justification** for the work. "We need caching because project X has it" is rejected. "We need caching because the endpoint makes 4 round-trips per request" is accepted, whether or not project X inspired the look.
 
@@ -178,6 +237,10 @@ Intake deliberately has **no evidence gate**. Requiring evidence here would coll
 - **Registering the sweep's output by hand.** Duplicates what `--sweep` already wrote, with weaker evidence.
 - **Multi-domain items.** "Improve ecosystem observability" is a program, not an item. It routes to nobody and closes never.
 - **`dod` that restates the title.** "DoD: the trace explorer being faster" is the title again, not a criterion.
+- **Writing `blocked` into `status`.** It destroys the stage the item must resume at, and then needs a second edit to clear — which nobody makes.
+- **Writing the reverse edge by hand.** `blocks:` is derived. Typing it creates a second copy of one fact, and the copies diverge.
+- **Leaving `blocked_by` on a closed item.** The registry then tells everyone after you that finished work is stuck.
+- **Blocking on an item nobody filed.** "Blocked by the auth rework" with no `B-NNN` and no block is a wish, not an edge.
 - **Treating `suggested_mode` as binding.** It is the filer's guess. Locking DISCOVER to it defeats the purpose of measuring.
 
 ## The index that opens the registry

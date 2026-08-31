@@ -309,3 +309,21 @@ def test_the_kit_does_not_judge_its_own_fixtures(tmp_path: Path) -> None:
     assert report.soft_floor is None, report.reason
     assert report.hard_cap is None, report.reason
     assert "tooling" in report.reason.lower()
+
+
+def test_needs_split_caps_the_plan_and_says_not_to_close_gaps(tmp_path):
+    """A split item scores low because it is two items; "close the gaps" is unfollowable."""
+    from check_alignment_gate import HARD_CAP, check_alignment_gate
+
+    (tmp_path / "BACKLOG.md").write_text("## B-014 — thing\nstatus: raw\n", encoding="utf-8")
+    _brief(tmp_path, "# Brief\n\n## Problem\n\nTwo subsystems.\n\n"
+                     "<!-- verdict: NEEDS_SPLIT: ingest and query -->\n")
+    plans = tmp_path / "records" / "plans"
+    plans.mkdir(parents=True, exist_ok=True)
+    plan = plans / "b-014-trace-p95-plan.md"
+    plan.write_text("---\nmilestone_id: B-014\n---\n\n# Plan\n", encoding="utf-8")
+
+    report = check_alignment_gate(plan)
+    assert report.verdict == "NEEDS_SPLIT"
+    assert report.hard_cap == HARD_CAP
+    assert "ingest and query" in report.reason

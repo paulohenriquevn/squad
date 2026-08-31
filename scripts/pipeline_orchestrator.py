@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 #: The chain `cycle-idea-to-release` declares. Seven, not five.
 STAGES: tuple[str, ...] = (
@@ -86,6 +87,34 @@ class Item:
         return self.stage == "__done__"
 
 
+#: What a completed stage means for the item's registry status. The pipeline moves an
+#: item between STAGES; the registry records how far it got. Mapping the two was missing
+#: entirely until 2026-08-30, so an item parked in a lane still read `triaged` on disk —
+#: and the disk is the only copy that outlives the session.
+#:
+#: Keyed by the stage being ENTERED, because entering one is the evidence the previous
+#: finished. Stages with no entry are stages that do not change the registry.
+STATUS_ON_ENTERING = {
+    "PLAN": "triaged",
+    "IMPLEMENT": "planned",
+    "__done__": "shipped",
+}
+
+
+@dataclass
+class StatusWrite:
+    """One pending change to BACKLOG.md, to be applied by `scripts/backlog_status.py`.
+
+    The pipeline accumulates these instead of writing, so that scheduling stays a pure
+    function of its own state and a run can be replayed, inspected, or aborted without
+    having already edited the registry.
+    """
+    slug: str
+    status: str | None = None
+    block_on: list[str] = field(default_factory=list)
+    note: str = ""
+
+
 @dataclass
 class Pipeline:
     items: list[Item]
@@ -93,6 +122,8 @@ class Pipeline:
     running: list[Item] = field(default_factory=list)
     live_worktrees: set[str] = field(default_factory=set)
     released_worktrees: set[str] = field(default_factory=set)
+    #: Registry changes this run has earned, oldest first. Drained by the runner.
+    pending_writes: list[StatusWrite] = field(default_factory=list)
 
     # ── queries ────────────────────────────────────────────────────────────
     def item(self, slug: str) -> Item:
@@ -140,6 +171,9 @@ class Pipeline:
         item.merge_only = None
         nxt = STAGES.index(item.stage) + 1
         item.stage = STAGES[nxt] if nxt < len(STAGES) else "__done__"
+        status = STATUS_ON_ENTERING.get(item.stage)
+        if status:
+            self.pending_writes.append(StatusWrite(item.slug, status=status))
 
     def fail(self, slug: str, reason: str) -> None:
         item = self.item(slug)
@@ -162,6 +196,28 @@ class Pipeline:
         item.parked = False
         item.attempts = 0
 
+    def block(self, slug: str, blockers: list[str] | None = None, note: str = "") -> None:
+        """An item that discovered mid-flight it needs another item.
+
+        This is the case the registry had no way to express: work starts, and partway
+        through it turns out to depend on something else — a new item to be filed, or
+        one already in the backlog. The lane is freed (holding it would burn a slot on
+        something that cannot move) and the dependency is recorded where it survives
+        the session, which is the registry rather than this object.
+
+        The item keeps its STAGE. It resumes where it stopped, because the stage is
+        exactly the fact needed to resume, and `blocked` is derived from the pair.
+        """
+        blockers = list(blockers or [])
+        if not blockers and not note.strip():
+            raise ValueError("an impediment needs either an item id or a stated reason")
+        item = self.item(slug)
+        item.parked = True
+        item.park_reason = note or f"blocked by {', '.join(blockers)}"
+        item.surfaced = True
+        self._release(item)
+        self.pending_writes.append(StatusWrite(slug, block_on=blockers, note=note))
+
     def send_back(self, slug: str, to: str, commit: str) -> None:
         """A merge-only hop to an earlier stage: carries a commit, not a task."""
         if STAGES.index(to) >= STAGES.index(self.item(slug).stage):
@@ -171,10 +227,22 @@ class Pipeline:
         item.stage = to
         item.merge_only = commit
         item.parked = False
+        # A send-back demotes the registry too. An item whose plan did not survive
+        # review is no longer `planned`, and leaving it so tells every later reader
+        # that a plan exists which review already rejected.
+        status = STATUS_ON_ENTERING.get(to)
+        if status:
+            self.pending_writes.append(StatusWrite(slug, status=status))
 
     def force_stage(self, slug: str, stage: str) -> None:
         """Test and recovery seam: place an item without running the stages."""
         self.item(slug).stage = stage
+
+    # ── the registry ───────────────────────────────────────────────────────
+    def drain_writes(self) -> list[StatusWrite]:
+        """Hand over the pending registry changes and forget them."""
+        writes, self.pending_writes = self.pending_writes, []
+        return writes
 
     # ── worktrees ──────────────────────────────────────────────────────────
     def _release(self, item: Item) -> None:
@@ -184,3 +252,27 @@ class Pipeline:
             self.live_worktrees.discard(item.worktree)
             self.released_worktrees.add(item.worktree)
             item.worktree = None
+
+
+def apply_writes(backlog: Path, writes: list[StatusWrite]) -> list[str]:
+    """Apply pending registry changes, returning the refusals rather than raising.
+
+    Refusals are RETURNED, not raised, because one illegal transition must not abort
+    the others. A run that discovers three things and can record two of them should
+    record two — the third comes back as a line for a human to read, which is the
+    honest outcome when the writer and the registry disagree about what is legal.
+    """
+    import backlog_status as bs
+
+    content = backlog.read_text(encoding="utf-8")
+    refusals: list[str] = []
+    for write in writes:
+        try:
+            if write.block_on or write.note:
+                content = bs.block(content, write.slug.upper(), write.block_on, write.note)
+            if write.status:
+                content = bs.advance(content, write.slug.upper(), write.status)
+        except bs.Refused as exc:
+            refusals.append(f"{write.slug}: {exc}")
+    backlog.write_text(content, encoding="utf-8")
+    return refusals

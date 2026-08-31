@@ -296,6 +296,21 @@ before/after that only counts improvements hides it.
 | `BLOCKED` | Machine score < 90% | The item is **not** built. Close the listed gaps and re-run |
 | `NEEDS_SPLIT` | The item describes independent subsystems, or cannot converge in five questions | Split; each piece aligns on its own |
 
+`NEEDS_SPLIT` is **declared by the reviewer, never inferred**. Mark the brief:
+
+```markdown
+<!-- verdict: NEEDS_SPLIT: ingest and query are independent subsystems -->
+```
+
+`score_alignment.py` transports the marker and `check_alignment_gate.py` caps the
+plan on it. Deciding that a description spans independent subsystems is judgement —
+the same judgement left unmechanized at intake (gate G3) for the same reason: a
+regex over a brief produces verdicts about language, not about the work.
+
+The marker is checked **before** the score, because a split item scores low as a
+consequence of being two items. Reporting `BLOCKED` would send the reviewer to close
+gaps that no rewrite can close.
+
 There is no "aligned with caveats". A caveat is an open question, and an open
 question is what this skill exists to close.
 

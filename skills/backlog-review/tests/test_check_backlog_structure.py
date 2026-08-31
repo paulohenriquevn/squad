@@ -249,3 +249,140 @@ def test_other_repeated_fields_are_not_reported(tmp_path: Path) -> None:
     )
     report = check_backlog(backlog)
     assert [f for f in report["findings"] if f["check"] == "duplicate_field"] == []
+
+
+# ── impediment edges ──────────────────────────────────────────────────────────
+#
+# Items stopped being independent when `blocked_by` gave them edges, which is why
+# cycle detection — dropped when this file was written — came back.
+
+
+def _blocked(tmp_path: Path, *blocks: str) -> dict:
+    return check_backlog(write_backlog(tmp_path, *blocks))
+
+
+def test_an_edge_to_an_unfiled_item_is_a_blocker(tmp_path: Path) -> None:
+    report = _blocked(tmp_path, item_block("B-001", status="triaged", extra="blocked_by: B-404\n"))
+    assert "blocker_missing" in _checks(report)
+    assert report["verdict"] == "INVALID"
+
+
+def test_an_item_blocking_itself_is_caught(tmp_path: Path) -> None:
+    report = _blocked(tmp_path, item_block("B-001", status="triaged", extra="blocked_by: B-001\n"))
+    assert "self_block" in _checks(report)
+
+
+def test_a_two_item_ring_is_reported_once(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw", extra="blocked_by: B-001\n"),
+    )
+    rings = [f for f in report["findings"] if f["check"] == "blocker_cycle"]
+    assert len(rings) == 1, rings
+    assert report["verdict"] == "INVALID"
+
+
+def test_a_three_item_ring_is_reported_once(tmp_path: Path) -> None:
+    """Keyed by membership, not entry point — otherwise one deadlock reads as three."""
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw", extra="blocked_by: B-003\n"),
+        item_block("B-003", status="raw", extra="blocked_by: B-001\n"),
+    )
+    assert len([f for f in report["findings"] if f["check"] == "blocker_cycle"]) == 1
+
+
+def test_a_chain_without_a_ring_is_clean(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw", extra="blocked_by: B-003\n"),
+        item_block("B-003", status="raw"),
+    )
+    assert "blocker_cycle" not in _checks(report)
+
+
+def test_an_edge_whose_blockers_all_closed_is_stale(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="shipped"),
+    )
+    assert "stale_block" in _checks(report)
+
+
+def test_a_live_edge_is_not_stale(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    assert "stale_block" not in _checks(report)
+
+
+def test_a_closed_item_with_an_open_blocker_is_incoherent(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="shipped", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    assert "closed_but_blocked" in _checks(report)
+
+
+# ── the field as it was already used, before it was specified ─────────────────
+
+
+def test_a_prose_impediment_is_not_malformed(tmp_path: Path) -> None:
+    """Seven of the eight real values named no item at all. None is a defect."""
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: decisão do patrocinador\n"),
+    )
+    assert not {"blocker_missing", "stale_block"} & _checks(report)
+
+
+def test_an_id_named_inside_prose_still_becomes_an_edge(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-404 — confirmado por medição\n"),
+    )
+    assert "blocker_missing" in _checks(report)
+
+
+def test_an_edge_carrying_prose_is_never_called_stale(tmp_path: Path) -> None:
+    """Nothing here can tell whether a sponsor ratified; saying so would be a lie."""
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002 — and the sponsor must ratify\n"),
+        item_block("B-002", status="shipped"),
+    )
+    assert "stale_block" not in _checks(report)
+
+
+def test_none_declares_no_impediment(tmp_path: Path) -> None:
+    report = _blocked(tmp_path, item_block("B-001", status="triaged", extra="blocked_by: none\n"))
+    assert not {"blocker_missing", "stale_block", "self_block"} & _checks(report)
+
+
+# ── the derived state ─────────────────────────────────────────────────────────
+
+
+def test_effective_state_replaces_the_stage_while_a_blocker_is_open(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    assert report["items_by_effective_state"]["blocked"] == 1
+    assert report["items_by_status"]["triaged"] == 1
+
+
+def test_effective_state_needs_no_second_edit_when_the_blocker_ships(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="shipped"),
+    )
+    assert "blocked" not in report["items_by_effective_state"]

@@ -23,6 +23,7 @@ verdict that scorer produces and turns it into a cap:
 |---|---|
 | Plan cites no `B-NNN` and no brief exists for it  | soft floor (<= 89) — see below |
 | Cites an item, no alignment brief on disk         | **hard cap (<= 49)** |
+| Reviewer marked the brief NEEDS_SPLIT             | **hard cap (<= 49)** — NEEDS_SPLIT |
 | Brief scores below the machine threshold          | **hard cap (<= 49)** — BLOCKED |
 | Brief clears it but no human signed off           | **hard cap (<= 49)** — AWAITING_REVIEW |
 | Brief unreadable                                  | **hard cap (<= 49)** |
@@ -115,7 +116,7 @@ SOFT_FLOOR = 89     # SHIPPABLE -> SHIPPABLE_WITH_CAVEATS
 @dataclass(frozen=True)
 class AlignmentGateReport:
     applies: bool
-    verdict: str | None          # ALIGNED · AWAITING_REVIEW · BLOCKED · MISSING · UNREADABLE
+    verdict: str | None          # ALIGNED · AWAITING_REVIEW · BLOCKED · NEEDS_SPLIT · MISSING · UNREADABLE
     reason: str
     hard_cap: int | None = None
     soft_floor: int | None = None
@@ -228,6 +229,19 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
             hard_cap=HARD_CAP, brief_path=str(brief))
 
     ratio = round(report.machine_ratio, 4)
+
+    # Checked before the score, for the same reason the scorer checks it first: a
+    # split item scores low BECAUSE it is two items, and "close these gaps" is advice
+    # no rewrite can follow. The plan must not be built either way, so the cap is the
+    # same — what changes is what the reader is told to do about it.
+    if report.needs_split:
+        because = f" ({report.split_reason})" if report.split_reason else ""
+        return AlignmentGateReport(
+            applies=True, verdict="NEEDS_SPLIT",
+            reason=(f"the reviewer marked this brief NEEDS_SPLIT{because}. "
+                    f"Do not close gaps — split the item, and align each piece on its own."),
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+
     if not report.meets_machine_threshold:
         gaps = ", ".join(c.key for c in report.gaps[:4])
         return AlignmentGateReport(
