@@ -147,6 +147,11 @@ _ITEM_RE = re.compile(r"\bB-\d{3,}\b")
 _SLASH_COMMAND_RE = re.compile(r"/[a-z][a-z0-9-]*")
 
 
+#: How long to wait for a terminal to redraw after a keystroke. Sending a key and
+#: reading the result are separate events, and nothing orders them; the first version
+#: read immediately and always saw the screen from before the move.
+_REDRAW_SECONDS = 3.0
+
 #: Menu entries that are not decisions. They open a text field, a conversation or a
 #: way out — choosing one answers nothing and changes the screen into a shape the lead
 #: cannot read. Measured: an agent picked "Type something." and cited a rule for it.
@@ -890,9 +895,14 @@ class Lead:
             # Re-read before committing: if the cursor is not where the arrows should
             # have put it, something else moved the menu and Enter would take the wrong
             # option.
-            screen_now = self.capture() or ""
-            landed = _SELECTED_RE.search(screen_now)
-            if not landed or landed.group(1) != decision.option_number:
+            #
+            # Polled rather than read once. The first version captured immediately after
+            # send-keys and always saw the screen as it was BEFORE the redraw, so the
+            # guard refused every move the arrows had actually made — three
+            # consultations reached the right option, by the right rule, and none of
+            # them ever pressed Enter. Sending a key and reading the result are separate
+            # events, and a terminal owes you no ordering between them.
+            if not self._cursor_reached(decision.option_number):
                 self._rewind_cursor(back, moved)
                 return False
             subprocess.run(["tmux", "send-keys", "-t", self.session, "Enter"],
@@ -904,6 +914,21 @@ class Lead:
             self.interventions[decision.item] = self.interventions.get(decision.item, 0) + 1
         self.answered.add(f"{decision.item}|{decision.option}")
         return True
+
+    def _cursor_reached(self, number: str) -> bool:
+        """Wait for the terminal to redraw, then confirm the cursor landed.
+
+        Bounded, and it fails closed: if the cursor is not there within the window, the
+        answer is no. The window only has to cover a redraw, so it is short — long
+        enough for a terminal, far too short to sit through anything the session does.
+        """
+        deadline = time.monotonic() + _REDRAW_SECONDS
+        while time.monotonic() < deadline:
+            landed = _SELECTED_RE.search(self.capture() or "")
+            if landed and landed.group(1) == number:
+                return True
+            time.sleep(0.2)
+        return False
 
     def _rewind_cursor(self, key: str, steps: int) -> None:
         """Put the cursor back where the session left it.
@@ -917,6 +942,7 @@ class Lead:
             try:
                 subprocess.run(["tmux", "send-keys", "-t", self.session, key],
                                check=True, timeout=15)
+                time.sleep(0.15)
             except (OSError, subprocess.SubprocessError):
                 return
 

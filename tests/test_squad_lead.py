@@ -953,3 +953,33 @@ def test_the_agent_is_called_with_stdin_closed(tmp_path: Path) -> None:
     finally:
         subprocess.run = original
     assert seen.get("stdin") is subprocess.DEVNULL
+
+
+def test_the_cursor_check_waits_for_the_redraw(tmp_path: Path) -> None:
+    """Sending a key and reading the result are separate events, and a terminal owes no
+    ordering between them.
+
+    The first version captured immediately after send-keys and always saw the screen as
+    it was BEFORE the redraw. Three consultations reached the right option, by the right
+    rule, and none of them ever pressed Enter — the guard refused every move the arrows
+    had actually made."""
+    lead = Lead(session="s")
+    frames = iter(["❯ 1. before the redraw\n  2. target\n",     # english-only: a screen
+                   "❯ 1. before the redraw\n  2. target\n",     # english-only: idem
+                   "  1. before the redraw\n❯ 2. target\n"])    # english-only: idem
+    lead.capture = lambda: next(frames, "  1. x\n❯ 2. target\n")
+    assert lead._cursor_reached("2") is True
+
+
+def test_the_cursor_check_fails_closed(tmp_path: Path) -> None:
+    """If the cursor never lands within the window, the answer is no. A guard that
+    times out into a yes is not a guard."""
+    import squad_lead
+    lead = Lead(session="s")
+    lead.capture = lambda: "❯ 1. never moves\n  2. target\n"   # english-only: a screen
+    original = squad_lead._REDRAW_SECONDS
+    try:
+        squad_lead._REDRAW_SECONDS = 0.4
+        assert lead._cursor_reached("2") is False
+    finally:
+        squad_lead._REDRAW_SECONDS = original
