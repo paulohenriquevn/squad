@@ -341,6 +341,9 @@ class Lead:
     #: Where decisions are written. Read back to the agent so consecutive consultations
     #: about one item cannot contradict each other.
     log_path: Path | None = None
+    #: The ranked order SELECT last returned, so a head that cannot start does not end
+    #: the search.
+    queue: list[str] = field(default_factory=list)
     #: True once a handed-back turn has been reported, so it is not repeated every
     #: poll. Cleared when the session moves again.
     reported_stall: bool = False
@@ -644,6 +647,12 @@ class Lead:
         item = answer.get("item_id") or ""
         if not _VALID_ITEM_RE.match(item):
             return None, f"SELECT named {item!r}, which is not an item id"
+        # The rest of the order comes back too. The lead used to take only the head and
+        # stop when it could not be started, which is the failure the envelope names in
+        # its own words: a queue that halts because ONE item is hard has turned a local
+        # problem into a global one. Measured: an item hit its per-item ceiling and the
+        # watchdog reported "the backlog offers nothing to start" with 25 items waiting.
+        self.queue = [i for i in (answer.get("queue") or []) if _VALID_ITEM_RE.match(i)]
         return item, answer.get("reason", "")
 
     # ── reading the session ────────────────────────────────────────────────
@@ -701,14 +710,24 @@ class Lead:
             # need a person; the QUEUE does not. Ask SELECT.
             item, why = self.next_item()
             if item:
-                allowed, verdict = self.may_start(item, time.time())
-                if allowed:
-                    return Decision(
-                        "start", f"the session handed the turn back after "
-                                 f"{int(idle // 60)} minute(s); SELECT names {item} as next "
-                                 f"({why}); {verdict}",
-                        self.handoff(item, why), item)
-                why = f"{verdict}. SELECT still names it: {why}"
+                now = time.time()
+                # Down the order, not just its head. `queue` is already ranked — what
+                # unblocks a halt first, then triaged before raw, then oldest — so the
+                # first candidate that may start is the right one to start.
+                held = []
+                for candidate in [item] + [q for q in self.queue if q != item]:
+                    allowed, verdict = self.may_start(candidate, now)
+                    if allowed:
+                        reason = (why if candidate == item
+                                  else f"{item} is held ({held[0] if held else 'unavailable'}), "
+                                       f"so the next in the ranked queue")
+                        return Decision(
+                            "start", f"the session handed the turn back after "
+                                     f"{int(idle // 60)} minute(s); SELECT names "
+                                     f"{candidate} ({reason}); {verdict}",
+                            self.handoff(candidate, reason), candidate)
+                    held.append(f"{candidate}: {verdict}")
+                why = ("every item in the queue is held — " + "; ".join(held[:3]))
 
             if self.reported_stall:
                 return Decision("wait", "no menu is waiting")

@@ -1017,3 +1017,44 @@ def test_the_cursor_check_fails_closed(tmp_path: Path) -> None:
         assert lead._cursor_reached("2") is False
     finally:
         squad_lead._REDRAW_SECONDS = original
+
+
+# ── one hard item does not stop the queue ────────────────────────────────────
+
+
+def test_the_lead_moves_down_the_queue_when_the_head_is_held(tmp_path: Path) -> None:
+    """The envelope says it in its own words: a queue that halts because ONE item is
+    hard has turned a local problem into a global one.
+
+    Measured: an item hit its per-item ceiling, `may_start` refused it, and the
+    watchdog reported "the backlog offers nothing to start" with 25 items waiting. It
+    only ever looked at the head."""
+    import time
+    lead = _lead_with_select(tmp_path, {"item": "B-059", "why": "oldest unblocked"})
+    lead.queue = ["B-059", "B-060", "B-067"]
+    lead.interventions["B-059"] = lead.max_per_item          # head is spent
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "start"
+    assert decision.item == "B-060"
+    assert "B-059 is held" in decision.reason
+
+
+def test_the_head_still_wins_when_it_can_start(tmp_path: Path) -> None:
+    """Walking the queue must not reorder it. The ranking is the selector's."""
+    lead = _lead_with_select(tmp_path, {"item": "B-059", "why": "oldest unblocked"})
+    lead.queue = ["B-059", "B-060"]
+    assert lead.decide("no menu here", idle=1000).item == "B-059"
+
+
+def test_a_queue_entirely_held_is_reported_with_the_reasons(tmp_path: Path) -> None:
+    """Then it really is stalled — and the log says what held each one, so the report
+    can be checked instead of believed."""
+    import time
+    lead = _lead_with_select(tmp_path, {"item": "B-059", "why": "oldest"})
+    lead.queue = ["B-059", "B-060"]
+    for item in ("B-059", "B-060"):
+        lead.interventions[item] = lead.max_per_item
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "stalled"
+    assert "every item in the queue is held" in decision.reason
+    assert "B-059" in decision.reason and "B-060" in decision.reason
