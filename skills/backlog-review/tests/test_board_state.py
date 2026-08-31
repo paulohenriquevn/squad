@@ -78,11 +78,27 @@ def test_the_stream_outranks_the_status(tmp_path: Path) -> None:
     assert _by_id(build_state(project))["B-001"]["phase"] == "review"
 
 
-def test_the_furthest_phase_wins_not_the_last_line(tmp_path: Path) -> None:
-    """Events can arrive out of order; position is how far it got, not what came last."""
+def test_the_last_phase_observed_wins_not_the_furthest(tmp_path: Path) -> None:
+    """"Furthest wins" assumes the cycle only moves forward, and it does not.
+
+    Measured on 2026-08-31: an item's last event was `implement FAIL` and the board
+    showed `code-quality`, because code-quality sits later in the sequence. The item
+    had gone BACK — a plan review rejects returns, and an implementation that fails its
+    own gate is worked again. Hiding that is the same defect as predicting the next
+    phase, one step removed.
+    """
     project = _project(tmp_path, item_block("B-001", status="triaged"),
-                       events=[_end("review", "B-001"), _end("discover", "B-001")])
-    assert _by_id(build_state(project))["B-001"]["phase"] == "review"
+                       events=[_end("code-quality", "B-001"), _end("implement", "B-001", "FAIL")])
+    item = _by_id(build_state(project))["B-001"]
+    assert item["phase"] == "implement"
+    assert item["last_verdict"] == "FAIL"
+
+
+def test_going_forward_still_works(tmp_path: Path) -> None:
+    """The fix must not turn every stream into a walk backwards."""
+    project = _project(tmp_path, item_block("B-001", status="triaged"),
+                       events=[_end("plan", "B-001"), _end("implement", "B-001", "VALIDATED")])
+    assert _by_id(build_state(project))["B-001"]["phase"] == "implement"
 
 
 def test_the_last_verdict_is_carried(tmp_path: Path) -> None:

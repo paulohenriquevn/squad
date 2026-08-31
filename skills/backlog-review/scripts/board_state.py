@@ -377,10 +377,19 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         if not slug or cycle not in PHASES or event.get("type") != "cycle:phase:end":
             continue
         if cycle in PHASES:
-            prev = reached.get(slug)
-            if prev is None or PHASES.index(cycle) >= PHASES.index(prev["phase"]):
-                reached[slug] = {"phase": cycle, "verdict": event.get("verdict"),
-                                 "at": event.get("timestamp")}
+            # The LAST phase observed, not the furthest one. "Furthest wins" assumes the
+            # cycle only moves forward, and it does not: a plan that review rejects goes
+            # back, and an implementation that fails its own gate is worked again.
+            #
+            # Measured on 2026-08-31: an item's last event was `implement FAIL` at
+            # 16:36:01 and the board showed `code-quality`, because code-quality sits
+            # later in the sequence. The operator asked whether that was right. It was
+            # not — the item had gone back, and hiding that is the same defect as
+            # predicting the next phase, one step removed.
+            #
+            # The stream is append-only, so file order is chronological.
+            reached[slug] = {"phase": cycle, "verdict": event.get("verdict"),
+                             "at": event.get("timestamp")}
 
     out_items = []
     for item in items:
