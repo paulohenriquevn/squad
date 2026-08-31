@@ -568,6 +568,20 @@ elif [ -f "$SRC_DIR/agents/README.md" ]; then
   echo "==> Copying agents/README.md (the routing mechanism)"
   cp "$SRC_DIR/agents/README.md" "$ECO/agents/README.md"
 fi
+
+# The kit's OWN agents, by name. They are not domain specialists — they describe no
+# repository and make no claim about the consumer's topology, which is the whole
+# reason specialists cannot ship. These two are mechanism, like the README: they say
+# what to do when the maintenance queue stops, and that is identical everywhere.
+#
+# Named explicitly rather than copied wholesale, so a specialist the project wrote
+# can never be overwritten by a glob that grew.
+for kit_agent in squad-lead.md squad-boss.md; do
+  if [ -f "$SRC_DIR/agents/$kit_agent" ]; then
+    cp "$SRC_DIR/agents/$kit_agent" "$ECO/agents/$kit_agent"
+    echo "    agents/$kit_agent"
+  fi
+done
 # Top-level docs and manifest
 for f in HOW-TO-USE.md README.md .active_plan.example; do
   [ -f "$SRC_DIR/$f" ] && cp "$SRC_DIR/$f" "$ECO/$f"

@@ -20,6 +20,9 @@ from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
+from kit_agents import kit_agents  # noqa: E402
+
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
@@ -116,7 +119,8 @@ def test_every_specialist_on_disk_is_reachable_from_the_table(table: dict | None
     """
     declared = {entry["agent"] for entry in (table or {}).values()}
     on_disk = {
-        f"agents/{p.name}" for p in AGENTS_DIR.glob("*.md") if p.name != "README.md"
+        f"agents/{p.name}" for p in AGENTS_DIR.glob("*.md")
+        if p.name not in kit_agents()
     }
     orphans = sorted(on_disk - declared)
     assert orphans == [], (

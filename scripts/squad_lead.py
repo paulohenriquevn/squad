@@ -153,10 +153,31 @@ _SLASH_COMMAND_RE = re.compile(r"/[a-z][a-z0-9-]*")
 _START_TEMPLATE = "/idea-to-release {item}"
 _VALID_ITEM_RE = re.compile(r"^B-\d{3,}$")
 
+#: An item id anywhere in a slug, with or without the hyphen and in either case.
+#: The stream carries BOTH forms — `B-033` from the registry phases and
+#: `b033-prometheus-url-dev-public` from the phases that produce artefacts — and
+#: matching only the first would have read every plan-slug event as belonging to no
+#: item, which is exactly how the board once lost half of its own execution.
+_SLUG_ITEM_RE = re.compile(r"\bb-?(\d{3,})\b", re.IGNORECASE)
+
+#: What the lead asks when the selector has computed everything and the queue is
+#: still stopped. Deliberately states the constraint the agent inherits, because the
+#: agent file states it too and a prompt that contradicts it would be the one place
+#: the rule could be lost.
+_STUCK_PROMPT = """The maintenance queue is stopped and the mechanical selector has no
+actionable answer. Its verdict was: {why}
+
+Read the registry, the event stream, the selector's JSON output and any BLOCKED
+reports on disk, then name ONE next move that is flow — a registry write the contract
+already prescribes. Do not decide anything a person owns, do not relax any gate, and
+do not recommend an option carrying a flag that switches off a precondition. If the
+honest answer is that only a person can move this, say exactly which decision and on
+which item."""
+
 
 @dataclass
 class Decision:
-    action: str          # confirm · escalate · wait · exhausted · stalled · start
+    action: str          # confirm · escalate · wait · exhausted · stalled · start · asked
     reason: str
     option: str = ""
     item: str = ""
@@ -190,6 +211,20 @@ class Lead:
     #: `_still_quiet` re-reads the marker before typing, so the horizon does not have
     #: to carry the whole safety margin by itself.
     stalled_seconds: int = 120
+    #: How long an attempt that produced no event at all is given before another is
+    #: allowed. Long enough that a session starting a cycle is not interrupted;
+    #: short enough that a command that never landed is not final.
+    retry_after: int = 300
+    #: Whether the lead may spend money on an agent when the mechanical path has no
+    #: answer. Off by default: a daemon that calls a model unattended is a different
+    #: thing from a daemon that reads a screen, and the difference should be chosen.
+    agents_when_stuck: bool = False
+    agent_budget_usd: float = 0.50
+    agent_timeout: int = 300
+    #: One ask per agent per this many seconds. The queue being stuck is a state, not
+    #: an event: without this the lead would re-ask on every poll.
+    agent_cooldown: int = 1800
+    agent_asked: dict[str, float] = field(default_factory=dict)
     #: True once a handed-back turn has been reported, so it is not repeated every
     #: poll. Cleared when the session moves again.
     reported_stall: bool = False
@@ -197,9 +232,112 @@ class Lead:
     #: answered. Both are stopping criteria, not statistics.
     interventions: dict[str, int] = field(default_factory=dict)
     answered: set[str] = field(default_factory=set)
-    #: Items this lead has already started. Starting one twice is the loop the
-    #: per-item ceiling exists to stop, one level up.
-    started: set[str] = field(default_factory=set)
+    #: What this lead tried, and what the stream held at that moment:
+    #: item -> (when it typed, how many events the item had then).
+    #:
+    #: It used to be a set of "already started", checked forever. That made ONE
+    #: attempt final: an item whose command never took — the session busy at the
+    #: instant of the keystroke, a person cancelling the run, anything — was never
+    #: offered again, and the queue died on it.
+    #:
+    #: Measured on 2026-08-31: the lead typed `/idea-to-release B-169` at 19:30:59,
+    #: the operator stopped the run to show the behaviour, the stream recorded nothing
+    #: for B-169, and every poll after that answered "already started once by this
+    #: lead". Ten minutes, then indefinitely.
+    #:
+    #: Repeating is legitimate when something sent the work back, or when the attempt
+    #: never landed; it is a loop only when nothing changed and no time passed. The
+    #: stream answers the first question and the clock answers the second — and
+    #: `max_per_item`, which already existed, is the ceiling over both.
+    attempts: dict[str, tuple[float, int]] = field(default_factory=dict)
+
+    # ── may this item be started again? ────────────────────────────────────
+    def _event_count(self, item: str) -> int:
+        """How many phase events the stream holds for this item.
+
+        Zero when the stream cannot be read: an unreadable stream is NOT MEASURED,
+        and treating it as "nothing moved" is the safe direction — it only ever
+        delays a retry, never fabricates progress.
+        """
+        if self.project is None:
+            return 0
+        tooling = Path(__file__).resolve().parent
+        if str(tooling) not in sys.path:
+            sys.path.insert(0, str(tooling))
+        try:
+            from cycle_events import read_events
+        except ImportError:
+            return 0
+        try:
+            events = read_events(self.project)
+        except (OSError, ValueError):
+            return 0
+        wanted = item.upper()
+        seen = 0
+        for event in events:
+            match = _SLUG_ITEM_RE.search(str(event.get("slug") or ""))
+            if match and f"B-{match.group(1)}" == wanted:
+                seen += 1
+        return seen
+
+    # ── asking an agent, from outside the session ─────────────────────────
+    def ask_agent(self, agent: str, question: str) -> tuple[str | None, str]:
+        """Run one headless session so an agent can answer what this cannot compute.
+
+        A subagent cannot help here: it lives inside a session, and the whole reason
+        this watchdog exists is that the session is the thing that stopped. So the
+        judgement runs in a NEW process — `claude -p` — with the project as its
+        working directory, where `.claude/agents/{agent}.md` is on disk.
+
+        Three limits, because a daemon that spends money unattended needs them:
+        `--max-budget-usd` caps one call, `agent_cooldown` caps the rate, and the
+        whole path is off unless `--agents-when-stuck` turned it on. Returns
+        (answer, why) — `None` and a reason whenever it did not run.
+        """
+        if not self.agents_when_stuck:
+            return None, "agents are off (pass --agents-when-stuck)"
+        if self.project is None:
+            return None, "no project to run the agent in"
+        now = time.time()
+        last = self.agent_asked.get(agent, 0.0)
+        if now - last < self.agent_cooldown:
+            return None, (f"{agent} was asked {int(now - last)}s ago; "
+                          f"waiting out the {self.agent_cooldown}s cooldown")
+        self.agent_asked[agent] = now
+        prompt = (f"Use the `{agent}` subagent for this, and report its answer "
+                  f"verbatim without adding to it.\n\n{question}")
+        try:
+            out = subprocess.run(
+                ["claude", "-p", prompt,
+                 "--max-budget-usd", str(self.agent_budget_usd),
+                 "--no-session-persistence"],
+                capture_output=True, text=True, timeout=self.agent_timeout,
+                cwd=str(self.project))
+        except subprocess.TimeoutExpired:
+            return None, f"{agent} did not answer in {self.agent_timeout}s"
+        except (OSError, subprocess.SubprocessError) as error:
+            return None, f"{agent} could not be run ({error})"
+        if out.returncode != 0:
+            return None, f"{agent} exited {out.returncode}: {out.stderr.strip()[:200]}"
+        answer = out.stdout.strip()
+        return (answer, "answered") if answer else (None, f"{agent} answered nothing")
+
+    def may_start(self, item: str, now: float) -> tuple[bool, str]:
+        """Whether to type this item's command, and the reason either way."""
+        if self.interventions.get(item, 0) >= self.max_per_item:
+            return False, f"{item} already started {self.max_per_item} times"
+        previous = self.attempts.get(item)
+        if previous is None:
+            return True, "not tried yet"
+        when, count_then = previous
+        if self._event_count(item) > count_then:
+            # A phase ran since the attempt. If SELECT is naming the item again, the
+            # work came back — which is the chain working, not a loop.
+            return True, "the item moved since the last attempt, and is back in the queue"
+        if now - when >= self.retry_after:
+            return True, (f"the last attempt produced no event in "
+                          f"{int((now - when) // 60)} minute(s); it did not land")
+        return False, f"{item} was started {int(now - when)}s ago and has not moved yet"
 
     # ── choosing what runs next ────────────────────────────────────────────
     def next_item(self) -> tuple[str | None, str]:
@@ -289,22 +427,32 @@ class Lead:
             # The turn is back and nothing is on screen to answer. The ITEM may well
             # need a person; the QUEUE does not. Ask SELECT.
             item, why = self.next_item()
-            if item and item not in self.started:
-                return Decision(
-                    "start", f"the session handed the turn back after "
-                             f"{int(idle // 60)} minute(s); SELECT names {item} as next "
-                             f"({why})", _START_TEMPLATE.format(item=item), item)
+            if item:
+                allowed, verdict = self.may_start(item, time.time())
+                if allowed:
+                    return Decision(
+                        "start", f"the session handed the turn back after "
+                                 f"{int(idle // 60)} minute(s); SELECT names {item} as next "
+                                 f"({why}); {verdict}",
+                        _START_TEMPLATE.format(item=item), item)
+                why = f"{verdict}. SELECT still names it: {why}"
 
             if self.reported_stall:
                 return Decision("wait", "no menu is waiting")
             # Either SELECT has nothing to hand out, or it keeps naming one this lead
             # already started. Both are a person's to clear, and both are reported with
             # SELECT's own words rather than a summary of them.
-            already = " (already started once by this lead)" if item else ""
+            # Nothing mechanical answers. This is the one place judgement is worth
+            # paying for: the selector computed everything it could and the queue is
+            # still stopped.
+            answer, note = self.ask_agent("squad-lead", _STUCK_PROMPT.format(why=why))
+            if answer:
+                return Decision("asked", f"the queue is stopped ({why}); squad-lead says:"
+                                         f" {answer[:900]}")
             return Decision("stalled",
                             f"the session ended its turn and has been idle for "
                             f"{int(idle // 60)} minute(s); no menu is waiting and the "
-                            f"backlog offers nothing to start — {why}{already}")
+                            f"backlog offers nothing to start — {why} [{note}]")
 
         option_text = selected.group(2)
         options = _OPTION_RE.findall(screen)
@@ -395,7 +543,9 @@ class Lead:
                            check=True, timeout=15)
         except (OSError, subprocess.SubprocessError):
             return False
-        self.started.add(decision.item)
+        # Recorded WITH the stream depth at this moment, so the next decision can ask
+        # whether anything happened rather than whether anything was typed.
+        self.attempts[decision.item] = (time.time(), self._event_count(decision.item))
         self.interventions[decision.item] = self.interventions.get(decision.item, 0) + 1
         return True
 
@@ -465,6 +615,14 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
                                    "keystrokes; not typing into a working session")
         _log(log, entry)
 
+        if decision.action == "asked":
+            # An answer is not an action. It goes in the log for a person to read, and
+            # the lead keeps watching — acting on it would be the lead deciding what
+            # it just paid an agent to think about.
+            lead.reported_stall = True
+            time.sleep(poll)
+            continue
+
         if decision.action == "start":
             # The session has work again. The next stall is a new fact.
             lead.reported_stall = False
@@ -502,6 +660,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="seconds of silence before the lead may act")
     parser.add_argument("--poll", type=int, default=20)
     parser.add_argument("--max-per-item", type=int, default=3)
+    parser.add_argument("--agents-when-stuck", action="store_true",
+                        help="when the selector has no actionable answer, spend one "
+                             "headless `claude -p` call asking the squad-lead agent "
+                             "what to do. Off by default")
+    parser.add_argument("--agent-budget-usd", type=float, default=0.50,
+                        help="cap for one agent call (default 0.50)")
+    parser.add_argument("--agent-cooldown", type=int, default=1800,
+                        help="minimum seconds between asks of the same agent")
     parser.add_argument("--project", type=Path,
                         help="project whose BACKLOG.md SELECT reads. Without it the "
                              "lead reports a handed-back turn and starts nothing")
@@ -516,7 +682,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: no BACKLOG.md under {project}", file=sys.stderr)
         return 1
     lead = Lead(session=args.session, project=project, max_per_item=args.max_per_item,
-                idle_seconds=args.idle, stalled_seconds=args.stalled)
+                idle_seconds=args.idle, stalled_seconds=args.stalled,
+                agents_when_stuck=args.agents_when_stuck,
+                agent_budget_usd=args.agent_budget_usd,
+                agent_cooldown=args.agent_cooldown)
     return watch(lead, args.marker, args.log, args.poll, rounds=1 if args.once else None)
 
 

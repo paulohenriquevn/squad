@@ -12,7 +12,11 @@ Without a manifest, the only way to tell them apart would be guessing by name.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
+from kit_agents import kit_agents  # noqa: E402
 
 _REPO = Path(__file__).resolve().parent.parent
 MANIFEST = ".claude/.kit-manifest.txt"
@@ -110,9 +114,12 @@ def test_no_specialist_is_ever_installed(tmp_path: Path) -> None:
     target = tmp_path / "consumidor"
     _install(target)
     agents = target / ".claude" / "agents"
-    installed = sorted(p.name for p in agents.glob("*.md"))
-    assert installed == ["README.md"], (
-        f"the install brought specialists from another ecosystem: {installed}"
+    # The kit's own agents are mechanism — they name no repository and make no claim
+    # about anyone's topology, which is precisely what disqualifies a specialist. The
+    # list comes from the installer that copies them, so it cannot drift from it.
+    installed = {p.name for p in agents.glob("*.md")} - kit_agents()
+    assert installed == set(), (
+        f"the install brought specialists from another ecosystem: {sorted(installed)}"
     )
 
 

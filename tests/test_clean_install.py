@@ -98,7 +98,11 @@ def test_no_domain_specialist_is_installed(installed):
     """
     target, _ = installed
     agents = target / ".claude" / "agents"
-    specialists = [p for p in agents.glob("*.md") if p.name != "README.md"]
+    # The kit's own two are mechanism, not specialists: they describe no repository
+    # and make no claim about the consumer's topology, which is the whole reason a
+    # specialist cannot ship. Anything ELSE here would be a leak.
+    kit_owned = {"README.md", "squad-lead.md", "squad-boss.md"}
+    specialists = [p for p in agents.glob("*.md") if p.name not in kit_owned]
     assert specialists == [], f"domain specialists leaked: {specialists}"
 
 
@@ -424,3 +428,28 @@ def test_reinstalling_keeps_the_projects_own_skills(
     assert (target / ".claude" / "skills" / "review").is_dir(), (
         "the kit's own skills must still be refreshed"
     )
+
+
+def test_the_kit_agents_reach_the_consumer(installed):
+    """Without them installed, the lead's `--agents-when-stuck` path finds nothing to
+    invoke: it runs `claude -p` in the project, and the agent files have to be there."""
+    target, _ = installed
+    agents = target / ".claude" / "agents"
+    for name in ("squad-lead.md", "squad-boss.md"):
+        assert (agents / name).is_file(), f"{name} did not reach the consumer"
+        assert (agents / name).stat().st_size > 0
+
+
+def test_a_project_specialist_survives_a_reinstall(versioned_kit, tmp_path):
+    """`agents/` is where the project's own specialists live, and nothing in the kit
+    justifies destroying one. The kit's two are copied BY NAME so a glob that grows
+    can never take a consumer's file with it."""
+    target = tmp_path / "consumer-specialist"
+    target.mkdir()
+    subprocess.run(["bash", str(versioned_kit / "scripts" / "install.sh"), str(target)],
+                   check=True, capture_output=True, text=True)
+    mine = target / ".claude" / "agents" / "control-plane.md"
+    mine.write_text("# my specialist\n", encoding="utf-8")
+    subprocess.run(["bash", str(versioned_kit / "scripts" / "install.sh"), str(target),
+                    "--force"], check=True, capture_output=True, text=True)
+    assert mine.read_text(encoding="utf-8") == "# my specialist\n"

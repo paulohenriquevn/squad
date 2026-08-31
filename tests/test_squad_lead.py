@@ -333,11 +333,46 @@ def test_a_handed_back_turn_starts_the_next_item(tmp_path: Path) -> None:
     assert decision.option == "/idea-to-release B-057"
 
 
-def test_the_lead_does_not_start_the_same_item_twice(tmp_path: Path) -> None:
-    """Starting one item over and over is the loop the per-item ceiling exists to
-    stop, one level up."""
+def test_an_attempt_that_just_happened_is_not_repeated(tmp_path: Path) -> None:
+    """Immediately after typing, nothing has had time to move. Retrying here would be
+    the loop the ceiling exists to stop."""
+    import time
     lead = _lead_with_select(tmp_path, {"item": "B-057", "why": "oldest unblocked"})
-    lead.started.add("B-057")
+    lead.attempts["B-057"] = (time.time(), 0)
+    assert lead.decide("no menu here", idle=1000).action == "stalled"
+
+
+def test_an_attempt_that_never_landed_is_retried(tmp_path: Path) -> None:
+    """Measured on 2026-08-31: the lead typed `/idea-to-release B-169`, the operator
+    stopped the run, the stream recorded nothing, and every poll after that answered
+    "already started once by this lead". One attempt was final, forever."""
+    import time
+    lead = _lead_with_select(tmp_path, {"item": "B-169", "why": "cause of a halt"})
+    lead.attempts["B-169"] = (time.time() - 400, 0)     # tried, produced nothing
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "start"
+    assert "did not land" in decision.reason
+
+
+def test_an_item_that_moved_and_came_back_may_run_again(tmp_path: Path) -> None:
+    """Something sent the work back. That is the chain working, not a loop — the same
+    distinction the drift checker draws between rework and disorder."""
+    import time
+    lead = _lead_with_select(tmp_path, {"item": "B-057", "why": "back in the queue"})
+    lead.attempts["B-057"] = (time.time(), 0)
+    lead._event_count = lambda item: 3                  # the stream grew since
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "start"
+    assert "moved since the last attempt" in decision.reason
+
+
+def test_the_ceiling_still_stops_a_real_loop(tmp_path: Path) -> None:
+    """Retrying is allowed; retrying forever is not. `max_per_item` was always the
+    right freio and is now the only one."""
+    import time
+    lead = _lead_with_select(tmp_path, {"item": "B-057", "why": "oldest"})
+    lead.interventions["B-057"] = lead.max_per_item
+    lead.attempts["B-057"] = (time.time() - 9999, 0)
     assert lead.decide("no menu here", idle=1000).action == "stalled"
 
 
@@ -365,7 +400,7 @@ def test_the_lead_never_types_anything_but_the_template(tmp_path: Path) -> None:
     lead = Lead(session="s", project=tmp_path)
     assert lead.start(Decision("start", "x", "whatever", "B-057; rm -rf /")) is False
     assert lead.start(Decision("start", "x", "whatever", "")) is False
-    assert lead.started == set()
+    assert lead.attempts == {}
 
 
 def test_a_still_quiet_session_waits(tmp_path: Path) -> None:
@@ -465,3 +500,60 @@ def test_a_session_that_woke_up_is_not_typed_into(tmp_path: Path) -> None:
     lead.start = lambda d: typed.append(d.item) or True   # never reached
     watch(lead, marker, log, poll=0, rounds=1)
     assert typed == []
+
+
+# ── asking an agent, from outside the session ────────────────────────────────
+
+
+def test_agents_are_off_unless_asked_for(tmp_path: Path) -> None:
+    """A daemon that calls a model unattended is a different thing from a daemon that
+    reads a screen, and the difference should be chosen, not inherited."""
+    lead = Lead(session="s", project=tmp_path)
+    answer, why = lead.ask_agent("squad-lead", "anything")
+    assert answer is None
+    assert "--agents-when-stuck" in why
+
+
+def test_the_same_agent_is_not_asked_twice_in_a_row(tmp_path: Path) -> None:
+    """Being stuck is a STATE, not an event. Without a cooldown the lead would re-ask
+    on every poll and bill for the same question all night."""
+    import time
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True,
+                agent_cooldown=1800)
+    lead.agent_asked["squad-lead"] = time.time()
+    answer, why = lead.ask_agent("squad-lead", "anything")
+    assert answer is None
+    assert "cooldown" in why
+
+
+def test_an_agent_answer_is_logged_not_acted_on(tmp_path: Path) -> None:
+    """The lead pays for a judgement and records it. Acting on it would be the lead
+    deciding the very thing it just paid someone else to think about."""
+    lead = _lead_with_select(tmp_path, {"item": None, "why": "BACKLOG_BLOCKED: all held"})
+    lead.agents_when_stuck = True
+    lead.ask_agent = lambda agent, q: ("NEXT: register the cause named in the report", "answered")
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "asked"
+    assert "register the cause" in decision.reason
+    assert decision.option == ""          # nothing to type
+
+
+def test_a_silent_agent_falls_back_to_reporting_the_stall(tmp_path: Path) -> None:
+    """No answer is not an excuse to invent one. The stall is reported as it always
+    was, with the reason the agent could not help."""
+    lead = _lead_with_select(tmp_path, {"item": None, "why": "BACKLOG_BLOCKED: all held"})
+    lead.agents_when_stuck = True
+    lead.ask_agent = lambda agent, q: (None, "squad-lead did not answer in 300s")
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "stalled"
+    assert "did not answer" in decision.reason
+
+
+def test_the_prompt_carries_the_constraint_the_agent_inherits(tmp_path: Path) -> None:
+    """The agent file states the rule and so does the prompt. A prompt that
+    contradicted it would be the one place the rule could be lost."""
+    import squad_lead
+    prompt = squad_lead._STUCK_PROMPT
+    assert "flow" in prompt
+    assert "do not relax any gate" in prompt.lower()
+    assert "only a person" in prompt
