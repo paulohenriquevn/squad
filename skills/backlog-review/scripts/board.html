@@ -487,7 +487,7 @@ h1 {
 .panel {
   position: fixed;
   top: 0; right: 0; bottom: 0;
-  width: min(440px, 92vw);
+  width: min(820px, 96vw);
   background: var(--surface);
   border-left: 1px solid var(--line);
   box-shadow: -8px 0 24px rgba(0,0,0,.10);
@@ -527,6 +527,34 @@ h1 {
 .panel-head button:focus-visible { outline: 2px solid var(--moving); outline-offset: 2px; }
 
 .panel-body { flex: 1 1 auto; overflow-y: auto; padding: 13px 16px 24px; }
+
+/* Progress, counted from task status — the only place that knows. The number is
+   stated beside the bar because a bar alone invites estimating. */
+.pprogress { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.pbar {
+  flex: 1 1 auto; height: 5px; border-radius: 3px;
+  background: var(--surface-2); overflow: hidden;
+}
+.pbar > i { display: block; height: 100%; background: var(--shipped); border-radius: 3px; }
+.pprogress .pct {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--shipped);
+}
+.pprogress .frac {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px; color: var(--ink-3);
+}
+.powner {
+  display: flex; gap: 7px; align-items: baseline;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px; color: var(--ink-2);
+  margin-bottom: 14px;
+}
+.powner .olabel {
+  font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3);
+}
+.powner .onote { color: var(--ink-3); font-size: 10px; }
 .psec { margin-bottom: 20px; }
 .psec > h3 {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
@@ -537,12 +565,28 @@ h1 {
 .psec > h3 .count { font-variant-numeric: tabular-nums; }
 .pempty { font-size: 11.5px; color: var(--ink-3); font-style: italic; }
 
-/* Plan phases with their tasks — the second-level kanban, stacked because a side
-   panel has one column of width and a plan has few phases. */
-.pphase { margin-bottom: 11px; }
+/* The plan as a board of its own: one column per plan phase, one card per task. The
+   phases of a plan are a sequence the same way the cycle's are, so the same shape
+   carries over — and a task's column says where it sits in that sequence, which a
+   stacked list could only say by ordering. */
+.pboard {
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  align-items: flex-start;
+}
+.pphase {
+  flex: 0 0 232px;
+  background: var(--ground);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 8px;
+  min-height: 70px;
+}
 .pphase-head {
   display: flex; gap: 7px; align-items: baseline;
-  padding-bottom: 4px; margin-bottom: 5px;
+  padding-bottom: 5px; margin-bottom: 7px;
   border-bottom: 1px solid var(--line-soft);
 }
 .pphase-head .num {
@@ -551,13 +595,16 @@ h1 {
 }
 .pphase-head .name { font-size: 12px; font-weight: 600; text-wrap: balance; }
 .ptask {
-  display: flex; gap: 8px; align-items: baseline;
-  padding: 4px 0 4px 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 6px 8px;
   font-size: 11.5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-left: 2px solid var(--line);
-  padding-left: 8px;
-  margin-bottom: 3px;
+  border-radius: var(--radius);
+  margin-bottom: 5px;
 }
+.ptask .trow { display: flex; gap: 7px; align-items: baseline; }
 .ptask.done      { border-left-color: var(--shipped); }
 .ptask.running   { border-left-color: var(--moving); }
 .ptask.blocked   { border-left-color: var(--impeded); }
@@ -571,6 +618,10 @@ h1 {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 10px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ptask .tcommit {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px; color: var(--ink-3);
 }
 .ptask .tstat {
   margin-left: auto; flex: 0 0 auto;
@@ -932,20 +983,25 @@ function renderPanel(detail) {
   const phaseTitle = new Map((detail.phases || []).map(p => [p.key, p.title]));
   const keys = [...new Set([...phaseTitle.keys(), ...byPhase.keys()])].sort();
 
-  const plan = keys.map(k => {
+  const plan = `<div class="pboard">` + keys.map(k => {
     const tasks = byPhase.get(k) || [];
     const rows = tasks.map(t => `
       <div class="ptask ${taskClass(t.status)}">
-        <span class="tid">${t.id || "?"}</span>
-        <span class="tfiles">${escapeHtml((t.files || []).join(", ") || "—")}</span>
-        <span class="tstat">${escapeHtml(t.status || "?")}</span>
-      </div>`).join("") || `<div class="pempty">no tasks recorded</div>`;
+        <div class="trow">
+          <span class="tid">${t.id || "?"}</span>
+          <span class="tstat">${escapeHtml(t.status || "?")}</span>
+        </div>
+        <span class="tfiles" title="${escapeHtml((t.files || []).join(", "))}">${
+          escapeHtml((t.files || []).map(f => f.split("/").pop()).join(", ") || "—")}</span>
+        ${t.commit ? `<span class="tcommit">${escapeHtml(String(t.commit).slice(0, 9))}${
+          t.iterations ? ` · ${t.iterations} iter` : ""}</span>` : ""}
+      </div>`).join("") || `<div class="pempty">no tasks</div>`;
     return `<div class="pphase">
         <div class="pphase-head"><span class="num">${k}</span>
           <span class="name">${escapeHtml(phaseTitle.get(k) || "unnamed phase")}</span></div>
         ${rows}
       </div>`;
-  }).join("");
+  }).join("") + `</div>`;
 
   const artefacts = (detail.artefacts || []).map(a => `
     <div class="part"><span class="pph">${a.phase}</span>
@@ -964,8 +1020,28 @@ function renderPanel(detail) {
     <div class="pblock">The <b>${b.phase}</b> gate last returned <b>${escapeHtml(b.verdict)}</b>.
       Nothing advances past it until a later run of that phase clears it.</div>`).join("");
 
-  el("p-body").innerHTML =
-      section("blocking now", null, blocking, "no gate is holding this item")
+  // Progress first: it is the one number anyone opens this panel to see.
+  const total = (detail.tasks || []).length;
+  const done = Math.round((detail.done_ratio || 0) * total);
+  const progress = total ? `
+    <div class="pprogress">
+      <span class="pct">${Math.round((detail.done_ratio || 0) * 100)}%</span>
+      <span class="pbar"><i style="width:${(detail.done_ratio || 0) * 100}%"></i></span>
+      <span class="frac">${done}/${total} tasks</span>
+    </div>` : "";
+
+  // The ASSIGNED specialist, not proof of who ran the last command. Nothing in the
+  // stream carries an author, and naming the session that happens to be open would be
+  // a guess dressed as a record — so the panel says which it is.
+  const owner = detail.domain ? `
+    <div class="powner">
+      <span class="olabel">specialist</span>
+      <span>${escapeHtml(detail.specialist || detail.domain)}</span>
+      <span class="onote">assigned by domain · not an execution record</span>
+    </div>` : "";
+
+  el("p-body").innerHTML = progress + owner
+    + section("blocking now", null, blocking, "no gate is holding this item")
     + section("plan · phases and tasks", (detail.tasks || []).length, plan, "no plan on disk yet")
     + section("artefacts", (detail.artefacts || []).length, artefacts, "nothing written yet")
     + section("every verdict", (detail.verdicts || []).length, verdicts, "no phase has ended");

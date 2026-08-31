@@ -529,3 +529,61 @@ def test_an_item_with_nothing_on_disk_returns_empty_fields(tmp_path: Path) -> No
     (tmp_path / ".claude" / "records").mkdir(parents=True)
     d = item_detail(tmp_path, "B-999")
     assert d["slug"] is None and d["tasks"] == [] and d["artefacts"] == []
+
+
+def test_progress_is_counted_from_task_status(tmp_path: Path) -> None:
+    """The only place that knows. A status nobody has seen must not round up."""
+    from board_state import item_detail
+
+    root = _with_records(tmp_path, "b033-x")
+    prog = root / ".claude" / "records" / "implementations" / ".progress-b033-x.json"
+    prog.write_text(json.dumps({"slug": "b033-x", "tasks": [
+        {"id": "T1.1", "phase": "1", "status": "committed"},
+        {"id": "T2.1", "phase": "2", "status": "committed"},
+        {"id": "T2.2", "phase": "2", "status": "pending"},
+        {"id": "T3.1", "phase": "3", "status": "unknown-to-us"},
+    ]}), encoding="utf-8")
+    assert item_detail(root, "B-033")["done_ratio"] == 0.5
+
+
+def test_no_tasks_means_no_ratio_rather_than_zero(tmp_path: Path) -> None:
+    """Zero percent and "nothing to measure" are different claims."""
+    from board_state import item_detail
+
+    (tmp_path / ".claude" / "records").mkdir(parents=True)
+    assert item_detail(tmp_path, "B-999")["done_ratio"] is None
+
+
+def test_the_specialist_comes_from_the_items_domain(tmp_path: Path) -> None:
+    from board_state import item_detail
+
+    root = _with_records(tmp_path, "b033-x")
+    (root / "BACKLOG.md").write_text(
+        "## B-033 — thing   [ ]\n\ndomain: engine-go\nstatus: triaged\n", encoding="utf-8")
+    (root / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+    (root / ".claude" / "agents" / "engine-go.md").write_text("# spec\n", encoding="utf-8")
+    d = item_detail(root, "B-033")
+    assert d["domain"] == "engine-go"
+    assert d["specialist"].endswith("engine-go.md")
+
+
+def test_a_domain_with_no_specialist_file_still_reports_the_domain(tmp_path: Path) -> None:
+    """Naming the domain is honest; inventing a file that is not there is not."""
+    from board_state import item_detail
+
+    root = _with_records(tmp_path, "b033-x")
+    (root / "BACKLOG.md").write_text(
+        "## B-033 — thing   [ ]\n\ndomain: nowhere\nstatus: raw\n", encoding="utf-8")
+    d = item_detail(root, "B-033")
+    assert d["domain"] == "nowhere" and d["specialist"] is None
+
+
+def test_the_commit_sha_reaches_the_task(tmp_path: Path) -> None:
+    from board_state import item_detail
+
+    root = _with_records(tmp_path, "b033-x")
+    prog = root / ".claude" / "records" / "implementations" / ".progress-b033-x.json"
+    prog.write_text(json.dumps({"slug": "b033-x", "tasks": [
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "49194f08b"},
+    ]}), encoding="utf-8")
+    assert item_detail(root, "B-033")["tasks"][0]["commit"] == "49194f08b"

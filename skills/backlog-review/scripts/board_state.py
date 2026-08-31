@@ -154,6 +154,22 @@ def _slug_for(item_id: str, records: Path) -> str | None:
     return None
 
 
+#: Task statuses that mean the work is finished. `committed` is what this cycle
+#: writes; anything else counts as outstanding rather than being guessed at.
+_DONE_TASK_STATUS = frozenset({"committed", "done", "completed", "merged"})
+
+
+def _item_block(project_root: Path, item_id: str) -> str | None:
+    """The registry block for one item, or None."""
+    backlog = project_root / "BACKLOG.md"
+    if not backlog.is_file():
+        return None
+    body = backlog.read_text(encoding="utf-8-sig", errors="replace")
+    match = re.search(rf"^## {re.escape(item_id)} — .*?(?=^## B-|\Z)", body,
+                      re.MULTILINE | re.DOTALL)
+    return match.group(0) if match else None
+
+
 def item_detail(project_root: Path, item_id: str) -> dict:
     """Everything the cycle left behind for one item.
 
@@ -168,7 +184,8 @@ def item_detail(project_root: Path, item_id: str) -> dict:
             records = candidate
             break
     out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
-                 "artefacts": [], "verdicts": [], "blocking": []}
+                 "artefacts": [], "verdicts": [], "blocking": [],
+                 "done_ratio": None, "specialist": None, "domain": None}
     if records is None:
         return out
 
@@ -197,6 +214,7 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                         "status": task.get("status", "unknown"),
                         "files": task.get("files") or [],
                         "iterations": task.get("iterations_used"),
+                        "commit": task.get("commit_sha"),
                     })
             except (json.JSONDecodeError, OSError):
                 pass
@@ -218,6 +236,30 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                     "phase": phase, "path": rel, "name": entry.name,
                     "bytes": entry.stat().st_size,
                 })
+
+    # ── how much of the plan is finished ──────────────────────────────────
+    # Counted from task status, which is the only place that knows. `committed` is the
+    # terminal one this repository writes; the others are treated as not-done rather
+    # than guessed at, because a status nobody has seen must not round up.
+    if out["tasks"]:
+        done = sum(1 for t in out["tasks"] if t["status"] in _DONE_TASK_STATUS)
+        out["done_ratio"] = round(done / len(out["tasks"]), 3)
+
+    # ── who owns this work ────────────────────────────────────────────────
+    # The item's `domain` routes to a specialist, and that file is the closest thing
+    # to a name. It is the ASSIGNED specialist, not proof of who ran the last command:
+    # nothing in the stream carries an author, and inventing one from the session that
+    # happens to be open would be a guess dressed as a record.
+    block = _item_block(project_root, item_id)
+    if block:
+        match = re.search(r"^domain:\s*(\S+)\s*$", block, re.MULTILINE)
+        if match:
+            out["domain"] = match.group(1)
+            for base in (".claude/agents", "agents"):
+                candidate = project_root / base / f"{match.group(1)}.md"
+                if candidate.is_file():
+                    out["specialist"] = f"{base}/{match.group(1)}.md"
+                    break
 
     # ── every verdict, not only the last ──────────────────────────────────
     # The board's card shows one. This item ended `code-quality` ten times, and a
