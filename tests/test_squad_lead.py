@@ -804,3 +804,51 @@ def test_the_budget_clears_the_measured_cost(tmp_path: Path) -> None:
     silently; the real menu consultation — read the envelope, the registry and the
     stream, then answer — cost USD 3.67 over two minutes."""
     assert Lead(session="s").agent_budget_usd >= 3.67
+
+
+# ── a numbered paragraph is not a menu ───────────────────────────────────────
+
+
+_PROSE_THEN_MENU = (
+    "  Recomendação\n"                                       # english-only: a captured screen
+    "\n"
+    "  1. Atualizar registro no BACKLOG com a descoberta\n"   # english-only: idem
+    "  2. Halt aqui — não estou expandindo escopo\n"          # english-only: idem
+    "\n"
+    "Qual escopo o chain deve implementar?\n"                 # english-only: idem
+    "\n"
+    "  1. Gate + fix nas 8 rotas (Recommended)\n"             # english-only: idem
+    "❯ 2. Gate-only, itens separados\n"                       # english-only: idem
+    "  3. Só a gate, aceitar caveat\n"                        # english-only: idem
+)
+
+
+def test_a_written_recommendation_is_not_read_as_the_menu(tmp_path: Path) -> None:
+    """`1. do this` is also how a session writes a recommendation in prose, and both
+    shapes sit on the same screen.
+
+    Measured: the lead recorded a sentence from a paragraph as the option it had
+    chosen, and handed the agent two lists spliced together. The cursor is what tells
+    them apart — exactly one line carries it, and it is in the real menu."""
+    options = Lead(session="s")._menu_options(_PROSE_THEN_MENU)
+    texts = [t for _, t in options]
+    assert len(options) == 3, texts
+    assert not any("Atualizar registro" in t for t in texts)
+    assert any("Gate-only" in t for t in texts)
+
+
+def test_the_option_chosen_is_the_menu_one_not_the_paragraph_one(tmp_path: Path) -> None:
+    """Both lists have a "2". Picking the wrong one meant recording — and fingerprinting
+    — a decision about a sentence nobody was offered."""
+    lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
+    lead.ask_agent = lambda a, q: ("OPTION: 2\nRULE APPLIED: Scope grew during measurement",
+                                   "answered")
+    decision = lead.decide(_PROSE_THEN_MENU, idle=200)
+    assert decision.action == "choose"
+    assert "Gate-only" in decision.option
+    assert "Halt aqui" not in decision.option  # english-only: quoting the screen
+
+
+def test_no_cursor_means_no_menu(tmp_path: Path) -> None:
+    """Numbered lines with nothing selected are a list, not a menu."""
+    assert Lead(session="s")._menu_options("  1. first\n  2. second\n") == []

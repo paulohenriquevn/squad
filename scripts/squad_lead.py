@@ -656,7 +656,7 @@ class Lead:
                             f"backlog offers nothing to start — {why} [{note}]")
 
         option_text = selected.group(2)
-        options = _OPTION_RE.findall(screen)
+        options = self._menu_options(screen)
 
         # The item comes from the OPTION first. Taking the screen's first `B-NNN` read
         # an id out of scrollback — observed live, reporting B-022 for an option about
@@ -713,6 +713,38 @@ class Lead:
         return Decision("confirm", "flow the session already recommended", option_text, item)
 
     # ── acting ─────────────────────────────────────────────────────────────
+    def _menu_options(self, screen: str) -> list[tuple[str, str]]:
+        """The options of the MENU, not every numbered line on screen.
+
+        `1. do this` is also how a session writes a recommendation in prose, and both
+        shapes sit on the same screen. Measured: a session's written recommendation —
+        "1. Atualizar registro…", "2. Halt aqui…" — was read as the menu, so the option
+        the lead recorded was a sentence from a paragraph and the menu passed to the
+        agent was two lists spliced together.
+
+        The cursor is what distinguishes them: exactly one line carries `❯`, and it is
+        in the real menu. From there the block extends while lines are options or their
+        indented descriptions, and stops at the first line that is neither.
+        """
+        lines = screen.splitlines()
+        cursor = next((i for i, line in enumerate(lines) if _SELECTED_RE.match(line)), None)
+        if cursor is None:
+            return []
+
+        def belongs(index: int) -> bool:
+            if not 0 <= index < len(lines):
+                return False
+            line = lines[index]
+            return bool(_OPTION_RE.match(line) or (line.strip() and line.startswith("  ")))
+
+        start = cursor
+        while belongs(start - 1):
+            start -= 1
+        end = cursor
+        while belongs(end + 1):
+            end += 1
+        return _OPTION_RE.findall("\n".join(lines[start:end + 1]))
+
     def _item_of(self, option_text: str, screen: str) -> str:
         """The item this menu is about — from the MENU, never from the scrollback.
 
