@@ -182,3 +182,74 @@ def test_the_item_comes_from_the_option_not_the_scrollback() -> None:
 def test_the_screen_is_the_fallback_when_the_option_names_no_item() -> None:
     screen = "  trabalhando em B-022\n❯ 1. Re-run the SELECT and continue (Recommended)\n  2. Parar\n"
     assert _lead().decide(screen).item == "B-022"
+
+
+# ── a turn handed back, with no menu to read ──────────────────────────────────
+#
+# Measured on 2026-08-31: the executing session ended its turn and stopped for TWO
+# HOURS, reporting that five reviewer sign-off checkboxes were waiting and a language
+# gate was blocked. The lead sat silent the whole time because it only reads menus, and
+# the user found it by looking at an empty pane. Silence from a watchdog is supposed to
+# mean "nothing to report", not "I cannot see this".
+
+
+IDLE_PROMPT = "  ⎿ report written\n\n❯ \n────────\n  workspace*\n"
+
+
+def test_a_handed_back_turn_is_reported_once_it_goes_quiet() -> None:
+    lead = Lead(session="test", stalled_seconds=900)
+    assert lead.decide(IDLE_PROMPT, idle=1200).action == "stalled"
+
+
+def test_a_brief_pause_is_not_a_handed_back_turn() -> None:
+    """A session thinking hard also looks idle; the threshold is well above that."""
+    lead = Lead(session="test", stalled_seconds=900)
+    assert lead.decide(IDLE_PROMPT, idle=200).action == "wait"
+
+
+def test_a_waiting_menu_is_still_answered_not_called_stalled() -> None:
+    """The menu path must win: that one the lead can actually move."""
+    lead = Lead(session="test", stalled_seconds=900)
+    assert lead.decide(REAL_MENU, idle=5000).action == "confirm"
+
+
+def test_stalled_is_reported_and_never_acted_on(monkeypatch, tmp_path: Path) -> None:
+    """A session that ended its turn is not stuck mid-thought; typing into it would be
+    the lead inventing work rather than unblocking it."""
+    import os
+    import time as _time
+
+    lead = Lead(session="test", stalled_seconds=10)
+    monkeypatch.setattr(lead, "capture", lambda: IDLE_PROMPT)
+    monkeypatch.setattr(lead, "confirm", lambda d: pytest.fail("acted on a stalled session"))
+    monkeypatch.setattr("squad_lead.time.sleep", lambda s: None)
+    marker = tmp_path / "log"
+    marker.write_text("x", encoding="utf-8")
+    old = _time.time() - 600
+    os.utime(marker, (old, old))
+    assert watch(lead, marker, None, poll=0, rounds=1) == 0
+
+
+def test_an_unmeasured_idle_is_never_called_stalled() -> None:
+    """No activity marker means "not measured"; asserting a duration from that would be
+    the lead reporting something it never observed."""
+    lead = Lead(session="test", stalled_seconds=10)
+    assert lead.decide(IDLE_PROMPT, idle=float("inf")).action == "wait"
+
+
+def test_the_stall_says_how_long(monkeypatch, tmp_path: Path) -> None:
+    import json
+    import os
+    import time as _time
+
+    lead = Lead(session="test", stalled_seconds=10)
+    monkeypatch.setattr(lead, "capture", lambda: IDLE_PROMPT)
+    monkeypatch.setattr("squad_lead.time.sleep", lambda s: None)
+    marker = tmp_path / "log"
+    marker.write_text("x", encoding="utf-8")
+    old = _time.time() - 600
+    os.utime(marker, (old, old))
+    log = tmp_path / "lead.jsonl"
+    watch(lead, marker, log, poll=0, rounds=1)
+    entry = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
+    assert entry["event"] == "stalled"

@@ -123,6 +123,9 @@ class Lead:
     session: str
     max_per_item: int = 3
     idle_seconds: int = 90
+    #: Silence beyond this, with no menu, is a handed-back turn worth surfacing. Well
+    #: above `idle_seconds`, because a session thinking hard also looks idle briefly.
+    stalled_seconds: int = 900
     #: How many times each item has been unblocked, and every question already
     #: answered. Both are stopping criteria, not statistics.
     interventions: dict[str, int] = field(default_factory=dict)
@@ -153,9 +156,29 @@ class Lead:
             return "flow"
         return "unknown"
 
-    def decide(self, screen: str) -> Decision:
+    def decide(self, screen: str, idle: float = 0.0) -> Decision:
         selected = _SELECTED_RE.search(screen)
         if not selected:
+            # No menu, and the session has gone quiet: it ended its turn and handed
+            # control back. Nothing here can answer that — the next move is a person's
+            # — but nobody learns of it unless the lead says so.
+            #
+            # Measured on 2026-08-31: the executing session stopped for TWO HOURS this
+            # way, reporting that five reviewer sign-off checkboxes were waiting and
+            # that a language gate was blocked, and the lead sat silent because there
+            # was no menu to read. The user found it by looking at an empty pane.
+            #
+            # `stalled` is reported and never acted on. A session that ended its turn
+            # is not a session stuck mid-thought, and typing into it would be the lead
+            # inventing work rather than unblocking it.
+            # A finite measurement only. Without an activity marker `idle` is
+            # infinite, which means "not measured" — and reporting a stall from that
+            # would be the lead asserting a duration it never observed.
+            if idle != float("inf") and idle >= self.stalled_seconds:
+                return Decision("stalled",
+                                f"the session ended its turn and has been idle for "
+                                f"{int(idle // 60)} minute(s); no menu is waiting, so only "
+                                f"a person can move it")
             return Decision("wait", "no menu is waiting")
 
         option_text = selected.group(2)
@@ -245,7 +268,7 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             time.sleep(poll)
             continue
 
-        decision = lead.decide(screen)
+        decision = lead.decide(screen, idle)
         if decision.action == "wait":
             time.sleep(poll)
             continue
@@ -256,6 +279,11 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
         if decision.action == "confirm":
             entry["sent"] = lead.confirm(decision)
         _log(log, entry)
+
+        if decision.action == "stalled":
+            # Reported once, then the watch ends: repeating it every poll would bury
+            # the line in a log nobody reads, which is how a signal stops being one.
+            return 0
 
         if decision.action in ("escalate", "exhausted"):
             # Escalation is terminal by design. Looping here would turn "a person must
@@ -275,11 +303,14 @@ def main(argv: list[str] | None = None) -> int:
                         help="seconds of silence before the lead may act")
     parser.add_argument("--poll", type=int, default=20)
     parser.add_argument("--max-per-item", type=int, default=3)
+    parser.add_argument("--stalled", type=int, default=900,
+                        help="seconds of silence with no menu before reporting a "
+                             "handed-back turn (default 900)")
     parser.add_argument("--once", action="store_true", help="one pass, then exit")
     args = parser.parse_args(argv)
 
     lead = Lead(session=args.session, max_per_item=args.max_per_item,
-                idle_seconds=args.idle)
+                idle_seconds=args.idle, stalled_seconds=args.stalled)
     return watch(lead, args.marker, args.log, args.poll, rounds=1 if args.once else None)
 
 
