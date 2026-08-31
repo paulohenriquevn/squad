@@ -283,7 +283,10 @@ def test_strict_does_not_fail_over_the_projects_own_content(tmp_path: Path) -> N
     from check_xrefs import validate_xrefs
 
     (tmp_path / "rules").mkdir(parents=True)
-    (tmp_path / "rules" / "cycle-plan.md").write_text("# plan\n\n## Hard gates\n", encoding="utf-8")
+    # A COMPLETE kit rule: an incomplete one raises warnings of its own, owned by the
+    # kit, and those would fail the run for a reason this test is not about.
+    (tmp_path / "rules" / "cycle-plan.md").write_text(
+        "# plan\n\n## Hard gates\n\n## Cross-references\n\n- none\n", encoding="utf-8")
     (tmp_path / "rules" / "own-rule.md").write_text("Driven by `cycle-roadmap`.\n", encoding="utf-8")
     (tmp_path / ".kit-manifest.txt").write_text("rules/cycle-plan.md\n", encoding="utf-8")
 

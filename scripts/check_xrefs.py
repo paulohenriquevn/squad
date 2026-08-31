@@ -504,18 +504,23 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     cycle_skill_names = {s for s in existing_skills if s.startswith("cycle-")}
 
     def _kit_owned(path: Path) -> bool:
-        """True when the manifest claims this file, or when there is no manifest."""
-        if kit_owned is None:
+        """True when the manifest claims this file, or when there is no manifest.
+
+        The guard is on `kit_paths` — does a manifest exist at all — and not on
+        `kit_owned`, which answers a narrower question: does the manifest list any
+        SKILLS. Guarding on the narrow one made a manifest without skill entries read
+        as no manifest, so every file in it came back as the kit's. Caught by a test
+        whose fixture happened to list only a rule.
+        """
+        if kit_paths is None:
             return True
         rel = _rel(path)
         if rel.startswith("skills/"):
-            return rel.split("/")[1] in kit_owned
+            return rel.split("/")[1] in (kit_owned or set())
         # `rules/` and the rest are listed per file, so the raw paths answer directly.
         # Without this a consumer's own `rules/*.md` read as the kit's, and its broken
         # references kept failing the kit's own install — measured on three of them.
-        if kit_paths is not None:
-            return rel in kit_paths
-        return True
+        return rel in kit_paths
 
     def _scan_for_cycle_refs(path: Path) -> None:
         try:
