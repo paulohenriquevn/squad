@@ -100,9 +100,21 @@ _UNRESOLVED_RE = re.compile(
 
 #: Stable identifiers. Without them nothing can cite anything: not an acceptance
 #: criterion, not a task, not a test, not a review comment.
-_FR_ID_RE = re.compile(r"\bFR-(\d{3})\b")
-_NFR_ID_RE = re.compile(r"\bNFR-(\d{3})\b")
-_AC_ID_RE = re.compile(r"\bAC-(\d{3})\b")
+# The WHOLE id is captured, prefix included. Capturing only the digits made
+# `FR-001` and `NFR-001` the same string, so `declared = fr_ids | nfr_ids` merged
+# them and an acceptance criterion citing FR-001 marked NFR-001 covered. A brief
+# whose non-functional requirements were verified by nothing scored full marks on
+# the criterion that exists to catch exactly that.
+#
+# Found on 2026-08-30 by an agent scoring a real backlog item during the first
+# pipeline run — with the line numbers and the figures: 5/6 reported, 3/6 actual.
+# This suite had not caught it because its fixture cites one FR and one NFR with
+# different numbers, which is the one shape the collision cannot produce.
+#
+# `(?<!N)` keeps `FR-` from matching inside `NFR-`.
+_FR_ID_RE = re.compile(r"\b(?<!N)(FR-\d{3})\b")
+_NFR_ID_RE = re.compile(r"\b(NFR-\d{3})\b")
+_AC_ID_RE = re.compile(r"\b(AC-\d{3})\b")
 
 #: The four scenario classes. "Did you think about failure?" stops being a
 #: question somebody remembers to ask and becomes a check that fires.

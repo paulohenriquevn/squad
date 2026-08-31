@@ -185,7 +185,8 @@ def _extract_referenced_paths(content: str, base: Path) -> set[Path]:
     return resolved
 
 
-def _extract_cycle_phases(cycle_rule_content: str) -> set[str]:
+def _extract_cycle_phases(cycle_rule_content: str,
+                          skills_root: Path | None = None) -> set[str]:
     """Extract skill names mentioned in a cycle rule's `phases:` frontmatter list AND in the chain section."""
     skills: set[str] = set()
 
@@ -204,11 +205,29 @@ def _extract_cycle_phases(cycle_rule_content: str) -> set[str]:
     chain_match = re.search(r"## Chain.*?\n```(.*?)```", cycle_rule_content, re.DOTALL)
     if chain_match:
         chain = chain_match.group(1)
-        # Match /skill-name in the chain. Accept either:
-        #   - kebab-case skills (e.g. /to-plan, /edge-case-plan)
-        #   - single-word skills explicitly listed (release, implement, review)
-        for m in re.finditer(r"/([a-z][a-z0-9]+(?:-[a-z0-9]+)+|to-plan|implement|review|release|trajectory-review|acceptance)[\s{]", chain):
-            skills.add(m.group(1))
+        # Match /skill-name in the chain. A kebab-case name is a skill by shape.
+        # A SINGLE word is a skill when `skills/<name>/` exists — asked of the
+        # filesystem rather than matched against a literal list.
+        #
+        # The list was `to-plan|implement|review|release|trajectory-review|
+        # acceptance`, so a new single-word skill stayed invisible to the orphan
+        # check until somebody remembered to edit this regex, and the symptom was
+        # a WARN claiming a skill is unreferenced while the cycle rule names it.
+        # Same shape as the preservation rules and the layout-blind paths this
+        # kit spent the week fixing: implemented for the cases its author listed.
+        #
+        # Asking the filesystem cannot go stale, and cannot admit a word that is
+        # not a skill — `/usr/bin/x` in a chain block stays a path.
+        root = skills_root if skills_root is not None else (
+            Path(__file__).resolve().parent.parent / "skills")
+        # The terminator stays `[\s{]` and never `/`: widening it to accept a
+        # slash made `records/maintenance-runs/` parse as a skill reference, and
+        # the checker reported a missing skill for a directory path. A checker
+        # that cries wolf in a consumer is one somebody disables.
+        for m in re.finditer(r"(?<![a-z0-9/])/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)[\s{]", chain):
+            name = m.group(1)
+            if "-" in name or (root / name).is_dir():
+                skills.add(name)
 
     return skills
 

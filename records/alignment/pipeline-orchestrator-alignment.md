@@ -128,6 +128,17 @@ sequenceDiagram
 - AC-006 (FR-006): `pytest tests/test_pipeline_orchestrator.py -k backward` exits 0.
 - AC-007 (FR-007): `pytest tests/test_pipeline_orchestrator.py -k parks_and_surfaces` exits 0.
 - AC-008 (NFR-001): `pytest tests/test_pipeline_orchestrator.py -k lane_budget` exits 0.
+- AC-009 (NFR-002): `pytest tests/test_pipeline_orchestrator.py -k isolation` exits 0 —
+  it asserts at most one live worktree per lane, which is the bound NFR-002 states.
+- AC-010 (NFR-003): UNVERIFIED. Restart survival needs the Workflow tool's
+  `resumeFromRunId` against a killed run, and no test here exercises it. Named
+  rather than covered by something adjacent: an acceptance criterion that does
+  not test its requirement is worse than an absent one, because it reports green.
+
+  This is the gap the scorer found only after its own id-collision defect was
+  fixed — `FR-001` and `NFR-001` collided, so requirements covered by nothing
+  scored as covered. The brief was at 91% on that arithmetic and is at 88% on
+  honest arithmetic.
 
 ## Dependencies
 

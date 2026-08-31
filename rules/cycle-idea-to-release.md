@@ -26,9 +26,13 @@ When NOT to use:
 
 ## Chain
 
-Default roadmap-driven (`/idea-to-release` or `/idea-to-release M<N>`):
-
 ```
+/pipeline B-014 B-022 …             [OPTIONAL — schedules many items through
+     ↓                               everything below, one stage each, a git
+     ↓                               worktree per lane. Every gate still applies
+     ↓                               per item; the alignment halt stops ONE item
+     ↓                               while the others advance.]
+
 /idea-to-release M<N>
      ↓ READ ROADMAP — extract milestone objective + DoD; derive slug; record milestone_id
      ↓ DISCOVER     (full chain, if no prior opportunity)
@@ -85,6 +89,23 @@ Any gate failure → pause + surface the blocking finding. The orchestrator does
 - A hard gate failure that the orchestrator cannot resolve autonomously (e.g., merge conflict, missing credential).
 - `cycle-acceptance` returns `ACCEPTED` or `ACCEPTED_WITH_CAVEATS` — the milestone is done and its checkbox flipped.
 - `cycle-acceptance` returns `REJECTED` or `NOT_VALIDATED` — halt and surface. The release stands; the milestone does not.
+
+## Scheduling many items at once
+
+This cycle chains its phases for ONE item. `/pipeline` sits above it and schedules
+several, one stage each, with a git worktree per lane —
+[`rules/parallelism-shapes.md`](parallelism-shapes.md) names the two shapes and
+why this kit had only one of them.
+
+Every gate here still applies per item, unchanged. `/pipeline` decides WHICH item
+enters WHICH stage and WHEN; it never decides whether a stage passed, and a
+scheduler that could overrule a verdict would be a way around this cycle rather
+than a way to run more of it.
+
+The alignment halt above is the clearest case. It stops everything today. Under
+`/pipeline` it stops one item while the others advance, which turns the
+operator's review from an interruption into a batch — and is the strongest
+argument for the shape rather than an obstacle to it.
 
 ## Anti-patterns
 

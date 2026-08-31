@@ -242,8 +242,14 @@ COMPLETE_V2 = COMPLETE.replace(
 ).replace(
     "- `npm run bench:traces -- --window 24h` reports p95 under 800ms.\n"
     "- `pytest tests/test_truncation.py` exits 0.",
+    # Four requirements, four criteria. The earlier fixture had two criteria for
+    # four requirements and still scored full marks, because the id collision
+    # made FR-001 and NFR-001 the same key. A fixture that only passes while a
+    # defect is present is worse than no fixture: it certifies the defect.
     "- AC-001 (NFR-001): `npm run bench:traces -- --window 24h` reports p95 under 800ms.\n"
-    "- AC-002 (FR-002): `pytest tests/test_truncation.py` exits 0.",
+    "- AC-002 (FR-002): `pytest tests/test_truncation.py` exits 0.\n"
+    "- AC-003 (FR-001): `pytest tests/test_window_24h.py` exits 0.\n"
+    "- AC-004 (NFR-002): `pytest tests/test_memory_ceiling.py` exits 0.",
 ).replace(
     "## Flows\n### Query a 24h window\n",
     "## Flows\n### Query a 24h window [primary]\n",
@@ -410,3 +416,27 @@ def test_a_section_keeps_its_own_subsections(tmp_path: Path) -> None:
     flows = next(c for c in report.criteria if c.key == "flows")
     assert flows.score == 2, flows.why
     assert "4 flow(s)" in flows.why
+
+
+def test_an_nfr_nobody_cites_is_not_covered_by_an_fr_with_the_same_number(
+        tmp_path: Path) -> None:
+    """Found by an agent scoring a real backlog item, not by this suite.
+
+    The id patterns captured only the DIGITS — `FR-(\\d{3})` and `NFR-(\\d{3})`
+    both yield `001` — and `declared = fr_ids | nfr_ids` merged them into one
+    set. An acceptance criterion citing `FR-001` therefore marked `NFR-001`
+    covered, and a brief whose non-functional requirements were verified by
+    nothing at all scored full marks on traceability.
+
+    Reported during the first pipeline run over `theo`'s backlog, with the line
+    numbers and the real-versus-reported figures: coverage 5/6 reported, 3/6
+    actual. The criterion exists to catch requirements that ship unverified, and
+    it was blind to exactly that in the numbering scheme this kit ships.
+    """
+    brief = COMPLETE_V2.replace(
+        "- AC-001 (NFR-001): `npm run bench:traces -- --window 24h` reports p95 under 800ms.",
+        "- AC-001 (FR-001): `npm run bench:traces -- --window 24h` reports p95 under 800ms.")
+    report = score_alignment(_write(tmp_path, brief))
+    trace = next(c for c in report.criteria if c.key == "traceability")
+    assert trace.score < 2, "an NFR cited by nothing scored as covered"
+    assert "NFR-001" in trace.why or "NFR-002" in trace.why, trace.why
