@@ -479,6 +479,150 @@ h1 {
 .wall-note[open]::after { content: "less ▴"; }
 .wall-note:hover::after { opacity: 1; }
 
+
+/* ── the item panel ───────────────────────────────────────────────────────────
+   The board answers "where is each item". This answers "what is being done inside
+   it", which is where the work actually happens — a plan's phases, its tasks, the
+   artefacts each cycle phase left, and every verdict rather than only the last. */
+.panel {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(440px, 92vw);
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 24px rgba(0,0,0,.10);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .18s ease-out;
+  z-index: 20;
+}
+.panel.open { transform: translateX(0); }
+@media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
+
+.panel-head {
+  flex: 0 0 auto;
+  padding: 13px 16px 11px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+.panel-head .pid {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 13px; font-weight: 600;
+}
+.panel-head .pslug {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px; color: var(--ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.panel-head button {
+  margin-left: auto;
+  font: inherit; font-size: 15px; line-height: 1;
+  background: transparent; border: 0; color: var(--ink-3);
+  cursor: pointer; padding: 2px 4px;
+}
+.panel-head button:hover { color: var(--ink); }
+.panel-head button:focus-visible { outline: 2px solid var(--moving); outline-offset: 2px; }
+
+.panel-body { flex: 1 1 auto; overflow-y: auto; padding: 13px 16px 24px; }
+.psec { margin-bottom: 20px; }
+.psec > h3 {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px; text-transform: uppercase; letter-spacing: .11em;
+  color: var(--ink-3); margin: 0 0 8px;
+  display: flex; gap: 7px; align-items: baseline;
+}
+.psec > h3 .count { font-variant-numeric: tabular-nums; }
+.pempty { font-size: 11.5px; color: var(--ink-3); font-style: italic; }
+
+/* Plan phases with their tasks — the second-level kanban, stacked because a side
+   panel has one column of width and a plan has few phases. */
+.pphase { margin-bottom: 11px; }
+.pphase-head {
+  display: flex; gap: 7px; align-items: baseline;
+  padding-bottom: 4px; margin-bottom: 5px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.pphase-head .num {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px; color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+.pphase-head .name { font-size: 12px; font-weight: 600; text-wrap: balance; }
+.ptask {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 4px 0 4px 4px;
+  font-size: 11.5px;
+  border-left: 2px solid var(--line);
+  padding-left: 8px;
+  margin-bottom: 3px;
+}
+.ptask.done      { border-left-color: var(--shipped); }
+.ptask.running   { border-left-color: var(--moving); }
+.ptask.blocked   { border-left-color: var(--impeded); }
+.ptask .tid {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px; font-weight: 600; color: var(--ink-2);
+  flex: 0 0 auto;
+}
+.ptask .tfiles {
+  color: var(--ink-3);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ptask .tstat {
+  margin-left: auto; flex: 0 0 auto;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-3);
+}
+.ptask.done .tstat    { color: var(--shipped); }
+.ptask.running .tstat { color: var(--moving); }
+.ptask.blocked .tstat { color: var(--impeded); }
+
+/* Artefacts: paths, not links — the board is read-only and cannot serve the file. */
+.part {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 3px 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+}
+.part .pph {
+  flex: 0 0 88px;
+  color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: .06em; font-size: 9.5px;
+}
+.part .ppath { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Verdict history — every one, because a single last verdict hides ten iterations. */
+.pverdict {
+  display: flex; gap: 8px; align-items: baseline;
+  padding: 3px 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+}
+.pverdict .pph { flex: 0 0 88px; color: var(--ink-3); font-size: 9.5px; text-transform: uppercase; }
+.pverdict .pv { color: var(--ink-2); }
+.pverdict.bad .pv { color: var(--impeded); }
+.pverdict.good .pv { color: var(--shipped); }
+.pverdict .pwhen { margin-left: auto; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.pblock {
+  border-left: 2px solid var(--impeded);
+  background: var(--impeded-bg);
+  padding: 6px 9px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  margin-bottom: 5px;
+}
+.pblock b { font-family: "IBM Plex Mono", ui-monospace, monospace; color: var(--impeded); }
+
+.card { cursor: pointer; }
+.card:focus-visible { outline: 2px solid var(--moving); outline-offset: 1px; }
+
 /* ── footer ───────────────────────────────────────────────────────────────── */
 footer {
   flex: 0 0 auto;
@@ -529,6 +673,14 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
 
 <section class="rail hidden" id="rail"></section>
 <main class="board" id="board"></main>
+<aside class="panel" id="panel" aria-hidden="true">
+  <div class="panel-head">
+    <span class="pid mono" id="p-id">—</span>
+    <span class="pslug" id="p-slug"></span>
+    <button type="button" id="p-close" aria-label="Close">✕</button>
+  </div>
+  <div class="panel-body" id="p-body"></div>
+</aside>
 
 <footer>
   <span class="key"><span class="swatch measured"></span>running now</span>
@@ -710,7 +862,7 @@ function render(state) {
       const note = it.blocked && it.blocked_note
         ? `<details class="wall-note"><summary>${escapeHtml(it.blocked_note)}</summary></details>`
         : "";
-      return `<article class="card ${cardClass(it)}">
+      return `<article class="card ${cardClass(it)}" data-item="${it.id}" tabindex="0">
           <div class="id mono">${it.id}</div>
           <div class="title">${escapeHtml(it.title || "")}</div>
           <div class="meta">${chips.join("")}</div>
@@ -733,6 +885,123 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+
+
+// ── the item panel ───────────────────────────────────────────────────────────
+// Fetched per item rather than folded into the board payload: this registry holds
+// 167 items, and reading every plan and progress file up front would spend the whole
+// page budget on detail nobody asked to see.
+
+const TASK_CLASS = {
+  done: "done", completed: "done", passed: "done",
+  running: "running", in_progress: "running", active: "running",
+  blocked: "blocked", failed: "blocked", error: "blocked",
+};
+
+function taskClass(status) {
+  return TASK_CLASS[String(status || "").toLowerCase()] || "";
+}
+
+const BAD_VERDICTS = new Set([
+  "INVALID", "FAIL_HARD", "FAIL_SOFT", "BLOCKED", "NEEDS_FIXES", "NEEDS_DEEPER",
+  "NEEDS_REVISION", "AWAITING_REVIEW", "NEEDS_SPLIT", "REJECTED", "NOT_VALIDATED",
+]);
+const GOOD_VERDICTS = new Set([
+  "PASS", "SHIPPABLE", "RELEASED", "READY_TO_MERGE", "ACCEPTED", "VALIDATED",
+  "ITEM_REGISTERED", "PLAN_WRITTEN", "OPPORTUNITY_COMPLETE",
+]);
+
+function section(title, count, inner, emptyText) {
+  const head = `<h3>${title}${count !== null ? ` <span class="count">${count}</span>` : ""}</h3>`;
+  return `<div class="psec">${head}${inner || `<div class="pempty">${emptyText}</div>`}</div>`;
+}
+
+function renderPanel(detail) {
+  el("p-id").textContent = detail.id;
+  el("p-slug").textContent = detail.slug || "no plan slug on disk";
+
+  // Tasks grouped under the plan's own phases. A task whose phase the plan does not
+  // name still shows — dropping it would hide work because a heading was worded
+  // differently.
+  const byPhase = new Map();
+  (detail.tasks || []).forEach(t => {
+    const k = t.phase || "?";
+    if (!byPhase.has(k)) byPhase.set(k, []);
+    byPhase.get(k).push(t);
+  });
+  const phaseTitle = new Map((detail.phases || []).map(p => [p.key, p.title]));
+  const keys = [...new Set([...phaseTitle.keys(), ...byPhase.keys()])].sort();
+
+  const plan = keys.map(k => {
+    const tasks = byPhase.get(k) || [];
+    const rows = tasks.map(t => `
+      <div class="ptask ${taskClass(t.status)}">
+        <span class="tid">${t.id || "?"}</span>
+        <span class="tfiles">${escapeHtml((t.files || []).join(", ") || "—")}</span>
+        <span class="tstat">${escapeHtml(t.status || "?")}</span>
+      </div>`).join("") || `<div class="pempty">no tasks recorded</div>`;
+    return `<div class="pphase">
+        <div class="pphase-head"><span class="num">${k}</span>
+          <span class="name">${escapeHtml(phaseTitle.get(k) || "unnamed phase")}</span></div>
+        ${rows}
+      </div>`;
+  }).join("");
+
+  const artefacts = (detail.artefacts || []).map(a => `
+    <div class="part"><span class="pph">${a.phase}</span>
+      <span class="ppath" title="${escapeHtml(a.path)}">${escapeHtml(a.name)}</span></div>`).join("");
+
+  // Newest first, and every one: the card shows a single verdict, and this item ended
+  // code-quality ten times — one FAIL_SOFT hides that it was iterating, not advancing.
+  const verdicts = (detail.verdicts || []).slice().reverse().map(v => {
+    const cls = BAD_VERDICTS.has(v.verdict) ? "bad" : GOOD_VERDICTS.has(v.verdict) ? "good" : "";
+    return `<div class="pverdict ${cls}"><span class="pph">${v.phase}</span>
+      <span class="pv">${escapeHtml(v.verdict || "—")}</span>
+      <span class="pwhen">${clock(v.at)}</span></div>`;
+  }).join("");
+
+  const blocking = (detail.blocking || []).map(b => `
+    <div class="pblock">The <b>${b.phase}</b> gate last returned <b>${escapeHtml(b.verdict)}</b>.
+      Nothing advances past it until a later run of that phase clears it.</div>`).join("");
+
+  el("p-body").innerHTML =
+      section("blocking now", null, blocking, "no gate is holding this item")
+    + section("plan · phases and tasks", (detail.tasks || []).length, plan, "no plan on disk yet")
+    + section("artefacts", (detail.artefacts || []).length, artefacts, "nothing written yet")
+    + section("every verdict", (detail.verdicts || []).length, verdicts, "no phase has ended");
+}
+
+async function openPanel(itemId) {
+  const panel = el("panel");
+  el("p-id").textContent = itemId;
+  el("p-slug").textContent = "loading…";
+  el("p-body").innerHTML = "";
+  panel.classList.add("open");
+  panel.setAttribute("aria-hidden", "false");
+  try {
+    const r = await fetch(`/api/item/${itemId}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    renderPanel(await r.json());
+  } catch (e) {
+    el("p-slug").textContent = "";
+    el("p-body").innerHTML = `<div class="pempty">could not load: ${escapeHtml(String(e))}</div>`;
+  }
+}
+
+function closePanel() {
+  const panel = el("panel");
+  panel.classList.remove("open");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+el("p-close").addEventListener("click", closePanel);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePanel(); });
+// Delegated, because the board is re-rendered on every push and per-card listeners
+// would be re-attached — or worse, leak — each time.
+el("board").addEventListener("click", e => {
+  const card = e.target.closest(".card");
+  if (card && card.dataset.item) openPanel(card.dataset.item);
+});
 
 // ── the live connection ──────────────────────────────────────────────────────
 let source;

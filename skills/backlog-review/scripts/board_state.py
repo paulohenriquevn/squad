@@ -113,6 +113,142 @@ def read_events(project_root: Path) -> list[dict]:
 _STALL_HORIZON_SECONDS = 900
 
 
+
+#: Where each phase leaves its work. Globbed by the item's slug rather than named
+#: exactly, because a slug is `b033-prometheus-url-dev-public` while the id is `B-033`
+#: and several artefacts carry a date as well.
+_ARTEFACT_DIRS = (
+    ("discover", "discoveries/opportunities"),
+    ("discover", "discoveries/plans"),
+    ("plan", "plans"),
+    ("plan", "alignment"),
+    ("implement", "implementations"),
+    ("code-quality", "audits"),
+    ("review", "reviews"),
+    ("release", "releases"),
+)
+
+#: A verdict that stops the item where it is. Anything else is progress or a caveat.
+_BLOCKING_VERDICTS = frozenset({
+    "INVALID", "FAIL_HARD", "BLOCKED", "NEEDS_FIXES", "NEEDS_DEEPER",
+    "NEEDS_REVISION", "AWAITING_REVIEW", "NEEDS_SPLIT", "REJECTED", "NOT_VALIDATED",
+})
+
+
+def _slug_for(item_id: str, records: Path) -> str | None:
+    """The plan slug an item goes by on disk, e.g. `b033-prometheus-url-dev-public`.
+
+    Derived from what exists rather than constructed, because only the phase that
+    wrote the artefact knows the words after the number.
+    """
+    number = item_id.replace("-", "").lower()          # B-033 -> b033
+    for base in ("plans", "implementations", "alignment"):
+        directory = records / base
+        if not directory.is_dir():
+            continue
+        for entry in sorted(directory.glob(f"*{number}*")):
+            name = entry.name.lstrip(".")
+            for suffix in ("-plan.md", "-implementation.md", "-alignment.md", ".json"):
+                if name.endswith(suffix):
+                    return name[: -len(suffix)]
+    return None
+
+
+def item_detail(project_root: Path, item_id: str) -> dict:
+    """Everything the cycle left behind for one item.
+
+    Loaded on demand rather than folded into the board: one registry here carries 167
+    items, and reading every plan and every progress file to render a column of cards
+    would spend the whole page budget on work nobody asked to see.
+    """
+    records = None
+    for rel in (".claude/records", "records"):
+        candidate = project_root / rel
+        if candidate.is_dir():
+            records = candidate
+            break
+    out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
+                 "artefacts": [], "verdicts": [], "blocking": []}
+    if records is None:
+        return out
+
+    slug = _slug_for(item_id, records)
+    out["slug"] = slug
+
+    # ── the plan's own phases, and the tasks under them ────────────────────
+    if slug:
+        plan = records / "plans" / f"{slug}-plan.md"
+        if plan.is_file():
+            body = plan.read_text(encoding="utf-8", errors="replace")
+            out["phases"] = [
+                {"key": m.group(1).strip(), "title": m.group(2).strip()}
+                for m in re.finditer(r"^##+\s*(?:Phase|Fase)\s*([0-9]+)\s*[:—-]\s*(.+?)\s*$",
+                                     body, re.MULTILINE)
+            ]
+
+        progress = records / "implementations" / f".progress-{slug}.json"
+        if progress.is_file():
+            try:
+                data = json.loads(progress.read_text(encoding="utf-8", errors="replace"))
+                for task in data.get("tasks", []):
+                    out["tasks"].append({
+                        "id": task.get("id"),
+                        "phase": str(task.get("phase", "")),
+                        "status": task.get("status", "unknown"),
+                        "files": task.get("files") or [],
+                        "iterations": task.get("iterations_used"),
+                    })
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        # ── what each phase left on disk ──────────────────────────────────
+        seen: set[str] = set()
+        for phase, base in _ARTEFACT_DIRS:
+            directory = records / base
+            if not directory.is_dir():
+                continue
+            for entry in sorted(directory.glob(f"*{slug}*")):
+                if not entry.is_file() or entry.name.startswith("."):
+                    continue
+                rel = str(entry.relative_to(records.parent))
+                if rel in seen:
+                    continue
+                seen.add(rel)
+                out["artefacts"].append({
+                    "phase": phase, "path": rel, "name": entry.name,
+                    "bytes": entry.stat().st_size,
+                })
+
+    # ── every verdict, not only the last ──────────────────────────────────
+    # The board's card shows one. This item ended `code-quality` ten times, and a
+    # single FAIL_SOFT hides that it was iterating rather than advancing.
+    for event in read_events(project_root):
+        if event.get("type") != "cycle:phase:end":
+            continue
+        if item_id_of(event.get("slug") or "") != item_id:
+            continue
+        verdict = event.get("verdict")
+        out["verdicts"].append({
+            "phase": event.get("cycle"), "verdict": verdict, "at": event.get("timestamp"),
+        })
+        if verdict in _BLOCKING_VERDICTS:
+            out["blocking"].append({"phase": event.get("cycle"), "verdict": verdict,
+                                    "at": event.get("timestamp")})
+
+    # Only the LAST blocking verdict per phase still applies: an earlier INVALID that a
+    # later run cleared is history, and listing it would report a gate that is open.
+    latest: dict[str, dict] = {}
+    for entry in out["blocking"]:
+        latest[entry["phase"]] = entry
+    still_blocking = []
+    for phase, entry in latest.items():
+        last_for_phase = [v for v in out["verdicts"] if v["phase"] == phase]
+        if last_for_phase and last_for_phase[-1]["verdict"] in _BLOCKING_VERDICTS:
+            still_blocking.append(entry)
+    out["blocking"] = still_blocking
+    return out
+
+
 def read_lead(log_path: Path | None, marker_path: Path | None) -> dict:
     """What the supervisor decided, and whether the executing session is moving.
 

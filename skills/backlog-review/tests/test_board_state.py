@@ -437,3 +437,95 @@ def test_the_rail_is_capped_at_a_screenful(tmp_path: Path) -> None:
 
     log = _lead_log(tmp_path, *[{"event": "confirm", "item": f"B-{i:03d}"} for i in range(40)])
     assert len(read_lead(log, None)["decisions"]) == 12
+
+
+# ── the item panel: what is being done INSIDE an item ─────────────────────────
+#
+# The board answers "where is each item". This answers "what is happening in it",
+# which is where the work is: a plan's phases, its tasks, the artefacts each cycle
+# phase left, and every verdict rather than only the last.
+
+
+def _with_records(tmp_path: Path, slug: str) -> Path:
+    recs = tmp_path / ".claude" / "records"
+    for sub in ("plans", "implementations", "audits", "reviews", "alignment"):
+        (recs / sub).mkdir(parents=True, exist_ok=True)
+    (recs / "plans" / f"{slug}-plan.md").write_text(
+        "# Plan\n\n## Phase 1: Write the failing test\n\n## Phase 2: Make it pass\n",
+        encoding="utf-8")
+    (recs / "implementations" / f".progress-{slug}.json").write_text(json.dumps({
+        "slug": slug,
+        "tasks": [
+            {"id": "T1.1", "phase": "1", "status": "done", "files": ["a_test.sh"]},
+            {"id": "T2.1", "phase": "2", "status": "pending", "files": ["b.yaml"]},
+        ],
+    }), encoding="utf-8")
+    (recs / "audits" / f"{slug}-code-quality-2026-08-31.md").write_text("x", encoding="utf-8")
+    return tmp_path
+
+
+def test_the_slug_is_found_from_what_is_on_disk(tmp_path: Path) -> None:
+    """Only the phase that wrote the artefact knows the words after the number."""
+    from board_state import item_detail
+
+    root = _with_records(tmp_path, "b033-prometheus-url-dev-public")
+    assert item_detail(root, "B-033")["slug"] == "b033-prometheus-url-dev-public"
+
+
+def test_the_plans_phases_and_tasks_come_back(tmp_path: Path) -> None:
+    from board_state import item_detail
+
+    d = item_detail(_with_records(tmp_path, "b033-x"), "B-033")
+    assert [p["key"] for p in d["phases"]] == ["1", "2"]
+    assert [t["id"] for t in d["tasks"]] == ["T1.1", "T2.1"]
+    assert d["tasks"][0]["status"] == "done"
+
+
+def test_artefacts_are_grouped_by_the_phase_that_wrote_them(tmp_path: Path) -> None:
+    from board_state import item_detail
+
+    d = item_detail(_with_records(tmp_path, "b033-x"), "B-033")
+    phases = {a["phase"] for a in d["artefacts"]}
+    assert "plan" in phases and "code-quality" in phases
+
+
+def test_every_verdict_is_kept_not_only_the_last(tmp_path: Path) -> None:
+    """A single last verdict hides iteration: one item ended code-quality ten times."""
+    from board_state import item_detail
+
+    root = _with_records(tmp_path, "b033-x")
+    (root / ".claude" / "records" / "cycle-events.jsonl").write_text(
+        "".join(json.dumps(_end("code-quality", "B-033", v)) + "\n"
+                for v in ("INVALID", "INVALID", "FAIL_SOFT")), encoding="utf-8")
+    d = item_detail(root, "B-033")
+    assert [v["verdict"] for v in d["verdicts"]] == ["INVALID", "INVALID", "FAIL_SOFT"]
+
+
+def test_a_gate_a_later_run_cleared_is_not_reported_as_blocking(tmp_path: Path) -> None:
+    """Listing a cleared INVALID would report a gate that is open as shut."""
+    from board_state import item_detail
+
+    root = _with_records(tmp_path, "b033-x")
+    (root / ".claude" / "records" / "cycle-events.jsonl").write_text(
+        json.dumps(_end("plan", "B-033", "INVALID")) + "\n"
+        + json.dumps(_end("plan", "B-033", "SHIPPABLE")) + "\n", encoding="utf-8")
+    assert item_detail(root, "B-033")["blocking"] == []
+
+
+def test_a_gate_still_failing_is_reported(tmp_path: Path) -> None:
+    from board_state import item_detail
+
+    root = _with_records(tmp_path, "b033-x")
+    (root / ".claude" / "records" / "cycle-events.jsonl").write_text(
+        json.dumps(_end("code-quality", "B-033", "INVALID")) + "\n", encoding="utf-8")
+    blocking = item_detail(root, "B-033")["blocking"]
+    assert [b["phase"] for b in blocking] == ["code-quality"]
+
+
+def test_an_item_with_nothing_on_disk_returns_empty_fields(tmp_path: Path) -> None:
+    """The panel renders one way; an item nobody has worked is the common case."""
+    from board_state import item_detail
+
+    (tmp_path / ".claude" / "records").mkdir(parents=True)
+    d = item_detail(tmp_path, "B-999")
+    assert d["slug"] is None and d["tasks"] == [] and d["artefacts"] == []

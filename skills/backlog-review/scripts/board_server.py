@@ -47,6 +47,7 @@ import argparse
 import json
 import os
 import queue
+import re
 import secrets
 import sys
 import threading
@@ -56,7 +57,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from board_state import build_state  # noqa: E402
+from board_state import build_state, item_detail  # noqa: E402
 
 POLL_SECONDS = 0.5
 WATCHED = ("BACKLOG.md", "records/cycle-events.jsonl", ".claude/records/cycle-events.jsonl")
@@ -191,6 +192,16 @@ def _handler(root: Path, hub: _Hub, token: str | None):
                 self._send(200, body, "text/html; charset=utf-8")
             elif self.path == "/api/state":
                 body = json.dumps(_state(root), ensure_ascii=False).encode()
+                self._send(200, body, "application/json; charset=utf-8")
+            elif self.path.startswith("/api/item/"):
+                # On demand, never in the board payload: this registry holds 167 items,
+                # and reading every plan and progress file to render a column of cards
+                # would spend the page budget on work nobody asked to see.
+                item = self.path[len("/api/item/"):].strip("/").upper()
+                if not re.fullmatch(r"B-\d{3,}", item):
+                    self._send(400, b"expected /api/item/B-NNN\n", "text/plain")
+                    return
+                body = json.dumps(item_detail(root, item), ensure_ascii=False).encode()
                 self._send(200, body, "application/json; charset=utf-8")
             elif self.path == "/api/stream":
                 self._stream()
