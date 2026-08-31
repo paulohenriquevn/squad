@@ -273,6 +273,12 @@ h1 {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* Age is information. Without it a decision from three hours ago sits beside one from
+   a minute ago at the same weight, and the eye reads the row as all-current. */
+.decision.aged { opacity: .55; }
+.decision.aged .why { -webkit-line-clamp: 1; }
+.decision.undated .when { font-style: italic; }
+
 .decisions .none {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 11px;
@@ -577,9 +583,25 @@ function sessionPulse(lead) {
 }
 
 function clock(iso) {
-  if (!iso) return "—";
+  if (!iso) return "no time";
   const d = new Date(iso);
-  return isNaN(d) ? "—" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (isNaN(d)) return "no time";
+  const mins = Math.round((Date.now() - d) / 60000);
+  // Relative, not absolute: "12:48" makes the reader do the subtraction, and the only
+  // thing they want from a supervisor's log is how long ago.
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = mins / 60;
+  return hrs < 24 ? `${hrs.toFixed(hrs < 10 ? 1 : 0)}h ago` : `${Math.round(hrs / 24)}d ago`;
+}
+
+//: A decision older than this is context, not news. Half the lead's stall horizon.
+const FRESH_MS = 450 * 1000;
+
+function isAged(iso) {
+  if (!iso) return true;               // undated entries predate the timestamp fix
+  const d = new Date(iso);
+  return isNaN(d) || (Date.now() - d) > FRESH_MS;
 }
 
 function renderRail(lead) {
@@ -606,7 +628,7 @@ function renderRail(lead) {
     </div>`;
 
   const cards = decisions.length ? decisions.map(d => `
-      <article class="decision ${d.event}">
+      <article class="decision ${d.event}${isAged(d.at) ? " aged" : ""}${d.at ? "" : " undated"}">
         <div class="head">
           <span class="act">${ACTION_LABEL[d.event] || d.event}</span>
           <span>${d.item || ""}</span>

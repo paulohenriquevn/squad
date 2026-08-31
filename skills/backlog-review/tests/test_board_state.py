@@ -369,3 +369,62 @@ def test_blockers_survive_the_running_lookup(tmp_path: Path) -> None:
                        events=[_start("discover", "B-002")])
     item = _by_id(build_state(project))["B-001"]
     assert item["blockers"] == ["B-002"]
+
+
+# ── a stall the session recovered from is history, not news ───────────────────
+
+
+def _marker(tmp_path: Path, seconds_ago: float) -> Path:
+    import os
+    import time as _time
+
+    m = tmp_path / "run.log"
+    m.write_text("x", encoding="utf-8")
+    when = _time.time() - seconds_ago
+    os.utime(m, (when, when))
+    return m
+
+
+def test_a_recovered_stall_is_dropped_from_the_board(tmp_path: Path) -> None:
+    """It stays in the log — that file is the audit trail — but a resolved stall shown
+    beside a live decision says the opposite of the truth."""
+    from board_state import read_lead
+
+    log = _lead_log(tmp_path,
+                    {"event": "stalled", "at": "2026-08-31T12:00:00+00:00"},
+                    {"event": "confirm", "item": "B-001", "at": "2026-08-31T13:00:00+00:00"})
+    lead = read_lead(log, _marker(tmp_path, 30))
+    assert [d["event"] for d in lead["decisions"]] == ["confirm"]
+
+
+def test_a_live_stall_is_kept(tmp_path: Path) -> None:
+    from board_state import read_lead
+
+    log = _lead_log(tmp_path, {"event": "stalled", "at": "2026-08-31T12:00:00+00:00"})
+    lead = read_lead(log, _marker(tmp_path, 4000))
+    assert [d["event"] for d in lead["decisions"]] == ["stalled"]
+
+
+def test_an_unknown_idle_keeps_the_stall(tmp_path: Path) -> None:
+    """Dropping it would assert a recovery nobody observed."""
+    from board_state import read_lead
+
+    log = _lead_log(tmp_path, {"event": "stalled", "at": "2026-08-31T12:00:00+00:00"})
+    assert read_lead(log, None)["decisions"][0]["event"] == "stalled"
+
+
+def test_other_decisions_survive_recovery(tmp_path: Path) -> None:
+    """Only stalls expire; a confirm is a fact about what was done."""
+    from board_state import read_lead
+
+    log = _lead_log(tmp_path,
+                    {"event": "confirm", "item": "B-001", "at": "2026-08-31T12:00:00+00:00"},
+                    {"event": "escalate", "item": "B-002", "at": "2026-08-31T12:30:00+00:00"})
+    assert len(read_lead(log, _marker(tmp_path, 30))["decisions"]) == 2
+
+
+def test_the_rail_is_capped_at_a_screenful(tmp_path: Path) -> None:
+    from board_state import read_lead
+
+    log = _lead_log(tmp_path, *[{"event": "confirm", "item": f"B-{i:03d}"} for i in range(40)])
+    assert len(read_lead(log, None)["decisions"]) == 12

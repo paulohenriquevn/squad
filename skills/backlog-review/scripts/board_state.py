@@ -107,6 +107,12 @@ def read_events(project_root: Path) -> list[dict]:
     return events
 
 
+#: Mirrors `squad_lead.py`'s own `--stalled` default. Below this the session has moved
+#: recently enough that the lead would not call it stalled, so any stall in the log is
+#: one it already recovered from.
+_STALL_HORIZON_SECONDS = 900
+
+
 def read_lead(log_path: Path | None, marker_path: Path | None) -> dict:
     """What the supervisor decided, and whether the executing session is moving.
 
@@ -138,9 +144,24 @@ def read_lead(log_path: Path | None, marker_path: Path | None) -> dict:
             entries.append(json.loads(line))
         except json.JSONDecodeError:
             continue
+    decisions = list(reversed(entries))
+
+    # A stall the session already recovered from is history, not news. It stays in the
+    # log — that file is the audit trail and nothing is removed from it — but the board
+    # answers "what is true now", and a resolved stall shown beside a live decision
+    # says the opposite of the truth.
+    #
+    # Recovered is measured, not guessed: the session's own marker moved recently
+    # enough that the lead would no longer call it stalled. When the idle time is
+    # unknown, the stall is kept — dropping it would be asserting a recovery nobody
+    # observed.
+    idle = out["idle_seconds"]
+    if idle is not None and idle < _STALL_HORIZON_SECONDS:
+        decisions = [d for d in decisions if d.get("event") != "stalled"]
+
     # Newest first: the question is always "what just happened", never "what happened
     # first". Capped because a long-running lead's log outgrows a page.
-    out["decisions"] = list(reversed(entries))[:40]
+    out["decisions"] = decisions[:12]
     return out
 
 
