@@ -535,8 +535,10 @@ def build_state(project_root: Path, lead_log: Path | None = None,
     # earlier in the pipeline.
     unplaced_no_item = 0
     unplaced_off_chain: dict[str, int] = {}
+    # Starts count too. A phase that BEGAN and cannot be placed is work the board
+    # shows nobody doing — `idea-to-release` opened on this stream and no card moved.
     for event in events:
-        if event.get("type") != "cycle:phase:end":
+        if event.get("type") not in ("cycle:phase:start", "cycle:phase:end"):
             continue
         slug = item_id_of(event.get("slug") or "")
         cycle = event.get("cycle") or ""

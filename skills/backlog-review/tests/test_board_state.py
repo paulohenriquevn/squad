@@ -772,3 +772,13 @@ def test_a_fully_placeable_stream_reports_nothing_unplaced(tmp_path: Path) -> No
                        events=[_end("discover", "b001-thing", "PASS")])
     unplaced = build_state(project)["unplaced"]
     assert unplaced == {"without_item": 0, "off_chain": {}}
+
+
+def test_a_start_the_board_cannot_place_is_counted_too(tmp_path: Path) -> None:
+    """A phase that BEGAN and cannot be placed is work the board shows nobody doing.
+    Measured on theo: `idea-to-release` opened and no card ever moved."""
+    project = _project(tmp_path, item_block("B-033", status="triaged"), events=[
+        {"type": "cycle:phase:start", "cycle": "idea-to-release",
+         "slug": "b033-thing", "timestamp": "2026-08-31T15:00:00Z"},
+    ])
+    assert build_state(project)["unplaced"]["off_chain"] == {"idea-to-release": 1}
