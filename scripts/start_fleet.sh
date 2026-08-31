@@ -12,26 +12,38 @@
 #
 # SIZE
 # ----
-# Derived, not chosen, and from the constraint that actually binds. Memory does not:
-# a session is ~240 MB against tens of gigabytes. CPU does — a session spends its time
-# in bursts (test suites, builds, greps) rather than steadily, so the ceiling is how
-# many bursts a machine absorbs without queueing.
+# Derived from the constraint that binds, and the constraint was measured rather than
+# assumed. Memory does not bind: three sessions held 1.3 GB with 15 GB free. CPU does.
 #
-# One third of the cores, floored at 2 and capped at 6. Two because a fleet of one is
-# a lead and the whole point is more than one; six because beyond that the shared
-# account rate limit binds before the machine does, and a session waiting on a rate
-# limit looks exactly like a session working.
+# Measured on an 8-core machine running the board and the watchdog alongside:
 #
-# This is a defensible estimate, not a measurement of steady-state load per session —
-# that number does not exist yet, and when it does this formula should be replaced by
-# it rather than argued with.
+#   1 session   load 4.85
+#   3 sessions  load 7.3 – 8.2      (saturated: 8 runnable on 8 cores)
+#
+# So the fixed cost of the surrounding processes is roughly 3.4, and each session adds
+# about 1.4 — a session spends its time in bursts, test suites and builds and greps,
+# not steadily, and a load average counts a burst the same as steady work.
+#
+#   sessions = (cores - 2) / 2
+#
+# Two cores reserved for everything that is not a session, and two cores per session
+# from the 1.4 measured plus headroom, because a machine at exactly 1.0 per core has
+# no room for the burst that arrives next. On the machine above this gives 3, which is
+# where the measurement puts the ceiling.
+#
+# Floored at 2, because a fleet of one is a lead. Capped at 6, because past that the
+# shared account rate limit binds before the machine does — and a session waiting on a
+# rate limit looks exactly like a session working, which makes the wrong number hard
+# to notice.
+#
+# Replace this formula when a better measurement exists. Do not argue with it.
 set -euo pipefail
 
 PROJECT="${1:?usage: start_fleet.sh <project-dir> [size]}"
 PROJECT="$(cd "$PROJECT" && pwd)"
 
 cores="$(nproc 2>/dev/null || echo 4)"
-default=$(( cores / 3 ))
+default=$(( (cores - 2) / 2 ))
 [ "$default" -lt 2 ] && default=2
 [ "$default" -gt 6 ] && default=6
 SIZE="${2:-$default}"

@@ -76,7 +76,17 @@ Two classes get **excluded from routing**, and the registry says so out loud rat
 
 A repo on disk that the detector did not reach is a finding, not a rounding error: surface it with `AskUserQuestion` and let the human either fold it into a derived domain or declare it out of scope. Never quietly drop it — a repo absent from the routing table can never receive an item.
 
-The specialist file is NOT derived. `detect_domains.py` names `agents/<domain>.md`, and writing it is human work: `route_domain.py` exits 3 when the table names an agent that is not on disk, so a generated table with no specialist trades one blocker for another.
+The specialist file is **scaffolded from disk, then completed by someone who knows the domain.**
+
+```bash
+python3 "$ECO/skills/backlog-init/scripts/scaffold_specialists.py" --root . --write
+```
+
+It writes one file per domain the table names, carrying what it measured — the repos found by walking for `.git`, each one's commit count, the manifests present, and the commands those manifests imply, marked IMPLIED because nothing was run. The invariants, the shape of a real finding and the blast radius are written as OPEN, because they need someone who knows the domain and an invariant asserted by nobody is worse than an absent one: it gets believed.
+
+This used to be human work at the first step, and `route_domain.py` exits 3 for a domain whose specialist is not on disk — so a project with a derived table and no specialists could not route a single item until a person sat down and wrote them. A file with the measured half and the rest marked open routes correctly today and improves later; a missing file routes nothing, ever.
+
+A specialist that already exists is never overwritten. It carries knowledge the scaffold cannot reproduce.
 
 ### Step 2 — Confirm the routing table, then WRITE it
 
