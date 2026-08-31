@@ -197,3 +197,43 @@ def test_none_of_these_are_selectable() -> None:
         text = _backlog(item_block("B-001", status=status,
                                    extra="kill_reason: x\n" if status == "killed" else ""))
         assert select(text).verdict != "ITEM_SELECTED"
+
+
+# ── an item a phase stopped on is not work to hand out ───────────────────────
+
+
+def test_a_halted_item_is_not_selected(tmp_path: Path) -> None:
+    """Measured on 2026-08-31: B-033 was `triaged`, nothing in the registry blocked it,
+    and it held the oldest id among unblocked items — so SELECT chose it. A phase had
+    already stopped on it and written a BLOCKED report. A caller that only asked SELECT
+    would have relaunched the thing that halted, forever."""
+    text = item_block("B-033", status="triaged") + item_block("B-057", status="triaged")
+    result = select(text, halted=frozenset({"B-033"}))
+    assert result.verdict == "ITEM_SELECTED"
+    assert result.item_id == "B-057"
+    assert result.halted == ["B-033"]
+    assert "B-033" not in (result.queue or [])
+
+
+def test_asking_about_a_halted_item_says_so_rather_than_yes(tmp_path: Path) -> None:
+    text = item_block("B-033", status="triaged")
+    result = select(text, "B-033", halted=frozenset({"B-033"}))
+    assert result.verdict == "ITEM_HALTED"
+    assert "BLOCKED report" in result.reason
+
+
+def test_a_halt_is_not_reported_as_an_impediment(tmp_path: Path) -> None:
+    """Two different things hold an item, and they need different actions from
+    different people. Folding one into the other loses which is which."""
+    text = item_block("B-033", status="triaged")
+    result = select(text, halted=frozenset({"B-033"}))
+    assert result.verdict == "BACKLOG_BLOCKED"
+    assert result.walls == {}
+    assert result.halted == ["B-033"]
+    assert "1 by a phase that halted" in result.reason
+
+
+def test_without_a_halt_set_nothing_changes(tmp_path: Path) -> None:
+    """The parameter defaults to empty, so every existing caller keeps its answer."""
+    text = item_block("B-033", status="triaged") + item_block("B-057", status="triaged")
+    assert select(text).item_id == "B-033"

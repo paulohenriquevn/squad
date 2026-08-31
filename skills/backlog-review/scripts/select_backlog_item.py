@@ -87,6 +87,7 @@ NOT_SELECTABLE = {
 class Selection:
     verdict: str                      # ITEM_SELECTED · BACKLOG_EMPTY · BACKLOG_BLOCKED
                                       # · ITEM_IN_FLIGHT · ITEM_SHIPPED · ITEM_KILLED
+                                      # · ITEM_HALTED
     item_id: str | None = None
     reason: str = ""
     #: Every selectable item held back, and what holds it. Reported even on success,
@@ -96,6 +97,9 @@ class Selection:
     #: Selectable items in the order they would be picked. Lets a caller take a batch
     #: without re-running, which is what the pipeline needs to fill more than one lane.
     queue: list[str] | None = None
+    #: Items a phase stopped on and wrote a BLOCKED report for. Held out of the queue
+    #: and named, because they are neither free nor blocked by another item.
+    halted: list[str] | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -137,7 +141,8 @@ def rank(items: list[Item]) -> list[Item]:
     return sorted(items, key=lambda i: (_RANK.get(i.fields.get("status", ""), 99), _number(i)))
 
 
-def select(text: str, requested: str | None = None) -> Selection:
+def select(text: str, requested: str | None = None,
+           halted: frozenset[str] = frozenset()) -> Selection:
     """Choose the next item, or explain why none may start.
 
     `requested` asks the narrower question — may THIS one start? — which is the form
@@ -151,7 +156,18 @@ def select(text: str, requested: str | None = None) -> Selection:
     selectable = [i for i in items if i.fields.get("status", "") in SELECTABLE]
     walls: dict[str, list[str]] = {}
     free: list[Item] = []
+    stopped: list[str] = []
     for item in selectable:
+        # A phase already stopped on this one and wrote down why. Handing it out again
+        # restarts the thing that halted — measured on 2026-08-31: B-033 was `triaged`
+        # with a BLOCKED report on disk and the oldest id among unblocked items, so a
+        # caller that only asked SELECT would have relaunched it forever.
+        #
+        # This is a MEASUREMENT, not a decision: the report exists or it does not.
+        # What to DO about the halt stays with whoever the report addresses.
+        if item.item_id in halted:
+            stopped.append(item.item_id)
+            continue
         blockers = live_blockers(item, statuses)
         if blockers is None:
             free.append(item)
@@ -164,7 +180,7 @@ def select(text: str, requested: str | None = None) -> Selection:
     if requested:
         if requested not in by_id:
             return Selection("BACKLOG_BLOCKED", reason=f"{requested} is not in this backlog",
-                             walls=walls, queue=queue)
+                             walls=walls, queue=queue, halted=stopped)
         status = statuses.get(requested, "")
         if status not in SELECTABLE:
             verdict = NOT_SELECTABLE.get(status)
@@ -172,13 +188,20 @@ def select(text: str, requested: str | None = None) -> Selection:
                 return Selection("BACKLOG_BLOCKED", item_id=requested,
                                  reason=f"{requested} carries no status this contract knows"
                                         f" ({status or 'the field is absent'})",
-                                 walls=walls, queue=queue)
+                                 walls=walls, queue=queue, halted=stopped)
             nexts = {"ITEM_IN_FLIGHT": " It has a plan; continue with /idea-to-release.",
                      "ITEM_SHIPPED": "", "ITEM_KILLED": ""}
             return Selection(verdict, item_id=requested,
                              reason=f"{requested} is {status}, past the point where SELECT hands"
                                     f" out work.{nexts[verdict]}",
-                             walls=walls, queue=queue)
+                             walls=walls, queue=queue, halted=stopped)
+        if requested in halted:
+            return Selection(
+                "ITEM_HALTED", item_id=requested,
+                reason=(f"{requested} is {status}, but a phase stopped on it and wrote a "
+                        f"BLOCKED report. Starting it again reruns what halted; read the "
+                        f"report first."),
+                walls=walls, queue=queue, halted=stopped)
         blockers = live_blockers(by_id[requested], statuses)
         if blockers is not None:
             waiting = ", ".join(blockers) if blockers else "something with no item to point at"
@@ -186,30 +209,33 @@ def select(text: str, requested: str | None = None) -> Selection:
                 "BACKLOG_BLOCKED", item_id=requested,
                 reason=(f"{requested} waits on {waiting}. Starting it now would build "
                         f"against a dependency that does not exist yet."),
-                walls=walls, queue=queue)
+                walls=walls, queue=queue, halted=stopped)
         return Selection("ITEM_SELECTED", item_id=requested,
                          reason=f"{requested} is {status} and nothing blocks it",
-                         walls=walls, queue=queue)
+                         walls=walls, queue=queue, halted=stopped)
 
     if ordered:
         chosen = ordered[0]
         return Selection("ITEM_SELECTED", item_id=chosen.item_id,
                          reason=(f"{chosen.item_id} is {statuses[chosen.item_id]}, the oldest "
                                  f"unblocked item of the highest-ranked status"),
-                         walls=walls, queue=queue)
+                         walls=walls, queue=queue, halted=stopped)
 
-    if walls:
+    if walls or stopped:
+        held = len(walls) + len(stopped)
         return Selection(
             "BACKLOG_BLOCKED",
-            reason=(f"{len(walls)} selectable item(s) remain and every one is blocked. "
+            reason=(f"{held} selectable item(s) remain and every one is held "
+                    f"({len(walls)} by an impediment, {len(stopped)} by a phase that "
+                    f"halted). "
                     f"This is not an empty backlog — running a sweep would add items "
                     f"beside a wall instead of clearing it."),
-            walls=walls, queue=queue)
+            walls=walls, queue=queue, halted=stopped)
 
     return Selection("BACKLOG_EMPTY",
                      reason=("nothing is raw or triaged. Not a finish line — "
                              "run /discover-execute --sweep {domain}."),
-                     walls=walls, queue=queue)
+                     walls=walls, queue=queue, halted=stopped)
 
 
 def main() -> int:
@@ -219,6 +245,9 @@ def main() -> int:
                         help="ask whether THIS item may start, instead of picking one")
     parser.add_argument("--queue", type=int, metavar="N",
                         help="print the first N eligible items in order, for a batch caller")
+    parser.add_argument("--ignore-halts", action="store_true",
+                        help="hand out an item even if a phase halted on it and wrote "
+                             "a BLOCKED report (read the report first)")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -226,7 +255,20 @@ def main() -> int:
         print(f"FATAL: {args.backlog} does not exist", file=sys.stderr)
         return 1
 
-    result = select(args.backlog.read_text(encoding="utf-8"), args.check)
+    # Read from the project the backlog sits in, so the CLI answers the same question
+    # the board does. `--ignore-halts` exists for the one caller who has read the
+    # report and decided to rerun anyway; it is never the default, because a default
+    # that ignores a halt turns every stop into a loop.
+    halted: frozenset[str] = frozenset()
+    if not args.ignore_halts:
+        try:
+            from board_state import halted_items
+            halted = frozenset(halted_items(args.backlog.resolve().parent))
+        except ImportError as error:
+            print(f"halt detection unavailable ({error}); proceeding without it",
+                  file=sys.stderr)
+
+    result = select(args.backlog.read_text(encoding="utf-8"), args.check, halted)
 
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))
@@ -236,6 +278,10 @@ def main() -> int:
     else:
         print(f"{result.verdict}: {result.item_id or '—'}")
         print(f"  {result.reason}")
+        if result.halted:
+            print("  halted (a phase stopped and wrote a report):")
+            for item_id in result.halted:
+                print(f"    {item_id}")
         if result.walls:
             print("  blocked:")
             for iid, blockers in sorted(result.walls.items()):

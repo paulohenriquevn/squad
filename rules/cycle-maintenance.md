@@ -87,8 +87,19 @@ LOOP BACK to SELECT
 | `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover-execute --sweep {domain}`.** Not a finish line |
 | `ITEM_SELECTED` | SELECT picked an item; nothing blocks it | ROUTE |
 | `BACKLOG_BLOCKED` | Selectable items remain and **every one is blocked** | Surface the wall. **Not `BACKLOG_EMPTY`** — a sweep would add items beside a wall instead of clearing it |
+| `ITEM_HALTED` | A phase stopped on this item and wrote `{slug}-BLOCKED.md` | Read the report. SELECT holds the item out of the queue until the file is gone — handing it out again reruns exactly what halted |
 
-`ITEM_SELECTED` and `BACKLOG_BLOCKED` are emitted by `skills/backlog-review/scripts/select_backlog_item.py`, which is also what makes
+**A halt is measured, never judged.** `ITEM_HALTED` asserts one thing: a BLOCKED
+report exists on disk for this item. What to DO about the halt — accept the failure
+with a caveat, fix its cause first, change the gate — is content, and stays with
+whoever the report addresses. SELECT only declines to hand the item out again.
+
+Measured on 2026-08-31: B-033 was `triaged`, nothing in the registry blocked it, and
+it held the oldest id among unblocked items — so SELECT chose it, while a report on
+disk said `/implement` had halted on it needing a sponsor decision. Any caller
+looping on SELECT would have restarted the halt forever.
+
+`ITEM_SELECTED`, `ITEM_HALTED` and `BACKLOG_BLOCKED` are emitted by `skills/backlog-review/scripts/select_backlog_item.py`, which is also what makes
 the SELECT phase above a computation rather than a paragraph an agent reads. It was
 added on 2026-08-30, when a sweep found this rule to be the kit's largest
 contract-without-executor: the chain, the ranking and eight verdicts were written,

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from squad_lead import Lead, watch
+from squad_lead import Lead, watch, Decision
 
 # The menu, as captured. Option 1 moves the registry; option 2 asks for a decision
 # only the sponsor holds.
@@ -308,3 +308,74 @@ def test_a_session_that_moves_again_can_stall_again(monkeypatch, tmp_path: Path)
     marker.write_text("x", encoding="utf-8")     # mtime = now, so it is working
     watch(lead, marker, None, poll=0, rounds=1)
     assert lead.reported_stall is False
+
+
+# ── a handed-back turn stops the item, not the queue ─────────────────────────
+
+
+def _lead_with_select(tmp_path, answer: dict):
+    """A Lead whose SELECT is a stub returning `answer`. The subprocess call is what
+    is being replaced, not the decision — the point is what the lead does with an
+    answer, not that Python can run a script."""
+    lead = Lead(session="s", project=tmp_path, stalled_seconds=900)
+    lead.next_item = lambda: (answer.get("item"), answer.get("why", ""))
+    return lead
+
+
+def test_a_handed_back_turn_starts_the_next_item(tmp_path: Path) -> None:
+    """Reporting the stall was right about the item and wrong about the backlog.
+    Measured on 2026-08-31: /implement halted on B-033 needing a sponsor decision and
+    the queue sat still for 85 minutes with 25 other selectable items waiting."""
+    lead = _lead_with_select(tmp_path, {"item": "B-057", "why": "oldest unblocked"})
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "start"
+    assert decision.item == "B-057"
+    assert decision.option == "/idea-to-release B-057"
+
+
+def test_the_lead_does_not_start_the_same_item_twice(tmp_path: Path) -> None:
+    """Starting one item over and over is the loop the per-item ceiling exists to
+    stop, one level up."""
+    lead = _lead_with_select(tmp_path, {"item": "B-057", "why": "oldest unblocked"})
+    lead.started.add("B-057")
+    assert lead.decide("no menu here", idle=1000).action == "stalled"
+
+
+def test_a_blocked_backlog_is_reported_not_forced(tmp_path: Path) -> None:
+    """A queue where everything is held is exactly the case only a person clears."""
+    lead = _lead_with_select(
+        tmp_path, {"item": None, "why": "BACKLOG_BLOCKED: every item is held"})
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "stalled"
+    assert "BACKLOG_BLOCKED" in decision.reason
+
+
+def test_without_a_project_the_lead_starts_nothing(tmp_path: Path) -> None:
+    """No registry to read means no answer to relay. It reports, as it always did."""
+    lead = Lead(session="s", stalled_seconds=900)
+    decision = lead.decide("no menu here", idle=1000)
+    assert decision.action == "stalled"
+    assert "cannot ask SELECT" in decision.reason
+
+
+def test_the_lead_never_types_anything_but_the_template(tmp_path: Path) -> None:
+    """The one thing it types unprompted is built from a template with a validated id.
+    An id that does not match is refused at the point of typing, not only where it was
+    chosen — that is where it becomes keystrokes in a session with no prompts."""
+    lead = Lead(session="s", project=tmp_path)
+    assert lead.start(Decision("start", "x", "whatever", "B-057; rm -rf /")) is False
+    assert lead.start(Decision("start", "x", "whatever", "")) is False
+    assert lead.started == set()
+
+
+def test_a_still_quiet_session_waits(tmp_path: Path) -> None:
+    """Below the stall horizon nothing happens — a session thinking hard looks idle."""
+    lead = _lead_with_select(tmp_path, {"item": "B-057"})
+    assert lead.decide("no menu here", idle=10).action == "wait"
+
+
+def test_an_unmeasured_idle_never_starts_anything(tmp_path: Path) -> None:
+    """Without an activity marker `idle` is infinite, which means NOT MEASURED. Acting
+    on it would be the lead asserting a duration it never observed."""
+    lead = _lead_with_select(tmp_path, {"item": "B-057"})
+    assert lead.decide("no menu here", idle=float("inf")).action == "wait"
