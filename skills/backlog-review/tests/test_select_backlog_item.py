@@ -107,7 +107,10 @@ def test_asking_about_a_blocked_item_is_refused() -> None:
 
 
 def test_asking_about_a_shipped_item_is_refused() -> None:
-    assert select(_backlog(item_block("B-001", status="shipped")), requested="B-001").verdict == "BACKLOG_BLOCKED"
+    """Refused, but named: `BACKLOG_BLOCKED` here claimed a wall that did not exist."""
+    result = select(_backlog(item_block("B-001", status="shipped")), requested="B-001")
+    assert result.verdict == "ITEM_SHIPPED"
+    assert result.item_id == "B-001"
 
 
 def test_asking_about_an_unknown_item_is_refused() -> None:
@@ -144,3 +147,53 @@ def test_the_wall_is_reported_even_on_success() -> None:
     result = select(text)
     assert result.verdict == "ITEM_SELECTED"
     assert result.walls["B-002"] == ["B-100"]
+
+
+# ── blocked, versus already past this gate ────────────────────────────────────
+#
+# Found by using the tool: an item that had reached `planned`, whose blocker had
+# SHIPPED, came back BACKLOG_BLOCKED. Nothing was blocking it — it was ready for the
+# next phase. One verdict was carrying two states, and only one of them is a wall.
+
+
+def test_a_planned_item_is_in_flight_not_blocked() -> None:
+    text = _backlog(item_block("B-001", status="planned"))
+    result = select(text, requested="B-001")
+    assert result.verdict == "ITEM_IN_FLIGHT"
+
+
+def test_a_planned_item_whose_blocker_shipped_is_not_reported_as_blocked() -> None:
+    """The exact case that surfaced the defect."""
+    text = _backlog(item_block("B-001", status="planned", extra="blocked_by: B-002\n"),
+                    item_block("B-002", status="shipped"))
+    assert select(text, requested="B-001").verdict == "ITEM_IN_FLIGHT"
+
+
+def test_a_shipped_item_says_so() -> None:
+    text = _backlog(item_block("B-001", status="shipped"))
+    assert select(text, requested="B-001").verdict == "ITEM_SHIPPED"
+
+
+def test_a_killed_item_says_so() -> None:
+    text = _backlog(item_block("B-001", status="killed", extra="kill_reason: measured otherwise\n"))
+    assert select(text, requested="B-001").verdict == "ITEM_KILLED"
+
+
+def test_a_genuinely_blocked_item_is_still_blocked() -> None:
+    """The distinction only helps if the real wall keeps its name."""
+    text = _backlog(item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+                    item_block("B-002", status="raw"))
+    assert select(text, requested="B-001").verdict == "BACKLOG_BLOCKED"
+
+
+def test_an_unknown_status_is_not_silently_called_in_flight() -> None:
+    """A status outside the contract means the contract moved; do not guess."""
+    text = _backlog(item_block("B-001", status="marinating"))
+    assert select(text, requested="B-001").verdict == "BACKLOG_BLOCKED"
+
+
+def test_none_of_these_are_selectable() -> None:
+    for status in ("planned", "shipped", "killed"):
+        text = _backlog(item_block("B-001", status=status,
+                                   extra="kill_reason: x\n" if status == "killed" else ""))
+        assert select(text).verdict != "ITEM_SELECTED"

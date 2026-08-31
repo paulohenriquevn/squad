@@ -78,10 +78,10 @@ LOOP BACK to SELECT
 
 | Verdict | Meaning | Next |
 |---|---|---|
-| `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
+| `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT |
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
 | `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it | Loop back to SELECT. **A terminal state, not a failure** | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
-| `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
+| `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it |
 | `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover-execute --sweep {domain}`.** Not a finish line |

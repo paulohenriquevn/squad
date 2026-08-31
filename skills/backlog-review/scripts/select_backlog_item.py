@@ -65,9 +65,28 @@ SELECTABLE = ("triaged", "raw")
 _RANK = {status: i for i, status in enumerate(SELECTABLE)}
 
 
+#: What `--check` answers for an item that is not selectable and not blocked. The
+#: verdicts are `cycle-maintenance.md`'s own; SELECT reaches them by a shorter route
+#: than ADVANCE does — reading the registry rather than watching a cycle finish — and
+#: the meaning is the same either way: this item is past the point where SELECT hands
+#: out work.
+#:
+#: Added on 2026-08-31 after using the tool: an item that had gone to `planned` and
+#: whose blocker had SHIPPED came back `BACKLOG_BLOCKED`, which is a lie in the exact
+#: direction that matters. Nothing was blocking it; it was ready for the next phase.
+#: One verdict was carrying two states — "held back by an impediment" and "already
+#: past this gate" — and only the first is a wall.
+NOT_SELECTABLE = {
+    "planned": "ITEM_IN_FLIGHT",
+    "shipped": "ITEM_SHIPPED",
+    "killed": "ITEM_KILLED",
+}
+
+
 @dataclass
 class Selection:
     verdict: str                      # ITEM_SELECTED · BACKLOG_EMPTY · BACKLOG_BLOCKED
+                                      # · ITEM_IN_FLIGHT · ITEM_SHIPPED · ITEM_KILLED
     item_id: str | None = None
     reason: str = ""
     #: Every selectable item held back, and what holds it. Reported even on success,
@@ -148,8 +167,17 @@ def select(text: str, requested: str | None = None) -> Selection:
                              walls=walls, queue=queue)
         status = statuses.get(requested, "")
         if status not in SELECTABLE:
-            return Selection("BACKLOG_BLOCKED", item_id=requested,
-                             reason=f"{requested} is {status or 'missing a status'}, not selectable",
+            verdict = NOT_SELECTABLE.get(status)
+            if verdict is None:
+                return Selection("BACKLOG_BLOCKED", item_id=requested,
+                                 reason=f"{requested} carries no status this contract knows"
+                                        f" ({status or 'the field is absent'})",
+                                 walls=walls, queue=queue)
+            nexts = {"ITEM_IN_FLIGHT": " It has a plan; continue with /idea-to-release.",
+                     "ITEM_SHIPPED": "", "ITEM_KILLED": ""}
+            return Selection(verdict, item_id=requested,
+                             reason=f"{requested} is {status}, past the point where SELECT hands"
+                                    f" out work.{nexts[verdict]}",
                              walls=walls, queue=queue)
         blockers = live_blockers(by_id[requested], statuses)
         if blockers is not None:
