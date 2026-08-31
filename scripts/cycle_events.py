@@ -248,6 +248,29 @@ def read_events(project_root: Path) -> list[dict[str, Any]]:
     return events
 
 
+def declared_phases(project_root: Path) -> set[str]:
+    """Phase names `rules/cycle-phases.txt` declares, or empty when it is unreadable.
+
+    Empty means "cannot check", and the caller treats that as permission rather than
+    refusal: a consumer whose rules directory has moved must still be able to record
+    what ran.
+    """
+    for rel in ("rules/cycle-phases.txt", ".claude/rules/cycle-phases.txt"):
+        path = project_root / rel
+        if not path.is_file():
+            continue
+        names = set()
+        for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and "|" in stripped:
+                name = stripped.split("|")[0].strip()
+                if name:
+                    names.add(name)
+        if names:
+            return names
+    return set()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Emit a cycle phase event. Callable from shell hooks.",
@@ -273,6 +296,29 @@ def main(argv: list[str] | None = None) -> int:
     # exists to make. And the four SKILL.md instructions added the day before all use
     # this CLI, from wherever the agent happens to be standing.
     root = project_root_for(args.project_root)
+
+    # A phase name nobody declared is written and then dropped by every reader:
+    # `check_phase_drift.py` scores against the declared set, and the board renders a
+    # column per declared phase. So the work happens, an event records it, and nothing
+    # can see it — the exact failure the stream exists to remove, arriving through the
+    # door meant to fix it.
+    #
+    # Measured on the first autonomous run: the executing session called this CLI with
+    # `--cycle deps-audit` and `--cycle idea-to-release`, neither in `cycle-phases.txt`.
+    # No static sweep could catch it, because the emitter was an agent at runtime
+    # rather than a line of code. Refusing here is the only place it can be caught.
+    #
+    # Refusing rather than warning, even though this module is otherwise fail-open:
+    # a fail-open write puts an invisible event in the stream and reports success,
+    # which is worse than no event. The write is lost either way; this way somebody
+    # learns of it.
+    known = declared_phases(root)
+    if known and args.cycle not in known:
+        print(f"REFUSED: `{args.cycle}` is not a phase in rules/cycle-phases.txt "
+              f"({', '.join(sorted(known))}). An event for an undeclared phase is "
+              f"written and then dropped by every reader. Declare the phase, or emit "
+              f"under the one that owns this work.", file=sys.stderr)
+        return 1
 
     if args.transition == "start":
         event = emit_phase_start(root, cycle=args.cycle, slug=args.slug)

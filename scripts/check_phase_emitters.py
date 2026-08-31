@@ -75,6 +75,15 @@ _SELF = ("scripts/check_phase_emitters.py", "scripts/check_phase_drift.py",
          "scripts/cycle_events.py")
 
 
+#: Any phase name an emitter passes, whether or not a contract declares it. The
+#: mirror of the sweep below: that one asks whether a declared phase has an emitter,
+#: this pattern finds emitters for phases nobody declared.
+_EMITTED_NAME_RE = (
+    re.compile(r"--cycle[ \t=]+([a-z][a-z0-9-]*)"),
+    re.compile(r"""cycle=["']([a-z][a-z0-9-]*)["']"""),
+)
+
+
 @dataclass
 class PhaseFinding:
     phase: str
@@ -88,13 +97,16 @@ class EmitterReport:
     emitting: int = 0
     findings: list[PhaseFinding] = field(default_factory=list)
     where: dict[str, list[str]] = field(default_factory=dict)
+    #: Phases something emits that `cycle-phases.txt` does not declare.
+    undeclared: list[PhaseFinding] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {
             "phases": self.phases,
             "emitting": self.emitting,
             "silent": len(self.findings),
-            "findings": [f.__dict__ for f in self.findings],
+            "undeclared": len(self.undeclared),
+            "findings": [f.__dict__ for f in self.findings + self.undeclared],
             "where": self.where,
         }
 
@@ -140,6 +152,29 @@ def check_phase_emitters(repo_root: Path) -> EmitterReport:
                 phase=phase, requirement=requirement,
                 detail=("declared in cycle-phases.txt and named by no emitter — "
                         "nothing records that this phase ran")))
+
+    # The mirror. An emitter for a phase nobody declared writes events that every
+    # reader drops: `check_phase_drift.py` scores against the declared set and the
+    # board renders a column per declared phase, so the work happens, is recorded,
+    # and is invisible anyway.
+    #
+    # Measured on the first autonomous run: `deps-audit` and `idea-to-release` both
+    # emitted into a live stream and neither appears in `cycle-phases.txt` — one of
+    # them with a null verdict. Twelve events, and two of the six phases producing
+    # them were unknown to everything downstream.
+    declared_names = {name for name, _ in declared_phases(repo_root)}
+    if declared_names:
+        seen: dict[str, str] = {}
+        for rel, text in corpus:
+            for pattern in _EMITTED_NAME_RE:
+                for name in pattern.findall(text):
+                    if name not in declared_names:
+                        seen.setdefault(name, rel)
+        for name, rel in sorted(seen.items()):
+            report.undeclared.append(PhaseFinding(
+                phase=name, requirement="undeclared",
+                detail=(f"emitted from {rel} and absent from {PHASES_FILE} — events for it "
+                        "are written and then dropped by every reader")))
     return report
 
 
@@ -153,17 +188,21 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json:
         print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))
-        return 1 if report.findings else 0
+        return 1 if (report.findings or report.undeclared) else 0
 
     print(f"{report.phases} declared phase(s): {report.emitting} have an emitter, "
-          f"{len(report.findings)} silent")
+          f"{len(report.findings)} silent, {len(report.undeclared)} emitted but undeclared")
     for finding in report.findings:
         print(f"  [silent] {finding.phase} ({finding.requirement})")
         print(f"      {finding.detail}")
+    for finding in report.undeclared:
+        print(f"  [undeclared] {finding.phase}")
+        print(f"      {finding.detail}")
 
-    if report.findings:
-        print("\nA phase nothing records is a phase the stream cannot tell from one that "
-              "was skipped. Emit it: `cycle_events.py end --cycle <phase> --verdict <v>`.")
+    if report.findings or report.undeclared:
+        print("\nA phase nothing records cannot be told from one that was skipped; a phase "
+              "nobody declares is recorded and then dropped. Emit the first, declare the "
+              "second in " + PHASES_FILE + ".")
         return 1
     return 0
 

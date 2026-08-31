@@ -378,3 +378,57 @@ def test_an_event_emitted_deep_is_readable_from_the_root(tmp_path):
                 if e.get("cycle") == "release" and e.get("verdict") == "RELEASED"]
     assert len(released) == 1
     assert released[0]["slug"] == "B-014"
+
+
+# ── a phase nobody declared is written and then dropped ───────────────────────
+#
+# Measured on the first autonomous run: the executing session called this CLI with
+# `--cycle deps-audit` and `--cycle idea-to-release`, neither in cycle-phases.txt. No
+# static sweep could catch it — the emitter was an agent at runtime, not a line of
+# code — so the write is the only place it can be caught.
+
+
+def _with_phases(tmp_path, *names):
+    (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "records").mkdir(exist_ok=True)
+    (tmp_path / "rules" / "cycle-phases.txt").write_text(
+        "# a comment\n" + "".join(f"{n} | conditional | what it does\n" for n in names),
+        encoding="utf-8")
+    return tmp_path
+
+
+def test_a_declared_phase_is_written(tmp_path):
+    from cycle_events import main
+
+    root = _with_phases(tmp_path, "backlog", "plan")
+    assert main(["end", "--cycle", "plan", "--verdict", "OK", "--project-root", str(root)]) == 0
+    assert list(root.rglob("cycle-events.jsonl"))
+
+
+def test_an_undeclared_phase_is_refused_and_writes_nothing(tmp_path):
+    """Fail-open here would put an invisible event in the stream and report success."""
+    from cycle_events import main
+
+    root = _with_phases(tmp_path, "backlog", "plan")
+    assert main(["end", "--cycle", "deps-audit", "--verdict", "PASS",
+                 "--project-root", str(root)]) == 1
+    assert not list(root.rglob("cycle-events.jsonl"))
+
+
+def test_an_unreadable_declaration_permits_rather_than_blocks(tmp_path):
+    """"Cannot check" must not become "cannot record" — the stream is the point."""
+    from cycle_events import main
+
+    (tmp_path / "records").mkdir(parents=True)
+    assert main(["end", "--cycle", "anything", "--verdict", "OK",
+                 "--project-root", str(tmp_path)]) == 0
+
+
+def test_the_declaration_is_found_under_dot_claude_too(tmp_path):
+    """In an installed consumer the rules live under `.claude/`."""
+    from cycle_events import declared_phases
+
+    (tmp_path / ".claude" / "rules").mkdir(parents=True)
+    (tmp_path / ".claude" / "rules" / "cycle-phases.txt").write_text(
+        "review | conditional | x\n", encoding="utf-8")
+    assert declared_phases(tmp_path) == {"review"}
