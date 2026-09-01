@@ -1,6 +1,6 @@
 """A rule may cite a rule that does not exist, and the validator did not look.
 
-`rules/cycle-acceptance.md` e `rules/cycle-release.md` ancoravam o single-flip
+`rules/cycle-acceptance.md` and `rules/cycle-release.md` anchored the single-flip
 invariant at *"cycle-roadmap § Hard gates"*. `cycle-roadmap` was replaced by
 `cycle-maintenance` and the file no longer exists — but `check_xrefs.py` reported
 PASS, because Check 7 swept `skills/**/SKILL.md`, `skills/**/*.py` and

@@ -46,14 +46,14 @@ When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_acti
 **Out of scope for M2** (mirrors `/discover-confidence`'s deferred dimensions):
 
 - **M3 (semantic citation faithfulness)** — verifies the cited path contains the claimed symbol/behavior. Future: SAFE adapted to `ripgrep + tree-sitter`.
-- **5th coverage corner `prior_art`** — `cycle-discover.md` v1.1 added a 5th corner. The current `check_corner_coverage.py` still recognizes the 4-corner v1.0 shape; v1.1 extension is tracked under `cycle-discover.md § Downstream changes required #8`. Until shipped, plans authored against the v1.1 template can still pass this scorer — the extra corner is recognized as an unmapped header but is NOT hard-capped. Human reviewers are expected to catch missing `prior_art` content until the script is extended.
+- **There is no 5th corner, and there is not going to be one.** This entry used to promise a `prior_art` corner, point at a `§ Downstream changes required #8` section that does not exist, and ask human reviewers to cover the gap meanwhile. `cycle-discover.md § The four corners` declares four, and the same rule now lists prior art as an **anti-pattern** — *"Project X does it this way is not a measurement of our system... it cannot fill the Evidence corner."* The scorer recognising four shapes is correct, not a limitation.
 
 ## Workflow
 
 1. **Resolve the plan path** — `.claude/records/discoveries/plans/{slug}-plan.md`. Refuse if absent.
 2. **Run the 4 checker scripts** in parallel via Bash subprocess. Each emits a JSON document on stdout.
 3. **Combine outputs** — apply hard caps per the rubric above. Compute weighted average.
-4. **Apply soft caps** — see `discover-plan-golden-rule.md § Soft gates`.
+4. **Apply soft caps** — see `discover-plan-golden-rule.md § 5 — Verdict tokens`, where the soft band is defined.
 5. **Emit a JSON score report** at `.claude/records/reviews/{slug}-discover-plan-confidence-{date}.json` AND a human-readable rendering at `.claude/records/reviews/{slug}-discover-plan-confidence-{date}.md`.
 6. **Print verdict** to stdout: one of `SHIPPABLE` (≥90), `SHIPPABLE_WITH_CAVEATS` (70-89), `NON_SHIPPABLE` (50-69), `INVALID` (≤49).
 
@@ -85,7 +85,7 @@ When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_acti
 
 ## Anti-patterns
 
-1. **NEVER add a `--skip-checks` / `--force` flag.** Per `discover-plan-golden-rule.md § What it requires`, no bypass mechanism exists.
+1. **NEVER add a `--skip-checks` / `--force` flag.** Per `discover-plan-golden-rule.md § 2 — What the rule requires`, no bypass mechanism exists.
 2. **NEVER silently lower hard caps.** Any change to the rubric requires an ADR signed by the project owner.
 3. **NEVER edit the plan during scoring.** This skill is read-only on the plan; mutations belong to `/discover-improve` (when it exists).
 4. **NEVER recommend skipping `/discover-execute` after this verdict ≥ SHIPPABLE_WITH_CAVEATS.** The verdict only proves the plan is STRUCTURALLY sound; the execute phase produces the actual opportunity.

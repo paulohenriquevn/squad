@@ -39,19 +39,26 @@ If you DON'T copy these, the skill falls back to **hard-coded defaults** (90/70/
 
 ### 3. (Optional) Install the CI gate
 
-```bash
-mkdir -p scripts
-cp /path/to/source/scripts/check-plan-confidence.sh scripts/
-chmod +x scripts/check-plan-confidence.sh
+The scorer is the gate — its exit codes were designed for one, so no wrapper
+script is needed:
+
+```
+0  SHIPPABLE or SHIPPABLE_WITH_CAVEATS      2  error (plan or rubric not found)
+1  INVALID (a hard cap fired)                3  NON_SHIPPABLE (score < 50, no hard cap)
 ```
 
-Add to Makefile if you have one:
+Add to your Makefile if you have one:
 
 ```makefile
 .PHONY: check-plan-confidence
 check-plan-confidence:
-	@bash scripts/check-plan-confidence.sh
+	@python3 .claude/skills/plan-confidence/scripts/run_structural.py $(PLAN)
 ```
+
+Earlier versions of this document told you to copy a `check-plan-confidence.sh`
+into `scripts/`. **That file has never existed in this repository** — the step
+failed for anyone who ran it, and the compatibility table below asserted a
+behaviour of it that nobody could have observed.
 
 ## Or use the automated installer
 
@@ -152,7 +159,7 @@ If `.claude/rules/` exists in your project, defaults are ignored. Project rules 
 | Templates in `templates/` | ✅ Fully | `.example.*` files |
 | Score schema (JSON) | ✅ Fully | Generic `$id` |
 | `/plan-improve` prompt template | ✅ Fully | Generic slugs |
-| `check-plan-confidence.sh` | ✅ Fully | Auto-finds `.claude/` from script location |
+| CI gate | ✅ Fully | `run_structural.py` exits 0/1/2/3; call it directly, there is no wrapper |
 
 ## Troubleshooting
 

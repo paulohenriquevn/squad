@@ -19,7 +19,7 @@ Fallback: if `.claude/rules/` is missing or empty, use defaults at `.claude/skil
 
 When Phase B (LLM-driven ADR alternatives) runs, the alternatives you propose SHALL respect:
 - dependency direction and module boundaries (per `architecture.md` if present)
-- file size budgets (per `architecture.md § Module hygiene` or `.claude/skills/plan-confidence/defaults/loc-limits.md` as fallback)
+- file size budgets (per `architecture.md § 3 — Module cohesion` or `.claude/skills/plan-confidence/defaults/loc-limits.md` as fallback)
 - testing conventions (per `testing.md` or `.claude/skills/plan-confidence/defaults/testing.md` as fallback)
 
 If a proposed alternative would violate any rule, choose another alternative OR leave a TODO comment marking the conflict.

@@ -75,7 +75,7 @@ If a `*-patterns` skill matches the domain (e.g., `project-b-pgvector-patterns`)
 
 ### 4. Naming and module hygiene
 
-Per `architecture.md § Module hygiene`:
+Per `architecture.md § 3 — Module cohesion`:
 
 - Files: kebab-case (`user-store.ts`, not `UserStore.ts` or `user_store.ts`)
 - Classes: PascalCase

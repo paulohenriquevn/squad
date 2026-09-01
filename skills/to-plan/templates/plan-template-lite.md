@@ -157,7 +157,7 @@ None [or list]
 - [ ] `npm test` exits 0
 - [ ] `npm run typecheck` exits 0
 - [ ] `npm run lint` exits 0
-- [ ] No file in NEW directories exceeds 500 LoC (per `architecture.md § Module hygiene`)
+- [ ] No file in NEW directories exceeds 500 LoC (per `architecture.md § 3 — Module cohesion`)
 - [ ] CHANGELOG.md entry under `[Unreleased]`
 - [ ] Plan archived to `.claude/records/plans/completed/{slug}-plan.md` post-merge
 

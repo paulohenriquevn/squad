@@ -256,6 +256,43 @@ def _extract_referenced_paths(content: str, base: Path) -> set[Path]:
     return resolved
 
 
+#: A `file.md § Section` citation. The section name runs to the first delimiter that
+#: cannot appear in a heading — a backtick, a full stop, a comma, a bracket, a quote.
+_ANCHOR_RE = re.compile(r"`?([a-z0-9][a-z0-9./-]*\.md)`?\s*§\s*([^`.,;)\]\"\n]+"
+                        r"(?:\n\s+[^`.,;)\]\"\n]+)?)")
+_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
+
+#: Section names that are not names. A template placeholder and a range of two
+#: sections are both legitimate prose, and reporting them is how a checker earns
+#: the reputation that gets it switched off.
+_NOT_A_SECTION = re.compile(r"[{}]|^\d+\s*[–-]\s*\d+")
+
+
+def _headings(path: Path) -> set[str]:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return set()
+    return {h.strip().lower() for h in _HEADING_RE.findall(text)}
+
+
+def _resolve_cited_doc(name: str, citing: Path, ecosystem_dir: Path) -> Path | None:
+    """The document a `§` citation points at, or None when it is not unambiguous.
+
+    Ambiguity is answered with None rather than a guess. Two files named
+    `improvement-prompt.md` live in this kit, and picking the first match reported a
+    section as missing from a file that never contained it — a finding about the
+    wrong document reads exactly like a real one.
+    """
+    leaf = name.split("/")[-1]
+    for candidate in (citing.parent / name, ecosystem_dir / name,
+                      ecosystem_dir / "rules" / leaf, citing.parent / leaf):
+        if candidate.is_file():
+            return candidate
+    matches = [m for m in ecosystem_dir.rglob(leaf) if m.is_file()]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _extract_cycle_phases(cycle_rule_content: str,
                           skills_root: Path | None = None) -> set[str]:
     """Extract skill names mentioned in a cycle rule's `phases:` frontmatter list AND in the chain section."""
@@ -587,6 +624,51 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 "agent": agent_md.stem,
                 "message": f"agents/{agent_md.name} is a derived skeleton with {pending} "
                            "section(s) left to fill — the routing works, the judgement does not",
+            })
+
+    # Check 10: a `file.md § Section` citation resolves to a heading that exists.
+    #
+    # Checks 3 and 7 answer "does the FILE exist". Nothing asked whether the SECTION
+    # does, and a section is what a reader is actually sent to. Measured 2026-08-31,
+    # by hand: **14 dead anchors across 10 files.** Three classes, and the third is
+    # the one worth the check:
+    #
+    #   renamed   `architecture.md § Module hygiene` in four files; the heading has
+    #             read `§ 3 — Module cohesion` for as long as git remembers
+    #   misquoted `§ What it requires` for `§ 2 — What the rule requires`
+    #   never written  three skills opened their loop step with "Read
+    #             `loop-engine-convention.md § How to invoke ralph-loop:ralph-loop
+    #             safely` BEFORE this step", and that section did not exist. Each
+    #             then restated the fact in its own words — one piece of knowledge
+    #             in three copies, with its named home empty.
+    #
+    # A citation that survives the rename of what it points at is worse than a
+    # missing one: the reader goes looking, finds a document that plainly exists,
+    # and concludes the section was removed on purpose.
+    for doc in sorted(list(ecosystem_dir.glob("skills/**/*.md"))
+                      + list(ecosystem_dir.glob("rules/*.md"))):
+        try:
+            content = doc.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for cited_name, cited_section in _ANCHOR_RE.findall(content):
+            section = " ".join(cited_section.split()).strip().lower()
+            if not section or len(section) < 3 or _NOT_A_SECTION.search(section):
+                continue
+            target = _resolve_cited_doc(cited_name, doc, ecosystem_dir)
+            if target is None:
+                continue
+            headings = _headings(target)
+            if any(section == h or section in h or h in section for h in headings):
+                continue
+            findings.append({
+                "severity": "WARN",
+                "check": "cited_section_does_not_exist",
+                "document": _rel(doc),
+                "target": cited_name,
+                "section": cited_section.strip(),
+                "message": (f"{_rel(doc)} cites `{cited_name} § {cited_section.strip()}` "
+                            f"and that document has no such heading"),
             })
 
     # Check 4: orphan skills (not in any cycle, not auxiliary)

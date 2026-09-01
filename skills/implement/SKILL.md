@@ -63,7 +63,7 @@ Each new module/class/function checked against SOLID at REFACTOR phase of TDD:
 
 ### Clean Code
 
-- Naming: per `rules/architecture.md § Naming conventions` (each project declares its own)
+- Naming: per `rules/architecture.md § 4 — Boundary enforcement` (each project declares its own layer names there)
 - Function size: < 20 lines as guideline; if larger, justify or split
 - No comments explaining WHAT (well-named code already does that); only WHY when non-obvious
 - No dead code: every export reachable from a public entry-point OR a test

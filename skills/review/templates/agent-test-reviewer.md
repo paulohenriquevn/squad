@@ -66,7 +66,7 @@ For every task in the plan with a TDD section:
 
 ### 3. AAA / Given-When-Then format
 
-Per `testing.md § BDD`:
+Per `testing.md § 3 — Rules`:
 
 - Every `it(...)` / `test(...)` block has: Arrange (setup), Act (operation), Assert (verification) — clearly separated
 - Test names describe BEHAVIOR, not method (`test_transfer_fails_when_balance_insufficient`, NOT `test_transfer_1`)

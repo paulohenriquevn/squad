@@ -30,7 +30,7 @@ This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md
 
 User explicitly invokes `/review {plan-slug}` when:
 
-- Recent commits on `workspace` passed `/implement` validation. PASS is the canonical state; PARTIAL with documented SKIPs (e.g., pre-code phase skipping npm gates) is acceptable only when `cycle-review.md § Trigger conditions` explicitly permits it for the current project lifecycle stage
+- Recent commits on `workspace` passed `/implement` validation. PASS is the canonical state; PARTIAL with documented SKIPs (e.g., pre-code phase skipping npm gates) is acceptable only when `cycle-review.md § Pre-conditions` explicitly permits it for the current project lifecycle stage
 - All tests are green on the branch
 - The implementation plan at `plans/{slug}-plan.md` is the canonical contract (un-revised since /implement)
 - PR is drafted OR ready to be drafted
@@ -363,7 +363,7 @@ Fix after the consolidation, then re-review. Marking the resulting findings
 
 ## When to give up honestly
 
-Per `cycle-review.md § Stop conditions`:
+Per `cycle-review.md § Verdicts` — `BLOCKED` is the honest outcome here:
 
 1. Review depth requires domain knowledge outside training (cryptography, hardware-specific, regulatory compliance) → mark BLOCKED with reason "requires human domain expert"
 2. PR scope ambiguous (changes touch files unrelated to plan) → halt; surface to human

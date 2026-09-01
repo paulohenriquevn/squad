@@ -116,7 +116,7 @@ After triad passes, update progress file: task status → `wired`, log iteration
 
 Before composing the commit message, check `.claude/rules/implement-model-routing.txt`. If a `commit:` entry exists (e.g., `commit: haiku ...`), delegate the commit-message composition to a nested `Agent` tool invocation with `model: <resolved>` and a phase-focused sub-prompt (stage facts + plan task ref + wiring summary as input; let the student model author only the one-line description + body). Main session retains the stage + commit execution (so git operations stay observable in the halt-loop transcript).
 
-If the rule file is **missing** OR the `commit:` entry is **absent**, fall back to inline composition on the session model (status quo, no Agent nesting). See `.claude/rules/cycle-implement.md § Model routing` for the contract.
+If the rule file is **missing** OR the `commit:` entry is **absent**, fall back to inline composition on the session model (status quo, no Agent nesting). **There is no `§ Model routing` contract in `cycle-implement.md`** — this split is experimental and the fallback above is its only specified behaviour.
 
 ### SEPA consultation 3/3 — Before COMMIT
 
