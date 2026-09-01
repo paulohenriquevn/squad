@@ -150,7 +150,7 @@ A phase of no cycle. Invoked when the question arises.
 | `code-quality` | *(also the whole of cycle-code-quality — see above)* | Outside the chain, to audit a tree | — |
 | `honesty-gate` | Blocks a "production-ready" / v1.0 claim without recorded evidence of sustained internal use | Someone is about to make that claim | Read `EVIDENCE_WITH_CAVEATS` as `SUFFICIENT` — the caveats are explicit. Never log evidence for one scenario and claim it satisfies another anchor |
 | `quality-init` | Emits quality-gate hooks calibrated to the project's real p90 metrics | Setting a project up, once | Generate hooks that auto-fix — hooks are gates, not fixers. Never set thresholds below the floors: the hook would block every write |
-| `skill-creator` | Authors, improves and evaluates skills. Vendored from Anthropic, kept byte-close to upstream | Creating or improving a skill | Re-sync it as a merge. It is a copy, and `validate_skill_frontmatter.py` exempts its frontmatter on purpose |
+| `skill-creator` | Authors, improves and evaluates skills; `run_eval.py` measures whether a description actually makes the model reach for the skill | Creating or improving a skill, and before trusting a description | **Re-sync it blindly.** It is vendored, but `run_eval.py` now carries a local fix — its trigger detector decided the whole turn from its first observation and could only produce false negatives. A copy from upstream reverts that silently, and the symptom is a trigger rate that reads low and looks like a fact about the skill |
 | `backlog-init`, `backlog-review` | *(see BACKLOG above)* | — | — |
 
 ---

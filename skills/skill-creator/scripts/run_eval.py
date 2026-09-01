@@ -32,6 +32,101 @@ def find_project_root() -> Path:
     return current
 
 
+class TriggerDetector:
+    """Folds `claude -p` stream events into one verdict: did THIS skill get used?
+
+    Extracted from the read loop so it can be tested at all. Until 2026-09-01 the
+    logic lived inline, had no test, and carried three instances of one defect —
+    each deciding the whole turn from its first observation:
+
+      1. `content_block_start` returned False the moment a tool that was not
+         Skill/Read appeared. Measured: with `deps-audit`'s real description the
+         model ran `Bash` three times to orient itself and invoked `Skill`
+         correctly at position four. That run scored as "did not trigger".
+      2. `content_block_stop` returned `clean_name in accumulated` for the first
+         tool block, so a Skill call for a DIFFERENT skill ended the turn.
+      3. `message_stop` returned False after the FIRST assistant message, and a
+         turn routinely has five.
+
+    Each one can only fail in one direction — it can call a trigger a miss, never
+    a miss a trigger. A trigger rate from that instrument is a lower bound
+    reported as a measurement, which is the worst kind of wrong number: it looks
+    like a result about the skill.
+
+    Paired against the same streams on 2026-09-01, five runs of one query: the old
+    logic scored 4/5, this one 5/5, and the single divergence was the run whose
+    first tool was `Bash`.
+
+    The verdict is `True` as soon as a matching invocation is seen — the early
+    return was always the right idea, and only the early NEGATIVE was wrong — and
+    `False` only when the turn is over.
+    """
+
+    #: The tools that count as reaching for a skill. `Read` is here because a
+    #: model that opens the SKILL.md has used it, whatever tool it used to do so.
+    USING_TOOLS = ("Skill", "Read")
+
+    def __init__(self, clean_name: str) -> None:
+        self.clean_name = clean_name
+        self._pending_tool: str | None = None
+        self._accumulated = ""
+
+    def feed(self, event: dict) -> bool | None:
+        """One event in; `True`/`False` when decided, `None` while undecided."""
+        kind = event.get("type")
+
+        if kind == "stream_event":
+            return self._feed_stream(event.get("event", {}))
+
+        # Fallback for a stream without partial messages: the whole message at
+        # once. Every content item is scanned — the old code returned on the
+        # first, which is defect (1) again in another shape.
+        if kind == "assistant":
+            for item in event.get("message", {}).get("content", []):
+                if item.get("type") != "tool_use":
+                    continue
+                if self._names_this_skill(item.get("name", ""), item.get("input", {})):
+                    return True
+            return None
+
+        # The turn ended without a matching invocation. This is the ONLY place a
+        # negative verdict is allowed to come from.
+        if kind == "result":
+            return False
+        return None
+
+    def _feed_stream(self, stream_event: dict) -> bool | None:
+        kind = stream_event.get("type", "")
+
+        if kind == "content_block_start":
+            block = stream_event.get("content_block", {})
+            self._pending_tool = (block.get("name", "")
+                                  if block.get("type") == "tool_use" else None)
+            self._accumulated = ""
+            return None
+
+        if kind == "content_block_delta" and self._pending_tool in self.USING_TOOLS:
+            delta = stream_event.get("delta", {})
+            if delta.get("type") == "input_json_delta":
+                self._accumulated += delta.get("partial_json", "")
+                if self.clean_name in self._accumulated:
+                    return True
+            return None
+
+        if kind == "content_block_stop":
+            # A block that was not this skill proves nothing about the next one.
+            self._pending_tool = None
+            self._accumulated = ""
+        return None
+
+    def _names_this_skill(self, tool_name: str, tool_input: dict) -> bool:
+        if tool_name not in self.USING_TOOLS:
+            return False
+        target = tool_input.get("skill", "") if tool_name == "Skill" \
+            else tool_input.get("file_path", "")
+        return self.clean_name in target
+
+
 def run_single_query(
     query: str,
     skill_name: str,
@@ -90,12 +185,9 @@ def run_single_query(
             env=env,
         )
 
-        triggered = False
         start_time = time.time()
         buffer = ""
-        # Track state for stream event detection
-        pending_tool_name = None
-        accumulated_json = ""
+        detector = TriggerDetector(clean_name)
 
         try:
             while time.time() - start_time < timeout:
@@ -125,55 +217,34 @@ def run_single_query(
                     except json.JSONDecodeError:
                         continue
 
-                    # Early detection via stream events
-                    if event.get("type") == "stream_event":
-                        se = event.get("event", {})
-                        se_type = se.get("type", "")
+                    verdict = detector.feed(event)
+                    if verdict is not None:
+                        return verdict
 
-                        if se_type == "content_block_start":
-                            cb = se.get("content_block", {})
-                            if cb.get("type") == "tool_use":
-                                tool_name = cb.get("name", "")
-                                if tool_name in ("Skill", "Read"):
-                                    pending_tool_name = tool_name
-                                    accumulated_json = ""
-                                else:
-                                    return False
-
-                        elif se_type == "content_block_delta" and pending_tool_name:
-                            delta = se.get("delta", {})
-                            if delta.get("type") == "input_json_delta":
-                                accumulated_json += delta.get("partial_json", "")
-                                if clean_name in accumulated_json:
-                                    return True
-
-                        elif se_type in ("content_block_stop", "message_stop"):
-                            if pending_tool_name:
-                                return clean_name in accumulated_json
-                            if se_type == "message_stop":
-                                return False
-
-                    # Fallback: full assistant message
-                    elif event.get("type") == "assistant":
-                        message = event.get("message", {})
-                        for content_item in message.get("content", []):
-                            if content_item.get("type") != "tool_use":
-                                continue
-                            tool_name = content_item.get("name", "")
-                            tool_input = content_item.get("input", {})
-                            if tool_name == "Skill" and clean_name in tool_input.get("skill", "") or tool_name == "Read" and clean_name in tool_input.get("file_path", ""):
-                                triggered = True
-                            return triggered
-
-                    elif event.get("type") == "result":
-                        return triggered
+            # Drain whatever the last read left behind. The loop breaks the
+            # moment the process has exited, and until 2026-09-01 the tail it had
+            # just appended was dropped unparsed — a fast turn could put the
+            # deciding event in exactly that chunk.
+            for line in buffer.split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                verdict = detector.feed(event)
+                if verdict is not None:
+                    return verdict
         finally:
             # Clean up process on any exit path (return, exception, timeout)
             if process.poll() is None:
                 process.kill()
                 process.wait()
 
-        return triggered
+        # Timed out, or the stream ended with no `result` event. Neither is
+        # evidence the skill was not used; it is evidence nothing was observed.
+        return False
     finally:
         if command_file.exists():
             command_file.unlink()
