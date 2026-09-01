@@ -164,3 +164,66 @@ def test_a_tree_without_node_modules_reports_a_miss_rather_than_raising(rooted: 
     report = check_measurement_targets(_plan(rooted, "Read `acme-pkg/server/plugins` for the seam."))
 
     assert report["fabricated"] == 1, report["fabricated_targets"]
+
+
+# ── gate G-L: an undeclared live host, and the three states of the declaration ──
+#
+# The guard read `if declared_hosts and host not in declared_hosts`, so an EMPTY set
+# skipped the loop entirely, `undeclared_hosts` stayed empty, and that satisfied
+# `if live_targets and not undeclared_hosts` — awarding a CONTRIBUTOR reading
+# "N live target(s), all declared" when nothing was declared.
+#
+# The kit ships rules/live-target.txt empty ON PURPOSE, so in every freshly installed
+# consumer the gate was not merely inert: it paid points for the targets it exists to
+# refuse. An inability reported as approval.
+
+
+def _plan_with_url(root: Path) -> Path:
+    (root / "plans").mkdir(parents=True, exist_ok=True)
+    p = root / "plans" / "p.md"
+    p.write_text(
+        "# Measurement plan\n\n## Target\n\n"
+        "Probe `https://app.example.com/api/traces` and record the status.\n",
+        encoding="utf-8",
+    )
+    return p
+
+
+def test_an_empty_declaration_makes_every_live_host_undeclared(tmp_path: Path) -> None:
+    """Declaring nothing is not the same as declaring everything."""
+    (tmp_path / ".git").touch()
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "live-target.txt").write_text("# none yet\n", encoding="utf-8")
+
+    report = check_measurement_targets(_plan_with_url(tmp_path))
+
+    assert report["undeclared_live_hosts"] == ["app.example.com"]
+    assert any("not declared" in d for d in report["detractors"])
+    assert not any("all declared" in c for c in report["contributors"]), (
+        "a plan must never be credited for targets nobody declared"
+    )
+
+
+def test_a_missing_declaration_file_is_reported_as_uncheckable(tmp_path: Path) -> None:
+    """Absent file: the check could not run. Not a violation, and not a pass."""
+    (tmp_path / ".git").touch()
+    (tmp_path / "rules").mkdir()
+
+    report = check_measurement_targets(_plan_with_url(tmp_path))
+
+    assert report["undeclared_live_hosts"] == [], "nothing was judged, so nothing is undeclared"
+    assert any("could not be checked" in c for c in report["contributors"])
+    assert not any("all declared" in c for c in report["contributors"])
+
+
+def test_a_declared_host_passes(tmp_path: Path) -> None:
+    """The widening must not swallow the signal it exists to give."""
+    (tmp_path / ".git").touch()
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "live-target.txt").write_text(
+        "target = https://app.example.com\n", encoding="utf-8")
+
+    report = check_measurement_targets(_plan_with_url(tmp_path))
+
+    assert report["undeclared_live_hosts"] == []
+    assert any("all declared" in c for c in report["contributors"])

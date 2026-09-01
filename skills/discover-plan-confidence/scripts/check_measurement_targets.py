@@ -100,8 +100,14 @@ def _resolves_as_module(project_root: Path, target: str) -> bool:
         current = current.parent
 
 
-def _declared_live_targets(project_root: Path) -> set[str]:
-    """Hosts declared in rules/live-target.txt.
+def _declared_live_targets(project_root: Path) -> set[str] | None:
+    """Hosts declared in rules/live-target.txt. `None` when the file is not there.
+
+    `None` is not an empty set, and conflating them is what broke gate G-L. An
+    ABSENT file means the check could not run; a PRESENT but empty one means the
+    project declared no live target, and then every live URL in a plan is undeclared
+    by definition. Returning `set()` for both made the caller skip the check
+    entirely — see the guard it feeds.
 
     A plan naming a live URL that no domain declares is planning a probe the cycle
     refuses to run (`cycle-discover.md`, gate G-L). Catching it here means the refusal
@@ -120,7 +126,7 @@ def _declared_live_targets(project_root: Path) -> set[str]:
                     re.MULTILINE,
                 )
             }
-    return set()
+    return None
 
 
 def _is_explicitly_blocked(raw: str, match_end: int) -> bool:
@@ -148,11 +154,26 @@ def check_measurement_targets(plan_path: Path) -> dict[str, Any]:
 
     undeclared_hosts: list[str] = []
     live_targets: set[str] = set()
+    # `declared_hosts is None` means rules/live-target.txt was not found: the check
+    # could not run, and nothing about these targets was judged. An EMPTY set means
+    # the project declared none, and then every live URL is undeclared — which is
+    # precisely what gate G-L exists to catch.
+    #
+    # THE DEFECT THIS REPLACES. The guard read `if declared_hosts and host not in
+    # declared_hosts`, so an empty set skipped the loop body entirely and
+    # `undeclared_hosts` stayed empty — which then satisfied
+    # `if live_targets and not undeclared_hosts` and awarded the plan a CONTRIBUTOR
+    # reading "N live target(s), all declared". Nothing was declared.
+    #
+    # The kit ships `live-target.txt` empty on purpose, so in every freshly installed
+    # consumer this gate was not merely inert: it paid points for the targets it
+    # exists to refuse. An inability reported as approval, which is worse than an
+    # inability reported as zero.
     for match in URL_TARGET_RE.finditer(raw):
         url = match.group(0)
         host = re.sub(r"^https?://", "", url).split("/")[0]
         live_targets.add(url)
-        if declared_hosts and host not in declared_hosts:
+        if declared_hosts is not None and host not in declared_hosts:
             undeclared_hosts.append(host)
 
     total = len(verified) + len(fabricated)
@@ -162,7 +183,13 @@ def check_measurement_targets(plan_path: Path) -> dict[str, Any]:
     contributors: list[str] = []
     if verified:
         contributors.append(f"{len(verified)} resolvable path target(s)")
-    if live_targets and not undeclared_hosts:
+    if live_targets and declared_hosts is None:
+        # Say what happened instead of crediting it. A missing declaration file is
+        # not a plan that got something right.
+        detractors_note = (f"{len(live_targets)} live target(s) could not be checked — "
+                           "rules/live-target.txt not found")
+        contributors.append(detractors_note)
+    elif live_targets and not undeclared_hosts:
         contributors.append(f"{len(live_targets)} live target(s), all declared")
     if blocked:
         contributors.append(f"{len(blocked)} explicitly BLOCKED target(s) (honest gaps)")
