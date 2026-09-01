@@ -89,6 +89,32 @@ If `compute_next_version.py` returns `AMBIGUOUS`, AskUserQuestion ONCE (major / 
 
 If a tag for `$NEXT_VERSION` already exists, halt — never overwrite a published tag.
 
+### Step 2.5 — The maturity gate, when the version crosses 1.0.0
+
+**Only when the computed next version is `1.0.0` or higher and the current one is
+below it.** Every other release skips this step; a patch release makes no claim
+about maturity and a gate that fires on ordinary work is one somebody disables.
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/honesty-gate/scripts/check_honesty_gate.py" --json
+```
+
+| Exit | Verdict | What follows |
+|---|---|---|
+| 0 | `EVIDENCE_SUFFICIENT` | cut the release |
+| 3 | `EVIDENCE_WITH_CAVEATS` | cut it, and the caveats go **into the release notes** — thin evidence, no failure story or a single operator are facts a reader of a 1.0 announcement is owed |
+| 1 | `EVIDENCE_INSUFFICIENT` | **refuse.** Cut `0.x` instead, or gather the evidence. Never lower the version claim by rewording the notes while cutting the tag anyway |
+| 2 | — | the gate could not be read; fix that before deciding |
+
+The gate reads `records/honesty-gate/manifest.md` and the evidence beside it. It
+refuses to infer: a missing manifest is `EVIDENCE_INSUFFICIENT`, never *not
+applicable*. A project that has not declared what would prove the claim has not
+proved it.
+
+This step exists because `1.0.0` is the one number in a release that is a claim
+about the product rather than about the diff, and the loop that produces it has
+no person in it to feel embarrassed.
+
 ### Step 3 — Rewrite CHANGELOG
 
 ```bash

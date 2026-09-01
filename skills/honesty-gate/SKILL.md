@@ -14,6 +14,25 @@ Applies the project's **honesty-gate golden rule** (`rules/honesty-gate-golden-r
 
 **This skill is NOT optional for a v1.0 claim.** Read `rules/honesty-gate-golden-rule.md` before invoking.
 
+## The verdict is computed, never asserted
+
+`scripts/check_honesty_gate.py` applies `rules/honesty-gate-golden-rule.md`: the
+four hard caps in order, first failure short-circuiting, then the three soft caps.
+Run it and read its exit code — `0` sufficient, `3` with caveats, `1` refused,
+`2` unreadable.
+
+Until 2026-09-01 this skill read the rule and applied it by hand, nothing in the
+repository read its verdict, and no phase invoked it — one artifact in a real
+consumer's entire history. The gate against an unearned claim was itself honoured
+only when somebody remembered, which in an unattended loop is never.
+
+`/release` now runs it at the `1.0.0` boundary and at no other, because a patch
+release makes no claim about maturity.
+
+**What it will not do:** pick the anchor. The rule says *pick one, be specific*,
+and a script choosing the scenario that would prove the product works would be
+the gate writing its own exam.
+
 ## Pre-conditions (per-project)
 
 This skill assumes the project has defined:

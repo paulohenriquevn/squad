@@ -98,10 +98,12 @@ def test_no_domain_specialist_is_installed(installed):
     """
     target, _ = installed
     agents = target / ".claude" / "agents"
-    # The kit's own two are mechanism, not specialists: they describe no repository
+    # The kit's own four — the squad — are mechanism, not specialists: they describe
+    # no repository
     # and make no claim about the consumer's topology, which is the whole reason a
     # specialist cannot ship. Anything ELSE here would be a leak.
-    kit_owned = {"README.md", "squad-lead.md", "squad-boss.md"}
+    kit_owned = {"README.md", "squad-lead.md", "squad-boss.md",
+                 "squad-runner.md", "squad-dispatcher.md"}
     specialists = [p for p in agents.glob("*.md") if p.name not in kit_owned]
     assert specialists == [], f"domain specialists leaked: {specialists}"
 
@@ -435,7 +437,8 @@ def test_the_kit_agents_reach_the_consumer(installed):
     invoke: it runs `claude -p` in the project, and the agent files have to be there."""
     target, _ = installed
     agents = target / ".claude" / "agents"
-    for name in ("squad-lead.md", "squad-boss.md"):
+    for name in ("squad-lead.md", "squad-boss.md",
+                 "squad-runner.md", "squad-dispatcher.md"):
         assert (agents / name).is_file(), f"{name} did not reach the consumer"
         assert (agents / name).stat().st_size > 0
 

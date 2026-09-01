@@ -1,4 +1,36 @@
-# Squad domain specialists
+# Squad
+
+Two kinds of file live here, and confusing them is the mistake this README exists
+to prevent.
+
+## The squad — four roles, versioned, shipped to every consumer
+
+They are **mechanism**: each describes a decision, not a repository, so none of
+them makes a claim about any consumer's topology. That is why they may be
+versioned here when a domain specialist may not.
+
+| Agent | Decides | Runs |
+|---|---|---|
+| `squad-boss` | what work exists — turns a written halt into registered items | `/backlog-item`, `squad_boss.py` |
+| `squad-lead` | what happens next when the mechanical path has no answer | `select_backlog_item.py`, `rules/autonomy-envelope.md` |
+| `squad-dispatcher` | which item enters which lane, and when | `/pipeline` |
+| `squad-runner` | one item, from idea to a release PR | `/idea-to-release` |
+
+The four do not overlap, and the seams are the point:
+
+```
+boss ──registers──▶ backlog ──ranks──▶ dispatcher ──allocates──▶ runner ──▶ PR
+  ▲                                         │                      │
+  └──────── a halt with a named cause ──────┴──────────────────────┘
+                    lead: called by any of them when no rule covers the case
+```
+
+The **boss** supplies work; the **dispatcher** allocates it; the **runner**
+executes it; the **lead** is what any of them escalates to. A role that could do
+two of these would be a role that can overrule itself — the dispatcher deciding a
+stage passed, or the runner choosing which item it prefers.
+
+## Domain specialists — derived per project, never shipped
 
 One agent per domain of the project this kit governs. Each knows the repos it covers, the build commands **verified on disk** rather than copied from a table, the invariants of its domain, and the shapes a real finding takes there.
 

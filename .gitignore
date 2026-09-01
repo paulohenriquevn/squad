@@ -71,7 +71,6 @@ study-material/**
 # nine files from three items reached the index before this line existed.
 
 # Agent run logs (consumer-specific)
-agents/**
 !agents/.gitkeep
 # EXCEPTION: the README describes the routing MECHANISM, not a domain, and
 # install.sh copies it unconditionally. Keeping it ignored made every install
@@ -83,11 +82,10 @@ agents/**
 # could deliver files that existed on one machine only.
 !agents/README.md
 
-# The kit's own two agents. They are mechanism, not domain specialists: they describe
+# The kit's own four agents — the squad. They are mechanism, not domain specialists:
+# they describe
 # no repository and make no claim about any consumer's topology, which is the whole
 # reason a specialist may not be versioned here. `squad_lead.py` invokes them through
 # `claude -p` when the mechanical selector has no answer, and an agent that is not
 # versioned reaches nobody — the exact failure the comment above records for the
 # specialists that lived on one machine's disk.
-!agents/squad-lead.md
-!agents/squad-boss.md
