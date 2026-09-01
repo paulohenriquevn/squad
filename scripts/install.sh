@@ -842,4 +842,9 @@ Next steps for the target project:
      items — an objective is not a why_now)
 
   8. First item: /backlog-item, or /plan-write "{one-sentence feature}"
+
+  The 360º view — every phase, who owns it, and what it reads:
+    .claude/rules/squad-map.md
+  A compact form of it is injected at every SessionStart, so an agent starting
+  work already knows the chain and the four roles.
 EOF

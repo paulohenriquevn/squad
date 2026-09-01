@@ -226,6 +226,7 @@ nothing — a `lib/`, a `utils/`, a test filed outside a test tree.
 squad/
 ├── wiki/product/    ← what the product IS. Four documents, agreed with a person
 ├── rules/           ← the contracts. What each cycle promises and which gates block it
+│   └── squad-map.md          ← the 360º view: every phase, who owns it, what it reads
 │   ├── cycle-*.md            ← one per phase; the source of truth for that phase
 │   ├── cycle-phases.txt      ← the chain itself, declared once and machine-readable
 │   ├── records-location.md   ← where output goes, and why the split below exists

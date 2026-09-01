@@ -145,6 +145,34 @@ def check_skill_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return not findings, [f"  {f}" for f in findings]
 
 
+def check_squad_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Does `rules/squad-map.md` still describe the system that is on disk?
+
+    Same lesson as `check_skill_map`, one level up and with a sharper cost: this map
+    is injected at SessionStart, so a stale one is not a document somebody might
+    open — it is a false premise in the agent's opening context, which every later
+    decision rests on.
+
+    It checks the four things only this map claims — phases, cycles, kit agents,
+    hooks — and deliberately leaves the skill inventory to `check_skill_map.py`,
+    because two checkers over one fact can disagree about it.
+    """
+    checker = ecosystem_dir / "scripts" / "check_squad_map.py"
+    if not checker.exists():
+        return True, ["  check_squad_map.py not installed — skipping"]
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
+        capture_output=True, text=True,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, [f"  check_squad_map.py produced no usable JSON "
+                       f"(exit {result.returncode})"]
+    findings = payload.get("findings", [])
+    return not findings, [f"  {f['message']}" for f in findings]
+
+
 def check_phase_numbering(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Do the skills of a cycle agree with each other about their own order?
 
@@ -399,6 +427,7 @@ def main() -> int:
         ("Cycle rules schema", check_cycle_rules),
         ("Phase numbering", check_phase_numbering),
         ("Skill map", check_skill_map),
+        ("Squad map", check_squad_map),
         ("Durable knowledge root", check_wiki_migration),
         ("Skill frontmatter", check_skill_frontmatter),
         ("Smoke chain (detect_domain → spawn_reviewers → consolidate)", check_smoke_chain),

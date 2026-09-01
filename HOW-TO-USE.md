@@ -21,6 +21,7 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 
 | Question | Cycle | Entry point |
 |---|---|---|
+| "Where am I, and who decides this?" | (orientation) | [`rules/squad-map.md`](rules/squad-map.md) — injected at SessionStart |
 | "What are we even building?" | `cycle-brainstorm` | `/brainstorm-vision`, then the four-phase cascade |
 | "First time — there is no registry yet" | (one-shot bootstrap) | `/backlog-init` |
 | "I noticed something worth looking at" | `cycle-backlog` | `/backlog-item {slug}` |

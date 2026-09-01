@@ -32,6 +32,7 @@ Every skill carries three documents, and they answer different questions:
 
 | File | Answers | Written for |
 |---|---|---|
+| [`rules/squad-map.md`](../rules/squad-map.md) | where a phase sits, who owns it, and what governs it | whoever needs the 360º view |
 | `SKILL.md` | what the skill guarantees and how it executes | the agent running it |
 | `SOP.md` | what to check before invoking, what comes back, what each verdict obliges | whoever operates it |
 | this map | which skill to reach for at all | whoever does not know yet |

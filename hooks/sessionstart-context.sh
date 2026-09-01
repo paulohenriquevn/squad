@@ -58,7 +58,37 @@ if [ -f "$ECO/ralph-loop.local.md" ]; then
   fi
 fi
 
-# 4) Reminder
+# 4) The Squad map, in its compact form
+#
+# WHY INLINE, AND WHY ONLY HERE
+# -----------------------------
+# The full map is `rules/squad-map.md`. This is the part an agent needs BEFORE it
+# can decide anything: which phase it is in, who owns the decision, and the one
+# routing rule that has a refusal attached.
+#
+# It is injected at SessionStart and NOT on every prompt. `userpromptsubmit-inject.sh`
+# records why that distinction matters: its additionalContext stays in the
+# conversation history, so anything re-injected per turn accumulates linearly and
+# drives compaction. Once per session is the right cadence for orientation — and
+# unlike a per-turn hook, a pointer here IS walkable, because the agent has the
+# whole session to open the file.
+#
+# THIS IS A SUMMARY, AND THE MAP IS THE SOURCE. Same discipline as the parsimony
+# ladder in the sibling hook: edit `rules/squad-map.md` first, then bring this in
+# line with it — never the reverse, and never only one. `scripts/check_squad_map.py`
+# keeps the map honest against the directory; nothing checks this summary against
+# the map, so the comment is the only thing standing between them.
+add ""
+add "SQUAD — the chain, and who decides (full map: $ECO/rules/squad-map.md)"
+add "  BRAINSTORM -> BACKLOG -> DISCOVER -> PLAN -> IMPLEMENT -> CODE-QUALITY -> REVIEW -> RELEASE -> ACCEPTANCE"
+add "  BRAINSTORM is the ONLY phase that requires a person; everything after it runs unattended, merge included."
+add "  ITEM_KILLED ends the chain and is a SUCCESSFUL outcome."
+add "  Roles: kairos=what work exists & in what order | iris=what the user experiences | daedalus=one item's technical path | hermes=flow & halts"
+add "  Domain specialists are the PROJECT's, never the kit's. Reach them with scripts/route_domain.py <repo>;"
+add "    exit 3 (BROKEN ROUTE) means the domain names a specialist nobody wrote — stop, do NOT stand in for them."
+add "  No verdict is asserted in prose: a script computes it. Read the cycle rule before running a phase."
+
+# 5) Reminder
 add ""
 add "Unbreakable principles apply (see ~/.claude/CLAUDE.md): 95% confidence, TDD-first, no commits to main, CHANGELOG discipline."
 
