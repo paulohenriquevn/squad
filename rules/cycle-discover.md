@@ -120,7 +120,7 @@ The **Blast radius** corner is the one whose shape depends most on the project. 
 | G-M | **Mode contract satisfied** (`check_opportunity_completeness.py`) | The mode's mandatory evidence is incomplete — most often `bug` without a failing test. |
 | G-L | **Live target declared** (`check_measurement_targets.py`, at plan time) | `--mode live-test` on a domain with no block in `rules/live-target.txt`. |
 | G-C | **Corners populated** (`check_corner_coverage.py`) | Any of the four corners empty. `unknown` populates Constraint relation; it is an answer, not a blank. |
-| G-K | **Kill is reasoned** _(not mechanized: measured 2026-08-27, no script reads `kill_reason`; the token and the reason are written by the run that decided to kill, and nothing confronts them)_ | `ITEM_KILLED` without a `kill_reason` naming what was measured and what it showed. An unexplained kill is indistinguishable from an abandoned run. |
+| G-K | **Kill is reasoned** — mechanised on two layers: `backlog_status.py` REFUSES a transition to `killed` without a `--kill-reason` (point of action), and `check_backlog_structure.py` reports `killed_without_reason` as MAJOR (after the fact). Both name this gate by id. _(not mechanized: the SUBSTANCE of the reason — nothing confronts what the reason claims against what was measured, and a `kill_reason` of "n/a" satisfies both layers)_ | `ITEM_KILLED` without a `kill_reason` naming what was measured and what it showed. An unexplained kill is indistinguishable from an abandoned run. |
 
 ## Stop conditions
 
