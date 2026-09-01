@@ -3,7 +3,7 @@
 
 WHAT IT IS AND WHAT IT IS NOT
 -----------------------------
-`rules/parallelism-shapes.md` names two shapes. This kit had FAN-OUT — N agents
+`skills/_kit-rules/parallelism-shapes.md` names two shapes. This kit had FAN-OUT — N agents
 on the same work from different angles — and no PIPELINE: N items at different
 stages at once. `cycle-idea-to-release` chains its seven phases for one item at a
 time, so with 22 triaged items in one consumer, every phase sits idle whenever it

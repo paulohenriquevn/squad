@@ -2,7 +2,7 @@
 
 So it drifts by default, and the drift is invisible: the file still reads as
 complete. This one drifted twice. The CHANGELOG records the second time —
-*"`skills/README.md`: it said 35 skills, there are 36, and the table omitted 7"* —
+*"the old `README.md` under `skills/`: it said 35 skills, there are 36, and the table omitted 7"* —
 and notes that four of the omitted skills had **zero mentions in any entry point**:
 on disk, passing every validator, unreachable by any discovery path.
 

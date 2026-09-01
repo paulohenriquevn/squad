@@ -16,7 +16,7 @@ needs that more than `/review` does, not less.
 
 WHAT THESE TESTS PIN
 --------------------
-Not the wording — `rules/prompt-text-is-not-behaviour.md` forbids that, and the
+Not the wording — `skills/_kit-rules/prompt-text-is-not-behaviour.md` forbids that, and the
 lesson cost this kit a red suite on a refactor that improved the code. They pin
 the CONTRACT: every stage gets a file, every placeholder is substituted, the
 frontmatter parses, and the isolation posture matches what the spawn actually

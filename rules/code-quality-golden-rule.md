@@ -177,7 +177,7 @@ permanent soft caps — making `PASS` unreachable by construction and turning th
 
 ## § 6 — Per-project tuning (PER-PROJECT — EDIT THIS)
 
-Thresholds for the detectors live in `code-quality-thresholds.txt`. The keys are stable; the values are per-project. Defaults are shipped in `skills/code-quality/defaults/thresholds.txt` and may be promoted to `rules/code-quality-thresholds.txt` for project-specific overrides.
+Thresholds for the detectors live in `code-quality-thresholds.txt`. The keys are stable; the values are per-project. Defaults are shipped in `rules/code-quality-thresholds.txt` and may be promoted to `rules/code-quality-thresholds.txt` for project-specific overrides.
 
 **Until 2026-08-26 none of them reached a detector.** The orchestrator called
 `load_thresholds()` for the side-effect of validating the file and discarded the

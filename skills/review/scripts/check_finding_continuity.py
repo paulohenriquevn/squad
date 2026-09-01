@@ -9,7 +9,7 @@ thing standing against either was a sentence in `skills/review/SKILL.md`, guarde
 by a test asserting `"delete" in text`.
 
 A grep over a contract is not a guard: a synonym defeats it, an unrelated
-occurrence satisfies it. `rules/prompt-text-is-not-behaviour.md` names that shape
+occurrence satisfies it. `skills/_kit-rules/prompt-text-is-not-behaviour.md` names that shape
 and says what to do about it — mechanise the guarantee, or admit it is prose.
 This is the mechanised half.
 

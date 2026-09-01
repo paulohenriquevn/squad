@@ -8,7 +8,7 @@ WHY THIS EXISTS
 The index this map replaces went stale twice, and the second time is recorded in
 the CHANGELOG:
 
-    `skills/README.md`: it said 35 skills, there are 36, and the table omitted 7
+    the old `README.md` under `skills/`: it said 35 skills, there are 36, and the table omitted 7
 
 Four of those omitted skills had **zero mentions in any entry point** — they
 existed on disk, passed every validator, and were unreachable by any discovery

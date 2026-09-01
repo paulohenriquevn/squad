@@ -14,7 +14,7 @@ Scores a measurement plan produced by `/discover-plan` against the M2 structural
 
 Sibling of `/discover-confidence` — same architecture (Python deterministic + soft caps + hard caps), different rubric. `/discover-confidence` scores **opportunities** (output of `/discover-execute`); this skill scores **measurement plans** (output of `/discover-plan`).
 
-**Hard caps:** see [`.claude/rules/discover-plan-golden-rule.md`](../../rules/discover-plan-golden-rule.md)
+**Hard caps:** see [`.claude/skills/_kit-rules/discover-plan-golden-rule.md`](../../skills/_kit-rules/discover-plan-golden-rule.md)
 **Thresholds (versioned):** [`.claude/rules/discover-plan-thresholds.txt`](../../rules/discover-plan-thresholds.txt)
 
 ## When NOT to invoke
@@ -96,6 +96,6 @@ When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_acti
 - Sibling: [`/plan-confidence`](../plan-confidence/SKILL.md) — same shape for implementation plans.
 - Upstream: [`/discover-plan`](../discover-plan/SKILL.md), [`/discover-edge-cases`](../discover-edge-cases/SKILL.md).
 - Downstream: [`/discover-execute`](../discover-execute/SKILL.md) (runs when verdict ≥ SHIPPABLE_WITH_CAVEATS).
-- Golden rule: [`.claude/rules/discover-plan-golden-rule.md`](../../rules/discover-plan-golden-rule.md).
+- Golden rule: [`.claude/skills/_kit-rules/discover-plan-golden-rule.md`](../../skills/_kit-rules/discover-plan-golden-rule.md).
 - Thresholds: [`.claude/rules/discover-plan-thresholds.txt`](../../rules/discover-plan-thresholds.txt).
 - Cycle SoT: [`.claude/rules/cycle-discover.md`](../../rules/cycle-discover.md).

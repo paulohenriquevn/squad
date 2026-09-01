@@ -80,7 +80,7 @@ The plugin's per-stage hard caps mirror the canonical golden rules. **None of th
 
 | Stage | Contract it is pointed at | Note |
 |---|---|---|
-| `:discover` | `rules/discover-plan-golden-rule.md` | the measurement-plan contract of this ecosystem. The plugin's own docs name a `discover-blueprint-golden-rule.md`, which exists in other installs and never existed here. |
+| `:discover` | `skills/_kit-rules/discover-plan-golden-rule.md` | the measurement-plan contract of this ecosystem. The plugin's own docs name a `discover-blueprint-golden-rule.md`, which exists in other installs and never existed here. |
 | `:plan` | `rules/plan-confidence-golden-rule.md` | plus the **unbreakable** `feedback_never_single_source_evidence` rule, currently encoded in memory; to be promoted to a hard-cap detector in a follow-up slice. |
 | `:implementation` | `rules/cycle-implement.md` + `rules/code-quality-golden-rule.md` | |
 | `:final` | `rules/cycle-review.md` | |

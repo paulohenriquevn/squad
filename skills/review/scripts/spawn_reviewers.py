@@ -132,7 +132,7 @@ class _ModelOverrideAction(argparse.Action):
 def _default_routing_rule_path(skill_dir: Path) -> Path:
     """Resolve the canonical routing rule path relative to the skill dir.
 
-    Convention: .claude/rules/review-model-routing.txt at project root.
+    Convention: .claude/skills/_kit-rules/review-model-routing.txt at project root.
     """
     return skill_dir.parent.parent / "rules" / "review-model-routing.txt"
 
@@ -230,7 +230,7 @@ def main() -> int:
         "--routing-rule",
         type=Path,
         default=None,
-        help="Path to review-model-routing.txt (default: .claude/rules/review-model-routing.txt)",
+        help="Path to review-model-routing.txt (default: .claude/skills/_kit-rules/review-model-routing.txt)",
     )
     parser.add_argument(
         "--model-override",

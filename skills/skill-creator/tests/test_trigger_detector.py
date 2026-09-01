@@ -3,7 +3,7 @@
 `run_eval.py` spawns a real `claude -p`, gives it a raw query, and watches the
 stream to answer one question: did the model reach for THIS skill? That is a
 behaviour oracle, and it is the right shape — better than grading the prose of
-the skill, which is what `rules/prompt-text-is-not-behaviour.md` exists to refuse.
+the skill, which is what `skills/_kit-rules/prompt-text-is-not-behaviour.md` exists to refuse.
 
 It shipped with **no tests**, and the logic carried four instances of one defect:
 each decided the whole turn from its first observation.

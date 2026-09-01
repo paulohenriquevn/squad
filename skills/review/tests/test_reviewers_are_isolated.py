@@ -22,7 +22,7 @@ WHAT THIS PINS
 --------------
 The spawn instruction must ask for isolation. This is a contract on the
 INSTRUCTION, which is prose — so it asserts the mechanism is named, not any
-particular sentence. `rules/prompt-text-is-not-behaviour.md` draws that line:
+particular sentence. `skills/_kit-rules/prompt-text-is-not-behaviour.md` draws that line:
 naming a required parameter is structure; the wording around it is not.
 """
 from __future__ import annotations
@@ -77,6 +77,6 @@ def test_the_detector_is_still_there() -> None:
         pytest.skip(
             "this kit ships no tree-state detector — it has the isolation fix and "
             "no way to notice if the isolation stops working. Named in "
-            "rules/parallelism-shapes.md; porting it is a decision, not a chore."
+            "skills/_kit-rules/parallelism-shapes.md; porting it is a decision, not a chore."
         )
     assert "def capture_tree_state" in src

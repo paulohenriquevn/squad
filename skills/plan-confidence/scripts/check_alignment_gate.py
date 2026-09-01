@@ -3,7 +3,7 @@
 
 WHY THIS EXISTS
 ---------------
-`rules/alignment-threshold.md` says an item below 90% shared understanding must
+`skills/_kit-rules/alignment-threshold.md` says an item below 90% shared understanding must
 not be built. `cycle-implement.md` repeats it as a pre-condition.
 `cycle-plan.md` lists it as a phase contract. Three documents, one rule — and a
 grep across the kit for anything that READ `records/alignment/` returned nothing.

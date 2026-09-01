@@ -47,7 +47,7 @@ STAGES = ("discover", "align", "plan")
 
 DEFAULT_MODEL = "opus"
 
-#: `align | sonnet | reason` — same shape as `rules/review-model-routing.txt`.
+#: `align | sonnet | reason` — same shape as `skills/_kit-rules/review-model-routing.txt`.
 #: A stage with no entry keeps the default, so an empty file changes nothing.
 _ROUTING_RE = re.compile(r"^\s*([a-z-]+)\s*\|\s*([a-z0-9.-]+)\s*\|", re.IGNORECASE)
 

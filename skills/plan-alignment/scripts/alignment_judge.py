@@ -3,7 +3,7 @@
 
 WHY THIS EXISTS, AND WHAT IT COSTS
 ----------------------------------
-`rules/alignment-threshold.md` says the agent that writes a brief may never sign
+`skills/_kit-rules/alignment-threshold.md` says the agent that writes a brief may never sign
 it, because an author approving their own work is not a review. The operator
 chose autonomy — humans at backlog construction and nowhere else in the loop —
 so a judge signs instead.

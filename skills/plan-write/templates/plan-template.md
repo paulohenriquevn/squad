@@ -305,7 +305,7 @@ Table mapping original gaps/requirements to tasks:
 - [ ] Backward compatibility preserved across public API
 - [ ] Plan-specific criteria (list them explicitly)
 - [ ] **Runtime-metric proof** — for every task whose DoD references a runtime counter, the metric MUST be observed non-zero in an integration workload, not just verified to compile. "Code exists + tests pass" is NOT proof the wiring fires in real workloads.
-- [ ] **Plan archived** — after `/review` returns `READY_TO_MERGE` AND the PR has been merged, move `records/plans/{slug}-plan.md` to `records/plans/completed/{slug}-plan.md`. This signals the plan is no longer the active contract. Associated artifacts (confidence reports, edge-case reports, implementation md, review reports) stay in their original locations and follow the rotation policy in [`rules/audit-trail-rotation.md`](../../../rules/audit-trail-rotation.md). NEVER move the plan before the PR is merged — the plan is the contract `/review` cites.
+- [ ] **Plan archived** — after `/review` returns `READY_TO_MERGE` AND the PR has been merged, move `records/plans/{slug}-plan.md` to `records/plans/completed/{slug}-plan.md`. This signals the plan is no longer the active contract. Associated artifacts (confidence reports, edge-case reports, implementation md, review reports) stay in their original locations and follow the rotation policy in [`skills/_kit-rules/audit-trail-rotation.md`](../../../skills/_kit-rules/audit-trail-rotation.md). NEVER move the plan before the PR is merged — the plan is the contract `/review` cites.
 
 ## Failure scenarios (when I/O external)
 

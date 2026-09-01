@@ -438,7 +438,7 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
 
     # ── the reviewer's half ────────────────────────────────────────────────
     # Generated unchecked by the agent; ticked only by a human. The agent MUST
-    # NOT tick these — see rules/alignment-threshold.md. Adopted from spec-kit,
+    # NOT tick these — see skills/_kit-rules/alignment-threshold.md. Adopted from spec-kit,
     # whose checklist carries the same instruction to its own /implement.
     signoff = _section(body, "Reviewer sign-off", "Reviewer signoff", "Sign-off")
     boxes = _CHECKBOX_RE.findall(signoff or "")

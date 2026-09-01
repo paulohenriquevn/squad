@@ -10,7 +10,7 @@ argument-hint: "{item-id} [{item-id} ...]"
 
 # `/pipeline` — many items in flight, one stage each
 
-`rules/parallelism-shapes.md` names two shapes. This kit had FAN-OUT — N agents on
+`skills/_kit-rules/parallelism-shapes.md` names two shapes. This kit had FAN-OUT — N agents on
 the same work from different angles — and no PIPELINE. `cycle-idea-to-release`
 chains its seven phases for **one item at a time**, so a consumer with 22 triaged
 items works them in sequence and every phase idles whenever it is not the current
@@ -33,7 +33,7 @@ this skill refuses to do at any stage.
 An earlier version of this paragraph said the gate *"needs a signature no agent
 may give"*. That read the rule's real clause — the AUTHOR must not sign — as a
 ban on every agent, and the difference is the reason an unattended run used to
-stop forever. See `rules/alignment-threshold.md § Amended 2026-09-01`.
+stop forever. See `skills/_kit-rules/alignment-threshold.md § Amended 2026-09-01`.
 
 That halt is still the argument for the shape where a person does review. It stops
 everything; here it stops one item while the rest move, and the operator's
@@ -123,6 +123,6 @@ itself cited.
 
 ## Related
 
-- Shape and its requirements: [`rules/parallelism-shapes.md`](../../rules/parallelism-shapes.md)
-- The gate that halts it by design: [`rules/alignment-threshold.md`](../../rules/alignment-threshold.md)
+- Shape and its requirements: [`skills/_kit-rules/parallelism-shapes.md`](../../skills/_kit-rules/parallelism-shapes.md)
+- The gate that halts it by design: [`skills/_kit-rules/alignment-threshold.md`](../../skills/_kit-rules/alignment-threshold.md)
 - The design it schedules: [`rules/cycle-idea-to-release.md`](../../rules/cycle-idea-to-release.md)

@@ -46,7 +46,7 @@ it gets built. **Read `cycle-plan.md § Chain` before invoking.**
 ```
 
 The threshold, and the rule that the agent may never tick its OWN reviewer boxes,
-are defined once in [`rules/alignment-threshold.md`](../../rules/alignment-threshold.md).
+are defined once in [`skills/_kit-rules/alignment-threshold.md`](../../skills/_kit-rules/alignment-threshold.md).
 This file carries the protocol; that file carries the gate.
 
 ## Who may sign, and what each signature is worth
@@ -408,7 +408,7 @@ generated page requires nothing.
 
 ## Related
 
-- Gate: [`rules/alignment-threshold.md`](../../rules/alignment-threshold.md)
+- Gate: [`skills/_kit-rules/alignment-threshold.md`](../../skills/_kit-rules/alignment-threshold.md)
 - Upstream: `/discover-plan` — supplies the evidence the brief opens with
 - Downstream: `/plan-write` — the plan's `## Context` cites this brief
 - 95%-confidence principle: `~/.claude/CLAUDE.md § 1`

@@ -3,7 +3,7 @@
 WHY THIS IS THE MOST IMPORTANT TEST FILE IN plan-confidence
 -----------------------------------------------------------
 Until this check existed, the 90% alignment threshold was PROSE. It was written
-in `rules/alignment-threshold.md`, restated as a pre-condition in
+in `skills/_kit-rules/alignment-threshold.md`, restated as a pre-condition in
 `cycle-implement.md`, and listed as a phase contract in `cycle-plan.md` — and a
 grep across the kit for anything that READ `records/alignment/` returned nothing.
 Three documents said the item must not be built; no code could stop it.

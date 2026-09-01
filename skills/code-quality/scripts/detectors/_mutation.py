@@ -51,7 +51,7 @@ from pathlib import Path
 
 from scripts._detector_contract import Finding
 
-#: Defaults from `skills/code-quality/defaults/thresholds.txt`. The CALLER passes
+#: Defaults from `rules/code-quality-thresholds.txt`. The CALLER passes
 #: the project's values; these exist so a direct call is still well-defined.
 DEFAULT_FLOOR_LOW = 60
 DEFAULT_FLOOR_HIGH = 80

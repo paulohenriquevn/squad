@@ -166,7 +166,7 @@ rules/plan-confidence-golden-rule.md
 rules/code-quality-golden-rule.md
 rules/deps-audit-golden-rule.md
 rules/discover-opportunity-golden-rule.md
-rules/discover-plan-golden-rule.md
+skills/_kit-rules/discover-plan-golden-rule.md
 rules/honesty-gate-golden-rule.md
 rules/error-handling.md
 rules/git-safety.md
@@ -184,7 +184,7 @@ rules/testing.md
 rules/public-copy.md
 rules/parsimony-ladder.md
 rules/loop-engine-convention.md
-rules/audit-trail-rotation.md
+skills/_kit-rules/audit-trail-rotation.md
 
 # === Hooks (git-safety hardening + provenance guards) ===
 hooks/validate-command.sh

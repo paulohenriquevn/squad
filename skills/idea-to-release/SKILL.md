@@ -157,7 +157,7 @@ Skill(/plan-alignment {topic-slug})          # cycle-plan phase 0 — UNBREAKABL
 **`AWAITING_REVIEW` is where an unattended chain used to stop forever.** The brief
 is complete and nobody signed it, and for a fleet session nobody is coming. The
 answer is not to let the author sign — that is the one thing
-`rules/alignment-threshold.md` forbids — it is to hand the brief to a reviewer
+`skills/_kit-rules/alignment-threshold.md` forbids — it is to hand the brief to a reviewer
 that is not the author:
 
 ```

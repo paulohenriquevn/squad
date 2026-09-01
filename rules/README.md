@@ -28,6 +28,7 @@ So the question that places a file is **not who reads it. It is who owns it.**
 |---|---|---|
 | The **project** — anything a consumer tunes | `rules/` | `skills/` does not survive an install |
 | The **kit** — a cycle contract | `rules/cycle-*.md` | four root checkers glob exactly that pattern: `check_xrefs`, `check_phase_numbering`, `check_gate_mechanisms`, `check_orphan_verdicts`. Splitting them across skills would end the sweeps that prove the chain coherent |
+| The **kit** — a rule two or more skills read | `skills/_kit-rules/` | kit content SHOULD be replaced on update; that is how a fix reaches the projects that installed it |
 | The **kit** — a skill's own procedure | inside the skill | it ships and is replaced with that skill |
 | The **installer** | `rules/templates/` | copied into a fresh consumer's `rules/`, then deleted from it |
 

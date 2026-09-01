@@ -166,7 +166,7 @@ A phase of no cycle. Invoked when the question arises.
 ## Why this file is checked rather than trusted
 
 The index it replaces went stale twice, and the second time is in the CHANGELOG:
-*"`skills/README.md`: it said 35 skills, there are 36, and the table omitted 7"* —
+*"the old `README.md` under `skills/`: it said 35 skills, there are 36, and the table omitted 7"* —
 four of those omitted skills had **zero mentions in any entry point**, so they
 existed on disk, passed every validator and were unreachable by any discovery
 path. When this map was written the same file claimed 36 skills against 34 on

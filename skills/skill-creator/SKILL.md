@@ -54,7 +54,7 @@ criterion is met, writing a criterion that could fail.
 
 So the kit measures that a skill is *found* and never that it *holds up*. This is
 the gap the Skills-Coach paper names as its third sub-question and answers by
-grading prose, which `rules/prompt-text-is-not-behaviour.md` refuses. The oracle
+grading prose, which `skills/_kit-rules/prompt-text-is-not-behaviour.md` refuses. The oracle
 this kit would use instead already exists and has been used once —
 `wiki/references/judgement-gates-are-insurance.md` records running the scenario
 WITHOUT the rule, under pressure, and reading what the agent did.

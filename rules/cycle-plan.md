@@ -125,7 +125,7 @@ call sites, which would have failed every test in two files.
 - `AWAITING_REVIEW` — phase 0 only: the brief is complete and nobody has signed. Ask for the review, or run `alignment_judge.py` when none is coming.
 - `BLOCKED` — phase 0 only: below the machine threshold. The item is **not** built.
 - `NEEDS_SPLIT` — phase 0 only: the brief describes independent subsystems. Declared by the reviewer, never inferred.
-- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an approval, a dependency in another repository). An alignment sign-off is **no longer** one of them: `rules/alignment-threshold.md § Amended 2026-09-01` requires a reviewer who is not the author, which a judge can be. **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an approval, a dependency in another repository). An alignment sign-off is **no longer** one of them: `skills/_kit-rules/alignment-threshold.md § Amended 2026-09-01` requires a reviewer who is not the author, which a judge can be. **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
 ## Anti-patterns
 

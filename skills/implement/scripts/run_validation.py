@@ -500,7 +500,7 @@ def check_implementation_log(project_root: Path, slug: str) -> dict[str, Any]:
 def check_alignment_gate(project_root: Path, slug: str) -> dict[str, Any]:
     """The item this slug implements reached 90% shared understanding, and a human said so.
 
-    `rules/alignment-threshold.md` says an item below the threshold is not built, and
+    `skills/_kit-rules/alignment-threshold.md` says an item below the threshold is not built, and
     `cycle-implement.md § Pre-conditions` repeats it. Both were prose: nothing in this
     suite read `records/alignment/`, so the rule held exactly as long as somebody
     remembered it — the same shape as the implementation log above, which went missing

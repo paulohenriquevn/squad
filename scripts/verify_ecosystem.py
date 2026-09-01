@@ -244,7 +244,13 @@ def check_skill_frontmatter(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         return False, issues
 
     for skill_dir in (ecosystem_dir / "skills").iterdir():
-        if not skill_dir.is_dir() or skill_dir.name == "generated":
+        # A leading underscore marks a directory under `skills/` that is NOT a
+        # skill — `_kit-rules/` holds rules two or more skills read. Every other
+        # enumerator in the kit finds skills by the presence of `SKILL.md` and so
+        # never sees it; this one enumerated directories and demanded the file,
+        # which turned a deliberate non-skill into a missing one.
+        if not skill_dir.is_dir() or skill_dir.name == "generated" \
+                or skill_dir.name.startswith("_"):
             continue
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.exists():

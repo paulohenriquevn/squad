@@ -38,7 +38,7 @@ The same line, stated three ways because it is the one that gets crossed:
 
 Run `/pipeline`. It is backed by `scripts/pipeline_orchestrator.py` — lanes,
 worktrees, batch/task consumption per stage, backward hops carrying a commit —
-and that script is deterministic. `rules/parallelism-shapes.md` explains why the
+and that script is deterministic. `skills/_kit-rules/parallelism-shapes.md` explains why the
 shape is a pipeline rather than fan-out, and what the two are for.
 
 ## The decisions that are yours

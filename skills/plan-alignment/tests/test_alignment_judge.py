@@ -8,7 +8,7 @@ stop that never ends.
 It shipped with **no tests**, which is the same shape as every other defect this
 kit has paid for: the mechanism existed, nothing exercised it, and nothing named
 it either — `plan-alignment/SKILL.md` did not mention it once, and
-`rules/alignment-threshold.md` still said the reviewer had to be a human. The
+`skills/_kit-rules/alignment-threshold.md` still said the reviewer had to be a human. The
 machinery to clear the halt was on disk and unused for days.
 
 What the tests below pin is not that it signs. It is the three properties that

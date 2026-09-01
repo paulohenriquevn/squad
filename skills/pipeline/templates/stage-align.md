@@ -37,7 +37,7 @@ blocked item than a confident wrong one.
 
 ## Does Not Own
 
-- You never tick a reviewer sign-off box. `rules/alignment-threshold.md` is
+- You never tick a reviewer sign-off box. `skills/_kit-rules/alignment-threshold.md` is
   unconditional on that: the agent that writes a brief may not approve it.
 - Your verdict may be `AWAITING_REVIEW` or `BLOCKED`, never `ALIGNED` — `ALIGNED`
   requires a signature you cannot give.

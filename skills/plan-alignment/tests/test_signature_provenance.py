@@ -7,7 +7,7 @@ honest alternative: a judge agent signs, in the open.
 
 So a signature carries its author. `ALIGNED` no longer means one thing: it means
 either a human read the brief, or an agent did, and a reader must be able to tell
-those apart without opening the file. `rules/alignment-threshold.md` says the
+those apart without opening the file. `skills/_kit-rules/alignment-threshold.md` says the
 agent that WRITES a brief may never sign it; a judge is a different agent, and
 that distinction is the whole basis for allowing this at all.
 """

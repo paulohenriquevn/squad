@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f'      "{f.literal}"  in  {f.target}')
     print("\nWording is not behaviour: this fails when the sentence improves and")
     print("passes when the thing it describes breaks. See")
-    print("rules/prompt-text-is-not-behaviour.md — and read the section on what a")
+    print("skills/_kit-rules/prompt-text-is-not-behaviour.md — and read the section on what a")
     print("grep over a contract is a SYMPTOM of before deleting the assert.")
     print("\nTo keep one, say why on the line:")
     print("    assert \"...\" in text  # prose-test: the contract IS the subject here")

@@ -98,7 +98,7 @@ def test_the_two_dishonest_ways_past_a_blocker_are_MECHANISED() -> None:
     fails the check; the word `delete` appearing anywhere else satisfies it. It
     failed when the sentence improved and passed when the thing broke.
 
-    `rules/prompt-text-is-not-behaviour.md` names that shape and says what to do
+    `skills/_kit-rules/prompt-text-is-not-behaviour.md` names that shape and says what to do
     with it: a grep over a contract is a SYMPTOM that the guarantee exists only as
     prose. So the guarantee moved. `check_finding_continuity.py` compares two
     consolidated reports for one slug and reports findings that were open and are

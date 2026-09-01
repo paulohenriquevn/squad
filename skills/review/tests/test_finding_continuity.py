@@ -9,7 +9,7 @@ BLOCKER to MEDIUM, passes — and only the contract warned against it.
 
 But a grep over a contract is not a guard. A synonym defeats it ("removing a
 finding is forbidden" fails the check while saying the same thing) and an
-unrelated occurrence satisfies it. `rules/prompt-text-is-not-behaviour.md` names
+unrelated occurrence satisfies it. `skills/_kit-rules/prompt-text-is-not-behaviour.md` names
 that shape and says what to do instead: mechanise the guarantee, or admit it is
 prose. This is the first half.
 

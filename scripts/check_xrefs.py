@@ -204,6 +204,12 @@ RULES_REF_RE = re.compile(
     r"(?<![A-Za-z0-9_/-])(?:\.claude/)?rules/([A-Za-z0-9._-]+\.(?:md|txt))"
 )
 
+#: A path under `skills/` cited in prose or code. The extension anchors the end so
+#: a sentence following the reference is not swallowed into the path.
+SKILLS_REF_RE = re.compile(
+    r"(?<![A-Za-z0-9_/-])(?:\.claude/)?skills/([A-Za-z0-9_][A-Za-z0-9._/-]*\.(?:md|txt|py|sh|json))"
+)
+
 
 from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl  # noqa: E402
 
@@ -491,6 +497,15 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 })
 
     # Check 7: rules referenced from SKILL.md bodies + scripts must exist on disk.
+    #
+    # `rules/` was the only rooted path this check knew, and on 2026-09-01 that
+    # became a hole: six kit-owned rules moved to `skills/_kit-rules/`, and every
+    # reference to their new home was unvalidated. Forty-four references pointed
+    # at a directory that did not yet exist and this validator reported PASS.
+    #
+    # Check 3 does resolve arbitrary paths — but only inside a cycle rule's
+    # `## Cross-references` section. A path named anywhere else, in any SKILL.md,
+    # was nobody's job.
     rules_dir = ecosystem_dir / "rules"
     existing_rule_files: set[str] = {p.name for p in rules_dir.glob("*")} if rules_dir.exists() else set()
 
@@ -509,6 +524,18 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 "source": _rel(path),
                 "missing_rule": rule_name,
                 "message": f"{_rel(path)} references `rules/{rule_name}` which does not exist",
+            })
+        for m in SKILLS_REF_RE.finditer(content):
+            target = ecosystem_dir / "skills" / m.group(1)
+            if target.exists():
+                continue
+            findings.append({
+                "severity": "FAIL",
+                "check": "skills_reference_resolves",
+                "source": _rel(path),
+                "missing_path": f"skills/{m.group(1)}",
+                "message": (f"{_rel(path)} references `skills/{m.group(1)}` "
+                            f"which does not exist"),
             })
 
     for skill_md in (ecosystem_dir / "skills").rglob("SKILL.md"):
