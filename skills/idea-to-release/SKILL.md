@@ -12,7 +12,7 @@ argument-hint: "[M<N> | B-NNN | {topic-slug}] [--plan-only] [--depth=none|light|
 
 End-to-end autonomous orchestration of the 6-cycle pipeline: `cycle-discover` → `cycle-plan` → `cycle-implement` → `cycle-code-quality` → `cycle-review` → `cycle-release`. Replaces the 9+ slash manual sequence with a single invocation that:
 
-1. **Assesses confidence** deterministically against repo state (references, patterns skills, ADRs, CLAUDE.md, completed plans, user context).
+1. **Assesses confidence** deterministically against repo state — signals about OUR system: patterns skills, ADRs, ROADMAP/CLAUDE.md, completed plans, tool study-material, user context. Peer projects under `records/references/` are **reported and score zero**: prior art cannot buy past the measurement, because a peer project cannot tell you what is true of your system (`README.md` § Prior art can never be evidence).
 2. **Derives depth** from the confidence band (no interactive prompts — overridable via CLI flag).
 3. **Chains skills autonomously** through every cycle, gating each transition on the downstream cycle's pre-conditions.
 4. **Auto-injects MUST-FIX items** from `/plan-edge-cases` into the plan before `/plan-confidence` re-scores — eliminating the manual "human absorbs MUST FIX" step.

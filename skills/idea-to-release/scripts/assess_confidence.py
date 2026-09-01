@@ -5,7 +5,7 @@ Deterministic (no LLM). Scans repo state for signals that the requested topic
 has enough prior art for plan-only mode vs needs full discover.
 
 Signals + weights:
-  - References match (records/references/{project}/ matches keyword)              +30 each match (cap +30)
+  - References match (records/references/{project}/ matches keyword)               +0 — REPORTED, never scored (prior art buys no depth)
   - Tools match (study-material/{tool}/ matches keyword OR alias)                  +25 each match (cap +25)
   - Patterns skill (skills/*-patterns/ description contains keyword)                     +25 each match (cap +25)
   - ADR match (records/adrs/ title contains keyword)                              +20 cumulative (cap +20)
@@ -18,6 +18,30 @@ Signals + weights:
 Categories explained:
   - references/ = projects SIMILAR to ours, kept as architectural inspiration — "how did they solve it?"
   - tools/      = tools we DEPEND ON at runtime/test (read-only study material) — "how to use it?"
+
+PRIOR ART IS REPORTED AND SCORES ZERO — read before re-weighting
+-----------------------------------------------------------------
+`references/` used to carry the HEAVIEST weight (+30) and is prior art by the
+definition just above. Prior art is the one justification this kit refuses:
+
+    README.md      "Prior art can never be evidence. Gate G5 rejects 'project X
+                    does it this way' as a justification."
+    cycle-backlog  "'Project X does it this way.' That is not an item."
+
+And the top band returns depth `none`, so enough peer material SKIPPED a phase
+`cycle-phases.txt` declares required — on the strength of a signal gate G5 would
+refuse as grounds for the item existing at all.
+
+The weight came from Cycle, whose DISCOVER asks *how did others solve this*. Squad
+inverted that question on purpose: README calls the peer-study version "the right
+question when building something new and the wrong one when maintaining something
+that runs: it produces imitation, not maintenance." The weights had never followed
+the inversion.
+
+So `score_references` returns 0 and still returns its matches. A peer project cannot
+tell you what is true of your system, so it cannot stand in for measuring it — but
+knowing the material exists is genuinely useful to whoever writes the plan.
+`tests/test_assess_confidence.py` pins this.
 
 The TOOL_ALIASES map below is INTENTIONALLY EMPTY. Each project may populate
 it with its own short→canonical mappings (e.g., {"k8s": "kubernetes",
@@ -62,7 +86,25 @@ TOOL_ALIASES: dict[str, str] = {}
 
 
 def score_references(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
-    """+30 if any reference project matches a keyword."""
+    """Reports matching peer projects and scores them ZERO. Prior art buys no depth.
+
+    This returned +30 — the heaviest weight in the table — for a match under
+    `records/references/`, which the header defines as *"projects SIMILAR to ours…
+    how did they solve it?"*. That is prior art, and it fed a band whose top return
+    is `("HIGH", "none", "Sufficient prior art; skip discover.")`.
+
+    So enough peer material skipped a phase `cycle-phases.txt` declares REQUIRED, on
+    the strength of the one signal `cycle-backlog.md` gate G5 refuses as grounds for
+    an item existing at all. `README.md`: *"Prior art can never be evidence."*
+
+    The weight came from Cycle, whose DISCOVER asks how others solved it. Squad
+    inverted that question — DISCOVER measures OUR code — and the weights had not
+    followed. A peer project cannot tell you what is true of your system, so it
+    cannot stand in for measuring it.
+
+    **The matches are still returned**, because knowing that peer material exists is
+    genuinely useful to whoever writes the plan. They inform; they no longer score.
+    """
     refs_dir = repo / "records" / "references"
     if not refs_dir.is_dir():
         return 0, []
@@ -74,7 +116,8 @@ def score_references(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
             if kw in child.name.lower():
                 signals.append(f"references/{child.name}/")
                 break
-    return (30 if signals else 0), signals
+    # Zero, deliberately. See the docstring: informative, never depth-buying.
+    return 0, signals
 
 
 def score_tools(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
@@ -195,6 +238,17 @@ def score_user_context(context_length: int) -> tuple[int, list[str]]:
     return 0, []
 
 
+def refuses(verdict: str) -> bool:
+    """Whether this verdict refuses to proceed without `--force-override`.
+
+    `recommended_depth` is NOT a refusal signal: a `LOW` verdict returns `"full"`,
+    so a caller reading only the depth proceeds at exactly the confidence level the
+    band exists to stop. The refusal lives in `SKILL.md`, and reading it required
+    knowing that. This makes it a field.
+    """
+    return verdict == "LOW"
+
+
 def verdict_from_score(score: int) -> tuple[str, str, str]:
     """Map score -> (verdict, recommended_depth, reasoning)."""
     if score >= 95:
@@ -252,6 +306,9 @@ def main() -> int:
         "score": total,
         "verdict": verdict,
         "recommended_depth": depth,
+        # Explicit, because `recommended_depth` is "full" for LOW too and a caller
+        # branching on it would proceed at the confidence this band refuses.
+        "refuses": refuses(verdict),
         "reasoning": reasoning,
         "signals": {
             "baseline": baseline,

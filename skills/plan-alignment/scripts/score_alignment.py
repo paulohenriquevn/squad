@@ -23,7 +23,13 @@ requirements checklist **reviewer-owned** — generated unchecked, and
 So there are two independent conditions, and `ALIGNED` needs both:
 
     machine score >= 90%   — structure. The agent can and should reach this.
-    reviewer sign-off      — judgement. Only a human can give it.
+    reviewer sign-off      — judgement, from a reviewer who is not the author.
+                             A person, or `alignment_judge.py` when none is coming
+                             (`alignment-threshold.md § Amended 2026-09-01`). This
+                             line read "only a human can give it" while the code
+                             below already accepted a judge — the verdict turns on
+                             `reviewer_signed_off`, and `signed_by_is_human` is
+                             reported beside it rather than gating on it.
 
 A perfect machine score with no sign-off is `AWAITING_REVIEW`, never `ALIGNED`.
 This is not ceremony: the three things the script explicitly cannot decide are
@@ -48,7 +54,7 @@ added in v2 come from:
 WHAT IS MECHANISED AND WHAT IS NOT
 ----------------------------------
 Structure is mechanised. Whether the content is *right* is not, and this script
-says so rather than pretending: `judgement_items` lists what a human still has to
+says so rather than pretending: `judgement_items` lists what a REVIEWER still has to
 sign off, and they are excluded from the computed score instead of being silently
 marked as passing. They are the same three items the reviewer checklist asks.
 
@@ -437,9 +443,12 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
         html.group(0) if html else "no .html referenced")
 
     # ── the reviewer's half ────────────────────────────────────────────────
-    # Generated unchecked by the agent; ticked only by a human. The agent MUST
-    # NOT tick these — see skills/_kit-rules/alignment-threshold.md. Adopted from spec-kit,
-    # whose checklist carries the same instruction to its own /implement.
+    # Generated unchecked by the agent that wrote the brief; ticked by a reviewer who
+    # is NOT that agent — a person, or `alignment_judge.py` when none is coming
+    # (`alignment-threshold.md § Amended 2026-09-01`). The author MUST NOT tick these:
+    # that is the half of the rule a script cannot enforce, and the only one that is
+    # dishonest rather than merely lazy. Adopted from spec-kit, whose checklist carries
+    # the same instruction to its own /implement.
     signoff = _section(body, "Reviewer sign-off", "Reviewer signoff", "Sign-off")
     boxes = _CHECKBOX_RE.findall(signoff or "")
     pending = tuple(text for mark, text in boxes if mark == " ")
