@@ -125,7 +125,7 @@ dismissibility is the whole difference between the tiers.
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Skill: `skills/code-quality/SKILL.md` (phase-specific protocol)
-- Defaults: `skills/code-quality/defaults/languages.txt`
+- Enabled languages: `rules/code-quality-languages.txt` — the project's, and the only copy. A second copy shipped inside the skill's defaults directory until 2026-09-01, described as a fallback; nothing fell back to it, and a missing rule correctly exits 2 rather than auditing a stale subset silently.
 - Languages enabled per project: `rules/code-quality-languages.txt`
 - Downstream: `rules/cycle-review.md` (consumes the audit verdict)
 - Upstream: `rules/cycle-implement.md` (must emit `IMPLEMENTATION_COMPLETE` before this runs)

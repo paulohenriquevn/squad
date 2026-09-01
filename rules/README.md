@@ -4,6 +4,49 @@ Source of truth for cycle contracts, golden rules, thresholds, and allowlists.
 Every cycle reads its contract from here; every quality gate references a golden
 rule file.
 
+## Why a rule lives here and not inside the skill that reads it
+
+The obvious rearrangement is to push a rule only one skill uses into that skill's
+directory. **It would destroy the consumer's configuration on the next update**,
+and the reason is in `install.sh`:
+
+```
+install.sh  →  rm -rf <target>/.claude/skills/ ; cp -r source   (full overwrite)
+               rules/ and agents/ are snapshotted and preserved
+```
+
+`skills/` is deleted and replaced every install. `rules/` is where a project's own
+configuration lives — the routing table, the enabled languages, the live target,
+the thresholds, the allow-lists — and it survives precisely because it is here.
+Measured before the installer gained its backup: a `typescript | ENABLED` line and
+a live-target block added to a fresh install were both gone after one re-run, with
+no message.
+
+So the question that places a file is **not who reads it. It is who owns it.**
+
+| Owner | Home | Why |
+|---|---|---|
+| The **project** — anything a consumer tunes | `rules/` | `skills/` does not survive an install |
+| The **kit** — a cycle contract | `rules/cycle-*.md` | four root checkers glob exactly that pattern: `check_xrefs`, `check_phase_numbering`, `check_gate_mechanisms`, `check_orphan_verdicts`. Splitting them across skills would end the sweeps that prove the chain coherent |
+| The **kit** — a skill's own procedure | inside the skill | it ships and is replaced with that skill |
+| The **installer** | `rules/templates/` | copied into a fresh consumer's `rules/`, then deleted from it |
+
+A golden rule usually belongs to both: `§ 1` is marked PER-PROJECT and the verdict
+vocabulary below it is LOCKED. That is deliberate, and it is why those files carry
+the marks — the marks are what say which half a consumer may touch.
+
+## What Claude Code actually loads from here
+
+**Nothing, automatically.** No hook reads a rule file; `settings.json` names none.
+The only automatic contact is a pointer injected by
+`hooks/userpromptsubmit-inject.sh` on every turn, and the parsimony ladder, whose
+six rungs are **inlined in that hook** rather than read from
+`parsimony-ladder.md`.
+
+That makes the pointer the whole interface, and a pointer at fifty-four files is
+not one — a model told to read fifty-four files before an architectural decision
+reads none of them. See the doctrine list the hook names.
+
 ## Cycle Contracts
 
 Each `cycle-{name}.md` defines:

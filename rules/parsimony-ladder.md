@@ -19,6 +19,11 @@ minimalism" and "minimalism is enforced at the keystroke".
 
 ## The ladder (walk top-down; stop at the first rung that resolves the need)
 
+> **These six rungs are also inlined in `hooks/userpromptsubmit-inject.sh`**, which
+> injects them on every turn. A hook that supplies context cannot ask the model to
+> read a file first, so the copy is necessary — and this file is the source. Change
+> it here, then bring the hook in line. Verified in agreement 2026-09-01.
+
 | # | Rung | Resolution | Rule |
 |---|---|---|---|
 | 1 | **Does this need to exist?** | No → skip it. Delete the task, do not write the code. | YAGNI (Rule 11) |

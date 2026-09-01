@@ -29,6 +29,15 @@ SLUG_RE='^[A-Za-z0-9_][A-Za-z0-9._-]*$'
 # Parsimony ladder — re-injected EVERY turn (always-on, plan or no plan) so the
 # minimalism deliberation does not decay across a long session. Canonical source:
 # rules/parsimony-ladder.md. Kept terse on purpose; it is a deliberation prompt.
+#
+# THIS IS A COPY, AND THE RULE IS THE SOURCE. Inlining is not laziness: a hook that
+# injects context cannot ask the model to go and read a file first — the injection
+# IS the context, and a pointer here would arrive too late to be walked. So the six
+# rungs live in two places by necessity.
+#
+# What that costs is drift, and the mitigation is this comment plus the matching one
+# in the rule. Edit `rules/parsimony-ladder.md` first, then bring this in line with
+# it — never the reverse, and never only one. Verified in agreement 2026-09-01.
 LADDER="PARSIMONY LADDER (rules/parsimony-ladder.md) — walk top-down BEFORE writing code; stop at the first rung that resolves the need:
   1. Does this need to exist?      -> no: skip it (YAGNI)
   2. Stdlib does it?               -> use it
@@ -128,9 +137,28 @@ PROGRESS_FILE="$ECO/session-state/${PLAN_SLUG}-progress.md"
 [ -f "$PROGRESS_FILE" ] && CTX="$CTX
 Progress log: $PROGRESS_FILE (Read its tail for recent state)."
 
-# Rules pointer (already a pointer; kept).
-RULES_COUNT=$(ls -1 "$KIT_DIR"/rules/*.md 2>/dev/null | wc -l | tr -d ' ')
-[ "$RULES_COUNT" -gt 0 ] && CTX="$CTX
-Rules: $KIT_DIR/rules/ ($RULES_COUNT files) — Read before architectural decisions."
+# Rules pointer.
+#
+# This used to say `rules/ (N files) — Read before architectural decisions`, with N
+# at fifty-four. That is not a pointer, it is a wall: a model told to read
+# fifty-four files before a decision reads none of them, and the injection cost is
+# paid on every single turn for an instruction nobody can follow.
+#
+# So it names the DOCTRINE — the stack-agnostic files that actually answer "how do
+# we build things here" — and says what the rest are, which is per-phase contracts
+# read when that phase runs. Named individually rather than counted, because a
+# name is followable and a count is not.
+#
+# The list is short on purpose and each entry earns its place by being the kind of
+# question that comes up BEFORE code exists. A rule read while running a phase
+# belongs to that phase's contract, not to this line.
+DOCTRINE=""
+for r in architecture testing error-handling parsimony-ladder git-safety \
+         records-location autonomy-envelope loop-engine-convention; do
+  [ -f "$KIT_DIR/rules/$r.md" ] && DOCTRINE="${DOCTRINE:+$DOCTRINE, }$r"
+done
+[ -n "$DOCTRINE" ] && CTX="$CTX
+Doctrine ($KIT_DIR/rules/): $DOCTRINE — read the one your decision touches.
+Phase contracts live in the same directory as cycle-*.md; read a cycle's contract when you run that cycle, not before."
 
 emit_context "$CTX"
