@@ -61,13 +61,6 @@ skills/acceptance/scripts/compute_acceptance_verdict.py
 skills/acceptance/tests/conftest.py
 skills/acceptance/tests/test_extract_acceptance_criteria.py
 skills/acceptance/tests/test_compute_acceptance_verdict.py
-skills/session-goal/SKILL.md
-skills/session-goal/scripts/compose_goal_condition.py
-skills/session-goal/tests/conftest.py
-skills/session-goal/scripts/check_goal_met.py
-skills/session-goal/scripts/install_goal_hook.py
-skills/session-goal/tests/test_check_goal_met.py
-skills/session-goal/tests/test_compose_goal_condition.py
 skills/release/SKILL.md
 skills/release/scripts/changelog_section_nonempty.py
 skills/release/scripts/compute_next_version.py
@@ -167,7 +160,6 @@ rules/cycle-plan.md
 rules/cycle-review.md
 rules/cycle-code-quality.md
 rules/cycle-judge-codex.md
-rules/cycle-trajectory-review.md
 rules/plan-confidence-golden-rule.md
 
 # === Rules (golden rules + conventions + index) — rules-audit 2026-06-28 ===
@@ -176,7 +168,6 @@ rules/deps-audit-golden-rule.md
 rules/discover-opportunity-golden-rule.md
 rules/discover-plan-golden-rule.md
 rules/honesty-gate-golden-rule.md
-rules/trajectory-review-golden-rule.md
 rules/error-handling.md
 rules/git-safety.md
 rules/live-target.txt
@@ -220,7 +211,6 @@ skills/discover-plan/
 skills/discover-plan-confidence/
 skills/honesty-gate/
 skills/plan-edge-cases/
-skills/plan-grill/
 skills/implement/
 skills/plan-confidence/
 skills/plan-improve/
@@ -383,7 +373,7 @@ done
 
 # --- records scaffold for NEW cycles ---------------------------------
 # A patch copies files; it never created directories a new cycle writes into. That
-# gap bit for real: session-goal's Stop hook defaults to records/acceptance,
+# gap bit for real: the acceptance gate defaults to records/acceptance,
 # which existed in ZERO of the 29 patched consumers, so an armed gate reported
 # "/acceptance never ran" — a message indistinguishable from a legitimate verdict —
 # and blocked forever on a configuration problem.
@@ -391,7 +381,7 @@ done
 # Only creates what is missing, and only empty directories. Existing content is
 # never touched, so this stays inside the "patch never deletes" contract.
 NEW_KB_DIRS=(
-  "records/acceptance"           # cycle-acceptance records (read by the session-goal gate)
+  "records/acceptance"           # cycle-acceptance records
   "records/acceptance/evidence"  # screenshots, console/network dumps, transcripts
   "records/roadmap-runs"         # per-milestone macro-loop audit trail
 )

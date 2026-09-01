@@ -95,7 +95,7 @@ The actual checks depend on what {DOMAIN} is. Below are domain-recipes — apply
 
 ### If {DOMAIN} not in above list
 
-Fall back to generic domain trajectory-review:
+Fall back to generic domain analysis:
 
 - What does the plan declare as domain-specific patterns?
 - What does any registered `*-patterns` skill say about this domain?

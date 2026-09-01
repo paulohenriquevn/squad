@@ -130,7 +130,7 @@ findings:
 
 1. Accepting /implement's wiring check results without re-running on at least 3 sample symbols
 2. Treating pillar (a) as a checkbox — a caller can be a no-op or dead branch
-3. Skipping reachability trajectory-review ("if test passes, the code is wired") — tests can exercise paths that production never hits
+3. Skipping reachability analysis ("if test passes, the code is wired") — tests can exercise paths that production never hits
 4. Trusting `.wiring-evidence.json` numbers without sanity-checking magnitude
 5. Allowing dead exports because "they're internal" — internal != needed
 

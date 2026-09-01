@@ -32,5 +32,4 @@ Consumers do **not** share a records. Each project owns its `ROADMAP.md` and its
 
 - Cycle that writes acceptance records: `rules/cycle-acceptance.md`
 - Macro loop that reads the run-files: `rules/cycle-maintenance.md`
-- Session gate that reads the acceptance verdict: `skills/session-goal/SKILL.md`
 - Reviewer that detects the split: `skills/backlog-review/SKILL.md`

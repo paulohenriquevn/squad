@@ -1,6 +1,6 @@
 # SOP schema — the shape of an operating procedure
 
-**Skill:** `sop-author` · `sop-run` · `sop-review`
+**Mechanised by:** `scripts/check_sop_structure.py` (shape and review date) · `scripts/check_sop_run.py` (the run record accounts for the procedure)
 
 ## What a SOP is, and what it is not
 
@@ -127,7 +127,9 @@ flowchart TD
 
 ## Cross-references
 
-- Authoring skill: `skills/sop-author/SKILL.md`
-- Execution skill: `skills/sop-run/SKILL.md`
-- Audit skill: `skills/sop-review/SKILL.md`
+- The map that says where each procedure lives: `skills/map.md`
+- Three skills wrapped this schema until 2026-08-31 — authoring, execution and
+  audit. They were retired: the schema is enforced by the two scripts above, the
+  staleness they audited is reported by the first, and in the consumer measured
+  they had produced zero run records in the system's lifetime.
 - The gate-mechanism convention this schema borrows: `scripts/check_gate_mechanisms.py`

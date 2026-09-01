@@ -18,17 +18,17 @@ Do NOT trigger PLAN for:
 
 ## Chain
 
-Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requirements are not yet precise. Phase 0.5 is UNBREAKABLE for any item coming from `BACKLOG.md`. Phases 1+ are unbreakable.
+Phase 0 is UNBREAKABLE for any item coming from `BACKLOG.md`, and so is everything
+after it.
+
+**There was a Phase 0 before this one** — `/grill-me`, an optional interview that
+made vague requirements precise. It was retired on 2026-08-31 after producing one
+grill in a consumer's entire history: `/plan-alignment` interrogates the item as
+its first act, and it is unbreakable where the optional phase was not, so the
+interview already happened wherever the work actually is.
 
 ```
-/plan-grill {topic-slug}                     [Phase 0 — OPTIONAL]
-     ↓ (interview-driven requirements resolution)
-     ↓ (produces: records/grills/{slug}-grill.md)
-     ↓ verdict:
-     ↓   READY_FOR_PLAN  → proceed to /plan-alignment
-     ↓   NEEDS_SPLIT     → split topic, re-grill sub-topics
-     ↓   NEEDS_DISCOVERY → return to /discover-plan first
-/plan-alignment {slug}               [Phase 0.5 — grill + draw, scored]
+/plan-alignment {slug}                       [Phase 0 — grill + draw, scored]
      ↓ (produces: records/alignment/{slug}-alignment.md + {slug}-walkthrough.html)
      ↓ verdict:
      ↓   ALIGNED          → machine >= 90% AND a human signed off → /plan-write
@@ -53,7 +53,6 @@ Phase 0 is OPTIONAL — invoke only when the topic is non-trivial AND requiremen
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| plan-grill (opt.) | topic slug | grill log + verdict in records/grills/{slug}-grill.md | every recommended answer offered; ≤ 15 questions; verdict declared |
 | plan-alignment | item + discover evidence | alignment brief + animated walkthrough + an unticked reviewer checklist | `score_alignment.py` reports ALIGNED — machine score >= 90% AND a human ticked every `## Reviewer sign-off` box. The agent may never tick one (see [`alignment-threshold.md`](alignment-threshold.md)) |
 | plan-write | feature description (+ grill output if Phase 0 ran) | plan with Goal, Tasks, Risks, Test Plan, Open Questions | Coverage Matrix present (every Goal claim mapped to ≥ 1 task) |
 | plan-edge-cases | plan | annotated plan with MUST-FIX | every MUST-FIX has owner + acceptance criterion |
@@ -89,13 +88,6 @@ believed to be automatic is one nobody runs.
 
 A BLOCKED report blocks downstream: `/plan-confidence` MUST NOT honor the plan as SHIPPABLE until the human resolves the blocker.
 
-## When to skip Phase 0 (plan-grill)
-
-- The user already wrote a detailed spec (e.g., a one-pager in `docs/specs/`).
-- Trivial fix (single-line, obvious bug).
-- Pure refactor with no behavior change.
-- Decision tree has < 3 branches — just write the plan.
-- A grill output already exists for the same slug and is < 7 days old.
 
 ## Pre-flight: task interfaces
 
@@ -142,7 +134,7 @@ call sites, which would have failed every test in two files.
 ## Cross-references
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
-- Skills: `skills/plan-grill/SKILL.md`, `skills/plan-write/SKILL.md`, `skills/plan-edge-cases/SKILL.md`, `skills/deps-audit/SKILL.md`, `skills/plan-confidence/SKILL.md`, `skills/plan-improve/SKILL.md`
+- Skills: `skills/plan-write/SKILL.md`, `skills/plan-edge-cases/SKILL.md`, `skills/deps-audit/SKILL.md`, `skills/plan-confidence/SKILL.md`, `skills/plan-improve/SKILL.md`
 - Macro super-loop: `rules/cycle-maintenance.md` — defines the `milestone_id` frontmatter contract that plans MAY carry
 - Upstream: `rules/cycle-discover.md` (when prior art is unknown)
 - Downstream: `rules/cycle-implement.md` (consumes the plan with verdict ≥ SHIPPABLE_WITH_CAVEATS)

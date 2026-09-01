@@ -295,9 +295,10 @@ def test_a_bullet_does_not_inherit_from_section_prose(tmp_path: Path) -> None:
 def test_a_table_inherits_an_exemption_declared_in_its_section_prose(tmp_path: Path) -> None:
     """One note above the table beats the same marker pasted into six rows.
 
-    `cycle-trajectory-review.md` is the real case: measured 2026-08-27, `skills/trajectory-review/`
-    ships a SKILL.md and no scripts, so all six of its hard caps are asserted
-    rather than computed. That is one fact about the slice, and stating it once
+    `cycle-trajectory-review.md` was the real case: measured 2026-08-27, `skills/trajectory-review/`
+    shipped a SKILL.md and no scripts, so all six of its hard caps were asserted
+    rather than computed. The rule and its skill were retired on 2026-08-31 for
+    exactly that reason; the pattern they demonstrated is why this test exists. That is one fact about the slice, and stating it once
     where the reader meets the table says more than six identical parentheticals
     — which would read as six independent decisions.
     """

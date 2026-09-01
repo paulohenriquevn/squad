@@ -134,7 +134,7 @@ DUPLICATE_MIN_LINES = 4      # fixed
 DUPLICATE_MIN_OCCURRENCES = 2
 ```
 
-**`smell_python.py`** — Python-specific AST trajectory-review: cyclomatic complexity (counting `if/for/while/try/except/assert` + boolean operators), function line span, nesting depth, parameter count.
+**`smell_python.py`** — Python-specific AST analysis: cyclomatic complexity (counting `if/for/while/try/except/assert` + boolean operators), function line span, nesting depth, parameter count.
 
 **`smell_checks.py`** — Orchestrator: routes files by extension, runs file-level checks (length, duplicates), delegates to `smell_python.py` for `.py` files, optionally to `lizard` for JS/TS/Go/Rust/Java/C/C++.
 
@@ -217,7 +217,7 @@ These match McCabe's original threshold for complexity and industry-standard rec
 
 ### Skip directories
 
-The hook always skips these directories (no trajectory-review, no blocking):
+The hook always skips these directories (no analysis, no blocking):
 
 ```
 node_modules, __pycache__, .git, dist, build, .next, .venv, venv,

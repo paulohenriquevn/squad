@@ -678,7 +678,6 @@ KB_DIRS=(
   "acceptance/evidence"         # screenshots, console/network dumps, transcripts
   "maintenance-runs"            # per-item macro-loop audit trail
   "backlog"                     # /backlog-item intake logs
-  "grills"                      # /plan-grill Q&A logs
   "honesty-gate"                     # /honesty-gate anchor manifest
   "honesty-gate/evidence"            # /honesty-gate evidence files
   "judge-codex"                 # orthogonal LLM jury outputs (optional plugin)
@@ -687,7 +686,7 @@ KB_DIRS=(
   "discoveries/plans"           # /discover-plan outputs
   "discoveries/snapshots"       # hash-verified snapshots cited by opportunities
   "progress"                    # per-slug progress.md (read by hooks + session-catchup)
-  "sop-runs"                    # /sop-run output — what one machine did following them
+  "sop-runs"                    # run records: what one machine did following a procedure
 )
 
 # The OKF bundle: durable knowledge, separate from the dated trail above.
@@ -828,5 +827,5 @@ Next steps for the target project:
   5. Open the project in Claude Code. The settings.json wires hooks; skills/
      and commands/ are auto-discovered.
 
-  6. First run: /plan-write "{one-sentence feature}"  OR  /plan-grill {topic}
+  6. First run: /backlog-item, or /plan-write "{one-sentence feature}"
 EOF

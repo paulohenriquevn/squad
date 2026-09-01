@@ -83,7 +83,7 @@ LOOP BACK to SELECT
 | `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it. Decided by `all_changes_are_untracked()` in `scripts/advance_items.py`, which runs the `git check-ignore` test defined below | Loop back to SELECT. **A terminal state, not a failure** |
 | `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
-| `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it |
+| `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it. _(emitted externally: the CONDITION is detected by `route_domain.py`, which prints `UNROUTED` and exits 3; the token is written by the runner that surfaces it. The skill that named it was retired 2026-08-31, and the detector was not)_ |
 | `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover-execute --sweep {domain}`.** Not a finish line |
 | `ITEM_SELECTED` | SELECT picked an item; nothing blocks it | ROUTE |
 | `BACKLOG_BLOCKED` | Selectable items remain and **every one is blocked** | Surface the wall. **Not `BACKLOG_EMPTY`** — a sweep would add items beside a wall instead of clearing it |

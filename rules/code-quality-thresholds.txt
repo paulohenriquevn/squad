@@ -23,7 +23,7 @@
 #   - Defaults remain in skills/code-quality/defaults/thresholds.txt for portability.
 
 # D1 — Dead code
-# Defaults inherited; override only when project's call-graph trajectory-review is unusual.
+# Defaults inherited; override only when project's call-graph review is unusual.
 # vulture.min_confidence = 80
 # knip.exit_code = strict
 # cargo_udeps.fail_on_unused = true

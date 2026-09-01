@@ -61,7 +61,7 @@ Log every defect observed along the way with a severity (`blocker` | `major` | `
 
 `records/acceptance/{milestone}-{date}.md`, plus artifacts under `records/acceptance/evidence/`. Cite evidence by path; the paths must resolve.
 
-The frontmatter MUST carry `verdict: <TOKEN>` — `session-goal`'s Stop-hook gate reads that exact line to decide whether the session may end (`rules/cycle-acceptance.md § Output`). A verdict stated only in prose leaves the milestone looking never-accepted.
+The frontmatter MUST carry `verdict: <TOKEN>` — it is the line any reader resolves to decide whether the session may end (`rules/cycle-acceptance.md § Output`). A verdict stated only in prose leaves the milestone looking never-accepted.
 
 ### 5. Compute the verdict — do not name it
 
@@ -116,6 +116,5 @@ State the target address, the verdict token, per-criterion status, evidence path
 
 - [`skills/release/SKILL.md`](../release/SKILL.md) — must have emitted `RELEASED`; no longer flips the checkbox
 - [`skills/honesty-gate/SKILL.md`](../honesty-gate/SKILL.md) — sustained-use honesty gate that consumes acceptance evidence
-- [`skills/session-goal/SKILL.md`](../session-goal/SKILL.md) — names this phase in the milestone goal condition
 - `rules/cycle-maintenance.md` — the macro loop that consumes this verdict
 - `rules/testing.md` — why exercised behaviour beats asserted coverage

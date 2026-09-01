@@ -136,7 +136,7 @@ def smoke_test_tools(
         pass
 
     if not lizard_available:
-        msg = "Optional: lizard not installed. JS/TS/Go/Rust/Java/C trajectory-review will be limited to file-level checks."
+        msg = "Optional: lizard not installed. JS/TS/Go/Rust/Java/C analysis will be limited to file-level checks."
         if not allow_missing:
             _log(msg, verbose)
             print(

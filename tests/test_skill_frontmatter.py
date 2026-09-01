@@ -101,7 +101,7 @@ def test_skill_names_match_directory() -> None:
 
 
 def test_skill_count() -> None:
-    """Sanity check: we expect exactly 34 SKILL.md files.
+    """Sanity check: we expect exactly 27 SKILL.md files.
 
     Retired the in-cycle skill-distillation tail (skill-writer + skill-validator
     + skill-register, -3), adopted the standalone official skill-creator (+1),
@@ -122,10 +122,16 @@ def test_skill_count() -> None:
     Deleted the seven skills no cycle phase referenced — the presentation trio
     (slide-deck, marp-slide, excalidraw), the vendored frontend-design, and the
     three domain specialists (cap-theorem, backpressure, resilience), which the
-    scaffolded per-project specialists replace (-7): 41 -> 34.
+    scaffolded per-project specialists replace (-7): 41 -> 34. Cut seven more on
+    utility grounds (-7): 34 -> 27. trajectory-review shipped six hard caps its own
+    rule said were never computed; session-goal bound sessions to hand-authored
+    milestones the kit has no producer for; commands-help was superseded by
+    skills/map.md; grill-me produced one grill in a consumer's history and
+    plan-alignment interrogates as its first act; and the three sop-* skills wrapped
+    a schema two scripts already enforce, with zero run records ever written.
     """
     files = _get_skill_files()
-    assert len(files) == 34, (
-        f"Expected 34 SKILL.md files, found {len(files)}. "
+    assert len(files) == 27, (
+        f"Expected 27 SKILL.md files, found {len(files)}. "
         f"Update this test if skills were added or removed."
     )

@@ -56,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # - skill-creator: standalone skill-authoring tool (the official Anthropic skill-creator);
 #   invoked on demand to create/improve any skill at skills/{purpose}/. Deliberately decoupled
 #   from every cycle (replaced the retired skill-writer/validator/register discover tail).
-AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "commands-help", "quality-init", "skill-creator", "arch-check", "sop-author", "sop-run", "sop-review"}
+AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "quality-init", "skill-creator", "arch-check"}
 
 
 def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:

@@ -10,8 +10,8 @@ status: stable
 
 # The skill map
 
-**34 skills.** Most are a phase of a cycle and are invoked in an order the
-cycle rule fixes; nine are invoked on demand and belong to no chain.
+**27 skills.** Most are a phase of a cycle and are invoked in an order the
+cycle rule fixes; six are invoked on demand and belong to no chain.
 
 **Every row below carries three things**: what the skill does, when to reach for
 it, and — the column that is usually missing from an index — when reaching for it
@@ -38,6 +38,45 @@ Every skill carries three documents, and they answer different questions:
 
 When the map and a `SKILL.md` disagree, the `SKILL.md` wins and the disagreement
 is a defect — see the last section.
+
+---
+
+## The two registries
+
+Squad has two registries, on two different axes. Confusing them is the most common
+mistake, and `cycle-acceptance` says so in its own words: they are *"a different
+registry on a different axis. Anything claiming otherwise is a stale redirect."*
+
+| File | Ids | Answers | Created by |
+|---|---|---|---|
+| `BACKLOG.md` | `B-NNN` | "what should we look at next?" | `backlog-init`, then `backlog-item` |
+| `ROADMAP.md` | `M<N>` | "what did we promise a user?" | **hand-authored — no skill generates one** |
+
+Only a milestone has a checkbox, so only a milestone reaches `acceptance`. A
+`B-NNN` released without a milestone ends at `RELEASED`, and that is correct.
+
+## The flows
+
+**A hunch worth checking — the default maintenance loop:**
+
+```
+/backlog-item {slug}                register it; no evidence required, on purpose
+/discover-plan B-NNN --mode {mode}  what is measured, and what would kill it
+/discover-edge-cases B-NNN          what could make the measurement lie
+/discover-plan-confidence B-NNN     is the plan ready to run?
+/discover-execute B-NNN             run it — ITEM_KILLED is a success
+/discover-confidence B-NNN          is the finding solid enough to act on?
+   ↓
+/plan-alignment {slug} → /plan-write → /plan-edge-cases → /deps-audit
+   → /plan-confidence → /implement → /code-quality → /review → /release
+```
+
+**The same chain, unattended:** `/idea-to-release {item}` runs every phase of it
+for one item. `/pipeline` runs many items through it at once, a lane each.
+
+There is **no `/discover` command** — the discovery chain is six separate skills,
+each with its own gate. A rule referring to the chain as a whole names the cycle,
+`cycle-discover`, never a slash command.
 
 ---
 
@@ -69,7 +108,6 @@ release → acceptance`. Skills below are in the order they run.
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
-| `plan-grill` (phase 0, optional) | Interviews one question per turn until requirements are precise, codebase-first | The topic is non-trivial AND requirements are still vague | Ask what Grep would answer, or stack multiple questions in one turn |
 | `plan-alignment` (phase 0.5) | Alignment brief + animated walkthrough + a reviewer checklist, scored on 17 criteria | **Unbreakable for anything from `BACKLOG.md`** — below 90% the item is not built | Tick your own review boxes — that is the single failure the sign-off exists to prevent. Never draw before grilling: a diagram of a vague brief looks rigorous |
 | `plan-write` (phase 1) | Turns context into a plan at `records/plans/{slug}-plan.md` | The item is `ALIGNED` | Invoke it before alignment. `check_alignment_gate.py` hard-caps an unaligned plan at 49, so the plan cannot enter `/implement` anyway |
 | `plan-edge-cases` (phase 2) | Annotates the plan with MUST-FIX edge cases | Right after `/plan-write` | Over-engineer. "An `ErrorRecoveryManager` for this edge case" → no; `if input.is_empty()` solves it. Speculation about future API changes is out of scope |
@@ -97,7 +135,6 @@ These invoke the chain rather than sitting in it.
 |---|---|---|---|
 | `idea-to-release` | Chains DISCOVER → … → ACCEPTANCE for one item, deriving depth from a deterministic confidence score | One item should go end to end without a person invoking nine commands | Fabricate a confidence signal — the script is deterministic and its output is the truth. Never skip `/plan-edge-cases`, `/deps-audit` or `/code-quality` on "high confidence": those gates are cheap and catch what unit tests miss |
 | `pipeline` | Runs MANY items through the chain at once — a lane per item, a worktree each, batch/task consumption per stage | Several triaged items are waiting and the phases would otherwise idle between them | Expect it to relax a gate. Every gate the chain declares still applies per item, including the alignment gate, which the pipeline **cannot** satisfy |
-| `session-goal` | Binds a session to one or more milestones so it cannot stop before acceptance is green | A session should not end early | Stuff a persona into the goal — it is a Stop-hook condition read by a small model. Never write a vague condition: "M2 is done" lets the evaluator accept an assertion |
 
 ---
 
@@ -107,18 +144,13 @@ A phase of no cycle. Invoked when the question arises.
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
-| `commands-help` | Lists every command by cycle, with the recommended flows | Someone asks what the kit can do | Treat it as the contract — it is an index, and the cycle rules are the contract |
 | `ast-grep` | Structural search and refactor via tree-sitter patterns | The question is about AST **shape** — signatures, hierarchies, call sites | Use it to find a file containing a word: Grep is faster and clearer. Never inline a multi-statement pattern — use a YAML rule file |
 | `arch-check` | Verifies declared architecture boundaries, or proposes ones the repo already obeys | Boundaries exist and may have drifted, or none are declared | Expect it to invent a boundary the code does not already respect, or to report a clean run it could not perform |
 | `deps-audit` | *(also phase 3 of cycle-plan — see above)* | Outside a plan, when dependency risk is the question | — |
 | `code-quality` | *(also the whole of cycle-code-quality — see above)* | Outside the chain, to audit a tree | — |
 | `honesty-gate` | Blocks a "production-ready" / v1.0 claim without recorded evidence of sustained internal use | Someone is about to make that claim | Read `EVIDENCE_WITH_CAVEATS` as `SUFFICIENT` — the caveats are explicit. Never log evidence for one scenario and claim it satisfies another anchor |
 | `quality-init` | Emits quality-gate hooks calibrated to the project's real p90 metrics | Setting a project up, once | Generate hooks that auto-fix — hooks are gates, not fixers. Never set thresholds below the floors: the hook would block every write |
-| `trajectory-review` | Empirical trajectory validation — benchmarks, complexity, fitness, scalability. Opt-in per project | The question is whether the direction holds up under measurement | Fabricate a measurement: every number comes from a real tool run with subprocess evidence. Never skip hypothesis extraction — benchmarks without hypotheses are benchmarking, not review |
 | `skill-creator` | Authors, improves and evaluates skills. Vendored from Anthropic, kept byte-close to upstream | Creating or improving a skill | Re-sync it as a merge. It is a copy, and `validate_skill_frontmatter.py` exempts its frontmatter on purpose |
-| `sop-author` | Writes or revises a Standard Operating Procedure for something this kit does repeatedly | Someone asks "how do we do X here?" and the answer lives only in a script header | Write a procedure for something done once. A SOP is for the repeated act; a one-off belongs in a record |
-| `sop-run` | Executes a SOP and records what actually happened — steps run, skipped, adapted, and what forced each deviation | Following a documented procedure | Record a run that did not happen, or omit a deviation. The value of the record is exactly the deviations |
-| `sop-review` | Audits SOPs and their run records — procedures past review date, steps nobody accounts for, recurring deviations, procedures with no run at all | Periodically, or before trusting a procedure | Edit a SOP from this skill. A reviewer that fixes what it finds cannot report what it found |
 | `backlog-init`, `backlog-review` | *(see BACKLOG above)* | — | — |
 
 ---

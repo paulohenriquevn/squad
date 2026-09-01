@@ -178,5 +178,5 @@ Cases found: N (EDGE: N, NEGATIVE: N | MUST FIX: N, SHOULD TEST: N, DOCUMENT: N)
 ## Integration
 
 - Runs AFTER `/plan-write` or whenever someone asks for a review of a plan in `records/plans/`
-- This skill analyzes **plans before implementation** — for deep trajectory-review of existing code, open a PR and use `/review` or `/security-review` (built-in)
+- This skill analyzes **plans before implementation** — for deep analysis of existing code, open a PR and use `/review` or `/security-review` (built-in)
 - Part of the unbreakable chain documented in `/plan-write` SKILL.md: `/plan-write` → `/plan-edge-cases` → `/plan-confidence` → (if needed) `/plan-improve` → `/plan-confidence` re-score

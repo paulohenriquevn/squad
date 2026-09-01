@@ -33,7 +33,7 @@ Produce `records/plans/{slug}-plan.md`: what will be built, in what order, with 
 ## Prerequisites
 
 - The item is `ALIGNED`. A plan written before alignment is capped at 49 and cannot enter `/implement`.
-- The grill output, if `/plan-grill` ran, is on disk where Step 0 will find it.
+- Any pre-existing grill output is on disk where Step 0 will find it.
 
 ## Steps
 

@@ -29,7 +29,7 @@ produces a diagram of a vague brief, or a precise brief nobody can picture.
 
 ## Cycle contract
 
-This skill is **Phase 0.5** of [`cycle-plan`](../../rules/cycle-plan.md), and unlike
+This skill is **phase 0** of [`cycle-plan`](../../rules/cycle-plan.md), and unlike
 Phase 0 it is not optional for anything arriving from `BACKLOG.md`. It runs after
 `/discover-plan` has evidence the item is real, and before `/plan-write` commits to how
 it gets built. **Read `cycle-plan.md § Chain` before invoking.**
@@ -78,7 +78,7 @@ be split first. Each piece gets its own alignment.
 
 Read the `B-NNN` block and whatever `cycle-discover` attached to it. Then read the
 code the item touches. Every question you can answer from the repository is a
-question you must not spend on the human — the same codebase-first rule `/plan-grill`
+question you must not spend on the human — the codebase-first rule the retired `/grill-me`
 enforces, for the same reason.
 
 ## Step 2 — Draft the brief from what you already know
@@ -378,5 +378,4 @@ generated page requires nothing.
 - Gate: [`rules/alignment-threshold.md`](../../rules/alignment-threshold.md)
 - Upstream: `/discover-plan` — supplies the evidence the brief opens with
 - Downstream: `/plan-write` — the plan's `## Context` cites this brief
-- Sibling interview skill: `/plan-grill` — used alone when no drawing is warranted
 - 95%-confidence principle: `~/.claude/CLAUDE.md § 1`

@@ -16,7 +16,7 @@ You receive these parameters in your prompt:
 - **loser_skill_path**: Path to the skill that produced the losing output
 - **loser_transcript_path**: Path to the execution transcript for the loser
 - **comparison_result_path**: Path to the blind comparator's output JSON
-- **output_path**: Where to save the trajectory-review results
+- **output_path**: Where to save the analysis results
 
 ## Process
 
@@ -76,7 +76,7 @@ Determine what held the loser back:
 
 ### Step 7: Generate Improvement Suggestions
 
-Based on the trajectory-review, produce actionable suggestions for improving the loser skill:
+Based on the analysis, produce actionable suggestions for improving the loser skill:
 - Specific instruction changes to make
 - Tools/scripts to add or modify
 - Examples to include
@@ -86,7 +86,7 @@ Prioritize by impact. Focus on changes that would have changed the outcome.
 
 ### Step 8: Write Analysis Results
 
-Save structured trajectory-review to `{output_path}`.
+Save structured analysis to `{output_path}`.
 
 ## Output Format
 
