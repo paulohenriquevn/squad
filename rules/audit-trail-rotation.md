@@ -26,7 +26,7 @@ How to retire generated artifacts so the repository stays navigable.
 
 ## Rotation triggers
 
-- Manual: `/audit-rotate` — **not yet implemented**; see `records/backlog.md` for the promotion trigger. Until then, rotation is fully manual.
+- Manual: `/audit-rotate` — **not yet implemented**, and nothing schedules it. Rotation is fully manual until a command exists.
 - On merge of a feature: archive the corresponding implement/review trail.
 - On a quarterly basis: human-driven sweep of `agents/archive/` against the delete threshold.
 

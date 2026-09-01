@@ -10,19 +10,24 @@ depends on.
 
 **This bundle is not the audit trail.** Dated, immutable records of what
 happened — audits, reviews, implementations, releases, acceptance runs, SOP run
-records — live in `records/` and stay there. A record of one execution on
-one day is not a concept that evolves, and forcing it into a schema built for
-knowledge that does would lose what makes it evidence.
+records — belong to `records/`, which every consumer keeps and this repository
+does not carry in its index. A record of one execution on one day is not a
+concept that evolves, and forcing it into a schema built for knowledge that does
+would lose what makes it evidence. The consequence for this bundle is the whole
+reason it exists: what is written here is the half meant to survive the run.
 
 ## Directories
 
 - [`sops/`](/sops/index.md) — operating procedures for what this kit does
-  repeatedly: installing into a consumer, patching an install, porting a fix
-  between kits, cutting a release.
-- `decisions/` — architecture decisions that outlive the discussion that
-  produced them. *(empty)*
-- `references/` — external material absorbed into concepts, with the source URL
-  kept as `resource` for re-checking. *(empty)*
+  repeatedly: installing into a consumer, patching an install, propagating a
+  delta across consumers, and porting a fix between the sibling kits. Three of
+  the four are `draft`: derived from the scripts, not from a run anyone
+  performed and recorded.
+- [`decisions/`](/decisions/where-knowledge-lives.md) — architecture decisions
+  that outlive the discussion that produced them.
+- [`references/`](/references/judgement-gates-are-insurance.md) — external
+  material absorbed into concepts, with the source URL kept as `resource` for
+  re-checking.
 - `opportunities/` — measured findings from `/discover-execute` that survived
   their falsification criterion. *(empty)*
 

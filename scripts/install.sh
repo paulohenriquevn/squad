@@ -699,13 +699,6 @@ for d in "${KB_DIRS[@]}"; do
   mkdir -p "$ECO/records/$d"
 done
 
-# Optional: bring over the project-agnostic backlog template
-if [ -f "$SRC_DIR/records/backlog.md" ]; then
-  if [ ! -f "$ECO/records/backlog.md" ]; then
-    cp "$SRC_DIR/records/backlog.md" "$ECO/records/backlog.md"
-  fi
-fi
-
 # agents/ holds only the README above. The routing table ships empty alongside it,
 # so route_domain.py has nothing to resolve until the project derives both — a table
 # with rows and no specialist on disk is what exit 3 (BROKEN ROUTE) exists to catch.

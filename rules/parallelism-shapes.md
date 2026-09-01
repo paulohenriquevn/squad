@@ -1,6 +1,8 @@
-# Two shapes of parallelism, and the one this kit does not have
+# Two shapes of parallelism, and how the kit came to have both
 
-Running N agents at once is not one technique. It is two, they solve different problems, and this kit implements one of them.
+Running N agents at once is not one technique. It is two, they solve different
+problems, and this kit now implements both. It implemented one of them when this
+was written, and the record of that gap is why the second one got built.
 
 ## The two shapes
 
@@ -23,12 +25,13 @@ They are orthogonal. A pipeline stage can itself fan out.
 | | Shape | Where |
 |---|---|---|
 | ✅ | Fan-out | `/review` (5–7 agents), `discover-plan-confidence` (4 checkers), `cycle-judge-codex` (a second model family over the same artefacts) |
-| ❌ | Pipeline | Nowhere. `cycle-idea-to-release` chains DISCOVER → PLAN → IMPLEMENT → REVIEW → RELEASE **one item at a time**, and every phase waits for the previous one to finish on that item |
+| ✅ | Pipeline | `scripts/pipeline_orchestrator.py` and `/pipeline` — a lane per item with its own worktree, batch/task consumption per stage, backward hops carrying a commit. `cycle-idea-to-release` still takes **one item at a time**, which is correct: it is the chain, and the pipeline is what runs many chains at once |
 
-A consumer with 22 triaged backlog items today processes them strictly in
-sequence, and the agent is idle in every phase it is not currently running.
+The measured case that made it worth building: a consumer with 22 triaged backlog
+items processed them strictly in sequence, with the agent idle in every phase it
+was not currently running.
 
-## Three things the pipeline shape requires, which are the interesting part
+## Three things the pipeline shape requires — which became its specification
 
 **Isolation, not detection.** Stages run concurrently, so they cannot share a
 working tree. swarm-forge gives each role a git worktree. This kit measured the
@@ -48,29 +51,33 @@ invoked, or it is not.
 without blocking the line. swarm-forge marks each role `forward-only`, `back-one`
 or `back-all`, and a back-hop is merge-only — it carries the commit, not a task.
 
-## Why this is written down rather than built
+All three are met: `Item.worktree` with a live/released set, `take_batch()`
+reading a per-stage `CONSUMPTION` mode, and `send_back(slug, to, commit)` whose
+signature carries the commit rather than a task.
 
-Building a pipeline is not a change to a skill; it is a scheduler, a queue, a
-worktree lifecycle and a backward-merge protocol. Writing "we should parallelise"
-into a rule and shipping nothing would be the mechanism-with-no-contract shape
-this kit names elsewhere, inverted.
+## Why it was written down before it was built
 
-What is recorded here is the **distinction**, because the kit had a word for one
+The three requirements above were not a wish list; they became the specification.
+Writing "we should parallelise" into a rule and shipping nothing would have been
+the mechanism-with-no-contract shape this kit names elsewhere, inverted — so what
+got recorded first was the **distinction**, because the kit had a word for one
 shape and no word for the other, and a team without the word cannot notice the
-absence. The measured cost is in the table above: items are processed one at a
-time, and the phases are idle.
+absence.
 
-## The gap this rule leaves open
+The sequence is the point. Naming the gap is what made it a thing someone could
+close, and the closing implementation was checked against these three clauses
+rather than against taste. An alignment judge then refused its first draft for
+omitting one of them — backward propagation, in a design resting on the very rule
+that names it as one of three things the shape needs.
 
-Only one of the two kits ships `capture_tree_state`. The other now passes
-`isolation="worktree"` and has **nothing that would notice if that stopped taking
-effect** — the worse half of the pair, by the B-025 comment's own reasoning.
+## The gap this closed
 
-Not ported in the same pass on purpose: the detector has seven integration points
-including the report renderer, and the two `consolidate_findings.py` have already
-diverged this week — copying one wholesale over the other broke a kit. A rushed
-port of a detector produces a detector nobody can trust. Recorded here so it is a
-decision someone takes, not an oversight someone finds.
+An earlier version of this section recorded that only one of the two kits shipped
+`capture_tree_state`, leaving the other passing `isolation="worktree"` with
+nothing that would notice if that stopped taking effect. **Both kits ship it
+now.** The note stays as a record of how the pair is meant to work: isolation is
+the fix and the detector is what proves the fix is still in force, so a kit that
+has one without the other is the half that fails quietly.
 
 ## Cross-references
 
