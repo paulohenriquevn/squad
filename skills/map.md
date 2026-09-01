@@ -28,9 +28,16 @@ what its **chain position** forbids, which is sourced rather than invented.
 | **Use when** | the precondition. Most are "the previous phase produced X" |
 | **Do NOT** | the misuse that looks reasonable at the time |
 
-A skill's own `SKILL.md` is the contract; this map is a way in. When the two
-disagree, the `SKILL.md` wins and the disagreement is a defect — see the last
-section.
+Every skill carries three documents, and they answer different questions:
+
+| File | Answers | Written for |
+|---|---|---|
+| `SKILL.md` | what the skill guarantees and how it executes | the agent running it |
+| `SOP.md` | what to check before invoking, what comes back, what each verdict obliges | whoever operates it |
+| this map | which skill to reach for at all | whoever does not know yet |
+
+When the map and a `SKILL.md` disagree, the `SKILL.md` wins and the disagreement
+is a defect — see the last section.
 
 ---
 
@@ -138,5 +145,7 @@ An index that drifts is worse than none: it is read as complete.
 
 So `scripts/check_skill_map.py` compares this file against the directory and
 fails when they disagree in either direction — a skill on disk and absent here, a
-row here for a skill that no longer exists, or a count in the prose that does not
-match. It runs in `verify_ecosystem.py`.
+row here for a skill that no longer exists, a count in the prose that does not
+match, or a skill with no `SOP.md` beside its contract. It runs in
+`verify_ecosystem.py`, and `check_sop_structure.py` sweeps every one of those
+SOPs for shape and review date alongside the kit's own procedures.

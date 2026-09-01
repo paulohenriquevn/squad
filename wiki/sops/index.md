@@ -13,6 +13,16 @@ reconstruct it from a script header.
 - [Propagate a delta across consumers](/sops/propagate-a-delta-across-consumers.md)
   — classify before copying, and never merge a local improvement automatically.
 
+## The other thirty-four
+
+These four are procedures **about the kit** — installing it, patching an install,
+propagating a delta, porting a fix between the sibling kits. Each skill also
+carries its own `SOP.md`, which is the procedure for **operating that skill**:
+what must be true before invoking it, what comes back, and what each verdict
+obliges. They live beside their `SKILL.md` rather than here, because a procedure
+belongs next to the thing it operates — and `check_sop_structure.py` sweeps both
+roots, so all thirty-eight are held to one schema and one review interval.
+
 ## What these four are worth, stated
 
 One of them was written from runs somebody performed and recorded. The other

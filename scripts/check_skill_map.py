@@ -27,6 +27,13 @@ Three things, and the second is the one the CHANGELOG says was missed:
     missing_from_map   a skill directory with no row here
     absent_from_disk   a row for a skill that no longer exists
     count_disagrees    the prose says N skills and the directory holds M
+    missing_sop        a skill with no `SOP.md` beside its `SKILL.md`
+
+The fourth clause is the same defect one level down. `SKILL.md` is the contract
+the agent executes; `SOP.md` is what a person needs to run the phase and act on
+what comes back — measured 2026-08-31, only 6 of 34 skills answered "it returned
+X, now what". A skill that ships without one is reachable and not operable, and
+nothing else would say so.
 
 It does not check what a row SAYS. Whether "Do NOT" is the right prohibition is
 judgement, and a checker claiming to verify that would be asserting a review
@@ -82,6 +89,12 @@ def check(root: Path) -> list[str]:
     for name in sorted(listed - on_disk):
         findings.append(
             f"absent_from_disk: map.md has a row for `{name}`, which no longer exists")
+
+    for name in sorted(on_disk):
+        if not (skills_dir / name / "SOP.md").is_file():
+            findings.append(
+                f"missing_sop: `{name}` has no SOP.md — the contract is there and "
+                f"the procedure for operating it is not")
 
     claimed = claimed_count(map_path)
     if claimed is not None and claimed != len(on_disk):

@@ -30,6 +30,9 @@ def _kit(root: Path, on_disk: list[str], rows: list[str], count: int | None = No
     for name in on_disk:
         (skills / name).mkdir(parents=True, exist_ok=True)
         (skills / name / "SKILL.md").write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
+    for name in on_disk:
+        # every skill carries the operator procedure beside its contract
+        (skills / name / "SOP.md").write_text("# sop\n", encoding="utf-8")
     header = f"**{count} skills.**\n\n" if count is not None else ""
     table = "\n".join(f"| `{r}` | does | when | do not |" for r in rows)
     (skills / "map.md").write_text(
@@ -117,3 +120,16 @@ def test_the_kit_itself_agrees() -> None:
     assert check(_REPO) == []
     assert claimed_count(_REPO / "skills" / "map.md") == len(
         list((_REPO / "skills").glob("*/SKILL.md")))
+
+
+def test_a_skill_without_a_sop_is_reported(tmp_path: Path) -> None:
+    """`SKILL.md` is the contract the agent executes; `SOP.md` is what a person
+    needs to run the phase and act on what comes back. Measured 2026-08-31: only 6
+    of 34 skills answered "it returned X, now what". A skill that ships without one
+    is reachable and not operable."""
+    _kit(tmp_path, ["alpha", "beta"], ["alpha", "beta"], count=2)
+    (tmp_path / "skills" / "beta" / "SOP.md").unlink()
+
+    findings = check(tmp_path)
+
+    assert [f for f in findings if "missing_sop" in f and "beta" in f]

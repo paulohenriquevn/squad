@@ -111,17 +111,40 @@ class SopReport:
 
 
 
+def _sop_files(project_root: Path, bundle: Path | None) -> list[Path]:
+    """Every SOP this project keeps, from both places one can live.
+
+    The bundle at `wiki/sops/` holds procedures ABOUT the kit — installing it into
+    a consumer, propagating a delta, porting a fix between the sibling kits. A
+    skill's `SOP.md` holds the procedure for OPERATING that skill: what must be
+    true before invoking it, what comes back, and what each verdict obliges.
+
+    Both are procedures under the same schema, and the reason to sweep both is the
+    reason the schema exists. A SOP carries `last_reviewed` and a review interval;
+    a procedure nothing sweeps has a review date nobody reads, which is a promise
+    with no mechanism — the defect this kit names more often than any other. Thirty
+    four of them would be that defect at scale.
+    """
+    found: list[Path] = []
+    if bundle is not None:
+        found.extend(sorted(bundle.glob("*.md")))
+    skills = Path(project_root) / "skills"
+    if not skills.is_dir():
+        skills = Path(project_root) / ".claude" / "skills"
+    if skills.is_dir():
+        found.extend(sorted(skills.glob("*/SOP.md")))
+    return found
+
+
 def check_sop_structure(project_root: Path, *, today: str | None = None) -> SopReport:
-    """Sweep `records/sops/` and report every structural defect."""
+    """Sweep every procedure this project keeps and report structural defects."""
     project_root = Path(project_root)
     report = SopReport()
     directory = resolve_knowledge_dir(project_root, _SOPS_DIR)
-    if directory is None:
-        return report
 
     reference = date.fromisoformat(today) if today else date.today()
 
-    for path in sorted(directory.glob("*.md")):
+    for path in _sop_files(project_root, directory):
         # `index.md` and `log.md` are OKF reserved filenames at any level of the
         # hierarchy — a directory listing and a change history, never concepts.
         # Reading them as SOPs reported the bundle's own navigation as a
