@@ -335,7 +335,9 @@ def test_a_handed_back_turn_starts_the_next_item(tmp_path: Path) -> None:
     # one, correctly, after ten minutes of work the bare command ignored.
     assert "/idea-to-release B-057" in decision.option
     assert "oldest unblocked" in decision.option
-    assert "não escolha por mim" in decision.option  # english-only: the session's language
+    # The screen was English, so the handoff is. The lead mirrors the session rather
+    # than imposing a language on it — see the mirroring tests at the end of this file.
+    assert "do not choose for me" in decision.option
 
 
 def test_an_attempt_that_just_happened_is_not_repeated(tmp_path: Path) -> None:
@@ -1172,3 +1174,49 @@ def test_no_log_means_an_empty_fleet_not_a_crash(tmp_path: Path) -> None:
     from squad_lead import Fleet
     assert Fleet.restored(None).taken == {}
     assert Fleet.restored(tmp_path / "absent.jsonl").taken == {}
+
+
+# ── the lead writes in the language the session is speaking ────────────────────
+#
+# Reading and writing are not symmetric. `FLOW_MARKERS` matches both languages because
+# the lead does not choose what the session prints; the message it types back is the
+# opposite case, and a fixed language there made the lead the one participant that
+# ignored the conversation.
+
+
+def test_an_english_screen_gets_an_english_handoff(tmp_path: Path) -> None:
+    lead = _lead_with_select(tmp_path, {"item": "B-057", "why": "oldest unblocked"})
+
+    decision = lead.decide("The session finished and is waiting.", idle=1000)
+
+    assert lead.language == "en"
+    assert "The turn came back" in decision.option
+    assert "records no event" in decision.option
+
+
+def test_a_portuguese_screen_gets_a_portuguese_handoff(tmp_path: Path) -> None:
+    lead = _lead_with_select(tmp_path, {"item": "B-057", "why": "oldest unblocked"})
+
+    decision = lead.decide(REAL_MENU.replace("❯ 1.", "").replace("  2.", "")
+                           + "\nO turno já terminou e não há mais nada.", idle=1000)  # english-only: the screen under test
+
+    assert lead.language == "pt"
+    assert "O turno voltou" in decision.option  # english-only: asserting the mirror
+    assert "não escolha por mim" in decision.option  # english-only: asserting the mirror
+
+
+def test_one_marker_is_not_enough_to_switch(tmp_path: Path) -> None:
+    """A single Portuguese word decides nothing — an item title carries one, and the
+    cost of switching wrongly is every message after it."""
+    from squad_lead import detect_language
+
+    assert detect_language("Working on the arquivo listing") == "en"  # english-only: the input under test
+    assert detect_language("O arquivo não existe") == "pt"  # english-only: the input under test
+
+
+def test_an_empty_screen_keeps_the_default(tmp_path: Path) -> None:
+    """Silence is not evidence of a language. English is the repository's policy and
+    the honest fallback."""
+    from squad_lead import DEFAULT_LANGUAGE, detect_language
+
+    assert detect_language("") == DEFAULT_LANGUAGE == "en"

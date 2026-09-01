@@ -186,14 +186,84 @@ _ESCAPE_OPTIONS = ("type something", "chat about", "cancel", "go back", "none of
 #: current policy has to be pointed at.
 #:
 #: One line, because a newline in `tmux send-keys` submits.
-_START_TEMPLATE = (
-    "[squad-lead] O turno voltou e a fila tem trabalho: rode /idea-to-release {item}. "
-    "Por que este item: {why}. {history} "
-    "Antes de decidir que algo precisa de uma pessoa, releia rules/autonomy-envelope.md "  # english-only: the message the session reads; it operates in the operator's language
-    "em disco: ele diz o que o sistema decide sozinho, e muda sem avisar quem já roda. "  # english-only: the message the session reads; it operates in the operator's language
-    "Se isto contradiz o que você acabou de reportar, ou se o item precisa de uma "  # english-only: the message the session reads; it operates in the operator's language
-    "decisão que nem o envelope cobre, diga isso em vez de executar — não escolha por mim."  # english-only: the message the session reads; it operates in the operator's language
-)
+#: What the lead types INTO THE SESSION, in the language that session is speaking.
+#:
+#: Reading and writing are not symmetric here, and conflating them was the defect.
+#: `FLOW_MARKERS` above matches BOTH languages because matching is reading, and the
+#: lead does not get to choose what the session prints. Writing is the opposite: a
+#: fixed language makes the lead the one participant in the conversation that ignores
+#: the conversation. So the language is OBSERVED from the screen and mirrored.
+#:
+#: English is the default rather than a guess: this repository is English by policy,
+#: and a session that has printed nothing recognisable has given no reason to switch.
+_START_TEMPLATES = {
+    "en": (
+        "[squad-lead] The turn came back and the queue has work: run "
+        "/idea-to-release {item}. Why this item: {why}. {history} "
+        "Before deciding that something needs a person, re-read "
+        "rules/autonomy-envelope.md on disk: it says what the system decides on its "
+        "own, and it changes without telling whoever is already running. If this "
+        "contradicts what you just reported, or if the item needs a decision the "
+        "envelope does not cover, say so instead of executing — do not choose for me."
+    ),
+    "pt": (
+        "[squad-lead] O turno voltou e a fila tem trabalho: rode /idea-to-release {item}. "  # english-only: mirrors the session's language
+        "Por que este item: {why}. {history} "  # english-only: mirrors the session's language
+        "Antes de decidir que algo precisa de uma pessoa, releia rules/autonomy-envelope.md "  # english-only: mirrors the session's language
+        "em disco: ele diz o que o sistema decide sozinho, e muda sem avisar quem já roda. "  # english-only: mirrors the session's language
+        "Se isto contradiz o que você acabou de reportar, ou se o item precisa de uma "  # english-only: mirrors the session's language
+        "decisão que nem o envelope cobre, diga isso em vez de executar — não escolha por mim."  # english-only: mirrors the session's language
+    ),
+}
+
+#: The same clause set, per language. Kept beside the template so adding a language is
+#: one dictionary entry in each, rather than a branch somewhere in `handoff`.
+_HISTORY = {
+    "en": {
+        "none": "The stream records no event for {item} yet.",
+        "some": "The stream already records {count} event(s) for {item}{ended}.",
+        "ended": ", last verdict `{verdict}`",
+        "blocked": " There is a BLOCKED report on disk for it — read it first.",
+    },
+    "pt": {
+        "none": "O stream não registra nenhum evento para {item} ainda.",  # english-only: mirrors the session's language
+        "some": "O stream já registra {count} evento(s) para {item}{ended}.",  # english-only: mirrors the session's language
+        "ended": ", último veredito `{verdict}`",  # english-only: mirrors the session's language
+        "blocked": " Há um laudo BLOCKED em disco para ele — leia antes.",  # english-only: mirrors the session's language
+    },
+}
+
+DEFAULT_LANGUAGE = "en"
+
+#: How many distinct Portuguese markers a screen must carry before the lead switches.
+#:
+#: Two, not one. A single word decides nothing — `implementação` inside an item title,
+#: or a path — and the cost of switching wrongly is every subsequent message written
+#: to a session that is not speaking that language. Two independent markers is the
+#: cheapest evidence that the SESSION is speaking it, not that one string contains it.
+_LANGUAGE_EVIDENCE = 2
+
+
+def detect_language(text: str) -> str:
+    """The language the session is speaking, read from what it printed.
+
+    Reuses `check_english_only.find_markers` rather than carrying a second list of
+    what Portuguese looks like. The two uses point opposite ways — that script REFUSES
+    what this one MIRRORS — but the question underneath is the same one, and a second
+    copy of the answer is how the two drift.
+    """
+    if not text:
+        return DEFAULT_LANGUAGE
+    try:
+        from check_english_only import find_markers
+    except ImportError:
+        return DEFAULT_LANGUAGE
+    seen: set[str] = set()
+    for line in text.splitlines():
+        seen.update(find_markers(line))
+        if len(seen) >= _LANGUAGE_EVIDENCE:
+            return "pt"
+    return DEFAULT_LANGUAGE
 
 #: The bare command, for when the lead has nothing to add. Kept so a caller that wants
 #: determinism over context can have it.
@@ -301,6 +371,10 @@ class Lead:
     #: The project whose registry SELECT reads. Absent means the lead reports a
     #: handed-back turn and stops there, exactly as it did before.
     project: Path | None = None
+    #: The language the session is speaking, re-read from every screen. Held on the
+    #: lead rather than passed down so a caller that composes a message outside
+    #: `decide()` still writes in the language the session last used.
+    language: str = DEFAULT_LANGUAGE
     max_per_item: int = 3
     idle_seconds: int = 90
     #: Silence beyond this, with no menu, is a handed-back turn.
@@ -566,20 +640,22 @@ class Lead:
         states what it knows and stops — telling the session what to conclude would be
         it deciding content through a sentence instead of through a menu.
         """
+        phrases = _HISTORY.get(self.language, _HISTORY[DEFAULT_LANGUAGE])
         count = self._event_count(item)
         verdict = self._last_verdict(item)
         if count == 0:
-            history = f"O stream não registra nenhum evento para {item} ainda."  # english-only: the message the session reads; it operates in the operator's language
+            history = phrases["none"].format(item=item)
         else:
-            ended = f", último veredito `{verdict}`" if verdict else ""
-            history = f"O stream já registra {count} evento(s) para {item}{ended}."  # english-only: the message the session reads; it operates in the operator's language
+            ended = phrases["ended"].format(verdict=verdict) if verdict else ""
+            history = phrases["some"].format(count=count, item=item, ended=ended)
         if self.project is not None:
             for base in (".claude/records", "records"):
                 directory = self.project / base / "implementations"
                 if directory.is_dir() and any(directory.glob(f"*{item[2:]}*-BLOCKED.md")):
-                    history += " Há um laudo BLOCKED em disco para ele — leia antes."
+                    history += phrases["blocked"]
                     break
-        return _START_TEMPLATE.format(item=item, why=why.rstrip(". "), history=history)
+        template = _START_TEMPLATES.get(self.language, _START_TEMPLATES[DEFAULT_LANGUAGE])
+        return template.format(item=item, why=why.rstrip(". "), history=history)
 
     def _blocking_verdicts(self) -> frozenset[str]:
         """The shared list, read from `rules/blocking-verdicts.txt`.
@@ -727,6 +803,9 @@ class Lead:
         return "unknown"
 
     def decide(self, screen: str, idle: float = 0.0) -> Decision:
+        # Observed before anything is composed: every message this call may produce
+        # should be in the language of the screen that prompted it.
+        self.language = detect_language(screen)
         selected = _SELECTED_RE.search(screen)
         if not selected:
             # No menu, and the session has gone quiet: it ended its turn and handed
