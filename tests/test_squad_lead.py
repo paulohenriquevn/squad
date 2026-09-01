@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from squad_lead import Lead, watch, Decision
+from squad_lead import SQUAD_FACILITATOR, Lead, watch, Decision
 
 # The menu, as captured. Option 1 moves the registry; option 2 asks for a decision
 # only the sponsor holds.
@@ -518,7 +518,7 @@ def test_agents_are_off_unless_asked_for(tmp_path: Path) -> None:
     """A daemon that calls a model unattended is a different thing from a daemon that
     reads a screen, and the difference should be chosen, not inherited."""
     lead = Lead(session="s", project=tmp_path)
-    answer, why = lead.ask_agent("squad-lead", "anything")
+    answer, why = lead.ask_agent(SQUAD_FACILITATOR, "anything")
     assert answer is None
     assert "--agents-when-stuck" in why
 
@@ -529,8 +529,8 @@ def test_the_same_agent_is_not_asked_twice_in_a_row(tmp_path: Path) -> None:
     import time
     lead = Lead(session="s", project=tmp_path, agents_when_stuck=True,
                 agent_cooldown=1800)
-    lead.agent_asked["squad-lead"] = time.time()
-    answer, why = lead.ask_agent("squad-lead", "anything")
+    lead.agent_asked[SQUAD_FACILITATOR] = time.time()
+    answer, why = lead.ask_agent(SQUAD_FACILITATOR, "anything")
     assert answer is None
     assert "cooldown" in why
 
@@ -552,7 +552,7 @@ def test_a_silent_agent_falls_back_to_reporting_the_stall(tmp_path: Path) -> Non
     was, with the reason the agent could not help."""
     lead = _lead_with_select(tmp_path, {"item": None, "why": "BACKLOG_BLOCKED: all held"})
     lead.agents_when_stuck = True
-    lead.ask_agent = lambda agent, q: (None, "squad-lead did not answer in 300s")
+    lead.ask_agent = lambda agent, q: (None, "hermes-scrum-master did not answer in 300s")
     decision = lead.decide("no menu here", idle=1000)
     assert decision.action == "stalled"
     assert "did not answer" in decision.reason
@@ -778,7 +778,7 @@ def test_an_error_on_stdout_is_not_an_answer(tmp_path: Path) -> None:
     lead_run = subprocess.run
     try:
         subprocess.run = lambda *a, **k: completed
-        answer, note = lead.ask_agent("squad-lead", "anything")
+        answer, note = lead.ask_agent(SQUAD_FACILITATOR, "anything")
     finally:
         subprocess.run = lead_run
     assert answer is None
@@ -790,7 +790,7 @@ def test_why_the_doctrine_did_not_decide_reaches_the_log(tmp_path: Path) -> None
     A log that renders them identically reports a gap in the envelope that is not
     there — and the gap is the one thing meant to go back to the human."""
     lead = Lead(session="s", project=tmp_path, agents_when_stuck=True)
-    lead.ask_agent = lambda a, q: (None, "squad-lead could not answer: Error: budget")
+    lead.ask_agent = lambda a, q: (None, "hermes-scrum-master could not answer: Error: budget")
     decision = lead.decide(_MENU, idle=200)
     assert decision.action == "escalate"
     assert "could not answer" in decision.reason
@@ -966,7 +966,7 @@ def test_a_failure_is_reported_from_stdout_when_stderr_is_empty(tmp_path: Path) 
     original = subprocess.run
     try:
         subprocess.run = lambda *a, **k: completed
-        answer, note = lead.ask_agent("squad-lead", "x")
+        answer, note = lead.ask_agent(SQUAD_FACILITATOR, "x")
     finally:
         subprocess.run = original
     assert answer is None
@@ -987,7 +987,7 @@ def test_the_agent_is_called_with_stdin_closed(tmp_path: Path) -> None:
         return subprocess.CompletedProcess([], 0, "OK", "")
     try:
         subprocess.run = capture
-        lead.ask_agent("squad-lead", "x")
+        lead.ask_agent(SQUAD_FACILITATOR, "x")
     finally:
         subprocess.run = original
     assert seen.get("stdin") is subprocess.DEVNULL

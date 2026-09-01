@@ -29,6 +29,9 @@ from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
+from kit_agents import kit_agents  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
 
 #: Directories that are tool cache — never kit content.
@@ -102,8 +105,7 @@ def test_no_domain_specialist_is_installed(installed):
     # no repository
     # and make no claim about the consumer's topology, which is the whole reason a
     # specialist cannot ship. Anything ELSE here would be a leak.
-    kit_owned = {"README.md", "squad-lead.md", "squad-boss.md",
-                 "squad-runner.md", "squad-dispatcher.md"}
+    kit_owned = kit_agents()
     specialists = [p for p in agents.glob("*.md") if p.name not in kit_owned]
     assert specialists == [], f"domain specialists leaked: {specialists}"
 
@@ -437,8 +439,7 @@ def test_the_kit_agents_reach_the_consumer(installed):
     invoke: it runs `claude -p` in the project, and the agent files have to be there."""
     target, _ = installed
     agents = target / ".claude" / "agents"
-    for name in ("squad-lead.md", "squad-boss.md",
-                 "squad-runner.md", "squad-dispatcher.md"):
+    for name in sorted(kit_agents() - {"README.md"}):
         assert (agents / name).is_file(), f"{name} did not reach the consumer"
         assert (agents / name).stat().st_size > 0
 

@@ -198,7 +198,7 @@ _ESCAPE_OPTIONS = ("type something", "chat about", "cancel", "go back", "none of
 #: and a session that has printed nothing recognisable has given no reason to switch.
 _START_TEMPLATES = {
     "en": (
-        "[squad-lead] The turn came back and the queue has work: run "
+        "[hermes] The turn came back and the queue has work: run "
         "/idea-to-release {item}. Why this item: {why}. {history} "
         "Before deciding that something needs a person, re-read "
         "rules/autonomy-envelope.md on disk: it says what the system decides on its "
@@ -207,7 +207,7 @@ _START_TEMPLATES = {
         "envelope does not cover, say so instead of executing — do not choose for me."
     ),
     "pt": (
-        "[squad-lead] O turno voltou e a fila tem trabalho: rode /idea-to-release {item}. "  # english-only: mirrors the session's language
+        "[hermes] O turno voltou e a fila tem trabalho: rode /idea-to-release {item}. "  # english-only: mirrors the session's language
         "Por que este item: {why}. {history} "  # english-only: mirrors the session's language
         "Antes de decidir que algo precisa de uma pessoa, releia rules/autonomy-envelope.md "  # english-only: mirrors the session's language
         "em disco: ele diz o que o sistema decide sozinho, e muda sem avisar quem já roda. "  # english-only: mirrors the session's language
@@ -350,6 +350,12 @@ already prescribes. Do not decide anything a person owns, do not relax any gate,
 do not recommend an option carrying a flag that switches off a precondition. If the
 honest answer is that only a person can move this, say exactly which decision and on
 which item."""
+
+
+#: The squad agent this watchdog escalates to. It is the facilitator role —
+#: flow and impediments — and the name must match a file `install.sh` copies,
+#: because `claude -p` resolves it from `.claude/agents/{name}.md` on disk.
+SQUAD_FACILITATOR = "hermes-scrum-master"
 
 
 @dataclass
@@ -500,7 +506,7 @@ class Lead:
         """
         menu = "\n".join(f"{n}. {text}" for n, text in options)
         answer, note = self.ask_agent(
-            "squad-lead", _MENU_PROMPT.format(menu=menu, history=self._prior_rulings(item)))
+            SQUAD_FACILITATOR, _MENU_PROMPT.format(menu=menu, history=self._prior_rulings(item)))
         if not answer:
             # Never conflated with "no rule covers it". One is the doctrine speaking and
             # the other is nobody speaking, and a log that renders them identically
@@ -864,9 +870,9 @@ class Lead:
             # Nothing mechanical answers. This is the one place judgement is worth
             # paying for: the selector computed everything it could and the queue is
             # still stopped.
-            answer, note = self.ask_agent("squad-lead", _STUCK_PROMPT.format(why=why))
+            answer, note = self.ask_agent(SQUAD_FACILITATOR, _STUCK_PROMPT.format(why=why))
             if answer:
-                return Decision("asked", f"the queue is stopped ({why}); squad-lead says:"
+                return Decision("asked", f"the queue is stopped ({why}); hermes-scrum-master says:"
                                          f" {answer[:900]}")
             return Decision("stalled",
                             f"the session ended its turn and has been idle for "
@@ -1409,7 +1415,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-per-item", type=int, default=3)
     parser.add_argument("--agents-when-stuck", action="store_true",
                         help="when the selector has no actionable answer, spend one "
-                             "headless `claude -p` call asking the squad-lead agent "
+                             "headless `claude -p` call asking the hermes-scrum-master agent "
                              "what to do. Off by default")
     parser.add_argument("--agent-budget-usd", type=float, default=6.00,
                         help="ceiling for ONE agent call (default 6.00). Measured: a "

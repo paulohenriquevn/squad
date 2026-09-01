@@ -576,7 +576,7 @@ fi
 #
 # Named explicitly rather than copied wholesale, so a specialist the project wrote
 # can never be overwritten by a glob that grew.
-for kit_agent in squad-lead.md squad-boss.md squad-runner.md squad-dispatcher.md; do
+for kit_agent in kairos-product-owner.md iris-product-designer.md daedalus-tech-lead.md hermes-scrum-master.md; do
   if [ -f "$SRC_DIR/agents/$kit_agent" ]; then
     cp "$SRC_DIR/agents/$kit_agent" "$ECO/agents/$kit_agent"
     echo "    agents/$kit_agent"

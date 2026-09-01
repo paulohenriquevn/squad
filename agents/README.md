@@ -5,30 +5,48 @@ to prevent.
 
 ## The squad — four roles, versioned, shipped to every consumer
 
-They are **mechanism**: each describes a decision, not a repository, so none of
-them makes a claim about any consumer's topology. That is why they may be
-versioned here when a domain specialist may not.
+They are **mechanism**: each describes a DECISION, not a repository, so none of them
+makes a claim about any consumer's topology. That is why they may be versioned here
+when a domain specialist may not.
 
-| Agent | Decides | Runs |
-|---|---|---|
-| `squad-boss` | what work exists — turns a written halt into registered items | `/backlog-item`, `squad_boss.py` |
-| `squad-lead` | what happens next when the mechanical path has no answer | `select_backlog_item.py`, `rules/autonomy-envelope.md` |
-| `squad-dispatcher` | which item enters which lane, and when | `/pipeline` |
-| `squad-runner` | one item, from idea to a release PR | `/idea-to-release` |
+| Agent | Role | Decides | Runs |
+|---|---|---|---|
+| `kairos-product-owner` | Product Owner | what work exists, and in what order | `/backlog-item`, `/backlog-review`, `squad_boss.py` |
+| `iris-product-designer` | Product Designer (UX/UI) | what the user will experience, made visible before it is built | `/plan-alignment`, `/acceptance` |
+| `daedalus-tech-lead` | Tech Lead | one item's technical path — and who builds each part | `/idea-to-release`, the domain specialists |
+| `hermes-scrum-master` | Scrum Master / Agile Facilitator | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
+
+Each carries a name and a temperament, because the temperament is what the file is
+for: Kairos is impatient with vagueness, Iris refuses a brief that describes a system
+instead of an experience, Daedalus distrusts his own cleverness, Hermes never judges
+the work he is moving.
 
 The four do not overlap, and the seams are the point:
 
 ```
-boss ──registers──▶ backlog ──ranks──▶ dispatcher ──allocates──▶ runner ──▶ PR
-  ▲                                         │                      │
-  └──────── a halt with a named cause ──────┴──────────────────────┘
-                    lead: called by any of them when no rule covers the case
+Kairos ──registers & ranks──▶ backlog
+   │                             │
+   ▼                             ▼
+ Iris ──what the user gets──▶ Hermes ──allocates a lane──▶ Daedalus ──▶ PR
+   │      (brief + walkthrough)    │                          │
+   │                               │                          ├─▶ domain specialist
+   └──────── acceptance, after the release ───────────────────┘   (Developers / QA)
 ```
 
-The **boss** supplies work; the **dispatcher** allocates it; the **runner**
-executes it; the **lead** is what any of them escalates to. A role that could do
-two of these would be a role that can overrule itself — the dispatcher deciding a
-stage passed, or the runner choosing which item it prefers.
+**Kairos** supplies the work; **Iris** decides what it must feel like and holds the
+alignment gate; **Hermes** allocates lanes and clears impediments; **Daedalus**
+executes one item and hands each domain to the specialist who owns it. A role that
+could do two of these would be a role that can overrule itself — Hermes deciding a
+stage passed, or Daedalus choosing which item he prefers.
+
+### Where Developers and QA are
+
+**They are not here, and that is deliberate.** They are the project's own domain
+specialists, described in the next section. `daedalus-tech-lead` delegates to them
+through `scripts/route_domain.py`, and refuses to stand in for one that does not
+exist: a `BROKEN ROUTE` (exit 3) stops the item and becomes work for Kairos, because
+a Tech Lead answering for a domain whose invariants nobody wrote is asserting facts
+that were never checked.
 
 ## Domain specialists — derived per project, never shipped
 

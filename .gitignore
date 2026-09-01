@@ -83,10 +83,30 @@ study-material/**
 # could deliver files that existed on one machine only.
 !agents/README.md
 
-# The kit's own four agents — the squad. They are mechanism, not domain specialists:
-# they describe
-# no repository and make no claim about any consumer's topology, which is the whole
-# reason a specialist may not be versioned here. `squad_lead.py` invokes them through
-# `claude -p` when the mechanical selector has no answer, and an agent that is not
-# versioned reaches nobody — the exact failure the comment above records for the
-# specialists that lived on one machine's disk.
+# A domain specialist describes the repositories of ONE ecosystem. Shipping a
+# stranger's makes the routing gate refuse every item a consumer files — measured on
+# an adopter 2026-08-18: 88 items with real `file:line` evidence, all
+# `BLOCKER/unroutable_repo`. So `agents/` is ignored by default and the kit's own are
+# excepted by name.
+#
+# This paragraph existed for days with NO RULE UNDER IT. The comment explained why the
+# four were an exception to an ignore that was never written, so any specialist
+# scaffolded into `agents/` was tracked, stageable, and one `git add -A` away from
+# shipping to every consumer — the precise failure the paragraph describes as
+# prevented. A contract whose mechanism is missing reads as enforced, which is worse
+# than an absent rule: nobody goes looking.
+agents/*.md
+!agents/README.md
+
+# The kit's own four — the squad. They are mechanism, not domain specialists: each
+# describes a DECISION, not a repository, and makes no claim about any consumer's
+# topology. That is the whole reason they may be versioned here when a specialist may
+# not. `squad_lead.py` invokes the facilitator through `claude -p` when the mechanical
+# selector has no answer, and an agent that is not versioned reaches nobody.
+#
+# This list is checked against `scripts/install.sh` by `tests/test_squad_agents.py` —
+# three files naming the same four is three chances to drift.
+!agents/kairos-product-owner.md
+!agents/iris-product-designer.md
+!agents/daedalus-tech-lead.md
+!agents/hermes-scrum-master.md
