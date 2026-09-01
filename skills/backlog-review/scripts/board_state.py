@@ -44,12 +44,43 @@ from check_backlog_structure import (  # noqa: E402
     parse_blocked_by,
 )
 
-#: The board's columns, in cycle order. `killed` is a lane rather than a column: it is
-#: a terminal OUTCOME, and the contract is explicit that it is a successful one, so
-#: burying it after `release` would put a success at the end of a pipeline it left
-#: early.
-PHASES = ("backlog", "discover", "plan", "implement", "code-quality", "review",
-          "release", "acceptance")
+#: The board's columns, in cycle order, READ FROM THE DECLARATION rather than copied.
+#: `killed` is a lane rather than a column: it is a terminal OUTCOME, and the contract
+#: is explicit that it is a successful one, so burying it after `release` would put a
+#: success at the end of a pipeline it left early.
+#:
+#: This was a literal tuple of eight names. `cycle-phases.txt` gained `brainstorm` on
+#: 2026-09-01 and the tuple did not, so the board drew a chain that had nine phases as
+#: if it had eight — silently, because nothing compares a hardcoded list to the file
+#: that declares the chain. `check_phase_drift.py` reads that file, `check_squad_map.py`
+#: reads that file, and this was the one reader carrying its own copy.
+#:
+#: Found by exercising `board_server.py` for real: `/api/state` reported eight phases
+#: starting at `backlog`. No test caught it because every test asserted against
+#: `PHASES` itself, which agrees with itself no matter what it says.
+def _declared_phases() -> tuple[str, ...]:
+    """The chain from `rules/cycle-phases.txt`, in declared order.
+
+    Falls back to the historical eight only when the file cannot be read — a board
+    that renders nothing is worse than one rendering a stale chain, and the fallback
+    is narrow enough to be obvious when it fires.
+    """
+    for base in (Path(__file__).resolve().parents[3], Path.cwd(), Path.cwd() / ".claude"):
+        path = base / "rules" / "cycle-phases.txt"
+        if not path.is_file():
+            continue
+        names = []
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if line and "|" in line:
+                names.append(line.split("|")[0].strip())
+        if names:
+            return tuple(names)
+    return ("backlog", "discover", "plan", "implement", "code-quality", "review",
+            "release", "acceptance")
+
+
+PHASES = _declared_phases()
 
 #: What a registry status implies about position when no stream exists: the last
 #: phase the status proves ENDED. Not the next one — entering a phase is a guess.
@@ -273,6 +304,22 @@ def _item_block(project_root: Path, item_id: str) -> str | None:
     return match.group(0) if match else None
 
 
+def _in_registry(project_root: Path, item_id: str) -> bool:
+    """Does `BACKLOG.md` define a block for this id?
+
+    Read through the shared parser rather than a local regex: a second definition of
+    the block format would disagree with the first about what the registry contains,
+    which is the defect the index exists to expose.
+    """
+    backlog = project_root / "BACKLOG.md"
+    if not backlog.is_file():
+        return False
+    try:
+        return any(i.item_id == item_id for i in _parse_items(backlog.read_text(encoding="utf-8")))
+    except OSError:
+        return False
+
+
 def item_detail(project_root: Path, item_id: str) -> dict:
     """Everything the cycle left behind for one item.
 
@@ -284,7 +331,13 @@ def item_detail(project_root: Path, item_id: str) -> dict:
     out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
                  "artefacts": [], "verdicts": [], "blocking": [],
                  "done_ratio": None, "specialist": None, "domain": None,
-                 "halted": None, "attest": None}
+                 "halted": None, "attest": None,
+                 # Whether the REGISTRY carries this id at all. Without it the shape
+                 # above is returned for an id nobody ever filed, and a caller cannot
+                 # tell "no records yet" from "no such item" — the two states this
+                 # board exists to keep apart, since it draws position by evidence and
+                 # labels derived what it inferred.
+                 "in_registry": _in_registry(project_root, item_id)}
     if records is None:
         return out
 

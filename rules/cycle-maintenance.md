@@ -14,6 +14,8 @@ The ancestor loop ended: `ROADMAP_COMPLETE` when every milestone was `[x]`, beca
 
 So the empty state is `BACKLOG_EMPTY`, and it is a **prompt to sweep**, not a terminal verdict. Treating it as completion is how a maintenance system quietly stops working while reporting success.
 
+**It does, however, cut a pre-release.** A dry queue means everything in flight has landed, which is the one mechanical definition of "this batch is done" that does not require anyone's judgement — so `cycle-release` cuts an `X.Y.Z-rc.N` there (`cycle-release.md § Two cuts`). That is not completion and does not contradict the paragraph above: an rc says *installable*, never *finished*. The final version waits for a milestone to close and be accepted, because a milestone IS a declared finite scope and a backlog is not.
+
 ## Pre-conditions
 
 - `BACKLOG.md` exists at the root of the governed scope — umbrella or autonomous repo (created once by `/backlog-init`).
@@ -78,7 +80,7 @@ LOOP BACK to SELECT
 
 | Verdict | Meaning | Next |
 |---|---|---|
-| `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT. Written by `scripts/advance_items.py` |
+| `ITEM_SHIPPED` | The item reached `RELEASED` — the FINAL cut — and its block says `shipped` | Loop back to SELECT. Written by `scripts/advance_items.py`, which reads `RELEASED` and never `PRE_RELEASED`: a pre-release must not close work it did not finish |
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
 | `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it. Decided by `all_changes_are_untracked()` in `scripts/advance_items.py`, which runs the `git check-ignore` test defined below | Loop back to SELECT. **A terminal state, not a failure** |
 | `ITEM_IN_FLIGHT` | Paused where only a person can act — branch protection requiring a reviewer, a T3 call, a dependency in another repository | Resume when the human answers |

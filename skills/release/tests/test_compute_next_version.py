@@ -28,6 +28,7 @@ from compute_next_version import (
     bump_version,
     derive_bump,
     level_under_zerover,
+    parse_semver,
 )
 
 SCRIPT = Path(__file__).parent.parent / "scripts" / "compute_next_version.py"
@@ -126,10 +127,19 @@ def _changelog(tmp_path: Path, section: str, entry: str = "- something") -> Path
     return p
 
 
-def _run(changelog: Path, current: str = "0.61.0") -> subprocess.CompletedProcess[str]:
+def _run(
+    changelog: Path, current: str = "0.61.0", mode: str = "final"
+) -> subprocess.CompletedProcess[str]:
+    """`mode="final"` by default HERE, deliberately, though the CLI defaults to `pre`.
+
+    These tests are about the LEVEL the CHANGELOG derives — minor / patch / the
+    breaking class under 0.x — and an rc suffix on every expectation would obscure
+    exactly the digit under test. The CLI's own default is pinned separately by
+    `test_the_cli_defaults_to_a_pre_release`, so nothing here hides it.
+    """
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--changelog", str(changelog),
-         "--current", current, "--bump", "auto"],
+         "--current", current, "--bump", "auto", "--mode", mode],
         capture_output=True, text=True, check=False,
     )
 
@@ -269,3 +279,62 @@ def test_at_1_x_and_above_the_zerover_clause_does_nothing() -> None:
     assert level_under_zerover("major", (1, 4, 2)) == "major"
     assert bump_version((1, 4, 2), "major") == "2.0.0"
     assert bump_version((2, 0, 0), "major") == "3.0.0"
+
+
+# ── the rc series ─────────────────────────────────────────────────────────────
+#
+# `/release` cuts a pre-release per batch and a final release only when a milestone
+# closes (`rules/cycle-release.md § Two cuts`). The asymmetry below is the contract:
+# the core version is bumped ONCE, by the first rc, and the final promotes rather
+# than bumping again — otherwise it would publish a number none of the rcs pointed at.
+
+
+def test_the_cli_defaults_to_a_pre_release(tmp_path: Path) -> None:
+    """Most cuts are pre-releases, so that is the default — and a default is behaviour."""
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--changelog", str(_changelog(tmp_path, "Added")),
+         "--current", "0.61.0", "--bump", "auto"],
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "0.62.0-rc.1"
+
+
+def test_the_first_rc_bumps_the_core_and_the_next_only_counts() -> None:
+    assert bump_version((0, 2, 0, None), "minor", "pre") == "0.3.0-rc.1"
+    assert bump_version((0, 3, 0, 1), "minor", "pre") == "0.3.0-rc.2"
+    assert bump_version((0, 3, 0, 9), "minor", "pre") == "0.3.0-rc.10"
+
+
+def test_the_final_promotes_a_standing_rc_without_bumping_again() -> None:
+    """The rc series already reserved 0.3.0. Bumping here would publish 0.4.0 —
+    a version none of the pre-releases pointed at."""
+    assert bump_version((0, 3, 0, 5), "minor", "final") == "0.3.0"
+
+
+def test_a_final_with_no_rc_standing_bumps_normally() -> None:
+    """A milestone closing on work that never cut an rc still gets a release."""
+    assert bump_version((0, 2, 0, None), "minor", "final") == "0.3.0"
+
+
+def test_a_standing_rc_needs_no_level_and_never_pauses(tmp_path: Path) -> None:
+    """A `Changed`-only body returns AMBIGUOUS and pauses the chain — but with an rc
+    standing the core is already fixed, so no level can change the answer and asking
+    would pause over a number that does not matter."""
+    changed_only = _changelog(tmp_path, "Changed")
+    for mode in ("pre", "final"):
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--changelog", str(changed_only),
+             "--current", "0.3.0-rc.4", "--bump", "auto", "--mode", mode],
+            capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, f"{mode}: {result.stderr}"
+        assert "AMBIGUOUS" not in result.stdout
+    
+
+def test_the_rc_counter_survives_parsing() -> None:
+    """The pattern used to end `(?:[-+].*)?` — matching a pre-release and discarding
+    it — so every rc parsed as the final release of its version."""
+    assert parse_semver("v0.3.0-rc.7") == (0, 3, 0, 7)
+    assert parse_semver("0.3.0") == (0, 3, 0, None)
+    assert parse_semver("v1.2.3+build.9") == (1, 2, 3, None)

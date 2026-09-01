@@ -14,7 +14,7 @@ Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automate
 
 ## Cycle contract
 
-This skill is **the only phase** of [`cycle-release`](../../rules/cycle-release.md). The cycle rule is the **source of truth** for pre-conditions, verdicts (`RELEASED` / `PR_OPEN_AWAITING_APPROVAL` / `BLOCKED`), hard gates (PR approval mandatory; no direct main commits; annotated-tag-only), stop conditions, and anti-patterns. **Read `cycle-release.md` before invoking.**
+This skill is **the only phase** of [`cycle-release`](../../rules/cycle-release.md). The cycle rule is the **source of truth** for pre-conditions, verdicts (`RELEASED` / `PRE_RELEASED` / `PR_OPEN_AWAITING_APPROVAL` / `BLOCKED`), the two cuts and when each fires, hard gates (PR approval mandatory; no direct main commits; annotated-tag-only), stop conditions, and anti-patterns. **Read `cycle-release.md` before invoking.**
 
 ## When to trigger
 
@@ -298,13 +298,33 @@ A `start` with no matching `end` is exactly the fact "this is happening now".
 
 ### Step 8 — Record the release
 
+### Which cut is this?
+
+**`--final` only when a milestone closed**: every `B-NNN` citing `M<N>` is `shipped`
+AND `/acceptance M<N>` returned `ACCEPTED`. Otherwise this is a pre-release — the
+default — and `cycle-release.md § Two cuts` is the source of truth for both.
+
+```bash
+# The version. `--mode pre` is the default; pass --mode final only for a closed milestone.
+NEXT_VERSION=$(python3 "$ECO/skills/release/scripts/compute_next_version.py" \
+                 --current "$CURRENT" --bump "${BUMP:-auto}" --mode "${CUT:-pre}")
+```
+
+**A pre-release does NOT run `promote_unreleased.py`.** Emptying `[Unreleased]` at
+`-rc.1` would leave `-rc.2` and the final with nothing to publish, and would file the
+entries under a version that is still a candidate. The rc reads `[Unreleased]` for its
+notes and leaves it in place; the final promotes it.
+
+Tag and publish accordingly — `gh release create "v$NEXT_VERSION" --prerelease` for a
+pre-release, without the flag for a final.
+
 Write `records/releases/v${NEXT_VERSION}-release.md`:
 
 ```markdown
 # Release v{NEXT_VERSION}
 
 **Date:** {YYYY-MM-DD}
-**Verdict:** RELEASED
+**Verdict:** {RELEASED | PRE_RELEASED}
 **Source review:** {path to /review report}
 **PR:** {pr-url}
 **Merge commit:** {merge-sha}
@@ -319,9 +339,14 @@ Write `records/releases/v${NEXT_VERSION}-release.md`:
 Then record the transition in the stream, which is what a later phase reads:
 
 ```bash
+# PRE_RELEASED for an -rc.N cut; RELEASED only for a final one.
 python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
-    --cycle release --slug {item-or-milestone} --verdict RELEASED
+    --cycle release --slug {item-or-milestone} --verdict "${VERDICT:-PRE_RELEASED}"
 ```
+
+**Emitting `RELEASED` for a pre-release would close work that did not finish.**
+`advance_items.py` reads that token and writes `shipped` into the registry — the one
+artefact that outlives the session. An rc says installable, never finished.
 
 **After the tag and the GitHub release exist, never before.** The record file above
 and this event assert the same fact, and asserting it early makes the stream claim a

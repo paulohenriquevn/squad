@@ -24,15 +24,27 @@ import re
 import sys
 from pathlib import Path
 
-SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
+#: Captures the `-rc.N` counter instead of discarding it. The previous pattern ended
+#: `(?:[-+].*)?` — matching a pre-release and throwing it away — so `v0.3.0-rc.1`
+#: parsed as `(0, 3, 0)` and every rc looked like the final release of that version.
+#: Harmless while nothing produced an rc; wrong the moment something does.
+SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?(?:\+.*)?$")
+
+#: The pre-release identifier. `-rc.N` is plain semver, sorts correctly, and the
+#: package managers already treat it as a pre-release rather than installing it by
+#: accident. `detect_current_version.py` has carried a test for exactly this shape
+#: since before anything emitted one.
+RC = "rc"
 
 
-def parse_semver(tag: str) -> tuple[int, int, int]:
+def parse_semver(tag: str) -> tuple[int, int, int, int | None]:
+    """(major, minor, patch, rc) — `rc` is None for a final version."""
     m = SEMVER_RE.match(tag.strip())
     if not m:
         print(f"invalid semver tag: {tag}", file=sys.stderr)
         sys.exit(2)
-    return int(m.group(1)), int(m.group(2)), int(m.group(3))
+    rc = int(m.group(4)) if m.group(4) else None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3)), rc
 
 
 def extract_unreleased_subsections(changelog: Path) -> dict[str, list[str]]:
@@ -155,8 +167,8 @@ def level_under_zerover(level: str, current: tuple[int, int, int]) -> str:
     return level
 
 
-def bump_version(current: tuple[int, int, int], level: str) -> str:
-    major, minor, patch = current
+def _bump_core(core: tuple[int, int, int], level: str) -> str:
+    major, minor, patch = core
     if level == "major":
         return f"{major + 1}.0.0"
     if level == "minor":
@@ -164,6 +176,44 @@ def bump_version(current: tuple[int, int, int], level: str) -> str:
     if level == "patch":
         return f"{major}.{minor}.{patch + 1}"
     print(f"invalid bump level: {level}", file=sys.stderr)
+    sys.exit(2)
+
+
+def bump_version(current: tuple[int, int, int, int | None], level: str, mode: str = "final") -> str:
+    """Next version, in one of two modes.
+
+    THE ASYMMETRY IS THE POINT
+    --------------------------
+    `pre` bumps the CORE only once — on the first rc of a version — and after that
+    only advances the counter. `final` does NOT bump at all when an rc is standing:
+    it promotes `0.3.0-rc.5` to `0.3.0`, because the rc series already reserved that
+    number and bumping again would publish a version nobody's pre-releases pointed at.
+
+        0.2.0        --pre-->   0.3.0-rc.1     (core bumped once, by `level`)
+        0.3.0-rc.1   --pre-->   0.3.0-rc.2     (counter only)
+        0.3.0-rc.2   --final->  0.3.0          (promotion, no bump)
+        0.2.0        --final->  0.3.0          (no rc standing: ordinary bump)
+    """
+    core = current[:3]
+    # A 3-tuple is a version with no rc. Accepted rather than rejected so that
+    # callers predating the rc series keep working — `(0, 73, 0)` means exactly what
+    # `(0, 73, 0, None)` means, and rejecting it would be a breaking change for a
+    # distinction it does not make.
+    rc = current[3] if len(current) > 3 else None
+
+    if mode == "pre":
+        if rc is not None:
+            major, minor, patch = core
+            return f"{major}.{minor}.{patch}-{RC}.{rc + 1}"
+        return f"{_bump_core(core, level)}-{RC}.1"
+
+    if mode == "final":
+        if rc is not None:
+            major, minor, patch = core
+            return f"{major}.{minor}.{patch}"
+        return _bump_core(core, level)
+
+    print(f"invalid mode: {mode} (expected 'pre' or 'final')", file=sys.stderr)
     sys.exit(2)
 
 
@@ -177,9 +227,24 @@ def main() -> int:
         help="Bump level. 'auto' derives from CHANGELOG.",
     )
     parser.add_argument("--changelog", type=Path, default=Path("CHANGELOG.md"))
+    parser.add_argument(
+        "--mode",
+        default="pre",
+        choices=("pre", "final"),
+        help="'pre' cuts the next -rc.N (the default: most cuts are pre-releases). "
+             "'final' promotes a standing rc, or bumps when none is standing.",
+    )
     args = parser.parse_args()
 
     current = parse_semver(args.current)
+
+    # A standing rc already fixed the core version, so no level is needed in either
+    # mode: `pre` only advances the counter and `final` only drops the suffix. Asking
+    # the CHANGELOG for a level here would surface AMBIGUOUS on a `Changed`-only body
+    # and pause a chain over a number that cannot change the answer.
+    if current[3] is not None:
+        print(bump_version(current, "patch", args.mode))
+        return 0
 
     if args.bump == "auto":
         if not args.changelog.exists():
@@ -225,7 +290,7 @@ def main() -> int:
     else:
         bump = args.bump
 
-    next_version = bump_version(current, bump)
+    next_version = bump_version(current, bump, args.mode)
     print(next_version)
     return 0
 

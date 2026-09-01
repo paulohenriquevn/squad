@@ -26,10 +26,12 @@ Do NOT trigger when:
 ## Chain
 
 ```
-/release {bump-level?}
+/release {bump-level?} [--pre | --final]
      ↓ detect highest semver tag + stack manifest versions; refuse when no source exists
-     ↓ determine next version (bump-level OR auto-derive from CHANGELOG sections)
-     ↓ rewrite CHANGELOG: move [Unreleased] body under [{next-version}] - {date}
+     ↓ determine the cut: --final only when a milestone closed; otherwise --pre (default)
+     ↓ determine next version — compute_next_version.py --mode {pre|final}
+     ↓ --pre:   leave [Unreleased] in place; notes are read from it
+     ↓ --final: rewrite CHANGELOG, moving [Unreleased] under [{next-version}] - {date}
      ↓ commit "chore(release): {next-version}" on workspace
      ↓ open PR workspace → develop; merge it (promotion — git-safety.md § 1)
      ↓ open PR develop → main with the rendered release notes as body
@@ -65,10 +67,72 @@ Consequences for this cycle:
 
 ## Verdicts
 
-- `RELEASED` — PR merged, tag created, GitHub release published. Cycle complete.
+- `RELEASED` — PR merged, tag created, GitHub release published. Cycle complete. **Only a final cut emits this**; it is what `cycle-maintenance`'s ADVANCE consumes to write `shipped`.
+- `PRE_RELEASED` — an `X.Y.Z-rc.N` tag and a GitHub pre-release exist. The batch is installable and the scope is not finished. Items stay at their stage; nothing is marked `shipped`, because nothing was finally released.
 - `PR_OPEN_AWAITING_APPROVAL` — the PR is open and the system did not merge it: a gate did not pass, or branch protection requires a human reviewer. **The exception now, not the terminal state.** Resume automatically once the PR merges.
 - `BLOCKED` — pre-condition failed OR a hard gate fired during the chain. Surface to human.
 - `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
+
+## Two cuts: the rc series, and the final
+
+**A release is cut twice, and they answer different questions.**
+
+| Cut | When | Version | What it says |
+|---|---|---|---|
+| **pre-release** | the queue of ready items dries up | `X.Y.Z-rc.N` | "this batch is done and installable; the scope is not finished" |
+| **final** | a milestone closes | `X.Y.Z` | "everything `M<N>` promised is shipped and was accepted" |
+
+### What "the batch is done" means, mechanically
+
+A batch is not a judgement call and must not become one — a cut decided by feel is a
+cut nobody can predict or audit. **The batch closes when the queue of ready items
+dries up**: `select_backlog_item.py` returns `BACKLOG_EMPTY` or `BACKLOG_BLOCKED`,
+meaning nothing eligible remains to hand out. Everything in flight has landed, and
+what shipped since the last tag IS the batch.
+
+That moment already exists and already stops the loop — `cycle-maintenance.md` calls
+`BACKLOG_EMPTY` *a prompt to sweep*. It still is; it now also cuts an rc. Nothing new
+has to be observed, and no counter or timer decides anything.
+
+**The limit, stated rather than discovered.** A queue that never dries up never cuts
+an rc on its own. That is honest — with work continuously arriving, any cut point
+would be arbitrary — but it means a busy project can accumulate shipped items behind
+no tag. `/release --pre` cuts on demand for exactly that case. It is an escape hatch
+and not a schedule: reaching for it every time turns the mechanical rule back into a
+judgement call.
+
+### Why the final does not bump again
+
+The first rc bumps the core version; every rc after it only advances the counter; the
+final **promotes**. `0.2.0 → 0.3.0-rc.1 → 0.3.0-rc.2 → 0.3.0`.
+
+Bumping at the final would publish `0.4.0` — a version none of the pre-releases
+pointed at, so nobody testing `0.3.0-rc.2` would recognise what shipped. The rc series
+reserves the number; the final claims it.
+
+`compute_next_version.py --mode {pre|final}` implements exactly this, and **`pre` is
+the default** because most cuts are pre-releases.
+
+### The CHANGELOG moves once, at the final
+
+`promote_unreleased.py` empties `[Unreleased]` into a versioned section. **An rc must
+NOT run it.** Emptying at `-rc.1` would leave `-rc.2` and the final with nothing to
+publish, and the entries would be filed under a version that was still a candidate.
+
+So an rc reads `[Unreleased]` for its release notes and leaves it in place; the final
+promotes it. The `[Unreleased]` body therefore grows across a whole milestone, and
+that is correct: it is the milestone's changelog, accumulating.
+
+### What a milestone closing means
+
+Every `B-NNN` citing `M<N>` is `shipped` **and** `/acceptance M<N>` returned
+`ACCEPTED`. The acceptance gate is what separates "we shipped it" from "we shipped it
+and watched it work" (§ Post-merge ROADMAP.md checkbox flip), and only the second
+earns a final version.
+
+A `B-NNN` with no milestone never triggers a final. It rides the rc series and is
+published when some milestone closes — or stays in a pre-release indefinitely, which
+is the honest state for work nobody promised anyone.
 
 ## Bump-level derivation
 

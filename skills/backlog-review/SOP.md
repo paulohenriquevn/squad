@@ -37,10 +37,24 @@ Produce a picture of the registry's health before anything selects work from it.
 
 ## Steps
 
-1. Run `/backlog-review`.
-2. Read deterministic findings as facts and heuristic ones as questions.
-3. Answer the heuristic questions yourself — `possible_duplicate` and `vague_dod` ask, they do not decide.
-4. File the corrections through the skills that own them, never by editing `BACKLOG.md` from here.
+1. **Run** the review — `/backlog-review`, or the checker directly:
+   `python3 skills/backlog-review/scripts/check_backlog_structure.py BACKLOG.md --json`.
+2. **Read** deterministic findings as facts and heuristic ones as questions.
+3. **Answer** the heuristic questions yourself — `possible_duplicate` and `vague_dod` ask, they do not decide.
+4. **Check the queue** when the question is what to work on next, not what has rotted —
+   `python3 skills/backlog-review/scripts/select_backlog_item.py BACKLOG.md --json`.
+   Add `--check B-NNN` for *may this one start*, `--queue N` for the head of the order.
+5. **Read the halts** when an item is held and the report names a cause —
+   `python3 skills/backlog-review/scripts/squad_boss.py . --json`. The causes it names
+   are work for `/backlog-item`, not for this skill.
+6. **Open the board** for the same registry as a page — `python3 skills/backlog-review/scripts/board_server.py`,
+   then `127.0.0.1:8765`. It observes and never commands.
+7. **File the corrections** through the skills that own them, never by editing `BACKLOG.md` from here.
+
+**On `index_stale`:** report it and stop. Regenerating is
+`python3 skills/backlog-review/scripts/backlog_index.py BACKLOG.md --write`, and it belongs to
+`/backlog-item`'s contract — the one write that lives in this directory, and the reason
+`SKILL.md` names the exception explicitly.
 
 ## Decisions
 

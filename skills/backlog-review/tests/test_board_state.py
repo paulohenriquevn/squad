@@ -849,3 +849,54 @@ def test_a_plan_untouched_since_attesting_is_not_reported_as_drifted(tmp_path: P
     (recs / "implementations" / "b033-x-implementation.md").write_text(
         f"# Implementation\n\n**Attest sha:** `{real}`\n", encoding="utf-8")
     assert item_detail(root, "B-033")["attest"]["drifted"] is False
+
+
+def test_the_board_draws_the_chain_that_is_declared() -> None:
+    """PHASES was a literal tuple and went stale the day the chain grew.
+
+    `cycle-phases.txt` gained `brainstorm` and the tuple did not, so the board drew
+    eight columns for a nine-phase chain. Nothing caught it: every other test here
+    asserts against `PHASES`, which agrees with itself whatever it says.
+
+    So this one compares it to the DECLARATION — the same file `check_phase_drift.py`
+    and `check_squad_map.py` read. Three readers, one source.
+    """
+    from pathlib import Path
+
+    declared = []
+    path = Path(__file__).resolve().parents[3] / "rules" / "cycle-phases.txt"
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line and "|" in line:
+            declared.append(line.split("|")[0].strip())
+
+    assert list(PHASES) == declared, (
+        "the board's columns and rules/cycle-phases.txt disagree about the chain"
+    )
+
+
+def test_an_item_the_registry_does_not_carry_is_marked_absent(tmp_path) -> None:
+    """`item_detail` returned the same all-null shape for an id nobody filed as for
+    an item with no records yet, and the server answered 200 to both.
+
+    Found by exercising `board_server.py` for real rather than by reading it: the
+    route matched the id FORMAT, never the registry. The board's discipline is not
+    presenting inference as observation — answering for an item that does not exist
+    is that, at the transport layer.
+    """
+    from board_state import item_detail
+
+    (tmp_path / "BACKLOG.md").write_text(
+        "# Backlog\n\n## B-001 — Real one   [ ]\n\ndomain: web\nrepo: web-console\n"
+        "status: raw\n",
+        encoding="utf-8",
+    )
+    assert item_detail(tmp_path, "B-001")["in_registry"] is True
+    assert item_detail(tmp_path, "B-999")["in_registry"] is False
+
+
+def test_no_backlog_at_all_is_absent_not_present(tmp_path) -> None:
+    """A missing registry must not read as an item that exists."""
+    from board_state import item_detail
+
+    assert item_detail(tmp_path, "B-001")["in_registry"] is False

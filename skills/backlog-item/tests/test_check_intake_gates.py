@@ -149,3 +149,143 @@ def test_the_repo_name_itself_is_always_a_search_term(tmp_path: Path) -> None:
 def test_missing_backlog_fails_loudly(tmp_path: Path) -> None:
     rc, _data = _run(tmp_path / "does-not-exist.md", "alpha-lens", ["x"])
     assert rc == 2
+
+
+# ── could-not-judge is not refused ────────────────────────────────────────────
+#
+# Every error path used to collapse into ITEM_REJECTED / exit 1 — the verdict the
+# contract defines as "the item was refused". None of these three paths had a test,
+# which is why the collapse survived: the three error branches of `_route` were never
+# executed by the suite.
+#
+# The distinction is not cosmetic. A refused item gets reworded; an unreadable table
+# gets derived. Telling a filer the first when the second is true sends them to fix
+# something that was never broken.
+
+
+def _run_raw(project: Path, repo: str, backlog: Path) -> subprocess.CompletedProcess[str]:
+    """Distinct from `_run` above, which builds its own project and returns a tuple.
+
+    These tests MUTATE the project — deleting the routing tool, breaking the table,
+    removing a specialist — so they need to hold the project they broke.
+    """
+    return subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(SCRIPT), "--backlog", str(backlog),
+         "--repo", repo, "--project-root", str(project)],
+        capture_output=True, text=True,
+    )
+
+
+def test_an_unreadable_routing_table_is_inconclusive_not_a_refusal(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    (project / "rules" / "cycle-backlog.md").write_text(
+        "# Cycle: BACKLOG\n\n## Domain routing\n\nno rows here at all\n\n## Verdicts\n",
+        encoding="utf-8",
+    )
+    (project / "rules" / "domain-routing.txt").write_text("garbage\n", encoding="utf-8")
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(BACKLOG, encoding="utf-8")
+
+    result = _run_raw(project, "alpha-lens", backlog)
+
+    assert result.returncode == 2, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["verdict"] == "GATE_INCONCLUSIVE"
+    assert payload["g1"]["reason"] == "routing_table_unreadable"
+    assert "detect_domains.py" in payload["action"], "must say how to fix it"
+    assert "not judged" in payload["action"].lower(), "must not read as a verdict on the item"
+
+
+def test_a_missing_routing_tool_is_inconclusive(tmp_path: Path) -> None:
+    """The tool is absent, so routing was never assessed."""
+    project = _project(tmp_path)
+    (project / "scripts" / "route_domain.py").unlink()
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(BACKLOG, encoding="utf-8")
+
+    result = _run_raw(project, "alpha-lens", backlog)
+
+    assert result.returncode == 2, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["verdict"] == "GATE_INCONCLUSIVE"
+    assert payload["g1"]["reason"] == "route_domain_missing"
+
+
+def test_a_broken_route_refuses_and_names_the_missing_specialist(tmp_path: Path) -> None:
+    """The table read fine and the answer is no — a judgement, so a refusal.
+
+    Distinct from an unroutable repo: the repo IS in the table and the specialist
+    file is not on disk, so the fix is writing that file, never rewording the item.
+    """
+    project = _project(tmp_path)
+    (project / "agents" / "ingest.md").unlink()
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(BACKLOG, encoding="utf-8")
+
+    result = _run_raw(project, "alpha-lens", backlog)
+
+    assert result.returncode == 1, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["verdict"] == "ITEM_REJECTED"
+    assert payload["g1"]["reason"] == "broken_route"
+    assert "do NOT stand in" in payload["action"]
+
+
+def test_an_unroutable_repo_is_refused_and_says_so_differently(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(BACKLOG, encoding="utf-8")
+
+    result = _run_raw(project, "not-a-repo-here", backlog)
+
+    assert result.returncode == 1, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["verdict"] == "ITEM_REJECTED"
+    assert payload["g1"]["reason"] == "unroutable_repo"
+    assert "domain-routing.txt" in payload["action"]
+
+
+def test_the_four_outcomes_have_four_distinct_exit_codes(tmp_path: Path) -> None:
+    """A caller branching on the exit code must be able to tell them apart."""
+    project = _project(tmp_path)
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(BACKLOG, encoding="utf-8")
+
+    assert _run_raw(project, "alpha-rag", backlog).returncode == 0          # GATES_PASS
+    assert _run_raw(project, "nope", backlog).returncode == 1               # ITEM_REJECTED
+    assert _run_raw(project, "alpha-lens", backlog).returncode == 3         # DEDUP_CANDIDATES
+
+    (project / "scripts" / "route_domain.py").unlink()
+    result = _run_raw(project, "alpha-rag", backlog)
+    assert result.returncode == 2                                          # GATE_INCONCLUSIVE
+    # Not just the code: the REASON has to be there. Asserting the exit alone let a
+    # reverted fix pass this test, because `outcome` defaulted to inconclusive when
+    # absent — a silent default that hid exactly the class of bug being fixed.
+    assert json.loads(result.stdout)["g1"]["reason"] == "route_domain_missing"
+
+
+# ── the judgement gates are covered by evals, and that claim is now checked ────
+
+
+def test_every_judgement_gate_has_an_eval_of_its_own() -> None:
+    """`check_intake_gates.py` justifies leaving G3, G4 and G5 conversational by
+    saying the eval battery covers exactly them.
+
+    G4 had no case of its own: it appeared only as a secondary assertion inside the
+    happy-path eval, so the gate was never exercised FIRING while G3 and G5 both
+    were. The docstring asserted a coverage that did not exist — the same
+    contract-without-mechanism shape this file was already fixed for once.
+
+    This test is the mechanism. It does not judge whether the evals are GOOD; only
+    a run answers that. It refuses the case where a gate is claimed covered and no
+    case names it.
+    """
+    battery = json.loads(
+        (Path(__file__).parent.parent / "evals" / "evals.json").read_text(encoding="utf-8")
+    )
+    names = " ".join(e["name"] for e in battery["evals"])
+    for gate in ("G3", "G4", "G5"):
+        assert gate in names, (
+            f"{gate} is called conversational-and-eval-covered by the script's "
+            f"docstring, and no eval case names it: {names}"
+        )

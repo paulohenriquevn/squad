@@ -191,3 +191,92 @@ def test_only_the_result_event_produces_a_negative() -> None:
 
     assert all(detector.feed(event) is None for event in noise)
     assert detector.feed(_result()) is False
+
+
+def test_the_real_skill_name_counts_as_a_trigger() -> None:
+    """The runner isolates a description under `<skill>-skill-<uuid>` and matched
+    only that name. In a repository where the skill ITSELF is discoverable the model
+    invokes the real one, and `"backlog-item-skill-9f2a" in "backlog-item"` is False.
+
+    Measured 2026-09-01 on `backlog-item`: the battery scored 0/5 while a hand-run of
+    the same query showed `Skill(skill='backlog-item')` at tool position five, after
+    four `Bash` calls to orient. Every case was a trigger; every case was recorded as
+    a miss — this class's own documented failure shape, surviving where it did not
+    look.
+    """
+    detector = TriggerDetector("backlog-item-skill-9f2a", "backlog-item")
+
+    orienting = {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Bash", "input": {"command": "ls"}}]}}
+    assert detector.feed(orienting) is None, "a Bash call decides nothing"
+
+    real = {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Skill", "input": {"skill": "backlog-item"}}]}}
+    assert detector.feed(real) is True
+
+
+def test_the_isolated_name_still_counts() -> None:
+    """The unique name must keep working: it is how a description is tested in
+    isolation, before the skill exists under its own name at all."""
+    detector = TriggerDetector("backlog-item-skill-9f2a", "backlog-item")
+    unique = {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Skill",
+         "input": {"skill": "backlog-item-skill-9f2a"}}]}}
+    assert detector.feed(unique) is True
+
+
+def test_a_different_skill_is_not_a_trigger() -> None:
+    """Widening the match must not make every Skill call count."""
+    detector = TriggerDetector("deps-audit-skill-1111", "deps-audit")
+    other = {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Skill", "input": {"skill": "backlog-item"}}]}}
+    assert detector.feed(other) is None
+    assert detector.feed({"type": "result"}) is False
+
+
+def test_a_timeout_leaves_the_ratio_instead_of_diluting_it() -> None:
+    """`run_single_query` returns None when nothing was observed.
+
+    The old code returned False under a comment stating in full that a timeout is
+    "not evidence the skill was not used; it is evidence nothing was observed" — the
+    prose identified the distinction and the next line ignored it. Measured
+    2026-09-01: a query where the model orients with several Bash calls before
+    invoking the skill ran past a 120s budget and scored 0.0, a timeout published as
+    a trigger rate.
+    """
+    from scripts.run_eval import summarise_runs
+
+    rows = {r["query"]: r for r in summarise_runs(
+        {"partial": [True, True, None], "nothing": [None, None], "real-miss": [False, False]},
+        {q: {"should_trigger": True, "query": q} for q in ("partial", "nothing", "real-miss")},
+        0.5,
+    )}
+
+    # Two triggers and one timeout is 2/2, never 2/3.
+    assert rows["partial"]["trigger_rate"] == 1.0
+    assert rows["partial"]["runs"] == 2
+    assert rows["partial"]["inconclusive"] == 1
+    assert rows["partial"]["pass"] is True
+
+    # Nothing observed at all is not a failure — it is not a result.
+    assert rows["nothing"]["trigger_rate"] is None
+    assert rows["nothing"]["pass"] is None
+    assert rows["nothing"]["verdict"] == "NOT_OBSERVED"
+
+    # A real miss still fails. Widening must not swallow the signal.
+    assert rows["real-miss"]["trigger_rate"] == 0.0
+    assert rows["real-miss"]["pass"] is False
+
+
+def test_not_observed_stays_out_of_the_pass_denominator() -> None:
+    """3/5 with two timeouts and 3/5 with two real misses are different facts."""
+    from scripts.run_eval import summarise_runs
+
+    rows = summarise_runs(
+        {"a": [True], "b": [True], "c": [None]},
+        {q: {"should_trigger": True, "query": q} for q in ("a", "b", "c")},
+        0.5,
+    )
+    assert len([r for r in rows if r["pass"] is True]) == 2
+    assert len([r for r in rows if r["pass"] is not None]) == 2, "the timeout is not a case"
+    assert len([r for r in rows if r["pass"] is None]) == 1

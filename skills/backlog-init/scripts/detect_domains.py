@@ -14,7 +14,7 @@ Measured on an adopter on 2026-08-18: 88 backlog items with measured
 `packages/sdk`, 14 an adopter, and four more packages. The gate was right in
 what it said (*"I do not know who to send this to"*); what was wrong was the
 table, which belonged to
-dado de um projeto morando dentro do template de todos.
+one project's data living inside the template every project receives.
 
 THE DERIVATION RULE
 -------------------
@@ -32,22 +32,22 @@ here, but writing it is human work — a specialist with no content would route 
 item into an empty prompt, and `route_domain.py` exits 3 when the file does not
 exist, on purpose.
 
-DUAS FONTES, E A SEGUNDA MANDA
-------------------------------
+TWO SOURCES, AND THE SECOND ONE WINS
+------------------------------------
 `--from-backlog` derives from the (domain, repo) pairs the items ALREADY declare.
 Use it whenever the registry exists: topology says what exists, not who owns it.
 Measured on an adopter — the registry separates `sdk-core`, `repo-platform`,
 `sdk-satellites`, `edge-cli-acp` and `memory-adapters`, five domains no directory
 layout reveals and no detector should guess.
 
-Uso:
-    python3 detect_domains.py                       # imprime a tabela proposta
+Usage:
+    python3 detect_domains.py                       # print the proposed table
     python3 detect_domains.py --from-backlog BACKLOG.md
     python3 detect_domains.py --write rules/domain-routing.txt
     python3 detect_domains.py --json
 
 Exit codes:
-    0 — tabela derivada (e escrita, se --write)
+    0 — table derived (and written, when --write is passed)
     1 — no derivable domain (a directory with no repo and no manifest)
     2 — write error (file without a `## Domain routing` section)
 """

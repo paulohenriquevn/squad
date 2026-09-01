@@ -247,7 +247,18 @@ def _handler(root: Path, hub: _Hub, token: str | None):
                 if not re.fullmatch(r"B-\d{3,}", item):
                     self._send(400, b"expected /api/item/B-NNN\n", "text/plain")
                     return
-                body = json.dumps(item_detail(root, item), ensure_ascii=False).encode()
+                detail = item_detail(root, item)
+                if not detail.get("in_registry"):
+                    # 200 here said "found" about an id nobody filed, and the body was
+                    # every field null — indistinguishable from an item with no records
+                    # yet. The board's whole discipline is not presenting inference as
+                    # observation; answering for an item that does not exist is that,
+                    # at the transport layer.
+                    self._send(404, json.dumps(
+                        {"id": item, "error": "no such item in BACKLOG.md"},
+                        ensure_ascii=False).encode(), "application/json; charset=utf-8")
+                    return
+                body = json.dumps(detail, ensure_ascii=False).encode()
                 self._send(200, body, "application/json; charset=utf-8")
             elif self.path == "/api/stream":
                 self._stream()

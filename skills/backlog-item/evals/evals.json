@@ -1,6 +1,6 @@
 {
   "skill_name": "backlog-item",
-  "notes": "Intake is where two gates live that nothing downstream can recover from: G5 (a hunch justified by prior art must be refused) and the absence of an evidence gate (a hunch with no evidence must be ACCEPTED). Both are judgement calls the scripts cannot make, which is why they are evaluated here rather than in pytest. Iteration 1 exposed a defect in eval-0 itself: its prompt collided with B-014, the fixture item that exists so eval-3 can test dedup. Both arms correctly merged, and the assertions — written for a NEW item — scored 0/7 on correct behaviour. Rewritten against promptly, which no fixture item mentions.",
+  "notes": "Intake is where two gates live that nothing downstream can recover from: G5 (a hunch justified by prior art must be refused) and the absence of an evidence gate (a hunch with no evidence must be ACCEPTED). Both are judgement calls the scripts cannot make, which is why they are evaluated here rather than in pytest. Iteration 1 exposed a defect in eval-0 itself: its prompt collided with B-014, the fixture item that exists so eval-3 can test dedup. Both arms correctly merged, and the assertions — written for a NEW item — scored 0/7 on correct behaviour. Rewritten against promptly, which no fixture item mentions. G3, G4 and G5 are the judgement gates `check_intake_gates.py` deliberately leaves conversational, and its docstring says this battery covers exactly them. G4 had no case of its own until 2026-09-01: it appeared only as a secondary assertion inside the happy path, so the gate was never tested FIRING while G3 and G5 both were.",
   "evals": [
     {
       "id": 0,
@@ -60,6 +60,20 @@
         "No new B-NNN id was allocated",
         "The report names which existing id absorbed the request",
         "The existing block was not renumbered or reordered"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "refuses-an-unfalsifiable-dod-gate-G4",
+      "prompt": "the ingest pipeline in web-console feels sluggish since the retention change last week. open an item — done when it's faster and the code is cleaner",
+      "expected_output": "The item IS registered — the hunch is legitimate and `why_now` names a local change (the retention change), so G5 does not fire. Gate G4 does: neither 'faster' nor 'cleaner' can fail, so neither ever closes the item. The skill asks for a criterion that could come back false — a number, a threshold, a test that fails on the current state — before writing the block. It must NOT register the item carrying the vague dod, and must NOT invent a number the user never gave.",
+      "files": [],
+      "assertions": [
+        "The skill accepted the hunch itself and did not ask for evidence (intake has no evidence gate)",
+        "The skill identified that 'faster' and 'cleaner' are not verifiable criteria",
+        "The reason given is that a dod which cannot fail never closes the item",
+        "The user was asked for a criterion that could come back false, rather than one being invented for them",
+        "No B-NNN block was written to BACKLOG.md while the dod was still unfalsifiable"
       ]
     }
   ]

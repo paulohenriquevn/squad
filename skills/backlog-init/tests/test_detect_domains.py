@@ -89,8 +89,8 @@ def test_rendered_table_is_parseable_by_route_domain(tmp_path: Path) -> None:
     rule = tmp_path / "cycle-backlog.md"
     rule.write_text(
         "# Cycle: BACKLOG\n\n## Domain routing\n\n| Domain | Repos | Specialist |\n"
-        "|---|---|---|\n| `velho` | `outro-eco` | `agents/velho.md` |\n\n"
-        "## Verdicts\n\nintocado\n",
+        "|---|---|---|\n| `stale-domain` | `outro-eco` | `agents/stale-domain.md` |\n\n"
+        "## Verdicts\n\nuntouched\n",
         encoding="utf-8",
     )
     rewrite_routing_section(rule, detect_domains(root))
@@ -99,7 +99,7 @@ def test_rendered_table_is_parseable_by_route_domain(tmp_path: Path) -> None:
     from route_domain import parse_routing_table, route
 
     table = parse_routing_table(rule)
-    assert "velho" not in table, "a tabela do outro ecossistema tem de sair"
+    assert "stale-domain" not in table, "the other ecosystem's table has to go"
     assert route("packages/sdk", table) == ("adopter-sdk", "agents/adopter-sdk.md")
     assert route("adopter-sdk", table) == ("adopter-sdk", "agents/adopter-sdk.md")
     assert "## Verdicts" in rule.read_text(encoding="utf-8"), "the rest of the file survives"
@@ -291,7 +291,7 @@ def test_a_skeleton_is_routable(tmp_path: Path) -> None:
     (root / ".claude" / "rules").mkdir(parents=True)
     (root / ".claude" / "agents").mkdir(parents=True)
     rule = root / ".claude" / "rules" / "cycle-backlog.md"
-    rule.write_text("# x\n\n## Domain routing\n\n| D | R | S |\n|---|---|---|\n| `velho` | `outro` | `agents/velho.md` |\n", encoding="utf-8")
+    rule.write_text("# x\n\n## Domain routing\n\n| D | R | S |\n|---|---|---|\n| `stale-domain` | `outro` | `agents/stale-domain.md` |\n", encoding="utf-8")
     domains = detect_domains(root)
     rewrite_routing_section(rule, domains)
     (root / ".claude" / "agents" / "meu-projeto.md").write_text(
