@@ -121,6 +121,46 @@ def check_xrefs(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
+def check_wiki_migration(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Is this project still reading its durable knowledge from the old root?
+
+    Two states, two severities, and the difference is the point.
+
+    `UNMIGRATED` is a transition in progress, not a defect: the fallback exists
+    because the kit cannot run a migration inside a project it does not own, and
+    failing every consumer on the day the split was declared would produce a
+    gate somebody switches off. It is reported as a NOTE — visible, which is the
+    whole promise, and not blocking.
+
+    `SPLIT` fails. Both roots holding the same kind of document is the state
+    `records-location.md` was written about: the reader resolves the bundle and
+    the old copy becomes unreachable, so it cannot be seen to be stale, and
+    nothing errors while the two drift.
+    """
+    checker = ecosystem_dir / "scripts" / "check_wiki_migration.py"
+    if not checker.exists():
+        return True, ["  check_wiki_migration.py not installed — skipping"]
+    project_root = (ecosystem_dir.parent if ecosystem_dir.name == ".claude"
+                    else ecosystem_dir)
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), "--root", str(project_root), "--json"],
+        capture_output=True, text=True,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, [f"  check_wiki_migration.py produced no usable JSON "
+                       f"(exit {result.returncode})"]
+    split = [leaf for leaf in payload["leaves"] if leaf["state"] == "SPLIT"]
+    unmigrated = [leaf for leaf in payload["leaves"] if leaf["state"] == "UNMIGRATED"]
+    if split:
+        return False, [f"  SPLIT: `{leaf['leaf']}` — {leaf['detail']}" for leaf in split]
+    if unmigrated:
+        return True, [f"  note: `{leaf['leaf']}` — {leaf['detail']}"
+                      for leaf in unmigrated]
+    return True, []
+
+
 def check_cycle_rules(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     issues: list[str] = []
     required_sections = ("## Purpose", "## Chain", "## Anti-patterns")
@@ -298,6 +338,7 @@ def main() -> int:
         ("settings.json validity", check_settings_json),
         ("Cross-references", check_xrefs),
         ("Cycle rules schema", check_cycle_rules),
+        ("Durable knowledge root", check_wiki_migration),
         ("Skill frontmatter", check_skill_frontmatter),
         ("Smoke chain (detect_domain → spawn_reviewers → consolidate)", check_smoke_chain),
     ]
@@ -312,6 +353,13 @@ def main() -> int:
             ok, issues = False, [f"  exception: {exc}"]
         if ok:
             print(f"✓ {name}")
+            # A passing check may still have something to say — a skipped
+            # validator, a migration in progress. Printing only on failure meant
+            # `check_xrefs.py not installed — skipping` had never once been seen.
+            for note in issues[:5]:
+                print(note)
+            if len(issues) > 5:
+                print(f"  ... and {len(issues) - 5} more")
         else:
             all_pass = False
             print(f"✗ {name}")
