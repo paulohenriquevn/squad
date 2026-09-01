@@ -113,7 +113,7 @@ def test_the_reader_resolves_every_layout_a_consumer_may_keep() -> None:
     that fails when a refactor preserves its intent is a test that gets deleted,
     which would take the exemption with it.
 
-    The third layout is why the table exists at all: `theo-platform` declares
+    The third layout is why the table exists at all: `platform` declares
     `<project>/.claude/knowledge-base/` canonical in a rule of its own and holds
     32 plans there with none in `records/plans/`, so every `_find_plan` call site
     answered SKIP for that repository.

@@ -24,7 +24,7 @@ def _write(tmp_path: Path, content: str, name: str = "plan.md") -> Path:
 
 def test_reads_project_rules_when_present() -> None:
     """When invoked on a real project plan, finds .claude/rules/*.md."""
-    real_plan = COMPLETED_DIR / "theo-cli-cohesion-remediation-plan.md"
+    real_plan = COMPLETED_DIR / "cli-tool-cohesion-remediation-plan.md"
     if not real_plan.exists():
         pytest.skip("real plan not found")
     report = check_architecture_compliance(real_plan)
@@ -71,7 +71,7 @@ def test_plan_in_project_gets_credit_for_principles_even_without_rule_names() ->
     Both forms count as 'compliance signal'. This test documents that the
     checker correctly recognizes the principle-citation path.
     """
-    real_plan = COMPLETED_DIR / "theo-cli-cohesion-remediation-plan.md"
+    real_plan = COMPLETED_DIR / "cli-tool-cohesion-remediation-plan.md"
     if not real_plan.exists():
         pytest.skip("real plan not found")
     report = check_architecture_compliance(real_plan)

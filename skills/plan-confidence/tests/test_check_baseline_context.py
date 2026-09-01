@@ -175,7 +175,7 @@ None.
 # ---------------------------------------------------------------------------
 # B-101 — a glossary written as a table is still a glossary.
 #
-# MEASURED BEFORE THESE WERE WRITTEN, over the 64 plans in theokit-tui's records:
+# MEASURED BEFORE THESE WERE WRITTEN, over the 64 plans in an adopter's records:
 #
 #     bullets   47 plans   counted
 #     table     17 plans   counted as ZERO

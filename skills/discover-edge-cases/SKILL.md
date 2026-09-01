@@ -24,7 +24,7 @@ This skill is **phase 2** of [`cycle-discover`](../../rules/cycle-discover.md). 
 
 Slug or path, via free text:
 
-- Slug (`theo-lens-trace-latency`): `Glob` under `records/discoveries/plans/*{slug}*.md`
+- Slug (`web-console-trace-latency`): `Glob` under `records/discoveries/plans/*{slug}*.md`
 - A `.md` path: use directly
 - No hint: most recent file under `records/discoveries/plans/` by mtime
 

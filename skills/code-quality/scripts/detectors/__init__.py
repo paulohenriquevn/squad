@@ -112,10 +112,10 @@ class BaseDetector:
         skipped — the honest state, not a failure.
 
         Beyond forwarding the tool's verdict, D5 asserts the rules are not
-        VACUOUS. Measured on 2026-08-06 against `theo-contracts`: a
+        VACUOUS. Measured on 2026-08-06 against `contracts`: a
         `.go-arch-lint.yml` naming a directory that does not exist reports
         `ArchHasWarnings: false` — green — while the invariant it encoded can
-        no longer fire. The same class was measured in usetheo-labs/agent-builder,
+        no longer fire. The same class was measured in a TypeScript monorepo,
         where dissolving `tui/lib` would have left rules written against the old
         name matching nothing, and `npm run boundaries` reporting success.
 

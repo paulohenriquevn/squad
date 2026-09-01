@@ -40,6 +40,7 @@
 # outcome — reporting those absences as debt would teach the reader to ignore
 # the report, which is how a gate stops being read.
 
+brainstorm    | conditional | the four product documents + a human signature; absent for a scope aligned in an earlier session, and for a repo that adopted the kit before this phase existed
 backlog       | required    | /backlog-item registers the item; the entry point for every unit of maintenance
 discover      | required    | /discover-execute measures it; the phase that turns a hunch into evidence or kills it
 plan          | conditional | absent when discover killed the item — cycle-discover.md § ITEM_KILLED

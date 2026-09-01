@@ -2,7 +2,7 @@
 name: release
 version: 0.1.0
 requires: [review]
-description: Cuts a semver-tagged release from develop → main after /review returns READY_TO_MERGE. Auto-derives version from CHANGELOG sections (major/minor/patch), rewrites [Unreleased] under the new version header, commits chore(release), opens a PR develop→main with rendered release notes, and waits for human approval (the only manual gate — Unbreakable Rule 4). On merge, creates an annotated tag and a GitHub release. Single entry-point for cycle-release. Use after /review {slug} returned READY_TO_MERGE.
+description: Cuts a semver-tagged release from develop → main after /review returns READY_TO_MERGE. Auto-derives version from CHANGELOG sections (major/minor/patch), rewrites [Unreleased] under the new version header, commits chore(release), opens a PR develop→main with rendered release notes, verifies the whole chain passed, and merges it. On merge, creates an annotated tag and a GitHub release. Stops at PR_OPEN_AWAITING_APPROVAL only when a gate did not pass or branch protection requires a reviewer it cannot be. Single entry-point for cycle-release. Use after /review {slug} returned READY_TO_MERGE.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
 argument-hint: "[bump-level: patch|minor|major] (optional — auto-derived from CHANGELOG when omitted)"
@@ -10,7 +10,7 @@ argument-hint: "[bump-level: patch|minor|major] (optional — auto-derived from 
 
 # Release — develop → main with semver tag
 
-Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automates the release ritual end-to-end while keeping the human approval at PR merge — the only manual step Unbreakable Rule 4 mandates.
+Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automates the release ritual end-to-end, merge included — see [`rules/autonomy-envelope.md`](../../rules/autonomy-envelope.md) floor 2 and the decision behind it, [`wiki/decisions/merge-is-inside-the-envelope.md`](../../wiki/decisions/merge-is-inside-the-envelope.md).
 
 ## Cycle contract
 
@@ -187,11 +187,37 @@ gh pr create \
   --body "$RELEASE_NOTES"
 ```
 
-PR URL is captured; reported back to the user. The chain now pauses at the human-approval gate (verdict `PR_OPEN_AWAITING_APPROVAL`).
+PR URL is captured and reported.
 
-### Step 6 — Wait for human approval (the only manual gate)
+### Step 6 — Verify the chain, then merge
 
-The skill does NOT auto-merge. The user reviews + approves + merges the PR through GitHub UI / `gh pr merge` of their choice.
+**Check the gates before touching the PR.** The permission to merge comes from the
+verdicts the chain already emitted, and nowhere else:
+
+```bash
+# /review returned READY_TO_MERGE, /code-quality is not FAIL_HARD,
+# and no BLOCKED report stands against this item.
+python3 "$ECO/scripts/cycle_events.py" verdicts --slug "$SLUG"
+ls "$ECO"/records/**/"$SLUG"-BLOCKED.md 2>/dev/null && { echo "BLOCKED report stands — refuse"; exit 1; }
+```
+
+If any of the three fails, **stop and emit `PR_OPEN_AWAITING_APPROVAL`.** Do not
+re-run the gate hoping for a different answer, and never move a threshold: that is
+envelope floor 3, which now carries the whole weight it used to share with the
+human-approval stop.
+
+If all three pass, merge:
+
+```bash
+gh pr merge "$PR_NUMBER" --merge   # never --admin: that bypasses branch protection
+```
+
+**A refusal from branch protection is an answer, not an obstacle.** If the remote
+requires a reviewer the system cannot be, `gh` fails — emit
+`PR_OPEN_AWAITING_APPROVAL`, report the PR URL, and take the next item. Never reach
+for `--admin`, and never disable the protection: a project that configured it decided
+this, and floor 3 makes that decision the system's to honour rather than to route
+around.
 
 When the user resumes by re-invoking `/release --resume {pr-number}` (or by running `/release` again with the same `develop`/`main` state), the skill:
 
@@ -324,7 +350,7 @@ Next: nothing — release is published. Start a new cycle with /plan-write or /p
 ## Hard gates (cannot proceed)
 
 1. **`/review` verdict is not `READY_TO_MERGE`** → refuse. Re-run `/review` first.
-2. **PR approval mandatory** — the skill NEVER auto-merges the release PR. Auto-merge violates Unbreakable Rule 4.
+2. **The chain must have passed** — merge ONLY a PR whose `/review` returned `READY_TO_MERGE`, whose `/code-quality` is not `FAIL_HARD`, and against whose item no BLOCKED report stands. Merging anything else violates envelope floor 2; moving a threshold to get there violates floor 3. **Never `gh pr merge --admin`** — bypassing branch protection is the same act under a different name.
 3. **Tag must be annotated** (`git tag -a`) — never lightweight tags.
 4. **CHANGELOG [Unreleased] non-empty** — empty releases are forbidden.
 5. **No duplicate version tags** — if `v{X}` already exists, halt.
@@ -332,12 +358,12 @@ Next: nothing — release is published. Start a new cycle with /plan-write or /p
 
 ## Soft gates (proceed with note)
 
-1. **CI not green on develop** — warn but proceed; the human catches it at PR approval.
+1. **CI not green on develop** — this is no longer soft. Nobody catches it downstream now, so refuse and emit `PR_OPEN_AWAITING_APPROVAL` with the failing run named.
 2. **Bump-level ambiguous from CHANGELOG** — AskUserQuestion ONCE per release run.
 
 ## Anti-patterns
 
-1. **Auto-merging the release PR** — never. Unbreakable Rule 4.
+1. **Merging a PR whose chain did not pass** — the act floor 2 permits is narrow, and this is the way it gets widened by accident. Re-running a gate until it goes green is the same anti-pattern wearing patience.
 2. **Skipping `cycle-review`** — every release traces to a `READY_TO_MERGE` audit.
 3. **Editing CHANGELOG entries during the release** — discipline lives in the cycles that produce the entries.
 4. **Cutting a release with unaddressed FAIL_HARD from `/code-quality`** — the review gate enforces this; never bypass.

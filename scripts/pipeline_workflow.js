@@ -39,7 +39,7 @@ if (!Array.isArray(ITEMS) || ITEMS.length === 0) {
     'no queue: pass args.queue from `select_backlog_item.py --json`. ' +
     'A literal list cannot know which items the registry says are blocked.')
 }
-const REPO = args?.repo ?? '/home/paulo/Projetos/theo/theo-platform/theo'
+const REPO = args?.repo ?? '/home/paulo/Projetos/theo/platform/theo'
 const AGENTS = args?.agentsDir ?? 'records/pipeline-agents'
 
 // The generated file IS the system prompt; the task line is all this script adds.

@@ -1,6 +1,6 @@
 # Portable installation — `/code-quality` skill
 
-Standalone setup for the multi-language code-quality gate. Works inside the TheoMemory monorepo (default) OR in any other project that adopts the skill via copy.
+Standalone setup for the multi-language code-quality gate. Works inside a monorepo (default) OR in any other project that adopts the skill via copy.
 
 ## Python deps (managed via pyproject.toml)
 

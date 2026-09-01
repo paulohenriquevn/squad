@@ -66,7 +66,7 @@ def test_settings_json_is_compared_against_the_plugin_variant(tmp_path: Path) ->
 
 # ---------------------------------------------------------------------------
 # Lag is not modification — the lesson that stayed in sync_consumers and not here.
-# Measured on `theokit-tui`: the detector reported 11 files "needing a human"; 5
+# Measured on an adopter: the detector reported 11 files "needing a human"; 5
 # were real work and 4 were OLDER versions of the kit itself (`install.sh`,
 # `check_xrefs.py`, `code-quality-golden-rule.md`, `code-quality-allowlist.txt`). A
 # detector that reports 11 when there are 5 teaches people to ignore it, which is

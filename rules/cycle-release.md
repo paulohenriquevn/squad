@@ -1,10 +1,12 @@
 # Cycle: RELEASE
 
-Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READY_TO_MERGE`; produces a merge of `develop` into `main` and a semver tag. Human stays in the loop ONLY at PR-approval — every other step is automated.
+Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READY_TO_MERGE`; produces a merge of `develop` into `main` and a semver tag. Fully automated: the system merges a PR whose whole chain passed, and stops only where branch protection requires a reviewer it cannot be.
 
 ## Purpose
 
-Take an approved implementation from `READY_TO_MERGE` to a released, tagged version on `main`. Eliminates the manual release ritual (merge, version bump, tag, push, GitHub release notes) while keeping the human-controlled merge approval — Unbreakable Rule 4 (never commit directly to `main`).
+Take an approved implementation from `READY_TO_MERGE` to a released, tagged version on `main`. Eliminates the manual release ritual: merge, version bump, tag, push, GitHub release notes.
+
+**The merge is the system's, and it is gated rather than supervised.** `rules/autonomy-envelope.md` floor 2 permits merging a pull request whose full chain passed, and forbids merging anything else — the reasoning is [`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md). The branching topology is untouched: nothing commits to the trunk directly, everything arrives by PR with a semver tag, and `hooks/validate-command.sh` still enforces both.
 
 ## Pre-conditions
 
@@ -31,7 +33,8 @@ Do NOT trigger when:
      ↓ commit "chore(release): {next-version}" on workspace
      ↓ open PR workspace → develop; merge it (promotion — git-safety.md § 1)
      ↓ open PR develop → main with the rendered release notes as body
-     ↓ wait for human approval (hard gate — Unbreakable Rule 4 mandate)
+     ↓ verify the chain passed, then merge (envelope floor 2)
+     ↓   branch protection demands a reviewer? → PR_OPEN_AWAITING_APPROVAL, take the next item
      ↓ on merge: create annotated tag {next-version} pointing at the merge commit
      ↓ push tag; gh release create
      ↓ RELEASED — hand off to /acceptance M<N> for the checkbox flip
@@ -63,7 +66,7 @@ Consequences for this cycle:
 ## Verdicts
 
 - `RELEASED` — PR merged, tag created, GitHub release published. Cycle complete.
-- `PR_OPEN_AWAITING_APPROVAL` — chain paused at the human-approval gate. Resume automatically once the PR merges.
+- `PR_OPEN_AWAITING_APPROVAL` — the PR is open and the system did not merge it: a gate did not pass, or branch protection requires a human reviewer. **The exception now, not the terminal state.** Resume automatically once the PR merges.
 - `BLOCKED` — pre-condition failed OR a hard gate fired during the chain. Surface to human.
 - `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
@@ -82,7 +85,7 @@ If the rule cannot pick deterministically, the chain pauses and the human choose
 A `[Unreleased]` carrying only `### Changed` — *"we changed how something already published
 behaves, without adding or removing"* — matches none of the three rules above. It is an
 **ordinary** release shape, not an exotic one, and it hits the pause every time. Measured on
-`theokit-tui` on 2026-08-18:
+an adopter on 2026-08-18:
 `compute_next_version.py --current 0.61.0 --bump auto` → `AMBIGUOUS`.
 
 **It is not derived, and that is a decision rather than a gap.** Under 0.x — where
@@ -98,13 +101,13 @@ anyone on a caret range. Inferring from the entry's prose is the same guess with
 and the same source measured how a formatting variation (`**BREAKING:`) defeats that
 kind of match in this very script.
 
-The pause stays, and **carries the question** instead of a guess. Harvested from `theokit-tui`,
+The pause stays, and **carries the question** instead of a guess. Harvested from an adopter,
 where the reasoning was written down and measured.
 
 ## Hard gates
 
-- **PR approval gate (LOCKED)** — _(not mechanized: branch protection on the remote is what makes the PR mandatory, and the kit cannot configure another project's remote; a repo without it keeps the local guarantee that work originated on `workspace` and loses this one)_ The merge step ALWAYS waits for a human-approved PR. Auto-merging into `main` violates Unbreakable Rule 4.
-- **No direct commits to `main`** — `validate-command.sh`, which resolves the real trunk rather than matching the literal name. Even from this skill: Every change reaches `main` via the PR opened above.
+- **Gates-passed gate (LOCKED)** — _(not mechanized as one check: it reads the verdicts the chain already emitted — `/review` `READY_TO_MERGE`, `/code-quality` not `FAIL_HARD`, no BLOCKED report standing)_ The merge step merges ONLY a PR whose full chain passed. Merging anything else, or moving a threshold so that it passes, violates envelope floor 2 and floor 3. **This replaced a human-approval gate on 2026-09-01**; what it does not replace is the topology — the PR itself is still mandatory, and branch protection is still what makes it so on the remote.
+- **No direct commits to `main`** — `validate-command.sh`, which resolves the real trunk rather than matching the literal name. Even from this skill: every change reaches `main` via the PR opened above. **Unchanged by the amendment** — merging a PR and committing to the trunk are different acts, and only the first moved.
 - **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. _(not mechanized: nothing inspects the tag object's type or the branch it was cut from; `validate-command.sh` blocks the commit paths, not the tag)_
 - **CHANGELOG must have content** — `changelog_section_nonempty.py` refuses if `[Unreleased]` is empty after stripping headers.
 - **Single-flip invariant** — owned by [`cycle-acceptance § Hard gates`](cycle-acceptance.md), which is where the flip moved (see § Post-merge ROADMAP.md checkbox flip). This cycle no longer flips anything; the clause stays as a pointer so nobody re-adds a flip here.

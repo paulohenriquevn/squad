@@ -92,7 +92,7 @@ def test_pillar_c_pass_with_evidence(fake_project: Path) -> None:
 # ---------------------------------------------------------------------------
 # B-081 — a duplicate checkout inside the repository is not a second caller.
 #
-# MEASURED BEFORE THESE WERE WRITTEN, against theokit-tui@adf4cbf:
+# MEASURED BEFORE THESE WERE WRITTEN, against an adopter at adf4cbf:
 #
 #     clean tree                                    SlashMenuList -> 5 callers
 #     `.claude/worktrees/probe` present (ignored)                 -> 5
@@ -167,7 +167,7 @@ def test_a_caller_inside_a_nested_CLONE_is_not_counted(git_project: Path) -> Non
 
     `git worktree list` is authoritative for worktrees and knows nothing about a CLONE: a clone is
     a separate repository, so it is absent from the register B-081's fix consults. Measured on
-    theokit-tui with `git clone --local . ./nested-clone`: pillar (a) went 5 -> 10 and all three
+    an adopter with `git clone --local . ./nested-clone`: pillar (a) went 5 -> 10 and all three
     sampled callers were inside the clone — the exact symptom B-081 exists to prevent, through a
     door its fix does not close.
 

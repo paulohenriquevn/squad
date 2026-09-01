@@ -292,7 +292,7 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
     `auditor_unavailable_cargo-udeps` — a soft cap that blocks the cycle because
     of a path assumption rather than because of the code.
 
-    Measured on theo-db (usetheoai/theo-db#175): `theodb_rs/Cargo.toml`.
+    Measured on db-engine (an adopter's issue tracker): `theodb_rs/Cargo.toml`.
     """
     rules = tmp_path / ".claude" / "rules"
     rules.mkdir(parents=True)
@@ -450,12 +450,12 @@ def test_a_repo_with_no_manifests_at_all_is_still_INVALID_by_deliberate_policy(
 ) -> None:
     """Pinned as a DECISION — see ADR-0013.
 
-    A consumer's backlog (theokit-plugins B-020) asked that "a genuinely pre-code repo with no
+    A consumer's backlog (an adopter-plugins B-020) asked that "a genuinely pre-code repo with no
     manifest still passes". This kit holds the opposite: `cycle-review` admits on PASS, so a run
     that looked at nothing must not report a clean audit — even when there was nothing to look at.
 
     Both positions were defensible, so the disagreement was pinned here rather than settled by one
-    consumer's item, and filed as theokit-plugins B-035. The kit owner decided on 2026-08-24:
+    consumer's item, and filed as an adopter-plugins B-035. The kit owner decided on 2026-08-24:
     INVALID stays.
 
     The deciding evidence was not about pre-code repositories. One maintenance run in that same

@@ -52,7 +52,7 @@ UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 # verdict: a read-only session then cannot end without either fabricating a
 # CHANGELOG entry or reaching for STOP_VALIDATION_WARN_ONLY=1, and an override
 # used to answer a question the gate should not have asked is how a gate stops
-# being read. Measured on `theokit` 2026-08-26: a session that wrote nothing
+# being read. Measured on an adopter 2026-08-26: a session that wrote nothing
 # blocked nine times on the previous commit's `.ts` file.
 #
 # No upstream means no way to tell published from local, so stay strict.
@@ -288,7 +288,7 @@ if [ -f "CHANGELOG.md" ]; then
     | grep -vE '(^|/)(node_modules|vendor|dist|build|target|\.venv|__pycache__)/' \
     || true)
 
-  # Harvested from `theokit-tui`, where this fix lived for weeks inside a
+  # Harvested from an adopter, where this fix lived for weeks inside a
   # gitignored `.claude/` (2026-08-20). A comment-ONLY change has NOTHING to
   # announce to a consumer, and Rule 6 says to write for the consumer. Demanding
   # an entry for it invites the two worst outcomes: a fabricated line polluting
@@ -306,7 +306,7 @@ if [ -f "CHANGELOG.md" ]; then
   # documentation commit.
   #
   # `scripts/` is NOT in the exclusion list above, though it is in
-  # `theokit-tui`'s: there it is build tooling, here it is production — the kit
+  # an adopter's: there it is build tooling, here it is production — the kit
   # is made of scripts.
   if [ -n "$CODE_CHANGED" ]; then
     SUBSTANTIVE=""
@@ -344,7 +344,7 @@ if [ -f "CHANGELOG.md" ]; then
   # A monorepo publishing several packages records per-package changes in that
   # package's own CHANGELOG.md, or in a .changeset/*.md entry, which is what
   # BECOMES that changelog at version time. Accepting only the root file reports
-  # "undocumented" over work that is documented — measured on `theokit`, whose
+  # "undocumented" over work that is documented — measured on an adopter, whose
   # six packages all publish through .changeset/ and whose root file says so.
   #
   # .changeset/README.md and config.json ship with the tool and record nothing.

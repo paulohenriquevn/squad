@@ -66,7 +66,7 @@ def _historical_contents(kit_root: Path, rel: str) -> set[str]:
     """Every content this path has ever had in the kit's history.
 
     Without asking this, a consumer installed from an older version shows up as
-    local work in every file the kit has evolved since. Measured on `theokit-tui`:
+    local work in every file the kit has evolved since. Measured on an adopter:
     11 files reported as "need a human", of which 4 were merely older kit versions
     — `install.sh`, `check_xrefs.py`, `code-quality-golden-rule.md` and
     `code-quality-allowlist.txt`. The lesson was already in `sync_consumers` (231
@@ -110,7 +110,7 @@ def classify_file(install_file: Path, kit_file: Path,
 
 
 # Directories a consumer generates for itself. They are that project's artifacts, not kit code,
-# and reporting them would bury the signal under 38 rows of noise (measured on theokit-tui).
+# and reporting them would bury the signal under 38 rows of noise (measured on an adopter).
 _CONSUMER_LOCAL = ("__pycache__", ".pytest_cache", ".benchmarks", "records")
 
 #: Files that belong to the PROJECT even while living in a directory the kit also has.

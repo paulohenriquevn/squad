@@ -115,4 +115,4 @@ Next:
 - NEVER skip Step 3 (parallel agents) to move faster — the rigor IS the agents
 - NEVER approve with unresolved BLOCKER findings
 - NEVER fabricate findings or fill in default findings to "look thorough"
-- NEVER auto-merge — final merge is human decision after consuming the report
+- NEVER merge. `/release` owns the merge and reads this report's verdict as one of its preconditions

@@ -3,13 +3,14 @@
 A pipeline for taking a maintenance item from **hunch → measurement → plan → code → merge**, with Claude Code as the active agent at every phase. Each phase has hard gates, anti-patterns, rollback and an audit trail documented in `rules/cycle-*.md`.
 
 ```
-BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ACCEPTANCE
-   ↓          ↓         ↓        ↓            ↓           ↓        ↓
- B-NNN     measures   plans/   commits +   dead-code/   gate    develop→main
- (hunch)   OUR code            tests       fabrication/ tighter  PR + semver
-            ↓                              wiring
-       ITEM_KILLED ✔
-       (chain ends — a successful outcome)
+BRAINSTORM → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE
+    ↓           ↓          ↓         ↓        ↓            ↓           ↓        ↓
+ 4 docs +     B-NNN     measures   plans/  commits +   dead-code/    gate    develop→main
+ a person's  (hunch)    OUR code           tests       fabrication/  tighter  PR + semver
+ signature                  ↓                          wiring
+    ↑                  ITEM_KILLED ✔
+ the ONLY phase        (chain ends — a successful outcome)
+ a human attends
 ```
 
 Each arrow is an **unbreakable chain** — you do not skip a phase, and you do not advance past an INVALID verdict. Unlike a roadmap pipeline, this one has no end state: `cycle-maintenance` loops for as long as the ecosystem is maintained.
@@ -20,6 +21,7 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 
 | Question | Cycle | Entry point |
 |---|---|---|
+| "What are we even building?" | `cycle-brainstorm` | `/brainstorm-vision`, then the four-phase cascade |
 | "First time — there is no registry yet" | (one-shot bootstrap) | `/backlog-init` |
 | "I noticed something worth looking at" | `cycle-backlog` | `/backlog-item {slug}` |
 | "Is this hunch real?" | `cycle-discover` | `/discover-plan B-NNN --mode {review\|live-test\|bug\|evolve}`, then the chain |

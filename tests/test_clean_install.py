@@ -406,7 +406,7 @@ def test_reinstalling_keeps_the_projects_own_skills(
     them apart — without it the only alternative is guessing by name.
 
     Measured on 2026-08-28 while reinstalling across the consumers: six
-    `theokit-*` skills disappeared from `appteste` and six more from `website`,
+    `an adopter-*` skills disappeared from `appteste` and six more from `website`,
     every one a versioned file the project had written. They were recovered with
     `git restore`; a project that had not committed them would have lost them.
 

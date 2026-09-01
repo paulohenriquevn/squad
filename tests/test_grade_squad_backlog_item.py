@@ -29,14 +29,14 @@ BASE_BACKLOG = """# Backlog
 ## B-007 — Suspected N+1 in the ingest path   [ ]
 
 domain: data-plane-ts
-repo: theo-rag
+repo: search-api
 status: killed
 kill_reason: measured, it is a single batched query
 
 ## B-014 — Reduce round-trips in the trace listing   [ ]
 
 domain: data-plane-ts
-repo: theo-lens
+repo: web-console
 suggested_mode: review
 source: human
 evidence: none-yet
@@ -62,13 +62,13 @@ def _by_text(exps: list[dict], fragment: str) -> dict:
 def test_blocks_parses_every_item() -> None:
     blocks = _blocks(BASE_BACKLOG)
     assert set(blocks) == {"B-007", "B-014"}
-    assert "theo-lens" in blocks["B-014"]
-    assert "theo-lens" not in blocks["B-007"], "block boundaries leaked into the neighbour"
+    assert "web-console" in blocks["B-014"]
+    assert "web-console" not in blocks["B-007"], "block boundaries leaked into the neighbour"
 
 
 def test_field_extracts_only_its_own_field() -> None:
     block = _blocks(BASE_BACKLOG)["B-014"]
-    assert _field(block, "repo") == "theo-lens"
+    assert _field(block, "repo") == "web-console"
     assert _field(block, "status") == "raw"
     assert _field(block, "evidence") == "none-yet"
     assert _field(block, "nonexistent") == ""
@@ -90,7 +90,7 @@ def test_needs_review_never_auto_passes(tmp_path: Path) -> None:
 
 
 def _new_item(evidence: str = "none-yet", status: str = "raw",
-              domain: str = "data-plane-ts", repo: str = "theo-promptly") -> str:
+              domain: str = "data-plane-ts", repo: str = "promptly") -> str:
     return f"""
 ## B-032 — Resolving a new revision takes a few seconds   [ ]
 
@@ -112,7 +112,7 @@ def test_eval0_passes_on_a_correct_hunch(tmp_path: Path) -> None:
     assert _by_text(exps, "new B-NNN block was appended")["passed"]
     assert _by_text(exps, "evidence: none-yet")["passed"]
     assert _by_text(exps, "status: raw")["passed"]
-    assert _by_text(exps, "repo is theo-promptly")["passed"]
+    assert _by_text(exps, "repo is promptly")["passed"]
 
 
 def test_eval0_fails_when_evidence_was_demanded(tmp_path: Path) -> None:
@@ -129,9 +129,9 @@ def test_eval0_fails_when_nothing_was_registered(tmp_path: Path) -> None:
 
 
 def test_eval0_fails_on_wrong_domain(tmp_path: Path) -> None:
-    run = _run(tmp_path, BASE_BACKLOG + _new_item(domain="control-plane", repo="theo-cloud"))
+    run = _run(tmp_path, BASE_BACKLOG + _new_item(domain="control-plane", repo="control-plane"))
     exps = grade(run, 0)
-    assert not _by_text(exps, "repo is theo-promptly")["passed"]
+    assert not _by_text(exps, "repo is promptly")["passed"]
 
 
 def test_eval1_fails_when_prior_art_reached_the_registry(tmp_path: Path) -> None:
@@ -140,7 +140,7 @@ def test_eval1_fails_when_prior_art_reached_the_registry(tmp_path: Path) -> None
 ## B-032 — Waterfall de traces   [ ]
 
 domain: data-plane-ts
-repo: theo-lens
+repo: web-console
 evidence: none-yet
 why_now: LangSmith has a nice waterfall and we should have one too
 status: raw
@@ -183,14 +183,14 @@ def test_eval2_requires_two_items_in_the_right_domains(tmp_path: Path) -> None:
 ## B-032 — Blank screen when the token expires   [ ]
 
 domain: frontend-dashboard
-repo: theo-cloud/dashboard
+repo: control-plane/dashboard
 evidence: none-yet
 status: raw
 
 ## B-033 — API devolve 500 em vez de 401   [ ]
 
 domain: control-plane
-repo: theo-cloud
+repo: control-plane
 evidence: none-yet
 status: raw
 """
@@ -202,7 +202,7 @@ status: raw
 
 
 def test_eval2_fails_when_registered_as_one_item(tmp_path: Path) -> None:
-    run = _run(tmp_path, BASE_BACKLOG + _new_item(domain="control-plane", repo="theo-cloud"))
+    run = _run(tmp_path, BASE_BACKLOG + _new_item(domain="control-plane", repo="control-plane"))
     exps = grade(run, 2)
     assert not _by_text(exps, "split was proposed as two items")["passed"]
 

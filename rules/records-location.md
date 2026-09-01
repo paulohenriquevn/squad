@@ -12,7 +12,7 @@ In a **plugin install** — every consumer — the ecosystem lives at `<project>
 
 ## Why this needed writing down
 
-Measured across three consumers in 2026-08: `theo-promptly` and `theo-workspace` wrote to `.claude/records/`, `theo-skills` wrote to the project root, and all three had **both** directories present. An audit reading `.claude/` reported `theo-skills` as having "0 implementations, 0 reviews, 0 releases" — the repository actually had 6, 12 and 8. The claim was false, and nothing in the system detected it.
+Measured across three consumers in 2026-08: two wrote to `.claude/records/`, the third wrote to the project root, and all three had **both** directories present. An audit reading `.claude/` reported the third as having "0 implementations, 0 reviews, 0 releases" — the repository actually had 6, 12 and 8. The claim was false, and nothing in the system detected it.
 
 The failure mode is quiet by nature: a second records never errors. It just accumulates half the truth.
 

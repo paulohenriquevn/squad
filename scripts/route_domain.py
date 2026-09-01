@@ -20,7 +20,7 @@ Exit codes:
 Exit 3 used to be exit 0 printing `(none declared)`. The invariant behind it lived only in
 `tests/test_route_domain.py`, and `install.sh` does not copy `tests/` — so in every consumer
 repo the guard was absent and a domain pointing at a missing specialist answered `routed: true`
-with `agent: null`. Measured while installing into TheoCode: a second three-column table inside
+with `agent: null`. Measured while installing into a TypeScript monorepo: a second three-column table inside
 the `## Domain routing` section parses as routing, which invented two domains whose specialist
 files were never written, and nothing objected. A resolution that names nobody is the same
 vacuous gate D5 exists to catch — so the check belongs in the tool, which always runs, rather
@@ -37,12 +37,12 @@ from typing import Any
 
 ROW_RE = re.compile(r"^\|\s*`([a-z0-9-]+)`\s*\|(.+?)\|(.+?)\|\s*$", re.MULTILINE)
 # `/` is allowed so a repo split across domains can be addressed by path
-# (`theo-cloud/dashboard`). Without it that row parsed to an EMPTY repo list and the
+# (`control-plane/dashboard`). Without it that row parsed to an EMPTY repo list and the
 # domain became silently unreachable — every other check still passed.
 REPO_RE = re.compile(r"`([A-Za-z0-9_./-]+)`")
 # `.claude/` is accepted and stripped: in a plugin install that IS the correct
 # path, and it is what `/backlog-init` prints there. Requiring the bare form read
-# every such specialist as absent — measured on `theokit-tui`, two domains whose
+# every such specialist as absent — measured on an adopter, two domains whose
 # specialist files were on disk and parsed as `agent: None`, which is the same
 # signal as a table nobody finished.
 AGENT_RE = re.compile(r"`(?:\.claude/)?(agents/[a-z0-9-]+\.md)`")

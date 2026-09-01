@@ -114,7 +114,7 @@ def test_a_real_cycle_reference_still_resolves():
 #
 # `rules/auxiliary-skills.txt` is the right idea and ships EMPTY, so every consumer
 # starts with all of its own skills flagged. Measured on 2026-08-31 across two live
-# installs: `theo` had the file, empty, and 13 WARN; `theokit` had 102 skills of which
+# installs: `theo` had the file, empty, and 13 WARN; an adopter had 102 skills of which
 # 66 are its own, no file at all, and 119 WARN — every warning the checker produced.
 # `install.sh` runs this `--strict`, so both installs reported failure over the
 # consumers' own design, and a validation that always fails is one nobody reads.

@@ -2,7 +2,7 @@
 """Render a measured proposal into the linter's own config format.
 
 This exists because the translation is where the criterion gets lost. Adopting a proposal by hand
-against `theo-cloud` took four attempts, and every failure was a translation detail rather than a
+against `control-plane` took four attempts, and every failure was a translation detail rather than a
 wrong rule:
 
 1. a component key written without its `:` — 32 schema errors, reported as `ExecutionWarnings`,
@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import sys
 
-#: Directories whose contents are somebody else's code. `theo-cloud` vendors a Go file inside its
+#: Directories whose contents are somebody else's code. `control-plane` vendors a Go file inside its
 #: dashboard's node_modules, and without this it lands in the report as an ungoverned package
 #: forever — noise that trains readers to ignore the coverage number.
 _EXCLUDE_DIRS = ("**/node_modules", "**/vendor", "**/testdata")

@@ -49,7 +49,7 @@ Confirm the target is declared in `rules/live-target.txt` for this domain. **If 
 
 Record `METHOD URL -> STATUS`, console output, trace id where available, timing, and a screenshot for UI findings.
 
-Then do the thing this mode exists to get right: **name the uncertainty between environment and product.** `app-dev.usetheo.dev` is a dev environment; it breaks for reasons that have nothing to do with the code. Write which one you believe it is and what would distinguish them. If you cannot yet distinguish, say exactly that — do not resolve it toward the more interesting explanation.
+Then do the thing this mode exists to get right: **name the uncertainty between environment and product.** `app-dev.example.com` is a dev environment; it breaks for reasons that have nothing to do with the code. Write which one you believe it is and what would distinguish them. If you cannot yet distinguish, say exactly that — do not resolve it toward the more interesting explanation.
 
 Non-destructive discipline: read, observe, measure. No writes, no state mutation, no fixtures left behind.
 

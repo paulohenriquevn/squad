@@ -55,14 +55,15 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 
 | Cycle | OK | OK with caveats | Not OK — recoverable | Not OK — structural |
 |---|---|---|---|---|
-| `cycle-maintenance` (macro super-loop) | `ITEM_SHIPPED` / `ITEM_KILLED` / `ITEM_VERIFIED_LOCAL` | `ITEM_IN_FLIGHT` (paused at a human-approval gate) | `ITEM_BLOCKED` (recoverable per item) | `ITEM_UNROUTABLE` (repo in no domain) |
+| `cycle-brainstorm` (phase −1 · product alignment) | `PRODUCT_ALIGNED` | — | `NEEDS_REVISION` | `INVALID` (+ `AWAITING_REVIEW`, orthogonal) |
+| `cycle-maintenance` (macro super-loop) | `ITEM_SHIPPED` / `ITEM_KILLED` / `ITEM_VERIFIED_LOCAL` | `ITEM_IN_FLIGHT` (paused where only a person can act) | `ITEM_BLOCKED` (recoverable per item) | `ITEM_UNROUTABLE` (repo in no domain) |
 | `cycle-backlog` (phase 0 · intake) | `ITEM_REGISTERED` | — | `ITEM_MERGED` (folded into an open item) | `ITEM_REJECTED` (out of ecosystem, or gate G5) |
 | `cycle-discover` | `SHIPPABLE` (+ `ITEM_KILLED`, orthogonal) | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` | `INVALID` |
 | `cycle-plan` | `SHIPPABLE` | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` | `INVALID` |
 | `cycle-implement` | `IMPLEMENTATION_COMPLETE` (completion promise) | — | (halt-loop pauses for human) | — |
 | `cycle-code-quality` | `PASS` | `PASS_WITH_CAVEATS` | `FAIL_SOFT` | `FAIL_HARD` / `INVALID` |
 | `cycle-review` | `READY_TO_MERGE` | `READY_TO_MERGE_WITH_FOLLOWUPS` | `NEEDS_FIXES` | `NEEDS_DEEPER` |
-| `cycle-release` | `RELEASED` | — | `PR_OPEN_AWAITING_APPROVAL` (paused at human-approval gate) | `BLOCKED` |
+| `cycle-release` | `RELEASED` | — | `PR_OPEN_AWAITING_APPROVAL` (a gate did not pass, or branch protection needs a reviewer) | `BLOCKED` |
 | `cycle-acceptance` | `ACCEPTED` | `ACCEPTED_WITH_CAVEATS` | `REJECTED` | `NOT_VALIDATED` |
 | `cycle-idea-to-release` | (delegates to each chained cycle's verdict) | — | (pause + ask human at any gate failure) | — |
 | `cycle-judge-codex` (optional, external plugin) | `SHIPPABLE` / `READY_TO_MERGE` (`:final` only) | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` / `NEEDS_FIXES` / `NEEDS_DEEPER` (`:final` only) | `FAIL_HARD` / `INVALID` / `META_DEFECT_FOUND` (`:final` only) / `AGGREGATOR_BUG_SUSPECTED` (`:final` only) |
@@ -70,6 +71,7 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 
 ### Why each vocabulary differs
 
+- **brainstorm** grades a **cascade of four documents plus the agreement over them**, so its bands split on a distinction no other cycle needs. `NEEDS_REVISION` means the rubric scored below the floor and editing the documents can lift it; `INVALID` means a document is absent or an id cites a referent that does not exist, which no editing of the citing document can fix. **`AWAITING_REVIEW` is orthogonal to all three** — the same shape as `cycle-discover`'s `ITEM_KILLED`: it grades nothing. The structure is complete and the judgement has not been made, and it is the only cycle where that judgement may not be delegated to a judge (`cycle-brainstorm.md § Why the judge may not sign this one`). Reused rather than renamed because `cycle-plan` already emits it for the identical state and `rules/blocking-verdicts.txt` already holds it.
 - **maintenance** emits **macro-loop progression verdicts** per item: `ITEM_SHIPPED` when the item reached RELEASED, `ITEM_KILLED` when measurement refuted the hypothesis (an OK outcome — the loop protected the plan cycle from a hunch), `ITEM_BLOCKED` when a sub-cycle blocked recoverably, and `ITEM_UNROUTABLE` when the item's repo belongs to no domain, and `ITEM_VERIFIED_LOCAL` when every file the fix changed is untracked — the work is real and verified, and no tag can point at it. That last one is in the OK column on purpose: reporting it as blocked would file finished work as outstanding. Deliberately absent: a `*_COMPLETE` token. A roadmap is a finite declared scope and can be exhausted; a backlog is not a scope, and an empty one means nobody has looked recently rather than that the work is done. The empty state is `BACKLOG_EMPTY`, a prompt to sweep, and it is reported outside the OK/not-OK bands because it grades nothing.
 - **discover/plan** emit a **structural fitness verdict** on a document. `INVALID` means the document violates a hard cap (fabricated evidence pointer, empty corner); `NEEDS_REVISION` means the score is recoverable via `*-improve`. **`discover` carries a fifth token that is orthogonal to the other four**: `ITEM_KILLED` reports an *outcome* rather than grading an *artifact* — the measurement ran, the hypothesis did not hold, and there is no document to score. It sits in the OK column because a run that kills an item succeeded: it stopped work that would have been justified by a hunch. Collapsing it into `INVALID` would file the cycle's most valuable result as a failure and create a standing incentive to ship weak findings rather than kill them.
 - **implement** does not emit a verdict — it emits a **completion promise** (`IMPLEMENTATION_COMPLETE`) consumed by downstream cycles. Halt-loop pauses on hard-gate failure rather than emitting a verdict.

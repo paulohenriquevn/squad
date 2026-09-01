@@ -23,7 +23,7 @@ def clean_backlog(tmp_path: Path) -> Path:
             "B-002",
             "Corrigir exit code do deploy parcial",
             domain="platform-cli",
-            repo="theo-cli",
+            repo="cli-tool",
             suggested_mode="bug",
             status="triaged",
             evidence="src/deploy.ts:88",

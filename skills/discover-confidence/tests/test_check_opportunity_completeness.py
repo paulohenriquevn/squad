@@ -5,8 +5,13 @@ from pathlib import Path
 
 from check_opportunity_completeness import check_opportunity_completeness
 
+#: The repos these fixtures pretend the project has. Passed explicitly so the test
+#: does not depend on whatever routing table happens to sit in the working
+#: directory — the kit's own ships empty, by design.
+REPOS = {"web-console", "contracts", "control-plane", "cli-tool", "search-api"}
 
-def _opportunity(tmp_path: Path, name: str, *, repo: str = "theo-lens", blast: str, adrs: str = "") -> Path:
+
+def _opportunity(tmp_path: Path, name: str, *, repo: str = "web-console", blast: str, adrs: str = "") -> Path:
     path = tmp_path / name
     path.write_text(
         "# Opportunity: Test\n\n"
@@ -26,13 +31,13 @@ def _opportunity(tmp_path: Path, name: str, *, repo: str = "theo-lens", blast: s
 
 
 def test_good_opportunity_all_sections(good_opportunity: Path) -> None:
-    report = check_opportunity_completeness(good_opportunity)
+    report = check_opportunity_completeness(good_opportunity, known_repos=REPOS)
     assert report["found"] == report["total_required"]
     assert report["missing_mandatory"] == []
 
 
 def test_synthetic_opportunity_complete(synthetic_opportunity: Path) -> None:
-    report = check_opportunity_completeness(synthetic_opportunity)
+    report = check_opportunity_completeness(synthetic_opportunity, known_repos=REPOS)
     assert report["missing_mandatory"] == []
 
 
@@ -41,7 +46,7 @@ def test_missing_section_detected(tmp_path: Path) -> None:
     path.write_text(
         "# Opportunity: Test\n\n"
         "**Item:** B-014\n"
-        "**Repo:** theo-lens\n"
+        "**Repo:** web-console\n"
         "**Mode:** review\n\n"
         "## Context\n\nText.\n\n"
         "## Corner 1 — Evidence\n\nText.\n\n"
@@ -49,7 +54,7 @@ def test_missing_section_detected(tmp_path: Path) -> None:
         ,
         encoding="utf-8",
     )
-    report = check_opportunity_completeness(path)
+    report = check_opportunity_completeness(path, known_repos=REPOS)
     assert "Corner 3 — Blast Radius" in report["missing_mandatory"]
     assert "Recommendation" in report["missing_mandatory"]
 
@@ -58,7 +63,7 @@ def test_invalid_mode_is_a_missing_section(tmp_path: Path) -> None:
     """`Mode` must name one of the four real modes, not any word."""
     path = _opportunity(tmp_path, "bad-mode.md", blast="Repo-local.")
     path.write_text(path.read_text(encoding="utf-8").replace("**Mode:** review", "**Mode:** vibes"), encoding="utf-8")
-    report = check_opportunity_completeness(path)
+    report = check_opportunity_completeness(path, known_repos=REPOS)
     assert "Mode" in report["missing_mandatory"]
 
 
@@ -71,10 +76,10 @@ def test_repo_local_change_requires_no_adr(tmp_path: Path) -> None:
     path = _opportunity(
         tmp_path,
         "local.md",
-        repo="theo-lens",
-        blast="Repo-local. Only theo-lens consumes the affected surface.",
+        repo="web-console",
+        blast="Repo-local. Only web-console consumes the affected surface.",
     )
-    report = check_opportunity_completeness(path)
+    report = check_opportunity_completeness(path, known_repos=REPOS)
     assert report["cross_repo"] is False
     assert report["adr_required"] is False
     assert report["adr_missing"] is False
@@ -90,12 +95,12 @@ def test_cross_repo_change_without_adr_is_flagged(tmp_path: Path) -> None:
     path = _opportunity(
         tmp_path,
         "cross.md",
-        repo="theo-contracts",
-        blast="Changes the jwt claim shape consumed by theo-cloud and theo-cli.",
+        repo="contracts",
+        blast="Changes the jwt claim shape consumed by control-plane and cli-tool.",
     )
-    report = check_opportunity_completeness(path)
+    report = check_opportunity_completeness(path, known_repos=REPOS)
     assert report["cross_repo"] is True
-    assert report["foreign_repos"] == ["theo-cli", "theo-cloud"]
+    assert report["foreign_repos"] == ["cli-tool", "control-plane"]
     assert report["adr_required"] is True
     assert report["adr_missing"] is True
 
@@ -104,11 +109,11 @@ def test_cross_repo_change_with_adr_passes(tmp_path: Path) -> None:
     path = _opportunity(
         tmp_path,
         "cross-with-adr.md",
-        repo="theo-contracts",
-        blast="Changes the jwt claim shape consumed by theo-cloud.",
+        repo="contracts",
+        blast="Changes the jwt claim shape consumed by control-plane.",
         adrs="## ADRs\n\n### D1 — Version the claim instead of renaming it\n\nRationale.\n\n",
     )
-    report = check_opportunity_completeness(path)
+    report = check_opportunity_completeness(path, known_repos=REPOS)
     assert report["cross_repo"] is True
     assert report["adr_count"] == 1
     assert report["adr_missing"] is False
@@ -119,11 +124,11 @@ def test_own_repo_mention_does_not_make_it_cross_repo(tmp_path: Path) -> None:
     path = _opportunity(
         tmp_path,
         "self-mention.md",
-        repo="theo-lens",
-        blast="Confined to theo-lens; the theo-lens SDK surface is untouched.",
+        repo="web-console",
+        blast="Confined to web-console; the web-console SDK surface is untouched.",
     )
-    report = check_opportunity_completeness(path)
-    assert report["own_repo"] == "theo-lens"
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["own_repo"] == "web-console"
     assert report["foreign_repos"] == []
     assert report["cross_repo"] is False
 
@@ -139,9 +144,9 @@ def test_repos_named_outside_blast_radius_are_ignored(tmp_path: Path) -> None:
     path.write_text(
         "# Opportunity: Test\n\n"
         "**Item:** B-014\n"
-        "**Repo:** theo-lens\n"
+        "**Repo:** web-console\n"
         "**Mode:** review\n\n"
-        "## Context\n\nSimilar to something theo-rag and theo-memory already solved.\n\n"
+        "## Context\n\nSimilar to something search-api and memory-store already solved.\n\n"
         "## Corner 1 — Evidence\n\nText.\n\n"
         "## Corner 2 — Constraint Relation\n\nText.\n\n"
         "## Corner 3 — Blast Radius\n\nRepo-local; nothing downstream consumes it.\n\n"
@@ -149,5 +154,5 @@ def test_repos_named_outside_blast_radius_are_ignored(tmp_path: Path) -> None:
         "## Recommendation\n\n- Do X\n",
         encoding="utf-8",
     )
-    report = check_opportunity_completeness(path)
+    report = check_opportunity_completeness(path, known_repos=REPOS)
     assert report["cross_repo"] is False

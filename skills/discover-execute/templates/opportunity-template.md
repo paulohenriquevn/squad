@@ -75,7 +75,7 @@
      requires an `## ADRs` section below.
 
      Danger is proportional to position in the dependency graph: a change in
-     `theo-contracts` reaches everything downstream; one in a leaf repo reaches nothing.
+     `contracts` reaches everything downstream; one in a leaf repo reaches nothing.
      "Repo-local" is a legitimate and common answer — say it plainly rather than padding. -->
 
 ## Corner 4 — Verification

@@ -10,7 +10,7 @@ status: stable
 
 # The skill map
 
-**27 skills.** Most are a phase of a cycle and are invoked in an order the
+**31 skills.** Most are a phase of a cycle and are invoked in an order the
 cycle rule fixes; six are invoked on demand and belong to no chain.
 
 **Every row below carries three things**: what the skill does, when to reach for
@@ -57,6 +57,19 @@ Only a milestone has a checkbox, so only a milestone reaches `acceptance`. A
 
 ## The flows
 
+**Deciding what the product is — the one cycle a human attends:**
+
+```
+/brainstorm-vision      what it is, who for, and what it is NOT
+/brainstorm-objectives  OBJ-N, each with a metric and a horizon
+/brainstorm-trd         REQ-N, each citing the objective it serves
+/brainstorm-pieces      PIECE-N + the gate: 90% and a PERSON's signature
+   ↓
+/backlog-init           reads the four documents as context
+```
+
+Everything below this line runs unattended. That is what the gate above is for.
+
 **A hunch worth checking — the default maintenance loop:**
 
 ```
@@ -82,14 +95,25 @@ each with its own gate. A rule referring to the chain as a whole names the cycle
 
 ## Part 1 — The chain
 
-The pipeline is `backlog → discover → plan → implement → code-quality → review →
-release → acceptance`. Skills below are in the order they run.
+The pipeline is `brainstorm → backlog → discover → plan → implement → code-quality →
+review → release → acceptance`. Skills below are in the order they run.
+
+### BRAINSTORM — deciding what the product is
+
+The only cycle with a person in it. Four phases, one document each, then a gate.
+
+| Skill | Does | Use when | Do NOT |
+|---|---|---|---|
+| `brainstorm-vision` | Writes `wiki/product/product-vision.md`: the named user, the problem, what it is, and what it is **not** | Starting a product, adopting the kit into a new scope, or when "what are we building?" gets different answers | Accept a category ("developers") as the named user, or skip the non-goals because the session is going well — it is going well because nothing has been ruled out |
+| `brainstorm-objectives` | Writes `OBJ-N` objectives, each with a metric containing a number and a horizon | The vision exists and nobody can say what would count as achieving it | Write an objective that cannot fail. "Improve developer experience" closes never, so it is a value — put it in the vision, where nothing traces to it |
+| `brainstorm-trd` | Writes `REQ-N` requirements, each citing the `OBJ-N` it serves | The objectives exist and the team is arguing about implementation | Name a technology. If two competent teams could not satisfy it differently, it is a design and belongs to `cycle-plan`, where it gets an audit and a score |
+| `brainstorm-pieces` | Writes `PIECE-N` components, generates the unticked sign-off, and runs the product-alignment gate | The TRD is complete | **Tick your own boxes.** The one anti-pattern that defeats the gate. Never read `AWAITING_REVIEW` as a pass — a judge may not sign this one, by design |
 
 ### BACKLOG — deciding what is worth doing
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
-| `backlog-init` | Creates `BACKLOG.md` once, inventorying repos from disk and deriving the routing table | The project has no registry yet | Write the inventory from `CLAUDE.md` — it drifts; `find` / `git -C` is the source. Never seed "obvious" items: every one needs a human `why_now` and a DoD |
+| `backlog-init` | Creates `BACKLOG.md` once, inventorying repos from disk and deriving the routing table | The project has no registry yet — after `/brainstorm-pieces` returns `PRODUCT_ALIGNED`, whose four documents it reads as context | Write the inventory from `CLAUDE.md` — it drifts; `find` / `git -C` is the source. Never seed "obvious" items: every one needs a human `why_now` and a DoD |
 | `backlog-item` | Registers one `B-NNN` — a hypothesis; evidence is **not** required yet | Anyone notices something worth fixing, measuring or verifying | Ask for evidence during the intake grill — that turns intake into triage and silences the hunch this phase exists to capture. Never write to `BACKLOG.md` before the grill completes |
 | `backlog-review` | Reports what has rotted in the registry — duplicate ids, evidence-less triaged items, kills with no reason, repos routing to nobody | Before trusting the registry to pick work | Edit the backlog. It is read-only by contract: a reviewer that edits cannot be trusted to report what it found |
 
@@ -122,7 +146,7 @@ release → acceptance`. Skills below are in the order they run.
 | `implement` | Executes the plan through a TDD halt-loop with the wiring triad and mechanised gates | The plan is at least `SHIPPABLE_WITH_CAVEATS`, on `workspace` | Mark a task done because tests pass without the wiring triad — that is the difference between code that compiles and code that runs. Never skip REFACTOR "to save time" |
 | `code-quality` | Audits for dead symbols, fabricated APIs, cross-package orphans and weak tests | After the implement halt-loop closes | Edit source — read-only by contract. Never add `--force` / `--skip-checks` / `--accept-caveats` |
 | `review` | The most rigorous gate: quality gates, line-by-line plan vs implementation, integration depth, edge-case coverage, by parallel agents in isolated worktrees | `/implement` validation passed | Approve unreviewed scope, fabricate a finding, or merge. It reviews; it never merges, and `NEEDS_DEEPER` sends the work back to `/plan-write` for re-scoping |
-| `release` | Semver tag derived from the CHANGELOG, `develop → main` PR with rendered notes | `/review` returned `READY_TO_MERGE` | Auto-merge the PR — never, under any circumstance. Never cut a release that does not trace to a `READY_TO_MERGE` audit |
+| `release` | Semver tag derived from the CHANGELOG, `develop → main` PR with rendered notes, merged once the chain is verified | `/review` returned `READY_TO_MERGE` | Merge a PR whose chain did NOT pass, or reach for `gh pr merge --admin` when branch protection refuses. Merging is inside the envelope since 2026-09-01; bypassing a gate never was. Never cut a release that does not trace to a `READY_TO_MERGE` audit |
 | `acceptance` | Exercises the **released** deliverable against the milestone's Definition-of-done; the only gate that flips a ROADMAP checkbox | After the release exists | Re-run the test suite and call it acceptance — that passed three phases ago. Never mark a criterion `passed` by reading code: reading is not exercising |
 
 ---

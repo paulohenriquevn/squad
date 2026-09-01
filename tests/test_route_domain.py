@@ -3,7 +3,7 @@
 WHY THESE TESTS NAME NO REPOSITORIES
 ------------------------------------
 Until 2026-08-26 half of this file measured the table of the ecosystem the kit was
-written in: `len(table) == 8`, `("theo-lens", "data-plane-ts")`, five repos with no
+written in: `len(table) == 8`, `("web-console", "data-plane-ts")`, five repos with no
 checkout. The eight specialists that table named left the kit (the table is DERIVED
 from the project, `rules/cycle-backlog.md § Domain routing`), and with them goes any
 possibility of asserting about a concrete map — this repository may have a table,
@@ -217,7 +217,7 @@ def test_a_domain_naming_a_missing_specialist_exits_3(tmp_path, capsys) -> None:
 
     It lived only here, and `install.sh` does not copy `tests/` — so in every
     consumer repository the guard was absent. Measured while installing into
-    TheoCode: a second three-column table inside `## Domain routing` parses as
+    a TypeScript monorepo: a second three-column table inside `## Domain routing` parses as
     routing, inventing domains whose specialist files were never written, and
     `route_domain.py` answered `routed: true` / `agent: null` with exit 0.
     """
@@ -387,7 +387,7 @@ def test_a_specialist_path_in_plugin_layout_is_recognised(tmp_path: Path) -> Non
     `AGENT_RE` required the path to start with `agents/`, so a consumer that
     wrote the plugin-layout path — which is the correct path in a plugin
     install, and what `/backlog-init` prints there — had its specialist read as
-    absent. Measured on `theokit-tui`: two domains, both with a specialist file
+    absent. Measured on an adopter: two domains, both with a specialist file
     on disk, both parsed with `agent: None`.
 
     A markdown link wrapping it is the same again. The consumers that wrote
@@ -398,7 +398,7 @@ def test_a_specialist_path_in_plugin_layout_is_recognised(tmp_path: Path) -> Non
     rule.write_text(
         "## Domain routing\n\n"
         "| Domain | Repos | Specialist |\n|---|---|---|\n"
-        "| `tui-library` | `theokit-tui` | [`.claude/agents/tui-library.md`](.claude/agents/tui-library.md) |\n"
+        "| `tui-library` | an adopter | [`.claude/agents/tui-library.md`](.claude/agents/tui-library.md) |\n"
         "| `plain` | `svc-b` | `agents/plain.md` |\n\n## Verdicts\n",
         encoding="utf-8",
     )
@@ -421,7 +421,7 @@ def test_rows_the_parser_skipped_are_countable(tmp_path: Path) -> None:
     like data and did not become domains.
 
     Only the first contiguous table of the section counts. A second table under
-    the same heading — `theokit-tui` keeps `| Domain | Reason |` for exclusions
+    the same heading — an adopter keeps `| Domain | Reason |` for exclusions
     right below — is not a failed routing table, and counting its rows would
     refuse a migration that is complete.
     """

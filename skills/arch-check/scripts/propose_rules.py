@@ -14,7 +14,7 @@ An edge that is already one-way is a measured invariant, not an opinion. If `tui
 is *already true*; writing it down changes no code and freezes a property the repo has. If both
 directions carry traffic, there is no invariant to freeze and this tool proposes nothing.
 
-usetheo-labs/agent-builder states the same rule of adoption from the other side:
+a TypeScript monorepo states the same rule of adoption from the other side:
 
     "None of these rules was written against an existing violation: all five came out at 0
      violations in the commit that introduced them, which means they FREEZE a good state
@@ -149,7 +149,7 @@ def allow_list(graph: Graph) -> dict[str, list[str]]:
 
     This is the rigorous form, and it is how go-arch-lint and layered-crate express boundaries
     natively: a unit declares what it may depend on, and the linter forbids the rest. Enumerating
-    forbidden PAIRS instead is both weaker and unusable — theo-cloud has 27 units, which is 702
+    forbidden PAIRS instead is both weaker and unusable — control-plane has 27 units, which is 702
     ordered pairs, and 302 of them never touch. A proposal of 302 rules is not adopted; it is
     skimmed and dismissed, and the criterion this tool exists to serve dies with it.
 
@@ -168,7 +168,7 @@ def independent_pairs(graph: Graph) -> list[Candidate]:
 
     Both directions empty is as measured as one direction empty, and it states something stronger:
     these two are siblings, and neither is a library of the other. Written by hand in
-    usetheo-labs/agent-builder as `surfaces-do-not-import-each-other`, with the reasoning that code both
+    a TypeScript monorepo as `surfaces-do-not-import-each-other`, with the reasoning that code both
     need belongs in a third place — so the rule is what keeps the third place necessary.
 
     Restricted to units that participate in the graph at all. Two directories with no edges in any
@@ -370,7 +370,7 @@ def go_graph(manifest_dir: Path) -> Graph:
     version of this tool refused it, which meant the largest Go repo in the ecosystem was the one
     it could not read.
 
-    Modules OUTSIDE the repo are dropped. `theo`'s workspace uses `../theo-contracts`, a sibling
+    Modules OUTSIDE the repo are dropped. `theo`'s workspace uses `../contracts`, a sibling
     repository with its own boundaries; folding its packages in here would produce rules for
     `theo` about code `theo` does not own.
     """
@@ -462,7 +462,7 @@ def _add_module(graph: Graph, manifest_dir: Path, *, prefix: str) -> None:
         # `Imports` is production only. Test imports are measured apart, in `test_edges`, because
         # folding them in here would WIDEN the production allow-list: a test crossing a boundary
         # would license production to cross it too, which is the softening this tool exists to
-        # refuse. Measured on theo-cloud: 49 of the violations against a production-derived
+        # refuse. Measured on control-plane: 49 of the violations against a production-derived
         # allow-list came from `_test.go` files alone.
         for imported in pkg.get("Imports") or []:
             target = joined(_unit_of_import(str(imported), module, own))
@@ -521,7 +521,7 @@ def typescript_graph(manifest_dir: Path) -> Graph:
 
 #: `await import('...')`. The shared extractor reads import STATEMENTS; a dynamic import is a call
 #: expression and it does not see one. That is fine for D2, whose question is whether a symbol was
-#: fabricated, and wrong here, where the question is whether an edge exists. Measured on TheoCode:
+#: fabricated, and wrong here, where the question is whether an edge exists. Measured on a TypeScript monorepo:
 #: 17 of `cli -> agent`'s 23 crossings and 3 of `tui -> agent`'s are dynamic, so the static count
 #: alone under-reports by 20. Direction survived there — every dynamic import ran the same way as
 #: a static one — but a repo where a reverse edge exists ONLY dynamically would get a one-way rule
@@ -581,7 +581,7 @@ def _iter_json_objects(stream: str):
 def _unit_of_import(import_path: str, module: str, packages: frozenset[str] = frozenset()) -> str:
     """The smallest prefix of the path that is ITSELF a package. External imports are not units.
 
-    Taking the first segment was wrong, and measurably so. In theo-cloud, `internal/` holds 0 Go
+    Taking the first segment was wrong, and measurably so. In control-plane, `internal/` holds 0 Go
     files of its own and 28 subdirectories: it groups, it does not implement. Collapsing all 28
     into one unit hid every dependency between them — `internal/auth -> internal/account` became
     an invisible self-import — and left 44 packages matched by no component at all. The rules
@@ -604,7 +604,7 @@ def _unit_of_import(import_path: str, module: str, packages: frozenset[str] = fr
         return "."
     # Every segment, not just the first. `dashboard/node_modules/flatted/golang/pkg/flatted` is a
     # Go file vendored inside a TypeScript app's node_modules; checking only the head let it
-    # through and it became an architectural unit of theo-cloud.
+    # through and it became an architectural unit of control-plane.
     if any(segment in _NOT_A_GO_UNIT for segment in rest.split("/")):
         return ""
     if not packages:
@@ -636,13 +636,13 @@ def _ts_sources(root: Path) -> list[Path]:
 def _workspace_packages(root: Path) -> dict[str, Path]:
     """`name -> package directory`, for every package the root `package.json` declares.
 
-    A monorepo's cross-package imports are BARE specifiers — `@theocode/agent`, not `../agent`.
-    Skipping them because "a bare specifier is a package" was true and catastrophic: on TheoCode
+    A monorepo's cross-package imports are BARE specifiers — `@a-typescript-monorepo/agent`, not `../agent`.
+    Skipping them because "a bare specifier is a package" was true and catastrophic: on a TypeScript monorepo
     it measured 0 edges across 4 units that exchange 80 imports, and then proposed `independence`
     — a rule forbidding every one of them. Adopting it would have been red on arrival, which is
     the one thing this tool exists to make impossible.
 
-    `workspaces` is the declaration that separates `@theocode/agent` (a unit of this repo) from
+    `workspaces` is the declaration that separates `@a-typescript-monorepo/agent` (a unit of this repo) from
     `react` (somebody else's code). Without it there is nothing to distinguish them by, and
     guessing from the `@scope/` prefix would invent architecture out of a naming convention.
     """
@@ -676,7 +676,7 @@ def _workspace_packages(root: Path) -> dict[str, Path]:
 def _export_target(package_dir: Path, subpath: str) -> Path | None:
     """The file a workspace package's `exports` map points a subpath at.
 
-    `exports` is the resolution contract — it is what makes `@theocode/shared/shutdown` mean
+    `exports` is the resolution contract — it is what makes `@a-typescript-monorepo/shared/shutdown` mean
     `packages/shared/src/shutdown.ts` at runtime. Reading it beats guessing a layout: `shared`
     declares three subpath exports and NO `.` entry, so any convention like "the unit is
     `<pkg>/src/index.ts`" would have resolved nothing for it.

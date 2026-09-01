@@ -111,7 +111,12 @@ def main() -> int:
 
     coverage = check_corner_coverage(opportunity_path)
     evidence = check_evidence_pointers(opportunity_path)
-    completeness = check_opportunity_completeness(opportunity_path)
+    # Resolved from the artifact, the same walk `_resolve_thresholds` performs:
+    # cross-repo detection reads the project's routing table, and a scorer run from
+    # elsewhere would otherwise find no table and report the blast radius unchecked.
+    completeness = check_opportunity_completeness(
+        opportunity_path, project_root=_find_project_root(opportunity_path)
+    )
     smells = check_spec_smells(opportunity_path, rubric_path)
 
     # Per-dimension scores (0-100)

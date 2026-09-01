@@ -203,7 +203,7 @@ def test_fail_soft_with_an_adr_dismissing_every_soft_cap_does_not_demote() -> No
     mutation runner to FAIL_SOFT, so a repository that has not set up Stryker
     gets FAIL_SOFT on every run, forever; that caps every plan at 70 and demotes
     it to NON_SHIPPABLE; and `cycle-plan.md` requires >= SHIPPABLE_WITH_CAVEATS
-    to enter `/implement`. Measured by the consumer session in `theokit-skills`,
+    to enter `/implement`. Measured by the consumer session in an adopter,
     which is blocked right now on a plan with zero hard caps, zero soft caps of
     its own, and 91.6 weighted.
 

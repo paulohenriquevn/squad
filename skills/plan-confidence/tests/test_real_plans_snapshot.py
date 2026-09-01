@@ -42,7 +42,7 @@ SNAPSHOTS: dict[str, dict[str, object]] = {
         "expected_hard_caps_subset": set(),
     },
     # Completed: real plan that uses 5-column matrix; tests #2 fix (out-of-scope detection)
-    "theo-cli-cohesion-remediation-plan.md": {
+    "cli-tool-cohesion-remediation-plan.md": {
         "verdict_in": {"SHIPPABLE_WITH_CAVEATS", "SHIPPABLE"},
         "score_min": 60,
         "expected_hard_caps_subset": set(),  # after #2 fix, F-CODE-01 deferred not unmapped

@@ -89,8 +89,8 @@ ROUTING_TABLE = """# Cycle: BACKLOG
 
 | Domain | Repos | Specialist |
 |---|---|---|
-| `data-plane-ts` | `theo-lens`, `theo-memory` | `agents/data-plane-ts.md` |
-| `platform-cli` | `theo-cli` | `agents/platform-cli.md` |
+| `data-plane-ts` | `web-console`, `memory-store` | `agents/data-plane-ts.md` |
+| `platform-cli` | `cli-tool` | `agents/platform-cli.md` |
 
 ## Next
 """
@@ -112,7 +112,7 @@ def test_unroutable_repo_is_a_blocker(tmp_path: Path) -> None:
     check never ran.
     """
     _with_routing_table(tmp_path)
-    report = check_backlog(write_backlog(tmp_path, item_block(repo="theo-gateway")))
+    report = check_backlog(write_backlog(tmp_path, item_block(repo="gateway")))
     assert report["routing_table_read"] is True
     assert "unroutable_repo" in _checks(report)
     assert report["verdict"] == "INVALID"
@@ -120,7 +120,7 @@ def test_unroutable_repo_is_a_blocker(tmp_path: Path) -> None:
 
 def test_routable_repo_produces_no_finding(tmp_path: Path) -> None:
     _with_routing_table(tmp_path)
-    report = check_backlog(write_backlog(tmp_path, item_block(repo="theo-lens")))
+    report = check_backlog(write_backlog(tmp_path, item_block(repo="web-console")))
     assert report["routing_table_read"] is True
     assert "unroutable_repo" not in _checks(report)
 
@@ -227,7 +227,7 @@ def test_every_finding_declares_its_kind(tmp_path: Path) -> None:
 def test_a_duplicated_status_is_a_blocker(tmp_path: Path) -> None:
     """Two `status:` lines leave the block with two answers, and every reader takes the last.
 
-    Measured on theo-db: B-021 carries `raw` then `triaged`, B-022 `planned` then `raw`. The
+    Measured on db-engine: B-021 carries `raw` then `triaged`, B-022 `planned` then `raw`. The
     index buckets on status, so an ambiguous one makes the summary arbitrary rather than
     wrong-in-a-way-you-can-see.
     """
@@ -240,7 +240,7 @@ def test_a_duplicated_status_is_a_blocker(tmp_path: Path) -> None:
 
 
 def test_other_repeated_fields_are_not_reported(tmp_path: Path) -> None:
-    """`partial_progress` four times on theo-cloud's B-031 is an append-one-line-per-increment
+    """`partial_progress` four times on control-plane's B-031 is an append-one-line-per-increment
     log the team keeps on purpose, and `evidence: none-yet` followed by a pointer is an item that
     advanced. A gate that reports those is one people learn to override."""
     backlog = write_backlog(

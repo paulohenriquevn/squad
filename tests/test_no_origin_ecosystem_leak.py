@@ -1,36 +1,41 @@
-"""The consumer does not inherit another ecosystem's repository map.
+"""No ecosystem's own repository names travel with the kit.
 
 THE DEFECT THIS FIXES
 ---------------------
 `rules/cycle-backlog.md` carries the per-domain routing table, and the version
-versioned here was once the origin ecosystem's: eight domains pointing at
-`theo-cloud`, `theo-rag`, `theo-contracts` and twelve more repositories.
+versioned here was once one specific ecosystem's: eight domains pointing at
+repositories only that organisation had.
 
 The file itself already described the consequence, with a measurement:
 
     "A consumer that keeps this table inherits a map of repos it does not have,
-     and gate G1 then refuses every item it files. Measured on `theokit-sdk`
+     and gate G1 then refuses every item it files. Measured on an adopter
      (2026-08-18): 88 items with measured file:line evidence, all
      BLOCKER/unroutable_repo."
 
-Knowing and shipping anyway is the part this test ends. `install.sh` already
-preserved a consumer's DERIVED table in `--merge` mode; what was missing was the
-clean-install case, where there is no previous table to preserve and the origin
-ecosystem's went out by default.
+WHY THIS TEST GREW
+------------------
+Its first version measured only what `install.sh` COPIES — `rules/*.txt` and the
+routing section of `cycle-backlog.md`. That is where the refusal originates, so it
+was the right place to start and the wrong place to stop: the origin ecosystem's
+name also sat in `README.md`, in the plugin manifest's `description`, and in the
+frontmatter `description` of two skills, which is the text Claude Code reads when
+deciding whether to reach for a skill at all.
 
-WHY THE TEST MEASURES THE INSTALL, NOT THE REPOSITORY
-------------------------------------------------------
-A repository's table is correct FOR IT — whoever derived it really maintains those
-repos, and `route_domain.py` depends on it to run there. The defect was never
-having it; it was shipping it. So the assertion is about what leaves the
-installer, and each repository stays free to describe its own ecosystem.
+Those are not routing failures. They are identity: a kit that says it maintains
+one named product, shipped to somebody maintaining a different one. So the sweep
+now covers the whole versioned surface, and the install assertions stay as the
+narrower, sharper case underneath it.
 
-This repository stopped exercising that freedom on 2026-08-26: the table and the eight
-specialists it named left, and the section began being born empty in the source
-too. The test still holds, and is still what guarantees the property — the source
-may go back to describing an ecosystem at any moment, and the shipped copy may
-not.
+WHAT THE PATTERN DELIBERATELY DOES NOT MATCH
+--------------------------------------------
+`cap-theorem-specialist` is a skill in this kit and `theory of mind` appears in
+`skills/skill-creator/SKILL.md`. A case-insensitive search for the origin token
+flags both. The pattern below is anchored so that it cannot: the token must be
+followed by `-` plus a lowercase letter, or by `kit`, or preceded by `use`, or
+capitalised and followed by another capital (`TheoCode`).
 """
+
 from __future__ import annotations
 
 import re
@@ -41,26 +46,137 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 
-#: Names that only make sense in the origin ecosystem. Deliberately specific:
-#: `control-plane` or `engine-go` on their own are generic terms a consumer may
-#: legitimately use as a domain name of their own.
-ORIGIN_MARKERS = (
-    "theo-cloud",
-    "theo-rag",
-    "theo-memory",
-    "theo-lens",
-    "theo-trust",
-    "theo-skills",
-    "theo-promptly",
-    "theo-contracts",
-    "theo-infra-modules",
-    "theo-infra-live",
-    "theo-traefik-mcp",
-    "theo-cli",
-    "theo-storage",
-    "usetheo.dev",
-    "@usetheo/",
-)
+#: Anchored so `theorem` and `theory` never match. See the module docstring.
+ORIGIN_RE = re.compile(r"theo-[a-z]|theokit|usetheo|Theo[A-Z]")
+
+#: Generated, vendored or historical trees. `study-material/` is third-party and
+#: read-only by contract (`hooks/boundary-check.sh` blocks writes to it), and the
+#: caches hold compiled copies of files this sweep already reads at source.
+SKIP_PARTS = {
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".hypothesis",
+    ".benchmarks",
+    "study-material",
+    "records",
+}
+
+#: Files that must NAME the token in order to FORBID it. A guard against a string
+#: cannot avoid containing that string, and exempting them is what lets three
+#: independent guards coexist instead of one deleting the others.
+#:
+#: The exemption is by exact path and each entry is a guard — never a file that
+#: merely happens to mention the name. Widening this set is how the sweep stops
+#: working, so a new entry needs the same justification these three carry.
+GUARD_FILES = {
+    "tests/test_no_origin_ecosystem_leak.py",
+    "skills/plan-confidence/tests/test_audit_findings.py",
+    "skills/plan-confidence/tests/test_portability.py",
+}
+
+#: The address of a real external dependency, which is not the same thing as this
+#: kit claiming to maintain somebody's product.
+#:
+#: `cycle-judge-codex` is delivered by a plugin that lives outside this repository.
+#: Its coordinates appear in an install instruction (`/plugin marketplace add …`) and
+#: in the links a reader follows to check the contract this kit consumes. Replacing
+#: the org with a placeholder does not make the kit more portable — it makes the
+#: install instruction wrong, and a broken instruction is a worse outcome than a
+#: generic one.
+#:
+#: The exemption is the exact repository slug and nothing else, so it cannot widen:
+#: any OTHER use of the token still fails, in this file or any future one. That is
+#: the difference between exempting an address and exempting a name.
+EXTERNAL_DEPENDENCIES = ("usetheodev/judge-codex-plugin-cc",)
+
+
+def _leaks(text: str) -> list[str]:
+    """Matches, with the declared external-dependency addresses removed first.
+
+    Removing them from the TEXT rather than filtering the matches is what keeps the
+    exemption narrow: `usetheodev/other-thing` still leaks, because only the exact
+    declared slug is elided before the pattern runs.
+
+    The elision is right-anchored, and that is not a detail. A plain substring
+    replace also elides the slug when it is a PREFIX of something longer, so
+    `usetheodev/judge-codex-plugin-cc-fork` — a different repository — passed as
+    though it were the declared one. Caught by
+    `test_the_external_dependency_exemption_does_not_widen`, which is the whole
+    reason that test exists: an exemption nobody probes is a door.
+    """
+    for dep in EXTERNAL_DEPENDENCIES:
+        text = re.sub(rf"{re.escape(dep)}(?![A-Za-z0-9_.-])", "", text)
+    return sorted(set(ORIGIN_RE.findall(text)))
+
+
+def _versioned_files() -> list[Path]:
+    out = subprocess.run(  # noqa: PLW1510
+        ["git", "-C", str(REPO), "ls-files"],
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, out.stderr
+    return [
+        REPO / line
+        for line in out.stdout.splitlines()
+        if line and not SKIP_PARTS.intersection(Path(line).parts)
+    ]
+
+
+def test_no_versioned_file_names_the_origin_ecosystem():
+    """The whole tracked surface, not only what the installer copies.
+
+    This is the assertion that keeps the name from coming back. A single
+    `SKILL.md` description reintroducing it is enough to tell every consumer
+    that this kit maintains somebody else's product.
+    """
+    dirty: dict[str, list[str]] = {}
+    for path in _versioned_files():
+        rel = str(path.relative_to(REPO))
+        if rel in GUARD_FILES:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        found = _leaks(text)
+        if found:
+            dirty[rel] = found
+
+    assert not dirty, (
+        "versioned files name a specific ecosystem's repositories or org: "
+        f"{dirty}. The kit describes ANY product that adopts it; a named one "
+        "makes every consumer inherit a map of repos they do not have."
+    )
+
+
+def test_the_external_dependency_exemption_does_not_widen():
+    """The declared slug passes; anything else wearing the same org does not.
+
+    An exemption nobody probes is a door. This is the probe: the plugin's real
+    address is allowed because a broken install instruction is worse than a generic
+    one, and that argument covers exactly one string.
+    """
+    allowed = "install it with `/plugin marketplace add usetheodev/judge-codex-plugin-cc`"
+    assert _leaks(allowed) == []
+
+    for smuggled in (
+        "usetheodev/judge-codex-plugin-cc-fork",  # a suffix on the real slug
+        "usetheodev/some-other-repo",             # same org, different repo
+        "https://usetheo.dev",                    # the org's domain
+        "theo-cloud and theo-rag",                # plain repository names
+    ):
+        assert _leaks(smuggled), f"{smuggled!r} slipped through the exemption"
+
+
+def test_no_versioned_path_names_the_origin_ecosystem():
+    """A fixture DIRECTORY carries the name just as loudly as a line of prose."""
+    dirty = [
+        str(p.relative_to(REPO)) for p in _versioned_files() if ORIGIN_RE.search(str(p))
+    ]
+    assert not dirty, f"paths naming the origin ecosystem: {dirty}"
 
 
 @pytest.fixture(scope="module")
@@ -75,12 +191,13 @@ def installed_rules(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactor
     return target / ".claude" / "rules"
 
 
-def _leaks(text: str) -> list[str]:
-    return sorted({m for m in ORIGIN_MARKERS if m in text})
-
-
 def test_routing_table_ships_empty(installed_rules: Path):
-    """A clean install must not name another ecosystem's repositories."""
+    """A clean install must not name another ecosystem's repositories.
+
+    Narrower than the sweep above and kept separate on purpose: this is the
+    path where the consequence was actually measured, and it must keep failing
+    for its own reason even if the sweep is ever relaxed.
+    """
     backlog = installed_rules / "cycle-backlog.md"
     assert backlog.is_file()
     found = _leaks(backlog.read_text(encoding="utf-8"))
@@ -106,21 +223,22 @@ def test_routing_table_still_tells_the_consumer_what_to_do(installed_rules: Path
 
 @pytest.mark.parametrize("name", ["live-target.txt", "acceptance-target.txt"])
 def test_target_declarations_ship_undeclared(installed_rules: Path, name: str):
-    """Um alvo herdado faz o kit sondar o produto de outra pessoa.
+    """An inherited target makes the kit probe somebody else's product.
 
     `/discover-execute` in live-test mode and `/acceptance` exercise what these
     files declare. Inheriting the origin declaration is not just noise: it produces
     "evidence" about a system that is not the consumer's.
     """
     found = _leaks((installed_rules / name).read_text(encoding="utf-8"))
-    assert not found, f"{name} entregue cita o ecossistema de origem: {found}"
+    assert not found, f"the shipped {name} cites the origin ecosystem: {found}"
 
 
 def test_every_shipped_config_file_is_clean(installed_rules: Path):
     """A sweep over ALL shipped configuration, not only the known files.
 
-    Um `rules/*.txt` novo criado depois deste teste entra na varredura sozinho —
-    that is the difference between a test that pins today's list and one that pins the rule.
+    A new `rules/*.txt` created after this test joins the sweep by itself —
+    that is the difference between a test that pins today's list and one that
+    pins the rule.
     """
     dirty = {
         p.name: _leaks(p.read_text(encoding="utf-8", errors="replace"))

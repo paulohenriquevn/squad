@@ -91,7 +91,7 @@ sequential chain with extra machinery.
 
 ### Step 3 — Read what parked
 
-An item that parks is the gate working. The first run over `theo` returned **0
+An item that parks is the gate working. The first run over a real registry returned **0
 planned, 3 parked**, and all three refused to fabricate the numbers that would
 have let them pass — which is the outcome the anti-patterns ask for.
 

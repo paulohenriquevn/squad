@@ -266,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         # send the detector to the manifest's directory. Passing repo_root made cargo-udeps exit
         # with "could not find `Cargo.toml`", which the detector honestly reported as
         # `auditor_unavailable_cargo-udeps` — a soft cap blocking the cycle over a path assumption
-        # rather than over the code (measured on theo-db 2026-07-23, usetheoai/theo-db#175).
+        # rather than over the code (measured on db-engine 2026-07-23, an adopter's issue tracker).
         # Collapses to repo_root when the manifest sits at the root, which is the common case.
         manifest_dir = (repo_root / manifest_marker).parent
         d1_findings, d1_crash = _safe_call(

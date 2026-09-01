@@ -1,4 +1,4 @@
-"""D2/TypeScript — dois defeitos medidos no theo-promptly em 2026-08-03.
+"""D2/TypeScript — dois defeitos medidos no promptly em 2026-08-03.
 
 Both make the detector call FABRICATED what resolves perfectly, and together they
 produced 112 findings (60 HARD) in a repository whose build and tests are green. A
@@ -14,9 +14,9 @@ from scripts.detectors.typescript import TypescriptDetector
 
 
 def _workspace(tmp_path: Path) -> Path:
-    """Minimal pnpm monorepo: root `theo-promptly`, two members, one importing the other."""
+    """Minimal pnpm monorepo: root `promptly`, two members, one importing the other."""
     (tmp_path / "package.json").write_text(
-        json.dumps({"name": "theo-promptly", "private": True}), encoding="utf-8"
+        json.dumps({"name": "promptly", "private": True}), encoding="utf-8"
     )
     (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n- packages/*\n", encoding="utf-8")
     core = tmp_path / "packages" / "core"
@@ -24,11 +24,11 @@ def _workspace(tmp_path: Path) -> Path:
     for d in (core, api):
         (d / "src").mkdir(parents=True)
     (core / "package.json").write_text(
-        json.dumps({"name": "@usetheo/promptly"}), encoding="utf-8"
+        json.dumps({"name": "@scope/promptly"}), encoding="utf-8"
     )
     (api / "package.json").write_text(
-        json.dumps({"name": "@usetheo/promptly-api",
-                    "dependencies": {"@usetheo/promptly": "workspace:*"}}),
+        json.dumps({"name": "@scope/promptly-api",
+                    "dependencies": {"@scope/promptly": "workspace:*"}}),
         encoding="utf-8",
     )
     return api
@@ -38,13 +38,13 @@ def test_sibling_workspace_import_is_not_reported_as_fabricated(tmp_path, monkey
     """Importing a workspace SIBLING is not fabrication.
 
     The self-reference patch (2026-05-30) resolves only the ROOT package.json's name
-    (`theo-promptly`) — which nobody imports. Every sibling import went to the registry,
+    (`promptly`) — which nobody imports. Every sibling import went to the registry,
     took a 404 and
     virava HARD `symbol_fabrication_typescript`.
     """
     api = _workspace(tmp_path)
     src = api / "src" / "app.ts"
-    src.write_text("import { createPromptVersion } from '@usetheo/promptly';\n", encoding="utf-8")
+    src.write_text("import { createPromptVersion } from '@scope/promptly';\n", encoding="utf-8")
 
     # The registry must NEVER be queried for a local package — if it is, that is the bug.
     from scripts import _registry

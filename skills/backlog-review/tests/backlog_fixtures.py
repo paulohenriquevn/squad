@@ -13,7 +13,7 @@ def item_block(
     title: str = "Reduce round-trips in the trace listing",
     *,
     domain: str = "data-plane-ts",
-    repo: str = "theo-lens",
+    repo: str = "web-console",
     suggested_mode: str = "review",
     source: str = "human",
     evidence: str = "none-yet",

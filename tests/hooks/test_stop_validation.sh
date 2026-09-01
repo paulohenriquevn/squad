@@ -102,7 +102,7 @@ rc=$(run_hook)
 assert_exit "source changed with CHANGELOG update => exit 0" 0 "$rc"
 teardown
 
-# ---- Comment-only change to source => exit 0 (colhido do theokit-tui) ----
+# ---- Comment-only change to source => exit 0 (colhido do an adopter) ----
 # A comment-only change has NOTHING to announce to a consumer, and Rule 6 says to write
 # for the consumer. Demanding an entry for it invites the two worst outcomes: a fabricated
 # line polluting the public contract, or the override — and reaching for the override to

@@ -285,7 +285,7 @@ def test_the_bypass_is_still_closed_where_a_registry_exists(tmp_path: Path) -> N
 def test_the_kit_does_not_judge_its_own_fixtures(tmp_path: Path) -> None:
     """A plan inside the installed kit is tooling, not the project's work.
 
-    `theo-platform` has a `BACKLOG.md`, so the registry check above passes and the
+    `platform` has a `BACKLOG.md`, so the registry check above passes and the
     floor fired on `.claude/skills/plan-confidence/fixtures/good-plan.md` — the
     kit's own fixture, judged as if the project had written it. Eight tests red in
     that consumer, none of them about the project's plans.

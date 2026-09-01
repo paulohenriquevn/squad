@@ -6,7 +6,7 @@ the merge commit that lands on `main`, so it is NEVER an ancestor of `workspace`
 
     git describe --tags --abbrev=0             ->  v0.52.1
     git tag --sort=-v:refname | head -1        ->  v0.64.0
-    npm view @theokit/tui version              ->  0.64.0
+    npm view @acme/tui version              ->  0.64.0
     git merge-base --is-ancestor v0.64.0 HEAD  ->  NO
 
 Twelve versions stale, structurally — fetching does not help. A release cut from `workspace` would

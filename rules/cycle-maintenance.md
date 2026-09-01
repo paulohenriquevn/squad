@@ -81,7 +81,7 @@ LOOP BACK to SELECT
 | `ITEM_SHIPPED` | The item reached `RELEASED` and its block says `shipped` | Loop back to SELECT. Written by `scripts/advance_items.py` |
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
 | `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it. Decided by `all_changes_are_untracked()` in `scripts/advance_items.py`, which runs the `git check-ignore` test defined below | Loop back to SELECT. **A terminal state, not a failure** |
-| `ITEM_IN_FLIGHT` | Paused at a human-approval gate | Resume when the human answers |
+| `ITEM_IN_FLIGHT` | Paused where only a person can act — branch protection requiring a reviewer, a T3 call, a dependency in another repository | Resume when the human answers |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it. _(emitted externally: the CONDITION is detected by `route_domain.py`, which prints `UNROUTED` and exits 3; the token is written by the runner that surfaces it. The skill that named it was retired 2026-08-31, and the detector was not)_ |
 | `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover-execute --sweep {domain}`.** Not a finish line |
@@ -105,17 +105,27 @@ is the work that decision was blocking.
 A report naming no open item is reported as exactly that. It is the case only a
 person can move, and the one most easily mistaken for handled.
 
-## ADVANCE runs after the human, never instead of them
+## Why ADVANCE is safe to mechanise — and why the old reason expired
 
-Measured on the first autonomous run: the executing session's own plan ends at
-*/release (stops at PR_OPEN_AWAITING_APPROVAL)*. A session driving this cycle
-unattended **will never emit `RELEASED`** — the approval, the merge and the tag are
-all past a gate it cannot pass.
+This section used to argue that ADVANCE could not close an item on its own because
+*"a session driving this cycle unattended will never emit `RELEASED`* — the approval,
+the merge and the tag are all past a gate it cannot pass", so *"by the time it acts,
+every judgement it might have needed has been made by a person."*
 
-That is what makes ADVANCE safe to mechanise, and it is the opposite of how it
-first read. It is not the autonomous loop closing its own items; it is the
-bookkeeping that follows a decision somebody already made. By the time it acts,
-every judgement it might have needed has been made by a person.
+**That stopped being true on 2026-09-01.** Envelope floor 2 now permits the system to
+merge a pull request whose full chain passed, so the same loop that produces the
+release can emit `RELEASED` and then close the item on it. Keeping the old paragraph
+would have left a safety argument that had quietly expired — the shape this kit calls
+a contract without a mechanism, in the direction where the prose is the stale half.
+
+The real reason ADVANCE is safe is narrower and did not change: **it moves an item only
+on an explicit `cycle:phase:end` with `cycle=release` and `verdict=RELEASED`**, a token
+that exists only downstream of every gate in the chain. It infers nothing from files on
+disk, writes through `backlog_status.py` so an illegal transition is refused and the
+refusal reported, and running it twice changes nothing the first run did.
+
+What it never gained is the right to decide. It is still bookkeeping; what changed is
+who made the decision it follows — the gates, rather than a person reading them.
 
 It moves an item only on an explicit `cycle:phase:end` with `cycle=release` and
 `verdict=RELEASED`, and writes through `backlog_status.py` — so a blocked, killed
@@ -188,7 +198,7 @@ place to retire work that simply has not been released yet.
 sibling repositories running the same install. The followup that ends it is carrying the fix
 to the kit's own repository, where a release can reach every consumer.
 
-Harvested from `theokit-tui`, where the state was created and measured (2026-08-20). There
+Harvested from an adopter, where the state was created and measured (2026-08-20). There
 thirteen items paid that cost at once, and the rule defining it lived under `.claude/` — so
 the item that wrote it ended up in the very state it invented.
 

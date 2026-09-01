@@ -10,13 +10,13 @@ argument-hint: "(no arguments)"
 
 # `/backlog-init` — Create the ecosystem maintenance registry
 
-Create `BACKLOG.md` at the umbrella root: the one place that answers *"what is pending anywhere in the Theo ecosystem?"*
+Create `BACKLOG.md` at the umbrella root: the one place that answers *"what is pending anywhere in this ecosystem?"*
 
 Run once, at adoption. Every item after that arrives through `/backlog-item` (human) or `/discover-execute --sweep` (measured finding).
 
 ## Cycle contract
 
-**Two scopes, both valid.** `detect_scope` answers which one you are in: `umbrella` (the directory is not itself a repo and groups repos that are) or `single-repo` (the directory IS the repo). The previous pre-flight refused the second — *"no umbrella detected: run at the workspace root"* — which, in an autonomous project, means writing the registry into the parent directory, outside the project. Measured on `theokit-framework`: ten independent repos, each with its own cycle, and the kit pushed all ten registries into a directory that is nobody's repository.
+**Two scopes, both valid.** `detect_scope` answers which one you are in: `umbrella` (the directory is not itself a repo and groups repos that are) or `single-repo` (the directory IS the repo). The previous pre-flight refused the second — *"no umbrella detected: run at the workspace root"* — which, in an autonomous project, means writing the registry into the parent directory, outside the project. Measured on an adopter: ten independent repos, each with its own cycle, and the kit pushed all ten registries into a directory that is nobody's repository.
 
 The principle the rule defends ("one question, one place to look") never required an umbrella. It requires **one registry per governed scope**, and an autonomous repo is a scope.
 
@@ -46,7 +46,40 @@ echo "scope: $SCOPE"   # umbrella | single-repo — both are valid registry root
 
 # 0.3  CHANGELOG.md must exist (Unbreakable Rule 6)
 test -f CHANGELOG.md || { echo "FATAL: CHANGELOG.md missing"; exit 1; }
+
+# 0.4  the product documents, if the scope was aligned (advisory — see below)
+python3 "$ECO/skills/brainstorm-pieces/scripts/score_product_alignment.py" --root . || true
 ```
+
+### Step 0.5 — Read the brainstorm, if there is one
+
+`cycle-brainstorm` runs before this skill and produces four documents under
+`wiki/product/`. **Read all four before inventorying anything**, and hold them for
+the whole run:
+
+| Document | What it changes here |
+|---|---|
+| `product-vision.md` | What counts as in scope — the exclusions in Step 2 stop being arbitrary |
+| `objectives.md` | The `OBJ-N` ids items will later trace to |
+| `trd.md` | What the system must do, which is not the same as what its repos are |
+| `technical-pieces.md` | The pieces the product is made of — compared against the repos on disk in Step 1 |
+
+**The comparison in Step 1 is the point.** Pieces are what the product needs; repos
+are what exists. A piece with no repo and a repo realising no piece are both real
+findings, and this is the only moment both lists are in view at once. Report them;
+do not resolve them, and above all do not invent a repo or drop a piece to make the
+two agree.
+
+**This is advisory, not a gate.** A scope with no brainstorm still initialises —
+the kit is adopted into repositories that predate this cycle, and refusing them
+would mean a consumer cannot create a registry until they hold a product session
+they did not ask for. Say plainly that the documents were absent, so the reader
+knows the inventory had nothing to check itself against rather than assuming it did.
+
+**It still seeds ZERO items.** The objectives are not a backlog: an item needs a
+`why_now` drawn from something that changed, a DoD, and an owner, and deriving one
+from an objective would manufacture work nobody filed. `cycle-backlog.md § Purpose`
+is unchanged by any of this.
 
 ### Step 1 — Inventory the repos FROM DISK
 
@@ -67,7 +100,7 @@ python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . --json
 
 The rule is the repository as the unit of ownership: an umbrella of checked-out repos gets one domain per repo; a single repo gets ONE domain named after it, with each monorepo package listed as a path-addressed entry (`packages/sdk`) — the form the routing table already supports.
 
-Do NOT classify the target's repos into a domain set borrowed from anywhere — not from another project, not from a set the kit once shipped. `cycle-backlog.md` ships the section EMPTY precisely so there is nothing to borrow. Measured on `theokit-sdk` (2026-08-18), back when eight foreign domains did ship: 88 items carrying measured `file:line` evidence, every one of them `BLOCKER/unroutable_repo`, because `packages/sdk` cannot exist in another ecosystem's map.
+Do NOT classify the target's repos into a domain set borrowed from anywhere — not from another project, not from a set the kit once shipped. `cycle-backlog.md` ships the section EMPTY precisely so there is nothing to borrow. Measured on an adopter (2026-08-18), back when eight foreign domains did ship: 88 items carrying measured `file:line` evidence, every one of them `BLOCKER/unroutable_repo`, because `packages/sdk` cannot exist in another ecosystem's map.
 
 Two classes get **excluded from routing**, and the registry says so out loud rather than omitting them silently:
 

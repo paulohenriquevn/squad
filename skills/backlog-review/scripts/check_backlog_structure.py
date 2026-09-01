@@ -278,13 +278,13 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
                     f"`{required}` is absent"))
 
         # `status` twice leaves the block with two answers, and every reader — this gate, the
-        # index generator, a human skimming — silently takes the last one. Measured on theo-db:
+        # index generator, a human skimming — silently takes the last one. Measured on db-engine:
         # `B-021` carries `raw` then `triaged`, `B-022` carries `planned` then `raw`. The index
         # buckets on `status`, so an ambiguous one makes the summary arbitrary rather than
         # wrong-in-a-way-you-can-see.
         #
         # ONLY `status`, deliberately. The first draft flagged every repeated field and lit up
-        # theo-cloud: `partial_progress` four times on B-031 is an append-one-line-per-increment
+        # control-plane: `partial_progress` four times on B-031 is an append-one-line-per-increment
         # log the team keeps on purpose, and `evidence: none-yet` followed by a pointer is an item
         # that advanced. Neither is a defect, and a gate that reports them is a gate people learn
         # to override — which is how the real one gets waved through.

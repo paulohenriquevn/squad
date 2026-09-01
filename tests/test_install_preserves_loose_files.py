@@ -13,7 +13,7 @@ versioning it would have lost the file outright.
 This is the sixth face of one defect. The preservation rule has been stated once
 and implemented for one shape at a time: the routing table, then `rules/*.txt`,
 then `settings.json` by key, then project skill directories, then
-`theokit-conventions.md`, and now loose files. Each fix was correct and none of
+`an adopter.md`, and now loose files. Each fix was correct and none of
 them generalised, which is why this test asserts the RULE — anything the source
 kit does not ship is the project's — rather than one more shape.
 """
@@ -146,7 +146,7 @@ _COPIED_ITEMS = ("skills", "rules", "hooks", "commands", "scripts", "agents")
 def test_project_files_survive_in_every_copied_directory(tmp_path: Path, rel: str) -> None:
     """`hooks/` and `scripts/` had NO preservation pass, not a narrow one.
 
-    Measured by a consumer session on 2026-08-29 in `theo-platform`: the installer
+    Measured by a consumer session on 2026-08-29 in `platform`: the installer
     removed four files that do not exist in the source kit at all —
     `hooks/delivery-gate.sh`, `hooks/lib/detect-layout.sh`,
     `scripts/check-allowlist-sunsets.py`, `scripts/test_e2e_smoke.py`. Not kit

@@ -118,7 +118,7 @@ def _kit_owned_skills(ecosystem_dir: Path) -> set[str] | None:
     is the right idea — a consumer declaring which of its skills are auxiliary — but
     it SHIPS EMPTY, so every consumer starts with every one of its own skills flagged.
     Measured on 2026-08-31 across two live installs: `theo` had the file, empty, and
-    13 WARN; `theokit` had 102 skills of which 66 are its own, no file at all, and
+    13 WARN; an adopter had 102 skills of which 66 are its own, no file at all, and
     119 WARN — every single warning the checker produced. `install.sh` runs this with
     `--strict`, so both installations reported failure over the consumers' own design,
     and a validation that always fails is one nobody reads.

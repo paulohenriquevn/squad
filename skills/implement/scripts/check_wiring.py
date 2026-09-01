@@ -89,7 +89,7 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
 
     B-081 — a duplicate checkout is not a second caller. `git worktree add` puts a complete copy
     of the tree somewhere, and if that somewhere is inside the repository, every file in it
-    answers a `grep -r` twice. Measured on theokit-tui: pillar (a) reported 10 callers for
+    answers a `grep -r` twice. Measured on an adopter: pillar (a) reported 10 callers for
     `SlashMenuList` with two nested checkouts present against 5 without, and all three sampled
     "callers" were inside the copy.
 

@@ -22,7 +22,7 @@ candidates with the action the rule prescribes for each status. The choice betwe
 invent wrong merges.
 
 Uso:
-    python3 check_intake_gates.py --backlog BACKLOG.md --repo theo-lens \\
+    python3 check_intake_gates.py --backlog BACKLOG.md --repo web-console \\
         --term ingest --term latencia
 
 Exit codes:

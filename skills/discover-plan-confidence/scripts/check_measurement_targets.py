@@ -23,11 +23,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-# Backticked path: `theo-lens/src/` or `theo-lens/src/trace.ts`. Requires a slash so
+# Backticked path: `web-console/src/` or `web-console/src/trace.ts`. Requires a slash so
 # that prose words in backticks are not mistaken for targets.
 # `@` belongs inside a target, not outside it. The previous class excluded it, so a scoped npm
-# specifier like `@theokit/sdk/server/auth` never matched at all — and passed the gate by ACCIDENT
-# while its unscoped sibling `theokit/server/plugins` was scored `fabricated_target`. Two shapes of
+# specifier like `@acme/sdk/server/auth` never matched at all — and passed the gate by ACCIDENT
+# while its unscoped sibling `acme-pkg/server/plugins` was scored `fabricated_target`. Two shapes of
 # the same thing, treated oppositely, for no reason anyone chose.
 PATH_TARGET_RE = re.compile(r"`((?:@?\.?[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_.\-]*)`")
 URL_TARGET_RE = re.compile(r"https?://[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-/]*)?")
@@ -62,7 +62,7 @@ def _target_exists(project_root: Path, target: str) -> bool:
 def _resolves_as_module(project_root: Path, target: str) -> bool:
     """Does `target` name an installed npm module rather than a repo path?
 
-    `theokit/server/plugins` and `@theokit/sdk/server/auth` are module SPECIFIERS: they resolve
+    `acme-pkg/server/plugins` and `@acme/sdk/server/auth` are module SPECIFIERS: they resolve
     through `node_modules`, not through the repo tree, and they have no extension. Resolving them
     against the project root fails, which used to fire `fabricated_target` — a hard cap — on a
     citation that was correct.

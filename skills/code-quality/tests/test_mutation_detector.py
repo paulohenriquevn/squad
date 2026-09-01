@@ -262,7 +262,7 @@ def test_findings_carry_a_wellformed_allowlist_key(tmp_path: Path) -> None:
 # B-012 — a 22-minute gate is a gate people bypass
 # ---------------------------------------------------------------------------
 #
-# Measured in `theokit-skills` on 2026-08-27: `npx stryker run` took 1347s, and
+# Measured in an adopter on 2026-08-27: `npx stryker run` took 1347s, and
 # `run_structural.py` calls /code-quality internally, so EVERY /plan-confidence in
 # that repository cost 22.5 minutes. The detector re-ran the tool on every
 # invocation and read no existing report — mutation testing is a periodic deep

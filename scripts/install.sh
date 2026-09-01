@@ -82,7 +82,7 @@ echo "    target: $ECO"
 # `--force` overwrote all of it silently. Measured: a `typescript | ... | ENABLED` line and a
 # live-target block added to a fresh install were both gone after one re-run, with no message.
 #
-# In a repo that versions `.claude/` that is recoverable with `git restore`. TheoCode does not
+# In a repo that versions `.claude/` that is recoverable with `git restore`. a TypeScript monorepo does not
 # version it — the kit is a maintainer's tool, not product code — so silent was also permanent.
 # The fix is not to merge (guessing which side of a config wins is how you get it wrong): it is
 # to make the overwrite recoverable and loud. For an upgrade that must NOT clobber, use
@@ -139,7 +139,7 @@ prune_caches() {
 # --- tabela de roteamento: entregue VAZIA ------------------------------------
 # --- copy ecosystem code ---
 # Two modes, because a target with a `.claude/` of its own has no correct answer in one of them.
-# Measured on `theo-data-cells`: 598 files under `skills/` — 5 of the kit's, 10 the project wrote
+# Measured on an adopter: 598 files under `skills/` — 5 of the kit's, 10 the project wrote
 # (`architecture-debate-table`, `placement-algorithms`, `quota-isolation`, …) — plus 13 named
 # architect agents and their memory. The `rm -rf` below would have deleted every one of them, and
 # a snapshot in `.install-backups/` is a consolation prize, not a correct install.
@@ -235,7 +235,7 @@ for item in skills rules hooks commands scripts; do
     # branch is about to `rm -rf` it. `.kit-manifest.txt` is what tells the two
     # apart — it exists precisely because guessing by name is the alternative.
     # The merge branch never deletes; this one did, and measured on 2026-08-28
-    # it took six `theokit-*` skills out of `appteste` and six more out of
+    # it took six `an adopter-*` skills out of `appteste` and six more out of
     # `website`, every one a versioned file the project wrote.
     #
     # Same shape as rules/*.txt, settings.json and the routing table before it:
@@ -253,7 +253,7 @@ for item in skills rules hooks commands scripts; do
     #
     # Sixth face of one defect. The rule has been stated once and implemented for
     # one shape at a time — the routing table, `rules/*.txt`, `settings.json` by
-    # key, project skill directories, `theokit-conventions.md`, and now loose
+    # key, project skill directories, `an adopter.md`, and now loose
     # files. Each fix was right and none generalised. The rule is: whatever the
     # SOURCE kit does not ship is the project's, whatever its shape.
     if [ "$item" = "skills" ] && [ -d "$ECO/skills" ]; then
@@ -277,7 +277,7 @@ for item in skills rules hooks commands scripts; do
           *.txt) kit_owns_txt "$base" && continue ;;
           # A `rules/*.md` the manifest does not list was written by the project.
           # `boundary-check.sh` calls `rules/*.md` the kit's, which is true of the
-          # ones the kit ships — and two consumers keep a `theokit-conventions.md`
+          # ones the kit ships — and two consumers keep a `an adopter.md`
           # of their own beside them. Measured 2026-08-28: `--force` deleted it in
           # both, a versioned file in each case.
           *) [ -f "$SRC_DIR/rules/$base" ] && continue ;;
@@ -291,11 +291,11 @@ for item in skills rules hooks commands scripts; do
     # about skills: whatever the SOURCE kit does not ship is the project's,
     # wherever it sits. That rule has now been stated once and implemented one
     # shape at a time seven times over — the routing table, `rules/*.txt`,
-    # `settings.json` by key, project skill directories, `theokit-conventions.md`,
+    # `settings.json` by key, project skill directories, `an adopter.md`,
     # loose files in `skills/`, and finally `hooks/` and `scripts/`, which had no
     # preservation pass at all.
     #
-    # Measured by a consumer session on 2026-08-29 in `theo-platform`: the
+    # Measured by a consumer session on 2026-08-29 in `platform`: the
     # installer removed `hooks/delivery-gate.sh`, `hooks/lib/detect-layout.sh`,
     # `scripts/check-allowlist-sunsets.py` and `scripts/test_e2e_smoke.py`, none
     # of which exist in the kit. Two were gates that repository's pre-push
@@ -687,11 +687,12 @@ KB_DIRS=(
   "discoveries/snapshots"       # hash-verified snapshots cited by opportunities
   "progress"                    # per-slug progress.md (read by hooks + session-catchup)
   "sop-runs"                    # run records: what one machine did following a procedure
+  "brainstorms"                 # one record per product-alignment session, discards included
 )
 
 # The OKF bundle: durable knowledge, separate from the dated trail above.
 # `rules/sop-schema.md` and wiki/decisions/where-knowledge-lives.md say why.
-for d in sops decisions references opportunities; do
+for d in sops decisions references opportunities product; do
   mkdir -p "$ECO/wiki/$d"
 done
 for d in "${KB_DIRS[@]}"; do
@@ -827,5 +828,18 @@ Next steps for the target project:
   5. Open the project in Claude Code. The settings.json wires hooks; skills/
      and commands/ are auto-discovered.
 
-  6. First run: /backlog-item, or /plan-write "{one-sentence feature}"
+  6. Agree what the product IS — the one cycle that needs a person, and the reason
+     every phase after it may run unattended:
+       /brainstorm-vision  ->  /brainstorm-objectives
+         ->  /brainstorm-trd  ->  /brainstorm-pieces
+     Four documents land in wiki/product/ and the last one runs the gate: 90% on
+     the rubric AND your signature. A judge cannot sign this one.
+
+     Skippable for a repo that predates the cycle — /backlog-init still runs, and
+     says out loud that it had no product documents to check the inventory against.
+
+  7. Create the registry: /backlog-init  (reads those four as context, seeds zero
+     items — an objective is not a why_now)
+
+  8. First item: /backlog-item, or /plan-write "{one-sentence feature}"
 EOF

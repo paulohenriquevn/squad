@@ -66,7 +66,7 @@ def test_undeclared_live_host_is_flagged(rooted: Path) -> None:
     rules = rooted / "rules"
     rules.mkdir()
     (rules / "live-target.txt").write_text(
-        "domain = frontend-dashboard\nkind = web\ntarget = https://app-dev.usetheo.dev\n",
+        "domain = frontend-dashboard\nkind = web\ntarget = https://app-dev.example.com\n",
         encoding="utf-8",
     )
     report = check_measurement_targets(_plan(rooted, "Probe https://staging.example.com/api"))
@@ -77,10 +77,10 @@ def test_declared_live_host_passes(rooted: Path) -> None:
     rules = rooted / "rules"
     rules.mkdir()
     (rules / "live-target.txt").write_text(
-        "domain = frontend-dashboard\nkind = web\ntarget = https://app-dev.usetheo.dev\n",
+        "domain = frontend-dashboard\nkind = web\ntarget = https://app-dev.example.com\n",
         encoding="utf-8",
     )
-    report = check_measurement_targets(_plan(rooted, "Probe https://app-dev.usetheo.dev/api/traces"))
+    report = check_measurement_targets(_plan(rooted, "Probe https://app-dev.example.com/api/traces"))
     assert report["undeclared_live_hosts"] == []
     assert len(report["live_targets"]) == 1
 
@@ -105,7 +105,7 @@ def test_backticked_prose_is_not_a_target(rooted: Path) -> None:
 # --- B-017: an npm module specifier is not a repo path ---------------------------------
 #
 # `PATH_TARGET_RE` matched any backticked token containing a slash and resolved it against the
-# repo root. `theokit/server/plugins` is a real npm subpath specifier — it has no extension and
+# repo root. `acme-pkg/server/plugins` is a real npm subpath specifier — it has no extension and
 # lives under node_modules — so it failed `Path.exists()` and fired `fabricated_target`, a HARD
 # CAP that drops the plan to 49 and INVALID.
 #
@@ -124,18 +124,18 @@ def _install(root: Path, *specifiers: str) -> None:
 
 
 def test_an_unscoped_module_specifier_is_not_fabricated(rooted: Path) -> None:
-    _install(rooted, "theokit")
+    _install(rooted, "acme-pkg")
 
-    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+    report = check_measurement_targets(_plan(rooted, "Read `acme-pkg/server/plugins` for the seam."))
 
     assert report["fabricated"] == 0, report["fabricated_targets"]
 
 
 def test_a_scoped_module_specifier_is_recognised_rather_than_skipped(rooted: Path) -> None:
     # It must now be SEEN and classified, not merely absent from the match set.
-    _install(rooted, "@theokit/sdk")
+    _install(rooted, "@acme/sdk")
 
-    report = check_measurement_targets(_plan(rooted, "Read `@theokit/sdk/server/auth` for the type."))
+    report = check_measurement_targets(_plan(rooted, "Read `@acme/sdk/server/auth` for the type."))
 
     assert report["fabricated"] == 0, report["fabricated_targets"]
 
@@ -143,11 +143,11 @@ def test_a_scoped_module_specifier_is_recognised_rather_than_skipped(rooted: Pat
 def test_a_package_that_exists_only_in_the_pnpm_store_resolves(rooted: Path) -> None:
     # pnpm nests the real package two levels down. A top-level-only check misses every one of them,
     # which in this workspace is all of them.
-    (rooted / "node_modules" / ".pnpm" / "theokit@0.48.8" / "node_modules" / "theokit").mkdir(
+    (rooted / "node_modules" / ".pnpm" / "acme-pkg@0.48.8" / "node_modules" / "acme-pkg").mkdir(
         parents=True
     )
 
-    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+    report = check_measurement_targets(_plan(rooted, "Read `acme-pkg/server/plugins` for the seam."))
 
     assert report["fabricated"] == 0, report["fabricated_targets"]
 
@@ -161,6 +161,6 @@ def test_a_specifier_for_a_package_that_is_not_installed_is_still_fabricated(roo
 
 
 def test_a_tree_without_node_modules_reports_a_miss_rather_than_raising(rooted: Path) -> None:
-    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+    report = check_measurement_targets(_plan(rooted, "Read `acme-pkg/server/plugins` for the seam."))
 
     assert report["fabricated"] == 1, report["fabricated_targets"]

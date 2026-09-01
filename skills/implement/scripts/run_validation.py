@@ -369,7 +369,7 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
 #: Every root a consumer may keep its audit trail under, most specific first.
 #:
 #: The kit ships `records/` in two layouts. A consumer measured on 2026-08-29 uses
-#: neither: `theo-platform` declares `<project>/.claude/knowledge-base/` canonical
+#: neither: `platform` declares `<project>/.claude/knowledge-base/` canonical
 #: in a rule of its own, written after an audit read the wrong directory and
 #: reported a repository as having "0 implementations, 0 reviews, 0 releases" when
 #: it had 6, 12 and 8. That repository holds **32 plans in `knowledge-base/plans/`

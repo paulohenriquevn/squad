@@ -4,7 +4,7 @@ Source of Truth for the end-to-end autonomous orchestrator. Sits **below** `cycl
 
 ## Purpose
 
-Chain DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE autonomously for **one milestone** (or one ad-hoc topic), taking it from idea to a release PR awaiting human approval — without the user having to invoke 9+ slash commands manually. Default mode is `full-pipeline`; the `--plan-only` flag retains the legacy "discover + plan" behavior.
+Chain DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE autonomously for **one milestone** (or one ad-hoc topic), taking it from idea to a merged, tagged release — without the user having to invoke 9+ slash commands manually. Default mode is `full-pipeline`; the `--plan-only` flag retains the legacy "discover + plan" behavior.
 
 Two invocation modes coexist:
 
@@ -43,7 +43,7 @@ When NOT to use:
      ↓ CODE-QUALITY (audit; gate proceeds only when PASS / PASS_WITH_CAVEATS)
      ↓ REVIEW       (5-7 specialist agents)
      ↓ gate:         only proceed if /review ∈ {READY_TO_MERGE, READY_TO_MERGE_WITH_FOLLOWUPS}
-     ↓ RELEASE      (opens develop→main PR with semver tag; PAUSES for human approval)
+     ↓ RELEASE      (opens develop→main PR with semver tag; merges once the chain verifies)
      ↓                — cycle-release does NOT flip the checkbox
      ↓ ACCEPTANCE   (/acceptance M<N> — exercises the RELEASED delivery against the DoD)
      ↓                — ACCEPTED | ACCEPTED_WITH_CAVEATS → flips ROADMAP.md M<N> [ ] → [x]
@@ -78,7 +78,7 @@ Ad-hoc (`/idea-to-release {topic-slug}` with arbitrary slug):
 - Before CODE-QUALITY starts: implementation emitted `IMPLEMENTATION_COMPLETE`.
 - Before REVIEW starts: code-quality verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`}.
 - Before RELEASE starts: review verdict ∈ {`READY_TO_MERGE`, `READY_TO_MERGE_WITH_FOLLOWUPS`}. The second is not a softening: it is only reachable when zero BLOCKER remain and every HIGH is a *registered* followup, which `consolidate_findings.py` verifies against the plan's `## Followups` before emitting it.
-- Final manual gate: human approves the release PR. Auto-merge is forbidden (Unbreakable Rule 4).
+- Final gate: the release PR merges only when its whole chain passed — envelope floor 2. It pauses at `PR_OPEN_AWAITING_APPROVAL` when a gate did not pass, or when branch protection requires a reviewer the system cannot be.
 - Before ACCEPTANCE starts: `cycle-release` emitted `RELEASED` AND the plan carries a `milestone_id`. No `milestone_id` → the chain ends at `RELEASED`; there is no milestone to accept.
 
 Any gate failure → pause + surface the blocking finding. The orchestrator does NOT loop indefinitely; after 1 fix-and-retry attempt at the same gate, it halts with `BLOCKED` and asks the human.

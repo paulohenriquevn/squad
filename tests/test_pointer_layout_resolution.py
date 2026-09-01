@@ -6,7 +6,7 @@ plugin install they sit under `.claude/`, so every pointer to a kit file comes
 back `missing_file` and `check_evidence_pointers` raises `fabricated_evidence`
 over paths that exist.
 
-Measured in `theo-platform` on 2026-08-29: the kit's own `good-opportunity.md`
+Measured in `platform` on 2026-08-29: the kit's own `good-opportunity.md`
 fixture scored `evidence_pointers 0.0`, hard-capped to 49, verdict INVALID —
 four pointers, four "missing", all four present on disk one directory down.
 

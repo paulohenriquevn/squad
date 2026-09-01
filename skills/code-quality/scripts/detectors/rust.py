@@ -23,7 +23,7 @@ _RUST_MODULE_LOCAL_PREFIXES = ("crate::", "self::", "super::", "crate", "self", 
 
 # Crates that ship WITH the toolchain and are therefore never published on crates.io. Looking them up
 # there answers "not found", which the D2 rubric would read as symbol fabrication — so a file containing
-# `use std::collections::HashMap` scored FAIL_HARD. Measured on theo-db 2026-07-23: 117/117 D2 findings
+# `use std::collections::HashMap` scored FAIL_HARD. Measured on db-engine 2026-07-23: 117/117 D2 findings
 # were false positives of exactly this shape (mostly `std`, plus `core` and same-crate modules).
 _RUST_BUILTIN_CRATES = frozenset(
     {"std", "core", "alloc", "proc_macro", "test", "Self", "_"}
@@ -329,7 +329,7 @@ class RustDetector(BaseDetector):
         layer and running `cargo check` on each. That makes it strictly stronger than an import
         scan and strictly more fragile.
 
-        Measured against `theo-db`, the only Rust repo in the routing table, it did not run. Three
+        Measured against `db-engine`, the only Rust repo in the routing table, it did not run. Three
         blockers, in the order they appeared:
 
         1. `[lib]` declares `crate-type` but no `path` -> `failed to read lib.path from Cargo.toml`
@@ -405,7 +405,7 @@ class RustDetector(BaseDetector):
 
 
 #: Failures that mean layered-crate could not START, not that a layer boundary was crossed. Each
-#: string was observed against theo-db on 2026-08-06.
+#: string was observed against db-engine on 2026-08-06.
 _SETUP_MARKERS = {
     "failed to read lib.path": (
         "the crate's `[lib]` declares no `path`. layered-crate requires it; adding "
@@ -413,7 +413,7 @@ _SETUP_MARKERS = {
     ),
     "two packages named": (
         "the temporary package layered-crate generates collides with the crate inside its own "
-        "cargo workspace. Observed on theo-db even with the default temp dir under `target/`"
+        "cargo workspace. Observed on db-engine even with the default temp dir under `target/`"
     ),
     "not found archfile": "no Layerfile.toml where layered-crate looked",
     ".pgrx/config.toml": (

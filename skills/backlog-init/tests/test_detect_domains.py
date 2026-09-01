@@ -3,9 +3,9 @@
 `rules/cycle-backlog.md § Domain routing` used to embed 8 domains from the
 ecosystem the kit was written in. Every install copied that table, and
 `backlog-init` instructed people to classify the target's repos *inside* those 8,
-forbidding them to "invent a ninth domain". The result, measured on `theokit-sdk`:
+forbidding them to "invent a ninth domain". The result, measured on an adopter:
 88 items with measured `file:line` evidence, all `BLOCKER/unroutable_repo`,
-because `packages/sdk` and `theokit-sdk` do not exist in another ecosystem's map.
+because `packages/sdk` and an adopter do not exist in another ecosystem's map.
 
 The gate was right to refuse — it did not know who to send the work to. What was
 wrong was the table arriving ready-made from outside.
@@ -32,20 +32,20 @@ def _repo(root: Path, name: str, *, git: bool = True) -> Path:
 
 
 def test_single_repo_becomes_one_domain_named_after_it(tmp_path: Path) -> None:
-    root = _repo(tmp_path, "theokit-sdk")
+    root = _repo(tmp_path, "adopter-sdk")
     domains = detect_domains(root)
-    assert [d.name for d in domains] == ["theokit-sdk"]
-    assert domains[0].repos == ["theokit-sdk"]
-    assert domains[0].agent == "agents/theokit-sdk.md"
+    assert [d.name for d in domains] == ["adopter-sdk"]
+    assert domains[0].repos == ["adopter-sdk"]
+    assert domains[0].agent == "agents/adopter-sdk.md"
 
 
 def test_npm_monorepo_lists_each_package_by_path(tmp_path: Path) -> None:
-    """The theokit-sdk case: one repo, several packages, items citing `packages/x`.
+    """The adopter-sdk case: one repo, several packages, items citing `packages/x`.
 
     A single domain — there is one SDK, not six teams. The packages enter as
     path-addressed repos, a form the kit already supports.
     """
-    root = _repo(tmp_path, "theokit-sdk")
+    root = _repo(tmp_path, "adopter-sdk")
     for pkg in ("sdk", "acp", "sdk-pty"):
         (root / "packages" / pkg).mkdir(parents=True)
         (root / "packages" / pkg / "package.json").write_text("{}", encoding="utf-8")
@@ -54,7 +54,7 @@ def test_npm_monorepo_lists_each_package_by_path(tmp_path: Path) -> None:
 
     domains = detect_domains(root)
     assert len(domains) == 1
-    assert domains[0].repos == ["theokit-sdk", "packages/acp", "packages/sdk", "packages/sdk-pty"]
+    assert domains[0].repos == ["adopter-sdk", "packages/acp", "packages/sdk", "packages/sdk-pty"]
 
 
 def test_go_workspace_modules_become_repos(tmp_path: Path) -> None:
@@ -71,18 +71,18 @@ def test_umbrella_gives_one_domain_per_checked_out_repo(tmp_path: Path) -> None:
     """Umbrella workspace: the unit of ownership is the repository."""
     root = tmp_path / "umbrella"
     root.mkdir()
-    _repo(root, "theo-lens")
-    _repo(root, "theo-db")
+    _repo(root, "web-console")
+    _repo(root, "db-engine")
     (root / "docs").mkdir()  # no .git — not a repo, does not become a domain
     domains = detect_domains(root)
-    assert [d.name for d in domains] == ["theo-db", "theo-lens"]
+    assert [d.name for d in domains] == ["db-engine", "web-console"]
     assert all(d.repos == [d.name] for d in domains)
 
 
 def test_rendered_table_is_parseable_by_route_domain(tmp_path: Path) -> None:
     """The real contract: what comes out here must go into route_domain's parser."""
     import sys
-    root = _repo(tmp_path, "theokit-sdk")
+    root = _repo(tmp_path, "adopter-sdk")
     (root / "packages" / "sdk").mkdir(parents=True)
     (root / "packages" / "sdk" / "package.json").write_text("{}", encoding="utf-8")
 
@@ -100,23 +100,23 @@ def test_rendered_table_is_parseable_by_route_domain(tmp_path: Path) -> None:
 
     table = parse_routing_table(rule)
     assert "velho" not in table, "a tabela do outro ecossistema tem de sair"
-    assert route("packages/sdk", table) == ("theokit-sdk", "agents/theokit-sdk.md")
-    assert route("theokit-sdk", table) == ("theokit-sdk", "agents/theokit-sdk.md")
+    assert route("packages/sdk", table) == ("adopter-sdk", "agents/adopter-sdk.md")
+    assert route("adopter-sdk", table) == ("adopter-sdk", "agents/adopter-sdk.md")
     assert "## Verdicts" in rule.read_text(encoding="utf-8"), "the rest of the file survives"
 
 
 def test_render_names_the_specialist_files_that_must_exist(tmp_path: Path) -> None:
     """route_domain exits 3 when the table names an agent that is not on disk —
     trading 88 blockers for that error would not be a fix."""
-    root = _repo(tmp_path, "theokit-sdk")
+    root = _repo(tmp_path, "adopter-sdk")
     table = render_table(detect_domains(root))
-    assert "agents/theokit-sdk.md" in table
+    assert "agents/adopter-sdk.md" in table
 
 
 # ---------------------------------------------------------------------------
 # Deriving from the BACKLOG. Topology gives what EXISTS; it does not give the
 # SEMANTICS of ownership — domains no directory layout reveals, which the items
-# carry. Measured on theokit-sdk: the registry declares `sdk-core`,
+# carry. Measured on an adopter: the registry declares `sdk-core`,
 # `repo-platform`, `sdk-satellites`, `edge-cli-acp` and `memory-adapters` — five
 # domains the topology alone would never have produced.
 # ---------------------------------------------------------------------------
@@ -134,7 +134,7 @@ status: triaged
 ## B-002 — dois   [ ]
 
 domain: repo-platform
-repo: theokit-sdk
+repo: adopter-sdk
 status: triaged
 
 ## B-003 — three   [ ]
@@ -154,7 +154,7 @@ status: raw
 def test_domains_come_from_the_pairs_the_items_declare(tmp_path: Path) -> None:
     backlog = tmp_path / "BACKLOG.md"
     backlog.write_text(_BACKLOG, encoding="utf-8")
-    root = _repo(tmp_path, "theokit-sdk")
+    root = _repo(tmp_path, "adopter-sdk")
     (root / "packages" / "sdk").mkdir(parents=True)
     (root / "packages" / "sdk-pty").mkdir(parents=True)
 
@@ -169,7 +169,7 @@ def test_a_repo_the_items_cite_but_disk_does_not_have_is_surfaced(tmp_path: Path
     the same divergence a hand-kept table documents instead of deleting."""
     backlog = tmp_path / "BACKLOG.md"
     backlog.write_text(_BACKLOG, encoding="utf-8")
-    root = _repo(tmp_path, "theokit-sdk")
+    root = _repo(tmp_path, "adopter-sdk")
     (root / "packages" / "sdk").mkdir(parents=True)  # sdk-pty does NOT exist
 
     domains = domains_from_backlog(backlog, root)
@@ -189,7 +189,7 @@ domain: edge-cli-acp
 repo: packages/sdk
 status: raw
 """, encoding="utf-8")
-    root = _repo(tmp_path, "theokit-sdk")
+    root = _repo(tmp_path, "adopter-sdk")
     (root / "packages" / "sdk").mkdir(parents=True)
     (root / "packages" / "sdk-pty").mkdir(parents=True)
 
@@ -213,14 +213,14 @@ from detect_domains import detect_scope  # noqa: E402
 def test_umbrella_scope_when_more_than_one_repo_lives_below(tmp_path: Path) -> None:
     root = tmp_path / "framework"
     root.mkdir()
-    _repo(root, "theokit-sdk")
-    _repo(root, "theokit-ui")
+    _repo(root, "adopter-sdk")
+    _repo(root, "adopter-ui")
     assert detect_scope(root) == "umbrella"
 
 
 def test_single_repo_scope_is_valid_not_an_error(tmp_path: Path) -> None:
-    """theokit-sdk: one repo, its own cycle, its own registry."""
-    root = _repo(tmp_path, "theokit-sdk")
+    """An adopter: one repo, its own cycle, its own registry."""
+    root = _repo(tmp_path, "adopter-sdk")
     (root / "packages" / "sdk").mkdir(parents=True)
     (root / "packages" / "sdk" / "package.json").write_text("{}", encoding="utf-8")
     assert detect_scope(root) == "single-repo"

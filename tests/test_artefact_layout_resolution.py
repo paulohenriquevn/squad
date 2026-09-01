@@ -2,7 +2,7 @@
 
 `run_validation.py` resolves artefacts in two layouts: `<project>/.claude/records/`
 and `<project>/records/`. A consumer measured on 2026-08-29 uses neither. The
-`theo-platform` repository declares `<project>/.claude/knowledge-base/` canonical
+`platform` repository declares `<project>/.claude/knowledge-base/` canonical
 in a rule of its own — written after an audit read `.claude/` and reported one
 repository as having "0 implementations, 0 reviews, 0 releases" when it had 6, 12
 and 8.
@@ -49,7 +49,7 @@ import run_validation as rv  # noqa: E402
 LAYOUTS = (
     (".claude/records", "the plugin layout the kit ships"),
     ("records", "the standalone layout the kit dogfoods"),
-    (".claude/knowledge-base", "theo-platform, which declares this canonical in a rule"),
+    (".claude/knowledge-base", "platform, which declares this canonical in a rule"),
     ("knowledge-base", "the standalone form of the same convention"),
 )
 

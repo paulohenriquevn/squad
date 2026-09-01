@@ -85,7 +85,7 @@ Pause here and decide the corner coverage BEFORE drafting questions.
 
 Inventing a constraint question to fill the slot is padding. The corner is a lens, not a gate.
 
-**Blast Radius is the corner that earns its place in this ecosystem.** The repos form a dependency graph with `theo-contracts` at the stable base; a maintenance change is dangerous in proportion to how far up that graph it sits. A question here is rarely wasted.
+**Blast Radius is the corner that earns its place in this ecosystem.** The repos form a dependency graph with a shared contracts package at the stable base; a maintenance change is dangerous in proportion to how far up that graph it sits. A question here is rarely wasted.
 
 #### Question budget
 
@@ -119,7 +119,7 @@ Use `templates/measurement-plan-template.md`. Save to:
 records/discoveries/plans/{slug}-plan.md
 ```
 
-`{slug}` is kebab-case and prefixed by the repo when the problem shape recurs across repos (`theo-lens-trace-latency`, not `latency`). The registry spans 21 repos.
+`{slug}` is kebab-case and prefixed by the repo when the problem shape recurs across repos (`web-console-trace-latency`, not `latency`).
 
 ## Quality Rules
 

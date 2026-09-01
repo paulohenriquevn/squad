@@ -8,7 +8,7 @@ it is never an ancestor of `workspace`. Measured on this repository:
 
     git describe --tags --abbrev=0             ->  v0.52.1
     git tag --sort=-v:refname | head -1        ->  v0.64.0
-    npm view @theokit/tui version              ->  0.64.0
+    npm view @acme/tui version              ->  0.64.0
 
 Twelve versions stale, structurally rather than by a forgotten fetch. A release cut from `workspace`
 would have computed 0.53.0 — BELOW what was published — and the cycle's "tag already exists" stop

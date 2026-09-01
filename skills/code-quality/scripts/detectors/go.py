@@ -406,7 +406,7 @@ class GoDetector(BaseDetector):
                             "`ignoreNotFoundComponents: true` disables the linter's own guard "
                             "against a component whose glob matches nothing. With it on, a "
                             "directory rename silently retires the rule and the check still "
-                            "passes — measured on theo-contracts 2026-08-06, where a ghost "
+                            "passes — measured on contracts 2026-08-06, where a ghost "
                             "component reported ArchHasWarnings: false."
                         ),
                         allowlist_key="go|.go-arch-lint.yml|architecture|ignore_not_found_components",

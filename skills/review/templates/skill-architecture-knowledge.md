@@ -12,7 +12,7 @@ After writing the architecture-reviewer agent file, the script reads this templa
 - `{PLAN_GOAL_VERBATIM}` — Goal sentence from plan
 - `{PLAN_ADRS_ARCHITECTURE}` — ADRs from plan that touch DIP/SOLID/boundaries
 - `{PROJECT_ARCHITECTURE_RULES}` — verbatim `.claude/rules/architecture.md § 3` (DIP) + § 6 (naming) + § 7 (module hygiene)
-- `{DIFF_BOUNDARY_TOUCHES}` — list of `src/{core,local,cloud,theokit,agent-tools}/` paths in git diff
+- `{DIFF_BOUNDARY_TOUCHES}` — list of `src/{core,local,cloud,an adopter,agent-tools}/` paths in git diff
 
 Output MUST be Claude Code-conformant (≤500 lines per anthropic skill-creator best practices).
 

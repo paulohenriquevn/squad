@@ -57,7 +57,7 @@ def test_fixture_output_validates_against_schema(fixture_name: str, schema: dict
 
 @pytest.mark.parametrize("plan_filename", [
     "observability-cache-maturity-plan.md",
-    "theo-cli-cohesion-remediation-plan.md",
+    "cli-tool-cohesion-remediation-plan.md",
     "sota-gaps-remediation-plan.md",
 ])
 def test_real_plan_output_validates_against_schema(plan_filename: str, schema: dict) -> None:

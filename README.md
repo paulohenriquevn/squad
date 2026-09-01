@@ -10,7 +10,7 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](pyproject.toml)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](https://code.claude.com/docs/en/)
 
-A development squad that keeps the **Theo ecosystem** healthy: domain specialists you derive from your own repositories, and a pipeline that carries a maintenance item from **hunch → measurement → plan → code → merge**. Every item starts as a hypothesis. Nothing reaches a plan until somebody measured it — and finding nothing is a successful outcome.
+A development squad that keeps a running ecosystem healthy: domain specialists you derive from your own repositories, and a pipeline that carries a maintenance item from **hunch → measurement → plan → code → merge**. Every item starts as a hypothesis. Nothing reaches a plan until somebody measured it — and finding nothing is a successful outcome.
 
 [Quick start](#quick-start) · [How it works](#how-it-works) · [The specialists](#the-specialists) · [Contributing](CONTRIBUTING.md)
 
@@ -21,6 +21,7 @@ A development squad that keeps the **Theo ecosystem** healthy: domain specialist
 ## Table of contents
 
 - [Why this exists](#why-this-exists)
+- [The one phase with a human in it](#the-one-phase-with-a-human-in-it)
 - [What you get](#what-you-get)
 - [How it works](#how-it-works)
 - [The specialists](#the-specialists)
@@ -42,9 +43,38 @@ Maintaining a live multi-repo ecosystem fails in ways that building a new one do
 2. **Fabricated evidence.** A `file:line` nobody opened, a status code nobody requested, a test asserted to fail but never run. Everything downstream treats it as fact.
 3. **Findings that die orphaned.** A review notices six real problems; they live in a report, get read once, and never become work.
 4. **Local optimisation.** Ten well-evidenced improvements shipped into a stage that was never the limit, mistaken for throughput.
-5. **Generic agents.** A reviewer that does not know a root `go build ./...` covers almost nothing in `theo` reports "builds clean" and has measured nothing.
+5. **Generic agents.** A reviewer that does not know a root `go build ./...` covers almost nothing in a multi-module repo reports "builds clean" and has measured nothing.
 
 Squad addresses each with a phase, a gate, or a specialist who knows the difference.
+
+## The one phase with a human in it
+
+Everything from `/backlog-init` down runs unattended. That is only defensible if
+somebody agreed, once, on what is being built — otherwise the chain executes hunches
+at speed and the throughput reads as progress.
+
+`cycle-brainstorm` is where that agreement is made, and it is the **only** cycle in
+the kit that requires a person:
+
+```bash
+/brainstorm-vision       # what it is, who for, and what it is NOT
+/brainstorm-objectives   # OBJ-N, each with a metric containing a number
+/brainstorm-trd          # REQ-N, each citing the objective it serves
+/brainstorm-pieces       # PIECE-N + the gate: 90% and a PERSON's signature
+```
+
+Four documents land in `wiki/product/`, and every backlog item afterwards traces to
+an `OBJ-N`. That traceability makes two questions computable that were impressions
+before: **an objective nothing serves**, and **shipped work serving no objective**.
+Both become the agenda of the next session, which `build_agenda.py` assembles before
+the first question is asked — along with every item that halted, routed nowhere, or
+stalled on a decision only a person can make.
+
+**A judge may not sign this one.** `alignment_judge.py` signs an item's alignment
+brief when nobody is coming, because it reads the item's evidence. A product vision
+has no independent evidence — it is what everything else is measured against — so a
+judge scoring it would grade the document against itself. The scorer enforces that:
+a `signed-by: judge/…` returns `AWAITING_REVIEW`.
 
 ## What you get
 
@@ -54,12 +84,20 @@ Squad addresses each with a phase, a gate, or a specialist who knows the differe
 - **Pointers are verified, line included.** A cited `file:line` that does not resolve — missing file, or a line past the end of one — caps the artifact at INVALID.
 - **One registry, two producers.** `BACKLOG.md` is the single answer to "what is pending?". Humans file items; sweeps register findings with evidence attached. Orphaned findings have nowhere to hide.
 - **Eight specialists who know the terrain.** Each carries build commands verified on disk, the domain's invariants, and the false positives that domain generates.
-- **A boundary that stopped working does not pass silently.** Every architecture linter goes green when a rule names a directory that moved — measured in this ecosystem on `theo-contracts` and `agent-builder`. `/arch-check` and the D5 detector report it; nothing else does.
+- **A boundary that stopped working does not pass silently.** Every architecture linter goes green when a rule names a directory that moved — measured on two adopters, one Go and one TypeScript. `/arch-check` and the D5 detector report it; nothing else does.
 - **Guardrails at runtime.** Claude Code hooks enforce git safety (no `--force`, no direct-to-`main`), TDD discipline, CHANGELOG hygiene and honest public copy while you work.
 
 ## How it works
 
 ```
+        ┌──────────────────────────────────────────────┐
+        │  BRAINSTORM · /brainstorm-vision  (phase −1) │
+        │  → objectives → trd → pieces                 │
+        │  THE ONLY PHASE A HUMAN ATTENDS              │
+        │  gate: 90% + a person's signature            │
+        └────────────────────┬─────────────────────────┘
+                             │ PRODUCT_ALIGNED
+                             ▼
         ┌──────────────────────────────────────────────┐
         │  BACKLOG · /backlog-item          (phase 0)  │
         │  a hypothesis. evidence: none-yet            │
@@ -136,7 +174,7 @@ nobody. See [`agents/README.md`](agents/README.md).
 
 **Adopting it in another project is a bootstrap, not just an install.** The kit ships *this*
 ecosystem's domain routing table, and gate G1 refuses every item until you replace it — measured on
-`theokit-sdk`: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
+an adopter: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
 `scripts/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
 names. The installer prints the sequence.
 
@@ -186,6 +224,7 @@ nothing — a `lib/`, a `utils/`, a test filed outside a test tree.
 
 ```
 squad/
+├── wiki/product/    ← what the product IS. Four documents, agreed with a person
 ├── rules/           ← the contracts. What each cycle promises and which gates block it
 │   ├── cycle-*.md            ← one per phase; the source of truth for that phase
 │   ├── cycle-phases.txt      ← the chain itself, declared once and machine-readable

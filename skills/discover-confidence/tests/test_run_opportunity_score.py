@@ -34,6 +34,25 @@ def staged(project_root: Path):
     """
     written: list[Path] = []
 
+    # Cross-repo detection reads the project's routing table. This repository ships
+    # it EMPTY on purpose (`agents/README.md` records what shipping a populated one
+    # cost an adopter), so an end-to-end test of the ADR cap has to provide one.
+    # Never overwrite a real table: a consumer running this suite owns theirs.
+    table = project_root / "rules" / "domain-routing.txt"
+    borrowed = table.read_text(encoding="utf-8") if table.is_file() else None
+    if borrowed is None or not [
+        ln for ln in borrowed.splitlines() if ln.strip() and not ln.startswith("#")
+    ]:
+        table.parent.mkdir(parents=True, exist_ok=True)
+        table.write_text(
+            "contracts | contracts | agents/contracts.md\n"
+            "platform  | control-plane, cli-tool | agents/platform.md\n",
+            encoding="utf-8",
+        )
+        restore = borrowed
+    else:
+        restore = ...  # a real table: leave it exactly as found
+
     def _write(name: str, content: str) -> Path:
         directory = project_root / ".claude" / "records" / "discoveries" / "opportunities"
         directory.mkdir(parents=True, exist_ok=True)
@@ -46,6 +65,12 @@ def staged(project_root: Path):
 
     for path in written:
         path.unlink(missing_ok=True)
+
+    if restore is not ...:
+        if restore is None:
+            table.unlink(missing_ok=True)
+        else:
+            table.write_text(restore, encoding="utf-8")
 
 
 def test_good_opportunity_scores_shippable(good_opportunity: Path, project_root: Path) -> None:
@@ -112,15 +137,15 @@ def test_cross_repo_without_adr_is_capped(staged) -> None:
         "test-cross-repo-opportunity.md",
         "# Opportunity: Test\n\n"
         "**Item:** B-003\n"
-        "**Repo:** theo-contracts\n"
+        "**Repo:** contracts\n"
         "**Mode:** review\n\n"
         "## Context\n\nText.\n\n"
         "## Corner 1 — Evidence\n\nReal content here, well past the threshold for a "
         "populated corner section.\n\n"
         "## Corner 2 — Constraint Relation\n\nReal content here, well past the threshold "
         "for a populated corner section.\n\n"
-        "## Corner 3 — Blast Radius\n\nThe jwt claim shape is consumed by theo-cloud and "
-        "theo-cli, both of which must migrate.\n\n"
+        "## Corner 3 — Blast Radius\n\nThe jwt claim shape is consumed by control-plane and "
+        "cli-tool, both of which must migrate.\n\n"
         "## Corner 4 — Verification\n\nReal content here, well past the threshold for a "
         "populated corner section.\n\n"
         "## Recommendation\n\n- Do X\n",

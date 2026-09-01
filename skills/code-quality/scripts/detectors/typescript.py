@@ -121,8 +121,8 @@ class TypescriptDetector(BaseDetector):
         """Every package name declared INSIDE this repo — not just the root's.
 
         Patch 2026-08-03. `_find_self_package_name` resolves the OUTERMOST package.json#name,
-        which in a monorepo is the private root (`theo-promptly`) that nobody imports. Every
-        sibling import (`@usetheo/promptly` from packages/api) therefore fell through to the
+        which in a monorepo is the private root (`promptly`) that nobody imports. Every
+        sibling import (`@scope/promptly` from packages/api) therefore fell through to the
         npm registry, took a 404 and was reported as `Fabricated npm package` — 60 HARD
         findings on a repo whose build and tests are green. A workspace dependency declared
         `workspace:*` resolves perfectly; it is simply not published, by design.
@@ -384,7 +384,7 @@ class TypescriptDetector(BaseDetector):
         D5 invokes the npm script the repo declares rather than guessing which directories to
         cruise. Two reasons, both measured. The paths a cruise covers ARE an architectural
         decision — choosing them here would be Squad deciding what counts as the codebase. And
-        `npm run` resolves the LOCAL binary: usetheo-labs/agent-builder measured the global
+        `npm run` resolves the LOCAL binary: a TypeScript monorepo measured the global
         `depcruise` cruising **0 modules** against a config the local one cruised 279 with. A
         global binary runs without the project's transpilers, so it silently sees nothing.
 

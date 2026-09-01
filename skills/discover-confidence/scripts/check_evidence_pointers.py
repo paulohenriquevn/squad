@@ -81,7 +81,7 @@ def _resolve_code_pointer(project_root: Path, rel_path: str, line: int) -> tuple
     `missing_file` and the gate raised `fabricated_evidence` over paths that are
     on disk.
 
-    Measured in `theo-platform` on 2026-08-29: the kit's own `good-opportunity.md`
+    Measured in `platform` on 2026-08-29: the kit's own `good-opportunity.md`
     scored `evidence_pointers 0.0`, hard-capped to 49, verdict INVALID — four
     pointers, four "missing", all four present one directory down. The fixture was
     the visible casualty; the defect reaches any opportunity a consumer writes

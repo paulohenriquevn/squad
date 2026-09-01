@@ -146,7 +146,7 @@ def go_workspace_modules(project_root: Path) -> list[str]:
 
     `go test ./...` at a workspace root fails with "directory prefix . does not
     contain modules listed in go.work" — the kit already hit this shape in
-    /arch-check. Paths that leave the repo (`../theo-contracts`) belong to a
+    /arch-check. Paths that leave the repo (`../contracts`) belong to a
     sibling repository with its own gates and are dropped, not audited from here.
     """
     work = project_root / "go.work"

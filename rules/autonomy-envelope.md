@@ -44,14 +44,37 @@ agent moves them.
    project declares, the system follows it exactly. It never rewrites shared history
    and never attributes a commit to anyone but its author.
 
-2. **A change is proposed, never merged.** The system opens the pull request and stops
-   there. This is the one stop that costs nothing: the work is delivered, the PR is its
-   record, and the queue continues to the next item. Merging is the single act that
-   reaches shared history, and it stays outside the envelope.
+2. **No change reaches shared history except through the gates.** Every merge is of a
+   pull request whose full chain passed — `/review` returned `READY_TO_MERGE`,
+   `/code-quality` did not return `FAIL_HARD`, and no BLOCKED report stands against the
+   item. The system may merge such a pull request. It may never merge one that has not
+   passed, and it may never merge by moving a gate.
+
+   **This floor used to forbid merging outright**, on the argument that stopping at the
+   PR *"costs nothing: the work is delivered, the PR is its record, and the queue
+   continues."* That holds exactly while somebody is coming. With nobody watching, the
+   same pause is a stop — every item that passes review parks at an open PR and the
+   queue drains into a pile of branches nobody merges, which is the failure this file's
+   opening names, arriving at the last step instead of the first.
+
+   It was amended once `cycle-brainstorm` existed, because autonomy over merging is only
+   defensible downstream of a product a person signed for. The reasoning, the
+   alternatives rejected and what it costs are in
+   [`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md).
+
+   **Branch protection outranks this.** Where the remote requires a human reviewer, the
+   system cannot merge and must not try: it emits `PR_OPEN_AWAITING_APPROVAL` and takes
+   the next item. A project that wants the old behaviour turns that on, which is the
+   honest place for the switch — enforced rather than promised.
 
 3. **No mechanical gate is switched off, and no threshold is moved to pass one.** A
    failing gate is a fact to work with. Disabling it, skipping it, forcing past it, or
    loosening the bound until it goes green are the same act under four names.
+
+   **This floor now carries weight it used to share.** While floor 2 forbade merging,
+   a disabled gate still met a person before anything reached shared history. That
+   second look is gone, so this is the whole of what stands between a moved threshold
+   and a merge.
 
 4. **An honest stop beats a false completion.** No verdict for work that did not
    happen, no completion promise for a gate that did not pass, and no event written by

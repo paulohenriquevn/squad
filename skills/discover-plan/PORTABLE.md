@@ -62,7 +62,7 @@ The full chain:
 
 ### Domains and repo routing
 
-The eight domains in `rules/cycle-backlog.md § Domain routing` are specific to the Theo ecosystem. For your own, edit that table — the skill reads `domain` and `repo` from the item and does not hardcode names.
+The domains in the routing table are specific to the ecosystem that derived them. For your own, edit that table — the skill reads `domain` and `repo` from the item and does not hardcode names.
 
 ### Question budget
 
@@ -87,7 +87,7 @@ Blast Radius is the corner most worth keeping. It earns its place wherever repos
 | Question budget (3-10, max 3/corner) | ✅ | Heuristic, adjustable in the checker |
 | Template structure | ✅ | Matches the deterministic checker |
 | The four corners | ⚠️ | Portable in shape; edit all three places if you change them |
-| Domain routing table | ❌ | The eight Theo domains. Replace with yours. |
+| Domain routing table | ❌ | The origin ecosystem's domains. Replace with yours. |
 | `rules/live-target.txt` contents | ❌ | Your environments, your credentials-by-name |
 
 ## Limitations (known)

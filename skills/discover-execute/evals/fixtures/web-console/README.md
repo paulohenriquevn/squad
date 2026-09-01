@@ -1,4 +1,4 @@
-# theo-lens — eval fixture
+# web-console — eval fixture
 
 Not the real repo. A minimal stand-in so measurement evals have code to actually open,
 count and cite.

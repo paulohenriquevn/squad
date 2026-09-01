@@ -19,12 +19,12 @@ mechanism that stopped existing, and the reader has no way to tell the differenc
 
 Two measurements, both from this ecosystem:
 
-1. `theo-contracts`, 2026-08-06. A `.go-arch-lint.yml` whose component named a directory that
+1. `contracts`, 2026-08-06. A `.go-arch-lint.yml` whose component named a directory that
    does not exist reports `ArchHasWarnings: false` — green — with the diagnosis demoted to
    `ExecutionWarnings`, a field nothing was reading. The rule could no longer fire and the
    pipeline said it passed.
 
-2. `usetheo-labs/agent-builder`, 2026-08-06. Its `.dependency-cruiser.cjs` records the same class
+2. a TypeScript monorepo, 2026-08-06. Its `.dependency-cruiser.cjs` records the same class
    in prose: dissolving `tui/lib` into seven capability folders would leave a `forbidden` rule
    written against the old literal path matching nothing — *"a `forbidden` rule that matches
    nada produz ZERO violacoes, ou seja, VERDE. O invariante evaporaria em silencio."*
@@ -47,7 +47,7 @@ D5 = "d5_architecture"
 
 #: How many characters a rule's reason needs before it counts as a reason.
 #:
-#: Twenty, adopted from the journeys registry of usetheo-labs/agent-builder, which states the
+#: Twenty, adopted from the journeys registry of a TypeScript monorepo, which states the
 #: calibration: short enough not to demand prose, long enough to exclude `n/a`, `-` and `interno`
 #: — the three ways of not answering.
 RAZAO_MINIMA = 20

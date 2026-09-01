@@ -4,7 +4,7 @@ Source of Truth for the intake cycle. Skills consume this; do not duplicate cont
 
 ## Purpose
 
-Register **one unit of maintenance work** against the Theo ecosystem, cheaply and before anyone has measured anything. Outputs a numbered item in `BACKLOG.md` — never a plan, never code, never evidence.
+Register **one unit of maintenance work** against the governed ecosystem, cheaply and before anyone has measured anything. Outputs a numbered item in `BACKLOG.md` — never a plan, never code, never evidence.
 
 This is phase 0 of the Squad chain. It exists because the downstream cycle (`cycle-discover`) demands measured evidence for everything it accepts, and that demand, applied at intake, would silence the most valuable signal a maintenance team has: the hunch. *"the trace explorer feels slow"* is a legitimate thing to record and an illegitimate thing to plan against. BACKLOG separates the two — it takes the hunch, and hands DISCOVER the job of proving or killing it.
 
@@ -277,7 +277,7 @@ index and the items to move together, so the gate is what keeps them honest.
 
 The registry lives at the root of the governed SCOPE and not scattered below it, because a maintenance team asking "what is pending?" must have exactly one place to look. Per-directory backlogs inside one scope re-create the orphaned-findings problem the single-registry rule exists to solve.
 
-What this never meant is "an umbrella is required". An autonomous repository is its own scope and keeps its own registry — `theokit-sdk` holds 88 items about `theokit-sdk`, and asking it to file them in a parent directory that is nobody's repository would put the registry outside the thing it governs.
+What this never meant is "an umbrella is required". An autonomous repository is its own scope and keeps its own registry — one adopter holds 88 items about itself, and asking it to file them in a parent directory that is nobody's repository would put the registry outside the thing it governs.
 
 ## Rollback
 

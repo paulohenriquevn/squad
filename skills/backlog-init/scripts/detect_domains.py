@@ -9,9 +9,9 @@ ecosystem the kit was written in. Every install carried that table along, and
 an explicit instruction not to "invent a ninth domain". In a project that is not
 that ecosystem, no repo fits.
 
-Measured on `theokit-sdk` on 2026-08-18: 88 backlog items with measured
+Measured on an adopter on 2026-08-18: 88 backlog items with measured
 `file:line` evidence, all rejected as `BLOCKER/unroutable_repo` — 68 citing
-`packages/sdk`, 14 `theokit-sdk`, and four more packages. The gate was right in
+`packages/sdk`, 14 an adopter, and four more packages. The gate was right in
 what it said (*"I do not know who to send this to"*); what was wrong was the
 table, which belonged to
 dado de um projeto morando dentro do template de todos.
@@ -36,7 +36,7 @@ DUAS FONTES, E A SEGUNDA MANDA
 ------------------------------
 `--from-backlog` derives from the (domain, repo) pairs the items ALREADY declare.
 Use it whenever the registry exists: topology says what exists, not who owns it.
-Measured on `theokit-sdk` — the registry separates `sdk-core`, `repo-platform`,
+Measured on an adopter — the registry separates `sdk-core`, `repo-platform`,
 `sdk-satellites`, `edge-cli-acp` and `memory-adapters`, five domains no directory
 layout reveals and no detector should guess.
 
@@ -114,7 +114,7 @@ def detect_scope(root: Path) -> str:
     `backlog-init` refused to run without an umbrella — *"no umbrella detected: run
     at the workspace root"* — which, in an autonomous project, means creating the
     `BACKLOG.md` at the umbrella root, **outside the project**. Measured on
-    `theokit-framework`: ten independent repos, each with its own cycle, and the kit
+    an adopter: ten independent repos, each with its own cycle, and the kit
     pushed all ten registries into a directory that is nobody's repository.
 
     The principle the rule defends ("one question, one place to look") does not
@@ -193,7 +193,7 @@ def domains_from_backlog(backlog_path: Path, root: Path) -> list[Domain]:
     """Derive the table from the (domain, repo) pairs the items ALREADY declare.
 
     Topology says what exists; it does not say the semantics of ownership.
-    Measured on `theokit-sdk`: the registry separates `sdk-core`, `repo-platform`,
+    Measured on an adopter: the registry separates `sdk-core`, `repo-platform`,
     `sdk-satellites`, `edge-cli-acp` and `memory-adapters` — five domains no
     directory layout reveals and no detector should guess. The items already carry
     the answer; this merely reads it.

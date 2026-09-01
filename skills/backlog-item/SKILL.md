@@ -2,7 +2,7 @@
 name: backlog-item
 version: 0.1.0
 requires: []
-description: 'Register one unit of maintenance work in BACKLOG.md as the next B-NNN item. Use this whenever someone notices something worth fixing, improving, verifying or measuring in the Theo ecosystem — a slow endpoint, a suspicious code path, a flaky behaviour, a duplicated rule, a repo that feels wrong — even when they only mutter it in passing and never say "backlog" or "item". An unmeasured hunch is exactly what belongs here: intake requires no evidence, deliberately. Also use it before starting any maintenance work, so the work has an id, an owner and a Definition of Done.'
+description: 'Register one unit of maintenance work in BACKLOG.md as the next B-NNN item. Use this whenever someone notices something worth fixing, improving, verifying or measuring in the ecosystem — a slow endpoint, a suspicious code path, a flaky behaviour, a duplicated rule, a repo that feels wrong — even when they only mutter it in passing and never say "backlog" or "item". An unmeasured hunch is exactly what belongs here: intake requires no evidence, deliberately. Also use it before starting any maintenance work, so the work has an id, an owner and a Definition of Done.'
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 argument-hint: "{item-slug}"
@@ -10,7 +10,7 @@ argument-hint: "{item-slug}"
 
 # `/backlog-item` — Register one unit of maintenance work
 
-Take a one-line description of something to improve, fix, verify, or evolve in the Theo ecosystem (e.g. *"the theo-lens trace explorer feels slow"*) and append it as the next `B<N+1>` item in `BACKLOG.md`, with domain routing, a suggested discover mode, and a verifiable Definition of Done.
+Take a one-line description of something to improve, fix, verify, or evolve in the governed ecosystem (e.g. *"the trace explorer feels slow"*) and append it as the next `B<N+1>` item in `BACKLOG.md`, with domain routing, a suggested discover mode, and a verifiable Definition of Done.
 
 The item this skill produces is **a hypothesis, not a commitment**. It carries `evidence: none-yet` by design. Proving it — or killing it — is `cycle-discover`'s job.
 
@@ -64,9 +64,9 @@ A parse failure is surfaced verbatim so the human fixes the malformed registry b
 
 ### Step 1 — Resolve the slug
 
-Take `{item-slug}`. If absent, ask for a one-sentence description and derive a kebab-case slug (*"trace explorer feels slow"* → `theo-lens-trace-explorer-latency`).
+Take `{item-slug}`. If absent, ask for a one-sentence description and derive a kebab-case slug (*"trace explorer feels slow"* → `web-console-trace-explorer-latency`).
 
-Prefix the slug with the repo when the same problem shape recurs across repos (`theo-lens-…`, `theo-rag-…`). The registry spans 21 repos; a bare `latency` slug is unsearchable.
+Prefix the slug with the repo when the same problem shape recurs across repos (`web-console-…`, `search-api-…`). A registry spanning many repos makes a bare `latency` slug unsearchable.
 
 ### Step 2 — Gates G1 + G2, executados (MANDATORY)
 

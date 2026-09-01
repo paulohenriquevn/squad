@@ -22,7 +22,7 @@ Single entry-point for [`cycle-review`](../../rules/cycle-review.md). The most r
 
 ## Cycle contract
 
-This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md). The cycle rule is the **source of truth** for: pre-conditions, hard gates (BLOCKER never merges; NEEDS_DEEPER returns to /plan-write for re-scoping), soft gates, stop conditions, anti-patterns (never approve unresolved BLOCKER, never fabricate findings, never auto-merge), rollback (review-report only — never code).
+This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md). The cycle rule is the **source of truth** for: pre-conditions, hard gates (BLOCKER never merges; NEEDS_DEEPER returns to /plan-write for re-scoping), soft gates, stop conditions, anti-patterns (never approve unresolved BLOCKER, never fabricate findings, never merge — that belongs to `/release`), rollback (review-report only — never code).
 
 **Read `cycle-review.md` before invoking this skill.** This SKILL.md retains phase-specific detail (domain detection, agent generation, consolidation rubric).
 
@@ -357,7 +357,7 @@ Fix after the consolidation, then re-review. Marking the resulting findings
 - The skill NEVER fabricates findings — if a file has no issues, the finding is "INFO: no issues found"
 - The skill SHOULD cover every file in the diff (each baseline agent is briefed to enumerate touched files via the diff base). When a file is genuinely trivial — pure rename, single-line typo — the finding is "INFO: no issues found". Coverage is enforced by agent prompts today; a future `consolidate_findings.py` check may mechanically assert "every changed file appears in ≥1 finding"
 - The skill NEVER reviews without the plan as ground truth — review without plan is vibes
-- The skill NEVER auto-merges — final merge is always human decision
+- The skill NEVER merges. The merge belongs to `/release`, which verifies this review's verdict before performing it — a reviewer that could merge on its own verdict would be grading its own decision to proceed
 - The skill NEVER reviews code modified between `/implement` validation and `/review` — if commits happened, re-run `/implement` validation
 - The skill NEVER deletes the spawned agent files post-review — they are audit trail (per user decision: persist as audit)
 

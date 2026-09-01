@@ -2,7 +2,7 @@
 name: idea-to-release
 version: 0.1.0
 requires: [discover-plan, discover-edge-cases, discover-plan-confidence, discover-execute, discover-confidence, discover-improve, plan-write, plan-edge-cases, deps-audit, plan-confidence, plan-improve, implement, code-quality, review, release, acceptance]
-description: End-to-end autonomous orchestrator for cycle-discover + cycle-plan + cycle-implement + cycle-code-quality + cycle-review + cycle-release + cycle-acceptance. Single entry-point chains the whole pipeline from idea to a released, accepted milestone — pausing at the one manual gate, human approval of the release PR. Default is full-pipeline; --plan-only retains the legacy discover+plan behavior. Depth (none/light/full) is derived deterministically from a confidence score against repo state — no interactive prompts. MUST-FIX items from /plan-edge-cases are auto-injected into the plan before /plan-confidence re-scores. Inspired by planning-with-files v2.43.0 autonomy + composes Claude Code primitives (/plan-goal, /plan-loop) absorbed 2026-05-26.
+description: End-to-end autonomous orchestrator for cycle-discover + cycle-plan + cycle-implement + cycle-code-quality + cycle-review + cycle-release + cycle-acceptance. Single entry-point chains the whole pipeline from idea to a released, accepted milestone, merge included — pausing only where a gate did not pass or branch protection requires a reviewer. Default is full-pipeline; --plan-only retains the legacy discover+plan behavior. Depth (none/light/full) is derived deterministically from a confidence score against repo state — no interactive prompts. MUST-FIX items from /plan-edge-cases are auto-injected into the plan before /plan-confidence re-scores. Inspired by planning-with-files v2.43.0 autonomy + composes Claude Code primitives (/plan-goal, /plan-loop) absorbed 2026-05-26.
 user-invocable: true
 allowed-tools: Read Write Edit Bash Glob Grep Skill
 argument-hint: "[M<N> | B-NNN | {topic-slug}] [--plan-only] [--depth=none|light|full] [--no-release] [--bump=patch|minor|major]"
@@ -16,7 +16,7 @@ End-to-end autonomous orchestration of the 6-cycle pipeline: `cycle-discover` �
 2. **Derives depth** from the confidence band (no interactive prompts — overridable via CLI flag).
 3. **Chains skills autonomously** through every cycle, gating each transition on the downstream cycle's pre-conditions.
 4. **Auto-injects MUST-FIX items** from `/plan-edge-cases` into the plan before `/plan-confidence` re-scores — eliminating the manual "human absorbs MUST FIX" step.
-5. **Pauses ONLY at the human-approval gate** of the release PR (Unbreakable Rule 4).
+5. **Pauses only where a person is genuinely required** — a gate that did not pass, or branch protection demanding a reviewer the system cannot be (`rules/autonomy-envelope.md` floor 2).
 
 ## When to invoke
 
@@ -230,7 +230,7 @@ Skill(/review {topic-slug})
 Skill(/release [--bump={forwarded}])
 ```
 
-`/release` opens a develop→main PR and pauses for human approval. The orchestrator emits final verdict:
+`/release` opens a develop→main PR and merges it once the chain verifies. The orchestrator emits final verdict:
 
 - `RELEASED` — PR was already merged when this chain ran (`/release` resumed after merge).
 - `PR_OPEN_AWAITING_APPROVAL` — PR is open; cycle is complete on the orchestrator's side. Human approves the PR through GitHub UI to finalize.
@@ -283,7 +283,7 @@ If any phase blocked → honest report listing what blocked + recommended human 
 5. **`/plan-confidence` final verdict INVALID after improve** → halt; surface gaps; do NOT deliver as "ready".
 6. **`/code-quality` returns FAIL_HARD or INVALID** → halt; do NOT proceed to `/review`. Loop back to `/implement` once; if still failing, surface to human.
 7. **`/review` returns NEEDS_DEEPER** → halt; the human re-scopes via a fresh `/plan-write` invocation.
-8. **Release PR auto-merge attempt** → forbidden. The human approves the release PR on GitHub. The orchestrator never invokes `gh pr merge` on the release PR.
+8. **Merging a PR whose chain did not pass** → forbidden. `/release` owns the merge and verifies the verdicts first; the orchestrator never merges on its own, and never with `--admin`.
 
 ## Soft gates (proceed with warning)
 
@@ -300,7 +300,7 @@ If any phase blocked → honest report listing what blocked + recommended human 
 4. **NEVER claim SHIPPABLE if plan-confidence returned WITH_CAVEATS** — honesty per Unbreakable Rule 3.
 5. **NEVER proceed past INVALID verdict** — that's an explicit fail-closed.
 6. **NEVER ask the user between phases.** Depth is derived; MUST-FIX is injected; gates pause only on `BLOCKED`. Interactive prompts during the chain defeat the orchestrator's purpose.
-7. **NEVER auto-merge the release PR.** Unbreakable Rule 4 mandates human approval at merge.
+7. **NEVER merge past a gate.** `/release` merges only a PR whose chain passed; re-running a gate until it goes green, or reaching for `--admin` when branch protection refuses, are the same violation of envelope floor 3.
 
 ## Cycle contract
 

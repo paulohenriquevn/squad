@@ -86,9 +86,9 @@ Every `export` in the diff: must be either (a) re-exported via `src/index.ts` (p
 
 The `.claude/hooks/boundary-check.sh` already blocks cross-tier imports at write time. Spot-check:
 
-- `src/core/` imports — must not reference `src/local/`, `src/cloud/`, `src/theokit/`, `src/agent-tools/`
+- `src/core/` imports — must not reference `src/local/`, `src/cloud/`, `src/an adopter/`, `src/agent-tools/`
 - `src/local/` and `src/cloud/` must not import each other
-- `src/theokit/` must depend only on `src/core/`
+- `src/an adopter/` must depend only on `src/core/`
 
 FLAG as BLOCKER any violation (hook should have caught it; if it slipped through, the hook itself is broken).
 
