@@ -102,6 +102,8 @@ review → release → acceptance`. Skills below are in the order they run.
 ### BRAINSTORM — deciding what the product is
 
 The only cycle with a person in it. Four phases, one document each, then a gate.
+Run by `iris-product-designer`, who holds the item-level alignment gate too — same
+rubric, same floor, one level up.
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|

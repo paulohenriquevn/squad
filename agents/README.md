@@ -12,7 +12,7 @@ when a domain specialist may not.
 | Agent | Role | Decides | Runs |
 |---|---|---|---|
 | `kairos-product-owner` | Product Owner | what work exists, and in what order | `/backlog-item`, `/backlog-review`, `squad_boss.py` |
-| `iris-product-designer` | Product Designer (UX/UI) | what the user will experience, made visible before it is built | `/plan-alignment`, `/acceptance` |
+| `iris-product-designer` | Product Designer (UX/UI) | what the product IS, and what the user will experience — made visible before it is built | `cycle-brainstorm` (4 skills), `/plan-alignment`, `/acceptance` |
 | `daedalus-tech-lead` | Tech Lead | one item's technical path — and who builds each part | `/idea-to-release`, the domain specialists |
 | `hermes-scrum-master` | Scrum Master / Agile Facilitator | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
 
@@ -24,20 +24,27 @@ the work he is moving.
 The four do not overlap, and the seams are the point:
 
 ```
-Kairos ──registers & ranks──▶ backlog
-   │                             │
-   ▼                             ▼
- Iris ──what the user gets──▶ Hermes ──allocates a lane──▶ Daedalus ──▶ PR
-   │      (brief + walkthrough)    │                          │
-   │                               │                          ├─▶ domain specialist
-   └──────── acceptance, after the release ───────────────────┘   (Developers / QA)
+ Iris ──the product vision──▶ Kairos ──registers & ranks──▶ backlog
+   │    (cycle-brainstorm,        │                            │
+   │     the one cycle a          │  objectives ──traces_to──▶ │
+   │     person attends)          ▼                            ▼
+   ├──what the user gets──▶ Hermes ──allocates a lane──▶ Daedalus ──▶ PR
+   │   (brief + walkthrough)      │                          │
+   │                              │                          ├─▶ domain specialist
+   └──────── acceptance, after the release ──────────────────┘   (Developers / QA)
 ```
 
-**Kairos** supplies the work; **Iris** decides what it must feel like and holds the
-alignment gate; **Hermes** allocates lanes and clears impediments; **Daedalus**
-executes one item and hands each domain to the specialist who owns it. A role that
-could do two of these would be a role that can overrule itself — Hermes deciding a
-stage passed, or Daedalus choosing which item he prefers.
+**Iris** decides what the product is and what it must feel like, and holds BOTH
+alignment gates — product and item; **Kairos** turns that into work and ranks it;
+**Hermes** allocates lanes and clears impediments; **Daedalus** executes one item and
+hands each domain to the specialist who owns it. A role that could do two of these
+would be a role that can overrule itself — Hermes deciding a stage passed, or
+Daedalus choosing which item he prefers.
+
+**Iris holding both gates is not one of those overlaps.** They are the same
+instrument at two levels, and in neither does she sign: the product sign-off is the
+human's, and an item's may be `alignment_judge.py`'s. She produces what is graded and
+never grades it.
 
 ### Where Developers and QA are
 

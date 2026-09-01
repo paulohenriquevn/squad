@@ -47,7 +47,7 @@ they may be versioned when a domain specialist may not.
 | Agent | Decides | Runs |
 |---|---|---|
 | `kairos-product-owner` | what work exists, and in what order | `/backlog-item`, `/backlog-review`, `squad_boss.py` |
-| `iris-product-designer` | what the user will experience | `/plan-alignment`, `/acceptance` |
+| `iris-product-designer` | what the product IS, and what the user will experience | `cycle-brainstorm` (4 skills), `/plan-alignment`, `/acceptance` |
 | `daedalus-tech-lead` | one item's technical path — and who builds each part | `/idea-to-release`, the domain specialists |
 | `hermes-scrum-master` | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
 
@@ -55,18 +55,28 @@ A role that could do two of these could overrule itself — Hermes deciding a st
 passed, or Daedalus choosing which item he prefers. See
 [`agents/README.md`](../agents/README.md).
 
-**`cycle-brainstorm` has no declared owner among the four.** They were written
-before the phase existed. Two readings are defensible on the roles as they stand —
-Kairos, who already decides what work exists and whose backlog now derives from it;
-or Iris, who already refuses a brief describing a system instead of an experience.
-Naming one is a decision about roles, and it belongs to whoever owns this kit.
+**`cycle-brainstorm` is Iris's**, decided 2026-09-01. The four roles predate the
+phase, and Kairos was the other defensible reading — his backlog derives from it. He
+did not get it because his role is the QUEUE, and the brainstorm produces what the
+queue serves rather than the queue itself.
+
+Iris got it on three counts already in her file: her temperament is *refusing a brief
+that describes a system instead of an experience*, which is gate G-B1; her standing
+question is *"and then what does the user see?"*, which is the vision's question; and
+she already holds the alignment mechanism — same 17-criteria rubric, same 90% floor.
+`cycle-brainstorm` is that instrument one level up.
+
+So **Iris holds both alignment gates**, product and item, and in neither does she
+sign: the product sign-off is the human's and an item's may be the judge's. She
+produces what is graded and never grades it. What Kairos inherits is the output — the
+`OBJ-N` ids that items cite through `traces_to`.
 
 ## Phase by phase
 
 Each row: the skills in order, the contracts that govern them, and what computes
 the verdict. **No verdict in this kit is asserted in prose.**
 
-### BRAINSTORM — phase −1 · a person is required
+### BRAINSTORM — phase −1 · Iris, with a person in the room
 
 | | |
 |---|---|

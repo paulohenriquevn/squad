@@ -38,6 +38,21 @@ and the answers are the adopter's. A vision document carried in from another eco
 is the same defect as an inherited routing table — `agents/README.md` records what that
 cost when it was measured, and the shape does not change because the artifact is prose.
 
+## Who runs it
+
+**`iris-product-designer`.** The role decides what the user will experience and makes
+it visible before it is built, refuses a brief describing a system in place of an
+experience — which is gate G-B1 — and already holds the item-level alignment gate at
+the same 90% floor over the same 17-criteria rubric. This cycle is that instrument
+one level up.
+
+She runs the cascade and generates the sign-off unticked. **She never signs it**, and
+neither does any judge: see § Why the judge may not sign this one.
+
+`kairos-product-owner` inherits the output rather than the phase — the `OBJ-N` ids
+that backlog items cite through `traces_to`. The queue is his; what the queue serves
+is not.
+
 ## Pre-conditions
 
 Invoke `/brainstorm-vision` when ALL of:

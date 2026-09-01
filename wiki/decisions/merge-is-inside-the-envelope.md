@@ -20,10 +20,22 @@ sources:
 # Merging is inside the autonomy envelope
 
 **Status:** accepted · **Date:** 2026-09-01 · **Decided by:** Paulo Henrique (owner)
+· **Drafted by:** the agent, from that decision · **Owner review:** not performed
+
+**Read that last field before relying on the reasoning below.** The DECISION is the
+owner's: auto-merge was chosen deliberately, with the cost stated in front of the
+choice. The *argument* for it — the load-bearing clause, the three preconditions, the
+rejected alternatives — is the agent's reconstruction of why that decision is sound,
+and the owner has not confirmed that it is his reasoning.
+
+The envelope says changing it is a human act, and it is the one document where an
+agent validating its own draft would be the exact failure the kit refuses elsewhere.
+So this field stays until a person edits the file, and a reader who finds an argument
+here they disagree with should treat it as the agent's, not as settled.
 
 ## Context
 
-`rules/autonomy-envelope.md` had four floors the system never crossed. The second
+`rules/autonomy-envelope.md` has five floors the system never crosses. The second
 read:
 
 > **A change is proposed, never merged.** The system opens the pull request and stops
