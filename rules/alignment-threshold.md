@@ -9,14 +9,14 @@ An item nobody can draw is an item somebody is about to guess at. Below 90% shar
 | Condition | Who satisfies it | Verdict if missing |
 |---|---|---|
 | Machine score ≥ 90% over the structural rubric | The agent | `BLOCKED` |
-| Every box in `## Reviewer sign-off` ticked | **A human, never the agent** | `AWAITING_REVIEW` |
+| Every box in `## Reviewer sign-off` ticked | **A reviewer who is not the author** | `AWAITING_REVIEW` |
 
 Both come from `skills/plan-alignment/scripts/score_alignment.py`, run against
 `records/alignment/{slug}-alignment.md`. Exit 0 permits the work; exit 1 forbids it.
 There is no band in between and no override for urgency — urgency is the condition
 under which guessing is most expensive, not least.
 
-## The agent may not tick the reviewer's boxes
+## The AUTHOR may not tick the reviewer's boxes
 
 This is the half of the rule that a script cannot enforce, and it is the more
 important half.
@@ -36,10 +36,48 @@ So:
 - The agent **generates** `## Reviewer sign-off`, always unticked, one item per
   thing the script cannot decide.
 - The agent **may add** items when the work warrants them.
-- The agent **may never tick one, remove one, or delete the section.** Doing so is
-  a Rule 3 (honesty) violation, not a shortcut — it fabricates a human's judgement.
+- The agent that wrote the brief **may never tick one, remove one, or delete the
+  section.** Doing so is a Rule 3 (honesty) violation, not a shortcut — it
+  fabricates a judgement nobody made.
 - A brief with no checklist is not signed off either. An absent gate is not a
   passed one.
+
+### Amended 2026-09-01 — the reviewer need not be a person
+
+This rule said *"a human, never the agent"* for most of its life, and the sentence
+did two jobs at once. Only one of them was the argument: **the author must not
+grade the author's own form.** The other — that the reviewer must be human — never
+followed from it, and it is what left the autonomous loop halted at
+`AWAITING_REVIEW` with the machinery to clear it already on disk and unused.
+
+`skills/plan-alignment/scripts/alignment_judge.py` may sign. It satisfies the
+argument this rule actually makes:
+
+- **it did not write the brief**, so it is not grading its own form;
+- **it reads the item's EVIDENCE, not only the brief** — a brief that is internally
+  tidy and describes work nobody measured is exactly what a self-approving author
+  produces, and only the evidence exposes it;
+- **it can refuse, and refusing costs what signing costs.** A judge that has never
+  refused is a judge nobody has tested;
+- **it signs under its own name** — `<!-- signed-by: judge/alignment-judge -->` —
+  so `ALIGNED` by a judge and `ALIGNED` by a person are different claims that a
+  reader tells apart without opening the file. `score_alignment.py` reports the
+  **weakest** signer of a mixed set, so one unattributed tick cannot launder
+  the rest.
+
+**Who this affects.** Every consumer running the chain unattended: the halt at
+`AWAITING_REVIEW` was permanent for them, because nobody was coming.
+
+**What it does not change.** The 90% machine score, the ban on the author signing,
+`NEEDS_SPLIT` staying a reviewer's declaration, and the absence of any `--skip`.
+A judge's signature is a weaker claim than a person's and is recorded as one; it
+is not a way past the gate, it is the gate answered by somebody else.
+
+**What was rejected.** Leaving the rule as it stood and letting the loop halt —
+which is not neutral: it discards work already measured and understood, and the
+envelope names that failure explicitly. Also rejected: letting the author sign
+when no reviewer is available, which would have kept the letter of the rule and
+destroyed its reason.
 
 `AWAITING_REVIEW` is a normal, expected state. It means the structure is done and
 the judgement has not been made yet. It is not a failure and it is not an

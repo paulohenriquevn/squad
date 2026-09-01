@@ -138,6 +138,40 @@ If `/discover-confidence` after improve still < SHIPPABLE_WITH_CAVEATS → halt 
 
 #### Phase P — Plan (always)
 
+**Phase 0 of `cycle-plan` runs FIRST, and it is not optional for a backlog item.**
+This chain used to go straight from discover to `/plan-write`, which could not
+work: `check_alignment_gate.py` hard-caps a plan citing a `B-NNN` with no
+alignment brief at 49, so `/plan-confidence` returned `INVALID` for every backlog
+item and `/plan-improve` was handed a defect it cannot fix — the missing artifact
+is not in the plan. The chain did not halt at the gate, it died past it with a
+reason that pointed at the wrong file.
+
+```
+Skill(/plan-alignment {topic-slug})          # cycle-plan phase 0 — UNBREAKABLE for a B-NNN
+     ↓ ALIGNED          → continue
+     ↓ AWAITING_REVIEW  → see below; unattended runs sign with the judge
+     ↓ BLOCKED          → the item is NOT built; close the gaps and re-score
+     ↓ NEEDS_SPLIT      → split into items that each align on their own; halt this run
+```
+
+**`AWAITING_REVIEW` is where an unattended chain used to stop forever.** The brief
+is complete and nobody signed it, and for a fleet session nobody is coming. The
+answer is not to let the author sign — that is the one thing
+`rules/alignment-threshold.md` forbids — it is to hand the brief to a reviewer
+that is not the author:
+
+```
+Bash(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/alignment_judge.py" \
+       records/alignment/{slug}-alignment.md \
+       --verdict signed --reason "<what was checked, against which evidence>")
+```
+
+Exit 0 signs and the chain continues; exit 1 is a REFUSAL, and a refusal halts
+this item with the reason written into the brief. **Do not retry a refusal** — the
+judge reading the same evidence twice is not a second opinion. Invoke it only when
+no reviewer is coming; where a person reviews, wait for the person, because a
+human signature is worth more and the record says which one it got.
+
 ```
 Skill(/plan-write {topic-slug} [--milestone M<N>])   # --milestone forwarded only in roadmap-driven mode
 Skill(/plan-edge-cases {topic-slug})

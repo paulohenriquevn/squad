@@ -24,10 +24,18 @@ scheduler that could overrule one would be a way around it rather than through i
 
 Sits above [`cycle-idea-to-release`](../../rules/cycle-idea-to-release.md) and
 schedules it. Every gate that cycle declares still applies per item, including
-the alignment gate — which **cannot be satisfied by the pipeline**, because
-`ALIGNED` needs a signature no agent may give.
+the alignment gate. **The scheduler never satisfies that gate itself** — it is
+answered inside the lane, by a reviewer who is not the brief's author: a person,
+or `alignment_judge.py` when none is coming. The distinction is the whole point.
+A scheduler that could sign would be deciding a verdict, which is the one thing
+this skill refuses to do at any stage.
 
-That halt is the argument for the shape, not against it. Today it stops
+An earlier version of this paragraph said the gate *"needs a signature no agent
+may give"*. That read the rule's real clause — the AUTHOR must not sign — as a
+ban on every agent, and the difference is the reason an unattended run used to
+stop forever. See `rules/alignment-threshold.md § Amended 2026-09-01`.
+
+That halt is still the argument for the shape where a person does review. It stops
 everything; here it stops one item while the rest move, and the operator's
 review becomes a batch instead of an interruption.
 
@@ -98,7 +106,8 @@ itself cited.
 ## Does Not Own
 
 - It does not decide whether a stage passed. Every gate keeps its verdict.
-- It does not sign an alignment brief. No agent may.
+- It does not sign an alignment brief. The lane's own chain does that, through a
+  reviewer that is not the author — never the scheduler, and never the author.
 - It does not run IMPLEMENT or later. Those write to the repository, and a
   writing stage needs its own decision about what its tool list should be —
   named here rather than shipped with permissions nobody examined.

@@ -141,7 +141,7 @@ def smoke_test_tools(
             _log(msg, verbose)
             print(
                 "lizard not installed. Install with: python3 -m pip install lizard\n"
-                "Or re-run with --allow-missing-tools to continue without multi-language trajectory-review.",
+                "Or re-run with --allow-missing-tools to continue without multi-language analysis.",
                 file=sys.stderr,
             )
             raise SystemExit(2)
@@ -203,6 +203,20 @@ def _format_report(result: InitResult) -> str:
     lines.append(f"Target: {result.target}")
     lines.append(f"Generated: {result.generated_date}")
     lines.append("")
+
+    # What the calibration could NOT see. `--allow-missing-tools` lets the run
+    # continue without `lizard`, and until 2026-09-01 the only trace of that was a
+    # log line printed under `--verbose` — so a gate calibrated from file-level
+    # checks alone was installed looking fully calibrated. Same distinction the
+    # `blocking_rate` comment below already makes: a measurement that did not run
+    # is not a measurement that came back empty.
+    if not result.lizard_available:
+        lines.append("LIMITATION — `lizard` was not available.")
+        lines.append("  Multi-language calibration fell back to file-level checks,")
+        lines.append("  so every threshold below is derived from partial data.")
+        lines.append("  Install lizard and re-run before trusting them as this")
+        lines.append("  project's p90.")
+        lines.append("")
 
     # Languages
     lines.append("Languages detected:")

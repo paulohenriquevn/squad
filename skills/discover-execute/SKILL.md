@@ -182,7 +182,15 @@ Registration is not optional. A finding that stays in this run's output and neve
 - **Prior art as evidence.** Not a measurement of our system, and it cannot fill the Evidence corner.
 - **Improvising a live probe** on a domain with no declared target.
 - **Refusing to kill.** After a long measurement, sunk cost makes a weak finding look shippable.
-- **`ITEM_KILLED` when nothing was measured.** Target unreachable is not disproof — stop and ask the human.
+- **`ITEM_KILLED` when nothing was measured.** Target unreachable, credential
+  absent, tool missing — nothing was measured, so nothing was refuted, and the
+  kill would be a fabricated result. Emit **`OPPORTUNITY_BLOCKED`** naming what
+  could not be reached and why, and let the queue take the next item. *Stopping
+  to ask a person* was the instruction here until 2026-09-01, and in an unattended
+  run that is a halt with no end: the item waits for somebody who is not coming,
+  and the whole queue waits with it. `rules/autonomy-envelope.md § Nothing here
+  fits` says the move instead — record the impediment where the next reader finds
+  it, and move on. One item waiting is not the backlog waiting.
 - **Emitting a promise without the Step 7 check.**
 - **Spawning concurrent ralph-loops** on overlapping state.
 - **Sweeping without registering.**

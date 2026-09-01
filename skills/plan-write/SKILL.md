@@ -106,7 +106,14 @@ The captured output feeds the `## Baseline Context` table directly. **If a row i
 
 Honesty gates that apply to Step 1:
 
-- If you cannot identify the public callers of a symbol the plan modifies, STOP and ask the user — do not guess. Half the bugs caught in `/review` start with "we did not know X also called this."
+- If you cannot identify the public callers of a symbol the plan modifies, **do
+  not guess and do not write the task.** Half the bugs caught in `/review` start
+  with "we did not know X also called this." The blast radius is a measurement,
+  and an unmeasured one belongs to `cycle-discover`, not to a plan: halt this item
+  with the unresolved symbol named, and let the queue take the next. Asking a
+  person and waiting was the instruction until 2026-09-01, and it stops an
+  unattended run indefinitely — the answer is a record the next run reads, per
+  `rules/autonomy-envelope.md § Nothing here fits`.
 - If `records/discoveries/opportunities/` is empty for the topic AND no `*-patterns` skill matches, the `## Prior Art & Related Work` section must say "(none identified — first-of-its-kind in this codebase)" — `/plan-edge-cases` will challenge that.
 
 ### Step 2 — Architecture Snapshot (BEFORE) — OPTIONAL

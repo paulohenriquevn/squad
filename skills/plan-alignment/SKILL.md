@@ -2,7 +2,7 @@
 name: plan-alignment
 version: 0.3.0
 requires: []
-description: Bring one backlog item to ~90% shared understanding BEFORE any of it is built, by interrogating it and drawing it in the same pass. Produces an alignment brief (problem, functional and non-functional requirements with stable ids, four scenario classes, system design, interaction model, traceable acceptance criteria, out-of-scope, closed questions) plus an animated HTML walkthrough of every flow, then scores the result on seventeen criteria and hands a human an unticked review checklist. Below 90% machine score the item MUST NOT be implemented; without the reviewer's sign-off it is not aligned either. Use after DISCOVER has evidence and before /plan-write writes the plan, on any item where two people could read the description and picture different systems — which is most of them.
+description: Bring one backlog item to ~90% shared understanding BEFORE any of it is built, by interrogating it and drawing it in the same pass. Produces an alignment brief (problem, functional and non-functional requirements with stable ids, four scenario classes, system design, interaction model, traceable acceptance criteria, out-of-scope, closed questions) plus an animated HTML walkthrough of every flow, then scores the result on seventeen criteria and hands an unticked review checklist to a reviewer who is not its author — a person, or `alignment_judge.py` when no person will. Below 90% machine score the item MUST NOT be implemented; without a sign-off it is not aligned either, and the signature records which kind it was. Use after DISCOVER has evidence and before /plan-write writes the plan, on any item where two people could read the description and picture different systems — which is most of them.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 argument-hint: "{item-slug or B-NNN}"
@@ -39,15 +39,46 @@ it gets built. **Read `cycle-plan.md § Chain` before invoking.**
      ↓
 /plan-alignment B-NNN → records/alignment/{slug}-alignment.md + {slug}-walkthrough.html
      ├── ALIGNED         → /plan-write
-     ├── AWAITING_REVIEW → structure is done; a human has not signed off yet
+     ├── AWAITING_REVIEW → structure is done; nobody has signed off yet
      └── BLOCKED         → the item is NOT built; close the gaps and re-score
      ↓
 /plan-write → /plan-confidence → /implement
 ```
 
-The threshold, and the rule that the agent may never tick the reviewer's boxes,
+The threshold, and the rule that the agent may never tick its OWN reviewer boxes,
 are defined once in [`rules/alignment-threshold.md`](../../rules/alignment-threshold.md).
 This file carries the protocol; that file carries the gate.
+
+## Who may sign, and what each signature is worth
+
+The rule is **not** that a human must sign. It is that **the author must not**.
+Those are different rules, and reading the first for the second is what left this
+skill's own judge unused for days while the autonomous loop halted at
+`AWAITING_REVIEW` — the machinery existed, `score_alignment.py` already read its
+signature, and nothing here said so.
+
+| Signer | Marker | What it is worth |
+|---|---|---|
+| A person | `<!-- signed-by: human/{who} -->` | a review |
+| `alignment_judge.py` | `<!-- signed-by: judge/alignment-judge -->` | a second agent that read the EVIDENCE, not only the brief, and could refuse |
+| The author | — | nothing. Never |
+
+`score_alignment.py` reports the **weakest** signer of a mixed set, so one
+unattributed tick does not launder the rest, and `ALIGNED` by a judge and
+`ALIGNED` by a person are visibly different claims to any reader.
+
+**Invoke the judge when no reviewer is coming** — the unattended loop, a fleet
+session, any run where waiting means the item never moves:
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/alignment_judge.py" \
+  records/alignment/{slug}-alignment.md \
+  --verdict signed --reason "<what the evidence showed>"
+```
+
+It must be able to REFUSE, and refusing must cost the same as signing. A judge
+that has never refused is a judge nobody has tested — pass `--verdict refused`
+and the reason is written into the brief, where the next run reads it.
 
 ## Step 0 — Classify the path, out loud
 
@@ -256,7 +287,7 @@ Two independent conditions, and the verdict needs both:
 | Condition | Who satisfies it |
 |---|---|
 | Machine score ≥ 90% over seventeen structural criteria | **You.** Iterate with `--machine-only` until it clears |
-| Reviewer sign-off — every box in `## Reviewer sign-off` ticked | **A human. Never you.** |
+| Reviewer sign-off — every box in `## Reviewer sign-off` ticked | **A person, or `alignment_judge.py`. Never you.** |
 
 Generate the checklist **unticked**, one item per thing a script cannot decide:
 
@@ -270,7 +301,9 @@ Generate the checklist **unticked**, one item per thing a script cannot decide:
 **You must never tick a box.** The mechanism exists because the first version of
 this skill had the agent writing the brief and running the scorer that approved it
 — a gate grading its own homework. Ticking your own checklist restores exactly
-that, with a checkbox drawn over it. Add items when the item warrants them; never
+that, with a checkbox drawn over it. Handing the brief to `alignment_judge.py`
+does not: that judge did not write it, reads the evidence rather than the prose,
+and signs under its own name. Add items when the item warrants them; never
 remove one, and never mark one.
 
 Do not argue with the machine score by rewording. A criterion scores on what is
@@ -291,8 +324,8 @@ before/after that only counts improvements hides it.
 
 | Verdict | Meaning | Downstream action |
 |---|---|---|
-| `ALIGNED` | Machine score ≥ 90% **and** every reviewer box ticked | `/plan-write {slug}` |
-| `AWAITING_REVIEW` | Structure is complete; no human has signed off | Ask for the review. Do not proceed |
+| `ALIGNED` | Machine score ≥ 90% **and** every reviewer box ticked by someone who is not the author | `/plan-write {slug}` |
+| `AWAITING_REVIEW` | Structure is complete; nobody has signed off | Ask for the review, or run `alignment_judge.py` when none is coming. Do not proceed unsigned |
 | `BLOCKED` | Machine score < 90% | The item is **not** built. Close the listed gaps and re-run |
 | `NEEDS_SPLIT` | The item describes independent subsystems, or cannot converge in five questions | Split; each piece aligns on its own |
 
