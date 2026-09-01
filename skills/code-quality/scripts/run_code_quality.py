@@ -100,10 +100,10 @@ def _build_detector(language: str, thresholds: dict | None = None):
     if cls is None:
         return None
     detector = cls()
-    # Os knobs do projeto chegam ao detector. Antes, `load_thresholds()` era chamado
+    # The project's knobs reach the detector. Before, `load_thresholds()` was called
     # for the side effect of validating the file and the result was discarded — every
-    # `vulture.min_confidence` ou `mutation.score_floor_low` declarado em
-    # `code-quality-thresholds.txt` era inerte.
+    # `vulture.min_confidence` or `mutation.score_floor_low` declared in
+    # `code-quality-thresholds.txt` was inert.
     detector.thresholds = thresholds or {}
     if language == "python" and "vulture.min_confidence" in detector.thresholds:
         detector.min_confidence = int(detector.thresholds["vulture.min_confidence"])

@@ -43,7 +43,7 @@ def default_acceptance_dir(root: Path) -> str:
     if (root / ".claude" / "records").exists():
         return PLUGIN_ACCEPTANCE_DIR
     if (root / ".claude").exists():
-        return PLUGIN_ACCEPTANCE_DIR  # plugin install; o scaffold ainda vai nascer
+        return PLUGIN_ACCEPTANCE_DIR  # plugin install; the scaffold is yet to be created
     return STANDALONE_ACCEPTANCE_DIR
 
 

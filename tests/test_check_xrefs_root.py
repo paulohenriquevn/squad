@@ -3,9 +3,9 @@
 Before, without `--ecosystem-dir`, the root came from `Path.cwd()`. The effect was
 a validator that lies by omission: running
 
-    python3 <outro-projeto>/.claude/scripts/check_xrefs.py
+    python3 <another-project>/.claude/scripts/check_xrefs.py
 
-de um cwd qualquer auditava silenciosamente o ecossistema DO CWD e imprimia o
+from an arbitrary cwd silently audited the ecosystem OF THE CWD and printed
 its verdict — with the other project's name on the command line. Measured on
 2026-08-03: three consumers reported as `PASS` actually had 3, 0 and 11 findings;
 the `PASS` was the kit's own repo validating itself three times.

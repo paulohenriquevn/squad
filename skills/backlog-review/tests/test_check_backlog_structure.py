@@ -61,7 +61,7 @@ def test_killed_without_reason_is_flagged(tmp_path: Path) -> None:
 
 def test_killed_with_reason_is_clean(tmp_path: Path) -> None:
     report = check_backlog(
-        write_backlog(tmp_path, item_block(status="killed", extra="kill_reason: medido, 1 query por request\n"))
+        write_backlog(tmp_path, item_block(status="killed", extra="kill_reason: measured, 1 query per request\n"))
     )
     assert "killed_without_reason" not in _checks(report)
 
@@ -179,8 +179,8 @@ def test_possible_duplicate_between_open_items(tmp_path: Path) -> None:
     report = check_backlog(
         write_backlog(
             tmp_path,
-            item_block("B-001", "Reduzir round-trips do listing de traces"),
-            item_block("B-002", "Reduzir round-trips no listing de traces do explorer"),
+            item_block("B-001", "Reduce round-trips in the trace listing"),
+            item_block("B-002", "Reduce round-trips in the explorer trace listing"),
         )
     )
     assert "possible_duplicate" in _checks(report)
@@ -195,8 +195,8 @@ def test_closed_items_are_not_duplicate_candidates(tmp_path: Path) -> None:
     report = check_backlog(
         write_backlog(
             tmp_path,
-            item_block("B-001", "Reduzir round-trips do listing de traces", status="shipped"),
-            item_block("B-002", "Reduzir round-trips no listing de traces do explorer"),
+            item_block("B-001", "Reduce round-trips in the trace listing", status="shipped"),
+            item_block("B-002", "Reduce round-trips in the explorer trace listing"),
         )
     )
     assert "possible_duplicate" not in _checks(report)

@@ -97,7 +97,7 @@ class TestRuleSelfcheck:
 
     def _rule(self, **over: object) -> dict:
         rule = {
-            "name": "regra",
+            "name": "rule",
             "comment": "A reason with enough substance to pass the threshold.",
             "from": {"path": "^agents/goal/"},
             "to": {"path": "^tui/consent/"},

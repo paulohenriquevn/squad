@@ -5,13 +5,13 @@ THE DEFECT THIS FIXES
 `check_xrefs.py` has two modes. Without `--strict`, a WARN-severity finding is
 printed and the process exits 0 — the literal output carries the WARN line and,
 right
-abaixo, `Overall: PASS`. Com `--strict`, o mesmo achado sai 1.
+below it, `Overall: PASS`. With `--strict`, the same finding exits 1.
 
 `scripts/install.sh` always called it with `--strict`. The workflow called it
 without. The result, measured 2026-08-26: an installation from a clean clone was
 born with `rules/cycle-maintenance.md` pointing at an `agents/README.md`
-inexistente, o instalador dizia `check_xrefs.py: FAIL`, e o CI do mesmo commit
-ficava verde. O gate olhou, viu e aprovou.
+that did not exist, the installer said `check_xrefs.py: FAIL`, and the CI of the
+same commit went green. The gate looked, saw, and approved.
 
 WHY THE TEST READS THE WORKFLOW'S COMMAND INSTEAD OF LOOKING FOR THE FLAG
 --------------------------------------------------------------------------
@@ -97,8 +97,7 @@ def test_ci_runs_the_install_contract(_broken: None = None):
 
     `tests/test_clean_install.py` is the only test that sees what another machine
     would receive. If it does not run in CI, it goes back to being a file that
-    passed
-    uma vez.
+    passed once.
     """
     runs = " ".join((s.get("run") or "") for s in _steps())
     assert "run_slice_tests.sh" in runs or "test_clean_install" in runs, (

@@ -115,9 +115,10 @@ def test_render_names_the_specialist_files_that_must_exist(tmp_path: Path) -> No
 
 # ---------------------------------------------------------------------------
 # Deriving from the BACKLOG. Topology gives what EXISTS; it does not give the
-# propriedade. Medido no theokit-sdk: o registro declara `sdk-core`,
-# `repo-platform`, `sdk-satellites`, `edge-cli-acp` e `memory-adapters` — cinco
-# SEMANTICS of ownership — domains no directory layout reveals, which the items carry.
+# SEMANTICS of ownership — domains no directory layout reveals, which the items
+# carry. Measured on theokit-sdk: the registry declares `sdk-core`,
+# `repo-platform`, `sdk-satellites`, `edge-cli-acp` and `memory-adapters` — five
+# domains the topology alone would never have produced.
 # ---------------------------------------------------------------------------
 
 from detect_domains import domains_from_backlog  # noqa: E402
@@ -136,7 +137,7 @@ domain: repo-platform
 repo: theokit-sdk
 status: triaged
 
-## B-003 — tres   [ ]
+## B-003 — three   [ ]
 
 domain: sdk-satellites
 repo: packages/sdk-pty
@@ -182,7 +183,7 @@ def test_one_repo_in_two_domains_is_refused(tmp_path: Path) -> None:
     registry contradicts it, the derived table would route by iteration order."""
     backlog = tmp_path / "BACKLOG.md"
     backlog.write_text(_BACKLOG + """
-## B-005 — cinco   [ ]
+## B-005 — five   [ ]
 
 domain: edge-cli-acp
 repo: packages/sdk

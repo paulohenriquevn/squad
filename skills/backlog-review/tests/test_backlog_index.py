@@ -90,7 +90,7 @@ class TestLinks:
 
         _, written = _indexed(
             tmp_path,
-            item_block("B-001", "Reduzir round-trips do listing"),
+            item_block("B-001", "Reduce round-trips in the listing"),
             item_block("B-002", "Corrigir exit code do deploy parcial", status="shipped"),
         )
         index = written[written.index(START) : written.index(END)]

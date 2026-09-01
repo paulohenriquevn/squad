@@ -375,7 +375,7 @@ def test_the_shipped_template_parses_when_you_follow_its_own_instructions(tmp_pa
 #   "hard_caps_triggered": ["soft_cap_orphan_export_python", "soft_cap_..."]
 #   "soft_caps_triggered": ["flush_caches", "DEFAULT_SKIP_DIRS", ...]
 #
-# Duas coisas erradas de uma vez. `compute_verdict` devolve TODOS os identificadores
+# Two things wrong at once. `compute_verdict` returns ALL the identifiers
 # when the verdict is FAIL_SOFT, and the orchestrator publishes them under the name
 # `hard`; and the `soft` field carried the `allowlist_key`'s tail, which in D3 is the
 # SYMBOL'S NAME, not the stable identifier. Golden rule § 1.4 requires stable

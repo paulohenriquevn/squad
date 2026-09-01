@@ -9,7 +9,7 @@ distributed lived for months on one machine and on no other. As long as the test
 installed from disk, it measured the machine running it, not what the kit
 delivers.
 
-Medido em 2026-08-26: um clone limpo instalado num alvo vazio produzia
+Measured 2026-08-26: a clean clone installed into an empty target produced
 an EMPTY `.claude/agents/` — not even the `README.md` the installer copies
 unconditionally — and `check_xrefs.py --strict` exited 1, because
 `rules/cycle-maintenance.md` cites `agents/README.md`. On the maintainer's

@@ -4,8 +4,7 @@
 # ENABLED`, because the kit's repository is Python. Every consumer was born with
 # Python enabled, including those with no `pyproject.toml`: the detector pointed at a
 # missing manifest and the cycle stopped on a path assumption. Uncomment what this
-# project
-# realmente usa, com o MANIFEST-MARKER medido em disco.
+# project actually uses, with the MANIFEST-MARKER measured on disk.
 #
 # WHICH LANGUAGES THE DETECTORS ACTUALLY IMPLEMENT
 # ------------------------------------------------

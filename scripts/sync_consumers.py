@@ -15,8 +15,8 @@ Measured afterwards: **42 consumers** have the kit installed. At that volume,
 "compare before copying" does not survive as manual discipline — it becomes this
 classifier.
 
-A REGRA
--------
+THE RULE
+--------
 For each file in the delta, three contents enter the decision: the kit's
 (`source`), the base version the consumer came from (`base`) and the consumer's
 (`target`).
@@ -31,7 +31,7 @@ For each file in the delta, three contents enter the decision: the kit's
 The script does not merge, on purpose. An automatic merge across 42 repos is the
 way to spread silently the very error this classifier exists to prevent.
 
-Uso:
+Usage:
     python3 scripts/sync_consumers.py --base <sha> --targets targets.txt
     python3 scripts/sync_consumers.py --base <sha> --targets targets.txt --apply
 

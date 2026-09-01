@@ -10,7 +10,7 @@ from pathlib import Path
 
 def item_block(
     item_id: str = "B-001",
-    title: str = "Reduzir round-trips do listing de traces",
+    title: str = "Reduce round-trips in the trace listing",
     *,
     domain: str = "data-plane-ts",
     repo: str = "theo-lens",

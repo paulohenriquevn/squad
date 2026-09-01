@@ -26,14 +26,14 @@ BASE_BACKLOG = """# Backlog
 
 ## Itens
 
-## B-007 — Suspeita de N+1 no ingest   [ ]
+## B-007 — Suspected N+1 in the ingest path   [ ]
 
 domain: data-plane-ts
 repo: theo-rag
 status: killed
-kill_reason: medido, uma query em lote
+kill_reason: measured, it is a single batched query
 
-## B-014 — Reduzir round-trips do listing de traces   [ ]
+## B-014 — Reduce round-trips in the trace listing   [ ]
 
 domain: data-plane-ts
 repo: theo-lens

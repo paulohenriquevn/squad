@@ -96,7 +96,7 @@ Chutar `minor` transforma toda entrada reescrita em sinal de incompatibilidade. 
 understates a real break — exactly the failure semver exists to prevent, delivered silently to
 anyone on a caret range. Inferring from the entry's prose is the same guess with a longer regex,
 and the same source measured how a formatting variation (`**BREAKING:`) defeats that
-tipo de casamento neste mesmo script.
+kind of match in this very script.
 
 The pause stays, and **carries the question** instead of a guess. Harvested from `theokit-tui`,
 where the reasoning was written down and measured.

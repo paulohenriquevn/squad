@@ -309,7 +309,7 @@ def test_opportunity_ref_with_absent_section_is_still_flagged(tmp_path: Path) ->
     )
     plan = _write_plan(
         tmp_path,
-        "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Opportunity §Q99 que nao existe.\n",
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nSee Opportunity §Q99, which does not exist.\n",
     )
     report = check_evidence_citations(plan, project_root)
     unresolved = [c for c in report.unresolved_citations if c.kind == "blueprint"]

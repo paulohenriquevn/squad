@@ -118,7 +118,7 @@ def test_no_user_facing_message_points_at_a_command_that_does_not_exist() -> Non
 
 
 def test_the_condition_actually_names_the_pipeline() -> None:
-    """Guarda contra o teste acima passar por vacuidade.
+    """Guards the test above against passing vacuously.
 
     If a refactor replaces the literals with interpolation, the previous test goes
     green while verifying nothing. This one demands the backbone is still there.

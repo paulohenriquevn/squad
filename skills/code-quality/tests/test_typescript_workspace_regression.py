@@ -86,8 +86,9 @@ class TestPathAliasNotAPackage:
     """Terceira familia de falso positivo: `@/components/...` e alias de tsconfig.
 
     986 HARD findings in a dashboard, all false, because the detector treated
-    qualquer especificador com `@` como escopo npm e ia ao registry. A raiz das
-    tres familias e a mesma: resolver nome de modulo contra o registry publico
+    any specifier carrying `@` as an npm scope and went to the registry. The root
+    of all three families is the same: resolving a module name against the public
+    registry
     without consulting what the project declares.
     """
 

@@ -1,10 +1,10 @@
 """Source enumeration PRUNES during the walk, it does not filter afterwards.
 
-`_enumerate_source_files` descia em `node_modules`, `.git` e `.venv` inteiros e
+`_enumerate_source_files` descended into `node_modules`, `.git` and `.venv` whole and
 and only then discarded what it had found. The result was the same; the cost was
 not. Measured 2026-08-26 on a 56,128-file repository (40k of them in
-`node_modules`): 326 ms percorrendo tudo contra 0,4 ms podando — 832x, uma vez
-por linguagem habilitada.
+`node_modules`): 326 ms walking everything against 0.4 ms pruning — 832x, once
+per enabled language.
 
 This is the same lesson the CHANGELOG already records for `check_wiring.py`
 (1080 ms -> 13 ms, 83x). The tests below pin the SHAPE the speed comes from,
@@ -38,7 +38,7 @@ def test_finds_project_sources(tmp_path):
 def test_does_not_traverse_skipped_trees(tmp_path, monkeypatch):
     """No `rglob` over the whole tree — the pruning has to happen during it.
 
-    Um `rglob("*")` seguido de filtro produz a resposta certa pelo caminho
+    An `rglob("*")` followed by a filter produces the right answer the wrong
     way: it has already descended into everything it was going to discard. Banning
     the primitive is what makes the pruning verifiable without a stopwatch.
     """

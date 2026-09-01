@@ -116,7 +116,7 @@ def test_a_project_with_no_declared_surface_reports_info_not_a_verdict(tmp_path:
     The wrong path would be to infer a surface and emit SOFT_CAP against it: that
     would produce a verdict about a contract nobody wrote.
     """
-    _write(tmp_path, "solto.py", "def qualquer():\n    return 1\n")
+    _write(tmp_path, "loose.py", "def anything():\n    return 1\n")
 
     findings = _wiring.detect_orphan_exports("python", tmp_path, tmp_path)
 

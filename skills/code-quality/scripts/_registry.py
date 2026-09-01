@@ -34,7 +34,7 @@ _USER_AGENT = "code-quality-skill/0.1 (audit only)"
 # behind a proxy, 100 unknown imports cost 500s of waiting that never became an
 # answer, on every run, indefinitely.
 #
-# Depois de _MAX_CONSECUTIVE_FAILURES falhas seguidas, D2 declara a rede
+# After _MAX_CONSECUTIVE_FAILURES consecutive failures, D2 declares the network
 # unavailable and returns None immediately — the SAME ambiguous verdict as
 # before, without the wait. A single hit resets the counter, so a blip does not
 # switch the detector off for the rest of the run.

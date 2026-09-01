@@ -28,7 +28,7 @@ BACKLOG = """# Backlog
 
 ## Index
 
-## B-007 — Suspeita de N+1 no ingest do alpha-lens   [ ]
+## B-007 — Suspected N+1 in alpha-lens's ingest path   [ ]
 
 domain: ingest
 repo: alpha-lens

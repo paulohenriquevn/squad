@@ -1,6 +1,6 @@
-"""`_ts_sources` poda na travessia em vez de filtrar depois.
+"""`_ts_sources` prunes during the walk instead of filtering afterwards.
 
-Mesmo defeito medido em `run_code_quality._enumerate_source_files`: 326 ms
+The same defect measured in `run_code_quality._enumerate_source_files`: 326 ms
 against 0.4 ms on a 56,000-file repository. It weighs more here, because a
 TypeScript monorepo is exactly where `node_modules` is large.
 """

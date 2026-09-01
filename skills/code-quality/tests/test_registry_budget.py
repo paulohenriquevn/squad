@@ -60,7 +60,7 @@ def test_a_success_resets_the_breaker(monkeypatch):
 
     results = [_registry.package_exists_on_pypi(f"pkg{i}") for i in range(10)]
 
-    assert results.count(True) == 5, "o breaker desligou D2 por falhas intercaladas"
+    assert results.count(True) == 5, "the breaker switched D2 off over interleaved failures"
 
 
 def test_the_cache_file_is_written_once_not_per_lookup(monkeypatch):

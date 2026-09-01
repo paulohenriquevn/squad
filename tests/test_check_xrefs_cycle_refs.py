@@ -70,7 +70,7 @@ def test_rule_citing_a_nonexistent_cycle_is_caught(tmp_path: Path) -> None:
 
 
 def test_rule_citing_a_nonexistent_rules_file_is_caught(tmp_path: Path) -> None:
-    """Check 7 nunca varreu `rules/` — uma regra citando outra escapava."""
+    """Check 7 never swept `rules/` — a rule citing another one escaped."""
     eco = _make_ecosystem(tmp_path)
     (eco / "rules" / "cycle-implement.md").write_text(
         "# Cycle: IMPLEMENT\n\nSee `rules/does-not-exist-anywhere.md`.\n"

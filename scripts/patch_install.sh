@@ -23,7 +23,7 @@
 #
 # What this script does NOT do:
 #   - Does not delete anything. Skills RETIRED by the kit are MOVED to
-#     .claude/.patch-backups/retired/, nunca apagadas.
+#     .claude/.patch-backups/retired/, never deleted.
 #   - Does not touch settings.json, settings.local.json, records/, agents/
 #   - Does not touch skills NOT in the manifest (preserves SEPA-knowledge etc)
 #   - Does not run tests in the target (different env)
@@ -362,7 +362,7 @@ fi
 # retired tail survives forever in the consumer and check_xrefs reports it as
 # orphaned, on every run, forever. Measured on the three consumers 2026-08-03:
 # skill-writer, skill-validator and skill-register, retired when we adopted the
-# skill-creator oficial, ainda produziam 3 WARN e faziam --strict falhar.
+# official skill-creator, still produced 3 WARN and made --strict fail.
 #
 # We do NOT delete: we MOVE to .claude/.patch-backups/retired/<timestamp>/. The
 # "the patch never destroys" guarantee still stands, and the tree stays clean.

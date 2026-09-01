@@ -113,8 +113,8 @@ def detect_scope(root: Path) -> str:
 
     `backlog-init` refused to run without an umbrella — *"no umbrella detected: run
     at the workspace root"* — which, in an autonomous project, means creating the
-    `BACKLOG.md` na raiz do guarda-chuva, **fora do projeto**. Medido no
-    `theokit-framework`: dez repos independentes, cada um com seu ciclo, e o kit
+    `BACKLOG.md` at the umbrella root, **outside the project**. Measured on
+    `theokit-framework`: ten independent repos, each with its own cycle, and the kit
     pushed all ten registries into a directory that is nobody's repository.
 
     The principle the rule defends ("one question, one place to look") does not
