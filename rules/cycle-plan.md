@@ -121,7 +121,11 @@ call sites, which would have failed every test in two files.
 - `NEEDS_REVISION` — soft caps blew (risks under-addressed, test plan thin). Use `/plan-improve`.
 - `SHIPPABLE_WITH_CAVEATS` — proceed to `/implement`; caveats are explicit, not hidden.
 - `SHIPPABLE` — green light.
-- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
+- `ALIGNED` — phase 0 only: machine score ≥ 90% and a reviewer who is not the author signed off. Proceed to `/plan-write`.
+- `AWAITING_REVIEW` — phase 0 only: the brief is complete and nobody has signed. Ask for the review, or run `alignment_judge.py` when none is coming.
+- `BLOCKED` — phase 0 only: below the machine threshold. The item is **not** built.
+- `NEEDS_SPLIT` — phase 0 only: the brief describes independent subsystems. Declared by the reviewer, never inferred.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an approval, a dependency in another repository). An alignment sign-off is **no longer** one of them: `rules/alignment-threshold.md § Amended 2026-09-01` requires a reviewer who is not the author, which a judge can be. **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
 ## Anti-patterns
 

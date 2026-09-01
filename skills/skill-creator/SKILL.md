@@ -32,6 +32,39 @@ Then after the skill is done (but again, the order is flexible), you can also ru
 
 Cool? Cool.
 
+## Stated gap — the judgement evals nothing runs
+
+Measured 2026-09-01, reviewing every skill in the kit.
+
+Four skills carry a judgement eval suite: `backlog-item`, `discover-plan`,
+`discover-edge-cases` and `discover-execute` — **sixteen scenarios**, each with a
+prompt, an expected output, the files it needs and its assertions. They encode
+exactly what no script can decide: refusing a hunch justified by prior art,
+recognising an unfalsifiable hypothesis, killing an item when the falsification
+criterion is met, writing a criterion that could fail.
+
+**Nothing executes them.** The pieces exist and are not joined:
+
+| Piece | State |
+|---|---|
+| `skills/*/evals/evals.json` | 16 scenarios, read by nothing |
+| `setup_squad_eval_sandbox.py` | reachable from no SKILL.md and no sibling script |
+| `grade_squad_backlog_item.py` | grades ONE of the four batteries; same |
+| `run_eval.py` | works, and answers a different question — whether a description makes the model REACH for the skill, not whether the skill then does the right thing |
+
+So the kit measures that a skill is *found* and never that it *holds up*. This is
+the gap the Skills-Coach paper names as its third sub-question and answers by
+grading prose, which `rules/prompt-text-is-not-behaviour.md` refuses. The oracle
+this kit would use instead already exists and has been used once —
+`wiki/references/judgement-gates-are-insurance.md` records running the scenario
+WITHOUT the rule, under pressure, and reading what the agent did.
+
+Written here rather than fixed here because a runner is a build, not an edit, and
+a gap named where the tooling lives is findable. Two constraints it must carry,
+both from measurements in that reference: **two model tiers**, because the same
+gates changed nothing on one and caught a fabrication on another, and **a judge
+that can refuse**, because one that never has is one nobody tested.
+
 ## Communicating with the user
 
 The skill creator is liable to be used by people across a wide range of familiarity with coding jargon. If you haven't heard (and how could you, it's only very recently that it started), there's a trend now where the power of Claude is inspiring plumbers to open up their terminals, parents and grandparents to google "how to install npm". On the other hand, the bulk of users are probably fairly computer-literate.
