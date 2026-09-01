@@ -32,12 +32,10 @@ class ExtractedSymbol:
     language: str
     file_path: str
     line: int
-    column: int
     kind: str
     module: str  # dotted module path (relative imports preserved with leading dots)
     symbol: str  # imported symbol name (when applicable)
     full_text: str
-    type_only: bool = False  # TypeScript `import type` flag (EC-15)
 
 
 def tree_sitter_available() -> bool:
@@ -119,7 +117,6 @@ def _python_extract(root, source: bytes, file_path: str) -> list[ExtractedSymbol
                             language="python",
                             file_path=file_path,
                             line=child.start_point[0] + 1,
-                            column=child.start_point[1],
                             kind="import",
                             module=module,
                             symbol=module.split(".")[-1],
@@ -135,7 +132,6 @@ def _python_extract(root, source: bytes, file_path: str) -> list[ExtractedSymbol
                                     language="python",
                                     file_path=file_path,
                                     line=sub.start_point[0] + 1,
-                                    column=sub.start_point[1],
                                     kind="import",
                                     module=module,
                                     symbol=module.split(".")[-1],
@@ -151,7 +147,6 @@ def _python_extract(root, source: bytes, file_path: str) -> list[ExtractedSymbol
                         language="python",
                         file_path=file_path,
                         line=node.start_point[0] + 1,
-                        column=node.start_point[1],
                         kind="import",
                         module=module,
                         symbol="",
@@ -216,7 +211,6 @@ def _typescript_extract(root, source: bytes, file_path: str) -> list[ExtractedSy
                         language="typescript",
                         file_path=file_path,
                         line=node.start_point[0] + 1,
-                        column=node.start_point[1],
                         kind="import",
                         module=module,
                         symbol="",
@@ -240,7 +234,6 @@ def _rust_extract(root, source: bytes, file_path: str) -> list[ExtractedSymbol]:
                     language="rust",
                     file_path=file_path,
                     line=node.start_point[0] + 1,
-                    column=node.start_point[1],
                     kind="import",
                     module=module,
                     symbol=module.split("::")[-1],
@@ -265,7 +258,6 @@ def _go_extract(root, source: bytes, file_path: str) -> list[ExtractedSymbol]:
                             language="go",
                             file_path=file_path,
                             line=child.start_point[0] + 1,
-                            column=child.start_point[1],
                             kind="import",
                             module=raw,
                             symbol=raw.rsplit("/", 1)[-1],

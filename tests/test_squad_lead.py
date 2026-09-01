@@ -499,7 +499,6 @@ def test_no_marker_means_the_lead_does_not_type(tmp_path: Path) -> None:
 def test_a_session_that_woke_up_is_not_typed_into(tmp_path: Path) -> None:
     """End to end through `watch`: the decision was `start`, the marker is fresh, and
     nothing is sent."""
-    import squad_lead
     marker = tmp_path / "run.log"
     marker.write_text("x", encoding="utf-8")
     log = tmp_path / "lead.jsonl"
@@ -1034,7 +1033,6 @@ def test_the_lead_moves_down_the_queue_when_the_head_is_held(tmp_path: Path) -> 
     Measured: an item hit its per-item ceiling, `may_start` refused it, and the
     watchdog reported "the backlog offers nothing to start" with 25 items waiting. It
     only ever looked at the head."""
-    import time
     lead = _lead_with_select(tmp_path, {"item": "B-059", "why": "oldest unblocked"})
     lead.queue = ["B-059", "B-060", "B-067"]
     lead.interventions["B-059"] = lead.max_per_item          # head is spent
@@ -1054,7 +1052,6 @@ def test_the_head_still_wins_when_it_can_start(tmp_path: Path) -> None:
 def test_a_queue_entirely_held_is_reported_with_the_reasons(tmp_path: Path) -> None:
     """Then it really is stalled — and the log says what held each one, so the report
     can be checked instead of believed."""
-    import time
     lead = _lead_with_select(tmp_path, {"item": "B-059", "why": "oldest"})
     lead.queue = ["B-059", "B-060"]
     for item in ("B-059", "B-060"):

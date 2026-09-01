@@ -187,7 +187,7 @@ def test_the_chain_is_the_seven_stages_the_cycle_declares() -> None:
 # `status:` field at all, so an item parked in a lane still read `triaged` on disk —
 # and the disk is the only copy that outlives the session.
 
-from pipeline_orchestrator import STAGES, StatusWrite, apply_writes
+from pipeline_orchestrator import StatusWrite, apply_writes
 
 
 def _one(slug: str = "b-001") -> Pipeline:

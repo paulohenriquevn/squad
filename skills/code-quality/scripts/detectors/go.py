@@ -157,12 +157,6 @@ class GoDetector(BaseDetector):
         return findings
 
     @staticmethod
-    def _read_go_mod_module(changed_files: list[Path]) -> str | None:
-        """The nearest module path. Kept for callers that want a single answer."""
-        modules = GoDetector._workspace_modules(changed_files)
-        return sorted(modules)[0] if modules else None
-
-    @staticmethod
     def _module_of(go_mod: Path) -> str | None:
         try:
             for line in go_mod.read_text(encoding="utf-8").splitlines():

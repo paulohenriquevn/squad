@@ -41,6 +41,7 @@ settings.local.json
 .compaction-snapshots/
 .attestations/
 cross-validation-output/
+deadcode-output/
 # Claude Code runtime dir of THIS repo acting as its own consumer
 # (the shipped config lives in settings.json / settings.plugin.json at the root)
 .claude/

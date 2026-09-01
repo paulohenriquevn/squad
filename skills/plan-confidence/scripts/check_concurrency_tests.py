@@ -131,7 +131,6 @@ CONCURRENCY_SIGNALS_RE = re.compile("|".join(CONCURRENCY_SIGNALS), re.IGNORECASE
 RACE_TEST_SIGNALS_RE = re.compile("|".join(RACE_TEST_SIGNALS), re.IGNORECASE)
 ESCAPE_RE = re.compile("|".join(ESCAPE_MARKERS), re.IGNORECASE)
 
-H2_RE = re.compile(r"^##\s+(.*?)\s*$", re.MULTILINE)
 H4_TASK_RE = re.compile(r"^###\s+(T\d+\.\d+)\b[^\n]*$", re.MULTILINE)
 H4_CONCURRENCY_RE = re.compile(
     r"^####\s+Concurrency tests\b[^\n]*$", re.MULTILINE

@@ -67,10 +67,6 @@ STATUS_PHASE = {
     "killed": "killed",
 }
 
-#: Outcomes, not phases. Work here has left the cycle, so it is counted and reachable
-#: but never competes for attention with what is still moving.
-SETTLED = ("done", "killed")
-
 
 #: An item id anywhere in a slug, with or without the hyphen.
 _SLUG_ITEM_RE = re.compile(r"\bb-?(\d{3,})\b", re.IGNORECASE)

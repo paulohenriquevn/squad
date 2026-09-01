@@ -319,8 +319,8 @@ def run_structural(
     patterns_consumption = check_patterns_consumption(plan_path, _find_repo_root_from_plan(plan_path))
 
     # Compute per-dimension scores
-    completeness, completude_motivos = _compute_completude(cov, adr, tdd)
-    risco, risco_motivos = _compute_risco(smells)
+    completeness, completeness_reasons = _compute_completude(cov, adr, tdd)
+    risco, structural_risk_reasons = _compute_risco(smells)
 
     # ADR D8 — renormalize for active dimensions
     active = M2_ACTIVE_DIMENSIONS[:]
@@ -426,15 +426,15 @@ def run_structural(
     ):
         verdict = "INVALID"
 
-    evidence_motivos: list[Reason] = []
+    evidence_reasons: list[Reason] = []
     if evidence.total_citations > 0:
         resolved_count = evidence.total_citations - len(evidence.unresolved_citations)
         if resolved_count > 0:
-            evidence_motivos.append(
+            evidence_reasons.append(
                 Reason(sign="positive", label=f"{resolved_count} citations resolved", weight=float(resolved_count))
             )
         if evidence.unresolved_citations:
-            evidence_motivos.append(
+            evidence_reasons.append(
                 Reason(
                     sign="negative",
                     label=f"{len(evidence.unresolved_citations)} fabricated citation(s)",
@@ -442,11 +442,11 @@ def run_structural(
                 )
             )
 
-    motivos_map: dict[str, list[Reason]] = {
-        "completeness": completude_motivos,
-        "evidence": evidence_motivos,
+    reasons_by_dimension: dict[str, list[Reason]] = {
+        "completeness": completeness_reasons,
+        "evidence": evidence_reasons,
         "calibration": [],  # M5 future
-        "structural_risk": risco_motivos,
+        "structural_risk": structural_risk_reasons,
     }
 
     return StructuralScoreReport(
@@ -462,7 +462,7 @@ def run_structural(
         hard_caps_triggered=hard_cap_ids,
         final_score_after_caps=round(final_score, 2),
         verdict=verdict,
-        reasons=motivos_map,
+        reasons=reasons_by_dimension,
         sub_reports={
             "coverage_matrix": {
                 "total_gaps": cov.total_gaps,
@@ -477,6 +477,7 @@ def run_structural(
                 "with_alternatives": adr.with_alternatives,
                 "completeness_ratio": adr.completeness_ratio,
                 "missing_alternatives": list(adr.missing_alternatives),
+                "missing_cost_if_wrong": list(adr.missing_cost_if_wrong),
             },
             "tdd_in_bugfix": {
                 "total_bugfix_tasks": tdd.total_bugfix_tasks,

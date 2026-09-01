@@ -26,7 +26,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from phase_coverage import Phase, coverage_for_item, grade, scan_registry
+from phase_coverage import (
+    MANDATORY_PER_ITEM, Phase, coverage_for_item, grade, main, scan_registry,
+)
 
 
 def _kb(tmp_path: Path) -> Path:
@@ -146,10 +148,13 @@ def test_plan_and_review_remain_mandatory_and_are_reported_when_absent(tmp_path:
     registry.write_text("## B-003 — c   [x]\n\nstatus: shipped\nevidence: |\n  src/a.ts:1\n")
 
     graded = grade(scan_registry(registry, kb), registry)
-    # RELEASE too: the fixture has no release record, and ADR 0012 says an item is covered
-    # when a release record NAMES it. My first version of this assertion omitted it — the
-    # expectation was incomplete, not the code.
-    assert set(graded[0].gaps) == {Phase.PLAN, Phase.REVIEW, Phase.CODE_QUALITY, Phase.RELEASE}
+    # PLAN and REVIEW only, which is what this test's name has always said. An earlier
+    # version widened the assertion to include CODE_QUALITY and RELEASE with the note
+    # "the expectation was incomplete, not the code" — but the ADR above `gaps` says the
+    # opposite in the source itself: code-quality is graded per slice and release per
+    # release, so asking them per item names a non-gap. `MANDATORY_PER_ITEM` encoded the
+    # rule and `gaps` walked every Phase anyway; the test had been widened to fit that.
+    assert set(graded[0].gaps) == {Phase.PLAN, Phase.REVIEW}
 
 
 def test_a_plan_declared_not_warranted_is_not_a_gap(tmp_path: Path) -> None:
@@ -160,3 +165,71 @@ def test_a_plan_declared_not_warranted_is_not_a_gap(tmp_path: Path) -> None:
 
     graded = grade(scan_registry(registry, kb), registry)
     assert Phase.PLAN not in graded[0].gaps
+
+
+# ── the CLI, which no test had ever run ───────────────────────────────────────
+
+
+def test_the_cli_runs_at_all(tmp_path: Path, capsys) -> None:
+    """Every invocation of `main` raised AttributeError.
+
+    `add_argument("--records")` binds `args.records`, and the body read
+    `args.knowledge_base` — a name from an earlier spelling of the flag. The suite
+    covered `scan_registry` and `grade` thoroughly and never called `main`, so a
+    script that could not start once passed twelve tests.
+    """
+    kb = _kb(tmp_path)
+    registry = tmp_path / "BACKLOG.md"
+    registry.write_text("## B-001 — a thing\nstatus: open\nevidence: none-yet\n",
+                        encoding="utf-8")
+
+    assert main(["--registry", str(registry), "--records", str(kb)]) == 0
+    assert "expect the full loop" in capsys.readouterr().out
+
+
+def test_a_missing_records_directory_is_reported_not_raised(tmp_path: Path) -> None:
+    registry = tmp_path / "BACKLOG.md"
+    registry.write_text("## B-001 — a thing\nstatus: open\n", encoding="utf-8")
+
+    assert main(["--registry", str(registry), "--records", str(tmp_path / "absent")]) == 2
+
+
+# ── MANDATORY_PER_ITEM, which named the rule and did not apply it ─────────────
+
+
+def test_only_the_mandatory_phases_count_as_a_gap(tmp_path: Path) -> None:
+    """ADR 0012 says plan and review are the per-item mandatory records; code-quality
+    is per-slice and release is per-release, so grading them per item "named as gaps
+    two things that are not". `MANDATORY_PER_ITEM` said so and `gaps` ignored it,
+    walking every member of `Phase`."""
+    kb = _kb(tmp_path)
+    (kb / "plans" / "b001-thing-plan.md").write_text("plan", encoding="utf-8")
+    (kb / "reviews" / "b001-thing-review.md").write_text("review", encoding="utf-8")
+    registry = tmp_path / "BACKLOG.md"
+    registry.write_text("## B-001 — a thing\nstatus: open\nevidence: `x.md:1`\n",
+                        encoding="utf-8")
+
+    graded = grade(scan_registry(registry, kb), registry)
+
+    assert [g.gaps for g in graded] == [[]], (
+        "an item with a plan and a review has no per-item gap, even with no "
+        "code-quality audit and no release record")
+
+
+def test_a_missing_review_is_still_a_gap(tmp_path: Path) -> None:
+    """The narrowing must not turn the gate off: the two mandatory phases still bite."""
+    kb = _kb(tmp_path)
+    (kb / "plans" / "b001-thing-plan.md").write_text("plan", encoding="utf-8")
+    registry = tmp_path / "BACKLOG.md"
+    registry.write_text("## B-001 — a thing\nstatus: open\nevidence: `x.md:1`\n",
+                        encoding="utf-8")
+
+    graded = grade(scan_registry(registry, kb), registry)
+
+    assert graded[0].gaps == [Phase.REVIEW]
+
+
+def test_the_gap_rule_is_read_from_the_constant_that_declares_it() -> None:
+    """One fact, one source: if the ADR changes which phases are mandatory, the
+    constant is the only place that has to move."""
+    assert set(MANDATORY_PER_ITEM) == {Phase.PLAN, Phase.REVIEW}

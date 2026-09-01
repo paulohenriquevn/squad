@@ -92,7 +92,7 @@ class TestPathAliasNotAPackage:
     without consulting what the project declares.
     """
 
-    def test_alias_declarado_no_tsconfig_nao_vai_ao_registry(self, tmp_path, monkeypatch):
+    def test_an_alias_declared_in_tsconfig_does_not_reach_the_registry(self, tmp_path, monkeypatch):
         from scripts.detectors.typescript import TypescriptDetector
 
         (tmp_path / ".git").mkdir()
@@ -111,7 +111,7 @@ class TestPathAliasNotAPackage:
         assert det._is_path_alias("@/components/Button", aliases) is True
         assert det._is_path_alias("~lib/util", aliases) is True
 
-    def test_pacote_escopado_de_verdade_nao_e_confundido_com_alias(self, tmp_path):
+    def test_a_genuinely_scoped_package_is_not_mistaken_for_an_alias(self, tmp_path):
         from scripts.detectors.typescript import TypescriptDetector
 
         (tmp_path / ".git").mkdir()
@@ -126,7 +126,7 @@ class TestPathAliasNotAPackage:
 
         assert det._is_path_alias("@scope/pkg", aliases) is False
 
-    def test_tsconfig_com_comentarios_e_virgula_final_e_lido(self, tmp_path):
+    def test_a_tsconfig_with_comments_and_a_trailing_comma_is_read(self, tmp_path):
         """tsconfig admite comentarios; JSON estrito falharia e o alias sumiria."""
         from scripts.detectors.typescript import TypescriptDetector
 

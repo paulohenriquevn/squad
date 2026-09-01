@@ -8,6 +8,7 @@ from __future__ import annotations
 import pytest
 from compute_acceptance_verdict import (
     ACCEPTED,
+    FLIP_ALLOWED,
     ACCEPTED_WITH_CAVEATS,
     NOT_VALIDATED,
     REJECTED,
@@ -17,7 +18,7 @@ from compute_acceptance_verdict import (
 
 
 class TestGreenPaths:
-    def test_todos_os_criterios_exercidos_com_evidencia_dao_accepted(
+    def test_every_criterion_exercised_with_evidence_gives_accepted(
         self, criteria_m2: list[dict], passing_results: list[dict]
     ) -> None:
         outcome = compute(criteria_m2, passing_results, [])
@@ -25,7 +26,7 @@ class TestGreenPaths:
         assert outcome["verdict"] == ACCEPTED
         assert outcome["flip_allowed"] is True
 
-    def test_defeito_nao_bloqueante_da_accepted_with_caveats(
+    def test_a_non_blocking_defect_gives_accepted_with_caveats(
         self, criteria_m2: list[dict], passing_results: list[dict]
     ) -> None:
         defects = [{"severity": "minor", "summary": "spinner pisca", "issue": "#412"}]
@@ -35,7 +36,7 @@ class TestGreenPaths:
         assert outcome["verdict"] == ACCEPTED_WITH_CAVEATS
         assert outcome["flip_allowed"] is True
 
-    def test_caveat_sem_issue_aberta_fica_visivel_no_motivo(
+    def test_a_caveat_with_no_open_issue_stays_visible_in_the_reason(
         self, criteria_m2: list[dict], passing_results: list[dict]
     ) -> None:
         outcome = compute(criteria_m2, passing_results, [{"severity": "minor", "summary": "x"}])
@@ -44,7 +45,7 @@ class TestGreenPaths:
 
 
 class TestRejected:
-    def test_criterio_reprovado_no_sistema_vivo_da_rejected(
+    def test_a_criterion_failed_in_the_live_system_gives_rejected(
         self, criteria_m2: list[dict], passing_results: list[dict]
     ) -> None:
         results = [passing_results[0], {"id": "AC2", "status": "failed", "note": "levou 6s"}]
@@ -55,7 +56,7 @@ class TestRejected:
         assert outcome["flip_allowed"] is False
         assert any("levou 6s" in reason for reason in outcome["reasons"])
 
-    def test_defeito_blocker_reprova_mesmo_com_todos_os_criterios_verdes(
+    def test_a_blocker_defect_rejects_even_when_every_criterion_is_green(
         self, criteria_m2: list[dict], passing_results: list[dict]
     ) -> None:
         defects = [{"severity": "blocker", "summary": "leaks another user's session"}]
@@ -67,7 +68,7 @@ class TestRejected:
 
 
 class TestNotValidated:
-    def test_passou_sem_evidencia_nao_e_passou(self, criteria_m2: list[dict]) -> None:
+    def test_passed_without_evidence_is_not_passed(self, criteria_m2: list[dict]) -> None:
         results = [
             {"id": "AC1", "status": "passed", "evidence": ["evidence/ok.png"]},
             {"id": "AC2", "status": "passed", "evidence": []},
@@ -78,7 +79,7 @@ class TestNotValidated:
         assert outcome["verdict"] == NOT_VALIDATED
         assert any("asserted pass is not a pass" in reason for reason in outcome["reasons"])
 
-    def test_evidencia_so_com_espacos_em_branco_nao_conta(self, criteria_m2: list[dict]) -> None:
+    def test_evidence_of_whitespace_only_does_not_count(self, criteria_m2: list[dict]) -> None:
         results = [
             {"id": "AC1", "status": "passed", "evidence": ["evidence/ok.png"]},
             {"id": "AC2", "status": "passed", "evidence": ["   "]},
@@ -86,7 +87,7 @@ class TestNotValidated:
 
         assert compute(criteria_m2, results, [])["verdict"] == NOT_VALIDATED
 
-    def test_criterio_sem_resultado_registrado_nao_valida(
+    def test_a_criterion_with_no_recorded_result_does_not_validate(
         self, criteria_m2: list[dict], passing_results: list[dict]
     ) -> None:
         outcome = compute(criteria_m2, passing_results[:1], [])
@@ -95,7 +96,7 @@ class TestNotValidated:
         assert any("AC2: no result recorded" in reason for reason in outcome["reasons"])
 
     @pytest.mark.parametrize("status", ["not_exercised", "blocked"])
-    def test_criterio_nao_exercido_nao_valida(self, criteria_m2: list[dict], status: str) -> None:
+    def test_an_unexercised_criterion_does_not_validate(self, criteria_m2: list[dict], status: str) -> None:
         results = [
             {"id": "AC1", "status": "passed", "evidence": ["evidence/ok.png"]},
             {"id": "AC2", "status": status},
@@ -103,7 +104,7 @@ class TestNotValidated:
 
         assert compute(criteria_m2, results, [])["verdict"] == NOT_VALIDATED
 
-    def test_nao_validado_tem_precedencia_sobre_reprovado(self, criteria_m2: list[dict]) -> None:
+    def test_not_validated_takes_precedence_over_rejected(self, criteria_m2: list[dict]) -> None:
         """'We could not check' and 'we checked and it broke' are different facts."""
         results = [
             {"id": "AC1", "status": "failed", "note": "quebrou"},
@@ -112,7 +113,7 @@ class TestNotValidated:
 
         assert compute(criteria_m2, results, [])["verdict"] == NOT_VALIDATED
 
-    def test_evidencia_como_string_unica_e_aceita(self, criteria_m2: list[dict]) -> None:
+    def test_evidence_given_as_a_single_string_is_accepted(self, criteria_m2: list[dict]) -> None:
         results = [
             {"id": "AC1", "status": "passed", "evidence": "evidence/ok.png"},
             {"id": "AC2", "status": "passed", "evidence": "evidence/ok2.png"},
@@ -122,17 +123,17 @@ class TestNotValidated:
 
 
 class TestMalformedInput:
-    def test_status_desconhecido_e_erro_e_nao_um_veredito(self, criteria_m2: list[dict]) -> None:
+    def test_an_unknown_status_is_an_error_and_not_a_verdict(self, criteria_m2: list[dict]) -> None:
         results = [{"id": "AC1", "status": "mostly-ok"}]
 
         with pytest.raises(MalformedEvidence, match="status 'mostly-ok'"):
             compute(criteria_m2, results, [])
 
-    def test_resultado_sem_id_e_erro(self, criteria_m2: list[dict]) -> None:
+    def test_a_result_with_no_id_is_an_error(self, criteria_m2: list[dict]) -> None:
         with pytest.raises(MalformedEvidence, match="no `id`"):
             compute(criteria_m2, [{"status": "passed"}], [])
 
-    def test_severidade_desconhecida_e_erro(
+    def test_an_unknown_severity_is_an_error(
         self, criteria_m2: list[dict], passing_results: list[dict]
     ) -> None:
         with pytest.raises(MalformedEvidence, match="severity 'catastrophic'"):
@@ -178,3 +179,20 @@ def test_main_emits_a_phase_event_and_does_not_crash(tmp_path, monkeypatch):
     assert event["verdict"] == result.stdout.strip(), (
         "the event must carry the verdict the script printed, not a second opinion"
     )
+
+
+# ── flip_allowed is derived, not restated at each exit ────────────────────────
+
+
+def test_flip_allowed_agrees_with_the_constant_that_declares_it() -> None:
+    """`FLIP_ALLOWED` named the verdicts that let cycle-roadmap tick a milestone, and
+    every return path hardcoded its own boolean instead. Two statements of one rule:
+    add a verdict to the set and four literals stay behind, still answering as before.
+    """
+    assert FLIP_ALLOWED == {ACCEPTED, ACCEPTED_WITH_CAVEATS}
+
+
+def test_every_verdict_flips_exactly_when_the_constant_says_so() -> None:
+    for verdict, expected in ((ACCEPTED, True), (ACCEPTED_WITH_CAVEATS, True),
+                              (REJECTED, False), (NOT_VALIDATED, False)):
+        assert (verdict in FLIP_ALLOWED) is expected, verdict

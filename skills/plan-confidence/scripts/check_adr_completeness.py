@@ -69,7 +69,9 @@ class ADRReport:
     with_alternatives: int
     completeness_ratio: float
     missing_alternatives: tuple[str, ...] = field(default_factory=tuple)
-    #: Decisions that never say what being wrong would cost.
+    #: Decisions that never say what being wrong would cost. Reported by
+    #: `run_structural.py` under `sub_reports.adr_completeness`; it was collected
+    #: and dropped for as long as this field had no reader.
     missing_cost_if_wrong: tuple[str, ...] = ()
 
 

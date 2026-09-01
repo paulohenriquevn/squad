@@ -1097,7 +1097,9 @@ let QUERY = "";
 let DOMAIN = "";
 let TAB = "cycle";
 
-const SETTLED = ["done", "killed"];
+// Outcomes, not phases. Work here has left the cycle, so it is counted and
+  // reachable but never competes for attention with what is still moving.
+  const SETTLED = ["done", "killed"];
 
 //: An item that has left the cycle, unless something is running on it again.
 function hasSettled(it) {

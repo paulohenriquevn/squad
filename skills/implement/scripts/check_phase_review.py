@@ -85,10 +85,6 @@ def _find_report(review_dirs: list[Path], slug: str, phase: str) -> Path | None:
     return None
 
 
-def _has_report(review_dirs: list[Path], slug: str, phase: str) -> bool:
-    return _find_report(review_dirs, slug, phase) is not None
-
-
 _HEAD_RE = re.compile(r"Reviewed at head:\*{0,2}\s*`?([0-9a-f]{7,40})`?", re.IGNORECASE)
 
 

@@ -30,7 +30,6 @@ DEFER_CORNER_RE = re.compile(
     r"<!--\s*DEFER-CORNER:\s*(evidence|constraint|blast_radius|verification)\b",
     re.IGNORECASE | re.DOTALL,
 )
-TBD_MARKER_RE = re.compile(r"<!--\s*TBD\b", re.IGNORECASE)
 
 
 def _has_defer_corner_marker(content: str, corner: str) -> bool:

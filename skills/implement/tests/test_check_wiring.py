@@ -213,3 +213,51 @@ def test_the_walk_does_not_descend_into_node_modules_or_into_a_checkout(git_proj
     assert "outer-copy" in found, "the nested checkout itself must be found"
     assert "dep" not in found, "node_modules is never descended into"
     assert "inner" not in found, "a checkout inside a checkout adds nothing — the outer one covers it"
+
+
+# ── pillar (a)'s docstring said "under src/, lib/, or packages/" ──────────────
+#
+# `PRODUCTION_DIR_NAMES` held those three names and nothing read it: the grep ran
+# from `project_root`, so a caller anywhere in the tree passed a pillar that claims
+# to look only at production source. The scope is narrowed when at least one of the
+# three exists, and left whole when none does — a flat layout keeps its callers.
+
+
+def test_a_caller_outside_the_production_dirs_does_not_pass_pillar_a(
+    fake_project: Path,
+) -> None:
+    """A script beside the repo root is not production source. `src/` exists here,
+    so the pillar has somewhere to look and must look only there."""
+    (fake_project / "scratch.ts").write_text(
+        "export function nearby() { rememberFact('hello'); }\n", encoding="utf-8")
+
+    _rc, data = _run_wiring("rememberFact", fake_project)
+
+    pillar_a = next(p for p in data["pillars"] if p["pillar"] == "a_static_caller")
+    assert pillar_a["status"] == "FAIL"
+
+
+def test_a_caller_inside_a_production_dir_still_passes(fake_project: Path) -> None:
+    (fake_project / "src" / "uses-it.ts").write_text(
+        "export function myCaller() { rememberFact('hello'); }\n", encoding="utf-8")
+
+    _rc, data = _run_wiring("rememberFact", fake_project)
+
+    pillar_a = next(p for p in data["pillars"] if p["pillar"] == "a_static_caller")
+    assert pillar_a["status"] == "PASS"
+
+
+def test_a_flat_project_with_no_production_dir_still_finds_its_caller(
+    tmp_path: Path,
+) -> None:
+    """Narrowing must not turn the pillar off for a repo that keeps source at the
+    root — that would report every symbol in such a project as unwired."""
+    (tmp_path / "definition.py").write_text("def rememberFact(x):\n    return x\n",
+                                            encoding="utf-8")
+    (tmp_path / "caller.py").write_text("from definition import rememberFact\n"
+                                        "rememberFact('hello')\n", encoding="utf-8")
+
+    _rc, data = _run_wiring("rememberFact", tmp_path)
+
+    pillar_a = next(p for p in data["pillars"] if p["pillar"] == "a_static_caller")
+    assert pillar_a["status"] == "PASS"

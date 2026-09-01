@@ -429,8 +429,8 @@ def emit_json_summary(
         if f.language:
             languages_set.add(f.language)
 
-    # `hard_caps_triggered` carrega HARD caps. `compute_verdict` devolve todos os
-    # identifiers triggered — including the soft ones, when the verdict is FAIL_SOFT —
+    # `hard_caps_triggered` carries HARD caps only. `compute_verdict` returns every
+    # triggered identifier — including the soft ones, when the verdict is FAIL_SOFT —
     # and publishing them under this name made a dismissible cap (with an ADR) look
     # like a blocker, and would hide a real HARD in the middle of the list when both
     # coexist.

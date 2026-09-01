@@ -6,11 +6,12 @@ the calibration and emission concerns.
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 import sys
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 # ── Constants ─────────────────────────────────────────────────────────
@@ -91,7 +92,6 @@ class LanguageInfo:
     name: str
     file_count: int = 0
     loc: int = 0
-    extensions: set[str] = field(default_factory=set)
 
 
 # ── Shared helpers ────────────────────────────────────────────────────
@@ -189,8 +189,7 @@ def detect_languages(target: str, verbose: bool = False) -> list[LanguageInfo]:
             name=lang,
             file_count=len(paths),
             loc=loc,
-            extensions={p.suffix.lower() for p in paths},
-        )
+            )
         languages.append(info)
         _log(f"Detected {lang}: {len(paths)} files, {loc} LOC", verbose)
 
@@ -266,15 +265,31 @@ def detect_existing_linters(target: str, verbose: bool = False) -> list[str]:
 
 
 def detect_test_dirs(target: str, verbose: bool = False) -> list[str]:
-    """Detect test directories in the project."""
-    test_dirs: list[str] = []
+    """Detect test directories: by directory NAME, and by the test FILES they hold.
 
-    for root, dirs, _files in os.walk(target):
+    `SKILL.md` § stage 5 says this stage locates test directories *and test file
+    patterns* per language. `TEST_PATTERNS` held the patterns and nothing read them,
+    so only the name rule ran — and a project that keeps `test_thing.py` beside its
+    source, with no `tests/` directory anywhere, reported no test directories at all.
+    Every downstream gate was then calibrated as if the project had no tests.
+
+    An empty `tests/` still counts: the name is a declared intent, and reporting a
+    project as untested because its suite is not written yet would answer a different
+    question than the one asked.
+    """
+    test_dirs: set[str] = set()
+
+    for root, dirs, files in os.walk(target):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         for d in dirs:
             if d.lower() in TEST_DIR_NAMES:
                 rel = os.path.relpath(os.path.join(root, d), target)
-                test_dirs.append(rel)
-                _log(f"Detected test dir: {rel}", verbose)
+                test_dirs.add(rel)
+                _log(f"Detected test dir (by name): {rel}", verbose)
+        if any(fnmatch.fnmatch(f, pattern) for f in files for pattern in TEST_PATTERNS):
+            rel = os.path.relpath(root, target)
+            if rel not in test_dirs:
+                test_dirs.add(rel)
+                _log(f"Detected test dir (by file pattern): {rel}", verbose)
 
     return sorted(test_dirs)

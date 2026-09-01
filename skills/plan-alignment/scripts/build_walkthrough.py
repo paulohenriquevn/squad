@@ -259,7 +259,7 @@ def layout(spec: Spec, engine: str = "dot") -> dict:
         }
 
     routed: dict[str, list[dict]] = {}
-    for fi, (name, steps) in enumerate(spec.flows.items()):
+    for name, steps in spec.flows.items():
         lines = [
             "digraph F {",
             '  splines=true; overlap=false; sep="+14";',

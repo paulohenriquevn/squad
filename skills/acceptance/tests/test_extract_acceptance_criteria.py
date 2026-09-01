@@ -6,7 +6,7 @@ from extract_acceptance_criteria import GateViolation, extract
 
 
 class TestExtract:
-    def test_usa_os_bullets_do_definition_of_done_do_milestone(self, roadmap_text: str) -> None:
+    def test_it_uses_the_milestones_definition_of_done_bullets(self, roadmap_text: str) -> None:
         payload = extract(roadmap_text, "M2")
 
         assert payload["milestone_id"] == "M2"
@@ -17,28 +17,28 @@ class TestExtract:
             "A dropped connection resumes without data loss.",
         ]
 
-    def test_numera_os_criterios_e_declara_a_origem(self, roadmap_text: str) -> None:
+    def test_it_numbers_the_criteria_and_declares_their_origin(self, roadmap_text: str) -> None:
         criteria = extract(roadmap_text, "M2")["criteria"]
 
         assert [c["id"] for c in criteria] == ["AC1", "AC2", "AC3"]
         assert {c["source"] for c in criteria} == {"roadmap-dod"}
 
-    def test_para_no_proximo_rotulo_em_negrito(self, roadmap_text: str) -> None:
+    def test_it_stops_at_the_next_bold_label(self, roadmap_text: str) -> None:
         """`**Dependencies:**` and `**Top risks:**` must not become acceptance criteria."""
         texts = [c["text"] for c in extract(roadmap_text, "M2")["criteria"]]
 
         assert not any("Proxy buffering" in t for t in texts)
         assert not any("M1" == t for t in texts)
 
-    def test_le_dod_de_milestone_ja_lancado(self, roadmap_text: str) -> None:
+    def test_it_reads_the_definition_of_done_of_an_already_released_milestone(self, roadmap_text: str) -> None:
         """`[x]` bullets are still criteria — the bullet's state is not the verdict."""
         assert len(extract(roadmap_text, "M1")["criteria"]) == 2
 
-    def test_recusa_milestone_sem_definition_of_done(self, roadmap_text: str) -> None:
+    def test_it_refuses_a_milestone_with_no_definition_of_done(self, roadmap_text: str) -> None:
         with pytest.raises(GateViolation, match="no `\\*\\*Definition of done"):
             extract(roadmap_text, "M3")
 
-    def test_recusa_definition_of_done_sem_bullets(self) -> None:
+    def test_it_refuses_a_definition_of_done_with_no_bullets(self) -> None:
         text = (
             "### M4 — [ ] Empty\n\n"
             "**Definition of done (all must hold):**\n\n"
@@ -48,10 +48,10 @@ class TestExtract:
         with pytest.raises(GateViolation, match="no `- \\[ \\]` bullets"):
             extract(text, "M4")
 
-    def test_recusa_milestone_ausente(self, roadmap_text: str) -> None:
+    def test_it_refuses_a_missing_milestone(self, roadmap_text: str) -> None:
         with pytest.raises(GateViolation, match="M9 is not in the roadmap"):
             extract(roadmap_text, "M9")
 
-    def test_recusa_id_malformado(self, roadmap_text: str) -> None:
+    def test_it_refuses_a_malformed_id(self, roadmap_text: str) -> None:
         with pytest.raises(GateViolation, match="invalid milestone id"):
             extract(roadmap_text, "milestone-2")

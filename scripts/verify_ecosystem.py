@@ -249,8 +249,11 @@ def check_skill_frontmatter(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         # enumerator in the kit finds skills by the presence of `SKILL.md` and so
         # never sees it; this one enumerated directories and demanded the file,
         # which turned a deliberate non-skill into a missing one.
+        # A dot-directory under `skills/` is a tool artifact, never a skill:
+        # pytest-benchmark drops `.benchmarks/` here on any run that measures, and
+        # this check then reported the tool's own output as a broken skill.
         if not skill_dir.is_dir() or skill_dir.name == "generated" \
-                or skill_dir.name.startswith("_"):
+                or skill_dir.name.startswith(("_", ".")):
             continue
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.exists():

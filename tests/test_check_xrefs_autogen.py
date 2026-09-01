@@ -30,25 +30,25 @@ def _orphans(existing: set[str]) -> set[str]:
     return existing - AUXILIARY_SKILLS - auto
 
 
-def test_review_knowledge_gerada_nao_e_orfa() -> None:
+def test_generated_review_knowledge_is_not_an_orphan() -> None:
     assert _orphans({"review-m5-ship-apikey-otel-tests-knowledge"}) == set()
 
 
-def test_sepa_knowledge_gerada_nao_e_orfa() -> None:
+def test_generated_sepa_knowledge_is_not_an_orphan() -> None:
     assert _orphans({"promptly-sepa-knowledge"}) == set()
 
 
-def test_skill_de_verdade_sem_cycle_continua_orfa() -> None:
+def test_a_real_skill_with_no_cycle_is_still_an_orphan() -> None:
     """The exemption must not become a back door for a real skill with no cycle."""
     assert _orphans({"skill-writer"}) == {"skill-writer"}
 
 
-def test_nome_que_so_parece_gerado_continua_orfa() -> None:
+def test_a_name_that_only_looks_generated_is_still_an_orphan() -> None:
     """`records-helper` does not end in `-knowledge`; it is not exempt."""
     assert _orphans({"records-helper"}) == {"records-helper"}
 
 
-def test_gerada_tambem_isenta_de_cycle_contract() -> None:
+def test_generated_is_also_exempt_from_the_cycle_contract() -> None:
     """Regression: the exemption applied to one check and not the other.
 
     The skill `/review` writes has no `Cycle contract` section — nor should it.

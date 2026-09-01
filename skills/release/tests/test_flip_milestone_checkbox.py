@@ -110,14 +110,14 @@ def test_cli_returncode_2_on_invalid_milestone_id(roadmap_pre_flip: Path) -> Non
 class TestCanonicalRunsDir:
     """The CWD-relative default was what split the records in every consumer."""
 
-    def test_plugin_layout_usa_knowledge_base_dentro_de_claude(self, tmp_path) -> None:
+    def test_the_plugin_layout_uses_the_knowledge_base_inside_dot_claude(self, tmp_path) -> None:
         from flip_milestone_checkbox import _default_runs_dir
 
         (tmp_path / ".claude").mkdir()
 
         assert _default_runs_dir(tmp_path) == tmp_path / ".claude" / "records" / "roadmap-runs"
 
-    def test_standalone_usa_a_raiz(self, tmp_path) -> None:
+    def test_the_standalone_layout_uses_the_root(self, tmp_path) -> None:
         from flip_milestone_checkbox import _default_runs_dir
 
         assert _default_runs_dir(tmp_path) == tmp_path / "records" / "roadmap-runs"

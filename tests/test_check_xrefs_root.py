@@ -51,7 +51,7 @@ def _findings(script: Path, cwd: Path) -> list[dict]:
     return json.loads(proc.stdout)["findings"]
 
 
-def test_raiz_vem_do_script_e_nao_do_cwd(tmp_path: Path) -> None:
+def test_the_root_comes_from_the_script_and_not_from_the_cwd(tmp_path: Path) -> None:
     """The exact regression: a dirty project's script, called from a clean cwd."""
     sujo = tmp_path / "sujo"
     limpo = tmp_path / "limpo"
@@ -75,7 +75,7 @@ def test_raiz_vem_do_script_e_nao_do_cwd(tmp_path: Path) -> None:
     assert broken[0]["missing_rule"] == "does-not-exist-anywhere.md"
 
 
-def test_ecosystem_dir_explicito_continua_mandando(tmp_path: Path) -> None:
+def test_an_explicit_ecosystem_dir_still_wins(tmp_path: Path) -> None:
     """`--ecosystem-dir` is the only way to point at another target, and it wins."""
     outro = tmp_path / "outro"
     eco_outro = _make_ecosystem(outro, skill="implement", missing_rule=True)
@@ -123,7 +123,6 @@ def test_a_real_cycle_reference_still_resolves():
 def _consumer(tmp_path: Path, kit_skills: list[str], own_skills: list[str],
               manifest: bool = True) -> Path:
     """A `.claude/`-style tree: some skills from the kit, some the project's."""
-    from check_xrefs import _kit_owned_skills
 
     (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
     for skill in kit_skills + own_skills:
@@ -184,8 +183,13 @@ def test_a_skill_name_containing_cycle_is_not_a_cycle_reference() -> None:
         assert _extract_cycle_contract_ref(body, set()) is None
 
 
-def test_a_real_cycle_reference_still_resolves() -> None:
-    """The fix must not blind the check it protects."""
+def test_a_cycle_contract_reference_still_resolves() -> None:
+    """The fix must not blind the check it protects.
+
+    Renamed: this shared a name with the `CYCLE_NAME_RE` test above, and in Python the
+    second definition simply replaces the first — so the earlier test had never run.
+    Two tests, one name, one of them silently absent from every green run.
+    """
     from check_xrefs import _extract_cycle_contract_ref
 
     body = "## Cycle contract\n\nOwned by `cycle-plan.md`.\n"

@@ -169,7 +169,7 @@ def test_compliance_score_is_one_for_fully_compliant_plan(tmp_path: Path) -> Non
     assert report.compliance_score == 1.0
 
 
-def test_compliance_motivos_are_informative(tmp_path: Path) -> None:
+def test_compliance_reasons_are_informative(tmp_path: Path) -> None:
     plan = _write(
         tmp_path,
         "# Plan\n\n## Coverage Matrix\n\n| # | Gap | Task(s) | Resolution |\n|---|---|---|---|\n| 1 | x | T1.1 | y |\n",

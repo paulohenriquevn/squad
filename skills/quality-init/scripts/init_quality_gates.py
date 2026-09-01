@@ -40,7 +40,7 @@ from gate_authoring.calibrate import (
     FLOOR_NESTING_DEPTH,
     FLOOR_PARAMETERS,
     ThresholdCalibration,
-    # Re-exports deliberados: `tests/test_init_quality_gates.py` importa os dois
+    # Deliberate re-exports: `tests/test_init_quality_gates.py` imports both
     # from here. They stayed OUT of `__all__` — a private name in a public surface
     # is the contradiction D3 flagged in this file — but remain importable, which is
     # what the test needs. Without the noqa, `ruff --fix` deletes them as unused.

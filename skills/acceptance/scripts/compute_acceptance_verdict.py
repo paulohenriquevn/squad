@@ -49,6 +49,8 @@ REJECTED = "REJECTED"
 NOT_VALIDATED = "NOT_VALIDATED"
 
 #: Verdicts that allow cycle-roadmap to flip the milestone checkbox to [x].
+#: Every exit derives `flip_allowed` from this set rather than restating it, so
+#: adding a verdict here cannot leave a stale literal answering the old way.
 FLIP_ALLOWED = {ACCEPTED, ACCEPTED_WITH_CAVEATS}
 
 
@@ -110,7 +112,8 @@ def compute(criteria: list[dict], results: list[dict], defects: list[dict]) -> d
         )
 
     if missing or unexercised or unevidenced:
-        return {"verdict": NOT_VALIDATED, "reasons": reasons, "flip_allowed": False}
+        return {"verdict": NOT_VALIDATED, "reasons": reasons,
+                "flip_allowed": NOT_VALIDATED in FLIP_ALLOWED}
 
     failed = [c["id"] for c in criteria if by_id[c["id"]]["status"] == "failed"]
     blocker_defects = [d for d in defects if d.get("severity") == "blocker"]
@@ -123,7 +126,8 @@ def compute(criteria: list[dict], results: list[dict], defects: list[dict]) -> d
         reasons.append(f"blocker defect: {defect.get('summary', '(no summary)')}")
 
     if failed or blocker_defects:
-        return {"verdict": REJECTED, "reasons": reasons, "flip_allowed": False}
+        return {"verdict": REJECTED, "reasons": reasons,
+                "flip_allowed": REJECTED in FLIP_ALLOWED}
 
     if defects:
         for defect in defects:
@@ -131,12 +135,13 @@ def compute(criteria: list[dict], results: list[dict], defects: list[dict]) -> d
                 f"{defect.get('severity')} defect: {defect.get('summary', '(no summary)')} "
                 f"[{defect.get('issue', 'NO ISSUE FILED')}]"
             )
-        return {"verdict": ACCEPTED_WITH_CAVEATS, "reasons": reasons, "flip_allowed": True}
+        return {"verdict": ACCEPTED_WITH_CAVEATS, "reasons": reasons,
+                "flip_allowed": ACCEPTED_WITH_CAVEATS in FLIP_ALLOWED}
 
     return {
         "verdict": ACCEPTED,
         "reasons": [f"all {len(criteria)} criteria exercised and evidenced in the live system."],
-        "flip_allowed": True,
+        "flip_allowed": ACCEPTED in FLIP_ALLOWED,
     }
 
 

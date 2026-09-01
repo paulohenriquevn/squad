@@ -173,9 +173,16 @@ class GradedItem:
 
     @property
     def gaps(self) -> list[Phase]:
+        """The MANDATORY phases this item has no record for.
+
+        Only `MANDATORY_PER_ITEM` counts. Walking every member of `Phase` here was
+        the exact error the ADR above describes — code-quality is graded per slice
+        and release per release, so asking them per item "named as gaps two things
+        that are not".
+        """
         if not self.coverage.expects_full_loop:
             return []
-        return [p for p in Phase if p not in self.satisfied]
+        return [p for p in MANDATORY_PER_ITEM if p not in self.satisfied]
 
 
 def _blocks(registry: Path) -> dict[str, str]:
@@ -219,11 +226,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.registry.is_file():
         print(f"phase-coverage: no registry at {args.registry}", file=sys.stderr)
         return 2
-    if not args.knowledge_base.is_dir():
-        print(f"phase-coverage: no records at {args.knowledge_base}", file=sys.stderr)
+    if not args.records.is_dir():
+        print(f"phase-coverage: no records at {args.records}", file=sys.stderr)
         return 2
 
-    report = scan_registry(args.registry, args.knowledge_base)
+    report = scan_registry(args.registry, args.records)
     live = [r for r in report if r.expects_full_loop]
     total = len(live)
     graded = [g for g in grade(report, args.registry) if g.coverage.expects_full_loop]

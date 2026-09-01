@@ -48,14 +48,12 @@ class CoverageReport:
     """Structural report for a plan's Coverage Matrix."""
 
     total_gaps: int
-    total_tasks_referenced: int
     mapped_gaps: int
     deferred_gaps: int = 0  # v1.1+ #2 fix: explicitly out-of-scope, not missed
     unmapped_gaps: tuple[str, ...] = field(default_factory=tuple)
     orphan_tasks: tuple[str, ...] = field(default_factory=tuple)
     coverage_ratio: float = 0.0
     is_complete: bool = False
-    parse_errors: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _read_plan(plan_path: Path) -> str:
@@ -219,12 +217,10 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
 
     return CoverageReport(
         total_gaps=total_gaps,
-        total_tasks_referenced=len(matrix_task_ids),
         mapped_gaps=mapped_gaps,
         deferred_gaps=deferred_gaps,
         unmapped_gaps=tuple(unmapped),
         orphan_tasks=tuple(orphans),
         coverage_ratio=coverage_ratio,
         is_complete=is_complete,
-        parse_errors=(),
     )

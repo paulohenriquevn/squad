@@ -27,14 +27,14 @@ _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
 
-def test_reescreve_prefixo_de_hooks():
+def test_it_rewrites_the_hooks_prefix():
     assert (
         _mod.rewrite_value("$CLAUDE_PROJECT_DIR/hooks/validate-command.sh")
         == "$CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.sh"
     )
 
 
-def test_reescreve_prefixo_de_scripts_e_knowledge_base():
+def test_it_rewrites_the_scripts_and_knowledge_base_prefixes():
     assert _mod.rewrite_value("$CLAUDE_PROJECT_DIR/scripts/x.py").startswith(
         "$CLAUDE_PROJECT_DIR/.claude/scripts/"
     )
@@ -43,13 +43,13 @@ def test_reescreve_prefixo_de_scripts_e_knowledge_base():
     )
 
 
-def test_nao_reescreve_caminho_fora_da_lista():
+def test_it_does_not_rewrite_a_path_outside_the_list():
     value = "$CLAUDE_PROJECT_DIR/rules/thing.txt"
 
     assert _mod.rewrite_value(value) == value
 
 
-def test_transform_desce_em_listas_e_dicionarios():
+def test_transform_descends_into_lists_and_dicts():
     src = {"hooks": [{"command": "$CLAUDE_PROJECT_DIR/hooks/a.sh", "n": 1}]}
 
     out = _mod.transform(src)
@@ -58,11 +58,11 @@ def test_transform_desce_em_listas_e_dicionarios():
     assert out["hooks"][0]["n"] == 1
 
 
-def test_transform_preserva_tipos_nao_string():
+def test_transform_preserves_non_string_types():
     assert _mod.transform({"a": [1, True, None]}) == {"a": [1, True, None]}
 
 
-def test_check_reporta_sincronizado_no_repo():
+def test_check_reports_in_sync_for_this_repository():
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--check"], capture_output=True, text=True, cwd=REPO_ROOT
     )
@@ -70,7 +70,7 @@ def test_check_reporta_sincronizado_no_repo():
     assert result.returncode == 0, result.stderr
 
 
-def test_arquivo_gerado_nao_contem_prefixo_standalone_nos_diretorios_reescritos():
+def test_the_generated_file_carries_no_standalone_prefix_in_rewritten_dirs():
     """The proof that the rewrite really happened in the versioned file."""
     data = json.loads((REPO_ROOT / "settings.plugin.json").read_text(encoding="utf-8"))
 

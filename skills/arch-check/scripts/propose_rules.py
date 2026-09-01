@@ -65,15 +65,6 @@ _NOT_A_GO_UNIT = frozenset({"node_modules", "vendor", "testdata"})
 _GO_LIST_TIMEOUT_SEC = 180
 
 
-@dataclass(frozen=True)
-class Edge:
-    """One directed dependency between two top-level units, with how often it occurs."""
-
-    source: str
-    target: str
-    count: int
-
-
 @dataclass
 class Graph:
     """The dependency graph between a repo's top-level units."""

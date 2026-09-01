@@ -35,8 +35,6 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-H2_RE = re.compile(r"^##\s+(.*?)\s*$", re.MULTILINE)
-H3_RE = re.compile(r"^###\s+(.*?)\s*$", re.MULTILINE)
 TABLE_ROW_RE = re.compile(r"^\|[^|\n]+(?:\|[^|\n]*)+\|\s*$", re.MULTILINE)
 FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
 

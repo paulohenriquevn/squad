@@ -46,7 +46,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from check_phase_drift import load_blocking_verdicts, check_phase_drift, load_declared_phases  # noqa: E402
+from check_phase_drift import check_phase_drift, load_declared_phases  # noqa: E402
 from cycle_events import emit_phase_end, emit_phase_start  # noqa: E402
 
 _PLAN = """\

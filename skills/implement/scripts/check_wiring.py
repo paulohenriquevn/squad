@@ -185,9 +185,20 @@ def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, A
     Files where `symbol` appears ONLY in definition position (function/class/interface
     declaration) are excluded — those are the origin, not callers. A symbol with only
     its own definition and no callers is dead code, which is what this pillar catches.
+
+    The scope is `PRODUCTION_DIR_NAMES` when at least one of those directories exists,
+    and the whole tree when none does. The constant held the three names and nothing
+    read them, so the grep ran from `project_root` and a caller anywhere — a scratch
+    script beside the repo root — passed a pillar whose first line says production
+    source. Narrowing unconditionally would be worse than the bug: a repo that keeps
+    its source at the root would report every symbol as unwired.
     """
-    matches = _grep_symbol(
-        project_root,
+    production_roots = [project_root / name for name in PRODUCTION_DIR_NAMES
+                        if (project_root / name).is_dir()]
+    matches: list[Path] = []
+    for search_root in (production_roots or [project_root]):
+        matches.extend(_grep_symbol(
+        search_root,
         symbol,
         include_globs=["*.ts", "*.tsx", "*.js", "*.mjs", "*.py"],
         # B-081 — `.claude/worktrees/agent-<id>/` holds FULL checkouts of this same repo
@@ -198,7 +209,7 @@ def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, A
         # twice. `.claude/` is an installed plugin, never project source, so excluding it whole is
         # correct and not merely a worktree workaround.
         exclude_dirs=["node_modules", ".git", ".claude", "dist", "build", "tests", "test", "__tests__", "spec"],
-    )
+        ))
     # Exclude files with "test" / "spec" / "fixture" / "mock" in basename
     production_files = [
         p for p in matches
