@@ -121,6 +121,32 @@ def check_xrefs(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
+def check_phase_numbering(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Do the skills of a cycle agree with each other about their own order?
+
+    Third of the phase sweeps and the only one that looks inside a cycle. A number
+    claimed by two skills is a contract that answers differently depending on which
+    file the reader opened, and the kit shipped exactly that to every consumer for
+    five days after `/deps-audit` was inserted into `cycle-plan`.
+    """
+    checker = ecosystem_dir / "scripts" / "check_phase_numbering.py"
+    if not checker.exists():
+        return True, ["  check_phase_numbering.py not installed — skipping"]
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
+        capture_output=True, text=True,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, [f"  check_phase_numbering.py produced no usable JSON "
+                       f"(exit {result.returncode})"]
+    findings = payload.get("findings", [])
+    if findings:
+        return False, [f"  {f['cycle']}: {f['detail']}" for f in findings]
+    return True, []
+
+
 def check_wiki_migration(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Is this project still reading its durable knowledge from the old root?
 
@@ -338,6 +364,7 @@ def main() -> int:
         ("settings.json validity", check_settings_json),
         ("Cross-references", check_xrefs),
         ("Cycle rules schema", check_cycle_rules),
+        ("Phase numbering", check_phase_numbering),
         ("Durable knowledge root", check_wiki_migration),
         ("Skill frontmatter", check_skill_frontmatter),
         ("Smoke chain (detect_domain → spawn_reviewers → consolidate)", check_smoke_chain),

@@ -213,7 +213,7 @@ These rules are NON-NEGOTIABLE for every plan produced by this skill:
 
 This skill is **phase 1** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the **source of truth** for:
 
-- Chain order (this skill → `/edge-case-plan` → `/plan-confidence` → optional `/plan-improve` → `/plan-confidence` re-score)
+- Chain order (this skill → `/edge-case-plan` → `/deps-audit` → `/plan-confidence` → optional `/plan-improve` → `/plan-confidence` re-score)
 - Hard gates (Coverage Matrix 100%, ADR alternatives, TDD in bug-fix tasks, fabricated citations)
 - Soft gates (NON_SHIPPABLE verdict, smell density, low architecture compliance)
 - Stop conditions (no-improvement, hard-cap blockers, human-needed gaps)

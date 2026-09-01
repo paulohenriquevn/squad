@@ -18,7 +18,7 @@ Reads a plan, scores it with `/plan-confidence`, applies deterministic + semanti
 
 ## Cycle contract
 
-This skill is **phase 4** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the source of truth for chain order (invoked when `/plan-confidence` verdict < SHIPPABLE_WITH_CAVEATS; followed by `/plan-confidence` re-score), stop conditions (no-improvement detection, hard-cap blockers), anti-patterns (never fabricate ADR alternatives), and rollback. **Read `cycle-plan.md` before invoking this skill.** This SKILL.md retains phase-specific detail (Phase A deterministic fixes, Phase B LLM fixes, fix categories, limitations).
+This skill is **phase 5** of [`cycle-plan`](../../rules/cycle-plan.md), and conditional rather than part of the straight line. The cycle rule is the source of truth for chain order (invoked when `/plan-confidence` verdict < SHIPPABLE_WITH_CAVEATS; followed by `/plan-confidence` re-score), stop conditions (no-improvement detection, hard-cap blockers), anti-patterns (never fabricate ADR alternatives), and rollback. **Read `cycle-plan.md` before invoking this skill.** This SKILL.md retains phase-specific detail (Phase A deterministic fixes, Phase B LLM fixes, fix categories, limitations).
 
 ## When to Trigger
 

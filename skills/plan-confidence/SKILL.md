@@ -1,7 +1,7 @@
 ---
 name: plan-confidence
 version: 0.1.0
-requires: [edge-case-plan]
+requires: [deps-audit]
 description: Score a plan produced by /to-plan for structural quality (M2 deterministic check). Sibling of /discover-confidence with a plan-shape rubric. Use after /edge-case-plan, before /implement.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
@@ -23,7 +23,7 @@ Scores a plan produced by `/to-plan` against the M2 structural rubric. Determini
 
 ## Cycle contract
 
-This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the source of truth for chain order, hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (the scoring rubric, hard caps, output schema, exit codes).
+This skill is **phase 4** of [`cycle-plan`](../../rules/cycle-plan.md), after `/deps-audit` (phase 3). The cycle rule is the source of truth for chain order, hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (the scoring rubric, hard caps, output schema, exit codes).
 
 ## Architecture compliance check (always runs)
 
