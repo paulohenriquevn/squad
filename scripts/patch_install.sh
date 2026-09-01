@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Surgical patch installer — applies the session's delta to a consumer .claude/ tree
-# WITHOUT touching auto-generated artifacts (SEPA-knowledge skills, review-*-knowledge,
-# halt-loop-prompts, .progress-*.json, etc).
+# WITHOUT touching auto-generated artifacts (review-*-knowledge, halt-loop-prompts,
+# .progress-*.json, and any legacy *-sepa-knowledge a consumer still carries — /implement
+# stopped generating those on 2026-09-01 and now routes to the project's specialist).
 #
 # Difference from install.sh:
 #   - install.sh           → rm -rf <target>/.claude/skills/ ; cp -r source full overwrite
@@ -25,7 +26,7 @@
 #   - Does not delete anything. Skills RETIRED by the kit are MOVED to
 #     .claude/.patch-backups/retired/, never deleted.
 #   - Does not touch settings.json, settings.local.json, records/, agents/
-#   - Does not touch skills NOT in the manifest (preserves SEPA-knowledge etc)
+#   - Does not touch skills NOT in the manifest (preserves review-*-knowledge etc)
 #   - Does not run tests in the target (different env)
 #   - Does not commit anything (consumer decides)
 
@@ -395,6 +396,6 @@ for d in "${NEW_KB_DIRS[@]}"; do
 done
 
 echo
-echo "Done. Auto-generated skills (SEPA-knowledge, review-*-knowledge) preserved."
+echo "Done. Auto-generated skills (review-*-knowledge, and any legacy ones) preserved."
 echo "Consumer settings.json and agents/ untouched; records/ CONTENT untouched"
 echo "(${KB_CREATED} empty scaffold dir(s) created; ${RETIRED_MOVED} retired skill(s) archived)."

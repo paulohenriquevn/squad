@@ -20,12 +20,46 @@ If any pre-condition fails, refuse and surface the missing item.
 Each task runs as a halt-loop iteration:
 
 ```
+(once, before the loop)
+ROUTE    — scripts/route_domain.py resolves the project's domain specialist
+
+(per task)
 RED      — write the failing test that captures the task's acceptance criterion
 GREEN    — walk the parsimony ladder, then write the minimal code to pass the test
 REFACTOR — improve structure; tests stay green
 WIRING   — caller + integration test + runtime metric (the "wiring triad")
 COMMIT   — atomic commit referencing the plan slug and task ID
 ```
+
+## The domain specialist — consulted, never generated
+
+**This cycle generates no agents.** It routes to the specialist the project derived
+from its own disk (`agents/README.md`), and consults it three times per iteration:
+before RED, after GREEN, before COMMIT.
+
+| `route_domain.py` exit | Meaning | Action |
+|---|---|---|
+| `0` | resolves to a specialist on disk | consult it |
+| `1` | the repo is in no domain | HALT — gate G1 should have refused this upstream |
+| `2` | the routing table is unreadable | HALT — guessing is what the table prevents |
+| `3` | `BROKEN ROUTE` — a specialist nobody wrote | **HALT, and do not stand in for them** |
+
+A plan citing no `B-NNN` has no `repo:` to route on: the consultation is **skipped and
+the skip recorded** under "Pre-condition audit". With no declared domain, any
+specialist chosen would be chosen by resemblance.
+
+**Authority.** Read-only; never writes code, never commits, never modifies the plan. A
+`[CRITICAL]` finding recommends HALT and does not block on its own — Unbreakable Rule 1
+puts the confidence burden on the actor. **Inside its domain the specialist is not
+overruled**; believing it is wrong is a finding to record, not a verdict to substitute.
+
+This section was written on 2026-09-01 and it closes a gap rather than adding a step.
+The skill had a MANDATORY Step 2.5 that **generated** a per-plan agent, justified in
+its own text as being "per `cycle-implement.md`" — and this file contained no mention
+of it. A mandatory step resting on a contract that does not contain it is the defect
+this kit exists to catch, pointed inward. What the step does is now prescribed here,
+and what it used to do is recorded in
+`skills/implement/reference/domain-specialist.md`.
 
 ## Parsimony gate (GREEN-phase deliberation — pre-write)
 

@@ -162,16 +162,40 @@ This is the **companion gate to `plan-confidence`'s `check_criterion_executabili
 
 Write the ordered task list to `records/implementations/{slug}-implementation.md` using `templates/implementation-task-template.md`. This file is the halt-loop's working contract.
 
-### Step 2.5 — Spawn the SEPA (agent + paired knowledge skill)
+### Step 2.5 — Resolve the domain specialist
 
-**Mandatory step. SEPA = Specialist Engineer Per-plan Agent** — a read-only second opinion consulted 3× per iteration (before RED, after GREEN, before COMMIT). Each `/implement` invocation generates a NEW SEPA agent + paired knowledge skill, both composed from the FULL plan + ADRs + edge-case review + deps audit + plan-confidence report + project rules.
+**This skill generates no agents.** It routes to the specialist the project derived
+from its own disk, which is the same call `daedalus-tech-lead` makes and carries the
+same refusal.
 
-The full SEPA protocol — composition, initial brief, per-iteration invocation, log persistence, boundaries, skip conditions — lives in [`reference/sepa.md`](./reference/sepa.md). Read it before invoking. Summary of the steps SEPA generation requires:
+```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)
+python3 "$ECO/scripts/route_domain.py" <repo-or-item-file> --json
+```
 
-1. Read `templates/sepa-staff-engineer-template.md` and write the agent file to `agents/implement-{slug}-{date}/sepa.md`.
-2. Read `templates/sepa-knowledge-skill-template.md` and write the paired skill to `skills/implement-{slug}-sepa-knowledge/SKILL.md`.
-3. Invoke `Agent` ONCE for the initial brief; persist the response under `records/implementations/{slug}/sepa-iterations/initial-brief-response.md`.
-4. Each halt-loop iteration consults SEPA 3× via the same `Agent` subagent type.
+| Exit | Meaning | Action |
+|---|---|---|
+| `0` | resolves to a specialist on disk | consult it 3× per iteration — before RED, after GREEN, before COMMIT |
+| `1` | the repo is in no domain | **HALT.** G1 should have refused this upstream; arriving here unrouted means registry and plan disagree |
+| `2` | the routing table is unreadable | **HALT.** Guessing is what the table exists to prevent |
+| `3` | `BROKEN ROUTE` — specialist named, nobody wrote it | **HALT. Do NOT stand in for them** |
+
+A plan with no `B-NNN` has no `repo:` to route on. **Skip the consultation and record
+the skip** in the implementation contract under "Pre-condition audit", with the
+reason — with no declared domain, any specialist chosen is chosen by resemblance.
+
+The full protocol — invocation paths, the three consultations, log persistence,
+authority and boundaries, and why the generated per-plan agent that used to sit here
+was removed — is [`reference/domain-specialist.md`](./reference/domain-specialist.md).
+**Read it before invoking.**
+
+> **This step used to generate a `SEPA` agent** into `agents/` and a paired knowledge
+> skill into `skills/`. It wrote into the two directories it least should have — one
+> the project owns, one the installer deletes — and it was specialist about the *plan*
+> rather than about the *code*, since every byte of its context came from documents
+> this cycle had just produced. The project's specialists already carry what it was
+> imitating: repos verified on disk, build commands that were checked, and the false
+> positives their domain generates.
 
 ### Step 3 — Build the halt-loop prompt (file-referenced pattern)
 
@@ -181,6 +205,9 @@ Build the per-invocation driver file:
 
 1. Read `prompts/implementation-prompt.md` and substitute static placeholders:
    - `{PLAN_SLUG}`, `{PLAN_PATH}`, `{IMPLEMENTATION_PATH}`
+   - `{SPECIALIST_DOMAIN}` and `{SPECIALIST_PATH}` — from the Step 2.5 route. When Step 2.5
+     recorded a SKIP, substitute the literal `(none — no B-NNN to route on)` for both, so the
+     driver reads as a recorded skip rather than as an unresolved placeholder.
    - Leave `{ITERATION}` for ralph-loop to substitute per iteration.
 2. Write the substituted text to `halt-loop-prompts/implement-{plan-slug}.md` (gitignored).
 
@@ -305,6 +332,9 @@ When Step 5 exits with code `1`, the skill re-invokes `ralph-loop:ralph-loop` wi
 
 1. Read `prompts/validation-fix-prompt.md` and substitute placeholders:
    - `{PLAN_SLUG}`, `{PLAN_PATH}`, `{IMPLEMENTATION_PATH}`
+   - `{SPECIALIST_DOMAIN}` and `{SPECIALIST_PATH}` — from the Step 2.5 route. When Step 2.5
+     recorded a SKIP, substitute the literal `(none — no B-NNN to route on)` for both, so the
+     driver reads as a recorded skip rather than as an unresolved placeholder.
    - `{VALIDATION_REPORT_PATH}` — markdown report from Step 5
    - `{VALIDATION_REPORT_JSON_PATH}` — write the JSON output of Step 5 to `halt-loop-prompts/validate-{slug}-report.json` and reference this path (Step 5 captures stdout to this file before Step 5.5 runs)
    - Leave `{ITERATION}` for ralph-loop to substitute per iteration.
@@ -320,7 +350,7 @@ When Step 5 exits with code `1`, the skill re-invokes `ralph-loop:ralph-loop` wi
 | Failing check class | Iteration objective |
 |---|---|
 | `npm test` | Identify failing test(s); fix production code OR (new edge case) write failing test FIRST then fix. Forbidden: skip/weaken the test. |
-| `npm run typecheck` / `tsc --noEmit` | Resolve types narrowly. Forbidden: `any`, `@ts-ignore`. Multi-file drift → consult SEPA. |
+| `npm run typecheck` / `tsc --noEmit` | Resolve types narrowly. Forbidden: `any`, `@ts-ignore`. Multi-file drift → consult the domain specialist. |
 | `npm run lint` | Fix violation; no `// eslint-disable` without inline rule-naming justification. |
 | `coverage` | Add tests for uncovered branches (AAA, behavior-not-implementation). Forbidden: lowering threshold. |
 | `wiring_triad` (pillar a/b/c with `fail > 0`) | Add functional caller / integration test / fix metric emission. Forbidden: no-op caller, hand-edited `.wiring-evidence.json`. |

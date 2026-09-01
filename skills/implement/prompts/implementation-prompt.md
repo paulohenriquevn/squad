@@ -5,19 +5,20 @@ You are mid-implementation, iteration {ITERATION}. The user invoked `/implement 
 **Plan:** `{PLAN_PATH}`
 **Implementation working contract:** `{IMPLEMENTATION_PATH}`
 **Progress file:** `.claude/records/implementations/.progress-{PLAN_SLUG}.json` (gitignored)
-**SEPA agent file:** `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa.md` (Claude Code agent definition — frontmatter `name: implement-{PLAN_SLUG}-sepa`, body = role contract + verbatim plan/ADRs/edge-cases/audits/rules)
-**SEPA paired knowledge skill:** `.claude/skills/implement-{PLAN_SLUG}-sepa-knowledge/SKILL.md` (Claude Code Skills-conformant; SEPA invokes via `Skill` tool for WebSearch refresh)
-**SEPA per-iteration logs:** `.claude/records/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{N}-{phase}.md`
+**Domain specialist:** `{SPECIALIST_PATH}` — the project's own, resolved at Step 2.5 by `scripts/route_domain.py`. Subagent type is `{SPECIALIST_DOMAIN}` (the `name:` in its frontmatter). **Nothing here generates it**; it was derived from the project's disk and carries the repos it covers, their verified build commands, their invariants and the false positives that domain produces.
+**Consultation logs:** `.claude/records/implementations/{PLAN_SLUG}/specialist-consultations/iteration-{N}-{phase}.md`
 
-## SEPA invocation discipline (READ BEFORE Step 1)
+## Specialist invocation discipline (READ BEFORE Step 1)
 
-Claude Code's agent registry is loaded at SESSION START — agent files written by `/implement` Step 2.5 mid-session may NOT be auto-discoverable by `subagent_type='implement-{PLAN_SLUG}-sepa'` until a fresh session starts. Two invocation paths are supported, in priority order:
+Claude Code's agent registry loads at SESSION START, so a project that derived its specialists mid-session will not have them registered yet. Two paths, in priority order:
 
-1. **Primary (fresh session):** `Agent(subagent_type='implement-{PLAN_SLUG}-sepa', prompt=<iteration question>, description='SEPA iter {N} {phase}')`. The agent registry resolves `name:` from the SEPA file's frontmatter. Works only if the SEPA file was written BEFORE this session started.
+1. **Primary:** `Agent(subagent_type='{SPECIALIST_DOMAIN}', prompt=<iteration question>, description='specialist {phase} — {T-ID}')`.
 
-2. **Fallback (mid-session):** `Agent(subagent_type='general-purpose', prompt='Read .claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa.md for your full role contract + plan/ADR/edge-case context. <iteration-specific question with MODE=TIGHT or MODE=VERBOSE>', description='SEPA iter {N} {phase}')`. The general-purpose agent reads the SEPA file at invocation time, so timing-of-write doesn't matter.
+2. **Fallback:** `Agent(subagent_type='general-purpose', prompt='Read {SPECIALIST_PATH} for your role, the repos you cover, their invariants and their build commands. <iteration-specific question with MODE=TIGHT or MODE=VERBOSE>', description='specialist {phase} — {T-ID}')`.
 
-If the Primary path returns "Agent type not found", silently switch to Fallback for the rest of the cycle. Both paths satisfy the SEPA-mandate of `cycle-implement.md` Step 2.5 — the SEPA agent file IS the source of truth either way.
+If the Primary path returns "Agent type not found", switch to Fallback for the rest of the cycle. The file on disk is the source of truth either way.
+
+**If Step 2.5 recorded a SKIP** (a plan with no `B-NNN`, so no `repo:` to route on), perform no consultation and say so in the iteration log rather than substituting a generic agent — with no declared domain, any specialist chosen is chosen by resemblance. Every other Step 2.5 outcome is a HALT, so a running loop has either a specialist or a recorded skip.
 
 ## Your contract for this iteration
 
@@ -25,22 +26,22 @@ If the Primary path returns "Agent type not found", silently switch to Fallback 
 
 2. **For the picked task, run the complete TDD cycle in order:**
 
-### SEPA consultation 1/3 — Before RED
+### Specialist consultation 1/3 — Before RED
 
-Before writing any test, invoke the SEPA via `Agent` tool:
+Before writing any test, invoke the specialist via `Agent` tool:
 
-- `description`: "SEPA pre-RED brief — task {T-ID}"
-- `subagent_type`: `implement-{PLAN_SLUG}-sepa` (Primary) OR `general-purpose` (Fallback — pass SEPA file path in prompt)
-- `prompt`: read `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa.md` for the role brief, then advise on task {T-ID} — recap what the plan declares for this task; surface gotchas, ADR-link expectations, files-to-edit verification, and TDD shape concerns. Return ONLY the structured advice format from the brief.
+- `description`: "specialist pre-RED — task {T-ID}"
+- `subagent_type`: `{SPECIALIST_DOMAIN}` (Primary) OR `general-purpose` (Fallback — pass `{SPECIALIST_PATH}` in the prompt)
+- `prompt`: advise on task {T-ID} — recap what the plan declares for it, then, from what you know about these repos: the gotchas this domain produces, the false positives to expect, ADR-link expectations, files-to-edit verification, and TDD shape concerns.
 
-The SEPA's response is markdown advice. Read it BEFORE writing the test. If SEPA flags `[CRITICAL]`, treat as HALT trigger unless you have explicit Unbreakable-Rule-1 (95% confidence) justification to proceed.
+The response is markdown advice. Read it BEFORE writing the test. A `[CRITICAL]` flag is a HALT trigger unless you have explicit Unbreakable-Rule-1 (95% confidence) justification to proceed.
 
-Append SEPA's response to `.claude/records/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-pre-red.md` for audit trail (NOT `.claude/agents/` — that dir holds agent definitions only per Claude Code spec; logs go under records/implementations/).
+Append the response to `.claude/records/implementations/{PLAN_SLUG}/specialist-consultations/iteration-{ITERATION}-pre-red.md` for the audit trail. Logs go under `records/`; `agents/` holds definitions only.
 
 ### RED phase (mandatory first)
 
 - Read the plan's TDD section for this task
-- Apply any non-critical SEPA suggestions from the pre-RED brief
+- Apply any non-critical suggestions from the pre-RED consultation
 - Write the failing test FIRST in the declared `.test.ts` file
 - Run `npm test -- {test-file-path}` and CONFIRM it FAILS for the expected reason
 - If the test passes BEFORE implementation, the test does not exercise the targeted behavior — HALT, revise the test
@@ -62,25 +63,25 @@ Append SEPA's response to `.claude/records/implementations/{PLAN_SLUG}/sepa-iter
 - After 3 GREEN failures, mark task BLOCKED with reason "implementation strategy not viable"
 - Update progress file: task status → `green`, log iteration outcome
 
-### SEPA consultation 2/3 — After GREEN / Before REFACTOR
+### Specialist consultation 2/3 — After GREEN / Before REFACTOR
 
-Invoke the SEPA via `Agent` tool with the staged diff:
+Invoke the specialist via `Agent` tool with the diff:
 
-- `description`: "SEPA post-GREEN brief — task {T-ID}"
-- `subagent_type`: `general-purpose`
-- `prompt`: read `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa-staff-engineer.md` for the role brief, then review the diff (captured via `git diff` against last commit). Spot SOLID/Clean Code/DRY violations, missed JSDoc cross-references, naming-convention drift, test-d completeness against ADR invariants.
+- `description`: "specialist post-GREEN — task {T-ID}"
+- `subagent_type`: `{SPECIALIST_DOMAIN}` (Primary) OR `general-purpose` (Fallback — pass `{SPECIALIST_PATH}` in the prompt)
+- `prompt`: review the diff (`git diff` against last commit). Spot SOLID/Clean Code/DRY violations, missed cross-references, naming-convention drift, and test completeness against the ADR invariants — plus anything that violates an invariant of YOUR domain specifically.
 
-Append response to `.claude/records/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-post-green.md`.
+Append response to `.claude/records/implementations/{PLAN_SLUG}/specialist-consultations/iteration-{ITERATION}-post-green.md`.
 
 ### REFACTOR phase
 
-Review the new code against quality rules from `SKILL.md § Quality rules` PLUS SEPA's post-GREEN findings:
+Review the new code against quality rules from `SKILL.md § Quality rules` PLUS the post-GREEN findings:
 
 - **SOLID:** SRP (one reason to change), OCP (composition over inheritance), LSP (subtypes substitute), ISP (role-shaped interfaces), DIP (`src/core/` ↛ `src/local|cloud/`)
 - **Clean Code:** naming conventions, function size, no dead code, no `any`, no `console.log`
 - **DRY:** rule of three for extraction; don't merge code that looks similar but represents different concepts
 - **Design Patterns:** apply established patterns when the problem matches; don't invent
-- **SEPA-flagged items:** address each `[MAJOR]` or `[MINOR]` finding (or document explicit justification to skip)
+- **Specialist-flagged items:** address each `[MAJOR]` or `[MINOR]` finding (or document explicit justification to skip)
 
 If any violation found, fix it. Tests stay green throughout. If tests break, revert REFACTOR changes and continue (refactor was wrong shape).
 
@@ -118,17 +119,19 @@ Before composing the commit message, check `.claude/rules/implement-model-routin
 
 If the rule file is **missing** OR the `commit:` entry is **absent**, fall back to inline composition on the session model (status quo, no Agent nesting). **There is no `§ Model routing` contract in `cycle-implement.md`** — this split is experimental and the fallback above is its only specified behaviour.
 
-### SEPA consultation 3/3 — Before COMMIT
+### Specialist consultation 3/3 — Before COMMIT
 
-Stage the files first (`git add` with specific paths), then invoke the SEPA:
+Stage the files first (`git add` with specific paths), then invoke the specialist:
 
-- `description`: "SEPA pre-COMMIT brief — task {T-ID}"
-- `subagent_type`: `general-purpose`
-- `prompt`: read `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa-staff-engineer.md` for the role brief, then audit the staged diff (`git diff --cached`) + draft commit message against the task's DoD checkboxes from the plan. Verify: conventional-commit format, T-id reference, Wiring summary completeness, wiring triad sanity (pillar (a) callers are FUNCTIONAL not no-op stubs).
+- `description`: "specialist pre-COMMIT — task {T-ID}"
+- `subagent_type`: `{SPECIALIST_DOMAIN}` (Primary) OR `general-purpose` (Fallback — pass `{SPECIALIST_PATH}` in the prompt)
+- `prompt`: audit the staged diff (`git diff --cached`) + draft commit message against the task's DoD checkboxes from the plan. Verify: conventional-commit format, T-id reference, Wiring summary completeness, wiring triad sanity (pillar (a) callers are FUNCTIONAL not no-op stubs). Then judge the change against your domain's blast-radius heuristics.
 
-Append response to `.claude/records/implementations/{PLAN_SLUG}/sepa-iterations/iteration-{ITERATION}-pre-commit.md`.
+Append response to `.claude/records/implementations/{PLAN_SLUG}/specialist-consultations/iteration-{ITERATION}-pre-commit.md`.
 
-If SEPA flags `[CRITICAL]` on this consultation, do NOT commit. Unstage (`git restore --staged`), address the finding, re-invoke SEPA. Repeat up to 2 retries; on third [CRITICAL] mark task BLOCKED.
+On a `[CRITICAL]` finding here, do NOT commit. Unstage (`git restore --staged`), address it, re-consult. Up to 2 retries; on a third `[CRITICAL]` mark the task BLOCKED.
+
+**Inside its domain the specialist is not overruled.** Believing it is wrong is a finding to record in the log, not a verdict to substitute.
 
 Standard commit instructions (apply whether routed or inline):
 

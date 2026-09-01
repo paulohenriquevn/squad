@@ -2,6 +2,11 @@
 
 `/review` writes `review-{slug}-{dimension}-knowledge` and discover writes
 `*-sepa-knowledge`. They are execution ARTIFACTS, not cycle phases.
+
+`*-sepa-knowledge` no longer has a producer: `/implement` stopped generating agents
+and skills on 2026-09-01. The tolerance stays for consumers that still hold one on
+disk — dropping it would orphan their files and fail the check in a repository that
+did nothing wrong.
 `patch_install.sh` already treats them that way; this validator did not, and the
 effect showed up far from the cause: every consumer that ran `/review` started
 failing `--strict` — measured on the three consumers 2026-08-03, 26 WARN and no

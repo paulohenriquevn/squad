@@ -42,6 +42,10 @@ does not start and the missing item is surfaced.
   sign-off` box ticked. `AWAITING_REVIEW` is not a pass, and no agent may tick a box.
 - The repository is on `workspace`. Never `develop`, never `main`.
 - The language toolchain is bootstrapped — a manifest the suite runners can find.
+- **The item's domain routes to a specialist that exists on disk.** `route_domain.py`
+  exit 3 (`BROKEN ROUTE`) halts the phase: the skill consults the project's specialist
+  and never stands in for one nobody wrote. A plan with no `B-NNN` has nothing to route
+  on and records a skip instead — that case is expected, not a failure.
 
 ## Steps
 

@@ -142,9 +142,16 @@ def _kit_owned_skills(ecosystem_dir: Path) -> set[str] | None:
 def _is_auto_generated(skill: str) -> bool:
     """Skills the cycles THEMSELVES write, not phases anyone maintains.
 
-    `/review` emits `review-{slug}-{dimension}-knowledge` and discover emits
-    `*-sepa-knowledge`: these are run artifacts. Demanding a cycle contract or a
-    reference in some cycle-*.md asks the output to behave like an input.
+    `/review` emits `review-{slug}-{dimension}-knowledge`: these are run artifacts.
+    Demanding a cycle contract or a reference in some cycle-*.md asks the output to
+    behave like an input.
+
+    `*-sepa-knowledge` is kept as BACKWARD COMPATIBILITY and has no producer any more.
+    `/implement` used to generate one per plan; on 2026-09-01 it stopped generating
+    agents and skills entirely and now routes to the project's own domain specialist.
+    The pattern stays because consumers still hold what was already written to their
+    disk, and dropping it would turn those files into orphans and fail the check in
+    repositories that did nothing wrong. Remove it once no consumer carries one.
 
     It lives here rather than inline in a check because the first version exempted
     only `no_orphan_skills` and left `skill_has_cycle_contract` still charging — a half

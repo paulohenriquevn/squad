@@ -9,7 +9,7 @@ Implementation tasks already produced commits on the working branch. `/implement
 **Last validation report (markdown):** `{VALIDATION_REPORT_PATH}`
 **Last validation report (JSON, captured during Step 5):** `{VALIDATION_REPORT_JSON_PATH}`
 **Progress file:** `.claude/records/implementations/.progress-{PLAN_SLUG}.json` (gitignored)
-**SEPA agent file:** `.claude/agents/implement-{PLAN_SLUG}-{DATE}/sepa.md`
+**Domain specialist:** `{SPECIALIST_PATH}` — the project's own, resolved at Step 2.5. This skill generates no agents.
 
 ## Your contract for this iteration
 
@@ -35,7 +35,7 @@ Implementation tasks already produced commits on the working branch. `/implement
 
 - Resolve types narrowly. Read `stderr_tail` for the exact line + diagnostic.
 - **Forbidden:** `any`, `unknown as X`, `@ts-ignore`, `@ts-expect-error` without justifying inline comment naming the diagnostic code.
-- If the type drift requires changes across more than 1 file, halt this iteration and consult SEPA (per `implementation-prompt.md § SEPA invocation discipline`) before continuing.
+- If the type drift requires changes across more than 1 file, halt this iteration and consult the domain specialist (per `implementation-prompt.md § Specialist invocation discipline`) before continuing.
 
 ### `npm run lint` FAIL
 
