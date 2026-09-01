@@ -25,6 +25,24 @@ Dated execution records — audits, reviews, implementations, releases,
 acceptance runs, SOP run records, progress checkpoints — stay in
 `records/`, unchanged.
 
+# What this decision does NOT govern
+
+**A document that ships to consumers stays in `rules/`, whatever shape it has.**
+`install.sh` copies `rules/` into every consumer's `.claude/`; it creates
+`wiki/` and copies nothing into it, because a bundle describes ONE project's
+knowledge and installing the kit's own would be shipping a stranger's facts —
+the same argument that keeps the kit from shipping domain specialists.
+
+So the category a document belongs to (decision, reference, procedure) is not
+what decides where it lives. **Who reads it is.** A rule every consumer's agents
+must obey is kit machinery even when it is shaped like a decision; this bundle
+holds knowledge about the kit that consumers do not need.
+
+Recorded because the wrong criterion was applied once, on 2026-08-31, and would
+have moved four rules out of `rules/` — including `records-location.md`, which
+tells every consumer where its own trail lives. Three of the four would have
+vanished from eight projects to satisfy a taxonomy.
+
 # Context
 
 `records/` had grown to 15 directories under one convention, holding two

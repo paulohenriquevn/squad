@@ -14,11 +14,14 @@ generated:
   at: 2026-08-27
 status: stable
 stale_after: 2027-02-23
+# Derived from two runs performed on 2026-08-27. Their run records were kept
+# under `records/sop-runs/`, which this repository no longer carries in its
+# index — so the derivation is asserted here and cannot be followed to the
+# evidence. Stated rather than quietly dropped: a `sources` entry pointing at a
+# file nobody can open is worse than none, because it looks like provenance.
 sources:
-  - id: run-1
-    resource: ../../records/sop-runs/port-fix-between-kits-2026-08-27.md
-  - id: run-2
-    resource: ../../records/sop-runs/port-fix-between-kits-2026-08-27-sop.md
+  - id: split
+    resource: ../decisions/where-knowledge-lives.md
 
 # Kit-specific keys, kept so `check_sop_structure.py` keeps reading this file.
 # OKF preserves unknown keys rather than rejecting them, which is what lets one
