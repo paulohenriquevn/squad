@@ -29,7 +29,7 @@ CYCLE = """# Cycle: X
 ```
 /pipeline B-014 B-022
      ↓ schedules items
-/to-plan {slug}
+/plan-write {slug}
      ↓
 /implement
 ```
@@ -44,7 +44,7 @@ def test_a_single_word_skill_that_exists_is_found() -> None:
 
 def test_kebab_and_listed_names_still_work() -> None:
     found = _extract_cycle_phases(CYCLE, skills_root=ROOT / "skills")
-    assert {"to-plan", "implement"} <= found
+    assert {"plan-write", "implement"} <= found
 
 
 def test_a_single_word_that_is_not_a_skill_is_not_claimed(tmp_path: Path) -> None:

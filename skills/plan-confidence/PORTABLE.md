@@ -4,7 +4,7 @@ This skill works in **any project** that uses Claude Code. Copy-paste-able with 
 
 ## What you get
 
-- `/to-plan` — generates implementation plans (requires plan-confidence integration)
+- `/plan-write` — generates implementation plans (requires plan-confidence integration)
 - `/plan-confidence {slug}` — scores a plan structurally (M2, $0, deterministic)
 - `/plan-improve {slug}` — iteratively improves a plan's score (ralph-loop style)
 - Optional: `make check-plan-confidence` — CI gate

@@ -14,7 +14,7 @@ Analyze a measurement plan and ask one question: **what could make this measurem
 
 That is the shift from the ancestor. It asked what the *research* might miss — a corner unstudied, a reference project unread. Missing information is a gap you notice. A measurement that runs cleanly and produces a confident wrong answer is not: it looks exactly like a measurement that worked, and everything downstream treats it as measured fact.
 
-Sibling of `/edge-case-plan` — same philosophy, same output format, different scope: risks of the **measurement**, not of the implementation.
+Sibling of `/plan-edge-cases` — same philosophy, same output format, different scope: risks of the **measurement**, not of the implementation.
 
 ## Cycle contract
 

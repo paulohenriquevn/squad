@@ -72,7 +72,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _SHARED_UNDERSTANDING = (
-    Path(__file__).resolve().parents[2] / "shared-understanding" / "scripts"
+    Path(__file__).resolve().parents[2] / "plan-alignment" / "scripts"
 )
 if str(_SHARED_UNDERSTANDING) not in sys.path:
     sys.path.insert(0, str(_SHARED_UNDERSTANDING))
@@ -204,7 +204,7 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
                     "brief exists for its slug — this may be a legitimate ad-hoc "
                     "fix, or committed work that skipped intake to skip this gate. "
                     "No check separates those; a human decides. Run "
-                    "/shared-understanding if it came from the registry."),
+                    "/plan-alignment if it came from the registry."),
             soft_floor=SOFT_FLOOR)
 
     if not brief.exists():
@@ -212,7 +212,7 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
             applies=True, verdict="MISSING",
             reason=(f"plan implements {cited} and no alignment brief exists at "
                     f"{brief}. The alignment never happened, so the item is not "
-                    f"built. Run /shared-understanding {cited}."
+                    f"built. Run /plan-alignment {cited}."
                     if cited else
                     f"an alignment brief was expected at {brief} and is absent."),
             hard_cap=HARD_CAP, brief_path=str(brief))
@@ -225,7 +225,7 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
             applies=True, verdict="UNREADABLE",
             reason=(f"the alignment brief at {brief} is unreadable ({exc.__class__.__name__}). "
                     f"Not measured is not approved — fix the brief and re-run "
-                    f"/shared-understanding."),
+                    f"/plan-alignment."),
             hard_cap=HARD_CAP, brief_path=str(brief))
 
     ratio = round(report.machine_ratio, 4)
@@ -248,7 +248,7 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
             applies=True, verdict="BLOCKED",
             reason=(f"alignment scores {ratio:.0%}, below the 90% threshold. "
                     f"Close these first: {gaps}. "
-                    f"Return to /shared-understanding and re-score after each pass."),
+                    f"Return to /plan-alignment and re-score after each pass."),
             hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
 
     if not report.reviewer_signed_off:

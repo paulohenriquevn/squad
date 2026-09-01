@@ -22,7 +22,7 @@ Single entry-point for [`cycle-review`](../../rules/cycle-review.md). The most r
 
 ## Cycle contract
 
-This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md). The cycle rule is the **source of truth** for: pre-conditions, hard gates (BLOCKER never merges; NEEDS_DEEPER returns to /to-plan for re-scoping), soft gates, stop conditions, anti-patterns (never approve unresolved BLOCKER, never fabricate findings, never auto-merge), rollback (review-report only — never code).
+This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md). The cycle rule is the **source of truth** for: pre-conditions, hard gates (BLOCKER never merges; NEEDS_DEEPER returns to /plan-write for re-scoping), soft gates, stop conditions, anti-patterns (never approve unresolved BLOCKER, never fabricate findings, never auto-merge), rollback (review-report only — never code).
 
 **Read `cycle-review.md` before invoking this skill.** This SKILL.md retains phase-specific detail (domain detection, agent generation, consolidation rubric).
 

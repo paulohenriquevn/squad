@@ -86,7 +86,7 @@ flowchart TD
   own item and mark this one blocked on them. → the queue works the causes; see
   `rules/autonomy-envelope.md`.
 - The plan turns out to be wrong once code meets reality → stop and return to
-  `/to-plan`. → never widen an item that is already executing; the excess becomes
+  `/plan-write`. → never widen an item that is already executing; the excess becomes
   new items, linked.
 - Context runs out mid-loop → **not** a valid halt reason. The halt-loop exists to
   span context boundaries; let it restart. → nobody.

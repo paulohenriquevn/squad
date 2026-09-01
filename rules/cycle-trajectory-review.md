@@ -76,9 +76,9 @@ Six modules, each producing quantitative evidence. Modules run in order A1→A6.
 | Token | Score range | Meaning | Feedback action |
 |---|---|---|---|
 | `ON_TRACK` | 90-100 | All hypotheses validated. Architecture + performance meet targets. | Archive report as baseline. Next milestone proceeds normally. |
-| `ON_TRACK_WITH_RISKS` | 70-89 | Mostly validated. Risks identified with mitigation paths. | Inject risk mitigation tasks into next `/to-plan`. Schedule follow-up `/trajectory-review` after next release. |
-| `COURSE_CORRECTION_NEEDED` | 40-69 | Multiple falsified hypotheses OR significant performance gaps. Correctable. | Run `/to-plan` for corrective tasks before next feature work. Then `/implement` corrections. Re-run `/trajectory-review` after correction release. |
-| `FUNDAMENTAL_RETHINK` | 0-39 | Evidence contradicts core design assumptions. | Run `/discover-plan` for alternatives + `/to-plan` for redesign. Write ADR documenting failure evidence. |
+| `ON_TRACK_WITH_RISKS` | 70-89 | Mostly validated. Risks identified with mitigation paths. | Inject risk mitigation tasks into next `/plan-write`. Schedule follow-up `/trajectory-review` after next release. |
+| `COURSE_CORRECTION_NEEDED` | 40-69 | Multiple falsified hypotheses OR significant performance gaps. Correctable. | Run `/plan-write` for corrective tasks before next feature work. Then `/implement` corrections. Re-run `/trajectory-review` after correction release. |
+| `FUNDAMENTAL_RETHINK` | 0-39 | Evidence contradicts core design assumptions. | Run `/discover-plan` for alternatives + `/plan-write` for redesign. Write ADR documenting failure evidence. |
 | `INVALID` | — | Config missing, golden rule missing, or structural failure. | Stop. Surface to human. |
 
 ### Why this vocabulary
@@ -89,9 +89,9 @@ Six modules, each producing quantitative evidence. Modules run in order A1→A6.
 
 ### Feedback loop integration with cycle-roadmap
 
-When running inside the `cycle-maintenance` super-loop, the verdict shapes milestone M\<N+1\>: `ON_TRACK` / `ON_TRACK_WITH_RISKS` → roadmap selects the next milestone (risk mitigations injected into `/to-plan` for the latter); `COURSE_CORRECTION_NEEDED` → roadmap inserts a corrective milestone before the next feature milestone; `FUNDAMENTAL_RETHINK` → roadmap pauses for a human redesign/pivot decision.
+When running inside the `cycle-maintenance` super-loop, the verdict shapes milestone M\<N+1\>: `ON_TRACK` / `ON_TRACK_WITH_RISKS` → roadmap selects the next milestone (risk mitigations injected into `/plan-write` for the latter); `COURSE_CORRECTION_NEEDED` → roadmap inserts a corrective milestone before the next feature milestone; `FUNDAMENTAL_RETHINK` → roadmap pauses for a human redesign/pivot decision.
 
-The trajectory-review report is persisted at `records/audits/` and referenced by the next milestone's `/to-plan` as prior art (same as a cycle-discover opportunity).
+The trajectory-review report is persisted at `records/audits/` and referenced by the next milestone's `/plan-write` as prior art (same as a cycle-discover opportunity).
 
 ## Hard gates
 

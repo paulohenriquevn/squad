@@ -190,7 +190,7 @@ REJECTED and NOT_VALIDATED never satisfy this goal. Re-running /acceptance witho
 
 Reaching that verdict honestly requires ALL of the following, reported in this session for THAT milestone, each with the artifact named:
 
-1. cycle-discover — /grill-me or /discover-plan ran for it, OR the plan states why discovery was unnecessary.
+1. cycle-discover — /plan-grill or /discover-plan ran for it, OR the plan states why discovery was unnecessary.
 2. cycle-plan — records/plans/{{slug}}-plan.md exists carrying that milestone's `milestone_id` in its frontmatter, and /plan-confidence passed.
 3. cycle-implement — /implement finished and records/implementations/{{slug}}-implementation.md records every task against a real commit SHA.
 4. cycle-code-quality — /code-quality emitted a verdict with no BLOCKER left open.

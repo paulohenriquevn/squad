@@ -1,4 +1,4 @@
-"""Coverage Matrix structural check for /to-plan plans (M2 deterministic).
+"""Coverage Matrix structural check for /plan-write plans (M2 deterministic).
 
 Parses a plan .md file, extracts the `## Coverage Matrix` section,
 counts mapped gaps and detects orphan task references in the body.

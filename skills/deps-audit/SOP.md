@@ -36,9 +36,9 @@ will read it.
 ## Prerequisites
 
 - A plan exists at `records/plans/{slug}-plan.md`.
-- `/edge-case-plan` has run — this is phase 3 and that is phase 2.
+- `/plan-edge-cases` has run — this is phase 3 and that is phase 2.
 - The plan has a `## Dependencies` section. Without one the verdict is
-  `INVALID_PLAN_DEPS` and the fix is structural, in `/to-plan`.
+  `INVALID_PLAN_DEPS` and the fix is structural, in `/plan-write`.
 - The scanners the project needs are installed (`osv-scanner`, `npm audit`,
   `pip-audit`, `cargo audit`, `govulncheck`, as the manifests require).
 
@@ -61,7 +61,7 @@ will read it.
 | `PASS_WITH_CAVEATS` | 89 | Proceed; the caveats are logged and travel with the plan |
 | `FAIL_MEDIUM` | 70 | Bump the version, or add an allowlist entry **with an ADR**. Caps the plan at 89 |
 | `FAIL_INSECURE` | 49 | Stop. HIGH or CRITICAL CVE on a declared dependency — bump or allowlist with an ADR. Caps the plan at 49, which is `INVALID` |
-| `INVALID_PLAN_DEPS` | 49 | Return to `/to-plan`: the `## Dependencies` section is missing, a version is unset, or the Rule 9 column is empty |
+| `INVALID_PLAN_DEPS` | 49 | Return to `/plan-write`: the `## Dependencies` section is missing, a version is unset, or the Rule 9 column is empty |
 | `INVALID` | 0 | Stop the cycle and surface it. The golden rule or the allowlist is unreadable, so no verdict means anything |
 
 ```mermaid

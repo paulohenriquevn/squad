@@ -12,7 +12,7 @@ Without this file, `/deps-audit` emits `INVALID` with flag `deps_audit_golden_ru
 | `PASS_WITH_CAVEATS` | 89 | Outdated MAJOR without ADR OR LOW CVE. | Proceed; caveats logged. |
 | `FAIL_MEDIUM` | 70 | At least one MEDIUM CVE on a declared dep. | Loop back to plan or add allowlist entry with ADR. |
 | `FAIL_INSECURE` | 49 | HIGH or CRITICAL CVE on a declared dep (unallowlisted). | **Blocks `/plan-confidence`** — requires version bump or allowlist + ADR. |
-| `INVALID_PLAN_DEPS` | 49 | Plan `## Dependencies` section missing / version unset / Rule 9 column empty. | Loop back to `/to-plan` to fix structurally. |
+| `INVALID_PLAN_DEPS` | 49 | Plan `## Dependencies` section missing / version unset / Rule 9 column empty. | Loop back to `/plan-write` to fix structurally. |
 | `INVALID` | 0 | This golden rule missing OR allowlist malformed. | Stop the cycle; surface to human. |
 
 ## § 2 — Severity rubric (LOCKED)
@@ -85,7 +85,7 @@ Per `cycle-rule-schema.md § Golden Rule Change Protocol`. No rule-specific devi
 ## Cross-references
 
 - Schema: `cycle-rule-schema.md`
-- Cycle: `cycle-plan.md` (wired between `/edge-case-plan` and `/plan-confidence`)
+- Cycle: `cycle-plan.md` (wired between `/plan-edge-cases` and `/plan-confidence`)
 - Skill: `skills/deps-audit/SKILL.md`
 - Allowlist: `deps-audit-allowlist.txt`
 - Unbreakable Rule 9 (CLAUDE.md § 9) — do not reinvent CVE scanners

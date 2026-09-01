@@ -33,21 +33,21 @@ Produce `records/plans/{slug}-plan.md`: what will be built, in what order, with 
 ## Prerequisites
 
 - The item is `ALIGNED`. A plan written before alignment is capped at 49 and cannot enter `/implement`.
-- The grill output, if `/grill-me` ran, is on disk where Step 0 will find it.
+- The grill output, if `/plan-grill` ran, is on disk where Step 0 will find it.
 
 ## Steps
 
-1. Run `/to-plan "{one-sentence description}"`.
+1. Run `/plan-write "{one-sentence description}"`.
 2. Let Step 0 auto-discover the rules and any `*-patterns` skill before writing.
 3. Map every Goal claim to at least one task. A coverage matrix with a gap is a promise nothing delivers.
 4. Name the public callers of every symbol the plan modifies. Stop and ask when they cannot be identified — half the bugs `/review` catches start with "we did not know X also called this".
-5. Chain onward: `/edge-case-plan` → `/deps-audit` → `/plan-confidence`.
+5. Chain onward: `/plan-edge-cases` → `/deps-audit` → `/plan-confidence`.
 
 ## Decisions
 
 | State | What it means | What follows |
 |---|---|---|
-| Plan written, coverage matrix complete | Every Goal claim has a task | `/edge-case-plan` |
+| Plan written, coverage matrix complete | Every Goal claim has a task | `/plan-edge-cases` |
 | A Goal claim maps to no task | The plan promises what it does not build | Fix before proceeding |
 | Callers of a modified symbol unknown | The blast radius is unmeasured | Stop and ask; do not guess |
 
@@ -58,7 +58,7 @@ flowchart TD
     A -->|no| C[Stop — the plan would be capped at 49 anyway]
     A -->|yes| B
     B -->|no| D[Close the coverage gap]
-    B -->|yes| E[Proceed to /edge-case-plan]
+    B -->|yes| E[Proceed to /plan-edge-cases]
 ```
 
 ## Escalation

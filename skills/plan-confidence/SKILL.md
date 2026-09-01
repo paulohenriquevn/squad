@@ -2,7 +2,7 @@
 name: plan-confidence
 version: 0.1.0
 requires: [deps-audit]
-description: Score a plan produced by /to-plan for structural quality (M2 deterministic check). Sibling of /discover-confidence with a plan-shape rubric. Use after /edge-case-plan, before /implement.
+description: Score a plan produced by /plan-write for structural quality (M2 deterministic check). Sibling of /discover-confidence with a plan-shape rubric. Use after /plan-edge-cases, before /implement.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "{plan-slug}"
@@ -10,7 +10,7 @@ argument-hint: "{plan-slug}"
 
 # Plan-Confidence — M2 Structural Scoring
 
-Scores a plan produced by `/to-plan` against the M2 structural rubric. Deterministic. Zero LLM calls. Latency < 5s. Cost $0.
+Scores a plan produced by `/plan-write` against the M2 structural rubric. Deterministic. Zero LLM calls. Latency < 5s. Cost $0.
 
 **Rubric:** `templates/rubric-v1.md` (this skill's templates dir)
 **Hard caps:** see `.claude/rules/plan-confidence-golden-rule.md`
@@ -18,7 +18,7 @@ Scores a plan produced by `/to-plan` against the M2 structural rubric. Determini
 
 ## When to Trigger
 
-- After running `/edge-case-plan {slug}` and incorporating MUST FIX items, BEFORE implementation.
+- After running `/plan-edge-cases {slug}` and incorporating MUST FIX items, BEFORE implementation.
 - User explicitly invokes `/plan-confidence {plan-slug}`.
 
 ## Cycle contract
@@ -94,7 +94,7 @@ trigger `verdict == INVALID`.
 |---|---|---|
 | 90-100 | SHIPPABLE | Implement with confidence |
 | 70-89 | SHIPPABLE_WITH_CAVEATS | List caveats, review manually |
-| 50-69 | NON_SHIPPABLE | Re-run `/to-plan` + `/edge-case-plan` |
+| 50-69 | NON_SHIPPABLE | Re-run `/plan-write` + `/plan-edge-cases` |
 | 0-49 | INVALID | Structural defect — re-plan |
 
 ## Output Format
@@ -120,7 +120,7 @@ The skill produces a JSON object with these top-level keys (see `templates/score
 
 ## How to Read Edge Case Outputs
 
-If a previous `/edge-case-plan {slug}` produced MUST FIX items, the current plan should have incorporated them BEFORE invoking `/plan-confidence`. The skill does NOT cross-reference edge-case reports automatically in M2 — that's an M4 feature (jury layer).
+If a previous `/plan-edge-cases {slug}` produced MUST FIX items, the current plan should have incorporated them BEFORE invoking `/plan-confidence`. The skill does NOT cross-reference edge-case reports automatically in M2 — that's an M4 feature (jury layer).
 
 ## Related
 

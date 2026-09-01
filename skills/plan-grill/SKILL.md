@@ -1,18 +1,18 @@
 ---
-name: grill-me
+name: plan-grill
 version: 0.1.0
 requires: []
-description: Interview the user one question at a time until shared understanding on a plan/feature/design is reached. Walks the decision tree branch by branch, resolving dependencies between decisions. For every question, explores the codebase first (Grep/Read) if the answer is there; only asks the user when the answer requires intent/preference/business context. Persists the conversation to records/grills/{slug}-grill.md as input for /to-plan. Use BEFORE /to-plan when the feature is non-trivial AND the user has not yet articulated requirements precisely, or when the user explicitly says "grill me". SKIP for trivial fixes or when /to-plan can already synthesize from context.
+description: Interview the user one question at a time until shared understanding on a plan/feature/design is reached. Walks the decision tree branch by branch, resolving dependencies between decisions. For every question, explores the codebase first (Grep/Read) if the answer is there; only asks the user when the answer requires intent/preference/business context. Persists the conversation to records/grills/{slug}-grill.md as input for /plan-write. Use BEFORE /plan-write when the feature is non-trivial AND the user has not yet articulated requirements precisely, or when the user explicitly says "grill me". SKIP for trivial fixes or when /plan-write can already synthesize from context.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "{topic-slug}"
 ---
 
-# `/grill-me` — Interview-driven discovery
+# `/plan-grill` — Interview-driven discovery
 
 Interview the user about a plan/design until shared understanding is reached. Walks the decision tree branch by branch.
 
-Operationalizes the 95%-confidence principle (`~/.claude/CLAUDE.md § 1`): instead of producing a plan from vague requirements and iterating with `/edge-case-plan` + `/plan-improve` later, surface and resolve the requirements gaps **before** any plan is written.
+Operationalizes the 95%-confidence principle (`~/.claude/CLAUDE.md § 1`): instead of producing a plan from vague requirements and iterating with `/plan-edge-cases` + `/plan-improve` later, surface and resolve the requirements gaps **before** any plan is written.
 
 ## Cycle contract
 
@@ -114,7 +114,7 @@ verdict: READY_FOR_PLAN | NEEDS_SPLIT | NEEDS_DISCOVERY
 ### Q2: ...
 ```
 
-This file is the input contract for `/to-plan`. The plan's `## Context` section MUST cite specific grill decisions it implements.
+This file is the input contract for `/plan-write`. The plan's `## Context` section MUST cite specific grill decisions it implements.
 
 ### Step 7 — Recommend next step
 
@@ -122,9 +122,9 @@ Based on the verdict:
 
 | Verdict | Recommended next |
 |---|---|
-| `READY_FOR_PLAN` | `/to-plan {topic-slug}` — the plan reads `records/grills/{slug}-grill.md` as primary context |
-| `NEEDS_SPLIT` | Suggest 2-3 sub-topics; re-run `/grill-me {sub-topic}` on each |
-| `NEEDS_DISCOVERY` | `/discover-plan {topic-slug}` first; return to `/grill-me` after the opportunity lands |
+| `READY_FOR_PLAN` | `/plan-write {topic-slug}` — the plan reads `records/grills/{slug}-grill.md` as primary context |
+| `NEEDS_SPLIT` | Suggest 2-3 sub-topics; re-run `/plan-grill {sub-topic}` on each |
+| `NEEDS_DISCOVERY` | `/discover-plan {topic-slug}` first; return to `/plan-grill` after the opportunity lands |
 
 ## Anti-patterns
 
@@ -137,13 +137,13 @@ Based on the verdict:
 7. **Grilling when the user already wrote a spec.** Read the spec; ask only about gaps.
 
 ## Does Not Own
-- It does NOT write the plan — that's `/to-plan` reading the grill output.
+- It does NOT write the plan — that's `/plan-write` reading the grill output.
 - It does NOT explore prior art — that's `/discover-plan` (recommended when verdict is `NEEDS_DISCOVERY`).
-- It does NOT validate technical feasibility — that's `/edge-case-plan` + `/plan-confidence` later in the chain.
+- It does NOT validate technical feasibility — that's `/plan-edge-cases` + `/plan-confidence` later in the chain.
 
 ## Related
 
 - Phase 0 of: [`cycle-plan.md`](../../rules/cycle-plan.md) — optional, for vague topics
-- Downstream: `/to-plan` reads `records/grills/{slug}-grill.md` when present
+- Downstream: `/plan-write` reads `records/grills/{slug}-grill.md` when present
 - Sibling when discovery is needed: `/discover-plan`
 - 95%-confidence principle: `~/.claude/CLAUDE.md § 1`

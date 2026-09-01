@@ -38,7 +38,7 @@ Reach ~90% shared understanding of ONE item before any of it is built, and produ
 
 ## Steps
 
-1. Run `/shared-understanding {slug}`.
+1. Run `/plan-alignment {slug}`.
 2. Grill before drawing. A diagram of a vague brief looks rigorous and is not.
 3. Produce the brief and the animated walkthrough in the same pass.
 4. Generate the reviewer checklist UNTICKED. Never tick a box.
@@ -48,7 +48,7 @@ Reach ~90% shared understanding of ONE item before any of it is built, and produ
 
 | Verdict | What it means | What follows |
 |---|---|---|
-| `ALIGNED` | Machine score ≥ 90% AND every reviewer box ticked | `/to-plan` |
+| `ALIGNED` | Machine score ≥ 90% AND every reviewer box ticked | `/plan-write` |
 | `AWAITING_REVIEW` | Structure is done; nobody has signed off | Ask for the review. This is not a pass |
 | `BLOCKED` | Below the machine threshold | Close the listed gaps and re-score. The item is NOT built |
 | `NEEDS_SPLIT` | The brief describes two subsystems | Split into items that each align on their own |
@@ -60,7 +60,7 @@ flowchart TD
     A -->|no| C[BLOCKED — the item is not built]
     A -->|yes| B
     B -->|no| D[AWAITING_REVIEW — ask for it; this is not a pass]
-    B -->|yes| E[ALIGNED — proceed to /to-plan]
+    B -->|yes| E[ALIGNED — proceed to /plan-write]
 ```
 
 ## Escalation

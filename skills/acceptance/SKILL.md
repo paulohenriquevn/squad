@@ -82,7 +82,7 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scrip
     --plan records/plans/{slug}-plan.md --commit
 ```
 
-On `REJECTED`: the checkbox stays `[ ]`, the release is already public, so open the hotfix path immediately and re-enter at `/to-plan`. On `NOT_VALIDATED`: the checkbox stays `[ ]`; state precisely what could not be exercised and why.
+On `REJECTED`: the checkbox stays `[ ]`, the release is already public, so open the hotfix path immediately and re-enter at `/plan-write`. On `NOT_VALIDATED`: the checkbox stays `[ ]`; state precisely what could not be exercised and why.
 
 ### 7. Report
 
@@ -107,7 +107,7 @@ State the target address, the verdict token, per-criterion status, evidence path
 
 ## Does Not Own
 - Does not run unit, integration or e2e suites — `cycle-code-quality` and the plan's Integration Validation phase own those.
-- Does not deploy, roll back, or hotfix. It reports and blocks; the fix re-enters at `/to-plan`.
+- Does not deploy, roll back, or hotfix. It reports and blocks; the fix re-enters at `/plan-write`.
 - Does not decide production-readiness across releases — that is `/honesty-gate`, which can consume these records as evidence.
 - Does not invent acceptance criteria.
 - Does not ask a human to sign off. By design in this project: the gate rests on computed evidence instead. The trade-off is stated plainly in `cycle-acceptance § Hard gates`.

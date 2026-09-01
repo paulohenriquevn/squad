@@ -60,7 +60,7 @@ Questions, Prior Art) and the per-task `#### Why this step` subsection — all c
 the rubric above — come from a SOTA template upgrade (RFC tradition + C4/ARC42 baseline
 view + ReAct planning). They ship as **soft** caps with sunset **2026-09-07** (then
 promotable to a hard cap at 70 via ADR) so plans in flight migrate gradually rather than
-being invalidated overnight; authors migrate by re-running `/to-plan` against the updated
+being invalidated overnight; authors migrate by re-running `/plan-write` against the updated
 template. Full migration rationale lives in the CHANGELOG + the upgrade ADR.
 
 The concurrency-tests and failure-scenarios caps are **conditional** — they fire only

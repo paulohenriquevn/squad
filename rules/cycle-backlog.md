@@ -32,7 +32,7 @@ Do NOT trigger BACKLOG for:
      ↓ (produces: B-NNN in BACKLOG.md · status: raw · evidence: none-yet)
 /discover-plan B-NNN --mode {review|live-test|bug|evolve}
      ↓ (measures against OUR code/runtime)
-     ├── evidence found  → status: triaged · evidence: <pointer>  → /to-plan
+     ├── evidence found  → status: triaged · evidence: <pointer>  → /plan-write
      └── nothing found   → status: killed   · kill_reason: <why>  → chain ends here
 ```
 
@@ -90,7 +90,7 @@ dod:
 ### Status transitions
 
 ```
-raw ──/discover-execute measures──┬──> triaged ──/to-plan──> planned ──/release──> shipped
+raw ──/discover-execute measures──┬──> triaged ──/plan-write──> planned ──/release──> shipped
                                   │        ▲                    │
                                   │        └──── send-back ─────┘
                                   └──> killed (kill_reason mandatory)

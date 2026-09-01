@@ -14,7 +14,12 @@ which is written in two places that had no way to disagree out loud:
   - `rules/cycle-<name>.md § Chain` — the order, as a diagram
   - each `SKILL.md § Cycle contract` — the number, as a sentence
 
-Measured 2026-08-31. `/deps-audit` was inserted into `cycle-plan` on 2026-08-26
+Measured 2026-08-31, and quoted below under the names those skills carried that
+day: `/to-plan` and `/edge-case-plan` were renamed to `/plan-write` and
+`/plan-edge-cases` later the same day, and rewriting the quotes would describe a
+defect in files that did not exist yet.
+
+`/deps-audit` was inserted into `cycle-plan` on 2026-08-26
 (the extension is recorded in `deps-audit-golden-rule.md`), and only its own file
 was renumbered. The result:
 
@@ -60,7 +65,7 @@ would be caught by reading the Chain block — which is what a person does and t
 does not replace.
 
 The third clause is deliberately narrow. `requires` cannot simply be compared to
-the chain: `grill-me` is optional so `shared-understanding` requires nothing,
+the chain: `plan-grill` is optional so `plan-alignment` requires nothing,
 `idea-to-release` requires sixteen skills because it orchestrates them, and a
 chain may hand off to a skill that belongs to another cycle and whose `requires`
 speaks about that one. Checked naively, five of the six mismatches in this kit are

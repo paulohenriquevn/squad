@@ -52,13 +52,13 @@ without a milestone ends at `RELEASED`, and that is correct.
 
 **B. The measurement holds — build the fix:**
 ```
-/to-plan {slug} → /edge-case-plan → /deps-audit → /plan-confidence
+/plan-write {slug} → /plan-edge-cases → /deps-audit → /plan-confidence
               → /implement → /code-quality → /review → /release → /acceptance
 ```
 
 **C. Requirements are vague — get grilled first:**
 ```
-/grill-me {topic}  →  then flow B
+/plan-grill {topic}  →  then flow B
 ```
 
 **D. Autonomous, end to end:**
@@ -97,9 +97,9 @@ Runs against **our** code and runtime. Prior art can never be evidence here.
 
 | Command | Purpose |
 |---|---|
-| `/grill-me {topic}` | Interview one question at a time until requirements are shared |
-| `/to-plan {slug}` | Turn the context into an implementation plan |
-| `/edge-case-plan {slug}` | Unforeseen edge cases in the plan |
+| `/plan-grill {topic}` | Interview one question at a time until requirements are shared |
+| `/plan-write {slug}` | Turn the context into an implementation plan |
+| `/plan-edge-cases {slug}` | Unforeseen edge cases in the plan |
 | `/deps-audit [slug]` | CVE + outdated audit across npm/pip/cargo/go. Never edits manifests |
 | `/plan-confidence {slug}` | Score the plan (must pass before `/implement`) |
 | `/plan-improve {slug}` | Auto-improve a plan below `SHIPPABLE_WITH_CAVEATS` |

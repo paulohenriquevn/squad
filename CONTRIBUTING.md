@@ -23,7 +23,7 @@ the short checklist.
 1. **Pick the lightest entry point** that fits the work — see
    [How it works](README.md#how-it-works).
    A one-line fix needs no cycle; a multi-branch feature should run
-   `/to-plan → /implement → /code-quality → /review`.
+   `/plan-write → /implement → /code-quality → /review`.
 2. **Test-first (TDD).** Write the failing test before the code. Every bug fix
    starts with a regression test that fails, then passes.
 3. **Keep the suite green.** Run both:

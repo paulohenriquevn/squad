@@ -349,7 +349,7 @@ Print JSON summary to stdout:
   "report_path": "records/audits/theo-graphdb-analysis-2026-06-16.md",
   "baseline_updated": true,
   "feedback_action": "inject_risk_tasks",
-  "feedback_detail": "Risk mitigation tasks to inject into next /to-plan: [list]",
+  "feedback_detail": "Risk mitigation tasks to inject into next /plan-write: [list]",
   "schema_version": "0.1.0"
 }
 ```
@@ -377,12 +377,12 @@ The verdict is not advisory — it prescribes a concrete next step in the cycle 
 | Verdict | `feedback_action` | What Claude Code does next |
 |---|---|---|
 | `ON_TRACK` | `proceed` | Report archived as baseline. Next milestone proceeds normally via `cycle-maintenance`. |
-| `ON_TRACK_WITH_RISKS` | `inject_risk_tasks` | Report includes specific risk mitigation tasks. These MUST be injected as requirements in the next `/to-plan`. The report is cited as prior art (same as a cycle-discover opportunity). |
-| `COURSE_CORRECTION_NEEDED` | `corrective_plan` | Before any new feature work: run `/to-plan` scoped to the falsified hypotheses. The trajectory-review report becomes the "problem statement" input. Then `/implement` the corrections, re-release, re-run `/trajectory-review`. |
-| `FUNDAMENTAL_RETHINK` | `redesign` | Run `/discover-plan` to investigate alternatives. Write ADR documenting empirical evidence of why the current approach fails. Then `/to-plan` for the redesigned architecture. `cycle-maintenance` pauses until the human decides. |
+| `ON_TRACK_WITH_RISKS` | `inject_risk_tasks` | Report includes specific risk mitigation tasks. These MUST be injected as requirements in the next `/plan-write`. The report is cited as prior art (same as a cycle-discover opportunity). |
+| `COURSE_CORRECTION_NEEDED` | `corrective_plan` | Before any new feature work: run `/plan-write` scoped to the falsified hypotheses. The trajectory-review report becomes the "problem statement" input. Then `/implement` the corrections, re-release, re-run `/trajectory-review`. |
+| `FUNDAMENTAL_RETHINK` | `redesign` | Run `/discover-plan` to investigate alternatives. Write ADR documenting empirical evidence of why the current approach fails. Then `/plan-write` for the redesigned architecture. `cycle-maintenance` pauses until the human decides. |
 | `INVALID` | `stop` | Surface to human. Fix config/golden-rule before proceeding. |
 
-The trajectory-review report at `records/audits/` is referenced by the next iteration's `/to-plan` as **prior art** — the same way cycle-discover opportunities feed planning.
+The trajectory-review report at `records/audits/` is referenced by the next iteration's `/plan-write` as **prior art** — the same way cycle-discover opportunities feed planning.
 
 ---
 

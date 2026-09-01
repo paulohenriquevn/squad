@@ -670,7 +670,7 @@ fi
 # the plan repo's own honesty-gate, not part of the template.
 echo "==> Scaffolding records/ subdirs (semantic structure)"
 KB_DIRS=(
-  "plans"                       # /to-plan outputs
+  "plans"                       # /plan-write outputs
   "implementations"             # /implement halt-loop logs
   "reviews"                     # /review reports
   "audits"                      # /code-quality + /deps-audit reports
@@ -678,7 +678,7 @@ KB_DIRS=(
   "acceptance/evidence"         # screenshots, console/network dumps, transcripts
   "maintenance-runs"            # per-item macro-loop audit trail
   "backlog"                     # /backlog-item intake logs
-  "grills"                      # /grill-me Q&A logs
+  "grills"                      # /plan-grill Q&A logs
   "honesty-gate"                     # /honesty-gate anchor manifest
   "honesty-gate/evidence"            # /honesty-gate evidence files
   "judge-codex"                 # orthogonal LLM jury outputs (optional plugin)
@@ -828,5 +828,5 @@ Next steps for the target project:
   5. Open the project in Claude Code. The settings.json wires hooks; skills/
      and commands/ are auto-discovered.
 
-  6. First run: /to-plan "{one-sentence feature}"  OR  /grill-me {topic}
+  6. First run: /plan-write "{one-sentence feature}"  OR  /plan-grill {topic}
 EOF

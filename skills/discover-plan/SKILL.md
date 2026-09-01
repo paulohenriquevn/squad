@@ -12,7 +12,7 @@ argument-hint: "B-NNN [--mode {review|live-test|bug|evolve}]"
 
 Turns a `raw` backlog item — a hypothesis nobody has measured — into a **measurement plan**: what will be measured, where, with which tool, and what result would kill the hypothesis. The output is the input for `/discover-execute`.
 
-Sibling of `/to-plan` — same backbone, different output. `to-plan` produces implementation plans; this produces measurement plans whose deliverable is an **opportunity** (or a killed item).
+Sibling of `/plan-write` — same backbone, different output. `plan-write` produces implementation plans; this produces measurement plans whose deliverable is an **opportunity** (or a killed item).
 
 The ancestor of this skill planned an investigation into *other people's* code. This one plans an investigation into ours. That is the whole difference, and it changes every step below.
 

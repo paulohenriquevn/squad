@@ -1,14 +1,14 @@
 ---
-name: shared-understanding
+name: plan-alignment
 version: 0.3.0
 requires: []
-description: Bring one backlog item to ~90% shared understanding BEFORE any of it is built, by interrogating it and drawing it in the same pass. Produces an alignment brief (problem, functional and non-functional requirements with stable ids, four scenario classes, system design, interaction model, traceable acceptance criteria, out-of-scope, closed questions) plus an animated HTML walkthrough of every flow, then scores the result on seventeen criteria and hands a human an unticked review checklist. Below 90% machine score the item MUST NOT be implemented; without the reviewer's sign-off it is not aligned either. Use after DISCOVER has evidence and before /to-plan writes the plan, on any item where two people could read the description and picture different systems — which is most of them.
+description: Bring one backlog item to ~90% shared understanding BEFORE any of it is built, by interrogating it and drawing it in the same pass. Produces an alignment brief (problem, functional and non-functional requirements with stable ids, four scenario classes, system design, interaction model, traceable acceptance criteria, out-of-scope, closed questions) plus an animated HTML walkthrough of every flow, then scores the result on seventeen criteria and hands a human an unticked review checklist. Below 90% machine score the item MUST NOT be implemented; without the reviewer's sign-off it is not aligned either. Use after DISCOVER has evidence and before /plan-write writes the plan, on any item where two people could read the description and picture different systems — which is most of them.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 argument-hint: "{item-slug or B-NNN}"
 ---
 
-# `/shared-understanding` — Grill it and draw it, until both sides see the same system
+# `/plan-alignment` — Grill it and draw it, until both sides see the same system
 
 Two people read the same paragraph and picture different systems. The disagreement
 is invisible in prose — everyone nods — and surfaces at review, after the work.
@@ -31,18 +31,18 @@ produces a diagram of a vague brief, or a precise brief nobody can picture.
 
 This skill is **Phase 0.5** of [`cycle-plan`](../../rules/cycle-plan.md), and unlike
 Phase 0 it is not optional for anything arriving from `BACKLOG.md`. It runs after
-`/discover-plan` has evidence the item is real, and before `/to-plan` commits to how
+`/discover-plan` has evidence the item is real, and before `/plan-write` commits to how
 it gets built. **Read `cycle-plan.md § Chain` before invoking.**
 
 ```
 /discover-plan B-NNN        → evidence found, status: triaged
      ↓
-/shared-understanding B-NNN → records/alignment/{slug}-alignment.md + {slug}-walkthrough.html
-     ├── ALIGNED         → /to-plan
+/plan-alignment B-NNN → records/alignment/{slug}-alignment.md + {slug}-walkthrough.html
+     ├── ALIGNED         → /plan-write
      ├── AWAITING_REVIEW → structure is done; a human has not signed off yet
      └── BLOCKED         → the item is NOT built; close the gaps and re-score
      ↓
-/to-plan → /plan-confidence → /implement
+/plan-write → /plan-confidence → /implement
 ```
 
 The threshold, and the rule that the agent may never tick the reviewer's boxes,
@@ -78,7 +78,7 @@ be split first. Each piece gets its own alignment.
 
 Read the `B-NNN` block and whatever `cycle-discover` attached to it. Then read the
 code the item touches. Every question you can answer from the repository is a
-question you must not spend on the human — the same codebase-first rule `/grill-me`
+question you must not spend on the human — the same codebase-first rule `/plan-grill`
 enforces, for the same reason.
 
 ## Step 2 — Draft the brief from what you already know
@@ -190,7 +190,7 @@ For each answer:
 
 ```bash
 # records/alignment/{slug}-walkthrough.yaml
-python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/shared-understanding/scripts/build_walkthrough.py" \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/build_walkthrough.py" \
     records/alignment/{slug}-walkthrough.yaml \
     -o records/alignment/{slug}-walkthrough.html
 ```
@@ -247,7 +247,7 @@ without surfacing a single disagreement.
 ## Step 6 — Score, then hand the judgement to a human
 
 ```bash
-python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/shared-understanding/scripts/score_alignment.py" \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/score_alignment.py" \
     records/alignment/{slug}-alignment.md
 ```
 
@@ -291,7 +291,7 @@ before/after that only counts improvements hides it.
 
 | Verdict | Meaning | Downstream action |
 |---|---|---|
-| `ALIGNED` | Machine score ≥ 90% **and** every reviewer box ticked | `/to-plan {slug}` |
+| `ALIGNED` | Machine score ≥ 90% **and** every reviewer box ticked | `/plan-write {slug}` |
 | `AWAITING_REVIEW` | Structure is complete; no human has signed off | Ask for the review. Do not proceed |
 | `BLOCKED` | Machine score < 90% | The item is **not** built. Close the listed gaps and re-run |
 | `NEEDS_SPLIT` | The item describes independent subsystems, or cannot converge in five questions | Split; each piece aligns on its own |
@@ -340,7 +340,7 @@ question is what this skill exists to close.
     work, not to decorate it.
 
 ## Does Not Own
-- It does NOT write the plan — that is `/to-plan`, which reads this brief.
+- It does NOT write the plan — that is `/plan-write`, which reads this brief.
 - It does NOT decide whether the item is worth doing — that is `cycle-discover`,
   upstream; an item arriving here already has evidence.
 - It does NOT judge whether the content is right. It measures whether the content
@@ -377,6 +377,6 @@ generated page requires nothing.
 
 - Gate: [`rules/alignment-threshold.md`](../../rules/alignment-threshold.md)
 - Upstream: `/discover-plan` — supplies the evidence the brief opens with
-- Downstream: `/to-plan` — the plan's `## Context` cites this brief
-- Sibling interview skill: `/grill-me` — used alone when no drawing is warranted
+- Downstream: `/plan-write` — the plan's `## Context` cites this brief
+- Sibling interview skill: `/plan-grill` — used alone when no drawing is warranted
 - 95%-confidence principle: `~/.claude/CLAUDE.md § 1`

@@ -62,19 +62,19 @@ release → acceptance`. Skills below are in the order they run.
 | `discover-edge-cases` | Finds what could make the measurement **lie** — a stale target, a proxy read as the thing, an environment fault read as a defect | After `/discover-plan`, before scoring | Widen the investigation. An edge case lives inside what was planned, and speculation about future states is not one |
 | `discover-plan-confidence` | Scores the measurement plan, deterministically, in under 5s | Before running the measurement | Add a `--skip-checks` / `--force` flag, or lower a hard cap. The golden rule makes the absence of a bypass a constructor invariant |
 | `discover-execute` | Runs the measurement and produces an opportunity — **or emits `ITEM_KILLED`** | The plan scored well enough to run | Write to a governed repo. Discover produces a document; an opportunity carrying the patch has skipped every gate after it. Never cite a pointer nobody opened |
-| `discover-confidence` | Scores the opportunity | After the measurement, before `/to-plan` | Treat the score as a judgement about the finding's importance — it scores the ARGUMENT's structure |
+| `discover-confidence` | Scores the opportunity | After the measurement, before `/plan-write` | Treat the score as a judgement about the finding's importance — it scores the ARGUMENT's structure |
 | `discover-improve` | Lifts a low score by improving how the finding is **argued** | `/discover-confidence` returned `NEEDS_REVISION` | Rewrite the Evidence corner. It is the record of a measurement, and editing it falsifies findings downstream cannot detect |
 
 ### PLAN — deciding how
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
-| `grill-me` (phase 0, optional) | Interviews one question per turn until requirements are precise, codebase-first | The topic is non-trivial AND requirements are still vague | Ask what Grep would answer, or stack multiple questions in one turn |
-| `shared-understanding` (phase 0.5) | Alignment brief + animated walkthrough + a reviewer checklist, scored on 17 criteria | **Unbreakable for anything from `BACKLOG.md`** — below 90% the item is not built | Tick your own review boxes — that is the single failure the sign-off exists to prevent. Never draw before grilling: a diagram of a vague brief looks rigorous |
-| `to-plan` (phase 1) | Turns context into a plan at `records/plans/{slug}-plan.md` | The item is `ALIGNED` | Invoke it before alignment. `check_alignment_gate.py` hard-caps an unaligned plan at 49, so the plan cannot enter `/implement` anyway |
-| `edge-case-plan` (phase 2) | Annotates the plan with MUST-FIX edge cases | Right after `/to-plan` | Over-engineer. "An `ErrorRecoveryManager` for this edge case" → no; `if input.is_empty()` solves it. Speculation about future API changes is out of scope |
+| `plan-grill` (phase 0, optional) | Interviews one question per turn until requirements are precise, codebase-first | The topic is non-trivial AND requirements are still vague | Ask what Grep would answer, or stack multiple questions in one turn |
+| `plan-alignment` (phase 0.5) | Alignment brief + animated walkthrough + a reviewer checklist, scored on 17 criteria | **Unbreakable for anything from `BACKLOG.md`** — below 90% the item is not built | Tick your own review boxes — that is the single failure the sign-off exists to prevent. Never draw before grilling: a diagram of a vague brief looks rigorous |
+| `plan-write` (phase 1) | Turns context into a plan at `records/plans/{slug}-plan.md` | The item is `ALIGNED` | Invoke it before alignment. `check_alignment_gate.py` hard-caps an unaligned plan at 49, so the plan cannot enter `/implement` anyway |
+| `plan-edge-cases` (phase 2) | Annotates the plan with MUST-FIX edge cases | Right after `/plan-write` | Over-engineer. "An `ErrorRecoveryManager` for this edge case" → no; `if input.is_empty()` solves it. Speculation about future API changes is out of scope |
 | `deps-audit` (phase 3) | CVE + version audit across npm, Python, Rust, Go | Before any code is written | Edit manifests — read-only, diffs are suggestions. Never audit `package.json` without the lockfile: transitive vulnerabilities live there |
-| `plan-confidence` (phase 4) | Scores the plan; `INVALID` returns it to `/to-plan` | After `/deps-audit` | Add a bypass flag. Its golden rule makes the absence of `--skip-checks` a constructor invariant, and `check_deps_audit.py` caps the score when the audit is missing |
+| `plan-confidence` (phase 4) | Scores the plan; `INVALID` returns it to `/plan-write` | After `/deps-audit` | Add a bypass flag. Its golden rule makes the absence of `--skip-checks` a constructor invariant, and `check_deps_audit.py` caps the score when the audit is missing |
 | `plan-improve` (phase 5, conditional) | Iterates the plan up to its target verdict | `/plan-confidence` scored below `SHIPPABLE_WITH_CAVEATS` | Expect it to touch anything outside the plan file, or to commit. It does neither, by contract |
 
 ### IMPLEMENT → REVIEW → RELEASE → ACCEPTANCE
@@ -83,7 +83,7 @@ release → acceptance`. Skills below are in the order they run.
 |---|---|---|---|
 | `implement` | Executes the plan through a TDD halt-loop with the wiring triad and mechanised gates | The plan is at least `SHIPPABLE_WITH_CAVEATS`, on `workspace` | Mark a task done because tests pass without the wiring triad — that is the difference between code that compiles and code that runs. Never skip REFACTOR "to save time" |
 | `code-quality` | Audits for dead symbols, fabricated APIs, cross-package orphans and weak tests | After the implement halt-loop closes | Edit source — read-only by contract. Never add `--force` / `--skip-checks` / `--accept-caveats` |
-| `review` | The most rigorous gate: quality gates, line-by-line plan vs implementation, integration depth, edge-case coverage, by parallel agents in isolated worktrees | `/implement` validation passed | Approve unreviewed scope, fabricate a finding, or merge. It reviews; it never merges, and `NEEDS_DEEPER` sends the work back to `/to-plan` for re-scoping |
+| `review` | The most rigorous gate: quality gates, line-by-line plan vs implementation, integration depth, edge-case coverage, by parallel agents in isolated worktrees | `/implement` validation passed | Approve unreviewed scope, fabricate a finding, or merge. It reviews; it never merges, and `NEEDS_DEEPER` sends the work back to `/plan-write` for re-scoping |
 | `release` | Semver tag derived from the CHANGELOG, `develop → main` PR with rendered notes | `/review` returned `READY_TO_MERGE` | Auto-merge the PR — never, under any circumstance. Never cut a release that does not trace to a `READY_TO_MERGE` audit |
 | `acceptance` | Exercises the **released** deliverable against the milestone's Definition-of-done; the only gate that flips a ROADMAP checkbox | After the release exists | Re-run the test suite and call it acceptance — that passed three phases ago. Never mark a criterion `passed` by reading code: reading is not exercising |
 
@@ -95,7 +95,7 @@ These invoke the chain rather than sitting in it.
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
-| `idea-to-release` | Chains DISCOVER → … → ACCEPTANCE for one item, deriving depth from a deterministic confidence score | One item should go end to end without a person invoking nine commands | Fabricate a confidence signal — the script is deterministic and its output is the truth. Never skip `/edge-case-plan`, `/deps-audit` or `/code-quality` on "high confidence": those gates are cheap and catch what unit tests miss |
+| `idea-to-release` | Chains DISCOVER → … → ACCEPTANCE for one item, deriving depth from a deterministic confidence score | One item should go end to end without a person invoking nine commands | Fabricate a confidence signal — the script is deterministic and its output is the truth. Never skip `/plan-edge-cases`, `/deps-audit` or `/code-quality` on "high confidence": those gates are cheap and catch what unit tests miss |
 | `pipeline` | Runs MANY items through the chain at once — a lane per item, a worktree each, batch/task consumption per stage | Several triaged items are waiting and the phases would otherwise idle between them | Expect it to relax a gate. Every gate the chain declares still applies per item, including the alignment gate, which the pipeline **cannot** satisfy |
 | `session-goal` | Binds a session to one or more milestones so it cannot stop before acceptance is green | A session should not end early | Stuff a persona into the goal — it is a Stop-hook condition read by a small model. Never write a vague condition: "M2 is done" lets the evaluator accept an assertion |
 
@@ -138,7 +138,8 @@ The index it replaces went stale twice, and the second time is in the CHANGELOG:
 four of those omitted skills had **zero mentions in any entry point**, so they
 existed on disk, passed every validator and were unreachable by any discovery
 path. When this map was written the same file claimed 36 skills against 34 on
-disk and listed 29, with `shared-understanding` — the alignment gate that is
+disk and listed 29, with `shared-understanding` — since renamed `plan-alignment`,
+and the alignment gate that is
 unbreakable for every backlog item — among the missing.
 
 An index that drifts is worse than none: it is read as complete.

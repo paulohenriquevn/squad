@@ -1,4 +1,4 @@
-"""Patterns-skill consumption gate for `/to-plan` plans.
+"""Patterns-skill consumption gate for `/plan-write` plans.
 
 If a `*-patterns` skill is APPLICABLE to a plan (its frontmatter `description:`
 shares a keyword with the plan's title/Goal) it must be CONSUMED — named in the

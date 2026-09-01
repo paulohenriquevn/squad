@@ -72,7 +72,7 @@ def _brief(tmp_path: Path, body: str, slug: str = "b-014-trace-p95") -> Path:
 def _complete_brief() -> str:
     """A brief that clears the machine threshold, built from the scorer's fixture."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]
-                          / "skills/shared-understanding/tests"))
+                          / "skills/plan-alignment/tests"))
     from test_score_alignment import COMPLETE_V2
     return COMPLETE_V2
 
@@ -174,7 +174,7 @@ def test_the_reason_always_names_what_to_do_next(tmp_path: Path) -> None:
                   lambda: _brief(tmp_path, "# Alignment: B-014\n\n## Problem\nslow\n")):
         setup()
         report = check_alignment_gate(_plan(tmp_path))
-        assert "shared-understanding" in report.reason or "sign-off" in report.reason, \
+        assert "plan-alignment" in report.reason or "sign-off" in report.reason, \
             report.reason
 
 

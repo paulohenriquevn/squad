@@ -7,7 +7,8 @@ and notes that four of the omitted skills had **zero mentions in any entry point
 on disk, passing every validator, unreachable by any discovery path.
 
 When `map.md` replaced it on 2026-08-31 the same file claimed 36 against 34 on
-disk and listed 29. Among the five missing was `shared-understanding`, the
+disk and listed 29. Among the five missing was `shared-understanding` (renamed
+`plan-alignment` later the same day), the
 alignment gate that is unbreakable for every item coming from `BACKLOG.md`.
 
 Twice is a pattern. These tests are the third time not happening.
@@ -50,11 +51,11 @@ def test_agreement_produces_nothing(tmp_path: Path) -> None:
 def test_a_skill_on_disk_with_no_row_is_reported(tmp_path: Path) -> None:
     """The measured defect: five skills on disk and absent from the index, one of
     them a gate the pipeline cannot legally skip."""
-    _kit(tmp_path, ["alpha", "shared-understanding"], ["alpha"], count=2)
+    _kit(tmp_path, ["alpha", "plan-alignment"], ["alpha"], count=2)
 
     findings = check(tmp_path)
 
-    assert any("missing_from_map" in f and "shared-understanding" in f for f in findings)
+    assert any("missing_from_map" in f and "plan-alignment" in f for f in findings)
 
 
 def test_a_row_for_a_deleted_skill_is_reported(tmp_path: Path) -> None:

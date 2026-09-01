@@ -103,8 +103,8 @@ The **Blast radius** corner is the one whose shape depends most on the project. 
 
 | Verdict | Meaning | Downstream |
 |---|---|---|
-| `SHIPPABLE` | Opportunity is measured, complete, and its pointers resolve | `/to-plan` |
-| `SHIPPABLE_WITH_CAVEATS` | Complete, with stated open questions | `/to-plan`, caveats carried into the plan |
+| `SHIPPABLE` | Opportunity is measured, complete, and its pointers resolve | `/plan-write` |
+| `SHIPPABLE_WITH_CAVEATS` | Complete, with stated open questions | `/plan-write`, caveats carried into the plan |
 | `NEEDS_REVISION` | Recoverable via `/discover-improve` | loop |
 | `INVALID` | Structural — a fabricated pointer, or an empty corner | back to `/discover-plan` |
 | `ITEM_KILLED` | Measured honestly; the hypothesis did not hold | Item → `killed` + `kill_reason`. **Chain ends. This is success.** |

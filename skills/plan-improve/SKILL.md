@@ -2,7 +2,7 @@
 name: plan-improve
 version: 0.1.0
 requires: [plan-confidence]
-description: Iteratively improve a /to-plan plan's M2 score by applying deterministic fixes + LLM-driven semantic fixes via a ralph-loop-style autonomous iteration. Use after /plan-confidence returns a verdict below SHIPPABLE_WITH_CAVEATS (NON_SHIPPABLE or INVALID) and you want the system to attempt auto-improvement before human intervention.
+description: Iteratively improve a /plan-write plan's M2 score by applying deterministic fixes + LLM-driven semantic fixes via a ralph-loop-style autonomous iteration. Use after /plan-confidence returns a verdict below SHIPPABLE_WITH_CAVEATS (NON_SHIPPABLE or INVALID) and you want the system to attempt auto-improvement before human intervention.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
 argument-hint: "{plan-slug} [--target SHIPPABLE_WITH_CAVEATS]"
@@ -92,7 +92,7 @@ After the loop terminates AND sanity check passes:
 HALT and surface BLOCKED report to the human (do NOT emit `<promise>PLAN_IMPROVED</promise>`) when ANY of the following structural blockers fires:
 
 1. No-improvement detected for 2 consecutive iterations (same score, same `reasons`).
-2. Hard cap fires that cannot be auto-resolved (INVALID at 49 — `/plan-improve` does NOT fix hard caps per `cycle-plan.md § Verdicts`). Recommend `/to-plan` rewrite.
+2. Hard cap fires that cannot be auto-resolved (INVALID at 49 — `/plan-improve` does NOT fix hard caps per `cycle-plan.md § Verdicts`). Recommend `/plan-write` rewrite.
 3. ADR alternative cannot be credibly proposed by Phase B → leave TODO comment, surface for human.
 4. Coverage Matrix gap cannot be deferred via existing ADR justification → leave TODO comment.
 5. Post-promise sanity check (Step 6) detects score-disk drift → re-invoke OR HALT after 2 retries.

@@ -47,7 +47,7 @@ Salvage a finding whose case is weak, without touching the measurement that prod
 
 | Result | What it means | What follows |
 |---|---|---|
-| Target verdict reached | The case is now made | Proceed to `/to-plan` |
+| Target verdict reached | The case is now made | Proceed to `/plan-write` |
 | No improvement across two passes | The weakness is in the measurement, not the writing | Re-measure or drop the item |
 | A cap requires changing a claim | Out of scope for this skill | Stop; the claim is the measurement's |
 

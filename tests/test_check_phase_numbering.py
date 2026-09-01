@@ -79,7 +79,7 @@ def test_zero_based_numbering_is_not_a_finding(tmp_path: Path) -> None:
 
 
 def test_a_half_step_is_not_a_finding(tmp_path: Path) -> None:
-    """`shared-understanding` is phase 0.5 precisely so nothing downstream had to
+    """`plan-alignment` is phase 0.5 precisely so nothing downstream had to
     move. Demanding a dense integer sequence would punish the careful choice."""
     _kit(tmp_path, ["a", "b", "c"], {"a": "0", "b": "0.5", "c": "1"})
 
@@ -149,7 +149,8 @@ def test_the_kit_itself_is_coherent() -> None:
 
 def test_requires_reaching_past_the_predecessor_is_a_finding(tmp_path: Path) -> None:
     """The measured shape: `/deps-audit` was inserted between `edge-case-plan` and
-    `plan-confidence`, and `plan-confidence` kept requiring what came before it."""
+    `plan-confidence`, and `plan-confidence` kept requiring what came before it.
+    Both names are as they were that day; the first was renamed hours later."""
     _kit(tmp_path, ["a", "inserted", "c"], {"a": "1", "inserted": "2", "c": "3"},
          requires={"inserted": ["a"], "c": ["a"]})
 
@@ -167,7 +168,7 @@ def test_requiring_the_actual_predecessor_is_clean(tmp_path: Path) -> None:
 
 
 def test_an_empty_requires_is_never_a_finding(tmp_path: Path) -> None:
-    """`shared-understanding` requires nothing because `grill-me` is optional.
+    """`plan-alignment` requires nothing because `plan-grill` is optional.
     Reading an empty list as a skipped phase would fire on correct work."""
     _kit(tmp_path, ["a", "b"], {"a": "1", "b": "2"}, requires={"b": []})
 

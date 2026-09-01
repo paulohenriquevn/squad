@@ -2,7 +2,7 @@
 name: implement
 version: 0.1.0
 requires: [plan-confidence]
-description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + mechanized gates (test suite, coverage floor, TDD shape, /code-quality verdict) + a REFACTOR-phase design review against SOLID, Clean Code and DRY — judgement, not a detector. Single entry-point for cycle-implement. Use after /to-plan chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `workspace`.
+description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + mechanized gates (test suite, coverage floor, TDD shape, /code-quality verdict) + a REFACTOR-phase design review against SOLID, Clean Code and DRY — judgement, not a detector. Single entry-point for cycle-implement. Use after /plan-write chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `workspace`.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill Agent
 argument-hint: "{plan-slug}"
@@ -88,7 +88,7 @@ Common patterns to recognize and use deliberately:
 - **Pipeline** — sequential stages with explicit fallbacks
 - **State machine / Reconciler** — declarative desired-state convergence
 
-When a `*-patterns` skill (authored on demand via the standalone `/skill-creator`) is present in `skills/` AND its trigger phrases match the current task, the halt-loop SHOULD consult it as documented in `to-plan/SKILL.md § Step 0`. Override of a pattern requires an ADR.
+When a `*-patterns` skill (authored on demand via the standalone `/skill-creator`) is present in `skills/` AND its trigger phrases match the current task, the halt-loop SHOULD consult it as documented in `plan-write/SKILL.md § Step 0`. Override of a pattern requires an ADR.
 
 ### WIRING (HARD GATE — the main rule)
 

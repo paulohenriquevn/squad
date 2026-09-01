@@ -28,7 +28,7 @@ last_reviewed: 2026-08-31
 
 ## Purpose
 
-Decide whether a finding is argued solidly enough to feed `/to-plan`, deterministically and without an LLM call.
+Decide whether a finding is argued solidly enough to feed `/plan-write`, deterministically and without an LLM call.
 
 ## Prerequisites
 
@@ -46,8 +46,8 @@ Decide whether a finding is argued solidly enough to feed `/to-plan`, determinis
 
 | Verdict | Band | What follows |
 |---|---|---|
-| `SHIPPABLE` | ≥ 90 | Feed `/to-plan` |
-| `SHIPPABLE_WITH_CAVEATS` | ≥ 70 | Feed `/to-plan`; caveats travel |
+| `SHIPPABLE` | ≥ 90 | Feed `/plan-write` |
+| `SHIPPABLE_WITH_CAVEATS` | ≥ 70 | Feed `/plan-write`; caveats travel |
 | `NEEDS_REVISION` | ≥ 50 | `/discover-improve` |
 | `NON_SHIPPABLE` | < 50 | The finding is not argued; re-measure or drop |
 | `INVALID` | hard cap | A fabricated pointer or an empty corner |
@@ -58,7 +58,7 @@ flowchart TD
     B{Verdict at or above the caveat band?}
     A -->|no| C[INVALID — fabricated evidence]
     A -->|yes| B
-    B -->|yes| D[Proceed to /to-plan]
+    B -->|yes| D[Proceed to /plan-write]
     B -->|no| E[/discover-improve, argument only]
 ```
 

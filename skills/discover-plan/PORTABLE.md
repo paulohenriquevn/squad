@@ -116,4 +116,4 @@ grep -n 'MIN_QUESTIONS' .claude/skills/discover-plan-confidence/scripts/check_pl
 - Upstream: `rules/cycle-backlog.md` — supplies the `B-NNN` hypothesis
 - Next: `/discover-edge-cases` → `/discover-plan-confidence` → `/discover-execute`
 - Template: `templates/measurement-plan-template.md`
-- Sibling: `/to-plan` (same architecture, different output — implementation plans)
+- Sibling: `/plan-write` (same architecture, different output — implementation plans)

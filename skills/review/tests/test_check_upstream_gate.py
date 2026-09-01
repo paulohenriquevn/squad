@@ -130,7 +130,7 @@ def test_fail_soft_with_an_adr_per_cap_passes(tmp_path: Path) -> None:
 
 
 def test_the_plans_adr_section_counts_as_the_dismissal(tmp_path: Path) -> None:
-    """The ADR may live in the plan — that is where `/to-plan` writes them."""
+    """The ADR may live in the plan — that is where `/plan-write` writes them."""
     _audit(tmp_path, "demo", "FAIL_SOFT", soft="soft_cap_orphan_export_python")
     plans = tmp_path / "records" / "plans"
     plans.mkdir(parents=True)

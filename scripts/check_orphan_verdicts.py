@@ -15,7 +15,7 @@ verdict table were fully specified and never implemented.
 
 The same defect had just been fixed twice by hand, which is what prompted the sweep:
 
-  `NEEDS_SPLIT`  in shared-understanding's verdict table, in zero code paths. An item
+  `NEEDS_SPLIT`  in plan-alignment's verdict table, in zero code paths. An item
                  describing two subsystems came out as a generic `BLOCKED`, sending the
                  reviewer to close gaps that no rewrite can close.
   `planned`      in the backlog contract's status transitions, in zero items across

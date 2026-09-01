@@ -50,13 +50,13 @@ Decide whether a plan may enter `/implement`, deterministically, and record why 
 | `SHIPPABLE_WITH_CAVEATS` | ≥ 70 | Ready for `/implement`; caveats travel |
 | `NEEDS_REVISION` | ≥ 50 | `/plan-improve`, then re-score |
 | `NON_SHIPPABLE` | < 50 | Rewrite |
-| `INVALID` | hard cap | Back to `/to-plan`. A missing alignment brief and an insecure dependency both land here |
+| `INVALID` | hard cap | Back to `/plan-write`. A missing alignment brief and an insecure dependency both land here |
 
 ```mermaid
 flowchart TD
     A{Any hard cap fired?}
     B{Score at or above 70?}
-    A -->|yes| C[INVALID — back to /to-plan]
+    A -->|yes| C[INVALID — back to /plan-write]
     A -->|no| B
     B -->|yes| D[Ready for /implement]
     B -->|no| E[/plan-improve, then re-score]
@@ -69,5 +69,5 @@ flowchart TD
 
 ## Competencies
 
-- Reading which phase fed each cap. A capped score is usually a message from `/deps-audit` or `/shared-understanding`, not a judgement about the prose.
+- Reading which phase fed each cap. A capped score is usually a message from `/deps-audit` or `/plan-alignment`, not a judgement about the prose.
 - Knowing that no bypass flag exists here and that adding one is forbidden by the golden rule's constructor invariant.

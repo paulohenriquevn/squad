@@ -37,7 +37,7 @@ Reach precise requirements for a non-trivial topic, by asking a person only what
 
 ## Steps
 
-1. Run `/grill-me {slug}`.
+1. Run `/plan-grill {slug}`.
 2. Search the codebase for every candidate question before asking it. Ask only what needs intent, preference or business context.
 3. Ask one question per turn. A turn with `Q1` and `Q2` gets one answer and loses the other.
 4. Offer a recommended answer with each question, and stay under fifteen questions.
@@ -47,7 +47,7 @@ Reach precise requirements for a non-trivial topic, by asking a person only what
 
 | Verdict | What it means | What follows |
 |---|---|---|
-| `READY_FOR_PLAN` | The requirements are precise | `/shared-understanding` |
+| `READY_FOR_PLAN` | The requirements are precise | `/plan-alignment` |
 | `NEEDS_SPLIT` | The topic is two topics | Split and re-grill each |
 | `NEEDS_DISCOVERY` | The question is empirical, not a preference | Back to `/discover-plan` |
 

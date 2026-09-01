@@ -11,9 +11,9 @@ Without this file, `/trajectory-review` emits `INVALID` with flag `analysis_gold
 | Verdict | Score range | Meaning | Downstream action |
 |---|---|---|---|
 | `ON_TRACK` | 90-100 | All hypotheses validated with quantitative evidence. Architecture, performance, and scalability meet or exceed targets. | Archive report as baseline. Next milestone proceeds normally via `cycle-maintenance`. |
-| `ON_TRACK_WITH_RISKS` | 70-89 | Most hypotheses validated. Identified risks have concrete mitigation paths. No fundamental design flaw. | Next milestone proceeds, but risk mitigation tasks are injected into the next `/to-plan`. Follow-up `/trajectory-review` scheduled after next release. |
-| `COURSE_CORRECTION_NEEDED` | 40-69 | Multiple hypotheses falsified OR performance significantly below targets. Correctable without architectural rewrite. | Before next feature work, run `/to-plan` for corrective tasks. Then `/implement` corrections and re-release. Re-run `/trajectory-review` to validate corrections. |
-| `FUNDAMENTAL_RETHINK` | 0-39 | Architecture cannot meet stated goals based on empirical evidence. Benchmark data contradicts core design assumptions. | Run `/discover-plan` for alternatives + `/to-plan` for redesign. Write ADR documenting failure evidence. `cycle-maintenance` pauses until human decides. |
+| `ON_TRACK_WITH_RISKS` | 70-89 | Most hypotheses validated. Identified risks have concrete mitigation paths. No fundamental design flaw. | Next milestone proceeds, but risk mitigation tasks are injected into the next `/plan-write`. Follow-up `/trajectory-review` scheduled after next release. |
+| `COURSE_CORRECTION_NEEDED` | 40-69 | Multiple hypotheses falsified OR performance significantly below targets. Correctable without architectural rewrite. | Before next feature work, run `/plan-write` for corrective tasks. Then `/implement` corrections and re-release. Re-run `/trajectory-review` to validate corrections. |
+| `FUNDAMENTAL_RETHINK` | 0-39 | Architecture cannot meet stated goals based on empirical evidence. Benchmark data contradicts core design assumptions. | Run `/discover-plan` for alternatives + `/plan-write` for redesign. Write ADR documenting failure evidence. `cycle-maintenance` pauses until human decides. |
 | `INVALID` | — | Structural integrity broken (config missing, no benchmarks exist for engine profile, golden rule corrupted). | Stop. Surface to human. |
 
 A new verdict token requires an ADR + an entry in `cycle-rule-schema.md` § Canonical verdict vocabularies.

@@ -292,7 +292,7 @@ Merge commit: {sha}
 Tag: v{NEXT_VERSION}
 GitHub release: {url}
 
-Next: nothing — release is published. Start a new cycle with /to-plan or /grill-me.
+Next: nothing — release is published. Start a new cycle with /plan-write or /plan-grill.
 ```
 
 ## Hard gates (cannot proceed)

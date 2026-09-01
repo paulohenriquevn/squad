@@ -26,10 +26,10 @@ def _read(skill_name: str) -> str:
 
 
 def test_to_plan_instructs_reading_rules() -> None:
-    content = _read("to-plan")
+    content = _read("plan-write")
     text_lower = content.lower()
     assert _mentions_rules(content), (
-        "to-plan/SKILL.md does not cite the rules directory in any portable form "
+        "plan-write/SKILL.md does not cite the rules directory in any portable form "
         "(.claude/rules/, .claude/rules, or rules/)"
     )
     assert "step 0" in text_lower
@@ -44,7 +44,7 @@ def test_to_plan_instructs_reading_rules() -> None:
 
 
 def test_to_plan_mentions_defaults_fallback() -> None:
-    content = _read("to-plan")
+    content = _read("plan-write")
     text_lower = content.lower()
     assert "defaults" in text_lower
     # Fallback mentions: solid, dry, clean code, loc

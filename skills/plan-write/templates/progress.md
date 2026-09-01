@@ -44,7 +44,7 @@ This file is NOT a replacement for per-phase deterministic audits:
 | Artifact | When written | What it captures |
 |---|---|---|
 | `progress.md` (THIS file) | Continuously, after each Edit/Write | Granular action log: what was done + immediate observations |
-| `.claude/records/reviews/{slug}-edge-cases-plan-{date}.md` | Once per `/edge-case-plan` invocation | Classified edges (MUST FIX / SHOULD TEST / DOCUMENT) |
+| `.claude/records/reviews/{slug}-edge-cases-plan-{date}.md` | Once per `/plan-edge-cases` invocation | Classified edges (MUST FIX / SHOULD TEST / DOCUMENT) |
 | `.claude/records/reviews/{slug}-plan-confidence-{date}.md.json` | Once per `/plan-confidence` invocation | Structural M2 score + verdict |
 | `.claude/records/audits/{slug}-deps-audit-{date}.md` | Once per `/deps-audit` invocation | CVE/Rule 9 verdict |
 | `.claude/records/reviews/{slug}-implement-validate-{date}.md` | Once per `/implement` final validation | Test/typecheck/lint/coverage gates |

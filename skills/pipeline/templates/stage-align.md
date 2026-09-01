@@ -11,9 +11,9 @@ You are the ALIGNMENT phase for `{ITEM}`, in your own worktree over `{REPO}`.
 
 ## What you do
 
-Draft an alignment brief in the shape `skills/shared-understanding/SKILL.md`
+Draft an alignment brief in the shape `skills/plan-alignment/SKILL.md`
 defines, then score your own draft against the seventeen criteria in
-`skills/shared-understanding/scripts/score_alignment.py`.
+`skills/plan-alignment/scripts/score_alignment.py`.
 
 Report the score you would expect and the gaps that remain.
 

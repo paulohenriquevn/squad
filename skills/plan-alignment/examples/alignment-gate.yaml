@@ -10,7 +10,7 @@ title: The alignment gate
 subtitle: >-
   Four scenario classes for one gate. Watch where each packet goes — the step a
   reader gets wrong is step 3 of the primary flow, where a perfect machine score
-  does NOT open the way to /to-plan.
+  does NOT open the way to /plan-write.
 direction: LR
 
 nodes:
@@ -18,7 +18,7 @@ nodes:
   brief:    { label: Alignment brief, kind: store }
   scorer:   { label: score_alignment, kind: service }
   reviewer: { label: Reviewer,        kind: actor }
-  plan:     { label: /to-plan,        kind: external }
+  plan:     { label: /plan-write,        kind: external }
 
 flows:
   "Aligned [primary]":
@@ -41,7 +41,7 @@ flows:
       label: machine 34/34
       payload: "verdict: AWAITING_REVIEW"
       note: >-
-        100% and still not aligned. Readers expect this arrow to reach /to-plan.
+        100% and still not aligned. Readers expect this arrow to reach /plan-write.
         It does not. The number the agent controls was never the gate.
     - from: agent
       to: reviewer

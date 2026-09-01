@@ -1,8 +1,8 @@
 ---
 name: idea-to-release
 version: 0.1.0
-requires: [discover-plan, discover-edge-cases, discover-plan-confidence, discover-execute, discover-confidence, discover-improve, to-plan, edge-case-plan, deps-audit, plan-confidence, plan-improve, implement, code-quality, review, release, acceptance]
-description: End-to-end autonomous orchestrator for cycle-discover + cycle-plan + cycle-implement + cycle-code-quality + cycle-review + cycle-release + cycle-acceptance. Single entry-point chains the whole pipeline from idea to a released, accepted milestone — pausing at the one manual gate, human approval of the release PR. Default is full-pipeline; --plan-only retains the legacy discover+plan behavior. Depth (none/light/full) is derived deterministically from a confidence score against repo state — no interactive prompts. MUST-FIX items from /edge-case-plan are auto-injected into the plan before /plan-confidence re-scores. Inspired by planning-with-files v2.43.0 autonomy + composes Claude Code primitives (/plan-goal, /plan-loop) absorbed 2026-05-26.
+requires: [discover-plan, discover-edge-cases, discover-plan-confidence, discover-execute, discover-confidence, discover-improve, plan-write, plan-edge-cases, deps-audit, plan-confidence, plan-improve, implement, code-quality, review, release, acceptance]
+description: End-to-end autonomous orchestrator for cycle-discover + cycle-plan + cycle-implement + cycle-code-quality + cycle-review + cycle-release + cycle-acceptance. Single entry-point chains the whole pipeline from idea to a released, accepted milestone — pausing at the one manual gate, human approval of the release PR. Default is full-pipeline; --plan-only retains the legacy discover+plan behavior. Depth (none/light/full) is derived deterministically from a confidence score against repo state — no interactive prompts. MUST-FIX items from /plan-edge-cases are auto-injected into the plan before /plan-confidence re-scores. Inspired by planning-with-files v2.43.0 autonomy + composes Claude Code primitives (/plan-goal, /plan-loop) absorbed 2026-05-26.
 user-invocable: true
 allowed-tools: Read Write Edit Bash Glob Grep Skill
 argument-hint: "[M<N> | B-NNN | {topic-slug}] [--plan-only] [--depth=none|light|full] [--no-release] [--bump=patch|minor|major]"
@@ -15,7 +15,7 @@ End-to-end autonomous orchestration of the 6-cycle pipeline: `cycle-discover` �
 1. **Assesses confidence** deterministically against repo state (references, patterns skills, ADRs, CLAUDE.md, completed plans, user context).
 2. **Derives depth** from the confidence band (no interactive prompts — overridable via CLI flag).
 3. **Chains skills autonomously** through every cycle, gating each transition on the downstream cycle's pre-conditions.
-4. **Auto-injects MUST-FIX items** from `/edge-case-plan` into the plan before `/plan-confidence` re-scores — eliminating the manual "human absorbs MUST FIX" step.
+4. **Auto-injects MUST-FIX items** from `/plan-edge-cases` into the plan before `/plan-confidence` re-scores — eliminating the manual "human absorbs MUST FIX" step.
 5. **Pauses ONLY at the human-approval gate** of the release PR (Unbreakable Rule 4).
 
 ## When to invoke
@@ -139,8 +139,8 @@ If `/discover-confidence` after improve still < SHIPPABLE_WITH_CAVEATS → halt 
 #### Phase P — Plan (always)
 
 ```
-Skill(/to-plan {topic-slug} [--milestone M<N>])   # --milestone forwarded only in roadmap-driven mode
-Skill(/edge-case-plan {topic-slug})
+Skill(/plan-write {topic-slug} [--milestone M<N>])   # --milestone forwarded only in roadmap-driven mode
+Skill(/plan-edge-cases {topic-slug})
 # AUTO-INJECT MUST-FIX items into the plan (no AskUserQuestion):
 Bash(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/idea-to-release/scripts/inject_must_fix.py" \
        --plan records/plans/{slug}-plan.md \
@@ -188,7 +188,7 @@ Skill(/review {topic-slug})
 - review verdict = `READY_TO_MERGE` → proceed to Phase Rel (unless `--no-release`).
 - review verdict = `READY_TO_MERGE_WITH_FOLLOWUPS` → proceed to Phase Rel, and carry the registered followups into the release PR description. The verdict already proves every HIGH is owned (`consolidate_findings.py` fails closed otherwise), so re-litigating it here would only re-open a question the gate answered.
 - review verdict = `NEEDS_FIXES` → loop once back to `/implement` for targeted fixes, then re-run `/review`. After 1 loop attempt, halt with `BLOCKED`.
-- review verdict = `NEEDS_DEEPER` → halt; loop back to `/to-plan` requires fresh human decision.
+- review verdict = `NEEDS_DEEPER` → halt; loop back to `/plan-write` requires fresh human decision.
 
 #### Phase Rel — Release (full-pipeline only; SKIPPED when `--plan-only` OR `--no-release`)
 
@@ -248,7 +248,7 @@ If any phase blocked → honest report listing what blocked + recommended human 
 4. **`/discover-confidence` final verdict INVALID after improve** → halt; surface blockers; do NOT proceed to plan.
 5. **`/plan-confidence` final verdict INVALID after improve** → halt; surface gaps; do NOT deliver as "ready".
 6. **`/code-quality` returns FAIL_HARD or INVALID** → halt; do NOT proceed to `/review`. Loop back to `/implement` once; if still failing, surface to human.
-7. **`/review` returns NEEDS_DEEPER** → halt; the human re-scopes via a fresh `/to-plan` invocation.
+7. **`/review` returns NEEDS_DEEPER** → halt; the human re-scopes via a fresh `/plan-write` invocation.
 8. **Release PR auto-merge attempt** → forbidden. The human approves the release PR on GitHub. The orchestrator never invokes `gh pr merge` on the release PR.
 
 ## Soft gates (proceed with warning)
@@ -261,7 +261,7 @@ If any phase blocked → honest report listing what blocked + recommended human 
 ## Anti-patterns
 
 1. **NEVER fabricate confidence signals.** The script is deterministic; output is the truth.
-2. **NEVER skip /edge-case-plan, /deps-audit, or /code-quality even on HIGH confidence.** Those gates are cheap and catch issues unit tests miss.
+2. **NEVER skip /plan-edge-cases, /deps-audit, or /code-quality even on HIGH confidence.** Those gates are cheap and catch issues unit tests miss.
 3. **NEVER auto-commit produced plan.** Delivery is the file; user decides when to commit.
 4. **NEVER claim SHIPPABLE if plan-confidence returned WITH_CAVEATS** — honesty per Unbreakable Rule 3.
 5. **NEVER proceed past INVALID verdict** — that's an explicit fail-closed.

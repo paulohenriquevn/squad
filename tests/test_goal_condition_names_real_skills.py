@@ -1,7 +1,7 @@
 """The termination condition names commands, and nothing guaranteed they exist.
 
-`compose_goal_condition.py` embute `/grill-me`, `/discover-plan`,
-`/plan-confidence`, `/implement`, `/code-quality`, `/review` e `/acceptance`
+`compose_goal_condition.py` embeds `/plan-grill`, `/discover-plan`,
+`/plan-confidence`, `/implement`, `/code-quality`, `/review` and `/acceptance`
 as literal strings in the condition's text, each beside the artifact it must
 produce. Rename or retire any one of them and the condition still composes, still
 arms the Stop hook and still reads as authoritative — while telling the agent to

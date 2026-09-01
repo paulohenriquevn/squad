@@ -48,5 +48,5 @@ This is the lightweight equivalent of ralph-loop's `--completion-promise` mechan
 
 - `/plan-goal` does NOT replace `/goal`. Users can still run `/goal "any condition"` directly.
 - The derived condition stays under `/goal`'s 4000-char limit by quoting only Objective + Goal-metric lines, not full task bodies.
-- If `records/plans/{slug}-plan.md` does not exist, this command refuses with "no plan found; run /to-plan first".
+- If `records/plans/{slug}-plan.md` does not exist, this command refuses with "no plan found; run /plan-write first".
 - Pairs naturally with `/plan-attest`: attest first to lock the plan; then `/plan-goal` to drive execution against the locked content.

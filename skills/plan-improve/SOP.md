@@ -48,7 +48,7 @@ Raise a plan's score to at least `SHIPPABLE_WITH_CAVEATS` without changing what 
 | Result | What it means | What follows |
 |---|---|---|
 | Target verdict reached | The plan clears its band | `/implement` |
-| No improvement in a pass | The remaining gap is not structural | Stop; return to `/to-plan` |
+| No improvement in a pass | The remaining gap is not structural | Stop; return to `/plan-write` |
 | A hard cap is blocking | Another phase owns the fix | Halt and route there |
 
 ```mermaid
@@ -64,7 +64,7 @@ flowchart TD
 
 ## Escalation
 
-- The score will not move and the plan reads fine → the weakness is in the goal, not the writing. → back to `/to-plan`.
+- The score will not move and the plan reads fine → the weakness is in the goal, not the writing. → back to `/plan-write`.
 - A fix would require a file outside the plan → out of scope by contract. → this skill never touches anything else and never commits.
 
 ## Competencies

@@ -135,7 +135,7 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
 - Skipping REFACTOR because "tests are green" — the cycle is RED → GREEN → REFACTOR, not RED → GREEN → ship.
 - WIRING done in a separate PR ("I'll wire it later"). Later never comes.
 - Commits that mix multiple tasks. Each commit references one task ID.
-- Editing the plan during implementation. If the plan was wrong, return to `/to-plan`.
+- Editing the plan during implementation. If the plan was wrong, return to `/plan-write`.
 
 ## Output
 

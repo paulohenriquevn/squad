@@ -39,7 +39,7 @@ Run DISCOVER through ACCEPTANCE for one item without invoking nine commands by h
 
 1. Run `/idea-to-release {item}`.
 2. Let the depth be derived from the confidence score. Never assert a confidence signal — the script is deterministic and its output is the truth.
-3. Let every gate run. `/edge-case-plan`, `/deps-audit` and `/code-quality` are cheap and catch what unit tests miss.
+3. Let every gate run. `/plan-edge-cases`, `/deps-audit` and `/code-quality` are cheap and catch what unit tests miss.
 4. Expect the chain to stop at `AWAITING_REVIEW` for anything from the backlog. That halt is the design.
 5. Read the final verdict and act on it per Decisions.
 

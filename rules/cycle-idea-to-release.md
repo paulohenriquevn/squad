@@ -36,7 +36,7 @@ When NOT to use:
 /idea-to-release M<N>
      ↓ READ ROADMAP — extract milestone objective + DoD; derive slug; record milestone_id
      ↓ DISCOVER     (full chain, if no prior opportunity)
-     ↓ PLAN         (full chain — auto-injects MUST-FIX from edge-case-plan into the plan)
+     ↓ PLAN         (full chain — auto-injects MUST-FIX from plan-edge-cases into the plan)
      ↓                — plan frontmatter carries milestone_id: M<N> (contract with cycle-acceptance)
      ↓ gate:         only proceed if /plan-confidence ≥ SHIPPABLE_WITH_CAVEATS
      ↓ IMPLEMENT    (halt-loop until IMPLEMENTATION_COMPLETE)
@@ -73,7 +73,7 @@ Ad-hoc (`/idea-to-release {topic-slug}` with arbitrary slug):
 ## Confidence gates between phases
 
 - Before PLAN starts: a discovery opportunity exists OR the user explicitly confirms no measurement is needed (deterministic; pre-recorded via `--no-discover`).
-- **Before PLAN starts, for anything from `BACKLOG.md`: the item is `ALIGNED`.** `check_alignment_gate.py` hard-caps an unaligned plan at 49, so an item that skipped `/shared-understanding` cannot clear the next gate anyway. This one is different from every other gate in this list: it **cannot be satisfied by the pipeline**, because `ALIGNED` requires a human to tick `## Reviewer sign-off` and the agent may never tick a box. The orchestrator therefore **halts at `AWAITING_REVIEW` by design** and asks for the review. That is not a limitation to route around — an autonomous chain that could align an item with itself would be the failure the gate exists to prevent.
+- **Before PLAN starts, for anything from `BACKLOG.md`: the item is `ALIGNED`.** `check_alignment_gate.py` hard-caps an unaligned plan at 49, so an item that skipped `/plan-alignment` cannot clear the next gate anyway. This one is different from every other gate in this list: it **cannot be satisfied by the pipeline**, because `ALIGNED` requires a human to tick `## Reviewer sign-off` and the agent may never tick a box. The orchestrator therefore **halts at `AWAITING_REVIEW` by design** and asks for the review. That is not a limitation to route around — an autonomous chain that could align an item with itself would be the failure the gate exists to prevent.
 - Before IMPLEMENT starts: plan-confidence verdict ≥ SHIPPABLE_WITH_CAVEATS.
 - Before CODE-QUALITY starts: implementation emitted `IMPLEMENTATION_COMPLETE`.
 - Before REVIEW starts: code-quality verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`}.

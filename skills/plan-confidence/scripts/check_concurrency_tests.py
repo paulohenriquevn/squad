@@ -1,4 +1,4 @@
-"""Conditional concurrency-tests check for /to-plan plans (SOTA upgrade Phase 2).
+"""Conditional concurrency-tests check for /plan-write plans (SOTA upgrade Phase 2).
 
 Bugs in concurrent code escape TDD-first because single-threaded test execution
 interleaves cleanly — the race manifests only under specific schedules. A plan

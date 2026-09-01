@@ -25,8 +25,8 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "Is this hunch real?" | `cycle-discover` | `/discover-plan B-NNN --mode {review\|live-test\|bug\|evolve}`, then the chain |
 | "Sweep a domain for things nobody filed" | `cycle-discover` | `/discover-execute --sweep {domain}` |
 | "Advance the next item end-to-end autonomously" | `cycle-maintenance` → `cycle-idea-to-release` | `/idea-to-release` (no arg) or `/idea-to-release B-NNN` |
-| "The measurement holds — design the fix" | `cycle-plan` | `/to-plan B-NNN` |
-| "Requirements are still vague" | `cycle-plan` phase 0 | `/grill-me {slug}` |
+| "The measurement holds — design the fix" | `cycle-plan` | `/plan-write B-NNN` |
+| "Requirements are still vague" | `cycle-plan` phase 0 | `/plan-grill {slug}` |
 | "Build it per the plan" | `cycle-implement` | `/implement {plan-slug}` |
 | "Audit dead code + fabricated APIs post-implement" | `cycle-code-quality` | `/code-quality` |
 | "Review before merge" | `cycle-review` | `/review {plan-slug}` |

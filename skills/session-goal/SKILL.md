@@ -1,7 +1,7 @@
 ---
 name: session-goal
 version: 0.1.0
-requires: [idea-to-release, acceptance, grill-me, discover-plan, to-plan, plan-confidence, implement, code-quality, review, release]
+requires: [idea-to-release, acceptance, plan-grill, discover-plan, plan-write, plan-confidence, implement, code-quality, review, release]
 description: 'Turn one or more ROADMAP.md milestones into an active session goal. Validates the requested M<N> ids against ROADMAP.md (exists, still open, dependency order honoured), composes a termination condition whose single stop criterion is a green /acceptance run (ACCEPTED or ACCEPTED_WITH_CAVEATS) and which names the artifact each cycle phase must produce on the way there, then arms a session-scoped Stop hook of type command that reads the FILESYSTEM — the acceptance record''s verdict line and the ROADMAP.md checkbox — so a confident sentence cannot satisfy it. Milestones run sequentially, one in flight at a time, per the single-flip invariant. Use AFTER the milestones exist in a hand-authored ROADMAP.md and BEFORE driving them with /idea-to-release. Refuses on unknown, already-released, or dependency-blocked milestones, and on an over-long condition. Note: /backlog-init does NOT write ROADMAP.md — it writes BACKLOG.md, a different registry.'
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit
@@ -51,7 +51,7 @@ These are stated inside the composed condition itself, not merely here — the S
 The other six phases are in the condition as the honest path to that verdict — an acceptance run reached by skipping `/review` is not the same fact — but the terminator is one and only one thing.
 
 **Why `requires` lists ten skills when this one invokes two.** It invokes `/idea-to-release` and gates on
-`/acceptance`; everything else it *names*. `compose_goal_condition.py` bakes `/grill-me`,
+`/acceptance`; everything else it *names*. `compose_goal_condition.py` bakes `/plan-grill`,
 `/discover-plan`, `/plan-confidence`, `/implement`, `/code-quality`, `/review` and `/acceptance`
 into the composed condition as literal strings, each beside the artifact it must produce. Rename any
 of them and the condition still composes, still arms, and still reads as authoritative — while

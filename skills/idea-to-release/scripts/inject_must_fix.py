@@ -2,7 +2,7 @@
 """Inject MUST-FIX edge-case items into a plan's task list, so /plan-confidence
 can re-score the augmented plan without a human-in-the-loop step.
 
-The /edge-case-plan skill emits a report at:
+The /plan-edge-cases skill emits a report at:
     records/reviews/{slug}-edge-cases-{YYYY-MM-DD}.md
 
 with a `## MUST FIX` section listing entries like:
@@ -15,7 +15,7 @@ with a `## MUST FIX` section listing entries like:
     - **Suggested fix:** ...
 
 This script parses those entries and appends them to the plan as a new
-`## Absorbed MUST-FIX items (from /edge-case-plan)` section, with each
+`## Absorbed MUST-FIX items (from /plan-edge-cases)` section, with each
 entry rendered as a sub-task referencing the originating EC id and the
 affected plan task.
 
@@ -39,7 +39,7 @@ import re
 import sys
 from pathlib import Path
 
-HEADING = "## Absorbed MUST-FIX items (from /edge-case-plan)"
+HEADING = "## Absorbed MUST-FIX items (from /plan-edge-cases)"
 
 ENTRY_RE = re.compile(
     r"^###\s+(?P<id>EC-\d+):\s*(?P<title>.+?)\n(?P<body>.*?)(?=^###\s+EC-|\Z)",
@@ -53,7 +53,7 @@ FIELD_RE = re.compile(
 
 
 def parse_must_fix(text: str) -> list[dict[str, str]]:
-    """Extract MUST FIX entries from an edge-case-plan report."""
+    """Extract MUST FIX entries from an plan-edge-cases report."""
     section = re.search(
         r"^##\s+MUST FIX\s*\n(.*?)(?=^##\s+\w|\Z)",
         text,
@@ -89,7 +89,7 @@ def existing_injected_ids(plan_text: str) -> set[str]:
 def render_entry(entry: dict[str, str]) -> str:
     return (
         f"### {entry['id']} (auto-absorbed): {entry['title']}\n"
-        f"- **Source:** edge-case-plan MUST FIX\n"
+        f"- **Source:** plan-edge-cases MUST FIX\n"
         f"- **Affected task:** {entry['affected_task'] or 'unspecified'}\n"
         f"- **Family:** {entry['family'] or 'unspecified'}\n"
         f"- **Scenario:** {entry['scenario'] or '—'}\n"
@@ -99,7 +99,7 @@ def render_entry(entry: dict[str, str]) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Inject MUST-FIX items from /edge-case-plan into the plan.")
+    parser = argparse.ArgumentParser(description="Inject MUST-FIX items from /plan-edge-cases into the plan.")
     parser.add_argument("--plan", type=Path, required=True, help="Plan file (markdown).")
     parser.add_argument(
         "--edge-cases",

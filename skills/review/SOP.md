@@ -50,7 +50,7 @@ Compare the diff against the plan line by line, across the dimensions the domain
 |---|---|---|
 | `READY_TO_MERGE` | No open BLOCKER or HIGH finding | `/release` |
 | `NEEDS_FIXES` | Findings to close in this slice | Fix, then re-review |
-| `NEEDS_DEEPER` | The slice is wrong at the scope level | Back to `/to-plan` for re-scoping |
+| `NEEDS_DEEPER` | The slice is wrong at the scope level | Back to `/plan-write` for re-scoping |
 | `BLOCKED` | The review could not be performed | Say why; never a PASS by default |
 
 ```mermaid

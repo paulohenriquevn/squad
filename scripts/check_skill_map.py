@@ -13,7 +13,8 @@ the CHANGELOG:
 Four of those omitted skills had **zero mentions in any entry point** — they
 existed on disk, passed every validator, and were unreachable by any discovery
 path. When the map was written on 2026-08-31 the same file claimed 36 skills
-against 34 on disk and listed 29, with `shared-understanding` among the missing:
+against 34 on disk and listed 29, with `shared-understanding` among the missing
+(renamed `plan-alignment` later the same day):
 the alignment gate that is unbreakable for every item coming from `BACKLOG.md`.
 
 Twice is a pattern, and the pattern is not carelessness. An index is the one

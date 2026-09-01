@@ -64,7 +64,7 @@ is exactly when the missing classes are still being discovered.
 
 The diagram shows what happens. The note says **what people assume instead**.
 
-> ✅ "100% and still not aligned. Readers expect this arrow to reach /to-plan. It
+> ✅ "100% and still not aligned. Readers expect this arrow to reach /plan-write. It
 > does not — the number the agent controls was never the gate."
 >
 > ❌ "The scorer returns the verdict to the agent."

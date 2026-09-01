@@ -117,11 +117,11 @@ skills/discover-improve/SKILL.md
 skills/discover-improve/prompts/improvement-prompt.md
 skills/plan-improve/SKILL.md
 skills/plan-improve/prompts/improvement-prompt.md
-skills/to-plan/SKILL.md
+skills/plan-write/SKILL.md
 skills/discover-plan/templates/measurement-plan-template.md
 
 # === SOTA plan-template upgrade (2026-06-07) ===
-skills/to-plan/templates/plan-template.md
+skills/plan-write/templates/plan-template.md
 skills/plan-confidence/scripts/check_baseline_context.py
 skills/plan-confidence/scripts/check_drawbacks_section.py
 skills/plan-confidence/tests/test_check_baseline_context.py
@@ -136,7 +136,7 @@ skills/plan-confidence/scripts/check_failure_scenarios.py
 skills/plan-confidence/scripts/run_structural.py
 skills/plan-confidence/tests/test_check_concurrency_tests.py
 skills/plan-confidence/tests/test_check_failure_scenarios.py
-skills/to-plan/SKILL.md
+skills/plan-write/SKILL.md
 
 # === Test-suite fixes (32 pre-existing failures → 0) ===
 skills/plan-confidence/tests/conftest.py
@@ -219,15 +219,15 @@ skills/discover-improve/
 skills/discover-plan/
 skills/discover-plan-confidence/
 skills/honesty-gate/
-skills/edge-case-plan/
-skills/grill-me/
+skills/plan-edge-cases/
+skills/plan-grill/
 skills/implement/
 skills/plan-confidence/
 skills/plan-improve/
 skills/release/
 skills/review/
 skills/skill-creator/
-skills/to-plan/
+skills/plan-write/
 EOF
 
 CREATED=0

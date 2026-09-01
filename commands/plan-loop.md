@@ -52,4 +52,4 @@ Together they replace ralph-loop's `--max-iterations` + `--completion-promise` m
 - `/plan-loop` composes with `/loop`; it does NOT replace it. `/loop 5m "anything"` still works.
 - For "babysit until plan is done" semantics, combine `/plan-loop 10m` (cadence) with `/plan-goal` (termination). The loop runs every 10 minutes; the goal stops it when the plan is complete.
 - The default tick prompt is intentionally short to stay within compaction-safe length.
-- If `records/plans/{slug}-plan.md` does not exist, this command refuses with "no plan found; run /to-plan first".
+- If `records/plans/{slug}-plan.md` does not exist, this command refuses with "no plan found; run /plan-write first".

@@ -1,4 +1,4 @@
-"""Drawbacks & Risks structural check for /to-plan plans (SOTA upgrade).
+"""Drawbacks & Risks structural check for /plan-write plans (SOTA upgrade).
 
 Verifies the plan's `## Drawbacks & Risks` section has at least 2 entries,
 each with severity + mitigation + owner. RFC-tradition section (Rust RFCs,
@@ -12,7 +12,7 @@ Stable identifier for the soft cap: `drawbacks_section_insufficient`.
 
 Also verifies `## Unresolved Questions` section is present. The section
 may legitimately say "(none — every decision is resolved at plan time)"
-when justified — the edge-case-plan phase will challenge that.
+when justified — the plan-edge-cases phase will challenge that.
 
 Stable identifier for the unresolved-questions soft cap:
 `unresolved_questions_section_missing`.

@@ -1,5 +1,5 @@
 ---
-name: to-plan
+name: plan-write
 version: 0.1.0
 requires: []
 description: Turn the current conversation context into an implementation plan and save it to records/plans/. Use when user wants to create a plan from the current context.
@@ -8,7 +8,7 @@ allowed-tools: Read Glob Grep Bash Write Skill
 argument-hint: "{topic-slug}"
 ---
 
-This skill takes the current conversation context, any `/grill-me` output at `records/grills/{slug}-grill.md`, and codebase understanding, then produces a detailed implementation plan. Do NOT interview the user during `/to-plan` itself — if requirements are unclear, halt and recommend `/grill-me {topic-slug}` first. When a grill output exists, the plan's `## Context` section MUST cite specific decisions resolved during grilling.
+This skill takes the current conversation context, any `/plan-grill` output at `records/grills/{slug}-grill.md`, and codebase understanding, then produces a detailed implementation plan. Do NOT interview the user during `/plan-write` itself — if requirements are unclear, halt and recommend `/plan-grill {topic-slug}` first. When a grill output exists, the plan's `## Context` section MUST cite specific decisions resolved during grilling.
 
 ## Process
 
@@ -30,15 +30,15 @@ done
 
 Skills whose name ends with `-patterns` encapsulate Patterns + Recommendations + Cross-cutting Comparisons distilled from research investigations (typically a `/discover-execute` opportunity). Author them on demand with the standalone `/skill-creator`. If any exist in `skills/`, treat them as load-bearing project patterns.
 
-**How to consume a patterns skill in /to-plan:**
+**How to consume a patterns skill in /plan-write:**
 
 1. Scan the frontmatter `description` of every `*-patterns/SKILL.md` (cheap — just `head -8` is enough).
-2. If the topic-slug of the current `/to-plan` invocation OR any keyword from the user's request matches a trigger phrase in a patterns skill's `description`, Read the full SKILL.md.
+2. If the topic-slug of the current `/plan-write` invocation OR any keyword from the user's request matches a trigger phrase in a patterns skill's `description`, Read the full SKILL.md.
 3. The plan you produce SHOULD:
    - Cite the Patterns from the matched skill when an implementation decision matches one
    - Reference the Recommendations as ADR alternatives in the plan's own ADR section
    - Use the Key evidence citations as anchor evidence
-4. To OVERRIDE a Pattern from a `-patterns` skill, the plan MUST include an ADR that names the patterns skill + the specific pattern + the reason for divergence. Silent contradiction violates `/to-plan` quality rules.
+4. To OVERRIDE a Pattern from a `-patterns` skill, the plan MUST include an ADR that names the patterns skill + the specific pattern + the reason for divergence. Silent contradiction violates `/plan-write` quality rules.
 
 > **This is enforced, not advisory.** `/plan-confidence` runs `check_patterns_consumption.py`: a `*-patterns` skill whose `description:` matches the plan's title/Goal MUST be cited in the plan body OR named in an override ADR. Otherwise the plan is hard-capped at 49 (`patterns_skill_ignored` → INVALID). The matching skill can no longer be silently ignored.
 
@@ -64,7 +64,7 @@ If the agent does not honor Step 0, `/plan-confidence` will deduct via the `arch
 
 #### Pre-flight path validation
 
-Every plan task's `#### Files to edit` AND `#### TDD` test paths MUST be reachable by an existing test runner config. The `/to-plan` author MUST validate path patterns BEFORE writing the plan, by running the project's test runner discovery commands (e.g., `find . -name "Makefile" -maxdepth 2`, `cat package.json | jq .scripts`, `cat pyproject.toml`).
+Every plan task's `#### Files to edit` AND `#### TDD` test paths MUST be reachable by an existing test runner config. The `/plan-write` author MUST validate path patterns BEFORE writing the plan, by running the project's test runner discovery commands (e.g., `find . -name "Makefile" -maxdepth 2`, `cat package.json | jq .scripts`, `cat pyproject.toml`).
 
 When writing a task that creates a NEW test path, verify against the runner configs. If the test path won't be picked up by the configured runner, either pick a path that matches OR add the config update as a sub-step in the SAME task's "Files to edit".
 
@@ -107,7 +107,7 @@ The captured output feeds the `## Baseline Context` table directly. **If a row i
 Honesty gates that apply to Step 1:
 
 - If you cannot identify the public callers of a symbol the plan modifies, STOP and ask the user — do not guess. Half the bugs caught in `/review` start with "we did not know X also called this."
-- If `records/discoveries/opportunities/` is empty for the topic AND no `*-patterns` skill matches, the `## Prior Art & Related Work` section must say "(none identified — first-of-its-kind in this codebase)" — `/edge-case-plan` will challenge that.
+- If `records/discoveries/opportunities/` is empty for the topic AND no `*-patterns` skill matches, the `## Prior Art & Related Work` section must say "(none identified — first-of-its-kind in this codebase)" — `/plan-edge-cases` will challenge that.
 
 ### Step 2 — Architecture Snapshot (BEFORE) — OPTIONAL
 
@@ -197,7 +197,7 @@ These rules are NON-NEGOTIABLE for every plan produced by this skill:
 
 12. **Baseline Context section is mandatory** — `## Baseline Context` is populated from the Step 1 evidence (file table with LoC + git sha, callers list, glossary, architecture boundaries). Fabricated rows cap the plan at INVALID. A junior reads this section to understand "what exists today" without reading the codebase.
 
-13. **Prior Art & Related Work section is mandatory** — `## Prior Art & Related Work` cites internal opportunities, patterns skills, reference projects, OR external literature. "(none identified)" is acceptable but `/edge-case-plan` will challenge it.
+13. **Prior Art & Related Work section is mandatory** — `## Prior Art & Related Work` cites internal opportunities, patterns skills, reference projects, OR external literature. "(none identified)" is acceptable but `/plan-edge-cases` will challenge it.
 
 14. **Drawbacks & Risks section is mandatory** — `## Drawbacks & Risks` has ≥ 2 entries with severity + mitigation + owner. No plan is risk-free; missing or under-populated section caps the plan at 70 (SHIPPABLE_WITH_CAVEATS at best).
 
@@ -213,11 +213,11 @@ These rules are NON-NEGOTIABLE for every plan produced by this skill:
 
 This skill is **phase 1** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the **source of truth** for:
 
-- Chain order (this skill → `/edge-case-plan` → `/deps-audit` → `/plan-confidence` → optional `/plan-improve` → `/plan-confidence` re-score)
+- Chain order (this skill → `/plan-edge-cases` → `/deps-audit` → `/plan-confidence` → optional `/plan-improve` → `/plan-confidence` re-score)
 - Hard gates (Coverage Matrix 100%, ADR alternatives, TDD in bug-fix tasks, fabricated citations)
 - Soft gates (NON_SHIPPABLE verdict, smell density, low architecture compliance)
 - Stop conditions (no-improvement, hard-cap blockers, human-needed gaps)
-- Anti-patterns at the cycle level (skip edge-case-plan, advance with INVALID, fabricate paths, override patterns silently)
+- Anti-patterns at the cycle level (skip plan-edge-cases, advance with INVALID, fabricate paths, override patterns silently)
 - Rollback procedures
 - Companion cycles: upstream `cycle-discover.md` (provides `*-patterns` skills); downstream `cycle-implement.md` (consumes the validated plan)
 

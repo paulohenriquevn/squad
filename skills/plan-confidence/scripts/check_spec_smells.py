@@ -1,4 +1,4 @@
-"""Spec-smell detector for /to-plan plans (M2 deterministic, regex + dictionary).
+"""Spec-smell detector for /plan-write plans (M2 deterministic, regex + dictionary).
 
 Reads rubric-v1.md to get the list of smell categories with patterns and penalties.
 For each category, scans the plan for matches with word-boundary regex.

@@ -33,11 +33,11 @@ Surface real risks inside the plan as written, and get the MUST-FIX ones absorbe
 ## Prerequisites
 
 - A plan exists at `records/plans/{slug}-plan.md`.
-- `/to-plan` has finished — this is phase 2 and that is phase 1.
+- `/plan-write` has finished — this is phase 2 and that is phase 1.
 
 ## Steps
 
-1. Run `/edge-case-plan {slug}`.
+1. Run `/plan-edge-cases {slug}`.
 2. Analyse the plan AS IT IS. A future API change is not an edge case of this plan.
 3. Classify each finding MUST-FIX, SHOULD-TEST or DOCUMENT.
 4. Give every MUST-FIX an owner and an acceptance criterion.
@@ -64,7 +64,7 @@ flowchart TD
 ## Escalation
 
 - The fix wants a new abstraction → refuse. → `if input.is_empty()` solves it; an `ErrorRecoveryManager` is the anti-pattern this phase names.
-- The edge case implies the plan is wrong at the goal level → back to `/to-plan`. → this phase annotates plans, it does not rewrite them.
+- The edge case implies the plan is wrong at the goal level → back to `/plan-write`. → this phase annotates plans, it does not rewrite them.
 
 ## Competencies
 

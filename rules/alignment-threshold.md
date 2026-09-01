@@ -11,7 +11,7 @@ An item nobody can draw is an item somebody is about to guess at. Below 90% shar
 | Machine score ≥ 90% over the structural rubric | The agent | `BLOCKED` |
 | Every box in `## Reviewer sign-off` ticked | **A human, never the agent** | `AWAITING_REVIEW` |
 
-Both come from `skills/shared-understanding/scripts/score_alignment.py`, run against
+Both come from `skills/plan-alignment/scripts/score_alignment.py`, run against
 `records/alignment/{slug}-alignment.md`. Exit 0 permits the work; exit 1 forbids it.
 There is no band in between and no override for urgency — urgency is the condition
 under which guessing is most expensive, not least.
@@ -112,8 +112,8 @@ disables.
 ```
 /backlog-item        → hypothesis, no evidence required, and no alignment required
 /discover-plan       → evidence found or the item is killed
-/shared-understanding → ALIGNED (≥90%) or BLOCKED
-/to-plan             → refuses a slug with no ALIGNED brief
+/plan-alignment → ALIGNED (≥90%) or BLOCKED
+/plan-write             → refuses a slug with no ALIGNED brief
 /implement           → refuses a plan whose item is not ALIGNED
 ```
 
@@ -154,8 +154,8 @@ paragraph plus a rewrite plus the review that found it.
 
 ## Cross-references
 
-- Skill: [`skills/shared-understanding/SKILL.md`](../skills/shared-understanding/SKILL.md)
-- Scorer: `skills/shared-understanding/scripts/score_alignment.py`
+- Skill: [`skills/plan-alignment/SKILL.md`](../skills/plan-alignment/SKILL.md)
+- Scorer: `skills/plan-alignment/scripts/score_alignment.py`
 - Upstream gate on evidence: [`cycle-backlog.md`](cycle-backlog.md) § Hard gates
 - Downstream gate on plans: [`plan-confidence-golden-rule.md`](plan-confidence-golden-rule.md)
 - Honesty principle the unscored items serve: `~/.claude/CLAUDE.md § 3`
