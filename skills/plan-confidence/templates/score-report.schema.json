@@ -9,8 +9,8 @@
     "plan_path",
     "plan_version",
     "scored_at",
-    "completude_score",
-    "risco_estrutural_score",
+    "completeness_score",
+    "structural_risk_score",
     "active_dimensions",
     "weight_normalization_factor",
     "weighted_avg",
@@ -26,8 +26,8 @@
     "plan_path": { "type": "string", "minLength": 1 },
     "plan_version": { "type": "string", "minLength": 1 },
     "scored_at": { "type": "string", "format": "date-time" },
-    "completude_score": { "type": "number", "minimum": 0, "maximum": 100 },
-    "risco_estrutural_score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "completeness_score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "structural_risk_score": { "type": "number", "minimum": 0, "maximum": 100 },
     "active_dimensions": {
       "type": "array",
       "items": {

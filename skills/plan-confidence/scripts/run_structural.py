@@ -124,8 +124,8 @@ class StructuralScoreReport:
     plan_path: str
     plan_version: str
     scored_at: str
-    completude_score: float
-    risco_estrutural_score: float
+    completeness_score: float
+    structural_risk_score: float
     active_dimensions: list[str]
     weight_normalization_factor: float
     weighted_avg: float
@@ -189,7 +189,7 @@ def _lookup_verdict(score: float, bands: list[tuple[str, int]]) -> str:
     return "INVALID"
 
 
-def _compute_completude(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> tuple[float, list[Reason]]:
+def _compute_completeness(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> tuple[float, list[Reason]]:
     """v1.1 EC-1 fix: single formula (rubric weights 0.6/0.2/0.2 per Phase 4.3 algorithm)."""
     coverage_int = 1.0 if cov.is_complete else 0.0
     coverage_score = 60.0 * coverage_int  # weight 0.6 * 100
@@ -208,14 +208,14 @@ def _compute_completude(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> 
     return completeness, reasons
 
 
-def _compute_risco(smells: SmellReport) -> tuple[float, list[Reason]]:
-    risco = max(0.0, 100.0 + smells.total_penalty)
+def _compute_structural_risk(smells: SmellReport) -> tuple[float, list[Reason]]:
+    structural_risk = max(0.0, 100.0 + smells.total_penalty)
     # Top 3 categories by hit count
     sorted_cats = sorted(smells.by_category.items(), key=lambda x: x[1], reverse=True)
     reasons: list[Reason] = []
     for cat, count in sorted_cats[:3]:
         reasons.append(Reason(sign="negative" if count > 0 else "neutral", label=f"{count} {cat} hits", weight=-float(count)))
-    return risco, reasons
+    return structural_risk, reasons
 
 
 def _detect_hard_caps(
@@ -319,8 +319,8 @@ def run_structural(
     patterns_consumption = check_patterns_consumption(plan_path, _find_repo_root_from_plan(plan_path))
 
     # Compute per-dimension scores
-    completeness, completeness_reasons = _compute_completude(cov, adr, tdd)
-    risco, structural_risk_reasons = _compute_risco(smells)
+    completeness, completeness_reasons = _compute_completeness(cov, adr, tdd)
+    structural_risk, structural_risk_reasons = _compute_structural_risk(smells)
 
     # ADR D8 — renormalize for active dimensions
     active = M2_ACTIVE_DIMENSIONS[:]
@@ -329,7 +329,7 @@ def run_structural(
 
     weighted_avg = (
         normalized_weights["completeness"] * completeness
-        + normalized_weights["structural_risk"] * risco
+        + normalized_weights["structural_risk"] * structural_risk
     )
 
     # Hard caps (strict, fail-closed)
@@ -454,8 +454,8 @@ def run_structural(
         plan_path=str(plan_path),
         plan_version=plan_version,
         scored_at=datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
-        completude_score=round(completeness, 2),
-        risco_estrutural_score=round(risco, 2),
+        completeness_score=round(completeness, 2),
+        structural_risk_score=round(structural_risk, 2),
         active_dimensions=active,
         weight_normalization_factor=round(1.0 / norm_factor, 4),
         weighted_avg=round(weighted_avg, 2),

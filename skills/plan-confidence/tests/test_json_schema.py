@@ -1,6 +1,7 @@
 """L3 — JSON Schema validation for all real and fuzzed runs."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import subprocess
 import sys
@@ -92,7 +93,7 @@ def test_schema_rejects_invalid_verdict() -> None:
     bad = {
         "plan_slug": "x", "plan_path": "x", "plan_version": "1",
         "scored_at": "2026-05-17T00:00:00+00:00",
-        "completude_score": 50, "risco_estrutural_score": 50,
+        "completeness_score": 50, "structural_risk_score": 50,
         "active_dimensions": ["completeness"],
         "weight_normalization_factor": 1.0,
         "weighted_avg": 50, "hard_caps_triggered": [],
@@ -115,8 +116,8 @@ def test_schema_rejects_out_of_range_score() -> None:
     bad = {
         "plan_slug": "x", "plan_path": "x", "plan_version": "1",
         "scored_at": "2026-05-17T00:00:00+00:00",
-        "completude_score": 150,  # out of range
-        "risco_estrutural_score": 50,
+        "completeness_score": 150,  # out of range
+        "structural_risk_score": 50,
         "active_dimensions": ["completeness"],
         "weight_normalization_factor": 1.0,
         "weighted_avg": 100, "hard_caps_triggered": [],
@@ -132,3 +133,32 @@ def test_schema_rejects_out_of_range_score() -> None:
     }
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(bad, schema)
+
+
+# ── the score keys name the same dimensions the rubric names ──────────────────
+
+
+def test_the_score_keys_match_the_rubric_dimension_names() -> None:
+    """`rubric-v1.md` calls the two active dimensions `completeness` and
+    `structural_risk`; the emitted report called their scores `completeness_score`
+    and `structural_risk_score`. One fact under two spellings, and the
+    Portuguese pair was the only pt-BR left in anything the git repository
+    versions — a report read by consumers who do not speak it."""
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+    assert "completeness_score" in schema["properties"]
+    assert "structural_risk_score" in schema["properties"]
+    # the pt-BR spellings, built from parts so a future rename sweep cannot
+    # silently turn these negative assertions into the positive ones above
+    old_pair = {"completude" + "_score", "risco_estrutural" + "_score"}
+    assert not old_pair & set(schema["properties"])
+    assert {"completeness_score", "structural_risk_score"} <= set(schema["required"])
+
+
+def test_the_report_emits_the_renamed_keys(tmp_path: Path) -> None:
+    from run_structural import StructuralScoreReport
+
+    fields = {f.name for f in dataclasses.fields(StructuralScoreReport)}
+
+    assert {"completeness_score", "structural_risk_score"} <= fields
+    assert not {"completude" + "_score", "risco_estrutural" + "_score"} & fields
