@@ -121,6 +121,30 @@ def check_xrefs(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
+def check_skill_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Does `skills/map.md` still list every skill on disk, and only those?
+
+    The index it replaced drifted twice, and the second drift left four skills
+    reachable by nobody: on disk, passing every validator, mentioned in no entry
+    point. An index is the one document nothing forces you to open when you add a
+    file, so it goes stale by default and reads as complete while it does.
+    """
+    checker = ecosystem_dir / "scripts" / "check_skill_map.py"
+    if not checker.exists():
+        return True, ["  check_skill_map.py not installed — skipping"]
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
+        capture_output=True, text=True,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, [f"  check_skill_map.py produced no usable JSON "
+                       f"(exit {result.returncode})"]
+    findings = payload.get("findings", [])
+    return not findings, [f"  {f}" for f in findings]
+
+
 def check_phase_numbering(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Do the skills of a cycle agree with each other about their own order?
 
@@ -365,6 +389,7 @@ def main() -> int:
         ("Cross-references", check_xrefs),
         ("Cycle rules schema", check_cycle_rules),
         ("Phase numbering", check_phase_numbering),
+        ("Skill map", check_skill_map),
         ("Durable knowledge root", check_wiki_migration),
         ("Skill frontmatter", check_skill_frontmatter),
         ("Smoke chain (detect_domain → spawn_reviewers → consolidate)", check_smoke_chain),

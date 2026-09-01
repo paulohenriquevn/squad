@@ -1,0 +1,142 @@
+---
+name: map
+description: What every skill in this kit does, when to reach for it, and when reaching for it is the wrong move. Read this before invoking a skill you have not used, and before adding one.
+tags: [index, skills, orientation]
+generated:
+  by: claude/opus-5
+  at: 2026-08-31
+status: stable
+---
+
+# The skill map
+
+**34 skills.** Most are a phase of a cycle and are invoked in an order the
+cycle rule fixes; nine are invoked on demand and belong to no chain.
+
+**Every row below carries three things**: what the skill does, when to reach for
+it, and — the column that is usually missing from an index — when reaching for it
+is the wrong move. The third is not editorial. It is lifted from each skill's own
+`## Anti-patterns`, from a prohibition stated in its body, or from the position
+the cycle rule gives it. Where a skill's file states no prohibition, the row says
+what its **chain position** forbids, which is sourced rather than invented.
+
+## How to read a row
+
+| Column | Answers |
+|---|---|
+| **Does** | what comes out the other side — the artifact, not the activity |
+| **Use when** | the precondition. Most are "the previous phase produced X" |
+| **Do NOT** | the misuse that looks reasonable at the time |
+
+A skill's own `SKILL.md` is the contract; this map is a way in. When the two
+disagree, the `SKILL.md` wins and the disagreement is a defect — see the last
+section.
+
+---
+
+## Part 1 — The chain
+
+The pipeline is `backlog → discover → plan → implement → code-quality → review →
+release → acceptance`. Skills below are in the order they run.
+
+### BACKLOG — deciding what is worth doing
+
+| Skill | Does | Use when | Do NOT |
+|---|---|---|---|
+| `backlog-init` | Creates `BACKLOG.md` once, inventorying repos from disk and deriving the routing table | The project has no registry yet | Write the inventory from `CLAUDE.md` — it drifts; `find` / `git -C` is the source. Never seed "obvious" items: every one needs a human `why_now` and a DoD |
+| `backlog-item` | Registers one `B-NNN` — a hypothesis; evidence is **not** required yet | Anyone notices something worth fixing, measuring or verifying | Ask for evidence during the intake grill — that turns intake into triage and silences the hunch this phase exists to capture. Never write to `BACKLOG.md` before the grill completes |
+| `backlog-review` | Reports what has rotted in the registry — duplicate ids, evidence-less triaged items, kills with no reason, repos routing to nobody | Before trusting the registry to pick work | Edit the backlog. It is read-only by contract: a reviewer that edits cannot be trusted to report what it found |
+
+### DISCOVER — turning a hunch into evidence, or killing it
+
+| Skill | Does | Use when | Do NOT |
+|---|---|---|---|
+| `discover-plan` | Writes the measurement plan: what is measured, with which tool, against which target, and what result **kills** the hypothesis | An item is `raw` and someone wants to check the suspicion | "Look around and see what we find" — with no falsification criterion the measurement confirms whatever was already believed. Never write a target without opening it |
+| `discover-edge-cases` | Finds what could make the measurement **lie** — a stale target, a proxy read as the thing, an environment fault read as a defect | After `/discover-plan`, before scoring | Widen the investigation. An edge case lives inside what was planned, and speculation about future states is not one |
+| `discover-plan-confidence` | Scores the measurement plan, deterministically, in under 5s | Before running the measurement | Add a `--skip-checks` / `--force` flag, or lower a hard cap. The golden rule makes the absence of a bypass a constructor invariant |
+| `discover-execute` | Runs the measurement and produces an opportunity — **or emits `ITEM_KILLED`** | The plan scored well enough to run | Write to a governed repo. Discover produces a document; an opportunity carrying the patch has skipped every gate after it. Never cite a pointer nobody opened |
+| `discover-confidence` | Scores the opportunity | After the measurement, before `/to-plan` | Treat the score as a judgement about the finding's importance — it scores the ARGUMENT's structure |
+| `discover-improve` | Lifts a low score by improving how the finding is **argued** | `/discover-confidence` returned `NEEDS_REVISION` | Rewrite the Evidence corner. It is the record of a measurement, and editing it falsifies findings downstream cannot detect |
+
+### PLAN — deciding how
+
+| Skill | Does | Use when | Do NOT |
+|---|---|---|---|
+| `grill-me` (phase 0, optional) | Interviews one question per turn until requirements are precise, codebase-first | The topic is non-trivial AND requirements are still vague | Ask what Grep would answer, or stack multiple questions in one turn |
+| `shared-understanding` (phase 0.5) | Alignment brief + animated walkthrough + a reviewer checklist, scored on 17 criteria | **Unbreakable for anything from `BACKLOG.md`** — below 90% the item is not built | Tick your own review boxes — that is the single failure the sign-off exists to prevent. Never draw before grilling: a diagram of a vague brief looks rigorous |
+| `to-plan` (phase 1) | Turns context into a plan at `records/plans/{slug}-plan.md` | The item is `ALIGNED` | Invoke it before alignment. `check_alignment_gate.py` hard-caps an unaligned plan at 49, so the plan cannot enter `/implement` anyway |
+| `edge-case-plan` (phase 2) | Annotates the plan with MUST-FIX edge cases | Right after `/to-plan` | Over-engineer. "An `ErrorRecoveryManager` for this edge case" → no; `if input.is_empty()` solves it. Speculation about future API changes is out of scope |
+| `deps-audit` (phase 3) | CVE + version audit across npm, Python, Rust, Go | Before any code is written | Edit manifests — read-only, diffs are suggestions. Never audit `package.json` without the lockfile: transitive vulnerabilities live there |
+| `plan-confidence` (phase 4) | Scores the plan; `INVALID` returns it to `/to-plan` | After `/deps-audit` | Add a bypass flag. Its golden rule makes the absence of `--skip-checks` a constructor invariant, and `check_deps_audit.py` caps the score when the audit is missing |
+| `plan-improve` (phase 5, conditional) | Iterates the plan up to its target verdict | `/plan-confidence` scored below `SHIPPABLE_WITH_CAVEATS` | Expect it to touch anything outside the plan file, or to commit. It does neither, by contract |
+
+### IMPLEMENT → REVIEW → RELEASE → ACCEPTANCE
+
+| Skill | Does | Use when | Do NOT |
+|---|---|---|---|
+| `implement` | Executes the plan through a TDD halt-loop with the wiring triad and mechanised gates | The plan is at least `SHIPPABLE_WITH_CAVEATS`, on `workspace` | Mark a task done because tests pass without the wiring triad — that is the difference between code that compiles and code that runs. Never skip REFACTOR "to save time" |
+| `code-quality` | Audits for dead symbols, fabricated APIs, cross-package orphans and weak tests | After the implement halt-loop closes | Edit source — read-only by contract. Never add `--force` / `--skip-checks` / `--accept-caveats` |
+| `review` | The most rigorous gate: quality gates, line-by-line plan vs implementation, integration depth, edge-case coverage, by parallel agents in isolated worktrees | `/implement` validation passed | Approve unreviewed scope, fabricate a finding, or merge. It reviews; it never merges, and `NEEDS_DEEPER` sends the work back to `/to-plan` for re-scoping |
+| `release` | Semver tag derived from the CHANGELOG, `develop → main` PR with rendered notes | `/review` returned `READY_TO_MERGE` | Auto-merge the PR — never, under any circumstance. Never cut a release that does not trace to a `READY_TO_MERGE` audit |
+| `acceptance` | Exercises the **released** deliverable against the milestone's Definition-of-done; the only gate that flips a ROADMAP checkbox | After the release exists | Re-run the test suite and call it acceptance — that passed three phases ago. Never mark a criterion `passed` by reading code: reading is not exercising |
+
+---
+
+## Part 2 — Orchestrators
+
+These invoke the chain rather than sitting in it.
+
+| Skill | Does | Use when | Do NOT |
+|---|---|---|---|
+| `idea-to-release` | Chains DISCOVER → … → ACCEPTANCE for one item, deriving depth from a deterministic confidence score | One item should go end to end without a person invoking nine commands | Fabricate a confidence signal — the script is deterministic and its output is the truth. Never skip `/edge-case-plan`, `/deps-audit` or `/code-quality` on "high confidence": those gates are cheap and catch what unit tests miss |
+| `pipeline` | Runs MANY items through the chain at once — a lane per item, a worktree each, batch/task consumption per stage | Several triaged items are waiting and the phases would otherwise idle between them | Expect it to relax a gate. Every gate the chain declares still applies per item, including the alignment gate, which the pipeline **cannot** satisfy |
+| `session-goal` | Binds a session to one or more milestones so it cannot stop before acceptance is green | A session should not end early | Stuff a persona into the goal — it is a Stop-hook condition read by a small model. Never write a vague condition: "M2 is done" lets the evaluator accept an assertion |
+
+---
+
+## Part 3 — On demand
+
+A phase of no cycle. Invoked when the question arises.
+
+| Skill | Does | Use when | Do NOT |
+|---|---|---|---|
+| `commands-help` | Lists every command by cycle, with the recommended flows | Someone asks what the kit can do | Treat it as the contract — it is an index, and the cycle rules are the contract |
+| `ast-grep` | Structural search and refactor via tree-sitter patterns | The question is about AST **shape** — signatures, hierarchies, call sites | Use it to find a file containing a word: Grep is faster and clearer. Never inline a multi-statement pattern — use a YAML rule file |
+| `arch-check` | Verifies declared architecture boundaries, or proposes ones the repo already obeys | Boundaries exist and may have drifted, or none are declared | Expect it to invent a boundary the code does not already respect, or to report a clean run it could not perform |
+| `deps-audit` | *(also phase 3 of cycle-plan — see above)* | Outside a plan, when dependency risk is the question | — |
+| `code-quality` | *(also the whole of cycle-code-quality — see above)* | Outside the chain, to audit a tree | — |
+| `honesty-gate` | Blocks a "production-ready" / v1.0 claim without recorded evidence of sustained internal use | Someone is about to make that claim | Read `EVIDENCE_WITH_CAVEATS` as `SUFFICIENT` — the caveats are explicit. Never log evidence for one scenario and claim it satisfies another anchor |
+| `quality-init` | Emits quality-gate hooks calibrated to the project's real p90 metrics | Setting a project up, once | Generate hooks that auto-fix — hooks are gates, not fixers. Never set thresholds below the floors: the hook would block every write |
+| `trajectory-review` | Empirical trajectory validation — benchmarks, complexity, fitness, scalability. Opt-in per project | The question is whether the direction holds up under measurement | Fabricate a measurement: every number comes from a real tool run with subprocess evidence. Never skip hypothesis extraction — benchmarks without hypotheses are benchmarking, not review |
+| `skill-creator` | Authors, improves and evaluates skills. Vendored from Anthropic, kept byte-close to upstream | Creating or improving a skill | Re-sync it as a merge. It is a copy, and `validate_skill_frontmatter.py` exempts its frontmatter on purpose |
+| `sop-author` | Writes or revises a Standard Operating Procedure for something this kit does repeatedly | Someone asks "how do we do X here?" and the answer lives only in a script header | Write a procedure for something done once. A SOP is for the repeated act; a one-off belongs in a record |
+| `sop-run` | Executes a SOP and records what actually happened — steps run, skipped, adapted, and what forced each deviation | Following a documented procedure | Record a run that did not happen, or omit a deviation. The value of the record is exactly the deviations |
+| `sop-review` | Audits SOPs and their run records — procedures past review date, steps nobody accounts for, recurring deviations, procedures with no run at all | Periodically, or before trusting a procedure | Edit a SOP from this skill. A reviewer that fixes what it finds cannot report what it found |
+| `backlog-init`, `backlog-review` | *(see BACKLOG above)* | — | — |
+
+---
+
+## What this map does not answer
+
+- **Whether a skill's gate will pass.** Only the run answers that.
+- **The exact chain order and its numbering.** `rules/cycle-*.md § Chain` owns it,
+  and `check_phase_numbering.py` keeps the skills' own claims consistent with it.
+- **What a verdict means.** Each cycle has its own vocabulary, documented in its
+  rule and swept by `check_orphan_verdicts.py`.
+
+## Why this file is checked rather than trusted
+
+The index it replaces went stale twice, and the second time is in the CHANGELOG:
+*"`skills/README.md`: it said 35 skills, there are 36, and the table omitted 7"* —
+four of those omitted skills had **zero mentions in any entry point**, so they
+existed on disk, passed every validator and were unreachable by any discovery
+path. When this map was written the same file claimed 36 skills against 34 on
+disk and listed 29, with `shared-understanding` — the alignment gate that is
+unbreakable for every backlog item — among the missing.
+
+An index that drifts is worse than none: it is read as complete.
+
+So `scripts/check_skill_map.py` compares this file against the directory and
+fails when they disagree in either direction — a skill on disk and absent here, a
+row here for a skill that no longer exists, or a count in the prose that does not
+match. It runs in `verify_ecosystem.py`.
