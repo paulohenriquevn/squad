@@ -127,3 +127,49 @@ def test_a_task_id_outside_the_canonical_shape_is_invisible(tmp_path: Path) -> N
         _plan(tmp_path, "### T1 — Fix a bug in the parser\n\nJust patch it.\n"))
     assert short_form.total_bugfix_tasks == 0
     assert short_form.coverage_ratio == 1.0
+
+
+def test_both_scripts_that_ask_if_a_plan_is_a_bugfix_use_the_same_answer() -> None:
+    """`apply_fixes.py` decides whether to INSERT a TDD block; this gate decides
+    whether to REQUIRE one. Same question, same plan, two hand-kept lists.
+
+    A keyword in one and not the other means a plan gets a TDD section it is
+    never checked for, or is checked for one nothing offered to write. They were
+    aligned by hand once — a comment in this file still says so — and had drifted
+    by one entry when this was measured on 2026-09-02.
+
+    Read from source rather than imported: the two live in different skill slices
+    and `conftest.py` refuses to load slices in one process, because several ship
+    modules with the same basename.
+    """
+    import re
+    from pathlib import Path
+
+    def keywords(path: Path) -> set[str]:
+        text = path.read_text(encoding="utf-8")
+        block = re.search(r"BUGFIX_KEYWORDS\s*=\s*\((.*?)\n\)", text, re.S)
+        assert block, f"BUGFIX_KEYWORDS not found in {path}"
+        return {m.group(1) for m in re.finditer(r'"([^"]+)"', block.group(1))}
+
+    kit = Path(__file__).resolve().parents[3]
+    gate = keywords(kit / "skills" / "plan-confidence" / "scripts" / "check_tdd_in_bugfix.py")
+    writer = keywords(kit / "skills" / "plan-improve" / "scripts" / "apply_fixes.py")
+
+    assert gate == writer, (
+        f"the gate and the writer disagree about what a bugfix is: {sorted(gate ^ writer)}")
+
+
+def test_no_keyword_is_a_regex_in_a_list_matched_by_substring() -> None:
+    """`"fix.+bug"` sat in the list with a comment admitting it was never used as
+    one. It matched nothing, and it would start matching the day someone converts
+    the comparison to regex — with no record of what it was for."""
+    import re
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[1] / "scripts" /
+            "check_tdd_in_bugfix.py").read_text(encoding="utf-8")
+    block = re.search(r"BUGFIX_KEYWORDS\s*=\s*\((.*?)\n\)", text, re.S).group(1)
+
+    for keyword in re.findall(r'"([^"]+)"', block):
+        assert not re.search(r"[.*+?\[\]()|\\^$]", keyword), (
+            f"{keyword!r} is a regex in a list compared with `in`")
