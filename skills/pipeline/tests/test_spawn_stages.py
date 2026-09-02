@@ -24,6 +24,7 @@ does.
 """
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -34,7 +35,21 @@ yaml = pytest.importorskip("yaml")
 
 SKILL = Path(__file__).resolve().parents[1]
 SCRIPT = SKILL / "scripts" / "spawn_stages.py"
-STAGES = ("discover", "align", "plan")
+def _stages_from_source() -> tuple[str, ...]:
+    """The stage list the script actually has, not a copy of it kept here.
+
+    JUDGE was added on 2026-09-02 and this assertion was the only thing that
+    noticed the copy had gone stale — the good outcome, but a hand-kept list
+    beside the one it mirrors only ever drifts, and the next stage drifts it
+    again.
+    """
+    spec = importlib.util.spec_from_file_location("_spawn_stages_under_test", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return tuple(module.STAGES)
+
+
+STAGES = _stages_from_source()
 
 
 def _run(tmp_path: Path, *extra: str) -> subprocess.CompletedProcess:
@@ -100,18 +115,34 @@ def test_the_read_only_stages_cannot_write(tmp_path: Path) -> None:
             f"{stage} can write: prose asking it not to is not a mechanism")
 
 
-def test_isolation_is_declared_where_the_spawn_uses_it(tmp_path: Path) -> None:
-    """The `/review` templates still tell reviewers the tree is SHARED, which
-    stopped being true when the spawn started passing `isolation="worktree"`.
+def test_no_template_promises_isolation_the_scheduler_does_not_give(tmp_path: Path) -> None:
+    """The prose and the mechanism must describe the same world, in either
+    direction.
 
-    A prompt describing a world the code left behind is worse than no prompt: the
-    agent takes precautions against a hazard that is gone and trusts nothing it
-    should. These templates must not repeat that.
+    This test was written when the templates lagged BEHIND the code — `/review`'s
+    still told reviewers the tree was shared after the spawn had started isolating
+    it. On 2026-09-02 it caught the inverse: `isolation: 'worktree'` was removed
+    from the scheduler (it isolated the kit's repository, not the consumer's, and
+    every stage here is read-only), and three templates went on promising each
+    agent a worktree of its own.
+
+    Read from both sources rather than asserting a remembered answer, so whichever
+    side moves next, this fails.
     """
+    workflow = (Path(__file__).resolve().parents[3]
+                / "mechanisms" / "fleet" / "pipeline_workflow.js").read_text(encoding="utf-8")
+    code = "\n".join(line for line in workflow.splitlines()
+                     if not line.lstrip().startswith("//"))
+    scheduler_isolates = "isolation:" in code
+
     _run(tmp_path)
     for stage in STAGES:
         text = (tmp_path / "agents" / f"{stage}.md").read_text(encoding="utf-8").lower()
-        assert "worktree" in text, f"{stage} does not tell the agent it is isolated"
+        promises = "your own worktree" in text or "you are alone in this tree" in text
+        assert promises == scheduler_isolates, (
+            f"{stage}.md and the scheduler disagree: the template "
+            f"{'promises' if promises else 'does not promise'} isolation and the "
+            f"scheduler {'gives' if scheduler_isolates else 'does not give'} it")
 
 
 def test_the_model_comes_from_the_routing_rule(tmp_path: Path) -> None:

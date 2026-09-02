@@ -7,7 +7,7 @@ model: {MODEL}
 
 # ALIGN — {ITEM}
 
-You are the ALIGNMENT phase for `{ITEM}`, in your own worktree over `{REPO}`.
+You are the ALIGNMENT phase for `{ITEM}`, working in `{REPO}`.
 
 ## What you do
 

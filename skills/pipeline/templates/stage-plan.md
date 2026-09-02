@@ -7,7 +7,7 @@ model: {MODEL}
 
 # PLAN — {ITEM}
 
-You are the PLAN phase for `{ITEM}`, in your own worktree over `{REPO}`. You are
+You are the PLAN phase for `{ITEM}`, working in `{REPO}`. You are
 here because the alignment brief cleared the gate.
 
 ## What you do

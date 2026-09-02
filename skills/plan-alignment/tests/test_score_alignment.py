@@ -440,3 +440,88 @@ def test_an_nfr_nobody_cites_is_not_covered_by_an_fr_with_the_same_number(
     trace = next(c for c in report.criteria if c.key == "traceability")
     assert trace.score < 2, "an NFR cited by nothing scored as covered"
     assert "NFR-001" in trace.why or "NFR-002" in trace.why, trace.why
+
+
+# ── kit#12 and kit#13 — both filed by agents running inside the fleet ─────────
+
+def _score_of(tmp_path, body: str, key: str):
+    brief = tmp_path / "brief.md"
+    brief.write_text(body, encoding="utf-8")
+    report = score_alignment(brief)
+    return next(c for c in report.criteria if c.key == key)
+
+
+def test_a_sentence_denying_a_scenario_class_does_not_credit_it(tmp_path) -> None:
+    """kit#12. The rubric is the only mechanical defence against "happy path
+    only", and it was reading a negation as evidence.
+
+    Measured: a brief whose Flows section holds one sentence — "There is no
+    recovery path" — scored `1/4 classes: recovery`, moving the criterion from 0
+    to 1 and adding a real point toward the 90% gate that decides whether an item
+    may be implemented. A brief with literally zero flows drawn does not score
+    0/4.
+    """
+    denial = _score_of(tmp_path, "# A\n\n## Flows\n\n"
+                       "There is no recovery path: once written it cannot be undone.\n",
+                       "scenario_classes")
+
+    assert denial.score == 0, f"credited by a denial: {denial.why}"
+    assert "0/4" in denial.why
+
+
+def test_a_class_that_is_actually_drawn_still_counts(tmp_path) -> None:
+    """The narrowing must not eat the criterion it is protecting."""
+    drawn = _score_of(tmp_path, "# A\n\n## Flows\n\n"
+                      "### Recovery flow\n\n1. Retry with backoff\n",
+                      "scenario_classes")
+
+    assert drawn.score >= 1
+    assert "recovery" in drawn.why
+
+
+def test_an_explicit_class_marker_still_counts(tmp_path) -> None:
+    """`[recovery]` is the deliberate form and was always meant to count."""
+    marked = _score_of(tmp_path, "# A\n\n## Flows\n\n- [recovery] retry with backoff\n",
+                       "scenario_classes")
+
+    assert marked.score >= 1
+
+
+def test_an_empty_requirements_section_is_not_reported_as_a_missing_one(tmp_path) -> None:
+    """kit#13. The score was right and the reason was false.
+
+    A brief whose `## Functional Requirements` holds prose but no bullets was
+    told the section did not exist — sending the author to add a heading that is
+    already there instead of to add requirements. The gate's whole value is
+    telling an author what to close.
+    """
+    body = ("# A\n\n## Functional Requirements\n\n"
+            "Deliberately empty: the disposition has not been made.\n")
+
+    fr = _score_of(tmp_path, body, "functional_requirements")
+
+    assert fr.score == 0, "the score was never the problem"
+    assert "section" not in fr.why or "0" in fr.why, \
+        f"still blames the heading: {fr.why}"
+    assert "no `## Functional Requirements` section" != fr.why
+
+
+def test_a_genuinely_absent_section_still_says_so(tmp_path) -> None:
+    """The two states must stay distinguishable — that is the whole fix."""
+    fr = _score_of(tmp_path, "# A\n\n## Problem\n\nsomething\n",
+                   "functional_requirements")
+
+    assert fr.score == 0
+    assert "section" in fr.why
+
+
+def test_the_same_shape_is_fixed_for_the_nfr_criterion(tmp_path) -> None:
+    """The issue names it: "same defect for the NFR criterion, which shares the
+    shape". A fix applied to one of two identical branches is half a fix."""
+    body = ("# A\n\n## Non-Functional Requirements\n\n"
+            "To be decided once the scope call lands.\n")
+
+    nfr = _score_of(tmp_path, body, "nfr_measurable")
+
+    assert nfr.score == 0
+    assert nfr.why != "no `## Non-Functional Requirements` section"

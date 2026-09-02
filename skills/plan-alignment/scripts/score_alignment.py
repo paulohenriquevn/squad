@@ -278,6 +278,47 @@ def _bullets(text: str | None) -> list[str]:
     return [ln.strip() for ln in text.splitlines() if re.match(r"^\s*[-*\d]", ln) and ln.strip()]
 
 
+
+def _absent_or_empty(section: str | None, heading: str) -> str:
+    """Why a requirements criterion scored zero — the heading, or the contents.
+
+    kit#13. Both cases produced `no ## <heading> section`, so a brief whose
+    section held prose but no bullets was told the heading did not exist. The
+    score was right; the reason sent the author to add a heading already there
+    instead of to add requirements, and telling an author what to close is the
+    gate's entire value.
+    """
+    if section is None or not section.strip():
+        return f"no `## {heading}` section"
+    return f"`## {heading}` is present and lists nothing"
+
+
+#: A scenario class counts as DRAWN when it is labelled — an explicit `[class]`
+#: marker, or a heading naming it. Not when the word appears in running prose.
+#:
+#: kit#12. The old pattern also matched `<class> flow|path|scenario` anywhere in
+#: the section, and prose is where a brief EXPLAINS itself, including when it
+#: explains an absence. Measured: a Flows section holding the single sentence
+#: "There is no recovery path" scored `1/4 classes: recovery` — the criterion
+#: moved 0 -> 1 and added a real point toward the 90% gate that decides whether
+#: an item may be implemented, for a brief with zero flows drawn.
+#:
+#: Detecting the negation instead was the other option and was rejected: it
+#: needs a list of the ways English says no, and every word missing from that
+#: list is this same bug. A label is unambiguous, it is what "drawn" means, and
+#: the deliberate `[class]` form already existed for authors who want the point.
+_CLASS_MARKER = "[{c}]"
+
+
+def _class_is_drawn(cls: str, flows: str | None) -> bool:
+    if not flows:
+        return False
+    if _CLASS_MARKER.format(c=cls).lower() in flows.lower():
+        return True
+    heading = re.compile(rf"^\s*#{{1,6}}\s+.*\b{cls}\b", re.IGNORECASE | re.MULTILINE)
+    return bool(heading.search(flows))
+
+
 def _tri(present: bool, complete: bool) -> int:
     """0 absent · 1 present but partial · 2 complete."""
     return 2 if complete else (1 if present else 0)
@@ -303,7 +344,8 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     fr = _bullets(fr_section)
     add("functional_requirements", "Functional requirements enumerated",
         _tri(bool(fr), len(fr) >= 2),
-        f"{len(fr)} listed" if fr else "no `## Functional Requirements` section")
+        f"{len(fr)} listed" if fr else _absent_or_empty(
+            fr_section, "Functional Requirements"))
 
     # 3 — Non-functional requirements, WITH numbers.
     nfr_section = _section(body, "Non-Functional Requirements", "Non-functional requirements")
@@ -312,7 +354,7 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     add("nfr_measurable", "Non-functional requirements carry numbers",
         _tri(bool(nfr), bool(nfr) and len(measurable) == len(nfr)),
         f"{len(measurable)}/{len(nfr)} measurable" if nfr
-        else "no `## Non-Functional Requirements` section")
+        else _absent_or_empty(nfr_section, "Non-Functional Requirements"))
 
     # 4 — Flows, named and stepped.
     flows = _section(body, "Flows", "Flow", "User flows")
@@ -325,9 +367,7 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     # 5 — spec-kit /checklist: the four scenario classes.
     # "Happy path only" was an anti-pattern in prose. Naming the classes makes it
     # a measurement — the defects live in the three nobody drew.
-    covered = [c for c in _SCENARIO_CLASSES
-               if re.search(rf"\[{c}\]|\b{c}\s+(flow|path|scenario)\b",
-                            flows or "", re.IGNORECASE)]
+    covered = [c for c in _SCENARIO_CLASSES if _class_is_drawn(c, flows)]
     add("scenario_classes", "Primary, alternate, exception and recovery flows drawn",
         _tri(bool(covered), len(covered) == len(_SCENARIO_CLASSES)),
         f"{len(covered)}/4 classes: {', '.join(covered) or 'none'}"
