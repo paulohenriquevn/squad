@@ -19,6 +19,7 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
+from alignment_judge import sign  # noqa: E402
 from score_alignment import score_alignment  # noqa: E402
 
 BODY = "# Alignment: X\n\n## Problem\n" + ("word " * 40) + "\n"
@@ -95,3 +96,48 @@ def test_a_human_tick_beside_a_judge_tick_is_not_a_human_signoff(tmp_path: Path)
         "- [x] CHK001 x  <!-- signed-by: human/paulo -->\n"
         "- [x] CHK002 y  <!-- signed-by: judge/alignment-judge -->\n"))
     assert not report.signed_by_is_human
+
+
+def test_an_approving_signature_does_not_lower_the_score(tmp_path) -> None:
+    """kit#17. The gate must score the artefact, not the reviewer's prose.
+
+    `alignment_judge.py` appends the judge's `--reason` under `## Reviewer
+    sign-off`, and the placeholder criterion scanned the whole document for the
+    bare token `UNKNOWN`. So a judge writing "no unanswered UNKNOWN" as part of
+    saying the brief was CLEAN made that criterion fail. Measured on a real brief:
+    34/34 before the signature, 32/34 after. Nearer the threshold, an approving
+    signature would have pushed the brief below 90% and turned ALIGNED back into
+    a refusal.
+    """
+    brief = tmp_path / "b.md"
+    body = ("# Alignment: X\n\n## Problem\n\n"
+            + "the problem is stated as something observed here " * 5 + "\n\n"
+            "## Reviewer sign-off\n\n- [ ] CHK001 the evidence holds\n")
+    brief.write_text(body, encoding="utf-8")
+    before = next(c for c in score_alignment(brief).criteria if c.key == "no_placeholders")
+
+    brief.write_text(
+        sign(brief, "judge/alignment-judge",
+             "Checked every requirement against the tree: no unanswered UNKNOWN, "
+             "no TODO, nothing left to decide."),
+        encoding="utf-8")
+    after = next(c for c in score_alignment(brief).criteria if c.key == "no_placeholders")
+
+    assert before.score == 2, "the brief was clean before it was signed"
+    assert after.score == 2, (
+        f"the signature that APPROVED the brief lowered its score: {after.why}")
+
+
+def test_a_placeholder_in_the_brief_itself_is_still_caught_after_signing(tmp_path) -> None:
+    """The narrowing is scoped to the reviewer's section, not a pardon for the
+    document. A hole in a requirement stays a hole after a judge signs."""
+    brief = tmp_path / "b.md"
+    brief.write_text(
+        "# Alignment: X\n\n## Functional Requirements\n\n"
+        "- FR-001: the system does TODO when the ledger is written.\n\n"
+        "## Reviewer sign-off\n\n- [ ] CHK001 the evidence holds\n", encoding="utf-8")
+
+    brief.write_text(sign(brief, "judge/alignment-judge", "clean"), encoding="utf-8")
+    after = next(c for c in score_alignment(brief).criteria if c.key == "no_placeholders")
+
+    assert after.score == 0, f"a TODO in an FR survived the signature: {after.why}"

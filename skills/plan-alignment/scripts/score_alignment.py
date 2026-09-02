@@ -279,6 +279,25 @@ def _bullets(text: str | None) -> list[str]:
 
 
 
+#: Fenced code blocks and inline code spans — where a document QUOTES rather than
+#: states. Stripped before looking for a marker that carries a verdict.
+_FENCED_RE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+
+
+def _declarations_only(body: str) -> str:
+    """The lines on which the document speaks in its own voice.
+
+    A verdict marker is a statement the document makes. Quoted inside a sentence,
+    a list item or a code span it is an example of the syntax, not a use of it —
+    and a brief telling its reviewer how to declare a split contains exactly that.
+    """
+    stripped = _INLINE_CODE_RE.sub("", _FENCED_RE.sub("", body))
+    return "\n".join(
+        line for line in stripped.splitlines()
+        if line.strip().startswith("<!--") and line.strip().endswith("-->"))
+
+
 def _without_section(body: str, *headings: str) -> str:
     """`body` with the named section removed, heading and all.
 
@@ -473,7 +492,19 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     #
     # Outside that section nothing changes: an `UNKNOWN` in a requirement or an
     # acceptance criterion is a hole, and this is what charges for it.
-    outside_questions = _without_section(body, "Questions answered", "Questions")
+    # kit#17. `alignment_judge.py` appends the judge's `--reason` under
+    # `## Reviewer sign-off`, so a judge writing "no unanswered UNKNOWN" as part
+    # of saying the brief is CLEAN made this criterion fail. Measured on a real
+    # brief: 34/34 before the signature, 32/34 after — on a signature whose only
+    # sin was using the word. Nearer the threshold, an APPROVING signature would
+    # have pushed the brief below 90% and turned `ALIGNED` back into a refusal:
+    # the gate scoring the reviewer's prose instead of the artefact.
+    #
+    # The criterion measures the author's brief. The sign-off section belongs to
+    # the reviewer, and `alignment-threshold.md` is explicit that those are two
+    # different people.
+    outside_questions = _without_section(
+        body, "Questions answered", "Questions", "Reviewer sign-off")
     placeholders = sorted({m.group(0).upper()
                            for m in _UNRESOLVED_RE.finditer(outside_questions)})
     add("no_placeholders", "No unresolved placeholder anywhere in the brief",
@@ -542,7 +573,16 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
         "whether the flows drawn are the flows that matter",
         "whether the numbers in the NFRs are the right numbers",
     )
-    split = _NEEDS_SPLIT_RE.search(body)
+    # kit#14. The marker counts when it is USED, not when it is mentioned. A brief
+    # explains to its reviewer how to declare a split — "mark this brief
+    # `<!-- verdict: NEEDS_SPLIT: ... -->`" — and that sentence made the scorer
+    # emit NEEDS_SPLIT, a verdict the rubric defines as "declared by the reviewer,
+    # never inferred", for a brief in which no reviewer had declared anything.
+    #
+    # A declaration stands on its own line. A mention sits inside a sentence, a
+    # list item or a code span. Same distinction kit#17 needed, and the same root:
+    # a marker matched anywhere, with no notion of mentioned versus used.
+    split = _NEEDS_SPLIT_RE.search(_declarations_only(body))
     return AlignmentReport(
         tuple(criteria), judgement, pending, len(boxes), signed_by,
         needs_split=bool(split),
