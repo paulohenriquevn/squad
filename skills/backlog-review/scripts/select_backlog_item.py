@@ -130,6 +130,15 @@ def live_blockers(item: Item, statuses: dict[str, str]) -> list[str] | None:
     if not declares_impediment(raw):
         return None
     ids = parse_blocked_by(raw)
+    # An item cannot block itself, and `blocked_by` is prose: the parser lifts every
+    # `B-NNN` it finds, so a sentence that names the item — "same prose as B-079" —
+    # made B-079 its own blocker. That is a deadlock no work can clear, and it reads
+    # like a legitimate impediment: measured on a consumer 2026-09-02, where 26
+    # selectable items sat behind seven roots and two of the seven were holding
+    # themselves. Dropped here rather than reported, because the registry is prose
+    # and an incidental mention is not a claim; `check_backlog_structure` is where a
+    # malformed field belongs.
+    ids = [b for b in ids if b != item.item_id]
     if not ids:
         return []
     open_ids = [b for b in ids if statuses.get(b, "") in OPEN_STATUS]

@@ -700,6 +700,10 @@ KB_DIRS=(
   "plans"                       # /plan-write outputs
   "implementations"             # /implement halt-loop logs
   "reviews"                     # /review reports
+  # `cycle-release.md` § Output names `records/releases/{version}-release.md`,
+  # and `squad_boss.HALT_DIRS` watches the directory for BLOCKED reports — it
+  # was the only one of the eleven that nothing here created.
+  "releases"                    # /release run records, one per cut version
   "audits"                      # /code-quality + /deps-audit reports
   "acceptance"                  # /acceptance records (end-user validation of a release)
   "acceptance/evidence"         # screenshots, console/network dumps, transcripts

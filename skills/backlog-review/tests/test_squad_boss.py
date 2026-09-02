@@ -8,6 +8,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from backlog_fixtures import item_block  # noqa: E402
@@ -16,6 +18,7 @@ from squad_boss import (  # noqa: E402
     causes_named,
     halt_reports,
     unblocking_ids,
+    HALT_DIRS,
 )
 
 
@@ -109,3 +112,30 @@ def test_unblocking_ids_is_the_union_across_every_halt(tmp_path: Path) -> None:
     statuses = {"B-033": "triaged", "B-044": "triaged",
                 "B-168": "triaged", "B-169": "raw"}
     assert unblocking_ids(project, statuses) == {"B-168", "B-169"}
+
+
+def test_a_blocked_report_from_the_maintenance_cycle_is_seen(tmp_path: Path) -> None:
+    """`cycle-maintenance` declares ITEM_BLOCKED and writes under `maintenance-runs/`.
+
+    That directory was missing from `HALT_DIRS`, so a BLOCKED report from the cycle
+    that ORCHESTRATES the queue was invisible to the reader of that queue. A
+    consumer measured it from the inside on 2026-08-31 and filed the gap as its own
+    blocker — an item waiting on a kit fix nobody upstream knew was needed.
+    """
+    (tmp_path / ".claude" / "records" / "maintenance-runs").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "maintenance-runs" / "b-042-BLOCKED.md").write_text(
+        "# BLOCKED\n\nB-042 cannot proceed: it waits on B-077.\n", encoding="utf-8")
+
+    halts = halt_reports(tmp_path)
+
+    assert "B-042" in halts, f"the maintenance cycle's halt was not seen: {sorted(halts)}"
+
+
+@pytest.mark.parametrize("directory", sorted(HALT_DIRS))
+def test_every_halt_dir_is_one_the_installer_creates(directory: str) -> None:
+    """A directory in this map that the installer never scaffolds is a phase whose
+    halts can only be found by accident."""
+    install = (Path(__file__).resolve().parents[3]
+               / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+
+    assert f'"{directory}"' in install, f"{directory} is watched but never created"

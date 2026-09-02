@@ -61,7 +61,18 @@ from pathlib import Path
 
 #: Phase output directory -> the phase that writes there. A BLOCKED report is named
 #: `{slug}-BLOCKED.md` and lives beside the phase's other artefacts.
-HALT_DIRS = {"implementations": "implement", "reviews": "review", "releases": "release"}
+HALT_DIRS = {
+    "implementations": "implement",
+    "reviews": "review",
+    "releases": "release",
+    # `cycle-maintenance` declares ITEM_BLOCKED and writes to `maintenance-runs/`,
+    # and it was missing here — so a BLOCKED report from the cycle that ORCHESTRATES
+    # the queue was invisible to the reader of that queue. A consumer measured it
+    # from the inside on 2026-08-31: "meus BLOCKED reports desta data ficam
+    # invisíveis ao SELECT até isso", filed as its own blocker and then waiting on a
+    # kit fix nobody upstream knew was needed.
+    "maintenance-runs": "maintenance",
+}
 
 #: Statuses that mean an item is still work. A shipped or killed cause cannot be what
 #: holds anything, however the report's prose reads.

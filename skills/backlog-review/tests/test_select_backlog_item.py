@@ -282,3 +282,36 @@ def test_without_a_priority_set_the_order_is_unchanged(tmp_path: Path) -> None:
     """Every existing caller keeps its answer: the parameter defaults to empty."""
     text = item_block("B-057", status="triaged") + item_block("B-168", status="triaged")
     assert select(text).item_id == "B-057"
+
+def test_an_item_never_appears_as_its_own_wall() -> None:
+    """`blocked_by` is prose and the parser lifts every `B-NNN` in it, so a sentence
+    naming the item listed the item as its own blocker.
+
+    The prose still holds it — that is the contract, and an impediment with no item
+    to point at is exactly what an empty blocker list means. What must NOT happen is
+    the board reporting `B-001 → B-001`: a wall pointing at itself is a deadlock no
+    work can clear, and it reads like a cause somebody could go and fix.
+
+    Measured on a consumer 2026-09-02: 26 selectable items behind seven roots, two
+    of which were holding themselves, their prose reading "same wording as B-079
+    and B-080".
+    """
+    text = _backlog(item_block(
+        "B-001", status="triaged",
+        extra="blocked_by: waiting on the same batch as B-001 itself, see the note\n"))
+
+    report = select(text)
+
+    assert report.verdict == "BACKLOG_BLOCKED", "the prose impediment still holds it"
+    assert report.walls.get("B-001") == [], (
+        f"the item must not be listed as its own wall: {report.walls}")
+
+
+def test_a_real_blocker_beside_the_self_reference_still_holds() -> None:
+    """Dropping the self-mention must not drop the blocker standing next to it."""
+    text = _backlog(
+        item_block("B-001", status="triaged",
+                   extra="blocked_by: B-001's own note says this waits on B-002\n"),
+        item_block("B-002", status="triaged"))
+
+    assert select(text).item_id == "B-002", "B-001 is still held by B-002"
