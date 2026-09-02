@@ -182,14 +182,19 @@ def test_files_this_repository_does_cover_are_not_reported(source: str) -> None:
 #: the assertion would create the coverage it is checking for the absence of. The
 #: same circularity `check_prose_tests.py` exists to catch, arriving from the other
 #: side.
+#: The scheduler script left this list on 2026-09-02, and it is worth recording
+#: why: it was uncovered because it is JavaScript in a Python project, so it was
+#: reviewed by eye and by nothing else — and both of the worst defects this kit
+#: has shipped were one line of it. The third, a gate that named what may NOT
+#: pass instead of what may, sent five unsigned items to PLAN before an agent
+#: caught it. It now has assertions that read its executable lines.
 _UNCOVERED = [
-    "/".join(("mechanisms", "fleet", "pipeline" + "_workflow.js")),
     "/".join(("mechanisms", "fleet", "session" + "_catchup.py")),
     "/".join(("skills", "plan-confidence", "scripts", "patterns" + "_match.py")),
 ]
 
 
-@pytest.mark.parametrize("source", _UNCOVERED, ids=["workflow-js", "catchup", "patterns"])
+@pytest.mark.parametrize("source", _UNCOVERED, ids=["catchup", "patterns"])
 def test_the_files_that_genuinely_have_no_test_still_are(source: str) -> None:
     """Verified by hand on 2026-09-01: no test imports, names or runs any of these.
     They are what the gate is FOR, and pinning them keeps the widening honest — a

@@ -139,3 +139,60 @@ def test_rerunning_is_idempotent(tmp_path: Path) -> None:
     _run(tmp_path)
     second = {p.name: p.read_text(encoding="utf-8") for p in (tmp_path / "agents").glob("*.md")}
     assert first == second
+
+
+
+def _kit_at(root: Path) -> Path:
+    """A directory `squad.layout` will recognise: the three trees plus `.claude/`."""
+    for tree in ("skills", "rules", "hooks"):
+        (root / ".claude" / tree).mkdir(parents=True)
+    return root
+
+
+def test_the_destination_is_the_projects_data_root_not_the_callers_cwd(tmp_path) -> None:
+    """Three answers to "where do the stage agents live" were in circulation, and
+    both written-down ones were relative to whoever ran the command. On a real
+    consumer the documented form built a second `records/` tree at the repository
+    root while the cycle's own sat in `.claude/records/` — putting the run's audit
+    trail outside the tree that holds every other record of the cycle. The old
+    code default was worse: `.claude/agents/`, where DECLARED agents live."""
+    project = _kit_at(tmp_path / "consumer")
+
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), "--item", "B-014", "--repo", str(project)],
+        capture_output=True, text=True, check=False)
+
+    assert done.returncode == 0, done.stderr
+    written = project / ".claude" / "records" / "pipeline-agents" / "b-014"
+    assert {p.name for p in written.glob("*.md")} == {f"{s}.md" for s in STAGES}
+    assert not (project / ".claude" / "agents").exists(), \
+        "generated per-item files do not go where the kit keeps its declared agents"
+    assert not (project / "records").exists(), \
+        "nor at the repository root, beside a data root that already exists"
+
+
+def test_a_project_with_no_kit_is_refused_rather_than_guessed_at(tmp_path) -> None:
+    """A guess writes the audit trail somewhere nobody looks, and being traceable
+    back to the prompt is the entire reason these files are materialised."""
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), "--item", "B-014", "--repo", str(tmp_path)],
+        capture_output=True, text=True, check=False)
+
+    assert done.returncode != 0
+    assert "no kit under" in done.stderr
+    assert "--output-dir" in done.stderr, "and it says how to proceed deliberately"
+
+
+def test_an_explicit_output_dir_is_still_honoured_verbatim(tmp_path) -> None:
+    """The layout answers when nobody said; it does not overrule someone who did."""
+    project = _kit_at(tmp_path / "consumer")
+    chosen = tmp_path / "somewhere-else"
+
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), "--item", "B-014", "--repo", str(project),
+         "--output-dir", str(chosen)],
+        capture_output=True, text=True, check=False)
+
+    assert done.returncode == 0, done.stderr
+    assert (chosen / "discover.md").is_file()
+    assert not (project / ".claude" / "records").exists()

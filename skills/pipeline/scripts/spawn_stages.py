@@ -23,6 +23,23 @@ in each template explaining why is the explanation, and the difference matters:
 the first run asked the agents in prose not to write, which the harness does not
 read.
 
+WHERE THE FILES GO, AND WHY THE CALLER SHOULD NOT SAY
+------------------------------------------------------
+`--output-dir` is optional and should stay unused. Three answers to "where do the
+stage agents live" were in circulation and all three were wrong in a consumer:
+SKILL.md's `records/pipeline-agents/b-014` and this script's old default of
+`.claude/agents/pipeline-b-014` were both relative to the CWD — the caller's, not
+the project's — and the second wrote generated per-item files into the directory
+where the kit keeps its DECLARED agents. Measured on a real consumer: the
+documented form created a second `records/` tree at the repository root while the
+cycle's real one sat in `.claude/records/`, so the run's audit trail landed
+outside the tree that holds every other record of the cycle.
+
+`squad.layout` answers this and has since 2026-08-26. `resolve(repo).eco` is the
+cycle's data root for THAT project, whichever of the three install shapes it uses,
+and it is what this script now asks. A `--output-dir` given explicitly is still
+honoured verbatim, relative to the caller's CWD like any other CLI path.
+
 Usage:
     python3 spawn_stages.py --item B-014 --repo <path> [--output-dir DIR]
                             [--date YYYY-MM-DD] [--routing-rule FILE]
@@ -30,6 +47,7 @@ Usage:
 Exit codes:
     0 — every stage written
     1 — a template is missing, or a placeholder survived substitution
+    2 — no `--output-dir` and no kit under `--repo`, so there is no data root
 """
 from __future__ import annotations
 
@@ -39,11 +57,24 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from squad.layout import resolve  # noqa: E402
+
 #: The stages this script materialises. IMPLEMENT and beyond are not here yet —
 #: they write to the repository, and a writing stage needs its own review of what
 #: the tool list should be. Naming the gap rather than shipping a template whose
 #: permissions nobody thought about.
-STAGES = ("discover", "align", "plan")
+#: JUDGE sits between ALIGN and PLAN and is not optional. The alignment rule
+#: requires two independent things — a machine score AND a sign-off from someone
+#: who is not the brief's author — and ALIGN can only ever produce the first,
+#: because its own template forbids it from emitting `ALIGNED`. With no stage for
+#: the second, the scheduler read `AWAITING_REVIEW` as permission: measured on a
+#: real backlog on 2026-09-02, five of seven items scored `AWAITING_REVIEW` and
+#: all five were sent to PLAN unsigned. Three of those five PLAN agents refused
+#: the work themselves, which is the gate holding only where an agent chose to
+#: hold it.
+STAGES = ("discover", "align", "judge", "plan")
 
 DEFAULT_MODEL = "opus"
 
@@ -107,6 +138,21 @@ def spawn(item: str, repo: Path, output_dir: Path,
     return written
 
 
+def _default_output_dir(repo: Path, item: str) -> Path:
+    """The cycle's data root for `repo`, not the caller's working directory.
+
+    Exits rather than guessing. A guess here writes an audit trail somewhere
+    nobody looks, and the whole point of materialising these files is that a
+    wrong finding can be traced back to the prompt that produced it.
+    """
+    layout = resolve(repo)
+    if layout is None:
+        raise SystemExit(
+            f"FATAL: no kit under {repo}, so there is no data root to write to. "
+            f"Pass --output-dir explicitly if that is deliberate.")
+    return layout.eco / "records" / "pipeline-agents" / item.lower()
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--item", required=True, help="backlog item id, e.g. B-014")
@@ -116,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--routing-rule", type=Path, default=None)
     args = ap.parse_args(argv)
 
-    out = args.output_dir or Path(".claude/agents") / f"pipeline-{args.item.lower()}"
+    out = args.output_dir or _default_output_dir(args.repo, args.item)
     written = spawn(args.item, args.repo, out, args.date, args.routing_rule)
     print(f"wrote {len(written)} stage agent(s) to {out}")
     for path in written:

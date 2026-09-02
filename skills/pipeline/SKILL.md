@@ -63,9 +63,18 @@ is not running, and `unpark()` can bring it back when the blocker lands.
 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/pipeline/scripts/spawn_stages.py" \
-    --item B-014 --repo <consumer-path> \
-    --output-dir records/pipeline-agents/b-014
+    --item B-014 --repo <consumer-path>
 ```
+
+**Do not pass `--output-dir`.** The destination is `squad.layout`'s answer for
+that repo — `<eco>/records/pipeline-agents/<item>` — and the caller is the last
+thing that should be deciding it. This step used to document a relative path,
+which is relative to whoever is running the command rather than to the project:
+on a real consumer it built a second `records/` tree at the repository root while
+the cycle's own sat in `.claude/records/`, putting the run's audit trail outside
+the tree holding every other record. The old code default was worse still — it
+wrote generated per-item files into `.claude/agents/`, where the kit keeps its
+declared ones.
 
 One file per stage, written before anything runs, versioned. This is the shape
 `/review` has used for years and the first pipeline run did not: six agents ran

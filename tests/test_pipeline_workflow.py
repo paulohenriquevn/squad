@@ -65,8 +65,8 @@ def test_every_stage_is_labelled_and_grouped() -> None:
     labels = re.findall(r"label:\s*`([a-z]+):\$\{item\}`", code)
     phases = re.findall(r"phase:\s*'([A-Za-z]+)'", code)
 
-    assert labels == ["discover", "align", "plan"]
-    assert phases == ["Discover", "Align", "Plan"]
+    assert labels == ["discover", "align", "judge", "plan"]
+    assert phases == ["Discover", "Align", "Judge", "Plan"]
     for phase in phases:
         assert f"title: '{phase}'" in code, f"{phase} has no entry in meta.phases"
 
@@ -76,7 +76,43 @@ def test_the_scheduler_never_decides_a_verdict_it_only_reads_one() -> None:
     write a verdict would be a way around the gate rather than through it."""
     code = _code()
 
-    assert "scored.verdict === 'BLOCKED'" in code or "scored?.verdict" in code, \
-        "the gate result is read"
-    assert not re.search(r"verdict\s*=\s*['\"]", code), \
-        "and never assigned"
+    assert "?.verdict" in code, "the gate result is read"
+    assert not re.search(r"verdict\s*=[^=]", code), "and never assigned"
+
+
+def test_each_gate_names_what_may_pass_rather_than_what_may_not() -> None:
+    """An allowlist stops what it was never told about; a denylist passes it.
+
+    The denylist here was one line — `verdict === 'BLOCKED'` — and since ALIGN's
+    own template forbids it from emitting `ALIGNED`, every reachable verdict fell
+    through. Measured on a real backlog on 2026-09-02: five of seven items scored
+    `AWAITING_REVIEW` and all five were sent to PLAN unsigned. Three of those five
+    PLAN agents refused on their own reading of the rule, so the gate held exactly
+    where an agent chose to hold it and nowhere else.
+    """
+    code = _code()
+
+    assert "scored.verdict !== 'AWAITING_REVIEW'" in code, \
+        "ALIGN -> JUDGE must name the one verdict that may proceed"
+    assert "judged?.verdict === 'signed'" in code and "exit_code === 0" in code, \
+        "JUDGE -> PLAN must require the signature AND the measured exit code"
+    assert "=== 'BLOCKED'" not in code, \
+        "naming what is refused lets every unnamed verdict through"
+
+
+def test_planning_requires_a_signature_from_someone_who_is_not_the_author() -> None:
+    """Two independent conditions, and the machine score is only one of them.
+
+    `AWAITING_REVIEW` is named in the alignment rule's own anti-patterns: the
+    state where the machine has finished and the human has not started. A
+    pipeline with no stage between ALIGN and PLAN cannot satisfy the second
+    condition at all — every item reaches PLAN unsigned by construction.
+    """
+    code = _code()
+
+    assert "judge" in code and "phase: 'Judge'" in code, \
+        "the sign-off needs a stage; ALIGN is forbidden from giving it"
+    align_at = code.index("phase: 'Align'")
+    judge_at = code.index("phase: 'Judge'")
+    plan_at = code.index("phase: 'Plan'")
+    assert align_at < judge_at < plan_at, "and it sits between the two"

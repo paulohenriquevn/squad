@@ -5,7 +5,8 @@ export const meta = {
   phases: [
     { title: 'Discover', detail: 'measure each item against the code, in its own worktree' },
     { title: 'Align',    detail: 'write and score an alignment brief per item' },
-    { title: 'Plan',     detail: 'only for items whose brief cleared the gate' },
+    { title: 'Judge',    detail: 'a reviewer who is not the author signs the brief, or refuses' },
+    { title: 'Plan',     detail: 'only for items whose brief carries a signature' },
   ],
 }
 
@@ -69,6 +70,21 @@ const BRIEF = {
   },
 }
 
+const JUDGEMENT = {
+  type: 'object',
+  required: ['slug', 'verdict', 'exit_code'],
+  properties: {
+    slug: { type: 'string' },
+    // What `alignment_judge.py` was actually run with. Not a paraphrase of it.
+    verdict: { type: 'string', enum: ['signed', 'refused'] },
+    // The scorer's own exit code, measured by the judge rather than reported to
+    // it. 0 permits, 1 forbids, and a high percentage with exit 1 is a refusal.
+    exit_code: { type: 'integer' },
+    reason: { type: 'string' },
+    gaps: { type: 'array', items: { type: 'string' } },
+  },
+}
+
 const SCORE = {
   type: 'object',
   required: ['slug', 'machine_ratio', 'verdict'],
@@ -121,15 +137,54 @@ const results = await pipeline(
     { label: `align:${item}`, phase: 'Align', schema: SCORE },
   ),
 
-  // ── stage 3 · PLAN, only for what cleared ─────────────────────────────────
+  // ── stage 3 · JUDGE, the sign-off ALIGN is forbidden to give itself ───────
+  //
+  // This stage did not exist, and its absence was a gate that never closed.
+  // `alignment-threshold.md` requires TWO independent things before an item may
+  // be planned: a machine score at or above the threshold, AND a sign-off from a
+  // reviewer who is not the brief's author. ALIGN can only ever produce the
+  // first — its own template forbids it from emitting `ALIGNED` — so with no
+  // stage for the second, every item arrived at PLAN unsigned by construction.
+  //
+  // Measured on a real backlog on 2026-09-02: five of seven items scored
+  // `AWAITING_REVIEW` and ALL FIVE were sent to PLAN. Three of those five PLAN
+  // agents refused the work on their own reading of the rule and two did not,
+  // which is the gate holding only where an agent chose to hold it.
   (scored, item) => {
-    if (!scored || scored.verdict === 'BLOCKED') {
-      log(`  ${item} parked at the gate (${scored?.machine_ratio ?? '?'}) — the line keeps moving`)
-      return { slug: item, stage: 'parked', reason: scored?.gaps?.join('; ') ?? 'no score' }
+    if (!scored || scored.verdict !== 'AWAITING_REVIEW') {
+      log(`  ${item} stops at ALIGN (${scored?.verdict ?? 'no score'}) — the line keeps moving`)
+      return { slug: item, stage: 'parked', at: 'align',
+               reason: scored?.gaps?.join('; ') ?? scored?.verdict ?? 'no score' }
+    }
+    return agent(
+      stagePrompt(item, 'judge',
+        `ALIGN reported: ${JSON.stringify(scored)}\n\n` +
+        `Measure the score yourself, review the brief against the repository, ` +
+        `and sign or refuse under your own name. Return the structured object.`),
+      { label: `judge:${item}`, phase: 'Judge', schema: JUDGEMENT },
+    ).then((judged) => ({ ...judged, slug: item }))
+  },
+
+  // ── stage 4 · PLAN, only for a brief that carries a signature ─────────────
+  //
+  // ALLOWLIST, and the distinction is the defect this replaces. The old test was
+  // `verdict === 'BLOCKED'` — a denylist, which passes everything it was not
+  // told to stop. Since ALIGN cannot emit `ALIGNED`, every reachable verdict fell
+  // through it. `pipeline_orchestrator.py` had the correct shape all along
+  // (`if verdict !== 'PASS'` → park, "the scheduler obeys the gate; it does not
+  // reinterpret it"); this file duplicated that decision and drifted from it.
+  (judged, item) => {
+    const cleared = judged?.verdict === 'signed' && judged?.exit_code === 0
+    if (!cleared) {
+      if (judged?.stage === 'parked') return judged   // already stopped at ALIGN
+      log(`  ${item} refused at the gate — ${judged?.reason ?? 'no judgement'}`)
+      return { slug: item, stage: 'parked', at: 'judge',
+               reason: judged?.gaps?.join('; ') ?? judged?.reason ?? 'no judgement' }
     }
     return agent(
       stagePrompt(item, 'plan',
-        `The brief cleared at ${scored.machine_ratio}. Run your stage now.`),
+        `The brief was signed by ${'`judge/alignment-judge`'} and the scorer exits 0. ` +
+        `Run your stage now.`),
       { label: `plan:${item}`, phase: 'Plan' },
     ).then((text) => ({ slug: item, stage: 'planned', outline: text }))
   },
