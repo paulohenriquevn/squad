@@ -116,3 +116,44 @@ def test_planning_requires_a_signature_from_someone_who_is_not_the_author() -> N
     judge_at = code.index("phase: 'Judge'")
     plan_at = code.index("phase: 'Plan'")
     assert align_at < judge_at < plan_at, "and it sits between the two"
+
+
+def test_every_verdict_the_scorer_can_emit_is_declared_in_the_schedulers_schema() -> None:
+    """A verdict the schema does not list cannot be returned honestly.
+
+    The scheduler forces its stage agents through a JSON schema, so an ALIGN
+    agent whose scorer produced a verdict outside the enum has two options and
+    both are wrong: fail the structured call, or pick a listed value that is not
+    what it measured. `NEEDS_SPLIT` already lived through that — it existed in
+    SKILL.md's table and in no code, so a brief needing a split had to be squeezed
+    into BLOCKED, which tells the reader to close gaps no rewrite can close.
+
+    Two hand-kept lists in two languages. Today the same shape cost three separate
+    defects, so it gets an assertion rather than a habit.
+    """
+    code = _code()
+    declared = set(re.findall(r"enum:\s*\[([^\]]+)\]", code))
+    verdicts = {v.strip().strip("'\"")
+                for group in declared for v in group.split(",")}
+
+    scorer = (Path(__file__).resolve().parents[1] / "skills" / "plan-alignment"
+              / "scripts" / "score_alignment.py").read_text(encoding="utf-8")
+    emitted = set(re.findall(r'"(ALIGNED|AWAITING_REVIEW|BLOCKED|NEEDS_SPLIT)"', scorer))
+
+    assert emitted, "the scorer's verdicts moved — this test is reading the wrong file"
+    missing = emitted - verdicts
+    assert not missing, (
+        f"the scorer can emit {sorted(missing)} and the scheduler's schema does not "
+        f"list them; an agent measuring one has to fail the call or report a "
+        f"different verdict than it measured")
+
+
+def test_the_judge_stage_reports_the_exit_code_it_measured_not_one_it_was_told() -> None:
+    """The alignment rule's exit code IS the verdict — 0 permits, 1 forbids — and
+    a high percentage with exit 1 is a refusal, not a near-miss. A PLAN agent was
+    launched on 2026-09-02 with "The brief cleared at 1"; the 1 was the code that
+    forbids, rendered as a score. It refused, read the rule, and said so."""
+    code = _code()
+
+    assert "exit_code" in code, "the judgement carries the code"
+    assert "exit_code === 0" in code, "and clearing requires it to be zero"
