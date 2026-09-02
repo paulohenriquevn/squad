@@ -6,7 +6,7 @@ paths that do not exist in the installation — and `--check` keeps saying OK.
 
 PORTED FROM THE SIBLING KIT, 2026-08-29
 ---------------------------------------
-Both kits ship `mechanisms/dist/generate_plugin_settings.py`; only one guarded it. Editing
+Both kits ship `mechanisms/distribution/generate_plugin_settings.py`; only one guarded it. Editing
 `settings.json` and `settings.plugin.json` by hand desynchronised them here, the
 sibling's suite failed within seconds, and this one stayed green over the same
 drift — a generator with no drift check is a generator nobody runs.
@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = REPO_ROOT / "mechanisms" / "dist" / "generate_plugin_settings.py"
+SCRIPT = REPO_ROOT / "mechanisms" / "distribution" / "generate_plugin_settings.py"
 
 _spec = importlib.util.spec_from_file_location("generate_plugin_settings", SCRIPT)
 _mod = importlib.util.module_from_spec(_spec)

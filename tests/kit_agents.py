@@ -19,7 +19,7 @@ _MARKER = "for kit_agent in "
 
 
 def kit_agents() -> set[str]:
-    install = Path(__file__).resolve().parents[1] / "mechanisms" / "dist" / "install.sh"
+    install = Path(__file__).resolve().parents[1] / "mechanisms" / "distribution" / "install.sh"
     body = install.read_text(encoding="utf-8")
     if _MARKER not in body:
         return {"README.md"}

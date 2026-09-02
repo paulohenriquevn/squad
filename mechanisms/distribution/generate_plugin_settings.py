@@ -6,8 +6,8 @@ is the path prefix: settings.json uses ``$CLAUDE_PROJECT_DIR/`` (standalone)
 while settings.plugin.json uses ``$CLAUDE_PROJECT_DIR/.claude/`` (plugin install).
 
 Usage:
-    python3 mechanisms/dist/generate_plugin_settings.py          # writes settings.plugin.json
-    python3 mechanisms/dist/generate_plugin_settings.py --check   # exit 1 if out of sync
+    python3 mechanisms/distribution/generate_plugin_settings.py          # writes settings.plugin.json
+    python3 mechanisms/distribution/generate_plugin_settings.py --check   # exit 1 if out of sync
 """
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def main() -> int:
     # Add the explanatory comment
     data["_comment_"] = (
         "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains "
-        "the Cycle ecosystem). Used by mechanisms/dist/install.sh. For standalone use "
+        "the Cycle ecosystem). Used by mechanisms/distribution/install.sh. For standalone use "
         "(the Cycle repo itself), see settings.json."
     )
 
@@ -68,7 +68,7 @@ def main() -> int:
         if current != generated:
             print(
                 f"OUT OF SYNC: {target} differs from generated version. "
-                f"Run: python3 mechanisms/dist/generate_plugin_settings.py",
+                f"Run: python3 mechanisms/distribution/generate_plugin_settings.py",
                 file=sys.stderr,
             )
             return 1

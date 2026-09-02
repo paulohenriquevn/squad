@@ -10,7 +10,7 @@
 #                            never touches anything else under .claude/
 #
 # Usage:
-#   bash mechanisms/dist/patch_install.sh <target-project-dir>
+#   bash mechanisms/distribution/patch_install.sh <target-project-dir>
 #
 # Pre-flight:
 #   - Target must exist
@@ -33,11 +33,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The kit root is two levels up: this script lives in `mechanisms/dist/`.
+# The kit root is two levels up: this script lives in `mechanisms/distribution/`.
 SRC_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 if [ $# -lt 1 ]; then
-  echo "Usage: bash mechanisms/dist/patch_install.sh <target-project-dir>" >&2
+  echo "Usage: bash mechanisms/distribution/patch_install.sh <target-project-dir>" >&2
   exit 1
 fi
 

@@ -3,7 +3,7 @@
 THE DEFECT THIS FIXES
 ---------------------
 `plugin.json` advertised an installable plugin, but the only installation path
-that worked was `mechanisms/dist/install.sh`, which `cp -r`s the kit into
+that worked was `mechanisms/distribution/install.sh`, which `cp -r`s the kit into
 `<project>/.claude/`. Three consequences, measured 2026-08-26:
 
 1. **Installed by the native mechanism, no gate ran.** The manifest sat at the

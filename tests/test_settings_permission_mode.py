@@ -90,7 +90,7 @@ def _extract_merge_script() -> str:
     A test against a transcribed copy passes while the shipped script differs —
     which is how a merge defect survives a green suite.
     """
-    text = (ROOT / "mechanisms" / "dist" / "install.sh").read_text(encoding="utf-8")
+    text = (ROOT / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
     start = text.index("python3 - \"$ECO/settings.json\"")
     body = text[text.index("<<'PYEOF'", start) + len("<<'PYEOF'"):]
     return body[:body.index("\nPYEOF")]

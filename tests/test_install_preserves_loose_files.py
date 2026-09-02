@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-INSTALL = ROOT / "mechanisms" / "dist" / "install.sh"
+INSTALL = ROOT / "mechanisms" / "distribution" / "install.sh"
 
 
 #: A project skill has to look like one. The Cycle's `verify_ecosystem.py`

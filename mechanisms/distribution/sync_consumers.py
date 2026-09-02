@@ -32,8 +32,8 @@ The script does not merge, on purpose. An automatic merge across 42 repos is the
 way to spread silently the very error this classifier exists to prevent.
 
 Usage:
-    python3 mechanisms/dist/sync_consumers.py --base <sha> --targets targets.txt
-    python3 mechanisms/dist/sync_consumers.py --base <sha> --targets targets.txt --apply
+    python3 mechanisms/distribution/sync_consumers.py --base <sha> --targets targets.txt
+    python3 mechanisms/distribution/sync_consumers.py --base <sha> --targets targets.txt --apply
 
 Exit codes:
     0 — nothing pending a human decision

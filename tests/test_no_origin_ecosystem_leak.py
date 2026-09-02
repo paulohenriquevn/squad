@@ -183,7 +183,7 @@ def test_no_versioned_path_names_the_origin_ecosystem():
 def installed_rules(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
     target = tmp_path_factory.mktemp("consumer")
     proc = subprocess.run(  # noqa: PLW1510
-        ["bash", str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)],
+        ["bash", str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
     )

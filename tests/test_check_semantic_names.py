@@ -188,7 +188,7 @@ def test_an_executable_with_no_stated_purpose_is_reported(tmp_path: Path) -> Non
 
 
 def test_a_shell_script_stating_its_purpose_in_a_header_comment_passes(tmp_path: Path) -> None:
-    path = tmp_path / "mechanisms" / "dist" / "install.sh"
+    path = tmp_path / "mechanisms" / "distribution" / "install.sh"
     path.parent.mkdir(parents=True)
     path.write_text(
         "#!/usr/bin/env bash\n# Install the kit into a consumer project.\nset -eu\n",

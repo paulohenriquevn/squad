@@ -28,7 +28,7 @@ def test_install_writes_a_manifest_of_what_the_kit_brought(tmp_path: Path) -> No
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
     subprocess.run(
-        ["bash", str(_REPO / "mechanisms" / "dist" / "install.sh"), str(target)],
+        ["bash", str(_REPO / "mechanisms" / "distribution" / "install.sh"), str(target)],
         capture_output=True, text=True, check=True,
     )
 
@@ -52,7 +52,7 @@ def test_a_project_skill_is_absent_from_the_manifest(tmp_path: Path) -> None:
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
 
     subprocess.run(
-        ["bash", str(_REPO / "mechanisms" / "dist" / "install.sh"), str(target), "--merge"],
+        ["bash", str(_REPO / "mechanisms" / "distribution" / "install.sh"), str(target), "--merge"],
         capture_output=True, text=True, check=True,
     )
 
@@ -77,7 +77,7 @@ def test_merge_never_overwrites_an_existing_rules_txt(tmp_path: Path) -> None:
         "python | pyproject.toml | ENABLED |\n", encoding="utf-8")
 
     subprocess.run(
-        ["bash", str(_REPO / "mechanisms" / "dist" / "install.sh"), str(target), "--merge"],
+        ["bash", str(_REPO / "mechanisms" / "distribution" / "install.sh"), str(target), "--merge"],
         capture_output=True, text=True, check=True,
     )
 
@@ -97,7 +97,7 @@ def _install(target: Path, *flags: str) -> None:
     target.mkdir(parents=True, exist_ok=True)
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     subprocess.run(
-        ["bash", str(_REPO / "mechanisms" / "dist" / "install.sh"), str(target), *flags],
+        ["bash", str(_REPO / "mechanisms" / "distribution" / "install.sh"), str(target), *flags],
         capture_output=True, text=True, check=True,
     )
 
@@ -205,7 +205,7 @@ def test_the_removed_flag_is_refused_instead_of_ignored(tmp_path: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     (target / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
     proc = subprocess.run(
-        ["bash", str(_REPO / "mechanisms" / "dist" / "install.sh"), str(target), "--with-domain-agents"],
+        ["bash", str(_REPO / "mechanisms" / "distribution" / "install.sh"), str(target), "--with-domain-agents"],
         capture_output=True, text=True, check=False,
     )
     assert proc.returncode == 2, proc.stdout

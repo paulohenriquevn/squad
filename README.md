@@ -175,7 +175,7 @@ nobody. See [`agents/README.md`](agents/README.md).
 **Adopting it in another project is a bootstrap, not just an install.** The kit ships *this*
 ecosystem's domain routing table, and gate G1 refuses every item until you replace it — measured on
 an adopter: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
-`mechanisms/dist/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
+`mechanisms/distribution/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
 names. The installer prints the sequence.
 
 ```bash

@@ -101,4 +101,4 @@ def test_the_detector_accepts_the_fixed_form(tmp_path: Path) -> None:
 def test_the_detector_still_catches_the_defect() -> None:
     """And one that stopped catching it would be worse still."""
     assert _BLIND.search("python3 skills/acceptance/scripts/extract.py")
-    assert _BLIND.search("bash mechanisms/dist/install.sh")
+    assert _BLIND.search("bash mechanisms/distribution/install.sh")

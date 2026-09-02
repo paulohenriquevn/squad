@@ -43,7 +43,7 @@ def installed(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory):
     """A real installation, from the versioned kit, into an empty target."""
     target = tmp_path_factory.mktemp("consumer")
     proc = subprocess.run(  # noqa: PLW1510
-        ["bash", str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)],
+        ["bash", str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
     )
@@ -129,7 +129,7 @@ def test_no_tool_cache_reaches_the_consumer(versioned_kit, tmp_path):
     target = tmp_path / "consumer"
     target.mkdir()
     proc = subprocess.run(  # noqa: PLW1510
-        ["bash", str(dirty / "mechanisms" / "dist" / "install.sh"), str(target)],
+        ["bash", str(dirty / "mechanisms" / "distribution" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
     )
@@ -220,7 +220,7 @@ def test_reinstalling_never_empties_the_derived_routing_table(
     for path in (target, target / "svc-a"):
         subprocess.run(["git", "init", "-q", "."], cwd=path, check=True)
 
-    install = [str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)]
+    install = [str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)]
     subprocess.run(["bash", *install], capture_output=True, check=True)
     subprocess.run(  # noqa: PLW1510
         [sys.executable, ".claude/skills/backlog-init/scripts/detect_domains.py",
@@ -264,7 +264,7 @@ def test_reinstalling_never_overwrites_the_projects_own_config(
     """
     target = tmp_path_factory.mktemp(f"config{mode.strip('-')}")
     subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
-    install = [str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)]
+    install = [str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)]
     subprocess.run(["bash", *install], capture_output=True, check=True)
 
     # A marker the template cannot contain. `typescript` was the first choice and
@@ -302,7 +302,7 @@ def test_the_kit_can_still_update_its_own_contract(
     """
     target = tmp_path_factory.mktemp(f"contract{mode.strip('-')}")
     subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
-    install = [str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)]
+    install = [str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)]
     subprocess.run(["bash", *install], capture_output=True, check=True)
 
     phases = target / ".claude" / "rules" / "cycle-phases.txt"
@@ -337,7 +337,7 @@ def test_reinstalling_keeps_the_projects_permissions(
 
     target = tmp_path_factory.mktemp(f"perms{mode.strip('-')}")
     subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
-    install = [str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)]
+    install = [str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)]
     subprocess.run(["bash", *install], capture_output=True, check=True)
 
     settings = target / ".claude" / "settings.json"
@@ -376,7 +376,7 @@ def test_a_consumer_with_a_markdown_table_is_migrated_once(
     """
     target = tmp_path_factory.mktemp("migrate")
     subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
-    install = [str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)]
+    install = [str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)]
     subprocess.run(["bash", *install], capture_output=True, check=True)
 
     rules = target / ".claude" / "rules"
@@ -417,7 +417,7 @@ def test_reinstalling_keeps_the_projects_own_skills(
     """
     target = tmp_path_factory.mktemp(f"skills{mode.strip('-')}")
     subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
-    install = [str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)]
+    install = [str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)]
     subprocess.run(["bash", *install], capture_output=True, check=True)
 
     mine = target / ".claude" / "skills" / "project-owned-skill"
@@ -451,10 +451,10 @@ def test_a_project_specialist_survives_a_reinstall(versioned_kit, tmp_path):
     can never take a consumer's file with it."""
     target = tmp_path / "consumer-specialist"
     target.mkdir()
-    subprocess.run(["bash", str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)],
+    subprocess.run(["bash", str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)],
                    check=True, capture_output=True, text=True)
     mine = target / ".claude" / "agents" / "control-plane.md"
     mine.write_text("# my specialist\n", encoding="utf-8")
-    subprocess.run(["bash", str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target),
+    subprocess.run(["bash", str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target),
                     "--force"], check=True, capture_output=True, text=True)
     assert mine.read_text(encoding="utf-8") == "# my specialist\n"

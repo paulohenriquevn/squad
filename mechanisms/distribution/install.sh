@@ -4,7 +4,7 @@
 # picked up identically to the standalone repo.
 #
 # Usage:
-#   bash mechanisms/dist/install.sh <target-project-dir> [--force]
+#   bash mechanisms/distribution/install.sh <target-project-dir> [--force]
 #
 # What it does:
 #   1. Validates target is a directory.
@@ -29,12 +29,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The kit root is two levels up: this script lives in `mechanisms/dist/`.
+# The kit root is two levels up: this script lives in `mechanisms/distribution/`.
 SRC_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # --- args ---
 if [ $# -lt 1 ]; then
-  echo "Usage: bash mechanisms/dist/install.sh <target-project-dir> [--force|--merge]" >&2
+  echo "Usage: bash mechanisms/distribution/install.sh <target-project-dir> [--force|--merge]" >&2
   exit 2
 fi
 
@@ -757,7 +757,7 @@ fi
 
 # --- Validation ---
 # Run FROM THE TARGET. verify_ecosystem.py resolves the ecosystem from the CWD, and the normal way
-# to invoke this script is `cd squad && bash mechanisms/dist/install.sh <target>` — so it was validating
+# to invoke this script is `cd squad && bash mechanisms/distribution/install.sh <target>` — so it was validating
 # the source repo and printing OK for the installation it never opened. Measured: with a routed
 # specialist and a cycle rule deleted from a fresh install, it answered
 # `ecosystem: <workspace>/squad` / `ALL CHECKS PASSED` / exit 0. A check that cannot
@@ -783,7 +783,7 @@ MANIFEST="$ECO/.kit-manifest.txt"
 #
 # Now it lists every file of every copied directory, so the sentence is true.
 {
-  echo "# Written by mechanisms/dist/install.sh — what THIS kit brought into .claude/."
+  echo "# Written by mechanisms/distribution/install.sh — what THIS kit brought into .claude/."
   echo "# One path per line, relative to .claude/. Anything not here is the project's."
   echo "# Covers every directory the installer copies; nothing answers by omission."
   echo "# Regenerated on every install; do not edit by hand."

@@ -5,7 +5,7 @@ WHAT IT CATCHES, AND WHAT IT MISSES
 -----------------------------------
 It matches a list of common Portuguese function words, so it finds prose and misses
 phrases built from words the list does not carry. Demonstrated on 2026-08-31, by this
-kit against itself: `mechanisms/dist/install.sh` carried the comment *"exigindo a spec Agent
+kit against itself: `mechanisms/distribution/install.sh` carried the comment *"exigindo a spec Agent
 Skills; com o kit instalado"* and the sweep reported clean — none of `exigindo`,
 `com`, `kit` or `instalado` is on the list.
 

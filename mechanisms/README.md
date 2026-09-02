@@ -16,7 +16,7 @@ memory. The families below carry the meaning now.
 | `gates/` | Everything that MEASURES the kit against its own contracts, plus the runner that drives them | CI, `verify_ecosystem`, `install.sh --strict` |
 | `cycle/` | The cycle at runtime — routing, the event stream, status transitions, attestation | skills, during a cycle |
 | `fleet/` | Many sessions at once, and the surface a person watches them through | `settings.json`, the operator |
-| `dist/` | Getting the kit into a consumer and keeping it in step | a person, once per install |
+| `distribution/` | Getting the kit into a consumer and keeping it in step | a person, once per install |
 | `conventions/` | Shared parsing, imported by the rest | the other families |
 
 **The import namespace is flat.** `mechanisms/gates/check_xrefs.py` imports
@@ -85,7 +85,7 @@ which is why the rule is now computed rather than requested.
 | `start_fleet.sh` | Start a fleet of executing sessions and one watchdog over all of them |
 | `statusline.sh` | The single line Claude Code shows in its status bar |
 
-### `dist/` — into a consumer, and kept in step
+### `distribution/` — into a consumer, and kept in step
 
 | File | Purpose |
 |---|---|

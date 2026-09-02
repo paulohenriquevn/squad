@@ -133,7 +133,7 @@ def _consumer(tmp_path: Path, kit_skills: list[str], own_skills: list[str],
         d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(f"# {skill}\n\nNo cycle contract here.\n", encoding="utf-8")
     if manifest:
-        body = ["# Written by mechanisms/dist/install.sh"] + [f"skills/{s}" for s in kit_skills]
+        body = ["# Written by mechanisms/distribution/install.sh"] + [f"skills/{s}" for s in kit_skills]
         (tmp_path / ".kit-manifest.txt").write_text("\n".join(body) + "\n", encoding="utf-8")
     return tmp_path
 

@@ -34,7 +34,7 @@ jobs:
 
       # `--strict` is NOT cosmetic: without it a WARN finding is printed and the
       # process exits 0 — the output carries the WARN line and, right below it,
-      # `Overall: PASS`. `mechanisms/dist/install.sh` always called it with `--strict`, the
+      # `Overall: PASS`. `mechanisms/distribution/install.sh` always called it with `--strict`, the
       # workflow called it without, and the same commit produced
       # `check_xrefs.py: FAIL` at install time and green in CI. A gate that looks,
       # sees and approves is worse than an absent gate: it produces confidence where
@@ -99,7 +99,7 @@ jobs:
         run: python3 mechanisms/gates/check_sop_run.py
 
       - name: Generated settings are synchronized
-        run: python3 mechanisms/dist/generate_plugin_settings.py --check
+        run: python3 mechanisms/distribution/generate_plugin_settings.py --check
 
       - name: End-to-end smoke
         run: python3 mechanisms/gates/verify_ecosystem.py

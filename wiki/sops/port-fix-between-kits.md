@@ -64,7 +64,7 @@ This procedure and its run records live in different places on purpose — see
 6. **Run** the full battery — slice suite, `check_xrefs.py --strict`,
    `verify_ecosystem.py`.
 7. **Install** into a throwaway project and exercise the change for real —
-   `bash mechanisms/dist/install.sh <tmpdir>`.
+   `bash mechanisms/distribution/install.sh <tmpdir>`.
 8. **Record** the port in `CHANGELOG.md`, naming what diverged and what did not.
 
 ## Decisions

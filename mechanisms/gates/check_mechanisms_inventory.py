@@ -42,7 +42,7 @@ UNREADABLE = "INVENTORY_UNREADABLE"
 #: The families, in the order the README presents them. A directory outside this
 #: tuple is reported rather than ignored: a sixth family nobody documented is the
 #: same defect as an undocumented file, one level up.
-FAMILIES = ("gates", "cycle", "fleet", "dist", "conventions")
+FAMILIES = ("gates", "cycle", "fleet", "distribution", "conventions")
 
 #: `### \`gates/\` — measurement`
 _SECTION_RE = re.compile(r"^###\s+`([a-z]+)/`", re.MULTILINE)

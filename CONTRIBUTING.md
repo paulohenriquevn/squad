@@ -40,7 +40,7 @@ the short checklist.
    python3 mechanisms/gates/validate_skill_frontmatter.py
    python3 mechanisms/gates/check_xrefs.py
    python3 mechanisms/gates/verify_ecosystem.py
-   python3 mechanisms/dist/generate_plugin_settings.py --check
+   python3 mechanisms/distribution/generate_plugin_settings.py --check
    ```
 5. **CHANGELOG.** Record every user-visible change under `## [Unreleased]` in
    [`CHANGELOG.md`](CHANGELOG.md), following Keep a Changelog. One line per change,

@@ -161,5 +161,5 @@
     ]
   },
   "skipDangerousModePermissionPrompt": true,
-  "_comment_": "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains the Cycle ecosystem). Used by mechanisms/dist/install.sh. For standalone use (the Cycle repo itself), see settings.json."
+  "_comment_": "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains the Cycle ecosystem). Used by mechanisms/distribution/install.sh. For standalone use (the Cycle repo itself), see settings.json."
 }

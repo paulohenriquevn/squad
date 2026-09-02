@@ -273,7 +273,7 @@ def test_the_cli_emits_from_a_shell_hook(tmp_path: Path) -> None:
 def test_the_project_root_is_derived_from_the_work_not_from_cwd(tmp_path: Path) -> None:
     """A phase records against the project it acted on, not the shell's cwd.
 
-    Found in a real install: `mechanisms/dist/install.sh` runs the e2e smoke, which
+    Found in a real install: `mechanisms/distribution/install.sh` runs the e2e smoke, which
     exercises `consolidate_findings.py` against a synthetic plan in a tmpdir
     while cwd is the ADOPTER's repository. With the root taken from cwd, a
     freshly installed project got a `review` event for a review it never ran —

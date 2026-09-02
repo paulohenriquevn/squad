@@ -116,7 +116,7 @@ def project_root_for(work_path: Path) -> Path:
     """The project a phase acted on, derived from the work it touched.
 
     A phase records against the project it operated on, never against the
-    shell's cwd. Found in a real install: `mechanisms/dist/install.sh` runs the e2e
+    shell's cwd. Found in a real install: `mechanisms/distribution/install.sh` runs the e2e
     smoke, which exercises `consolidate_findings.py` against a synthetic plan in
     a tmpdir while cwd is the ADOPTER's repository. Taking the root from cwd
     gave a freshly installed project a `review` event for a review it never ran
