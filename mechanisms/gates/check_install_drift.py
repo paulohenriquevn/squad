@@ -111,7 +111,22 @@ def classify_file(install_file: Path, kit_file: Path,
 
 # Directories a consumer generates for itself. They are that project's artifacts, not kit code,
 # and reporting them would bury the signal under 38 rows of noise (measured on an adopter).
-_CONSUMER_LOCAL = ("__pycache__", ".pytest_cache", ".benchmarks", "records")
+#: Directories neither side is expected to match on. `records/` is the cycle's
+#: data and `.benchmarks/` is a consumer's; the rest are tool caches.
+#:
+#: The cache list MUST agree with `KIT_EXCLUDES` in `install.sh` — files the
+#: installer refuses to copy cannot be missing from an install in any meaningful
+#: sense, and reporting them fills the report with noise nobody reads. Measured
+#: on 2026-09-02, right after the scope was widened to all six trees: 43 of 64
+#: only-in-kit entries were `.ruff_cache/`, `.hypothesis/` and `.mypy_cache/`
+#: files. Two thirds of a report whose own docstring says "a report nobody is
+#: required to read is a report that goes unread".
+#:
+#: `test_install_drift_scope.py` fails when the two lists disagree — fourth time
+#: in one day that a rule lived in one file and was missing from another.
+_CACHE_DIRS = ("__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache",
+               ".hypothesis")
+_CONSUMER_LOCAL = (*_CACHE_DIRS, ".benchmarks", "records")
 
 #: Files that belong to the PROJECT even while living in a directory the kit also has.
 #: `agents/<domain>.md` describes the consumer's repository — harvesting it into the kit

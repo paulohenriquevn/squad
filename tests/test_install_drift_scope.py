@@ -158,3 +158,32 @@ def test_a_single_tree_can_still_be_compared_on_its_own(tmp_path: Path) -> None:
     out = _run(install / "rules", kit / "rules")
 
     assert "identical: 1" in out, out
+
+
+def test_the_cache_list_agrees_with_what_the_installer_refuses_to_copy() -> None:
+    """Two lists of tool caches, in two languages, kept by hand.
+
+    A file the installer excludes cannot be missing from an install in any
+    meaningful sense, so reporting it is pure noise. Measured on 2026-09-02, the
+    same hour the scope was widened to all six trees: 43 of 64 only-in-kit
+    entries were `.ruff_cache/`, `.hypothesis/` and `.mypy_cache/` files — two
+    thirds of a report whose own docstring warns that a report nobody is required
+    to read goes unread.
+
+    Fourth time in one day that a rule lived in one file and was missing from
+    another, so it gets an assertion.
+    """
+    import re
+
+    installer = (_REPO / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+    block = re.search(r"KIT_EXCLUDES=\(([^)]*)\)", installer, re.S)
+    assert block, "install.sh no longer declares KIT_EXCLUDES"
+    excluded = {m for m in re.findall(r"--exclude=([^\s]+)", block.group(1))
+                if not m.startswith("*") and not m.startswith(".DS")}
+
+    sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
+    import check_install_drift
+
+    assert set(check_install_drift._CACHE_DIRS) == excluded, (
+        "the drift report and the installer disagree about what is a cache; a "
+        "file the installer refuses to copy is not missing from an install")
