@@ -60,9 +60,21 @@ Each round, in this order:
 4. If a session is idle and the queue has work it can take, send it there with
    SendMessage, addressed by session name. Say which item and why that one.
 
-5. If the queue is BACKLOG_BLOCKED, say so once, name the decision and the item
-   that needs it, and stop. Do not re-ask an agent the same question — the
-   answer will not have changed and each ask is paid for.
+5. If the queue is BACKLOG_BLOCKED, say so once and name the decision and the
+   item that needs it. Do not re-ask an agent the same question — the answer
+   will not have changed and each ask is paid for.
+
+   Then, and only then, ask the KIT's own registry:
+   `python3 .claude/mechanisms/fleet/kit_issues.py paulohenriquevn/squad`
+   Exit 0 means there is work, 1 means there is none, 2 means it could not be
+   read — and 2 is NOT "no defects". Send an idle lane at one issue, by number,
+   with the repository it lives in. The consumer's backlog always wins; this is
+   where the fleet goes when the alternative is idling, and most of these issues
+   were filed by agents in this fleet.
+
+   Work on the kit is the cycle, not a shortcut around it: a failing test that
+   reproduces the issue comes before the fix, and the fix is not done until the
+   test passes and the issue carries the verification.
 
 Refusals, absolute: no `--no-verify`, no `--force`, no `--allow-dirty-tree`, no
 moving a threshold or a baseline to make something pass, no marking a verdict a
