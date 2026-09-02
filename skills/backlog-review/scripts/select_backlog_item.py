@@ -52,6 +52,7 @@ from check_backlog_structure import (  # noqa: E402
     OPEN_STATUS,
     Item,
     _parse_items,
+    carries_prose,
     declares_impediment,
     parse_blocked_by,
 )
@@ -142,7 +143,27 @@ def live_blockers(item: Item, statuses: dict[str, str]) -> list[str] | None:
     if not ids:
         return []
     open_ids = [b for b in ids if statuses.get(b, "") in OPEN_STATUS]
-    return open_ids or None
+    if open_ids:
+        return open_ids
+
+    # No OPEN item is named — but that only means the impediment is over when the
+    # value was nothing BUT item ids. When it states a reason, the ids in it are
+    # context and the reason is the barrier.
+    #
+    # Measured on a consumer 2026-09-02. B-060 reads "aguardando disposição de
+    # status: ... bala 2 movida para B-061 (shipped) ... Vide report B-060". The
+    # parser lifts B-061 and B-060; the self-mention is dropped above; B-061 is
+    # shipped, so no open id remains, and the item was returned as NOT BLOCKED and
+    # handed to the queue as the next thing to work on. An incidental mention of a
+    # closed item had erased a decision a person still owes. B-126 the same way.
+    # Both were the entire remote queue that day.
+    #
+    # `check_backlog_structure` has held this exact rule for `stale_block` all
+    # along — "a value that also states a reason outlives its item edge, and
+    # nothing in this repository can tell whether the sponsor has ratified". Third
+    # time in one day that a rule lived in one script and was missing from the
+    # other reading the same field.
+    return [] if carries_prose(raw) else None
 
 
 def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[Item]:

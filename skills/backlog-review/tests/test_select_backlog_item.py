@@ -315,3 +315,58 @@ def test_a_real_blocker_beside_the_self_reference_still_holds() -> None:
         item_block("B-002", status="triaged"))
 
     assert select(text).item_id == "B-002", "B-001 is still held by B-002"
+
+
+def _item_blocked_by(item_id: str, raw: str):
+    """An item carrying `raw` in its `blocked_by`, and nothing else that matters."""
+    from check_backlog_structure import Item
+    it = Item(item_id=item_id, title="t", line=1)
+    it.fields["blocked_by"] = raw
+    it.fields["status"] = "triaged"
+    return it
+
+
+def test_a_closed_item_mentioned_in_passing_does_not_clear_a_human_impediment() -> None:
+    """The reason is the barrier; the ids inside it are context.
+
+    Measured on a consumer 2026-09-02. B-060's value reads "aguardando disposição
+    de status: ... bala 2 movida para B-061 (shipped) ... Vide report B-060". The
+    parser lifts both ids, the self-mention is dropped, B-061 is shipped — so no
+    open id remained and the item was returned as NOT BLOCKED and handed to the
+    queue as the next thing to work on. An incidental mention of a closed item had
+    erased a decision a person still owes. B-126 went the same way, and the two of
+    them were the entire remote queue that day.
+    """
+    raw = ("aguardando disposicao de status: bala 2 movida para B-061 (shipped), "
+           "costura entregue. Vide report /idea-to-release B-060 de 2026-08-31.")
+    statuses = {"B-060": "triaged", "B-061": "shipped"}
+
+    blockers = live_blockers(_item_blocked_by("B-060", raw), statuses)
+
+    assert blockers == [], "blocked, by something with no item to point at"
+    assert blockers is not None, "None would put it in the queue"
+
+
+def test_an_ids_only_value_whose_items_all_shipped_really_is_clear() -> None:
+    """The narrowing must not trap items whose impediment genuinely ended. A value
+    that is nothing but ids says nothing a closed item leaves unanswered."""
+    statuses = {"B-060": "triaged", "B-061": "shipped", "B-062": "shipped"}
+
+    assert live_blockers(
+        _item_blocked_by("B-060", "B-061, B-062"), statuses) is None
+
+
+def test_an_open_item_named_in_prose_is_still_the_wall_it_always_was() -> None:
+    statuses = {"B-060": "triaged", "B-061": "triaged"}
+
+    assert live_blockers(
+        _item_blocked_by("B-060", "aguardando B-061 aterrissar"), statuses) == ["B-061"]
+
+
+def test_prose_naming_no_item_at_all_was_already_a_wall_and_stays_one() -> None:
+    """This path worked before and must keep working — it is the shape the fix
+    generalises from."""
+    statuses = {"B-060": "triaged"}
+
+    assert live_blockers(
+        _item_blocked_by("B-060", "aguardando decisao do sponsor"), statuses) == []
