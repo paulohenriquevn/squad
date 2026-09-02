@@ -158,6 +158,26 @@ def declared_requires(skill_md: Path) -> list[str]:
     return [name.strip() for name in found.group(1).split(",") if name.strip()]
 
 
+def surveyed(root: Path) -> tuple[int, int]:
+    """`(cycles, skills)` this gate actually looked at under `root`.
+
+    An empty finding list means BOTH "every declared numbering is coherent" and
+    "there was nothing declared", and the two must not print the same sentence.
+    Measured on 2026-09-02 against an empty tree: this gate printed *"Overall:
+    PASS — every cycle's declared numbering is unique and in chain order"* after
+    examining zero cycles. That is the shape this kit keeps finding — an
+    inability to measure published as a measurement — and five sibling gates
+    given the same empty tree said "swept 0 cycle rule(s)" instead.
+    """
+    rules_dir, skills_dir = root / "rules", root / "skills"
+    if not rules_dir.is_dir() or not skills_dir.is_dir():
+        return 0, 0
+    skills = [s for s in sorted(skills_dir.glob("*/SKILL.md"))
+              if declared_phase(s) is not None]
+    cycles = {declared_phase(s)[1] for s in skills}
+    return len(cycles), len(skills)
+
+
 def check(root: Path) -> list[Finding]:
     rules_dir = root / "rules"
     skills_dir = root / "skills"
@@ -231,10 +251,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     findings = check(root)
+    cycles, skills = surveyed(root)
     if args.json:
         print(json.dumps({"root": str(root),
+                          "cycles_examined": cycles, "skills_examined": skills,
                           "findings": [asdict(f) for f in findings],
-                          "verdict": "FAIL" if findings else "PASS"}, indent=2))
+                          "verdict": ("FAIL" if findings
+                                      else "PASS" if skills else "NOTHING_DECLARED")},
+                         indent=2))
         return 1 if findings else 0
 
     print(f"phase numbering — {root}")
@@ -244,7 +268,12 @@ def main(argv: list[str] | None = None) -> int:
     if findings:
         print(f"Overall: FAIL — {len(findings)} incoherent phase number(s)")
         return 1
-    print("Overall: PASS — every cycle's declared numbering is unique and in chain order")
+    if not skills:
+        print("Overall: NOTHING_DECLARED — 0 skill(s) declare a phase under this "
+              "root, so nothing was checked. This is not a pass.")
+        return 0
+    print(f"Overall: PASS — {skills} skill(s) across {cycles} cycle(s): every "
+          f"declared numbering is unique and in chain order")
     return 0
 
 
