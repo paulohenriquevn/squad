@@ -84,6 +84,17 @@ const SCORE = {
   },
 }
 
+// NO `isolation: 'worktree'` on any stage, and the reason is two defects, not a
+// preference. A worktree isolates the repository of the CWD — and the CWD here is
+// whichever repo invoked the workflow, which for a consumer run is the KIT, not
+// `REPO`. So the isolation guarded the wrong tree, and worse, it handed each agent
+// a cwd inside the kit while its instruction named an absolute path in the
+// consumer: a bare `git log` would have read this repository's history and been
+// reported as the item's. The second defect is that it bought nothing anyway —
+// all three generated stages are read-only (`tools: Read, Glob, Grep, Bash`, no
+// Write, no Edit), and worktrees exist for agents that MUTATE files in parallel.
+// Restore isolation when a writing stage lands, and give it the consumer's repo.
+
 log(`pipeline over ${ITEMS.length} items · repo ${REPO}`)
 
 // pipeline(), not parallel(): there is NO barrier between stages. Item B may be
@@ -97,7 +108,7 @@ const results = await pipeline(
   (item) => agent(
     stagePrompt(item, 'discover',
       `Run your stage now over ${item} in ${REPO}. Return the structured object.`),
-    { label: `discover:${item}`, phase: 'Discover', schema: BRIEF, isolation: 'worktree' },
+    { label: `discover:${item}`, phase: 'Discover', schema: BRIEF },
   ),
 
   // ── stage 2 · ALIGN ───────────────────────────────────────────────────────
@@ -107,7 +118,7 @@ const results = await pipeline(
 
 ` +
       `Run your stage now and return the structured object.`),
-    { label: `align:${item}`, phase: 'Align', schema: SCORE, isolation: 'worktree' },
+    { label: `align:${item}`, phase: 'Align', schema: SCORE },
   ),
 
   // ── stage 3 · PLAN, only for what cleared ─────────────────────────────────
@@ -119,7 +130,7 @@ const results = await pipeline(
     return agent(
       stagePrompt(item, 'plan',
         `The brief cleared at ${scored.machine_ratio}. Run your stage now.`),
-      { label: `plan:${item}`, phase: 'Plan', isolation: 'worktree' },
+      { label: `plan:${item}`, phase: 'Plan' },
     ).then((text) => ({ slug: item, stage: 'planned', outline: text }))
   },
 )
