@@ -60,12 +60,38 @@ UNIT_MANIFESTS = ("package.json", "go.mod", "pyproject.toml", "Cargo.toml")
 COMMENT_LEAD = re.compile(r"^\s*(//|\*|/\*|\*/|#).*$")
 
 
+#: Set by `git()` when a command could not be asked, as opposed to answering
+#: nothing. Module-level because every caller of `changed_files()` needs the
+#: distinction and none of them should have to thread it.
+_GIT_UNREACHABLE: list[str] = []
+
+
 def git(*args: str) -> str:
+    """Git's stdout, or `""` — and a note when `""` means "could not ask".
+
+    Every failure used to return the empty string: git missing, timeout, broken
+    repository, a subcommand exiting non-zero. All four are indistinguishable
+    from "nothing changed", and "nothing changed" is what makes every gate below
+    pass. This hook runs at the end of every session and two of its gates are
+    blockers, one of them for secrets — so the silent version of this failure is
+    a secret gate that did not run and a session that ended clean.
+    """
     try:
         done = subprocess.run(["git", *args], capture_output=True, text=True, timeout=15)  # noqa: PLW1510
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        _GIT_UNREACHABLE.append(f"`git {' '.join(args)}`: {type(exc).__name__}")
         return ""
-    return done.stdout if done.returncode == 0 else ""
+    if done.returncode != 0:
+        detail = (done.stderr or "").strip().splitlines()
+        # Outside a repository there is genuinely nothing to validate, and saying
+        # so on every prompt in a scratch directory is noise. Every OTHER failure
+        # is a measurement that did not happen.
+        if not any("not a git repository" in line.lower() for line in detail):
+            _GIT_UNREACHABLE.append(
+                f"`git {' '.join(args)}` exited {done.returncode}: "
+                f"{(detail[0] if detail else '')[:120]}")
+        return ""
+    return done.stdout
 
 
 def changed_files() -> list[str]:
@@ -252,7 +278,17 @@ def main() -> None:
         warnings.append(leak)
 
     files = changed_files()
-    if not files and not warnings:
+
+    # An empty file list is a verdict only when git was actually asked. If it was
+    # not, every gate below is about to pass on a measurement nobody took.
+    if _GIT_UNREACHABLE:
+        detail = "".join(f"\n    - {line}" for line in dict.fromkeys(_GIT_UNREACHABLE))
+        warnings.append(
+            "STOP GATES DID NOT RUN — git could not be asked what changed, so the "
+            "leakage, test, changelog and secret checks below graded an empty file "
+            f"list rather than this session's work:{detail}\n"
+            "  This is not a pass. Re-run the checks once git is reachable.")
+    elif not files and not warnings:
         c.output.allow()
 
     def gate(message: str) -> None:
