@@ -84,6 +84,20 @@ _ROUTING_RE = re.compile(r"^\s*([a-z-]+)\s*\|\s*([a-z0-9.-]+)\s*\|", re.IGNORECA
 
 _PLACEHOLDER_RE = re.compile(r"\{[A-Z_]+\}")
 
+#: What a backlog item id looks like. Validated because `--item` reaches the
+#: filesystem: it becomes a directory name and it is substituted into every
+#: generated prompt.
+#:
+#: Measured on 2026-09-02 — a caller's shell did not split a queue variable, so
+#: `--item` received the string "B-033 B-136 B-162 B-171 B-172" and this script
+#: created a directory with that name, holding four stage agents whose every
+#: mention of "the item" named five. Nothing objected. The agents would have run
+#: and reported findings against an item that does not exist.
+#:
+#: `squad.plan` has validated its own slug since it was written, for the same
+#: reason and against the same hazard.
+_ITEM_RE = re.compile(r"^[A-Za-z]+-\d+$")
+
 
 def _routing(path: Path | None) -> dict[str, str]:
     if not path or not path.is_file():
@@ -100,6 +114,12 @@ def _routing(path: Path | None) -> dict[str, str]:
 
 def spawn(item: str, repo: Path, output_dir: Path,
           date: str | None = None, routing_rule: Path | None = None) -> list[Path]:
+    if not _ITEM_RE.match(item):
+        raise SystemExit(
+            f"FATAL: {item!r} is not a backlog item id (expected e.g. `B-014`). "
+            f"It would become a directory name and be substituted into every "
+            f"generated prompt. A whole queue arriving here as one string is how "
+            f"this was found — check that the caller's shell split it.")
     templates = Path(__file__).resolve().parent.parent / "templates"
     date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     models = _routing(routing_rule)

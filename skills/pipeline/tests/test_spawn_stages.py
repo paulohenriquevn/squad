@@ -227,3 +227,37 @@ def test_an_explicit_output_dir_is_still_honoured_verbatim(tmp_path) -> None:
     assert done.returncode == 0, done.stderr
     assert (chosen / "discover.md").is_file()
     assert not (project / ".claude" / "records").exists()
+
+
+@pytest.mark.parametrize("bad", [
+    "B-033 B-136 B-162",   # a whole queue, unsplit by the caller's shell
+    "../../etc",           # a path, not an id
+    "",                    # nothing at all
+    "B-033/../B-999",      # an id with a way out of its directory
+], ids=["a-whole-queue", "a-path", "empty", "traversal"])
+def test_an_item_id_that_is_not_one_is_refused(tmp_path: Path, bad: str) -> None:
+    """`--item` reaches the filesystem AND every generated prompt.
+
+    Measured on 2026-09-02: a caller's shell did not split a queue variable, so
+    `--item` received "B-033 B-136 B-162 B-171 B-172". The script created a
+    directory with that name holding four stage agents, each of whose every
+    mention of "the item" named five. Nothing objected. Those agents would have
+    run and reported findings against an item that does not exist.
+    """
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), "--item", bad,
+         "--repo", str(tmp_path), "--output-dir", str(tmp_path / "agents")],
+        capture_output=True, text=True, check=False)
+
+    assert done.returncode != 0, f"accepted {bad!r}"
+    assert not (tmp_path / "agents").exists(), "and wrote nothing before refusing"
+
+
+def test_a_real_item_id_is_still_accepted(tmp_path: Path) -> None:
+    """The guard must not eat the thing it guards."""
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), "--item", "B-014",
+         "--repo", str(tmp_path), "--output-dir", str(tmp_path / "agents")],
+        capture_output=True, text=True, check=False)
+
+    assert done.returncode == 0, done.stderr
