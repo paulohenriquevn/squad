@@ -50,7 +50,7 @@ REPO = Path(__file__).resolve().parents[1]
 ORIGIN_RE = re.compile(r"theo-[a-z]|theokit|usetheo|Theo[A-Z]")
 
 #: Generated, vendored or historical trees. `study-material/` is third-party and
-#: read-only by contract (`hooks/boundary-check.sh` blocks writes to it), and the
+#: read-only by contract (`hooks/boundary-check.py` blocks writes to it), and the
 #: caches hold compiled copies of files this sweep already reads at source.
 SKIP_PARTS = {
     ".git",
@@ -183,7 +183,7 @@ def test_no_versioned_path_names_the_origin_ecosystem():
 def installed_rules(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
     target = tmp_path_factory.mktemp("consumer")
     proc = subprocess.run(  # noqa: PLW1510
-        ["bash", str(versioned_kit / "scripts" / "install.sh"), str(target)],
+        ["bash", str(versioned_kit / "mechanisms" / "dist" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
     )

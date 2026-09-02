@@ -48,7 +48,7 @@ This procedure and its run records live in different places on purpose — see
 - [ ] Both repositories are on `workspace` with a clean tree — `git -C <repo> status --short`.
 - [ ] The change is already committed in the source kit — a port from an
       uncommitted tree cannot be re-derived later.
-- [ ] The source kit's suite is green — `bash scripts/run_slice_tests.sh`.
+- [ ] The source kit's suite is green — `bash mechanisms/cycle/run_slice_tests.sh`.
 
 ## Steps
 1. **Measure** the receiving kit before changing it, and write the number down —
@@ -60,11 +60,11 @@ This procedure and its run records live in different places on purpose — see
 4. **Adapt** each artifact that encodes THIS kit's contract — phase chains, rule
    names, the skills that exist here — rather than the sibling's.
 5. **Verify** every mechanism a rule names exists in the receiving kit —
-   `python3 scripts/check_gate_mechanisms.py`.
+   `python3 mechanisms/gates/check_gate_mechanisms.py`.
 6. **Run** the full battery — slice suite, `check_xrefs.py --strict`,
    `verify_ecosystem.py`.
 7. **Install** into a throwaway project and exercise the change for real —
-   `bash scripts/install.sh <tmpdir>`.
+   `bash mechanisms/dist/install.sh <tmpdir>`.
 8. **Record** the port in `CHANGELOG.md`, naming what diverged and what did not.
 
 ## Decisions

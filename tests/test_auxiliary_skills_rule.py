@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-_SCRIPT = _REPO / "scripts" / "check_xrefs.py"
+_SCRIPT = _REPO / "mechanisms" / "gates" / "check_xrefs.py"
 
 
 def _eco(root: Path, *, skills: list[str], declared: list[str] | None) -> Path:

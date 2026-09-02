@@ -164,7 +164,7 @@ def _known_repos(backlog_dir: Path) -> set[str] | None:
     `except Exception` around the import would swallow that into a silent None. The check
     would then never run while the report looked healthy.
     """
-    tooling = Path(__file__).resolve().parents[3] / "scripts"
+    tooling = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
     if str(tooling) not in sys.path:
         sys.path.insert(0, str(tooling))
     try:

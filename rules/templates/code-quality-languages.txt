@@ -32,7 +32,7 @@
 #   identifier names the DETECTOR, not the source language.
 #
 
-# Languages enabled for /code-quality and post-edit-check.sh.
+# Languages enabled for /code-quality and post-edit-check.py.
 #
 # Format:  LANGUAGE | MANIFEST-MARKER | STATUS | NOTES
 #

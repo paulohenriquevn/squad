@@ -1,6 +1,6 @@
 # Public Copy
 
-Source of Truth for voice/tone in README, marketing, and external-facing docs. Enforced by `hooks/public-copy-lint.sh` (advisory, warn-first).
+Source of Truth for voice/tone in README, marketing, and external-facing docs. Enforced by `hooks/public-copy-lint.py` (advisory, warn-first).
 
 ## § 1 — Scope
 

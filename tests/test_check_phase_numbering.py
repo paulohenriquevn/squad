@@ -19,7 +19,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "gates"))
 
 from check_phase_numbering import (  # noqa: E402
     check, chain_order, declared_phase, declared_requires, main,

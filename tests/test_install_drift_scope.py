@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-_SCRIPT = _REPO / "scripts" / "check_install_drift.py"
+_SCRIPT = _REPO / "mechanisms" / "gates" / "check_install_drift.py"
 
 
 def _trees(tmp_path: Path) -> tuple[Path, Path]:

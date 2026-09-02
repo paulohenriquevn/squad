@@ -49,7 +49,7 @@ So the specialists are derived per project, and reaching them is mechanical:
 
 ```bash
 ECO=$([ -d .claude/skills ] && echo .claude || echo .)
-python3 "$ECO/scripts/route_domain.py" <repo-or-item-file> --json
+python3 "$ECO/mechanisms/cycle/route_domain.py" <repo-or-item-file> --json
 ```
 
 | Exit | Means | What you do |

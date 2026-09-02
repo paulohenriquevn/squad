@@ -44,7 +44,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "cycle"))
 
 from cycle_events import (  # noqa: E402
     EVENTS_FILENAME,
@@ -256,7 +256,7 @@ def test_the_cli_emits_from_a_shell_hook(tmp_path: Path) -> None:
     import subprocess
 
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "cycle_events.py"),
+        [sys.executable, str(REPO_ROOT / "mechanisms" / "cycle" / "cycle_events.py"),
          "start", "--cycle", "review", "--slug", "demo",
          "--project-root", str(tmp_path)],
         capture_output=True, text=True, check=False,
@@ -273,7 +273,7 @@ def test_the_cli_emits_from_a_shell_hook(tmp_path: Path) -> None:
 def test_the_project_root_is_derived_from_the_work_not_from_cwd(tmp_path: Path) -> None:
     """A phase records against the project it acted on, not the shell's cwd.
 
-    Found in a real install: `scripts/install.sh` runs the e2e smoke, which
+    Found in a real install: `mechanisms/dist/install.sh` runs the e2e smoke, which
     exercises `consolidate_findings.py` against a synthetic plan in a tmpdir
     while cwd is the ADOPTER's repository. With the root taken from cwd, a
     freshly installed project got a `review` event for a review it never ran —

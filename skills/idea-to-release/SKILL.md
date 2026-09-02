@@ -197,7 +197,7 @@ Skill(/plan-confidence {topic-slug})         # re-score
 #### Phase A — Attest (always, post-plan)
 
 ```
-Bash(scripts/attest_plan.sh {topic-slug})
+Bash(mechanisms/cycle/attest_plan.sh {topic-slug})
 ```
 
 Locks the SHA256 so UserPromptSubmit hook can validate.
@@ -318,7 +318,7 @@ This skill is `phase 0` of the super-cycle that orchestrates `cycle-discover` + 
 - `rules/cycle-release.md` — release sub-cycle (cuts the tag; does NOT flip the ROADMAP.md checkbox)
 - `rules/cycle-acceptance.md` — acceptance sub-cycle (exercises the RELEASED delivery and owns the checkbox flip)
 - `commands/plan-goal.md` + `plan-loop.md` — Claude Code primitive composition (alternative autonomy mechanism)
-- `scripts/attest_plan.sh` — attestation post-plan
+- `mechanisms/cycle/attest_plan.sh` — attestation post-plan
 - `skills/idea-to-release/scripts/select_next_milestone.py` — Step 0 milestone selector (roadmap-driven mode)
 - `skills/idea-to-release/scripts/inject_milestone_id.py` — Phase P metadata injector
 - `skills/idea-to-release/scripts/inject_must_fix.py` — auto-absorption of MUST-FIX items

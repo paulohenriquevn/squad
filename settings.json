@@ -5,7 +5,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/statusline.sh\""
+    "command": "bash \"$CLAUDE_PROJECT_DIR/mechanisms/fleet/statusline.sh\""
   },
   "permissions": {
     "defaultMode": "bypassPermissions",
@@ -66,8 +66,6 @@
       "Read(**/*secret*)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
-      "Edit(records/references/**)",
-      "Write(records/references/**)",
       "Edit(study-material/**)",
       "Write(study-material/**)"
     ]
@@ -78,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/sessionstart-context.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/sessionstart-context.py\"",
             "timeout": 30
           }
         ]
@@ -89,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/userpromptsubmit-inject.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/userpromptsubmit-inject.py\"",
             "timeout": 30
           }
         ]
@@ -101,7 +99,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/validate-command.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/validate-command.py\"",
             "timeout": 10
           }
         ]
@@ -111,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/boundary-check.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/boundary-check.py\"",
             "timeout": 10
           }
         ]
@@ -123,17 +121,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/post-edit-check.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/post-edit-check.py\"",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/public-copy-lint.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/public-copy-lint.py\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/english-only-check.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/english-only-check.py\"",
             "timeout": 30
           }
         ]
@@ -144,7 +142,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/stop-validation.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/stop-validation.py\"",
             "timeout": 120
           }
         ]
@@ -156,7 +154,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/precompact-preserve.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/hooks/precompact-preserve.py\"",
             "timeout": 30
           }
         ]

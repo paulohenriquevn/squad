@@ -142,7 +142,7 @@ The plan MUST include:
 Once the plan file exists, record the transition in the stream:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle plan --slug {slug} --verdict PLAN_WRITTEN
 ```
 
@@ -158,7 +158,7 @@ indistinguishable from a plan phase that never happened.
 Emit the START of this phase before doing the work:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" start \
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle plan --slug {B-NNN}
 ```
 

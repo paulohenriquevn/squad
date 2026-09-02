@@ -14,7 +14,7 @@
 ## Context
 
 `rules/git-safety.md` enumerates the forbidden git commands and states that
-`hooks/validate-command.sh` enforces "the mechanizable subset". The rule names which subset
+`hooks/validate-command.py` enforces "the mechanizable subset". The rule names which subset
 it expects the hook to cover. Nothing verifies that the hook and the rule still agree, and
 the two are edited independently.
 
@@ -32,7 +32,7 @@ document promises an enforcement that does not run.
 | # | Question | Corner | Tool | Target | Expected answer shape |
 |---|---|---|---|---|---|
 | Q1 | Which commands does the rule declare mechanizable? | evidence | Read | `rules/git-safety.md` | Enumerated list with the line of each claim |
-| Q2 | Which of those does the hook actually branch on? | evidence | Grep | `hooks/validate-command.sh` | Command → matching branch line, or absent |
+| Q2 | Which of those does the hook actually branch on? | evidence | Grep | `hooks/validate-command.py` | Command → matching branch line, or absent |
 | Q3 | What else invokes the hook or depends on its exit code? | blast_radius | Grep | `settings.json` | Caller list with file and key |
 | Q4 | Does a crafted invocation of each gap get refused? | verification | Bash | `hooks/` | Per-command exit code table |
 

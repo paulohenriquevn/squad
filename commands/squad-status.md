@@ -19,7 +19,7 @@ python3 "$ECO/skills/backlog-review/scripts/select_backlog_item.py" BACKLOG.md
 python3 "$ECO/skills/backlog-review/scripts/squad_boss.py" .
 
 # 3. What the chain declared against what actually ran.
-python3 "$ECO/scripts/check_phase_drift.py"
+python3 "$ECO/mechanisms/gates/check_phase_drift.py"
 
 # 4. The watchdog's last decisions, if it is running.
 tail -5 /tmp/squad-lead.jsonl 2>/dev/null || echo "no watchdog log at /tmp/squad-lead.jsonl"

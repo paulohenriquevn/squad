@@ -8,7 +8,7 @@
 # nothing could be asked "did this run follow the chain?" because there was no
 # single artifact stating what the chain IS.
 #
-# This is that artifact. `scripts/check_phase_drift.py` reads it and confronts
+# This is that artifact. `mechanisms/gates/check_phase_drift.py` reads it and confronts
 # it with `records/cycle-events.jsonl` — what was DECLARED against what
 # actually EMITTED.
 #

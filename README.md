@@ -154,7 +154,7 @@ domains at the granularity where those invariants differ — one agent per repo
 rots once per copy, one agent per role is too coarse to hold "this RDS instance
 is a protected unit".
 
-Routing is deterministic (`scripts/route_domain.py`) and reads its table from
+Routing is deterministic (`mechanisms/cycle/route_domain.py`) and reads its table from
 `rules/cycle-backlog.md` — one table, one truth. A domain naming a specialist
 that is not on disk exits 3 (`BROKEN ROUTE`) rather than reporting a route to
 nobody. See [`agents/README.md`](agents/README.md).
@@ -167,7 +167,7 @@ nobody. See [`agents/README.md`](agents/README.md).
 
 | Assumption | Why it matters |
 |---|---|
-| Branching `workspace → develop → trunk` | `hooks/validate-command.sh` blocks commits on the trunk and on `develop`. The trunk is detected — `main`, `master`, or whatever `origin/HEAD` points at — so a repo on `master` is protected too |
+| Branching `workspace → develop → trunk` | `hooks/validate-command.py` blocks commits on the trunk and on `develop`. The trunk is detected — `main`, `master`, or whatever `origin/HEAD` points at — so a repo on `master` is protected too |
 | `gh` CLI, authenticated | `/release` opens the develop→trunk PR through it |
 | `CHANGELOG.md`, Keep a Changelog format | The Rule 6 gate activates when the file exists; without it the Stop hook says so rather than passing silently |
 | Go, Python, TypeScript or Rust | Only these have `code-quality` detectors. Other stacks run the rest of the pipeline fine |
@@ -175,7 +175,7 @@ nobody. See [`agents/README.md`](agents/README.md).
 **Adopting it in another project is a bootstrap, not just an install.** The kit ships *this*
 ecosystem's domain routing table, and gate G1 refuses every item until you replace it — measured on
 an adopter: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
-`scripts/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
+`mechanisms/dist/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
 names. The installer prints the sequence.
 
 ```bash
@@ -219,7 +219,7 @@ Each mode defines what counts as a measurement. Evidence from one does not satis
 ## Project structure
 
 Every directory is named for what it holds, and the name is checked:
-`scripts/check_semantic_names.py` runs in CI and refuses a name that says
+`mechanisms/gates/check_semantic_names.py` runs in CI and refuses a name that says
 nothing — a `lib/`, a `utils/`, a test filed outside a test tree.
 
 ```
@@ -232,7 +232,12 @@ squad/
 │   ├── records-location.md   ← where output goes, and why the split below exists
 │   └── live-target.txt       ← declared live environments
 ├── skills/          ← what the agent can DO. One directory per capability
-├── scripts/         ← what COMPUTES the verdicts. No verdict is asserted in prose
+├── mechanisms/      ← what COMPUTES the verdicts. No verdict is asserted in prose
+│   ├── gates/                ← everything that measures the kit against its contracts
+│   ├── cycle/                ← the cycle at runtime: routing, events, status, attestation
+│   ├── fleet/                ← many sessions at once, and the line a person watches
+│   ├── dist/                 ← into a consumer, and kept in step
+│   └── conventions/          ← where things live and what shape they have
 ├── hooks/           ← what runs in the runtime, outside the agent's turn
 │   └── environment/          ← what a hook loads before it runs
 ├── agents/          ← domain specialists, derived per project (README explains routing)

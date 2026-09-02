@@ -7,7 +7,7 @@ printed and the process exits 0 — the literal output carries the WARN line and
 right
 below it, `Overall: PASS`. With `--strict`, the same finding exits 1.
 
-`scripts/install.sh` always called it with `--strict`. The workflow called it
+`mechanisms/dist/install.sh` always called it with `--strict`. The workflow called it
 without. The result, measured 2026-08-26: an installation from a clean clone was
 born with `rules/cycle-maintenance.md` pointing at an `agents/README.md`
 that did not exist, the installer said `check_xrefs.py: FAIL`, and the CI of the

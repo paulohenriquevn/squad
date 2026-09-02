@@ -21,5 +21,5 @@
       "ralph-loop"
     ]
   },
-  "_comment_": "NATIVE PLUGIN manifest. Claude Code looks for the manifest here, at .claude-plugin/plugin.json — while it existed only at the root, the native mechanism did not recognise the kit and the only possible installation was the copy made by scripts/install.sh. In this mode the kit's CODE lives outside the project, under $CLAUDE_PLUGIN_ROOT, and the project keeps only the cycle's DATA (records/, rules/*.txt, agents/*.md). That separation is what prevents the consumer's agent from editing the kit. The hooks are declared in hooks/hooks.json. For the copy install, which remains supported, see settings.plugin.json."
+  "_comment_": "NATIVE PLUGIN manifest. Claude Code looks for the manifest here, at .claude-plugin/plugin.json — while it existed only at the root, the native mechanism did not recognise the kit and the only possible installation was the copy made by mechanisms/dist/install.sh. In this mode the kit's CODE lives outside the project, under $CLAUDE_PLUGIN_ROOT, and the project keeps only the cycle's DATA (records/, rules/*.txt, agents/*.md). That separation is what prevents the consumer's agent from editing the kit. The hooks are declared in hooks/hooks.json. For the copy install, which remains supported, see settings.plugin.json."
 }

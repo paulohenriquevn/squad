@@ -1,4 +1,4 @@
-"""Behavioural tests for hooks/stop-validation.sh.
+"""Behavioural tests for hooks/stop-validation.py.
 
 The gate decides whether a session may end, so its false positives are as
 expensive as its misses: a gate that blocks a read-only session teaches people
@@ -11,12 +11,25 @@ Exit codes are the contract: 0 = clean or advisory, 2 = hard-gate violation.
 
 from __future__ import annotations
 
+import json
+import os
+import sys
 import subprocess
 from pathlib import Path
 
 import pytest
 
-HOOK = Path(__file__).resolve().parents[1] / "stop-validation.sh"
+#: Addressed by NAME: the hook migrated from shell to Python, and a test naming
+#: the file would fail on the rename rather than on behaviour.
+_FOUND = sorted(p for p in (Path(__file__).resolve().parents[1]).glob("stop-validation.*")
+                if p.suffix in (".sh", ".py"))
+assert len(_FOUND) == 1, f"expected one implementation, found {_FOUND}"
+HOOK = _FOUND[0]
+_CMD = ["bash", str(HOOK)] if HOOK.suffix == ".sh" else [sys.executable, str(HOOK)]
+
+#: `squad.create_context` refuses to guess which event it is holding, so the
+#: payload names it. The shell version never read the field.
+_PAYLOAD = json.dumps({"hook_event_name": "Stop", "stop_hook_active": False})
 
 
 def git(repo: Path, *args: str) -> str:
@@ -69,12 +82,14 @@ class HookRun:
 def run_hook(repo: Path) -> HookRun:
     return HookRun(
         subprocess.run(  # noqa: PLW1510
-            ["bash", str(HOOK)],
+            _CMD,
             cwd=repo,
+            input=_PAYLOAD,
             capture_output=True,
             text=True,
             env={
-                "PATH": "/usr/bin:/bin:/usr/local/bin",
+                "PATH": os.environ["PATH"],
+                "HOME": str(repo),
                 "CLAUDE_PROJECT_DIR": str(repo),
             },
         )

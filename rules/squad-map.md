@@ -6,14 +6,14 @@ complementary and neither replaces the other — a checker keeps each honest aga
 the directory it describes.
 
 A compact form of this map is injected at SessionStart by
-`hooks/sessionstart-context.sh`, so an agent starting work already knows the chain
+`hooks/sessionstart-context.py`, so an agent starting work already knows the chain
 and the four roles. That copy is deliberately partial and points here.
 
 ## Three layers, and only one is the project's
 
 | Layer | Written by | Survives a reinstall? |
 |---|---|---|
-| Contracts and skills — `rules/cycle-*.md`, `rules/*.md`, `skills/` | the kit | **No.** Overwritten, and that is how a fix reaches the projects that installed it |
+| Contracts and skills — `rules/cycle-*.md`, `rules/*.md`, `skills/`, `mechanisms/` | the kit | **No.** Overwritten, and that is how a fix reaches the projects that installed it |
 | Configuration — `rules/*.txt`, thresholds, allow-lists | the project | **Yes.** Preserved, because it is what a consumer calibrates |
 | Domain specialists — `agents/*.md` | the project, derived from disk | **Yes**, and the kit ships zero of them |
 
@@ -21,10 +21,21 @@ The question that places a file is **not who reads it — it is who owns it**
 (`rules/README.md`). A file a consumer tunes must live where the installer
 preserves it, or the next update destroys their configuration in silence.
 
+**Where the mechanisms are.** Everything that computes a verdict lives under
+`mechanisms/`, in five families: `gates/` measures the kit against its own
+contracts, `cycle/` is the cycle at runtime (routing, the event stream, status
+transitions, attestation), `fleet/` runs many sessions at once, `dist/` gets the
+kit into a consumer, and `conventions/` holds where things live and what shape
+they have. The import namespace is flat — a family is a directory, not a package
+— and a file there resolves the repository root as `parents[2]`. The directory
+was `scripts/` until 2026-09-01; a consumer installed before then has its
+`.claude/scripts/` removed by the installer, because a stale copy beside the new
+one keeps answering through the hooks' fallback chain.
+
 ## The chain
 
 Declared once, machine-readable, in [`rules/cycle-phases.txt`](cycle-phases.txt).
-`scripts/check_phase_drift.py` confronts that declaration with what actually
+`mechanisms/gates/check_phase_drift.py` confronts that declaration with what actually
 emitted.
 
 ```
@@ -184,7 +195,7 @@ from a field the item already declares.
 |---|---|---|
 | **1. Born** | `detect_domains.py --root . --write` reads the topology from disk and writes `rules/domain-routing.txt` | Empty table → G1 refuses *every* item, and the refusal is correct: with no table, routing would be a guess |
 | **2. Filled in** | `scaffold_specialists.py --write` writes one `agents/<domain>.md` per domain, carrying what it measured and marking the invariants `OPEN` | `check_xrefs.py` WARNs on unfilled sections — a scaffold routes correctly and judges nothing, which reads as a specialist that is ready |
-| **3. Reached** | The item declares `repo`; `scripts/route_domain.py` resolves it to exactly one domain | exit 1 = repo not in the table · exit 2 = table unreadable · **exit 3 = BROKEN ROUTE** |
+| **3. Reached** | The item declares `repo`; `mechanisms/cycle/route_domain.py` resolves it to exactly one domain | exit 1 = repo not in the table · exit 2 = table unreadable · **exit 3 = BROKEN ROUTE** |
 
 **Exit 3 is what tests the role.** When a domain names a specialist nobody wrote,
 Daedalus stops and does **not** stand in: a Tech Lead answering for a domain whose
@@ -208,7 +219,7 @@ two items — gate G3 — which is what keeps that boundary from becoming a nego
 | Rule | Governs | Applied by |
 |---|---|---|
 | [`autonomy-envelope.md`](autonomy-envelope.md) | what the system decides alone and what it never touches — 5 floors + doctrine | Hermes |
-| [`git-safety.md`](git-safety.md) | `workspace → develop → trunk`, no force-push, no `reset --hard` | `validate-command.sh` (hook) |
+| [`git-safety.md`](git-safety.md) | `workspace → develop → trunk`, no force-push, no `reset --hard` | `validate-command.py` (hook) |
 | [`architecture.md`](architecture.md) · [`testing.md`](testing.md) · [`error-handling.md`](error-handling.md) | how code is written, tested, and how it fails | plan-confidence, implement, review |
 | [`current-constraint.md`](current-constraint.md) | where the limit is — **a lens, never a gate**, and the file says why | discover-execute (advisory) |
 | [`cycle-phases.txt`](cycle-phases.txt) · [`blocking-verdicts.txt`](blocking-verdicts.txt) | the declared chain, and the verdicts that hold an item | `check_phase_drift.py`, board, selector, watchdog |
@@ -222,13 +233,13 @@ agent remembering. Declared in `hooks/hooks.json`.
 
 | Event | Hook | Effect |
 |---|---|---|
-| SessionStart | `sessionstart-context.sh` | git state, active plan, loop state, **and the compact form of this map** |
-| UserPromptSubmit | `userpromptsubmit-inject.sh` | parsimony ladder + a lean pointer to the active plan, SHA256-attested |
-| PreToolUse (Bash) | `validate-command.sh` | **blocks** destructive git and commits on the trunk — exit 2 |
-| PreToolUse (Edit/Write) | `boundary-check.sh` | **blocks** writes to `records/references/` and `study-material/` |
-| PostToolUse | `post-edit-check.sh` · `public-copy-lint.sh` · `english-only-check.sh` | linting, honest copy, repository language — advisory |
-| Stop | `stop-validation.sh` | **blocks**: CHANGELOG and secret-leak are hard gates; TDD is a warning |
-| PreCompact | `precompact-preserve.sh` | snapshots plan and progress before compaction |
+| SessionStart | `sessionstart-context.py` | git state, active plan, loop state, **and the compact form of this map** |
+| UserPromptSubmit | `userpromptsubmit-inject.py` | parsimony ladder + a lean pointer to the active plan, SHA256-attested |
+| PreToolUse (Bash) | `validate-command.py` | **blocks** destructive git and commits on the trunk — exit 2 |
+| PreToolUse (Edit/Write) | `boundary-check.py` | **blocks** writes to `study-material/` and into an installed kit |
+| PostToolUse | `post-edit-check.py` · `public-copy-lint.py` · `english-only-check.py` | linting, honest copy, repository language — advisory |
+| Stop | `stop-validation.py` | **blocks**: CHANGELOG and secret-leak are hard gates; TDD is a warning |
+| PreCompact | `precompact-preserve.py` | snapshots plan and progress before compaction |
 
 ## Orchestrators and on-demand skills
 
@@ -263,7 +274,7 @@ nothing forces you to open when you add a file, so it drifts by default and read
 as complete while it does. The second time, four skills had **zero mentions in any
 entry point** — on disk, passing every validator, unreachable.
 
-So `scripts/check_squad_map.py` compares this file against the directory in both
+So `mechanisms/gates/check_squad_map.py` compares this file against the directory in both
 directions and runs inside `verify_ecosystem.py`. It deliberately does **not**
 re-check what `check_skill_map.py` already owns; it checks what only this map
 claims: the phases, the cycles, the kit agents and the hooks.

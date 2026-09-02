@@ -1,6 +1,6 @@
 # English only
 
-**Skill:** every skill · **Mechanised by:** `scripts/check_english_only.py`
+**Skill:** every skill · **Mechanised by:** `mechanisms/gates/check_english_only.py`
 
 ## The rule
 
@@ -62,8 +62,8 @@ Anything else is a translation waiting to happen.
 
 ## Hard gates
 
-- **No Portuguese outside a declared exemption** — `scripts/check_english_only.py`.
-  Runs in CI, and as a `PostToolUse` hook (`hooks/english-only-check.sh`) that
+- **No Portuguese outside a declared exemption** — `mechanisms/gates/check_english_only.py`.
+  Runs in CI, and as a `PostToolUse` hook (`hooks/english-only-check.py`) that
   reports on the file just written. The hook is advisory and the checker is the
   verdict: at write time a quotation and a lapse look alike, and blocking the
   author mid-edit fights them at the moment they can least explain themselves.
@@ -97,6 +97,6 @@ Missing some Portuguese is recoverable. Being ignored is not.
 
 ## Cross-references
 
-- Checker: `scripts/check_english_only.py`
-- Hook: `hooks/english-only-check.sh`
-- The warn-first split this follows: `hooks/public-copy-lint.sh`, `rules/public-copy.md`
+- Checker: `mechanisms/gates/check_english_only.py`
+- Hook: `hooks/english-only-check.py`
+- The warn-first split this follows: `hooks/public-copy-lint.py`, `rules/public-copy.md`

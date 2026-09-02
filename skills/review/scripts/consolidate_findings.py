@@ -768,7 +768,7 @@ def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) ->
     ran, which is the defect the stream exists to remove.
     """
     from pathlib import Path as _Path
-    tooling = _Path(__file__).resolve().parents[3] / "scripts"
+    tooling = _Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
     if str(tooling) not in sys.path:
         sys.path.insert(0, str(tooling))
     try:

@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = REPO_ROOT / "scripts" / "validate_skill_frontmatter.py"
+SCRIPT = REPO_ROOT / "mechanisms" / "gates" / "validate_skill_frontmatter.py"
 
 _BROKEN = """\
 ---

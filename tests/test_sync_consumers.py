@@ -16,7 +16,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "mechanisms" / "dist"))
 
 from sync_consumers import Action, classify
 
@@ -50,7 +50,7 @@ def test_file_absent_from_the_base_but_present_in_both_is_compared_by_content() 
 
 # ---------------------------------------------------------------------------
 # Lag is not local modification. The first dry-run across 40 consumers marked 231
-# files as LOCAL_CHANGE, `scripts/install.sh` in almost all of them — and it was
+# files as LOCAL_CHANGE, `mechanisms/dist/install.sh` in almost all of them — and it was
 # not local improvement, it was an install made from an older version. Comparing
 # against ONE base only answers well for whoever sits exactly on it.
 # ---------------------------------------------------------------------------

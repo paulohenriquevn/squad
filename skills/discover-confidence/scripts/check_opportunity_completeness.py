@@ -67,7 +67,7 @@ def _known_repos(project_root: Path | None = None) -> set[str] | None:
     """
     root = project_root or Path.cwd()
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
         from route_domain import _routing_table_path, parse_routing_table
     except ImportError:
         return None

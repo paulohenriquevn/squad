@@ -171,7 +171,7 @@ gh pr create --base develop --head workspace --title "chore(release): ${NEXT_VER
 gh pr merge --merge   # or via the UI; branch protection decides who can
 ```
 
-NO `Co-Authored-By` trailer (per `hooks/validate-command.sh`). NO `--amend`. The commit is plain and signed by user policy.
+NO `Co-Authored-By` trailer (per `hooks/validate-command.py`). NO `--amend`. The commit is plain and signed by user policy.
 
 ### Step 5 — Open the release PR
 
@@ -197,7 +197,7 @@ verdicts the chain already emitted, and nowhere else:
 ```bash
 # /review returned READY_TO_MERGE, /code-quality is not FAIL_HARD,
 # and no BLOCKED report stands against this item.
-python3 "$ECO/scripts/cycle_events.py" verdicts --slug "$SLUG"
+python3 "$ECO/mechanisms/cycle/cycle_events.py" verdicts --slug "$SLUG"
 ls "$ECO"/records/**/"$SLUG"-BLOCKED.md 2>/dev/null && { echo "BLOCKED report stands — refuse"; exit 1; }
 ```
 
@@ -287,7 +287,7 @@ rather than duplicating it. Staying is not the same as being called: **nothing i
 Emit the START of this phase before doing the work:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" start \
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle release --slug {B-NNN}
 ```
 
@@ -340,7 +340,7 @@ Then record the transition in the stream, which is what a later phase reads:
 
 ```bash
 # PRE_RELEASED for an -rc.N cut; RELEASED only for a final one.
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle release --slug {item-or-milestone} --verdict "${VERDICT:-PRE_RELEASED}"
 ```
 
@@ -393,7 +393,7 @@ Next: nothing — release is published. Start a new cycle with /plan-write or /p
 3. **Editing CHANGELOG entries during the release** — discipline lives in the cycles that produce the entries.
 4. **Cutting a release with unaddressed FAIL_HARD from `/code-quality`** — the review gate enforces this; never bypass.
 5. **`git push --force` on a release tag** — tags are immutable once published; if wrong, deprecate and cut a new version.
-6. **Co-Authored-By trailer on the `chore(release)` commit** — blocked by `hooks/validate-command.sh`.
+6. **Co-Authored-By trailer on the `chore(release)` commit** — blocked by `hooks/validate-command.py`.
 7. **Flipping the ROADMAP checkbox from this cycle.** It moved to `cycle-acceptance`. A release proves a tag was cut, not that a user-visible promise was met.
 8. **Blocking the release if `milestone_id` is missing.** Ad-hoc / hotfix work is by design — emit INFO, continue as `RELEASED`, and skip the acceptance handoff.
 9. **Announcing the milestone as done in the release notes.** Until `/acceptance` returns green, the milestone is released, not accepted.
@@ -403,7 +403,7 @@ Next: nothing — release is published. Start a new cycle with /plan-write or /p
 - Cycle rule (SoT): [`rules/cycle-release.md`](../../rules/cycle-release.md)
 - Upstream cycle: [`rules/cycle-review.md`](../../rules/cycle-review.md) — consumes `READY_TO_MERGE` verdict
 - Conventions: [`rules/public-copy.md`](../../rules/public-copy.md) — release notes lint
-- Hooks enforced: `hooks/validate-command.sh` (git safety + Co-Authored-By block), `hooks/stop-validation.sh` (CHANGELOG hard gate)
+- Hooks enforced: `hooks/validate-command.py` (git safety + Co-Authored-By block), `hooks/stop-validation.py` (CHANGELOG hard gate)
 - Scripts: `scripts/compute_next_version.py`, `scripts/bump_version.py`, `scripts/detect_current_version.py`, `scripts/promote_unreleased.py`, `scripts/render_release_notes.py`, `scripts/changelog_section_nonempty.py`, `scripts/flip_milestone_checkbox.py` (housed here, invoked only by `cycle-acceptance` — see Step 7.5)
 - Downstream cycle: [`rules/cycle-acceptance.md`](../../rules/cycle-acceptance.md) — consumes `RELEASED`, owns the single-flip invariant and the roadmap-runs file contract
 - Macro super-loop: [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md) — selects the next `B-NNN` and delegates one `cycle-idea-to-release` run per item

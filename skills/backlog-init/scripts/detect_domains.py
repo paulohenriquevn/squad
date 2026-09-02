@@ -370,7 +370,7 @@ _ROUTING_HEADER = """\
 #
 # The invariants this table must satisfy are NOT repeated here. They are the
 # kit's contract and live in `rules/cycle-backlog.md` under `## Routing
-# invariants` — `scripts/route_domain.py` enforces them and its own header calls
+# invariants` — `mechanisms/cycle/route_domain.py` enforces them and its own header calls
 # that rule the source of truth it refuses to copy. This file is yours and could
 # be edited to say anything; the rule that governs it is not.
 #

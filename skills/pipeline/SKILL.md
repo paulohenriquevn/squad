@@ -55,7 +55,7 @@ knows that: the literal `['B-001', 'B-022', 'B-033']` this workflow shipped with
 began with an item blocked on a sponsor decision, in the very registry it was
 pointed at, and a whole run went by without anyone noticing.
 
-`from_selection()` in `scripts/pipeline_orchestrator.py` turns that JSON into a
+`from_selection()` in `mechanisms/fleet/pipeline_orchestrator.py` turns that JSON into a
 pipeline. Blocked items are carried, not dropped — so the scheduler can say why one
 is not running, and `unpark()` can bring it back when the blocker lands.
 
@@ -81,7 +81,7 @@ explanation.
 ### Step 2 — Run the workflow
 
 ```
-Workflow({scriptPath: "scripts/pipeline_workflow.js",
+Workflow({scriptPath: "mechanisms/fleet/pipeline_workflow.js",
           args: {queue: <the "queue" array from Step 0>, repo: "<consumer-path>"}})
 ```
 
@@ -118,8 +118,8 @@ itself cited.
 |---|---|
 | `scripts/spawn_stages.py` | Instantiates the templates into per-item agent files |
 | `templates/stage-*.md` | One per stage: frontmatter, tool list, and the stage's contract |
-| `../../scripts/pipeline_orchestrator.py` | Lanes, worktrees, batch/task, park, backward hops |
-| `../../scripts/pipeline_workflow.js` | The Workflow script that reads the generated agents |
+| `../../mechanisms/fleet/pipeline_orchestrator.py` | Lanes, worktrees, batch/task, park, backward hops |
+| `../../mechanisms/fleet/pipeline_workflow.js` | The Workflow script that reads the generated agents |
 
 ## Related
 

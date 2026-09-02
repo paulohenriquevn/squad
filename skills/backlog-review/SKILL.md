@@ -198,6 +198,6 @@ Say so in the report. Reporting every repo as unroutable from missing data would
 
 - The registry and its intake: [`rules/cycle-backlog.md`](../../rules/cycle-backlog.md)
 - The loop that consumes it: [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md)
-- Routing: `scripts/route_domain.py`
+- Routing: `mechanisms/cycle/route_domain.py`
 - Bootstrap: [`skills/backlog-init/SKILL.md`](../backlog-init/SKILL.md)
 - Intake: [`skills/backlog-item/SKILL.md`](../backlog-item/SKILL.md)

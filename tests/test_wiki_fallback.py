@@ -24,7 +24,8 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "conventions"))
 
 from sop_format import knowledge_base_dir, resolve_knowledge_dir  # noqa: E402
 

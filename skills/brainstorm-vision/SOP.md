@@ -42,7 +42,7 @@ after `/backlog-init` runs unattended, and that is only defensible if this happe
 ## Steps
 
 1. **Build** the agenda first — `python3 skills/brainstorm-vision/scripts/build_agenda.py --root .` — and read it to the person before asking anything.
-2. **Emit** the phase start — `python3 scripts/cycle_events.py start --cycle brainstorm --slug {scope}`.
+2. **Emit** the phase start — `python3 mechanisms/cycle/cycle_events.py start --cycle brainstorm --slug {scope}`.
 3. **Ask** the four questions, one per turn, persisting after each answer.
 4. **Refuse** a user who is a category ("developers", "users") and ask again for someone whose situation can be pictured.
 5. **Insist** on at least two non-goals. This is the section that settles later arguments.

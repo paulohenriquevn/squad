@@ -104,7 +104,7 @@ def test_the_tech_lead_delegates_through_the_router() -> None:
 
     assert "route_domain.py" in body
     assert "BROKEN ROUTE" in body, "exit 3 is the case that tests the role"
-    assert (ROOT / "scripts" / "route_domain.py").is_file()
+    assert (ROOT / "mechanisms" / "cycle" / "route_domain.py").is_file()
 
 
 def test_the_readme_table_lists_exactly_the_squad() -> None:

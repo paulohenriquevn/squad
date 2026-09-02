@@ -40,7 +40,7 @@ the marks — the marks are what say which half a consumer may touch.
 
 **Nothing, automatically.** No hook reads a rule file; `settings.json` names none.
 The only automatic contact is a pointer injected by
-`hooks/userpromptsubmit-inject.sh` on every turn, and the parsimony ladder, whose
+`hooks/userpromptsubmit-inject.py` on every turn, and the parsimony ladder, whose
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
@@ -118,4 +118,4 @@ Each `cycle-{name}.md` defines:
 
 - Cycle contracts and golden rules are **locked** — changes require team discussion
 - Thresholds and allowlists are per-project and can be adjusted freely
-- Run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_xrefs.py"` after any change to validate references
+- Run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/check_xrefs.py"` after any change to validate references

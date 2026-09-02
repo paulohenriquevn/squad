@@ -21,6 +21,12 @@ four hard caps in order, first failure short-circuiting, then the three soft cap
 Run it and read its exit code — `0` sufficient, `3` with caveats, `1` refused,
 `2` unreadable.
 
+An evidence file whose `outcome` is outside the locked `pass | partial | fail`
+is **ignored**, exactly like one missing a locked field, and the report names it
+under `ignored_evidence`. The value decides a soft cap, so reading it as free
+text meant a typo counted as a recorded failure and removed the caveat the
+release notes are owed.
+
 Until 2026-09-01 this skill read the rule and applied it by hand, nothing in the
 repository read its verdict, and no phase invoked it — one artifact in a real
 consumer's entire history. The gate against an unearned claim was itself honoured

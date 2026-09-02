@@ -25,7 +25,7 @@ They are orthogonal. A pipeline stage can itself fan out.
 | | Shape | Where |
 |---|---|---|
 | ✅ | Fan-out | `/review` (5–7 agents), `discover-plan-confidence` (4 checkers), `cycle-judge-codex` (a second model family over the same artefacts) |
-| ✅ | Pipeline | `scripts/pipeline_orchestrator.py` and `/pipeline` — a lane per item with its own worktree, batch/task consumption per stage, backward hops carrying a commit. `cycle-idea-to-release` still takes **one item at a time**, which is correct: it is the chain, and the pipeline is what runs many chains at once |
+| ✅ | Pipeline | `mechanisms/fleet/pipeline_orchestrator.py` and `/pipeline` — a lane per item with its own worktree, batch/task consumption per stage, backward hops carrying a commit. `cycle-idea-to-release` still takes **one item at a time**, which is correct: it is the chain, and the pipeline is what runs many chains at once |
 
 The measured case that made it worth building: a consumer with 22 triaged backlog
 items processed them strictly in sequence, with the agent idle in every phase it

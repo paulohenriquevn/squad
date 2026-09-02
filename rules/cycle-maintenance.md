@@ -46,7 +46,7 @@ SELECT next item:
      ↓                       items beside it and clears nothing)
      ↓
 ROUTE:
-     ↓ scripts/route_domain.py <repo> → domain + specialist
+     ↓ mechanisms/cycle/route_domain.py <repo> → domain + specialist
      ↓ unroutable → ITEM_UNROUTABLE, surface to the human (gate G1)
      ↓
 LOCK item:
@@ -59,7 +59,7 @@ DELEGATE:
      ↓ status triaged → /idea-to-release B-NNN
      ↓                  (cycle-plan → implement → code-quality → review → release)
      ↓
-ADVANCE:                              scripts/advance_items.py --apply
+ADVANCE:                              mechanisms/cycle/advance_items.py --apply
      ↓ RELEASED → status shipped, with the release artifact linked
      ↓ blocked  → status unchanged, blocker surfaced, LOOP BACK to SELECT
      ↓
@@ -80,9 +80,9 @@ LOOP BACK to SELECT
 
 | Verdict | Meaning | Next |
 |---|---|---|
-| `ITEM_SHIPPED` | The item reached `RELEASED` — the FINAL cut — and its block says `shipped` | Loop back to SELECT. Written by `scripts/advance_items.py`, which reads `RELEASED` and never `PRE_RELEASED`: a pre-release must not close work it did not finish |
+| `ITEM_SHIPPED` | The item reached `RELEASED` — the FINAL cut — and its block says `shipped` | Loop back to SELECT. Written by `mechanisms/cycle/advance_items.py`, which reads `RELEASED` and never `PRE_RELEASED`: a pre-release must not close work it did not finish |
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
-| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it. Decided by `all_changes_are_untracked()` in `scripts/advance_items.py`, which runs the `git check-ignore` test defined below | Loop back to SELECT. **A terminal state, not a failure** |
+| `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it. Decided by `all_changes_are_untracked()` in `mechanisms/cycle/advance_items.py`, which runs the `git check-ignore` test defined below | Loop back to SELECT. **A terminal state, not a failure** |
 | `ITEM_IN_FLIGHT` | Paused where only a person can act — branch protection requiring a reviewer, a T3 call, a dependency in another repository | Resume when the human answers |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it. _(emitted externally: the CONDITION is detected by `route_domain.py`, which prints `UNROUTED` and exits 3; the token is written by the runner that surfaces it. The skill that named it was retired 2026-08-31, and the detector was not)_ |
@@ -232,7 +232,7 @@ An item advanced in error is moved back with a note recording the advance and wh
 - The registry and its intake: `rules/cycle-backlog.md`
 - Measurement: `rules/cycle-discover.md`
 - Orchestrator this delegates to: `rules/cycle-idea-to-release.md`
-- Routing: `scripts/route_domain.py`
+- Routing: `mechanisms/cycle/route_domain.py`
 - Specialists: `agents/README.md`
 - Branching contract: `rules/git-safety.md`
 

@@ -3,28 +3,28 @@
 THE DEFECT THIS FIXES
 ---------------------
 `plugin.json` advertised an installable plugin, but the only installation path
-that worked was `scripts/install.sh`, which `cp -r`s the kit into
+that worked was `mechanisms/dist/install.sh`, which `cp -r`s the kit into
 `<project>/.claude/`. Three consequences, measured 2026-08-26:
 
 1. **Installed by the native mechanism, no gate ran.** The manifest sat at the
    root, and Claude Code reads `.claude-plugin/plugin.json`; there was no
    `hooks/hooks.json`; and `settings.plugin.json`'s hooks pointed at
    `$CLAUDE_PROJECT_DIR/.claude/hooks/…`, a path that only exists in copy mode.
-   `detect-layout.sh` then exited 0 without printing anything:
+   `detect-layout.sh` (retired; now `squad.layout`) then exited 0 silently:
    `stop-validation.sh` and `sessionstart-context.sh` exited 0, mute.
    A silently disabled gate is indistinguishable from a gate that approved.
 
-2. **O agente do consumidor editava o kit.** Vivendo em `.claude/`, com
+2. **The consumer's agent edited the kit.** Living in `.claude/`, with
    `Edit`/`Write`/`Bash(*)` allowed and no hook protecting the path, the kit was
-   writable territory. `scripts/check_install_drift.py` itself records
-   o resultado: "Twenty-two fixes to this kit lived for weeks inside one
+   writable territory. `mechanisms/gates/check_install_drift.py` itself records
+   the result: "Twenty-two fixes to this kit lived for weeks inside one
    consumer's gitignored `.claude/` install and nowhere else."
 
 3. **There was no "the system", there were N divergent copies.**
 
 THE FIX, AND WHAT IT SEPARATES
 ------------------------------
-`detect-layout.sh` now resolves TWO paths where there used to be one:
+`squad.layout` resolves TWO paths where there used to be one:
 
     KIT_DIR  — the kit's CODE (skills/, rules/, hooks/). Read-only.
     ECO      — the cycle's DATA (records/, .active_plan). Writable.
@@ -40,6 +40,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -144,14 +145,27 @@ def test_native_and_copy_layouts_wire_the_same_events():
 # detect-layout.sh
 # --------------------------------------------------------------------------
 def _resolve(project_dir: Path, env: dict | None = None) -> tuple[str, str, str]:
-    """Run detect-layout.sh and return (KIT_DIR, ECO, stderr)."""
-    script = f'source "{DETECT}"; echo "KIT=${{KIT_DIR:-}}"; echo "ECO=${{ECO:-}}"'
+    """Resolve the layout in a fresh process and return (KIT_DIR, ECO, stderr).
+
+    It used to `source detect-layout.sh`; that shell was retired when the hooks
+    became Python and `squad.layout` took over. A subprocess is still used rather
+    than an import, because the answer depends on the ENVIRONMENT and a test that
+    mutated this process's would leak into its neighbours.
+    """
+    script = (
+        "import sys; sys.path.insert(0, %r)\n"
+        "from squad.layout import resolve\n"
+        "found = resolve()\n"
+        "print('KIT=' + (str(found.kit_dir) if found else ''))\n"
+        "print('ECO=' + (str(found.eco) if found else ''))\n"
+    ) % str(REPO)
     full_env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)}
     full_env.pop("CLAUDE_PLUGIN_ROOT", None)
     if env:
         full_env.update(env)
     proc = subprocess.run(  # noqa: PLW1510
-        ["bash", "-c", script], capture_output=True, text=True, env=full_env
+        [sys.executable, "-c", script], capture_output=True, text=True, env=full_env,
+        cwd=project_dir,
     )
     kit = eco = ""
     for line in proc.stdout.splitlines():
@@ -210,15 +224,15 @@ def test_standalone_layout_still_resolves(tmp_path):
     """Regression: the kit's own repository opened in Claude Code."""
     project = _fake_kit(tmp_path / "kit-repo")
     kit_dir, eco, _ = _resolve(project)
-    assert kit_dir in (".", str(project))
-    assert eco in (".", str(project))
+    assert Path(kit_dir) == project.resolve()
+    assert Path(eco) == project.resolve()
 
 
 def test_absent_kit_stays_quiet(tmp_path):
     """A project that simply does not use the kit should be told nothing.
 
-    A contrapartida de `test_a_corrupt_plugin_root_is_loud`: o aviso vale
-    when the kit should be there and is not, not when nobody installed it.
+    The counterpart to `test_a_corrupt_plugin_root_is_loud`: the warning is for
+    when the kit should be there and is not, never for when nobody installed it.
     """
     project = tmp_path / "plain-project"
     project.mkdir()

@@ -4,7 +4,7 @@ Canonical schema for every `rules/cycle-*.md` file. Defines required vs optional
 
 ## Purpose
 
-Without a shared schema, cycle rules drift: one rule calls section X "Trigger conditions", another calls it "Pre-conditions", a third "When to use". Verdict tokens proliferate (`SHIPPABLE` vs `PASS` vs `READY_TO_MERGE`) without anyone explaining why. The schema makes the contract explicit so reviewers can detect divergence and `scripts/check_xrefs.py` can enforce it mechanically.
+Without a shared schema, cycle rules drift: one rule calls section X "Trigger conditions", another calls it "Pre-conditions", a third "When to use". Verdict tokens proliferate (`SHIPPABLE` vs `PASS` vs `READY_TO_MERGE`) without anyone explaining why. The schema makes the contract explicit so reviewers can detect divergence and `mechanisms/gates/check_xrefs.py` can enforce it mechanically.
 
 ## Required sections
 
@@ -88,7 +88,7 @@ Do NOT introduce a new verdict token without adding it to this matrix and explai
 
 - Use sentence-case headers (`## Pre-conditions`, not `## PRE-CONDITIONS`).
 - The `## Chain` block MUST be a fenced code block. Phases inside use `↓` arrows for flow.
-- `## Cross-references` MUST link to real files. `scripts/check_xrefs.py` validates that every backtick-referenced path resolves.
+- `## Cross-references` MUST link to real files. `mechanisms/gates/check_xrefs.py` validates that every backtick-referenced path resolves.
 - Verdict tokens MUST be in the matrix above.
 - Hard gates MUST cite the rule they enforce (e.g., "Unbreakable Rule 4" for the no-`main`-commit gate).
 
@@ -102,7 +102,7 @@ A golden rule is LOCKED. Changing it requires ALL of:
 
 1. An ADR in `records/adrs/` proposing the change.
 2. A CHANGELOG entry under `[Unreleased] § Changed`.
-3. `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_xrefs.py"` and `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/verify_ecosystem.py"` both PASS.
+3. `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/check_xrefs.py"` and `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/verify_ecosystem.py"` both PASS.
 
 A change that **softens** a gate (loosening a cap, removing a check) carries the full
 burden above. A change that **extends** the contract (adding a new hard cap) follows the
@@ -113,8 +113,8 @@ each golden rule's own change section.
 
 ## Enforcement
 
-- `scripts/check_xrefs.py` validates the `## Cross-references` section against the filesystem on every run.
-- `scripts/verify_ecosystem.py` validates that every cycle has the required sections (`## Purpose`, `## Chain`, `## Anti-patterns`).
+- `mechanisms/gates/check_xrefs.py` validates the `## Cross-references` section against the filesystem on every run.
+- `mechanisms/gates/verify_ecosystem.py` validates that every cycle has the required sections (`## Purpose`, `## Chain`, `## Anti-patterns`).
 - A new cycle without entries in the verdict matrix above is a review BLOCKER.
 
 ## Adding a new cycle
@@ -123,4 +123,4 @@ each golden rule's own change section.
 2. Add the new cycle's verdict vocabulary row to the matrix above.
 3. Wire the cycle in `README.md` (Project structure + the cycle diagram) and `HOW-TO-USE.md` (Which cycle, when).
 4. Add the new SKILL.md `Cycle contract` section pointing back at the rule.
-5. Run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/check_xrefs.py"` and `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/verify_ecosystem.py"` — both MUST be PASS before the cycle is merged.
+5. Run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/check_xrefs.py"` and `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/verify_ecosystem.py"` — both MUST be PASS before the cycle is merged.

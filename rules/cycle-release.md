@@ -6,7 +6,7 @@ Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READ
 
 Take an approved implementation from `READY_TO_MERGE` to a released, tagged version on `main`. Eliminates the manual release ritual: merge, version bump, tag, push, GitHub release notes.
 
-**The merge is the system's, and it is gated rather than supervised.** `rules/autonomy-envelope.md` floor 2 permits merging a pull request whose full chain passed, and forbids merging anything else — the reasoning is [`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md). The branching topology is untouched: nothing commits to the trunk directly, everything arrives by PR with a semver tag, and `hooks/validate-command.sh` still enforces both.
+**The merge is the system's, and it is gated rather than supervised.** `rules/autonomy-envelope.md` floor 2 permits merging a pull request whose full chain passed, and forbids merging anything else — the reasoning is [`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md). The branching topology is untouched: nothing commits to the trunk directly, everything arrives by PR with a semver tag, and `hooks/validate-command.py` still enforces both.
 
 ## Pre-conditions
 
@@ -171,8 +171,8 @@ where the reasoning was written down and measured.
 ## Hard gates
 
 - **Gates-passed gate (LOCKED)** — _(not mechanized as one check: it reads the verdicts the chain already emitted — `/review` `READY_TO_MERGE`, `/code-quality` not `FAIL_HARD`, no BLOCKED report standing)_ The merge step merges ONLY a PR whose full chain passed. Merging anything else, or moving a threshold so that it passes, violates envelope floor 2 and floor 3. **This replaced a human-approval gate on 2026-09-01**; what it does not replace is the topology — the PR itself is still mandatory, and branch protection is still what makes it so on the remote.
-- **No direct commits to `main`** — `validate-command.sh`, which resolves the real trunk rather than matching the literal name. Even from this skill: every change reaches `main` via the PR opened above. **Unchanged by the amendment** — merging a PR and committing to the trunk are different acts, and only the first moved.
-- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. _(not mechanized: nothing inspects the tag object's type or the branch it was cut from; `validate-command.sh` blocks the commit paths, not the tag)_
+- **No direct commits to `main`** — `validate-command.py`, which resolves the real trunk rather than matching the literal name. Even from this skill: every change reaches `main` via the PR opened above. **Unchanged by the amendment** — merging a PR and committing to the trunk are different acts, and only the first moved.
+- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. _(not mechanized: nothing inspects the tag object's type or the branch it was cut from; `validate-command.py` blocks the commit paths, not the tag)_
 - **CHANGELOG must have content** — `changelog_section_nonempty.py` refuses if `[Unreleased]` is empty after stripping headers.
 - **Single-flip invariant** — owned by [`cycle-acceptance § Hard gates`](cycle-acceptance.md), which is where the flip moved (see § Post-merge ROADMAP.md checkbox flip). This cycle no longer flips anything; the clause stays as a pointer so nobody re-adds a flip here.
 - **No silent flip** — `flip_milestone_checkbox.py --commit`, which writes the run-file and aborts the whole operation (restoring the checkbox) when the commit fails. The roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.

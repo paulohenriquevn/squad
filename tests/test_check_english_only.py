@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+sys.path.insert(0, str(PROJECT_ROOT / "mechanisms" / "gates"))
 
 from check_english_only import find_markers, is_exempt, scan_text  # noqa: E402
 

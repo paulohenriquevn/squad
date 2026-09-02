@@ -879,7 +879,7 @@ def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict) -> None:
     real emitter bug into a silence indistinguishable from a phase that never
     ran, which is the defect the stream exists to remove.
     """
-    tooling = Path(__file__).resolve().parents[3] / "scripts"
+    tooling = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
     if str(tooling) not in sys.path:
         sys.path.insert(0, str(tooling))
     try:

@@ -13,7 +13,7 @@ status: draft
 stale_after: 2027-02-28
 sources:
   - id: script
-    resource: ../../scripts/sync_consumers.py
+    resource: ../../mechanisms/dist/sync_consumers.py
 
 sop: propagate-a-delta-across-consumers
 version: 0.1.0
@@ -45,7 +45,7 @@ it is a classifier instead of a habit.
 ## Steps
 
 1. Run without `--apply` first:
-   `python3 scripts/sync_consumers.py --base <sha> --targets targets.txt`.
+   `python3 mechanisms/dist/sync_consumers.py --base <sha> --targets targets.txt`.
    Nothing is written; the run classifies.
 2. Read every `LOCAL_CHANGE`. Each one is a file that project changed after the
    base, and copying over it would erase a local fix. The script does not merge,

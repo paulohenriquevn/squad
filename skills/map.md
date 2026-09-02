@@ -203,7 +203,7 @@ unbreakable for every backlog item — among the missing.
 
 An index that drifts is worse than none: it is read as complete.
 
-So `scripts/check_skill_map.py` compares this file against the directory and
+So `mechanisms/gates/check_skill_map.py` compares this file against the directory and
 fails when they disagree in either direction — a skill on disk and absent here, a
 row here for a skill that no longer exists, a count in the prose that does not
 match, or a skill with no `SOP.md` beside its contract. It runs in

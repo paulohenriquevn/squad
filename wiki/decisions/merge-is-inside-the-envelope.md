@@ -67,7 +67,7 @@ by a floor about gates rather than about merging:
 
 The branching topology is unchanged: work is born on `workspace`, promotes to `develop`
 by PR, and reaches the trunk by a `develop → main` PR carrying a semver tag. Nothing
-commits to the trunk directly, and `hooks/validate-command.sh` still enforces that.
+commits to the trunk directly, and `hooks/validate-command.py` still enforces that.
 
 ## What made this defensible, and what it is not
 

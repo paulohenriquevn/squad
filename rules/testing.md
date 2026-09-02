@@ -61,7 +61,7 @@ Two distinct lenses. Cover **both** — not just whichever is easier to imagine.
 
 ## § 5 — Test pairing convention
 
-The default convention assumed by stop-validation.sh:
+The default convention assumed by stop-validation.py:
 
 - `<name>_test.<ext>` (same directory) — Go, Python (pytest), most languages
 - `<name>.test.<ext>` — JS/TS (Jest)

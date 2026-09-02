@@ -50,7 +50,7 @@ never grades it.
 
 **They are not here, and that is deliberate.** They are the project's own domain
 specialists, described in the next section. `daedalus-tech-lead` delegates to them
-through `scripts/route_domain.py`, and refuses to stand in for one that does not
+through `mechanisms/cycle/route_domain.py`, and refuses to stand in for one that does not
 exist: a `BROKEN ROUTE` (exit 3) stops the item and becomes work for Kairos, because
 a Tech Lead answering for a domain whose invariants nobody wrote is asserting facts
 that were never checked.
@@ -87,7 +87,7 @@ One agent per repo duplicates the same facts across every repo that shares a sta
 
 Requirement 1 is the one that pays for itself. Two failures found while deriving a real map, both live in that ecosystem's own `CLAUDE.md`: a CLI documented under `pnpm` that actually uses `npm` (a test run under the wrong package manager resolves a different dependency graph than the lockfile pins — green, and testing something other than what ships), and five repos the inventory named that had no checkout a week after it claimed to be verified. Documentation drifts; a routing table naming a repo nobody cloned sends work to a specialist who cannot open the code.
 
-`scripts/check_xrefs.py` emits a WARN for any agent here still carrying unfilled sections — a derived skeleton routes correctly and judges nothing, which reads as a specialist that is ready.
+`mechanisms/gates/check_xrefs.py` emits a WARN for any agent here still carrying unfilled sections — a derived skeleton routes correctly and judges nothing, which reads as a specialist that is ready.
 
 ## Related
 

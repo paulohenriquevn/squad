@@ -9,9 +9,14 @@ import pytest
 
 # Ensure scripts/ is importable
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPTS_DIR = REPO_ROOT / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+MECHANISMS = REPO_ROOT / "mechanisms"
+#: The import namespace stayed flat when `scripts/` became `mechanisms/<family>/`,
+#: so every family goes on the path — a test importing `check_xrefs` must not have
+#: to know which drawer it was filed in.
+for _family in ("gates", "conventions", "cycle", "fleet", "dist"):
+    _d = str(MECHANISMS / _family)
+    if _d not in sys.path:
+        sys.path.insert(0, _d)
 
 
 @pytest.fixture()

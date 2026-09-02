@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPT = REPO / "scripts" / "check_squad_map.py"
+SCRIPT = REPO / "mechanisms" / "gates" / "check_squad_map.py"
 MAP_REL = "rules/squad-map.md"
 
 
@@ -88,12 +88,12 @@ def test_a_hook_missing_from_the_map_is_reported(kit: Path) -> None:
     """A hook runs outside the agent's turn; one nobody documented is one nobody expects."""
     path = kit / MAP_REL
     path.write_text(
-        path.read_text(encoding="utf-8").replace("`boundary-check.sh`", "`(removed)`"),
+        path.read_text(encoding="utf-8").replace("`boundary-check.py`", "`(removed)`"),
         encoding="utf-8",
     )
     result = _run(kit)
     assert result.returncode == 1
-    assert "boundary-check.sh" in result.stdout
+    assert "boundary-check.py" in result.stdout
 
 
 def test_a_hook_the_map_invents_is_reported(kit: Path) -> None:

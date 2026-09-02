@@ -1,7 +1,7 @@
 # The suite the repository already had, on a trigger.
 #
 # `pyproject.toml` documented that "the per-slice test files run in CI via
-# scripts/run_slice_tests.sh" — and there was no workflow in this repository,
+# mechanisms/cycle/run_slice_tests.sh" — and there was no workflow in this repository,
 # only inside the vendored codex-plugin-cc/. Every gate this kit ships was
 # green because someone remembered to run it locally.
 name: CI
@@ -34,16 +34,16 @@ jobs:
 
       # `--strict` is NOT cosmetic: without it a WARN finding is printed and the
       # process exits 0 — the output carries the WARN line and, right below it,
-      # `Overall: PASS`. `scripts/install.sh` always called it with `--strict`, the
+      # `Overall: PASS`. `mechanisms/dist/install.sh` always called it with `--strict`, the
       # workflow called it without, and the same commit produced
       # `check_xrefs.py: FAIL` at install time and green in CI. A gate that looks,
       # sees and approves is worse than an absent gate: it produces confidence where
       # there was no verification.
       - name: Cross-reference validator (strict)
-        run: python3 scripts/check_xrefs.py --strict
+        run: python3 mechanisms/gates/check_xrefs.py --strict
 
       - name: Skill frontmatter validator
-        run: python3 scripts/validate_skill_frontmatter.py
+        run: python3 mechanisms/gates/validate_skill_frontmatter.py
 
       # Every declared hard gate names what computes it. Measured before this
       # gate existed: 59 gates, 11 naming a script. The other 48 were mostly
@@ -51,14 +51,14 @@ jobs:
       # gate nobody runs. Without this step the annotation decays the moment a
       # rule gains a line.
       - name: Every hard gate names its mechanism
-        run: python3 scripts/check_gate_mechanisms.py
+        run: python3 mechanisms/gates/check_gate_mechanisms.py
 
       # A name is the first documentation anyone reads. This catches the
       # structurally empty ones — the bin directory, the mixed convention, the
       # misfiled test, the script that states no purpose. Whether a name is
       # merely vague stays a human judgement, and the checker says so.
       - name: Folder and file names state their purpose
-        run: python3 scripts/check_semantic_names.py
+        run: python3 mechanisms/gates/check_semantic_names.py
 
       # The kit and every repository that installs it are English by policy, and
       # nothing enforced it until 2026-08-27: 334 Portuguese markers across 21
@@ -68,12 +68,18 @@ jobs:
       # — a verbatim quote, a fixture that must be Portuguese to trip the rule
       # it tests — and an exemption with no reason does not count.
       - name: English only
-        run: python3 scripts/check_english_only.py
+        run: python3 mechanisms/gates/check_english_only.py
       # swarm-forge's AGENTS.md is four lines saying this, and this kit paid for
       # the same lesson: a test that greps shipped prose fails when the sentence
       # improves and passes when the thing it describes breaks.
       - name: No test pins the wording of shipped prose
-        run: python3 scripts/check_prose_tests.py
+        run: python3 mechanisms/gates/check_prose_tests.py
+
+      # `mechanisms/README.md` declares what every file in that directory is. The
+      # README this replaced made the same promise in prose and covered 5 of 36:
+      # a rule nobody computed, decaying to a sample while reading as a list.
+      - name: Mechanisms inventory matches the directory
+        run: python3 mechanisms/gates/check_mechanisms_inventory.py
 
       # A SOP that stops describing the work keeps being followed. These two
       # check the shape of the procedures and whether each run record accounts
@@ -87,16 +93,16 @@ jobs:
       # `check_sop_structure.py` below is what CI actually enforces.
 
       - name: SOP structure
-        run: python3 scripts/check_sop_structure.py
+        run: python3 mechanisms/gates/check_sop_structure.py
 
       - name: SOP run records account for their procedure
-        run: python3 scripts/check_sop_run.py
+        run: python3 mechanisms/gates/check_sop_run.py
 
       - name: Generated settings are synchronized
-        run: python3 scripts/generate_plugin_settings.py --check
+        run: python3 mechanisms/dist/generate_plugin_settings.py --check
 
       - name: End-to-end smoke
-        run: python3 scripts/verify_ecosystem.py
+        run: python3 mechanisms/gates/verify_ecosystem.py
 
       - name: Python static trajectory-review
         run: ruff check scripts skills hooks tests conftest.py
@@ -126,7 +132,7 @@ jobs:
       - name: Root suite + every skill slice (isolated processes, with coverage)
         env:
           ROOT_SUITE_COV: '1'
-        run: bash scripts/run_slice_tests.sh
+        run: bash mechanisms/cycle/run_slice_tests.sh
 
   compatibility:
     name: Python ${{ matrix.python-version }} compatibility
@@ -143,7 +149,7 @@ jobs:
           cache: 'pip'
       - run: python -m pip install --upgrade pip pytest pyyaml
       - name: Full compatibility suite
-        run: bash scripts/run_slice_tests.sh
+        run: bash mechanisms/cycle/run_slice_tests.sh
 
   shell:
     name: Shell contracts

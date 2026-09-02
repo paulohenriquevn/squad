@@ -1,6 +1,6 @@
 # SOP schema — the shape of an operating procedure
 
-**Mechanised by:** `scripts/check_sop_structure.py` (shape and review date) · `scripts/check_sop_run.py` (the run record accounts for the procedure)
+**Mechanised by:** `mechanisms/gates/check_sop_structure.py` (shape and review date) · `mechanisms/gates/check_sop_run.py` (the run record accounts for the procedure)
 
 ## What a SOP is, and what it is not
 
@@ -59,7 +59,7 @@ One sentence. Why this procedure exists, not what it does.
 
 ## Steps
 1. **Verify** the working branch is `workspace` — `git branch --show-current`.
-2. **Run** the suite — `bash "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/run_slice_tests.sh"`.
+2. **Run** the suite — `bash "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/run_slice_tests.sh"`.
 
 ## Decisions
 ```mermaid
@@ -132,4 +132,4 @@ flowchart TD
   audit. They were retired: the schema is enforced by the two scripts above, the
   staleness they audited is reported by the first, and in the consumer measured
   they had produced zero run records in the system's lifetime.
-- The gate-mechanism convention this schema borrows: `scripts/check_gate_mechanisms.py`
+- The gate-mechanism convention this schema borrows: `mechanisms/gates/check_gate_mechanisms.py`

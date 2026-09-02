@@ -170,7 +170,7 @@ same refusal.
 
 ```bash
 ECO=$([ -d .claude/skills ] && echo .claude || echo .)
-python3 "$ECO/scripts/route_domain.py" <repo-or-item-file> --json
+python3 "$ECO/mechanisms/cycle/route_domain.py" <repo-or-item-file> --json
 ```
 
 | Exit | Meaning | Action |
@@ -447,7 +447,7 @@ In all BLOCKED cases, `/review` and `/release` MUST NOT run until the human reso
 - Scripts: `scripts/check_wiring.py`, `scripts/run_validation.py`, `scripts/check_progress_schema.py` (checkpoint shape) + `scripts/check_checkpoint_consistency.py` (checkpoint vs git), `scripts/diff_symbols.py` + `scripts/wiring_recheck.py` (independent wiring re-verification), `scripts/check_acceptance_criteria.py`, `scripts/check_test_obligations.py`, `scripts/check_phase_review.py` (Step 4.7 actually ran), `scripts/suite_runners.py` (multi-language test execution), `scripts/coverage_gate.py` (coverage actually read)
 - Loop engine: `ralph-loop` plugin (must be enabled in `~/.claude/settings.json`)
 - Project rules consumed: `architecture.md` (DIP, naming, hygiene), `testing.md` (TDD pyramid)
-- Hooks enforced: `hooks/validate-command.sh` (git safety), `hooks/boundary-check.sh` (read-only `records/references/` and `study-material/`). DIP is a convention enforced by code review per `rules/architecture.md § 4`, not by a hook.
+- Hooks enforced: `hooks/validate-command.py` (git safety), `hooks/boundary-check.py` (read-only `records/references/` and `study-material/`). DIP is a convention enforced by code review per `rules/architecture.md § 4`, not by a hook.
 
 ## Anti-patterns specific to /implement
 

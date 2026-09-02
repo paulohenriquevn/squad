@@ -12,7 +12,12 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# `hooks/tests` and `squad/tests` are here because they were NOT, and nothing
+# said so: fourteen tests for `stop-validation` and the whole hook library sat
+# outside the collected set. A test the suite does not collect is a test that
+# passed once — three of the four shell files beside them had already rotted
+# into failure before anyone ran them again.
+testpaths = ["tests", "hooks/tests", "squad/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -39,14 +44,14 @@ filterwarnings = [
 ]
 
 # NOTE: the default `pytest` run uses testpaths=["tests"] (the root aggregate
-# suite). The per-slice test files run in CI via scripts/run_slice_tests.sh
+# suite). The per-slice test files run in CI via mechanisms/cycle/run_slice_tests.sh
 # (.github/workflows/ci.yml), one isolated process per slice — slices are
 # import-isolated and ship colliding module basenames, so a single wide process
 # is unsound. See that script's header. The count is deliberately not repeated
 # here: it said 64 while the tree held 80, and a number nothing recomputes is a
 # claim that rots.
 [tool.coverage.run]
-source = ["scripts", "skills"]
+source = ["mechanisms", "skills"]
 relative_files = true
 omit = ["/tmp/*", "*/tests/*", "*/__pycache__/*"]
 

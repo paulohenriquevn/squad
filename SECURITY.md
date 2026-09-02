@@ -4,7 +4,7 @@
 
 The Squad ecosystem includes **runtime hooks** (`hooks/*.sh`) that execute shell
 commands in the user's environment. A vulnerability in hook logic (e.g., command
-injection via crafted branch names, regex bypass in `validate-command.sh`) could
+injection via crafted branch names, regex bypass in `validate-command.py`) could
 affect any project using this plugin.
 
 ## Supported Versions
@@ -31,9 +31,9 @@ affect any project using this plugin.
 ## Security Design
 
 - **Hooks use `set -euo pipefail`** — fail-fast on any unexpected state.
-- **`validate-command.sh`** blocks destructive git operations at the regex level.
-- **`stop-validation.sh`** blocks secret file commits (`.env`, `*.pem`, `*.key`).
-- **`boundary-check.sh`** enforces read-only access on `records/references/` and `study-material/`.
+- **`validate-command.py`** blocks destructive git operations at the regex level.
+- **`stop-validation.py`** blocks secret file commits (`.env`, `*.pem`, `*.key`).
+- **`boundary-check.py`** enforces read-only access on `records/references/` and `study-material/`.
 - **`check_xrefs.py`** validates all internal references exist (anti-hallucination).
 - **`attest_plan.sh`** uses SHA256 for plan tamper detection.
 

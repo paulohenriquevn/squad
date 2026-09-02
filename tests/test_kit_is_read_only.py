@@ -4,14 +4,14 @@ THE DEFECT THIS FIXES
 ---------------------
 Installed by copy, the kit lives in `<project>/.claude/`, and
 `settings.plugin.json` allows `Edit`, `Write` and `Bash(*)`. No hook covered that
-path: `boundary-check.sh` protected only `records/references/` and
-`study-material/`, and `validate-command.sh` mentioned neither
+path: `boundary-check` once protected only `records/references/` and
+`study-material/`, and `validate-command.py` mentioned neither
 `.claude/skills`, nor `.claude/rules`, nor `.claude/hooks`. The
 `.kit-manifest.txt`, written by the installer precisely to say what came from the
 kit, was read by no hook at all.
 
 The result is on record in the repository itself, in
-`scripts/check_install_drift.py`:
+`mechanisms/gates/check_install_drift.py`:
 
     "Twenty-two fixes to this kit lived for weeks inside one consumer's
      gitignored `.claude/` install and nowhere else. Nobody hid them.
@@ -34,27 +34,23 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-HOOK = REPO / "hooks" / "boundary-check.sh"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-BLOCK = 2
-ALLOW = 0
-
-
+from hook_harness import ALLOW, BLOCK, pre_tool_use, run_hook  # noqa: E402
 def _run(file_path: str, project: Path, plugin_root: Path | None = None) -> int:
-    payload = json.dumps({"tool_input": {"file_path": file_path}})
-    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project)}
-    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    """The hook is addressed by name: it migrated from shell to Python, and a test
+    naming the file would have failed on the rename rather than on behaviour."""
+    env = {"CLAUDE_PROJECT_DIR": str(project)}
     if plugin_root is not None:
         env["CLAUDE_PLUGIN_ROOT"] = str(plugin_root)
-    proc = subprocess.run(  # noqa: PLW1510
-        ["bash", str(HOOK)], input=payload, capture_output=True, text=True, env=env
-    )
-    return proc.returncode
+    return run_hook("boundary-check", pre_tool_use("Write", file_path=file_path),
+                    cwd=project, env=env).returncode
 
 
 @pytest.fixture()
@@ -84,9 +80,9 @@ def copy_install(tmp_path: Path) -> Path:
     [
         ".claude/skills/review/SKILL.md",
         ".claude/rules/cycle-review.md",
-        ".claude/hooks/stop-validation.sh",
+        ".claude/hooks/stop-validation.py",
         ".claude/hooks/environment/detect-layout.sh",
-        ".claude/scripts/check_xrefs.py",
+        ".claude/mechanisms/gates/check_xrefs.py",
         ".claude/commands/plan-goal.md",
     ],
 )
@@ -156,7 +152,7 @@ def test_native_plugin_root_is_read_only(tmp_path: Path):
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "rel",
-    ["records/references/outro-projeto.md", "study-material/argo-cd.md"],
+    ["study-material/argo-cd.md", "study-material/vendor/lib.py"],
 )
 def test_study_zone_stays_read_only(copy_install: Path, rel: str):
     assert _run(str(copy_install / ".claude" / rel), copy_install) == BLOCK

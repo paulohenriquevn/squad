@@ -5,7 +5,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/scripts/statusline.sh\""
+    "command": "bash \"$CLAUDE_PROJECT_DIR/mechanisms/fleet/statusline.sh\""
   },
   "permissions": {
     "defaultMode": "bypassPermissions",
@@ -65,8 +65,6 @@
       "Read(**/*secret*)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
-      "Edit(records/references/**)",
-      "Write(records/references/**)",
       "Edit(study-material/**)",
       "Write(study-material/**)"
     ]
@@ -77,7 +75,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/sessionstart-context.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/sessionstart-context.py\"",
             "timeout": 30
           }
         ]
@@ -88,7 +86,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/userpromptsubmit-inject.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/userpromptsubmit-inject.py\"",
             "timeout": 30
           }
         ]
@@ -100,7 +98,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.py\"",
             "timeout": 10
           }
         ]
@@ -110,7 +108,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/boundary-check.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/boundary-check.py\"",
             "timeout": 10
           }
         ]
@@ -122,17 +120,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.py\"",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/public-copy-lint.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/public-copy-lint.py\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/english-only-check.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/english-only-check.py\"",
             "timeout": 30
           }
         ]
@@ -143,7 +141,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-validation.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-validation.py\"",
             "timeout": 120
           }
         ]
@@ -155,7 +153,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/precompact-preserve.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/precompact-preserve.py\"",
             "timeout": 30
           }
         ]
@@ -163,5 +161,5 @@
     ]
   },
   "skipDangerousModePermissionPrompt": true,
-  "_comment_": "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains the Cycle ecosystem). Used by scripts/install.sh. For standalone use (the Cycle repo itself), see settings.json."
+  "_comment_": "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains the Cycle ecosystem). Used by mechanisms/dist/install.sh. For standalone use (the Cycle repo itself), see settings.json."
 }

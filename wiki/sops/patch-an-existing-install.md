@@ -14,7 +14,7 @@ status: draft
 stale_after: 2027-02-28
 sources:
   - id: script
-    resource: ../../scripts/patch_install.sh
+    resource: ../../mechanisms/dist/patch_install.sh
 
 sop: patch-an-existing-install
 version: 0.1.0
@@ -45,7 +45,7 @@ own cycles generated.
 
 ## Steps
 
-1. Run `bash scripts/patch_install.sh <target-project-dir>`.
+1. Run `bash mechanisms/dist/patch_install.sh <target-project-dir>`.
 2. Read the created-versus-overwritten summary it prints. An unexpected "created"
    means the target was missing something it should have had; an unexpected
    "overwritten" means a file you did not intend to ship changed under someone.

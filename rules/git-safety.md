@@ -2,7 +2,7 @@
 
 Source of Truth for the forbidden git commands and their safe substitutes
 (Unbreakable Rule 4). The list lives here as a document so the corpus states the
-contract even if the runtime hook is disabled; `hooks/validate-command.sh` enforces
+contract even if the runtime hook is disabled; `hooks/validate-command.py` enforces
 the mechanizable subset.
 
 ## § 1 — Branching model
@@ -20,7 +20,7 @@ workspace ──PR──> develop ──PR + semver tag──> main
 
 | Guarantee | Enforced by | Scope |
 |---|---|---|
-| Work *originates* on `workspace` (no direct authoring on develop/main) | `hooks/validate-command.sh` | Local, every machine that installed the hook |
+| Work *originates* on `workspace` (no direct authoring on develop/main) | `hooks/validate-command.py` | Local, every machine that installed the hook |
 | Promotion *passes through a PR* (no merge that skips review) | Branch protection on the remote | Server-side, unbypassable |
 
 The hook cannot tell a merge that finalizes an approved PR from one that skips it — it only sees `git merge workspace`. A repository without branch protection on `develop` has the origin guarantee but not the review guarantee.
@@ -42,7 +42,7 @@ force-push is tolerated only on disposable, never-shared branches.
 
 ## § 3 — Enforcement
 
-- `hooks/validate-command.sh` (PreToolUse) blocks the mechanizable subset. Exit code 2 = blocked:
+- `hooks/validate-command.py` (PreToolUse) blocks the mechanizable subset. Exit code 2 = blocked:
   - Any branch: `checkout`, `revert`, `push --force`/`-f`, `reset --hard`.
   - `HEAD` is `main`: `commit`/`merge`/`rebase`/`reset`/`cherry-pick`.
   - `HEAD` is `develop` (G1): `commit`/`rebase`/`reset`/`cherry-pick`, and `merge` from anything other than `workspace` (`origin/`/`upstream/` prefixes accepted).
@@ -61,5 +61,5 @@ force-push is tolerated only on disposable, never-shared branches.
 ## Cross-references
 
 - Schema for cycle rules: `cycle-rule-schema.md`
-- Hook: `../hooks/validate-command.sh`
+- Hook: `../hooks/validate-command.py`
 - Cycles that cite this: `cycle-implement.md`, `cycle-release.md`, `cycle-review.md`

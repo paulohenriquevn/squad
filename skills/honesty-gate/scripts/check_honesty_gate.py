@@ -56,7 +56,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import date, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "conventions"))
 
 try:  # the shared root resolver; a local fallback keeps the script portable
     from sop_format import KB_DIRS
@@ -90,6 +90,16 @@ _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
 #: than a missing one.
 _REQUIRED_EVIDENCE_FIELDS = ("scenario", "date", "operator", "outcome", "summary")
 
+#: The `outcome` vocabulary `§ 5` declares, LOCKED like the status one above. It
+#: is validated rather than trusted because the value decides a soft cap: with
+#: `outcome` read as free text, anything that is not the literal `pass` counts as
+#: a recorded failure, so a typo (`passed`) buys the run a failure story it never
+#: had and `no_failure_story` silently stops firing. A value outside this tuple
+#: is a file that does not say what the rule requires, which is the case
+#: `_REQUIRED_EVIDENCE_FIELDS` already answers with "ignored".
+PASS = "pass"
+_EVIDENCE_OUTCOMES = (PASS, "partial", "fail")
+
 
 @dataclass
 class HonestyReport:
@@ -99,6 +109,7 @@ class HonestyReport:
     hard_caps: list[str] = field(default_factory=list)
     soft_caps: list[str] = field(default_factory=list)
     evidence_count: int = 0
+    ignored_evidence: list[str] = field(default_factory=list)
     operators: list[str] = field(default_factory=list)
     newest_evidence: str | None = None
     freshness_days: int = _DEFAULT_FRESHNESS_DAYS
@@ -179,12 +190,18 @@ def check(root: Path, *, today: date | None = None) -> HonestyReport:
     for path in sorted(evidence_dir.glob("*.md")) if evidence_dir else []:
         fields = _frontmatter(path.read_text(encoding="utf-8", errors="replace"))
         if any(f not in fields for f in _REQUIRED_EVIDENCE_FIELDS):
+            report.ignored_evidence.append(f"{path.name}: a locked field is missing")
             continue  # § 5: a file missing a locked field is ignored, not counted
         if fields["scenario"] != report.anchor:
+            continue  # evidence for another anchor; not this gate's business
+        if fields["outcome"].lower() not in _EVIDENCE_OUTCOMES:
+            report.ignored_evidence.append(
+                f"{path.name}: outcome `{fields['outcome']}` is outside `§ 5`")
             continue
         try:
             when = date.fromisoformat(fields["date"])
         except ValueError:
+            report.ignored_evidence.append(f"{path.name}: `date` is not an ISO date")
             continue
         matching.append((when, fields))
 
@@ -212,7 +229,7 @@ def check(root: Path, *, today: date | None = None) -> HonestyReport:
     # ── soft caps — the claim is permitted and the caveats travel ────────────
     if report.evidence_count < 3:
         report.soft_caps.append("thin_evidence")
-    if not any(fields["outcome"].lower() != "pass" for _, fields in matching):
+    if all(fields["outcome"].lower() == PASS for _, fields in matching):
         report.soft_caps.append("no_failure_story")
     if len(report.operators) < 2:
         report.soft_caps.append("single_operator")
@@ -249,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [hard] {flag}")
         for flag in report.soft_caps:
             print(f"  [soft] {flag}")
+        for note in report.ignored_evidence:
+            print(f"  [skipped] {note}")
         print(f"  {report.detail}")
 
     if report.verdict == SUFFICIENT:

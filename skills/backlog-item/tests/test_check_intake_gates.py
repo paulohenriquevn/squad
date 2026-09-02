@@ -3,7 +3,7 @@
 `/backlog-item` declares five hard gates and shipped not a single script. G3
 (single domain), G4 (verifiable DoD) and G5 (no prior art) are judgement and stay
 conversational, covered by evals. G1 (the repo resolves) and G2 (the dedup search
-ran) are not: `scripts/route_domain.py` already existed, with 23 tests, and the
+ran) are not: `mechanisms/cycle/route_domain.py` already existed, with 23 tests, and the
 skill did not call it — it instructed an inline `python3 -c` and a `grep` nobody
 verified. A gate whose execution depends on the agent remembering is not a gate.
 """
@@ -52,11 +52,11 @@ status: killed
 def _project(tmp_path: Path) -> Path:
     """A project with a routing table of its own and the specialists it names."""
     root = tmp_path / "projeto"
-    (root / "scripts").mkdir(parents=True)
+    (root / "mechanisms" / "cycle").mkdir(parents=True)
     (root / "rules").mkdir()
     (root / "agents").mkdir()
-    (root / "scripts" / "route_domain.py").write_bytes(
-        (REPO_ROOT / "scripts" / "route_domain.py").read_bytes()
+    (root / "mechanisms" / "cycle" / "route_domain.py").write_bytes(
+        (REPO_ROOT / "mechanisms" / "cycle" / "route_domain.py").read_bytes()
     )
     (root / "rules" / "cycle-backlog.md").write_text(
         "# Cycle: BACKLOG\n\n## Domain routing\n\n"
@@ -199,7 +199,7 @@ def test_an_unreadable_routing_table_is_inconclusive_not_a_refusal(tmp_path: Pat
 def test_a_missing_routing_tool_is_inconclusive(tmp_path: Path) -> None:
     """The tool is absent, so routing was never assessed."""
     project = _project(tmp_path)
-    (project / "scripts" / "route_domain.py").unlink()
+    (project / "mechanisms" / "cycle" / "route_domain.py").unlink()
     backlog = tmp_path / "BACKLOG.md"
     backlog.write_text(BACKLOG, encoding="utf-8")
 
@@ -255,7 +255,7 @@ def test_the_four_outcomes_have_four_distinct_exit_codes(tmp_path: Path) -> None
     assert _run_raw(project, "nope", backlog).returncode == 1               # ITEM_REJECTED
     assert _run_raw(project, "alpha-lens", backlog).returncode == 3         # DEDUP_CANDIDATES
 
-    (project / "scripts" / "route_domain.py").unlink()
+    (project / "mechanisms" / "cycle" / "route_domain.py").unlink()
     result = _run_raw(project, "alpha-rag", backlog)
     assert result.returncode == 2                                          # GATE_INCONCLUSIVE
     # Not just the code: the REASON has to be there. Asserting the exit alone let a

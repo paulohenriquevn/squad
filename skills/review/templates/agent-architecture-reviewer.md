@@ -55,7 +55,7 @@ For every task in the plan, identify the production code that implements it and 
 - **OCP**: Are variation points handled via composition (Strategy, plugin, adapter)? Red flag: switch/case branches added by THIS commit when an extension point existed
 - **LSP**: Do subtypes substitute parents without breaking callers? Red flag: `NotImplementedException`, conditional type checks on subclasses
 - **ISP**: Are interfaces role-shaped? Red flag: an interface where 50%+ of consumers ignore 50%+ of methods
-- **DIP**: Does `src/core/` import from `src/local/` or `src/cloud/`? This is enforced by `boundary-check.sh` hook but spot-check anyway
+- **DIP**: Does `src/core/` import from `src/local/` or `src/cloud/`? This is enforced by `boundary-check.py` hook but spot-check anyway
 
 ### 2. Design pattern usage
 

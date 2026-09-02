@@ -8,7 +8,7 @@
 # is holding this item" about the same event. Two answers to one question, from
 # one repository, about one item.
 #
-# `scripts/check_phase_drift.py` reads this file to decide whether the chain
+# `mechanisms/gates/check_phase_drift.py` reads this file to decide whether the chain
 # advanced over a gate. `skills/backlog-review/scripts/board_state.py` reads it to
 # decide what to show as still holding an item. Neither owns the definition now.
 #

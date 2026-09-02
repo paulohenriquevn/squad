@@ -39,7 +39,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
 from check_sop_structure import check_sop_structure  # noqa: E402
 
@@ -64,7 +64,7 @@ One sentence saying why this exists.
 - [ ] The working branch is `workspace` — `git branch --show-current`.
 
 ## Steps
-1. **Verify** the suite is green — `bash scripts/run_slice_tests.sh`.
+1. **Verify** the suite is green — `bash mechanisms/cycle/run_slice_tests.sh`.
 2. **Copy** the script into the sibling kit.
 
 ## Decisions
@@ -129,7 +129,7 @@ def test_a_step_describing_a_state_is_reported(tmp_path: Path) -> None:
     """"The branch should be workspace" is a description. Nobody performs a
     description at 3am."""
     body = _FRONTMATTER + _BODY.replace(
-        "1. **Verify** the suite is green — `bash scripts/run_slice_tests.sh`.",
+        "1. **Verify** the suite is green — `bash mechanisms/cycle/run_slice_tests.sh`.",
         "1. The suite should be green before continuing.",
     )
     root = _sop(tmp_path, body)
@@ -155,8 +155,8 @@ def test_an_imperative_opener_passes_bold_or_not(tmp_path: Path, opener: str) ->
     """Bold is the house style, not the contract. Enforcing the asterisks would
     fail a correct instruction for its formatting."""
     body = _FRONTMATTER + _BODY.replace(
-        "1. **Verify** the suite is green — `bash scripts/run_slice_tests.sh`.",
-        f"1. {opener} the suite — `bash scripts/run_slice_tests.sh`.",
+        "1. **Verify** the suite is green — `bash mechanisms/cycle/run_slice_tests.sh`.",
+        f"1. {opener} the suite — `bash mechanisms/cycle/run_slice_tests.sh`.",
     )
     root = _sop(tmp_path, body)
 
@@ -321,7 +321,7 @@ def test_the_cli_exits_nonzero_on_a_finding(tmp_path: Path) -> None:
     root = _sop(tmp_path, body)
 
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "check_sop_structure.py"),
+        [sys.executable, str(REPO_ROOT / "mechanisms" / "gates" / "check_sop_structure.py"),
          "--project-root", str(root)],
         capture_output=True, text=True, check=False,
     )

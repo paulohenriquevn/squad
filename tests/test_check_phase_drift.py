@@ -44,7 +44,8 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "cycle"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
 from check_phase_drift import check_phase_drift, load_declared_phases  # noqa: E402
 from cycle_events import emit_phase_end, emit_phase_start  # noqa: E402
@@ -271,7 +272,7 @@ def test_the_cli_exits_nonzero_on_drift(tmp_path: Path) -> None:
     _ran(root, "review")
 
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "check_phase_drift.py"),
+        [sys.executable, str(REPO_ROOT / "mechanisms" / "gates" / "check_phase_drift.py"),
          "--project-root", str(root)],
         capture_output=True, text=True, check=False,
     )
@@ -289,7 +290,7 @@ def test_the_cli_reports_what_it_read_even_when_clean(tmp_path: Path) -> None:
     _ran(root, "backlog")
 
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "check_phase_drift.py"),
+        [sys.executable, str(REPO_ROOT / "mechanisms" / "gates" / "check_phase_drift.py"),
          "--project-root", str(root)],
         capture_output=True, text=True, check=False,
     )

@@ -118,7 +118,7 @@ place they come*. Remove this signature and the kit has no human input at all.
 ### Step 6 — Emit and hand off
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle brainstorm --slug {scope} --verdict {PRODUCT_ALIGNED|AWAITING_REVIEW|NEEDS_REVISION|INVALID}
 ```
 

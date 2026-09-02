@@ -1,4 +1,4 @@
-"""Tests for scripts/check_reference_leakage.py.
+"""Tests for mechanisms/gates/check_reference_leakage.py.
 
 Behaviour under test: a literal copy of study material into the project is
 detected; independent code is not; and an absent zone degrades to SKIP instead of
@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = REPO_ROOT / "scripts" / "check_reference_leakage.py"
+SCRIPT = REPO_ROOT / "mechanisms" / "gates" / "check_reference_leakage.py"
 
 COPIED_BLOCK = """\
 def dict_expand_if_needed(d):
@@ -47,7 +47,7 @@ def _init_repo(tmp_path: Path) -> Path:
 
 
 def _add_zone_file(repo: Path, relative: str, content: str) -> None:
-    path = repo / "records" / "references" / relative
+    path = repo / "study-material" / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
@@ -164,7 +164,7 @@ def test_zone_is_not_enumerated_when_nothing_changed(tmp_path, monkeypatch):
 
     It pins the SHAPE (the zone is not enumerated), not a duration.
     """
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
     import check_reference_leakage as leak
 
     repo = _init_repo(tmp_path)
@@ -189,7 +189,7 @@ def test_zone_is_not_enumerated_when_nothing_changed(tmp_path, monkeypatch):
 
 def test_zone_is_enumerated_when_there_is_something_to_compare(tmp_path, monkeypatch):
     """Regression of the test above: with a changed file, the zone IS walked."""
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
     import check_reference_leakage as leak
 
     repo = _init_repo(tmp_path)
@@ -218,7 +218,7 @@ def test_zone_traversal_skips_vendored_trees(tmp_path):
     and git repository along. Enumerating those is pure work: nothing there is the
     code the peer wrote.
     """
-    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
     import check_reference_leakage as leak
 
     repo = _init_repo(tmp_path)

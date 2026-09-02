@@ -95,7 +95,7 @@ def test_rendered_table_is_parseable_by_route_domain(tmp_path: Path) -> None:
     )
     rewrite_routing_section(rule, detect_domains(root))
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
     from route_domain import parse_routing_table, route
 
     table = parse_routing_table(rule)
@@ -298,7 +298,7 @@ def test_a_skeleton_is_routable(tmp_path: Path) -> None:
         render_specialist(domains[0], root), encoding="utf-8")
 
     out = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(Path(__file__).resolve().parents[3] / "scripts" / "route_domain.py"),
+        [sys.executable, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle" / "route_domain.py"),
          "meu-projeto", "--rule", str(rule)],
         capture_output=True, text=True,
     )
@@ -314,7 +314,7 @@ def test_write_does_not_destroy_the_invariants_the_code_enforces(tmp_path: Path)
     they run, and invariants, which never expire. Replacing the section deleted
     both — measured on an adopter, 45 lines down to 12.
 
-    The one that hurts is `One repo, one domain`. `scripts/route_domain.py` still
+    The one that hurts is `One repo, one domain`. `mechanisms/cycle/route_domain.py` still
     raises on a repo listed twice, and its own header says the rule file is the
     source of truth it refuses to copy. So the gate went on rejecting tables for
     a reason no longer written anywhere — the inverse of a fabricated mechanism:
@@ -341,7 +341,7 @@ def test_write_targets_the_projects_own_file(tmp_path: Path) -> None:
     """`--write` writes `rules/domain-routing.txt`, not a section of the kit's rule.
 
     This is what closes the contradiction rather than working around it. The kit
-    prescribed `--write .claude/rules/cycle-backlog.md` while `boundary-check.sh`
+    prescribed `--write .claude/rules/cycle-backlog.md` while `boundary-check.py`
     blocked `rules/*.md` as the kit's own — and the write went through anyway,
     via `Path.write_text`, which no hook intercepts. So the kit told you to
     write where it forbade writing, through a channel its own guard does not

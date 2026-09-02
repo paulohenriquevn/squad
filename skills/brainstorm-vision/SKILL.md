@@ -76,7 +76,7 @@ status changes because it appeared here.
 ### Step 2 — Emit the phase start
 
 ```bash
-python3 "$ECO/scripts/cycle_events.py" start --cycle brainstorm --slug {scope}
+python3 "$ECO/mechanisms/cycle/cycle_events.py" start --cycle brainstorm --slug {scope}
 ```
 
 Without it the board can only draw what FINISHED, and a session under way is
@@ -122,7 +122,7 @@ reads them by name:
 Then `CHANGELOG.md`, one line under `[Unreleased] § Added`, and the phase event:
 
 ```bash
-python3 "$ECO/scripts/cycle_events.py" end --cycle brainstorm --slug {scope} --verdict VISION_WRITTEN
+python3 "$ECO/mechanisms/cycle/cycle_events.py" end --cycle brainstorm --slug {scope} --verdict VISION_WRITTEN
 ```
 
 ### Step 5 — Report and hand off

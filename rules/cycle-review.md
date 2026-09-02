@@ -63,13 +63,13 @@ re-run by hand, or quietly ignored. The mechanism is now part of the line.
   push. **No hook executes the suite**, so a branch that never ran `/implement`
   reaches `/review` with this gate resting on CI alone.
 - New secrets committed (any pattern matching `.env`, `credentials*`, `*.pem`,
-  `*.key`) — `stop-validation.sh`.
-- Direct commit to `main` (Unbreakable Rule 4) — `validate-command.sh`, which
+  `*.key`) — `stop-validation.py`.
+- Direct commit to `main` (Unbreakable Rule 4) — `validate-command.py`, which
   resolves the real trunk instead of matching the literal `main`.
 - Co-Authored-By trailer in any commit on this branch (user policy) —
-  `validate-command.sh`.
+  `validate-command.py`.
 - `CHANGELOG.md` not updated despite production source changes (Unbreakable
-  Rule 6) — `stop-validation.sh`, which accepts a package `CHANGELOG.md` or a
+  Rule 6) — `stop-validation.py`, which accepts a package `CHANGELOG.md` or a
   `.changeset/` entry as the record.
 
 ## Output

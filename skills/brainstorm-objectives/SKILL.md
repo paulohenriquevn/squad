@@ -97,7 +97,7 @@ costs a sentence, and fixing it after the TRD cites the objective costs the TRD 
 Then emit the event and hand off:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle brainstorm --slug {scope} --verdict OBJECTIVES_WRITTEN
 ```
 

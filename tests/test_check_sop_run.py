@@ -38,7 +38,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
 from check_sop_run import check_sop_runs  # noqa: E402
 
@@ -280,7 +280,7 @@ def test_the_cli_exits_nonzero_on_a_blocking_finding(tmp_path: Path) -> None:
     root = _project(tmp_path, run=run)
 
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "check_sop_run.py"),
+        [sys.executable, str(REPO_ROOT / "mechanisms" / "gates" / "check_sop_run.py"),
          "--project-root", str(root)],
         capture_output=True, text=True, check=False,
     )
@@ -297,7 +297,7 @@ def test_the_cli_does_not_fail_on_info_alone(tmp_path: Path) -> None:
     root = _project(tmp_path, sop=sop)
 
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "check_sop_run.py"),
+        [sys.executable, str(REPO_ROOT / "mechanisms" / "gates" / "check_sop_run.py"),
          "--project-root", str(root)],
         capture_output=True, text=True, check=False,
     )

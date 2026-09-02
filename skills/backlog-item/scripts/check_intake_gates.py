@@ -24,7 +24,7 @@ shape. A coverage claim resting on a file nothing could run is the
 contract-without-mechanism failure this script was itself fixed for once.
 
   G1 — the `repo` resolves to a domain with a specialist on disk.
-       `scripts/route_domain.py` already did that, with 23 tests, and the skill
+       `mechanisms/cycle/route_domain.py` already did that, with 23 tests, and the skill
        did not call it: it instructed an inline `python3 -c`.
   G2 — the dedup search RAN. The skill instructed a `grep` whose execution nobody
        verified afterwards. A gate that depends on the agent remembering is not a
@@ -147,8 +147,8 @@ def _route(repo: str, project_root: Path) -> dict[str, Any]:
     stderr and leaves stdout empty — became `{"routed": False}`, indistinguishable
     from a repo legitimately outside the table.
     """
-    for candidate in (project_root / "scripts" / "route_domain.py",
-                      project_root / ".claude" / "scripts" / "route_domain.py"):
+    for candidate in (project_root / "mechanisms" / "cycle" / "route_domain.py",
+                      project_root / ".claude" / "mechanisms" / "cycle" / "route_domain.py"):
         if candidate.is_file():
             script = candidate
             break

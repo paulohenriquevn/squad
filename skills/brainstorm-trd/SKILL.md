@@ -95,7 +95,7 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/brainstorm-pi
 Then emit the event:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle brainstorm --slug {scope} --verdict TRD_WRITTEN
 ```
 

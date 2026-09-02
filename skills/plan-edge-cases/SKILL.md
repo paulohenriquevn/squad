@@ -85,7 +85,7 @@ CONCURRENCY:
 
 INTEGRATION:
   NEGATIVE [ ] Does the caller receive typed errors (not generic / not panics)?
-  EDGE     [ ] Is the dependency contract (DIP in `rules/architecture.md`, enforced by `hooks/boundary-check.sh`) respected at its limits?
+  EDGE     [ ] Is the dependency contract (DIP in `rules/architecture.md`, enforced by `hooks/boundary-check.py`) respected at its limits?
   EDGE     [ ] Is the public API surface explicit and versioned?
 ```
 

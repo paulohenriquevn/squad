@@ -193,7 +193,7 @@ def test_items_come_back_in_id_order(tmp_path: Path) -> None:
 
 def _main(argv: list[str]) -> int:
     import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "gates"))
     from board_server import main as server_main
 
     argv_backup, sys.argv = sys.argv, ["board_server.py", *argv]
@@ -684,7 +684,7 @@ def test_the_board_and_the_drift_checker_read_the_same_blocking_list() -> None:
     """
     import sys
     kit = Path(__file__).resolve().parents[3]
-    sys.path.insert(0, str(kit / "scripts"))
+    sys.path.insert(0, str(kit / "mechanisms" / "gates"))
     from check_phase_drift import load_blocking_verdicts
 
     from board_state import blocking_verdicts

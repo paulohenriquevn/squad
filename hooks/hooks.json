@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/sessionstart-context.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/sessionstart-context.py\"",
             "timeout": 30
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/userpromptsubmit-inject.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/userpromptsubmit-inject.py\"",
             "timeout": 30
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/validate-command.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/validate-command.py\"",
             "timeout": 10
           }
         ]
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/boundary-check.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/boundary-check.py\"",
             "timeout": 10
           }
         ]
@@ -50,17 +50,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-check.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-check.py\"",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/public-copy-lint.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/public-copy-lint.py\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/english-only-check.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/english-only-check.py\"",
             "timeout": 30
           }
         ]
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-validation.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/stop-validation.py\"",
             "timeout": 120
           }
         ]
@@ -83,7 +83,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/precompact-preserve.sh\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/precompact-preserve.py\"",
             "timeout": 30
           }
         ]

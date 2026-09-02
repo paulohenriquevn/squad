@@ -80,7 +80,7 @@ python3 "$ECO/skills/backlog-item/scripts/check_intake_gates.py" \
 
 One script, both mechanizable gates:
 
-- **G1** delegates to `scripts/route_domain.py` — the routing table is parsed from `rules/cycle-backlog.md`, so there is one table and one truth. Exit `1` = the repo is not in it, verdict `ITEM_REJECTED`.
+- **G1** delegates to `mechanisms/cycle/route_domain.py` — the routing table is parsed from `rules/cycle-backlog.md`, so there is one table and one truth. Exit `1` = the repo is not in it, verdict `ITEM_REJECTED`.
 - **G2** searches `BACKLOG.md` for every term **plus the repo name** (always added — the repo is the term that collides most across a registry spanning 21 of them) and returns each matching block with its status and the action the rule prescribes for it. Exit `3` = candidates found.
 
 Running it IS the evidence that G2 happened; the old instruction was a `grep` whose execution nobody could verify afterwards. Then read every `B-NNN` block it returned — a keyword hit is a candidate, not a verdict.
@@ -152,7 +152,7 @@ Record the decision (`g5_reformulated` / `g5_false_positive` / `g5_rejected`) in
 Emit the START of this phase before doing the work:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" start \
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle backlog --slug {B-NNN}
 ```
 
@@ -174,7 +174,7 @@ Only after Steps 2–5 pass. Four writes, in this order:
 4. **The phase event** — the transition, into the stream rather than a file someone reconstructs later:
 
    ```bash
-   python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/scripts/cycle_events.py" end \
+   python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
        --cycle backlog --slug B-NNN --verdict ITEM_REGISTERED
    ```
 
@@ -215,7 +215,7 @@ aligned on, and the growth is invisible to every gate that measured the original
 
 ```
 1. File the dependency as its own item        /backlog-item   (this skill, in full)
-2. Record the edge on the item that stalled   scripts/backlog_status.py B-014 --block-on B-100
+2. Record the edge on the item that stalled   mechanisms/cycle/backlog_status.py B-014 --block-on B-100
 3. Leave the stage alone                      it resumes where it stopped
 ```
 
@@ -227,7 +227,7 @@ Not every impediment has an item to file. When the blocker is a decision or an a
 outside the repository, record it as prose and say so:
 
 ```
-scripts/backlog_status.py BACKLOG.md B-014 --block-on --because "the sponsor must pick the cell map"
+mechanisms/cycle/backlog_status.py BACKLOG.md B-014 --block-on --because "the sponsor must pick the cell map"
 ```
 
 That edge cannot be resolved by any gate here, which is the honest outcome — nothing

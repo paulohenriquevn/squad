@@ -8,7 +8,7 @@ nothing**.
 
 The 50 are not unenforced. Sampling the five BLOCKERs of `cycle-review.md`
 against the hooks: secrets, trunk commits, `Co-Authored-By` and the CHANGELOG
-are all mechanized (`stop-validation.sh`, `validate-command.sh`); only "failing
+are all mechanized (`stop-validation.py`, `validate-command.py`); only "failing
 tests" is covered elsewhere (`/implement`, and CI). So four of five run, and
 **zero of five say so**.
 
@@ -27,7 +27,7 @@ WHAT COUNTS AS NAMING A MECHANISM
 One of three, and nothing else:
 
 1. An executable that exists in this repository (`check_wiring.py`,
-   `stop-validation.sh`) cited in backticks.
+   `stop-validation.py`) cited in backticks.
 2. A pointer to another rule's gate section, for a gate this rule does not own.
 3. An explicit `_(not mechanized: <reason>)_` marker.
 
@@ -52,7 +52,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
 from check_gate_mechanisms import check_gate_mechanisms  # noqa: E402
 
@@ -92,9 +92,9 @@ def test_a_gate_naming_an_existing_script_passes(tmp_path: Path) -> None:
 def test_a_gate_naming_an_existing_hook_passes(tmp_path: Path) -> None:
     root = _rules(tmp_path, "cycle-demo.md", (
         "# Demo\n\n## Hard gates\n\n"
-        "- New secrets committed — `stop-validation.sh`.\n"
+        "- New secrets committed — `stop-validation.py`.\n"
     ))
-    _with_script(root, "hooks/stop-validation.sh")
+    _with_script(root, "hooks/stop-validation.py")
 
     assert check_gate_mechanisms(root).findings == []
 
@@ -206,7 +206,7 @@ def test_a_table_header_is_not_a_gate(tmp_path: Path) -> None:
         "|---|---|---|\n"
         "| G1 | **Routes** | `route_domain.py` refuses the repo. |\n"
     ))
-    _with_script(root, "scripts/route_domain.py")
+    _with_script(root, "mechanisms/cycle/route_domain.py")
 
     report = check_gate_mechanisms(root)
 
@@ -218,9 +218,9 @@ def test_prose_between_gates_is_not_a_gate(tmp_path: Path) -> None:
     root = _rules(tmp_path, "cycle-demo.md", (
         "# Demo\n\n## Hard gates\n\n"
         "The loop refuses to start until these hold.\n\n"
-        "- Everything is fine — `stop-validation.sh`.\n"
+        "- Everything is fine — `stop-validation.py`.\n"
     ))
-    _with_script(root, "hooks/stop-validation.sh")
+    _with_script(root, "hooks/stop-validation.py")
 
     assert check_gate_mechanisms(root).total_gates == 1
 
@@ -350,11 +350,11 @@ def test_a_bullet_carries_its_continuation_lines(tmp_path: Path) -> None:
     root = _rules(tmp_path, "cycle-demo.md", (
         "# Demo\n\n## Hard gates\n\n"
         "- New secrets committed (any pattern matching `.env`, `credentials*`,\n"
-        "  `*.pem`, `*.key`) — `stop-validation.sh`.\n"
-        "- Another gate — `validate-command.sh`.\n"
+        "  `*.pem`, `*.key`) — `stop-validation.py`.\n"
+        "- Another gate — `validate-command.py`.\n"
     ))
-    _with_script(root, "hooks/stop-validation.sh")
-    _with_script(root, "hooks/validate-command.sh")
+    _with_script(root, "hooks/stop-validation.py")
+    _with_script(root, "hooks/validate-command.py")
 
     report = check_gate_mechanisms(root)
 
@@ -369,7 +369,7 @@ def test_a_table_row_carries_its_continuation_lines(tmp_path: Path) -> None:
         "| G1 | Routes —\n"
         "  `route_domain.py` refuses the repo. |\n"
     ))
-    _with_script(root, "scripts/route_domain.py")
+    _with_script(root, "mechanisms/cycle/route_domain.py")
 
     report = check_gate_mechanisms(root)
 
@@ -445,7 +445,7 @@ def test_the_cli_exits_nonzero_on_a_finding(tmp_path: Path) -> None:
 
     _rules(tmp_path, "cycle-demo.md", "# Demo\n\n## Hard gates\n\n- Nothing named.\n")
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "check_gate_mechanisms.py"),
+        [sys.executable, str(REPO_ROOT / "mechanisms" / "gates" / "check_gate_mechanisms.py"),
          "--repo-root", str(tmp_path)],
         capture_output=True, text=True, check=False,
     )
@@ -462,7 +462,7 @@ def test_the_cli_reports_the_count_it_swept(tmp_path: Path, verb: str) -> None:
 
     root = _rules(tmp_path, "cycle-demo.md", "# Demo\n\n## Hard gates\n\n- Fine — `x.py`.\n")
     _with_script(root, "scripts/x.py")
-    argv = [sys.executable, str(REPO_ROOT / "scripts" / "check_gate_mechanisms.py"),
+    argv = [sys.executable, str(REPO_ROOT / "mechanisms" / "gates" / "check_gate_mechanisms.py"),
             "--repo-root", str(tmp_path)]
     if verb:
         argv.append(verb)

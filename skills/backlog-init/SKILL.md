@@ -139,7 +139,7 @@ Measured across five consumers on 2026-08-27: four had the routing file at its e
 Then write the specialist file the table names, under `$ECO/agents/`. A derived table routes to `agents/<domain>.md`, and `route_domain.py` exits 3 while that file is absent: the table existing and the routing resolving are different facts, and the run is not done until both hold. Verify:
 
 ```bash
-python3 "$ECO/scripts/route_domain.py" <a-repo-from-the-table>; echo "exit $?"
+python3 "$ECO/mechanisms/cycle/route_domain.py" <a-repo-from-the-table>; echo "exit $?"
 ```
 
 Exit 0 is the only acceptable outcome of this step.
@@ -150,7 +150,7 @@ Structure, in this order:
 
 1. **Header** — what the registry is, and the one-line rule that governs it: *ids are monotonic and never renumbered*.
 2. **How an item gets here** — the two producers (`/backlog-item` human, `/discover-execute --sweep` measured), pointing at `cycle-backlog.md` for the schema rather than restating it. The registry is data; the contract lives in the rule.
-3. **Where routing lives** — one line pointing at `rules/domain-routing.txt`, plus the exclusions and their reasons. Do **not** copy the table itself here. `scripts/route_domain.py`'s own header states why — *"One table, one truth: a copy in code drifts from the rule the moment…"* — and a copy in the registry drifts the same way. Measured: the consumers that followed the older wording ended up with the real table in `BACKLOG.md`, where nothing reads it, and FATAL routing; the one consumer that refused to duplicate ended up with neither table, and FATAL routing. Obeying and disobeying reached the same place, which is the signal that the instruction was the defect.
+3. **Where routing lives** — one line pointing at `rules/domain-routing.txt`, plus the exclusions and their reasons. Do **not** copy the table itself here. `mechanisms/cycle/route_domain.py`'s own header states why — *"One table, one truth: a copy in code drifts from the rule the moment…"* — and a copy in the registry drifts the same way. Measured: the consumers that followed the older wording ended up with the real table in `BACKLOG.md`, where nothing reads it, and FATAL routing; the one consumer that refused to duplicate ended up with neither table, and FATAL routing. Obeying and disobeying reached the same place, which is the signal that the instruction was the defect.
 4. **`## Index`** — the three-bucket summary (`cycle-backlog.md § The index that opens the
    registry`). Do **not** hand-write it; run it, even on an empty registry:
 

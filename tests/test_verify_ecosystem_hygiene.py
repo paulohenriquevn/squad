@@ -18,9 +18,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = REPO_ROOT / "scripts" / "verify_ecosystem.py"
+SCRIPT = REPO_ROOT / "mechanisms" / "gates" / "verify_ecosystem.py"
 
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
 
 def _load():

@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-INSTALL = ROOT / "scripts" / "install.sh"
+INSTALL = ROOT / "mechanisms" / "dist" / "install.sh"
 
 
 #: A project skill has to look like one. The Cycle's `verify_ecosystem.py`
@@ -139,12 +139,12 @@ _COPIED_ITEMS = ("skills", "rules", "hooks", "commands", "scripts", "agents")
 @pytest.mark.parametrize("rel", [
     "hooks/delivery-gate.sh",
     "hooks/lib/detect-layout.sh",
-    "scripts/check-allowlist-sunsets.py",
-    "scripts/test_e2e_smoke.py",
+    "mechanisms/check-allowlist-sunsets.py",
+    "mechanisms/gates/test_e2e_smoke.py",
     "commands/their-command.md",
 ])
 def test_project_files_survive_in_every_copied_directory(tmp_path: Path, rel: str) -> None:
-    """`hooks/` and `scripts/` had NO preservation pass, not a narrow one.
+    """`hooks/` and the mechanisms directory had NO preservation pass, not a narrow one.
 
     Measured by a consumer session on 2026-08-29 in `platform`: the installer
     removed four files that do not exist in the source kit at all —
@@ -199,3 +199,31 @@ def test_the_manifest_does_not_claim_more_than_it_covers(tmp_path: Path) -> None
         assert not missing, (
             f"the header makes a claim the manifest does not support: no entries for "
             f"{missing}. Cover them, or narrow the sentence.")
+
+
+def test_the_legacy_scripts_directory_is_migrated_and_project_files_kept(tmp_path: Path) -> None:
+    """A consumer installed before the rename carries `.claude/scripts/`.
+
+    Leaving it beside `mechanisms/` is not harmless: `hooks/` resolves through a
+    fallback chain that still lists `.claude/scripts/`, so a hook would keep
+    firing the OLD gate and reporting its verdict as current — the drift
+    `check_install_drift.py` exists to name, arriving through the installer.
+
+    So the stale directory goes. What must NOT go is a file the project put
+    there: the kit never shipped it and has no standing to delete it. It is
+    moved aside, under a name that says what it is, and the installer prints
+    where.
+    """
+    root = _consumer(tmp_path)
+    legacy = root / ".claude" / "scripts"
+    legacy.mkdir(parents=True, exist_ok=True)
+    (legacy / "check_xrefs.py").write_text("the kit's old copy\n", encoding="utf-8")
+    (legacy / "their-own-audit.py").write_text("written by the project\n", encoding="utf-8")
+
+    _install(root)
+
+    assert not legacy.exists(), "the stale directory must not survive beside mechanisms/"
+    kept = root / ".claude" / "scripts.project-files" / "their-own-audit.py"
+    assert kept.is_file(), "a file the kit never shipped may not be deleted"
+    assert kept.read_text(encoding="utf-8") == "written by the project\n"
+    assert (root / ".claude" / "mechanisms" / "gates" / "check_xrefs.py").is_file()

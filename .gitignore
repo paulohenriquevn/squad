@@ -104,7 +104,7 @@ agents/*.md
 # not. `squad_lead.py` invokes the facilitator through `claude -p` when the mechanical
 # selector has no answer, and an agent that is not versioned reaches nobody.
 #
-# This list is checked against `scripts/install.sh` by `tests/test_squad_agents.py` —
+# This list is checked against `mechanisms/dist/install.sh` by `tests/test_squad_agents.py` —
 # three files naming the same four is three chances to drift.
 !agents/kairos-product-owner.md
 !agents/iris-product-designer.md

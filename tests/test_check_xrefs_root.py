@@ -3,7 +3,7 @@
 Before, without `--ecosystem-dir`, the root came from `Path.cwd()`. The effect was
 a validator that lies by omission: running
 
-    python3 <another-project>/.claude/scripts/check_xrefs.py
+    python3 <another-project>/.claude/mechanisms/gates/check_xrefs.py
 
 from an arbitrary cwd silently audited the ecosystem OF THE CWD and printed
 its verdict — with the other project's name on the command line. Measured on
@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-_SCRIPT = _REPO / "scripts" / "check_xrefs.py"
+_SCRIPT = _REPO / "mechanisms" / "gates" / "check_xrefs.py"
 
 
 def _make_ecosystem(root: Path, *, skill: str, missing_rule: bool) -> Path:
@@ -30,7 +30,7 @@ def _make_ecosystem(root: Path, *, skill: str, missing_rule: bool) -> Path:
     eco = root / ".claude"
     (eco / "skills" / skill).mkdir(parents=True)
     (eco / "rules").mkdir(parents=True)
-    (eco / "scripts").mkdir(parents=True)
+    (eco / "mechanisms" / "gates").mkdir(parents=True)
     (eco / "hooks").mkdir(parents=True)  # find_ecosystem_dir requires all three
 
     body = "# Skill\n\n## Cycle contract\n\nSee `rules/cycle-implement.md`.\n"
@@ -58,11 +58,14 @@ def test_the_root_comes_from_the_script_and_not_from_the_cwd(tmp_path: Path) -> 
     eco_sujo = _make_ecosystem(sujo, skill="implement", missing_rule=True)
     _make_ecosystem(limpo, skill="implement", missing_rule=False)
 
-    copia = eco_sujo / "scripts" / "check_xrefs.py"
+    copia = eco_sujo / "mechanisms" / "gates" / "check_xrefs.py"
     copia.write_bytes(_SCRIPT.read_bytes())
-    for shared in (_REPO / "scripts").glob("*.py"):
+    for shared in (_REPO / "mechanisms").rglob("*.py"):
         if shared.name != "check_xrefs.py":
-            (eco_sujo / "scripts" / shared.name).write_bytes(shared.read_bytes())
+            (eco_sujo / "mechanisms" / shared.relative_to(_REPO / "mechanisms")).parent.mkdir(
+                parents=True, exist_ok=True)
+            (eco_sujo / "mechanisms" / shared.relative_to(_REPO / "mechanisms")).write_bytes(
+                shared.read_bytes())
 
     broken = [
         f for f in _findings(copia, cwd=limpo)
@@ -130,7 +133,7 @@ def _consumer(tmp_path: Path, kit_skills: list[str], own_skills: list[str],
         d.mkdir(parents=True, exist_ok=True)
         (d / "SKILL.md").write_text(f"# {skill}\n\nNo cycle contract here.\n", encoding="utf-8")
     if manifest:
-        body = ["# Written by scripts/install.sh"] + [f"skills/{s}" for s in kit_skills]
+        body = ["# Written by mechanisms/dist/install.sh"] + [f"skills/{s}" for s in kit_skills]
         (tmp_path / ".kit-manifest.txt").write_text("\n".join(body) + "\n", encoding="utf-8")
     return tmp_path
 

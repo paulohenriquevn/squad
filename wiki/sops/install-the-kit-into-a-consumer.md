@@ -17,7 +17,7 @@ status: draft
 stale_after: 2027-02-28
 sources:
   - id: script
-    resource: ../../scripts/install.sh
+    resource: ../../mechanisms/dist/install.sh
 
 # Kit-specific keys, kept so `check_sop_structure.py` keeps reading this file.
 sop: install-the-kit-into-a-consumer
@@ -47,7 +47,7 @@ decide and the two ways an install reports success while being broken.
 
 ## Steps
 
-1. Run `bash scripts/install.sh <target-project-dir>`. Add `--force` only when
+1. Run `bash mechanisms/dist/install.sh <target-project-dir>`. Add `--force` only when
    replacing an existing install, and only after reading what it overwrites.
 2. Read the validation the installer runs at the end. It executes
    `check_xrefs.py --strict` **from the target**, not from the kit, because a

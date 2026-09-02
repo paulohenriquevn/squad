@@ -6,7 +6,7 @@ Replicates the matching shape used by `idea-to-release/scripts/assess_confidence
 `description:` line, and report a hit when any plan keyword appears in it.
 
 Deliberately duplicated per slice (ADR D2 of `patterns-consumption-gate-plan`):
-slices run isolated per-process (`scripts/run_slice_tests.sh`), so a shared
+slices run isolated per-process (`mechanisms/cycle/run_slice_tests.sh`), so a shared
 top-level import would break the isolation the harness depends on.
 """
 from __future__ import annotations

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 # Ensure scripts/ is importable
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 

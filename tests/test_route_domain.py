@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
 from kit_agents import kit_agents  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+sys.path.insert(0, str(PROJECT_ROOT / "mechanisms" / "cycle"))
 
 from route_domain import (  # noqa: E402
     count_candidate_rows,
@@ -319,7 +319,7 @@ def test_the_table_is_read_from_the_projects_own_file(tmp_path: Path) -> None:
     sections of the KIT's contract and exactly one thing belonging to the
     project. Everything that went wrong followed from that mixture:
 
-    - `boundary-check.sh` blocks `rules/*.md` as the kit's, so the kit invited an
+    - `boundary-check.py` blocks `rules/*.md` as the kit's, so the kit invited an
       edit to a file it forbade editing — and `detect_domains.py --write` wrote
       there anyway, through `Path.write_text`, which no hook intercepts.
     - The section had to be replaced by regex, and the regex took the invariants

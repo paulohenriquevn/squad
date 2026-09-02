@@ -92,6 +92,8 @@ def test_every_declared_hook_script_exists(declaration: str) -> None:
         for scripts in declared.values()
         for script in scripts
         if not (PROJECT_ROOT / "hooks" / script).is_file()
-        and not (PROJECT_ROOT / "scripts" / script).is_file()
+        # `mechanisms/` is searched recursively: the families are subdirectories,
+        # so a flat lookup would report every mechanism as missing.
+        and not any((PROJECT_ROOT / "mechanisms").rglob(script))
     ]
     assert missing == [], f"{declaration} declares scripts that do not exist: {missing}"

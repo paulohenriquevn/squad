@@ -115,7 +115,7 @@ def _objectives(root: Path) -> list[tuple[str, str]]:
 
 def _known_domains(root: Path) -> set[str]:
     try:
-        sys.path.insert(0, str(_HERE.parents[3] / "scripts"))
+        sys.path.insert(0, str(_HERE.parents[3] / "mechanisms" / "cycle"))
         from route_domain import _routing_table_path, parse_routing_table
     except ImportError:
         return set()

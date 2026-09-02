@@ -80,7 +80,7 @@ For domains with .claude/records/references/ clones (project-a, project-b, proje
 
 ## Boundaries you NEVER cross
 
-- NEVER edit anything in `.claude/records/references/` (read-only zone — enforced by `.claude/hooks/boundary-check.sh`).
+- NEVER edit anything in `.claude/records/references/` (read-only zone — enforced by `.claude/hooks/boundary-check.py`).
 - NEVER recommend a domain pattern outside the plan's declared scope.
 - NEVER cite vendor docs from memory — WebSearch + WebFetch with snapshot per discover-web protocol when shipped.
 - NEVER classify a domain finding "MUST FIX" — that's the agent's authority.

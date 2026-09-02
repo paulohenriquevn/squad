@@ -40,7 +40,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
 from check_semantic_names import check_semantic_names  # noqa: E402
 
@@ -129,7 +129,8 @@ def test_a_word_that_merely_contains_a_banned_one_is_not_a_finding(tmp_path: Pat
 def test_kebab_and_snake_in_one_directory_is_reported(tmp_path: Path) -> None:
     """Two conventions in one folder means the reader guesses which applies, and
     the next author copies whichever file they opened first."""
-    root = _repo(tmp_path, "scripts/check_xrefs.py", "scripts/generate-settings.py")
+    root = _repo(tmp_path, "mechanisms/gates/check_xrefs.py",
+                 "mechanisms/gates/generate-settings.py")
 
     report = check_semantic_names(root)
 
@@ -139,7 +140,7 @@ def test_kebab_and_snake_in_one_directory_is_reported(tmp_path: Path) -> None:
 
 
 def test_one_convention_per_directory_passes(tmp_path: Path) -> None:
-    root = _repo(tmp_path, "scripts/check_xrefs.py", "scripts/route_domain.py")
+    root = _repo(tmp_path, "mechanisms/gates/check_xrefs.py", "mechanisms/cycle/route_domain.py")
 
     assert "mixed_naming_convention" not in _kinds(check_semantic_names(root))
 
@@ -147,7 +148,7 @@ def test_one_convention_per_directory_passes(tmp_path: Path) -> None:
 def test_separate_directories_may_differ(tmp_path: Path) -> None:
     """The rule is one convention per directory, not one per repository — hooks
     are shell and use kebab by long habit; Python modules cannot."""
-    root = _repo(tmp_path, "scripts/route_domain.py", "hooks/post-edit-check.sh")
+    root = _repo(tmp_path, "mechanisms/cycle/route_domain.py", "hooks/post-edit-check.py")
 
     assert "mixed_naming_convention" not in _kinds(check_semantic_names(root))
 
@@ -187,7 +188,7 @@ def test_an_executable_with_no_stated_purpose_is_reported(tmp_path: Path) -> Non
 
 
 def test_a_shell_script_stating_its_purpose_in_a_header_comment_passes(tmp_path: Path) -> None:
-    path = tmp_path / "scripts" / "install.sh"
+    path = tmp_path / "mechanisms" / "dist" / "install.sh"
     path.parent.mkdir(parents=True)
     path.write_text(
         "#!/usr/bin/env bash\n# Install the kit into a consumer project.\nset -eu\n",
@@ -198,7 +199,7 @@ def test_a_shell_script_stating_its_purpose_in_a_header_comment_passes(tmp_path:
 
 
 def test_a_python_module_with_a_docstring_passes(tmp_path: Path) -> None:
-    root = _repo(tmp_path, "scripts/route_domain.py")
+    root = _repo(tmp_path, "mechanisms/cycle/route_domain.py")
 
     assert "purpose_not_stated" not in _kinds(check_semantic_names(root))
 
@@ -208,7 +209,7 @@ def test_a_python_module_with_a_docstring_passes(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_the_report_counts_what_it_inspected(tmp_path: Path) -> None:
-    root = _repo(tmp_path, "scripts/route_domain.py", "scripts/check_xrefs.py")
+    root = _repo(tmp_path, "mechanisms/cycle/route_domain.py", "mechanisms/gates/check_xrefs.py")
 
     report = check_semantic_names(root)
 
@@ -229,7 +230,7 @@ def test_the_cli_exits_nonzero_on_a_finding(tmp_path: Path) -> None:
     _repo(tmp_path, "scripts/utils/thing.py")
 
     result = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "scripts" / "check_semantic_names.py"),
+        [sys.executable, str(REPO_ROOT / "mechanisms" / "gates" / "check_semantic_names.py"),
          "--repo-root", str(tmp_path)],
         capture_output=True, text=True, check=False,
     )

@@ -102,7 +102,7 @@ review returns to the stage that produces plans, not to intake.
 
 `shipped` and `killed` are terminal. A killed item keeps its number forever.
 
-**These transitions are written by `scripts/backlog_status.py`, not by hand.** That
+**These transitions are written by `mechanisms/cycle/backlog_status.py`, not by hand.** That
 script exists because of a measurement on 2026-08-30: `planned` was in this contract
 and in zero items across every install — 22 `triaged`, 133 `shipped`, 11 `killed` in
 one project, 3 `raw` and 2 `triaged` in another, and not one `planned` anywhere. The
@@ -165,7 +165,7 @@ cannot be copied from anywhere and must be derived where it lives.
 
 Keeping the two in one file cost three defects, all of the same shape:
 
-- `hooks/boundary-check.sh` blocks `rules/*.md` as the kit's, so the kit
+- `hooks/boundary-check.py` blocks `rules/*.md` as the kit's, so the kit
   prescribed writing to a file it forbade editing — and the write landed anyway,
   through `Path.write_text`, which no hook watches.
 - The section had to be replaced by regex on every re-derive, and the regex took
@@ -197,7 +197,7 @@ correct: with no table, routing would be a guess.
 
 Both paragraphs were inside the span once. Running the command this very file prescribes deleted them — measured on an adopter, the section went from 45 lines to 12 — and `route_domain.py` kept enforcing a rule no file stated any more. That is the inverse of a fabricated mechanism: a real gate whose contract is written nowhere, which `rules/cycle-rule-schema.md` exists to prevent in the other direction.
 
-**One repo, one domain.** `scripts/route_domain.py` enforces the invariant: listing the same repository under two domains makes routing depend on dict iteration order, and the same item starts routing differently between runs. When one repository holds two genuinely distinct things — a service and the dashboard that consumes it, in the same checkout — separate them by path (`repo` and `repo/subdir`), never by repeating the bare name in both rows.
+**One repo, one domain.** `mechanisms/cycle/route_domain.py` enforces the invariant: listing the same repository under two domains makes routing depend on dict iteration order, and the same item starts routing differently between runs. When one repository holds two genuinely distinct things — a service and the dashboard that consumes it, in the same checkout — separate them by path (`repo` and `repo/subdir`), never by repeating the bare name in both rows.
 
 **Record the divergence instead of deleting it.** A repository the inventory names and disk does not have should stay listed, marked as having no checkout: an item filed against it routes nowhere, and seeing that written down is cheaper than discovering it through the refusal.
 
@@ -215,7 +215,7 @@ There is no "with caveats" band: an item is either in the registry or it is not.
 
 | # | Gate | Blocks on |
 |---|---|---|
-| G1 | **Domain + repo resolve** (run by `skills/backlog-item/scripts/check_intake_gates.py`, which delegates to `scripts/route_domain.py`) | `domain` not in the registered set, or `repo` not in the umbrella inventory. An item nobody owns is an item nobody does. |
+| G1 | **Domain + repo resolve** (run by `skills/backlog-item/scripts/check_intake_gates.py`, which delegates to `mechanisms/cycle/route_domain.py`) | `domain` not in the registered set, or `repo` not in the umbrella inventory. An item nobody owns is an item nobody does. |
 | G2 | **Dedup search ran** (`check_intake_gates.py`; running it IS the evidence) | No search of `BACKLOG.md` performed before writing. A collision on an open item forces `ITEM_MERGED`. |
 | G3 | **Single domain** _(not mechanized: judgement, by decision — deciding that a description spans two domains is not something a regex settles, and the evals cover it instead)_ | The description spans two domains. Split it; one item, one specialist. |
 | G4 | **Verifiable DoD** _(not mechanized: judgement, by decision — `check_criterion_executability.py` does the equivalent one phase later, against a plan; at intake an item is a hypothesis and a strict falsifiability check would silence the hunch)_ | Zero `dod` bullets, or every bullet unfalsifiable ("melhorar a performance"). Without a closing criterion the item never closes. |

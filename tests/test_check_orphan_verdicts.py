@@ -17,8 +17,9 @@ from check_orphan_verdicts import check_orphan_verdicts
 def _repo(tmp_path: Path, rule_body: str, code: str = "", doc: str = "") -> Path:
     (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
     (tmp_path / "rules" / "cycle-thing.md").write_text(rule_body, encoding="utf-8")
-    (tmp_path / "scripts").mkdir(exist_ok=True)
-    (tmp_path / "scripts" / "runner.py").write_text(code or "# nothing\n", encoding="utf-8")
+    (tmp_path / "mechanisms" / "gates").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "mechanisms" / "gates" / "runner.py").write_text(
+        code or "# nothing\n", encoding="utf-8")
     skill = tmp_path / "skills" / "doer"
     skill.mkdir(parents=True, exist_ok=True)
     (skill / "SKILL.md").write_text(doc or "# doer\n", encoding="utf-8")
@@ -126,8 +127,8 @@ def test_a_subsection_does_not_truncate_the_verdicts_section(tmp_path: Path) -> 
         "## Something else\n\n"
         "| `NOT_A_VERDICT_HERE` | outside the section |\n",
         encoding="utf-8")
-    scripts = tmp_path / "scripts"
-    scripts.mkdir()
+    scripts = tmp_path / "mechanisms" / "gates"
+    scripts.mkdir(parents=True)
     (scripts / "emit.py").write_text(
         'print("FIRST_ONE"); print("SECOND_ONE")\n', encoding="utf-8")
 

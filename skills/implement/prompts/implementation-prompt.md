@@ -5,7 +5,7 @@ You are mid-implementation, iteration {ITERATION}. The user invoked `/implement 
 **Plan:** `{PLAN_PATH}`
 **Implementation working contract:** `{IMPLEMENTATION_PATH}`
 **Progress file:** `.claude/records/implementations/.progress-{PLAN_SLUG}.json` (gitignored)
-**Domain specialist:** `{SPECIALIST_PATH}` — the project's own, resolved at Step 2.5 by `scripts/route_domain.py`. Subagent type is `{SPECIALIST_DOMAIN}` (the `name:` in its frontmatter). **Nothing here generates it**; it was derived from the project's disk and carries the repos it covers, their verified build commands, their invariants and the false positives that domain produces.
+**Domain specialist:** `{SPECIALIST_PATH}` — the project's own, resolved at Step 2.5 by `mechanisms/cycle/route_domain.py`. Subagent type is `{SPECIALIST_DOMAIN}` (the `name:` in its frontmatter). **Nothing here generates it**; it was derived from the project's disk and carries the repos it covers, their verified build commands, their invariants and the false positives that domain produces.
 **Consultation logs:** `.claude/records/implementations/{PLAN_SLUG}/specialist-consultations/iteration-{N}-{phase}.md`
 
 ## Specialist invocation discipline (READ BEFORE Step 1)

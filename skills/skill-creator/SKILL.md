@@ -84,7 +84,7 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 In this repository a new skill MUST be created directly at `skills/{purpose}/`, where `{purpose}` is a short, friendly, kebab-case name derived from what the skill does — e.g. `pdf-table-extract`, `changelog-linter`, `terraform-drift-check`. Pick the most specific descriptive name (Unbreakable Rule 5: Nomenclature), not a vague one.
 
-Do NOT use any `skills/generated/` staging path or a `-patterns` suffix convention: this project promotes skills straight to first-class `skills/{purpose}/`. There is no separate validate/register step — run `scripts/validate_skill_frontmatter.py` and `scripts/check_xrefs.py` after writing the skill instead.
+Do NOT use any `skills/generated/` staging path or a `-patterns` suffix convention: this project promotes skills straight to first-class `skills/{purpose}/`. There is no separate validate/register step — run `mechanisms/gates/validate_skill_frontmatter.py` and `mechanisms/gates/check_xrefs.py` after writing the skill instead.
 
 Frontmatter MUST include `name`, `description`, and `user-invocable` (the project's `validate_skill_frontmatter.py` requires all three; `name` must equal the directory name). Add `allowed-tools` and `argument-hint` when the skill is user-invocable.
 

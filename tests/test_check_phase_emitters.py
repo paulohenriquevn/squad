@@ -76,7 +76,7 @@ def test_an_absent_phases_file_declares_nothing(tmp_path: Path) -> None:
     assert check_phase_emitters(tmp_path).phases == 0
 
 
-@pytest.mark.parametrize("path", ["scripts/check_phase_emitters.py", "scripts/cycle_events.py"])
+@pytest.mark.parametrize("path", ["mechanisms/gates/check_phase_emitters.py", "mechanisms/cycle/cycle_events.py"])
 def test_the_sweep_cannot_pass_by_reading_its_own_prose(tmp_path: Path, path: str) -> None:
     """These files name every phase while emitting for none."""
     repo = _repo(tmp_path)

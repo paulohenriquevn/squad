@@ -84,7 +84,7 @@ Every `export` in the diff: must be either (a) re-exported via `src/index.ts` (p
 
 ### 4. Boundary respect (DIP)
 
-The `.claude/hooks/boundary-check.sh` already blocks cross-tier imports at write time. Spot-check:
+The `.claude/hooks/boundary-check.py` already blocks cross-tier imports at write time. Spot-check:
 
 - `src/core/` imports — must not reference `src/local/`, `src/cloud/`, `src/an adopter/`, `src/agent-tools/`
 - `src/local/` and `src/cloud/` must not import each other

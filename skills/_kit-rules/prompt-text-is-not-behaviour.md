@@ -50,7 +50,7 @@ it. The grep was the wrong instrument for a real problem.
 
 ## Enforcement
 
-`scripts/check_prose_tests.py` reports asserts whose left side is a string
+`mechanisms/gates/check_prose_tests.py` reports asserts whose left side is a string
 literal and whose right side traces back to text read from a shipped prose file
 in the same function. It is deliberately precise rather than exhaustive: it
 ignores asserts over program output (`result.stdout`, a generated report, a
@@ -67,6 +67,6 @@ prevented.
 
 ## Cross-references
 
-- Checker: `scripts/check_prose_tests.py`
+- Checker: `mechanisms/gates/check_prose_tests.py`
 - The defect that paid for this: `CHANGELOG.md`, `test_layout.py` entry of 2026-08-29
 - Source of the rule: [`unclebob/swarm-forge`](https://github.com/unclebob/swarm-forge) `AGENTS.md`

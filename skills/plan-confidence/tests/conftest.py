@@ -6,8 +6,8 @@ layout fallback so the test suite runs in BOTH layouts:
   - **standalone**: Cycle source repo itself — `rules/`, `skills/`, `records/`
     live at the top level (no `.claude/` wrapper).
   - **consumer install**: Cycle ecosystem copied into a consumer project under
-    `<consumer>/.claude/` (this is what `scripts/install.sh` and
-    `scripts/patch_install.sh` produce).
+    `<consumer>/.claude/` (this is what `mechanisms/dist/install.sh` and
+    `mechanisms/dist/patch_install.sh` produce).
 
 Without the fallback every test asserting `<root>/.claude/rules/foo.md` exists
 fails when the suite runs against the Cycle source itself — because the plan

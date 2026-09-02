@@ -30,11 +30,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-#: `python3 skills/…` or `bash scripts/…` with no layout resolution in front.
+#: `python3 skills/…` or `bash mechanisms/…` with no layout resolution in front.
 #: The negative lookbehind lets the fixed form through: once the path is prefixed
 #: by a `$ECO`-style expansion or `.claude/`, it is no longer layout-blind.
 _BLIND = re.compile(
-    r'(?<![$/"\w])(?:python3|bash|sh)\s+(?!["\']?\$)(skills|scripts|hooks)/[A-Za-z0-9_./-]+'
+    r'(?<![$/"\w])(?:python3|bash|sh)\s+(?!["\']?\$)(skills|mechanisms|hooks)/[A-Za-z0-9_./-]+'
 )
 
 #: Markdown the kit ships and an agent is expected to follow.
@@ -60,7 +60,7 @@ _SHIPPED = (
 #: which is the one thing a changelog must never do.
 #:
 #: `CONTRIBUTING.md` addresses someone working ON the kit, in its own repository,
-#: where `bash scripts/run_slice_tests.sh` is the correct command and the layout
+#: where `bash mechanisms/cycle/run_slice_tests.sh` is the correct command and the layout
 #: expression would be noise. It never reaches a consumer, so it cannot mislead
 #: one.
 _EXEMPT = {"CHANGELOG.md", "CONTRIBUTING.md"}
@@ -101,4 +101,4 @@ def test_the_detector_accepts_the_fixed_form(tmp_path: Path) -> None:
 def test_the_detector_still_catches_the_defect() -> None:
     """And one that stopped catching it would be worse still."""
     assert _BLIND.search("python3 skills/acceptance/scripts/extract.py")
-    assert _BLIND.search("bash scripts/install.sh")
+    assert _BLIND.search("bash mechanisms/dist/install.sh")

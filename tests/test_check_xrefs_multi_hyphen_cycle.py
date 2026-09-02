@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parent.parent
-_SCRIPT = _REPO / "scripts" / "check_xrefs.py"
+_SCRIPT = _REPO / "mechanisms" / "gates" / "check_xrefs.py"
 
 # Every multi-hyphen cycle rule in the kit. A new name here is a new case for free.
 MULTI_HYPHEN_CYCLES = ["cycle-code-quality", "cycle-idea-to-release", "cycle-judge-codex"]
