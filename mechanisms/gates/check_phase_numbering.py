@@ -158,6 +158,20 @@ def declared_requires(skill_md: Path) -> list[str]:
     return [name.strip() for name in found.group(1).split(",") if name.strip()]
 
 
+def _kit_under(root: Path) -> Path:
+    """`root` itself, or its `.claude/` when that is where the kit lives.
+
+    A consumer keeps the kit in `.claude/`, so `--root .` — the natural thing to
+    type from a project — pointed at a directory with no `skills/` and swept
+    nothing. Before the empty-sweep fix that printed a clean PASS; now it prints
+    NOTHING_DECLARED, which is honest and still not what the caller meant.
+    """
+    if (root / "skills").is_dir():
+        return root
+    nested = root / ".claude"
+    return nested if (nested / "skills").is_dir() else root
+
+
 def surveyed(root: Path) -> tuple[int, int]:
     """`(cycles, skills)` this gate actually looked at under `root`.
 
@@ -169,6 +183,7 @@ def surveyed(root: Path) -> tuple[int, int]:
     inability to measure published as a measurement — and five sibling gates
     given the same empty tree said "swept 0 cycle rule(s)" instead.
     """
+    root = _kit_under(root)
     rules_dir, skills_dir = root / "rules", root / "skills"
     if not rules_dir.is_dir() or not skills_dir.is_dir():
         return 0, 0
@@ -179,6 +194,7 @@ def surveyed(root: Path) -> tuple[int, int]:
 
 
 def check(root: Path) -> list[Finding]:
+    root = _kit_under(root)
     rules_dir = root / "rules"
     skills_dir = root / "skills"
     if not rules_dir.is_dir() or not skills_dir.is_dir():

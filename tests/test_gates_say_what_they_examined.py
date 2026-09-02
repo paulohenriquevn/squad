@@ -94,3 +94,28 @@ def test_the_roster_covers_every_gate_that_takes_a_root() -> None:
             missing.append(f"{path.stem} (takes --{sorted(flags)[0]})")
 
     assert not missing, f"gates taking a root but absent from the roster: {missing}"
+
+
+def test_phase_numbering_finds_the_kit_when_given_a_project_root(tmp_path: Path) -> None:
+    """A consumer keeps the kit in `.claude/`, and `--root .` is what someone
+    types from a project. That pointed at a directory with no `skills/` and swept
+    nothing — which printed a clean PASS until the empty-sweep fix, and prints an
+    honest NOTHING_DECLARED after it. Honest is better and still not the answer
+    the caller wanted."""
+    project = tmp_path / "consumer"
+    skill = project / ".claude" / "skills" / "some-phase"
+    skill.mkdir(parents=True)
+    (project / ".claude" / "rules").mkdir()
+    (skill / "SKILL.md").write_text(
+        "---\nname: some-phase\ndescription: d\n---\n\n"
+        "## Cycle contract\n\n"
+        "This skill is **phase 1** of [`cycle-demo`](../../rules/cycle-demo.md).\n\n"
+        "## Process\n\nsomething\n",
+        encoding="utf-8")
+
+    done = subprocess.run(
+        [sys.executable, str(_GATES / "check_phase_numbering.py"), "--root", str(project)],
+        capture_output=True, text=True, timeout=120, check=False)
+
+    assert "NOTHING_DECLARED" not in done.stdout, (
+        f"the kit is in .claude/ and the gate did not look there:\n{done.stdout}")
