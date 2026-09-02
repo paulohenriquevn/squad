@@ -31,6 +31,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# The width the output is cut to. Fixed at 140 until 2026-09-02, which is wider
+# than a pane in a 2x2 wall — every line wrapped and the report became unreadable
+# exactly where it is most useful. `tput` needs a terminal; inside a pipe there is
+# none, so COLUMNS answers and 100 is the last resort.
+WIDTH="${COLUMNS:-$(tput cols 2>/dev/null || echo 100)}"
+[ "$WIDTH" -lt 40 ] 2>/dev/null && WIDTH=40
+BODY=$((WIDTH - 8))
+
 if [ -t 1 ]; then
   B=$'\e[1m'; D=$'\e[2m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; C=$'\e[36m'; Z=$'\e[0m'
 else
@@ -98,7 +106,7 @@ render() {
 
     tmux capture-pane -p -t "$name" 2>/dev/null | strip_ansi \
       | grep -vE '^\s*$|bypass permissions|^─+$|^\s*❯\s*$|tokens\s*$|ctrl\+o to expand' \
-      | tail -"$LINES" | cut -c1-140 | sed "s/^/${B}│${Z}     /"
+      | tail -"$LINES" | cut -c1-"$BODY" | sed "s/^/${B}│${Z}     /"
   done
 
   printf '%s│%s\n' "$B" "$Z"
@@ -108,8 +116,9 @@ render() {
     stalls="$(grep -c '"event": "stalled"' "$LOG" 2>/dev/null || echo 0)"
     printf '%s├─ %slead%s      %s handed out · %s stalled · log %s\n' \
       "$B" "$B" "$Z" "$starts" "$stalls" "$LOG"
-    python3 - "$LOG" <<'PY' 2>/dev/null | sed "s/^/${B}│${Z}     /"
-import json, sys
+    BODY="$BODY" python3 - "$LOG" <<'PY' 2>/dev/null | sed "s/^/${B}│${Z}     /"
+import json, os, sys
+cut = max(20, int(os.environ.get("BODY", "92")) - 40)
 rows = []
 for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
     try:
@@ -119,7 +128,7 @@ for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
 for e in rows[-4:]:
     who = e.get("session") or "-"
     print(f'{(e.get("at") or "")[11:19]}  {e.get("event","?"):8} {who:7} '
-          f'{e.get("item") or "-":8} {str(e.get("reason","")).splitlines()[0][:78]}')
+          f'{e.get("item") or "-":8} {str(e.get("reason","")).splitlines()[0][:cut]}')
 PY
   else
     printf '%s├─ %slead%s      no log at %s\n' "$B" "$B" "$Z" "$LOG"

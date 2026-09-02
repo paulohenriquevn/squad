@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -90,3 +91,58 @@ def test_an_unreadable_report_says_so_instead_of_printing_a_verdict(tmp_path: Pa
 
     assert "could not be read" in out
     assert "ITEM_SELECTED" not in out
+
+
+# ── fleet_wall.sh ─────────────────────────────────────────────────────────────
+
+WALL = REPO / "mechanisms" / "fleet" / "fleet_wall.sh"
+
+
+def _wall(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    base = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"), "TERM": "dumb"}
+    return subprocess.run(["bash", str(WALL), *args], capture_output=True,  # noqa: PLW1510
+                          text=True, env={**base, **(env or {})})
+
+
+def test_the_wall_is_executable_and_parses() -> None:
+    assert os.access(WALL, os.X_OK)
+    check = subprocess.run(["bash", "-n", str(WALL)], capture_output=True, text=True)  # noqa: PLW1510
+    assert check.returncode == 0, check.stderr
+
+
+def test_the_wall_refuses_when_there_is_no_server(tmp_path: Path) -> None:
+    """And says how to start one, rather than exiting quietly on a blank screen."""
+    result = _wall("-d", env={"TMUX_TMPDIR": str(tmp_path)})
+
+    assert result.returncode == 1
+    assert "no tmux server" in result.stderr
+    assert "start_fleet.sh" in result.stderr
+
+
+def test_the_wall_is_read_only_unless_asked_otherwise() -> None:
+    """The default cannot type into a session. A fleet session is being driven by
+    the watchdog, and a stray keystroke answers — as the operator — a question the
+    agent asked someone else."""
+    source = WALL.read_text(encoding="utf-8")
+
+    assert 'MODE="-r"' in source, "read-only must be the default"
+    assert '-w|--writable' in source, "and there must be a deliberate way out of it"
+
+
+def test_the_wall_matches_only_fleet_sessions() -> None:
+    """A wall built from every tmux session shows whatever else the machine is
+    doing. Measured while building this: a throwaway session created two commands
+    earlier appeared as a fleet member."""
+    source = WALL.read_text(encoding="utf-8")
+
+    assert "FLEET_PATTERN" in source, "the set must be a pattern, not everything running"
+
+    default = re.search(r'PATTERN="\$\{FLEET_PATTERN:-([^}]+)\}"', source)
+    assert default, "the default pattern is not readable from the script"
+    pattern = re.compile(default.group(1))
+
+    # What start_fleet.sh names, and what it must not sweep up beside them.
+    assert pattern.search("squad1") and pattern.search("squad12")
+    assert not pattern.search("lead"), "the lead's pane is raw jsonl; the status pane replaces it"
+    assert not pattern.search("wall")
+    assert not pattern.search("my-other-work"), "a stray session is not a fleet member"
