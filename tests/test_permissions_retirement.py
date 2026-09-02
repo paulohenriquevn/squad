@@ -123,3 +123,68 @@ def test_the_removal_is_reported_rather_than_silent(tmp_path: Path) -> None:
     out = _install(root)
 
     assert "retired" in out.lower(), out[-400:]
+
+
+DECLARED_RETIRED = _REPO / "rules" / "retired-permissions.txt"
+
+
+def _declared() -> set[str]:
+    return {ln.strip() for ln in DECLARED_RETIRED.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")}
+
+
+def test_a_declared_retirement_is_removed_even_with_no_recorded_base(tmp_path: Path) -> None:
+    """The base cannot migrate the FIRST install under its own scheme.
+
+    With no record, every existing entry is indistinguishable from a project's
+    own, so that path removes nothing — by design, and correctly. Measured on
+    2026-09-02: the credential globs were rewritten, the base landed in the same
+    hour, and `Read(**/*secret*)` stayed denied in the consumer anyway. The fix
+    arrived inert, which is the shape it was written to prevent.
+
+    So the kit also declares its withdrawals explicitly. The base is automatic and
+    covers what nobody remembers; this is auditable and covers what the base
+    cannot know.
+    """
+    retired = sorted(_declared())[0]
+    root = _consumer(tmp_path, deny=[retired, PROJECT_OWN], base=None)
+
+    _install(root)
+
+    assert retired not in _deny(root), "a declared retirement must not need a base"
+    assert PROJECT_OWN in _deny(root)
+
+
+def test_nothing_the_kit_still_ships_is_listed_as_retired() -> None:
+    """A rule in both files would be added and removed on every install, and
+    which of the two won would depend on the order of two loops."""
+    shipped = set()
+    for name in ("settings.json", "settings.plugin.json"):
+        for items in json.loads((_REPO / name).read_text(encoding="utf-8"))["permissions"].values():
+            if isinstance(items, list):
+                shipped |= set(items)
+
+    contradiction = _declared() & shipped
+    assert not contradiction, (
+        f"{sorted(contradiction)} is declared retired and still shipped")
+
+
+def test_every_declared_retirement_carries_a_dated_reason() -> None:
+    """A list of bare rules is a list nobody can audit later. Each block says
+    when it was withdrawn and why, so a consumer surprised by a removal can find
+    the reasoning instead of the deletion."""
+    lines = DECLARED_RETIRED.read_text(encoding="utf-8").splitlines()
+    assert _declared(), "the file declares nothing"
+
+    # Walk the DECLARING lines, not every occurrence of the text. A rule named
+    # inside the prose above is a mention, and an earlier version of this test
+    # failed on exactly that — the third time in one day this kit tripped over
+    # the difference between a marker mentioned and a marker used.
+    dated = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            dated = dated or "Retired 20" in stripped
+            continue
+        if stripped:
+            assert dated, f"{stripped} is declared before any dated reason"

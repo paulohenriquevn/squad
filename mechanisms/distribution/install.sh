@@ -689,8 +689,28 @@ try:
 except (OSError, ValueError):
     _previous = {}
 
+# The declared half. A rule the kit withdrew is named in `rules/retired-permissions.txt`
+# and removed on every run, base or no base — which is what makes the FIRST
+# install under this scheme able to migrate at all.
+_declared_retired = set()
+try:
+    # `source` is `<kit>/settings.plugin.json`; the heredoc is quoted, so shell
+    # variables do not reach here and the kit root is derived from what does.
+    with open(os.path.join(os.path.dirname(source), "rules",
+                           "retired-permissions.txt"), encoding="utf-8") as _fh:
+        _declared_retired = {ln.strip() for ln in _fh
+                             if ln.strip() and not ln.lstrip().startswith("#")}
+except OSError:
+    pass
+
 merged = mine.setdefault("permissions", {})
 _retired_total = 0
+for _key, _list in merged.items():
+    if isinstance(_list, list):
+        for _rule in list(_list):
+            if _rule in _declared_retired:
+                _list.remove(_rule)
+                _retired_total += 1
 for key, items in kit.get("permissions", {}).items():
     if not isinstance(items, list):
         if key in _KIT_OWNED_SCALARS:
