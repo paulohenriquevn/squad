@@ -83,10 +83,28 @@ fi
 tmux new-session -d -s "$NAME" -c "$PROJECT" -x 200 -y 50 \
   "claude --name '$NAME' --dangerously-skip-permissions"
 
-sleep 4
+# NOTHING is typed until the session is at a prompt, and this is the whole fix.
+# The previous version slept four seconds and typed the brief. On 2026-09-02,
+# minutes after the CLI was upgraded, four seconds landed inside a first-run
+# dialog nobody had seen before — the brief answered the DIALOG, and its first
+# newline confirmed the pre-selected option, which on the trust dialog is
+# `No, exit`. The session died and this script printed that it was looping.
+if ! python3 "$_here/session_ready.py" "$NAME" --quiet; then
+  echo "==> not starting the lead: the session never reached a prompt." >&2
+  echo "    Nothing was typed into it — anything typed now answers whatever is up." >&2
+  exit 1
+fi
+
 tmux send-keys -t "$NAME" "$BRIEF" C-m
 sleep 1
 tmux send-keys -t "$NAME" "/loop $INTERVAL Run one lead round now, following the brief above." C-m
+
+# And it is checked again afterwards, because the brief is what the earlier
+# failure was made of: reporting a looping lead that a keystroke had just killed.
+if ! python3 "$_here/session_ready.py" "$NAME" --timeout 20 --quiet; then
+  echo "==> the lead did not survive its own brief. Do not assume it is running." >&2
+  exit 1
+fi
 
 echo "==> lead is a Claude session named '$NAME', looping every $INTERVAL"
 echo "    watch it:   tmux attach -t $NAME"

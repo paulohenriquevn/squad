@@ -49,6 +49,12 @@ default=$(( (cores - 2) / 2 ))
 SIZE="${2:-$default}"
 
 MARKERS="${MARKERS:-/tmp/squad-markers}"
+
+# Where this script is, not where the kit is assumed to be. The line further down
+# that spawns the watchdog resolves it through `$PROJECT/.claude/`, which only
+# holds for a copy install — under the plugin layout the kit lives outside the
+# project entirely.
+_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG="${LOG:-/tmp/squad-lead.jsonl}"
 # The per-consultation ceiling the lead passes to `--max-budget-usd`. The default
 # lives in `squad_lead.py` and its comment says 6.00 was measured "with room for a
@@ -61,6 +67,7 @@ mkdir -p "$MARKERS"
 echo "==> Fleet of $SIZE over $PROJECT (cores: $cores)"
 
 names=()
+started=()
 for i in $(seq 1 "$SIZE"); do
   name="squad$i"
   names+=("$name")
@@ -87,7 +94,30 @@ for i in $(seq 1 "$SIZE"); do
   # to tell a session that is thinking from one that has handed the turn back.
   tmux pipe-pane -t "$name" "cat >> $MARKERS/$name.log"
   echo "    $name started"
+  started+=("$name")
 done
+
+# Every session just created is CHECKED, and the fleet does not open on the ones
+# that are not at a prompt. Before this, `start_fleet.sh` printed "$name started"
+# for a session it had only asked tmux to create.
+#
+# Measured on 2026-09-02, right after the CLI was upgraded to 2.1.258: three lanes
+# sat in a first-run dialog nobody had seen before — "Try the new fullscreen
+# renderer?" — for forty minutes. `fleet_status.sh` showed them idle and `claude
+# agents --json` listed them alive, so the lead read three free lanes and would
+# have dispatched work into sessions that could not take it. Nothing in the fleet
+# could tell "idle" from "never started", because nothing had looked.
+stuck=()
+for name in "${started[@]}"; do
+  python3 "$_here/session_ready.py" "$name" --quiet || stuck+=("$name")
+done
+if [ ${#stuck[@]} -gt 0 ]; then
+  echo "" >&2
+  echo "==> ${#stuck[@]} of ${#started[@]} new session(s) never reached a prompt: ${stuck[*]}" >&2
+  echo "    The watchdog is NOT being started. A fleet whose lanes are stuck reports" >&2
+  echo "    them as idle, and the lead hands work to sessions that cannot take it." >&2
+  exit 1
+fi
 
 sleep 3
 
