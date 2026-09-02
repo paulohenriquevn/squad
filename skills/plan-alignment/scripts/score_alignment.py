@@ -184,6 +184,10 @@ class AlignmentReport:
     #: partially reviewed brief counts as unreviewed.
     signed_by: str | None = None
 
+    #: Acceptance criteria whose command can pass because its SUBJECT is absent.
+    #: Advisory, and scored nowhere: the rubric measures shape and this is about
+    #: meaning, so a false positive here must not cost an item a point.
+    vacuous_criteria: tuple[str, ...] = ()
     #: Set when a reviewer marked the brief `<!-- verdict: NEEDS_SPLIT -->`.
     needs_split: bool = False
     split_reason: str = ""
@@ -296,6 +300,39 @@ def _declarations_only(body: str) -> str:
     return "\n".join(
         line for line in stripped.splitlines()
         if line.strip().startswith("<!--") and line.strip().endswith("-->"))
+
+
+#: A negated test passes when what it negates is missing — including when the
+#: whole subject is missing. `! grep -q PROPOSED adr.md` exits 0 against a file
+#: that has no status line at all, so the criterion approves precisely the case
+#: it was written to catch.
+#:
+#: Reported by an ALIGN agent on 2026-09-02, which found two of its own criteria
+#: in this shape and rewrote them to match a terminal token POSITIVELY. Its words:
+#: "An acceptance criterion that passes when its subject is absent is executable,
+#: cites its requirement, and is wrong." It is also invisible to every one of the
+#: seventeen criteria, which is why this is advisory rather than scored — the
+#: rubric measures shape, and this is about meaning.
+_NEGATED_TEST_RE = re.compile(
+    # The backtick matters: acceptance criteria write their commands as inline
+    # code, so `!` is almost always preceded by one. Leaving it out of the
+    # delimiter class made this detector match nothing at all — which would have
+    # been an advisory that never fires, silently, and this file has spent the
+    # day removing exactly that shape.
+    r"(^|[\s;&|(`\"'])!\s*(grep|test|\[)|grep\s+-[a-z]*v|--invert-match|"
+    r"\bnot\s+in\b|\bassert\s+not\b")
+
+#: What makes a negated test safe: something asserting the subject IS there.
+_PRESENCE_RE = re.compile(
+    r"-n\s|\bwc\s+-l|\btest\s+-s\b|\[\s*-s\s|grep\s+-q\s[^|]*&&|"
+    r"\|\|\s*exit|\bif\s+grep\b")
+
+
+def _vacuous_criteria(bullets: list[str]) -> tuple[str, ...]:
+    """Acceptance criteria that could pass because their subject is absent."""
+    return tuple(
+        b.strip()[:120] for b in bullets
+        if _NEGATED_TEST_RE.search(b) and not _PRESENCE_RE.search(b))
 
 
 def _without_section(body: str, *headings: str) -> str:
@@ -585,6 +622,7 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     split = _NEEDS_SPLIT_RE.search(_declarations_only(body))
     return AlignmentReport(
         tuple(criteria), judgement, pending, len(boxes), signed_by,
+        vacuous_criteria=_vacuous_criteria(ac),
         needs_split=bool(split),
         split_reason=(split.group(1) or "").strip() if split else "",
     )
@@ -640,6 +678,19 @@ def main(argv: list[str] | None = None) -> int:
     for c in report.criteria:
         mark = {0: "✗", 1: "~", 2: "✓"}[c.score]
         print(f"  {mark} {c.label:<58} {c.why}")
+
+    # Advisory, printed whatever the verdict: a brief at 100% can still carry one
+    # of these, and a brief that failed will be rewritten by someone who should
+    # see it now rather than after the next run.
+    if report.vacuous_criteria:
+        print("\nADVISORY — acceptance criteria that can pass because their SUBJECT "
+              "is absent.\nA negated test approves the very case it was written to "
+              "catch: `! grep -q PROPOSED adr.md` exits 0 against a file with no "
+              "status line at all.\nAssert the terminal state positively, or guard "
+              "the negation with a presence check. Scored nowhere — the rubric "
+              "measures shape and this is meaning:")
+        for bullet in report.vacuous_criteria:
+            print(f"  ? {bullet}")
 
     if not report.meets_machine_threshold:
         print("\nThis item must NOT be built yet. Close these first:")

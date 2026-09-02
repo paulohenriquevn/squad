@@ -570,3 +570,64 @@ def test_answering_the_question_closes_both_criteria(tmp_path) -> None:
 
     assert _score_of(tmp_path, answered, "no_placeholders").score == 2
     assert _score_of(tmp_path, answered, "questions_closed").score == 2
+
+
+# ── an acceptance criterion that passes because its subject is absent ─────────
+
+def _advisory(tmp_path, criteria: str):
+    brief = tmp_path / "b.md"
+    brief.write_text(f"# V\n\n## Acceptance Criteria\n\n{criteria}\n", encoding="utf-8")
+    return score_alignment(brief).vacuous_criteria
+
+
+def test_a_bare_negated_test_is_flagged(tmp_path) -> None:
+    """`! grep -q PROPOSED adr.md` exits 0 against a file with no status line at
+    all, so the criterion approves precisely the case it was written to catch.
+
+    Found by an ALIGN agent on 2026-09-02, in two of its own criteria, and
+    rewritten to assert the terminal token positively. Its words: "An acceptance
+    criterion that passes when its subject is absent is executable, cites its
+    requirement, and is wrong." Invisible to all seventeen scored criteria.
+    """
+    flagged = _advisory(tmp_path, "- AC-001 (FR-001): `! grep -q PROPOSED adr.md` exits 0")
+
+    assert flagged and "AC-001" in flagged[0]
+
+
+def test_a_positive_assertion_is_not_flagged(tmp_path) -> None:
+    assert _advisory(
+        tmp_path, "- AC-002 (FR-002): `grep -q 'Status: ACCEPTED' adr.md` exits 0") == ()
+
+
+def test_a_negation_guarded_by_a_presence_check_is_not_flagged(tmp_path) -> None:
+    """The fix the agent applied, and the shape the advisory must not punish."""
+    assert _advisory(
+        tmp_path,
+        '- AC-003: `[ -n "$(grep Status adr.md)" ] && ! grep -q PROPOSED adr.md`') == ()
+
+
+def test_the_advisory_is_scored_nowhere(tmp_path) -> None:
+    """The rubric measures shape; this is about meaning, and a false positive
+    here must not cost an item a point toward the 90% gate."""
+    brief = tmp_path / "b.md"
+    brief.write_text(
+        "# V\n\n## Acceptance Criteria\n\n"
+        "- AC-001 (FR-001): `! grep -q PROPOSED adr.md` exits 0\n", encoding="utf-8")
+    with_flag = score_alignment(brief)
+
+    brief.write_text(
+        "# V\n\n## Acceptance Criteria\n\n"
+        "- AC-001 (FR-001): `grep -q ACCEPTED adr.md` exits 0\n", encoding="utf-8")
+    without = score_alignment(brief)
+
+    assert with_flag.vacuous_criteria and not without.vacuous_criteria
+    assert sum(c.score for c in with_flag.criteria) == sum(c.score for c in without.criteria)
+
+
+def test_the_detector_matches_commands_written_as_inline_code(tmp_path) -> None:
+    """Acceptance criteria write commands in backticks, so `!` is almost always
+    preceded by one. Omitting the backtick from the delimiter class made this
+    match NOTHING — an advisory that never fires, silently, which is the shape
+    this file spent the day removing."""
+    assert _advisory(tmp_path, "- AC-001: `! grep -q X f.md`")
+    assert _advisory(tmp_path, "- AC-002: run ! grep -q X f.md")
