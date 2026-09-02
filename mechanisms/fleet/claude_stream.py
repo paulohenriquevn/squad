@@ -34,6 +34,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+
 class Unsupported(RuntimeError):
     """The installed CLI does not have the capability being asked for.
 

@@ -63,7 +63,7 @@ def test_transform_preserves_non_string_types():
 
 
 def test_check_reports_in_sync_for_this_repository():
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510 — returncode is read below
         [sys.executable, str(SCRIPT), "--check"], capture_output=True, text=True, cwd=REPO_ROOT
     )
 

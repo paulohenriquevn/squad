@@ -56,7 +56,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from board_state import build_state, item_detail  # noqa: E402
+from board_state import build_state, item_detail
 
 POLL_SECONDS = 0.5
 WATCHED = ("BACKLOG.md", "records/cycle-events.jsonl", ".claude/records/cycle-events.jsonl")
@@ -167,7 +167,7 @@ def _handler(root: Path, hub: _Hub, token: str | None):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
-        def log_message(self, *args) -> None:  # noqa: D102 - quiet by default
+        def log_message(self, *args) -> None:
             pass
 
         def _send(self, code: int, body: bytes, ctype: str) -> None:
@@ -222,7 +222,7 @@ def _handler(root: Path, hub: _Hub, token: str | None):
             self.end_headers()
             return True
 
-        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler's contract
+        def do_GET(self) -> None:
             if not self._authorised():
                 if self._grant():
                     return

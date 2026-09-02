@@ -78,7 +78,7 @@ def _repos_under(root: Path) -> dict[str, Path]:
 
 def _commits(repo: Path) -> str:
     try:
-        out = subprocess.run(["git", "-C", str(repo), "rev-list", "--count", "HEAD"],
+        out = subprocess.run(["git", "-C", str(repo), "rev-list", "--count", "HEAD"],  # noqa: PLW1510 — returncode is read below
                              capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError):
         return "unknown"
@@ -169,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FATAL: detect_domains.py not found at {detector}", file=sys.stderr)
         return 1
 
-    out = subprocess.run([sys.executable, str(detector), "--root", str(root), "--json"],
+    out = subprocess.run([sys.executable, str(detector), "--root", str(root), "--json"],  # noqa: PLW1510 — returncode is read below
                          capture_output=True, text=True, timeout=120, cwd=str(root))
     if out.returncode != 0:
         print(f"FATAL: detect_domains exited {out.returncode}: {out.stderr[:200]}",

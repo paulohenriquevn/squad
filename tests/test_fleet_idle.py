@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"))
 
-from fleet_idle import measure, read_events, render  # noqa: E402
+from fleet_idle import measure, read_events, render
 
 
 def _events(*spec: tuple[str, int, str]) -> list[dict]:

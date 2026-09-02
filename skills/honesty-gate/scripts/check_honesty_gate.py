@@ -52,7 +52,7 @@ import argparse
 import json
 import re
 import sys
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 

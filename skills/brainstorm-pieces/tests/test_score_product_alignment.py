@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from score_product_alignment import FLOOR_PCT, score, verdict  # noqa: E402
+from score_product_alignment import FLOOR_PCT, score, verdict
 
 VISION = """# Product vision
 

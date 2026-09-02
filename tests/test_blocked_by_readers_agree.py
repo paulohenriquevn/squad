@@ -29,7 +29,10 @@ _SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "backlog-review" / "
 sys.path.insert(0, str(_SCRIPTS))
 
 from check_backlog_structure import (  # noqa: E402
-    Item, carries_prose, declares_impediment, impediment_edges,
+    Item,
+    carries_prose,
+    declares_impediment,
+    impediment_edges,
 )
 from select_backlog_item import live_blockers  # noqa: E402
 

@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from build_agenda import build, render  # noqa: E402
+from build_agenda import build, render
 
 ROUTING = "web | web-console | agents/web.md\napi | search-api | agents/api.md\n"
 

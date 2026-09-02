@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from squad import PreToolUseContext, create_context  # noqa: E402
+from squad import PreToolUseContext, create_context
 
 # ── the read-only zone (rules/reference-provenance.md § 1) ────────────────────
 ZONE = r"(\./)?(\.claude/)?study-material/"

@@ -43,7 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import backlog_status as bs  # noqa: E402
+import backlog_status as bs
 
 #: Where a consumer's stream lives, in the two layouts that exist.
 _STREAM_RELATIVE = (".claude/records/cycle-events.jsonl", "records/cycle-events.jsonl")

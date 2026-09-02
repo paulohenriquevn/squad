@@ -53,7 +53,7 @@ STAGES = _stages_from_source()
 
 
 def _run(tmp_path: Path, *extra: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
+    return subprocess.run(  # noqa: PLW1510 — returncode is read below
         [sys.executable, str(SCRIPT),
          "--item", "B-014", "--repo", str(tmp_path / "repo"),
          "--date", "2026-08-30", "--output-dir", str(tmp_path / "agents"), *extra],

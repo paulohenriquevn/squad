@@ -18,9 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from squad import SessionStartContext, create_context  # noqa: E402
-from squad.layout import Layout, resolve  # noqa: E402
-from squad.plan import resolve as resolve_plan  # noqa: E402
+from squad import SessionStartContext, create_context
+from squad.layout import Layout, resolve
+from squad.plan import resolve as resolve_plan
 
 
 def _git(*args: str) -> str | None:

@@ -165,7 +165,7 @@ class TestUnknownStatus:
 #
 # Only one direction is stored. `blocks` is derived, so the two halves cannot drift.
 
-from backlog_index import impediment_graph
+from backlog_index import impediment_graph  # noqa: E402
 
 
 def _items(*blocks: str) -> list:

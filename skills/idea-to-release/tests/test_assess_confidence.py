@@ -47,7 +47,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from assess_confidence import refuses, score_references, verdict_from_score  # noqa: E402
+from assess_confidence import (
+    refuses,
+    score_references,
+    verdict_from_score,
+)
 
 
 @pytest.mark.parametrize(

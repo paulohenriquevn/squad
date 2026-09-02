@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hook_harness import post_tool_use, run_hook  # noqa: E402
+from hook_harness import post_tool_use, run_hook
 
 
 def _lint(path: str, content: str) -> str:

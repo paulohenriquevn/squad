@@ -9,9 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from backlog_fixtures import item_block
-
-from select_backlog_item import live_blockers, rank, select
 from check_backlog_structure import _parse_items
+from select_backlog_item import live_blockers, rank, select
 
 
 def _backlog(*blocks: str) -> str:

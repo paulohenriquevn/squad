@@ -17,9 +17,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from squad import PreCompactContext, create_context  # noqa: E402
-from squad.layout import resolve  # noqa: E402
-from squad.plan import goal_line, resolve as resolve_plan  # noqa: E402
+from squad import PreCompactContext, create_context
+from squad.layout import resolve
+from squad.plan import goal_line
+from squad.plan import resolve as resolve_plan
 
 TAG = "[precompact-preserve]"
 

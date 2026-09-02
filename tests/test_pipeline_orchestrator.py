@@ -23,9 +23,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"))
 
-from pipeline_orchestrator import (  # noqa: E402
-    STAGES, Item, Pipeline, lane_budget,
-)
+from pipeline_orchestrator import STAGES, Item, Pipeline, lane_budget
 
 
 def _pipeline(*items: str, lanes: int = 3) -> Pipeline:
@@ -67,8 +65,10 @@ def test_a_parked_item_does_not_stop_the_others() -> None:
 def test_a_parked_item_resumes_where_it_stopped() -> None:
     """Not at the start. Re-running DISCOVER on a signed item wastes the wait."""
     p = _pipeline("b-014")
-    p.schedule(); p.complete("b-014")          # DISCOVER done, now at PLAN
-    p.schedule(); p.park("b-014", reason="AWAITING_REVIEW")
+    p.schedule()
+    p.complete("b-014")          # DISCOVER done, now at PLAN
+    p.schedule()
+    p.park("b-014", reason="AWAITING_REVIEW")
     p.unpark("b-014")
     assert p.item("b-014").stage == STAGES[1]
 
@@ -187,7 +187,10 @@ def test_the_chain_is_the_seven_stages_the_cycle_declares() -> None:
 # `status:` field at all, so an item parked in a lane still read `triaged` on disk —
 # and the disk is the only copy that outlives the session.
 
-from pipeline_orchestrator import StatusWrite, apply_writes
+from pipeline_orchestrator import (  # noqa: E402 — imported here, beside the behaviour it covers; the comment above says which
+    StatusWrite,
+    apply_writes,
+)
 
 
 def _one(slug: str = "b-001") -> Pipeline:
@@ -340,7 +343,7 @@ def test_one_refusal_does_not_abort_the_others(tmp_path):
 # nothing consumed one. A restarted session rebuilt its queue from a literal list and
 # scheduled an item the registry already said could not move.
 
-from pipeline_orchestrator import from_selection
+from pipeline_orchestrator import from_selection  # noqa: E402
 
 
 def test_a_blocked_item_is_never_scheduled():

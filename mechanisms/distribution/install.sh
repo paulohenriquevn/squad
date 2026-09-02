@@ -163,6 +163,17 @@ kit_owns_txt() {
     # to answer one question. Preserved by extension, a consumer keeps whatever list
     # it first received while the kit ships a corrected one.
     blocking-verdicts.txt) return 0 ;;
+    # The kit's own record of the permission rules it has withdrawn. A consumer
+    # never writes to it — only the kit knows what the kit used to ship — and it
+    # is the half of retirement that works with no recorded base, so a frozen
+    # copy is a consumer that keeps every rule the kit ever retired.
+    #
+    # Added the same day the file was, after `install.sh` announced
+    # "kept (yours): rules/retired-permissions.txt" on its first update. It
+    # arrived that time only because it was NEW; the second update would have
+    # preserved a stale one. Exactly what the comment above this case block warns
+    # about, introduced by the commit that wrote the comment's newest example.
+    retired-permissions.txt) return 0 ;;
     *) return 1 ;;
   esac
 }

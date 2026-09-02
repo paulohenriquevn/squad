@@ -30,7 +30,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from alignment_judge import DEFAULT_JUDGE, main, refuse, sign  # noqa: E402
+from alignment_judge import DEFAULT_JUDGE, main, refuse, sign
 
 _REASON = ("Checked the three judgement boxes against the opportunity's evidence "
            "corner and the plan targets it names, all of which resolve on disk.")

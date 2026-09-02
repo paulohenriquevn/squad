@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.run_eval import TriggerDetector  # noqa: E402
+from scripts.run_eval import TriggerDetector
 
 NAME = "deps-audit-skill-a1b2c3d4"
 

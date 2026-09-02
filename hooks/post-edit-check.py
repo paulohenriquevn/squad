@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from squad import PostToolUseContext, create_context  # noqa: E402
+from squad import PostToolUseContext, create_context
 
 FULL = os.environ.get("POST_EDIT_FULL_TYPECHECK", "0") == "1"
 

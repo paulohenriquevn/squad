@@ -48,7 +48,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from check_backlog_structure import (  # noqa: E402
+from check_backlog_structure import (
     OPEN_STATUS,
     Item,
     _parse_items,

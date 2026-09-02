@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
-from kit_agents import kit_agents  # noqa: E402
+from kit_agents import kit_agents
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "mechanisms" / "cycle"))

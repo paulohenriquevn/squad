@@ -23,9 +23,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from squad import UserPromptSubmitContext, create_context  # noqa: E402
-from squad.layout import resolve  # noqa: E402
-from squad.plan import attestation, goal_line, resolve as resolve_plan  # noqa: E402
+from squad import UserPromptSubmitContext, create_context
+from squad.layout import resolve
+from squad.plan import attestation, goal_line
+from squad.plan import resolve as resolve_plan
 
 LADDER = """PARSIMONY LADDER (rules/parsimony-ladder.md) — walk top-down BEFORE writing code; \
 stop at the first rung that resolves the need:

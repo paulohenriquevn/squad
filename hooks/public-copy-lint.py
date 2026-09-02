@@ -24,8 +24,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from squad import PostToolUseContext, create_context  # noqa: E402
-from squad.layout import resolve  # noqa: E402
+from squad import PostToolUseContext, create_context
+from squad.layout import resolve
 
 #: Files a stranger reads to decide whether to trust the project.
 PUBLIC = (re.compile(r"(^|/)README\.md$"),

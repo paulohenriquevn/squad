@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
-from kit_agents import kit_agents  # noqa: E402
+from kit_agents import kit_agents
 
 _REPO = Path(__file__).resolve().parent.parent
 MANIFEST = ".claude/.kit-manifest.txt"

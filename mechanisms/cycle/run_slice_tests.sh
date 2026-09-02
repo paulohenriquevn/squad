@@ -69,7 +69,7 @@ done
 # files with no test at all: `session_catchup.py`,
 # `validate_skill_frontmatter.py` and `test_check_install_drift.py` (0% each).
 #
-# THE SCOPE is narrow too and worth saying: `--cov=scripts` measures `scripts/`,
+# THE SCOPE is narrow too and worth saying: coverage measures `mechanisms/` and
 # not `skills/` nor `hooks/`. The skill slices run with their own suites, with no
 # aggregate floor. Raising the floor without widening the scope would measure an
 # ever smaller piece of the system ever better.
@@ -78,7 +78,12 @@ run_suite() {
     local out="$log_dir/$slot.out"
     local -a extra=()
     if [ "$path" = "tests" ] && [ "${ROOT_SUITE_COV:-0}" = "1" ]; then
-        extra=(--cov=scripts --cov-report=term "--cov-fail-under=${ROOT_SUITE_COV_MIN:-55}")
+        # `--cov=scripts` measured a directory renamed away on 2026-09-02, so the
+        # report was 0.00% and the floor failed on every CI run that enabled it —
+        # which the CI does, unconditionally. A floor that always fails is worth
+        # exactly as much as one that always passes.
+        extra=(--cov=mechanisms --cov=squad --cov-report=term
+               "--cov-fail-under=${ROOT_SUITE_COV_MIN:-55}")
     fi
     if python3 -m pytest -q -p no:cacheprovider --no-header "${extra[@]+"${extra[@]}"}" "$path" > "$out" 2>&1; then
         echo "0" > "$log_dir/$slot.rc"

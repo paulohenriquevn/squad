@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from squad.plan import attestation, goal_line, resolve  # noqa: E402
+from squad.plan import attestation, goal_line, resolve
 
 
 def _plan(eco: Path, slug: str, body: str = "# Plan\n") -> Path:
@@ -29,7 +29,8 @@ def test_a_pinned_plan_wins_and_says_it_was_pinned(tmp_path: Path) -> None:
 
 
 def test_the_newest_plan_is_the_fallback_and_says_so(tmp_path: Path) -> None:
-    import os, time  # noqa: E401
+    import os
+    import time
     _plan(tmp_path, "older")
     newer = _plan(tmp_path, "newer")
     os.utime(newer, (time.time() + 10, time.time() + 10))

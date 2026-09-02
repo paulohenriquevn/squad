@@ -23,8 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from squad import PreToolUseContext, create_context  # noqa: E402
-from squad.layout import resolve  # noqa: E402
+from squad import PreToolUseContext, create_context
+from squad.layout import resolve
 
 #: `rules/reference-provenance.md` § 1. `records/references/` was retired on
 #: 2026-09-01 with the practice that filled it; the rule records what that costs.

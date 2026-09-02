@@ -27,19 +27,19 @@ from typing import Any
 
 from _rubric_loader import load_rubric
 from check_adr_completeness import ADRReport, check_adr_completeness
+from check_alignment_gate import check_alignment_gate
 from check_architecture_compliance import check_architecture_compliance
 from check_baseline_context import check_baseline_context
 from check_concurrency_tests import check_concurrency_tests
 from check_coverage_matrix import CoverageReport, check_coverage_matrix
 from check_criterion_executability import ExecutabilityReport, check_criterion_executability
-from check_alignment_gate import check_alignment_gate
 from check_deps_audit import check_deps_audit
 from check_drawbacks_section import check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
-from check_task_interfaces import check_task_interfaces
 from check_failure_scenarios import check_failure_scenarios
 from check_patterns_consumption import PatternsConsumptionReport, check_patterns_consumption
 from check_spec_smells import SmellReport, check_spec_smells
+from check_task_interfaces import check_task_interfaces
 from check_tdd_in_bugfix import TDDReport, check_tdd_in_bugfix
 
 SKILL_ROOT = Path(__file__).parent.parent

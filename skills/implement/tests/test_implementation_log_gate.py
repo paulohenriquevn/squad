@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from run_validation import check_implementation_log  # noqa: E402
+from run_validation import check_implementation_log
 
 
 def _repo(tmp_path: Path, *, layout: str = ".claude", slug: str = "some-slug") -> Path:

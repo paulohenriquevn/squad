@@ -24,9 +24,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from check_honesty_gate import (  # noqa: E402
-    _EVIDENCE_OUTCOMES, INSUFFICIENT, RUNNING, SUFFICIENT, WITH_CAVEATS, check,
-    freshness_days, main,
+from check_honesty_gate import (
+    _EVIDENCE_OUTCOMES,
+    INSUFFICIENT,
+    RUNNING,
+    SUFFICIENT,
+    WITH_CAVEATS,
+    check,
+    freshness_days,
+    main,
 )
 
 _REPO = Path(__file__).resolve().parents[3]

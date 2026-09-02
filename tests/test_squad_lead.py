@@ -12,8 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
-
-from squad_lead import SQUAD_FACILITATOR, Lead, watch, Decision
+from squad_lead import SQUAD_FACILITATOR, Decision, Lead, watch
 
 # The menu, as captured. Option 1 moves the registry; option 2 asks for a decision
 # only the sponsor holds.
@@ -294,8 +293,8 @@ def test_the_same_stall_is_not_reported_twice(monkeypatch, tmp_path: Path) -> No
     log = tmp_path / "lead.jsonl"
 
     watch(lead, marker, log, poll=0, rounds=4)
-    stalls = [l for l in log.read_text(encoding="utf-8").splitlines()
-              if json.loads(l)["event"] == "stalled"]
+    stalls = [line for line in log.read_text(encoding="utf-8").splitlines()
+              if json.loads(line)["event"] == "stalled"]
     assert len(stalls) == 1, stalls
 
 
@@ -1142,6 +1141,7 @@ def test_claims_survive_a_restart(tmp_path: Path) -> None:
     The log already recorded which session was handed what. The state was never lost;
     it was only never read back."""
     import json
+
     from squad_lead import Fleet
     log = tmp_path / "lead.jsonl"
     log.write_text("\n".join(json.dumps(e) for e in [
@@ -1159,6 +1159,7 @@ def test_claims_survive_a_restart(tmp_path: Path) -> None:
 def test_the_last_start_per_session_wins(tmp_path: Path) -> None:
     """A session is on the item it was handed most recently, not the first one."""
     import json
+
     from squad_lead import Fleet
     log = tmp_path / "lead.jsonl"
     log.write_text("\n".join(json.dumps(e) for e in [
@@ -1258,7 +1259,7 @@ def test_the_agent_cooldown_is_shared_across_the_fleet() -> None:
     items. They cost 49% of the observed window and told nobody anything the first
     had not.
     """
-    from squad_lead import Fleet, Lead  # noqa: PLC0415
+    from squad_lead import Fleet, Lead
 
     fleet = Fleet()
     first = Lead(session="squad1", agents_when_stuck=True, fleet=fleet,
@@ -1278,7 +1279,7 @@ def test_the_agent_cooldown_is_shared_across_the_fleet() -> None:
 def test_a_single_session_still_has_its_own_cooldown() -> None:
     """With one session there is no fleet, and the two clocks are the same thing —
     the fix must not turn a lone lead into one that never consults."""
-    from squad_lead import Lead  # noqa: PLC0415
+    from squad_lead import Lead
 
     alone = Lead(session="squad1", agents_when_stuck=True, fleet=None,
                  project=Path("/nonexistent"), agent_cooldown=1800)

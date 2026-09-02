@@ -11,7 +11,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from advance_items import advance, released_items
 
 

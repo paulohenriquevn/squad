@@ -22,8 +22,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
-
 _REPO = Path(__file__).resolve().parent.parent
 _INSTALL = _REPO / "mechanisms" / "distribution" / "install.sh"
 
@@ -188,3 +186,37 @@ def test_every_declared_retirement_carries_a_dated_reason() -> None:
             continue
         if stripped:
             assert dated, f"{stripped} is declared before any dated reason"
+
+
+def test_the_kit_owns_its_own_retirement_list() -> None:
+    """`rules/*.txt` is the project's configuration by default — enabled
+    languages, allowlists, thresholds — and the installer preserves it. This file
+    is the exception: only the kit knows what the kit used to ship.
+
+    Measured on the first update after it was written: `install.sh` announced
+    "kept (yours): rules/retired-permissions.txt". It arrived that time only
+    because it was NEW; the second update would have kept a stale copy, and a
+    consumer would hold every rule the kit had ever retired. That is the exact
+    failure the comment above `kit_owns_txt` warns about for `cycle-phases.txt`,
+    reintroduced by the commit that added the newest example to that comment.
+    """
+    installer = (_REPO / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+
+    assert "retired-permissions.txt) return 0 ;;" in installer, (
+        "the installer treats the kit's retirement list as the consumer's, so it "
+        "freezes on the first update after install")
+
+
+def test_every_kit_owned_txt_actually_exists() -> None:
+    """A name in that case block that matches no file is a claim about ownership
+    of nothing, and it hides a rename the same way a dead glob does."""
+    import re
+
+    installer = (_REPO / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+    block = re.search(r"kit_owns_txt\(\)\s*\{(.*?)\n\}", installer, re.S)
+    assert block, "kit_owns_txt no longer exists"
+
+    claimed = re.findall(r"^\s*([a-z-]+\.txt)\)\s*return 0", block.group(1), re.M)
+    assert claimed, "the kit claims no rules/*.txt at all"
+    missing = [name for name in claimed if not (_REPO / "rules" / name).is_file()]
+    assert not missing, f"claimed by the kit and absent from rules/: {missing}"

@@ -12,13 +12,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from backlog_fixtures import item_block  # noqa: E402
-from squad_boss import (  # noqa: E402
+from backlog_fixtures import item_block
+from squad_boss import (
+    HALT_DIRS,
     attack_plan,
     causes_named,
     halt_reports,
     unblocking_ids,
-    HALT_DIRS,
 )
 
 

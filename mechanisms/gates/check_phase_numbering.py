@@ -90,7 +90,7 @@ import argparse
 import json
 import re
 import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 #: The ordered skill invocations inside a cycle rule's ``` Chain ``` block.

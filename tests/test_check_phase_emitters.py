@@ -10,7 +10,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from check_phase_emitters import check_phase_emitters, declared_phases
 
 _PHASES = "backlog       | required    | registers the item\nrelease       | conditional | cuts a version\n"

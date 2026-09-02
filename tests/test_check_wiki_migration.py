@@ -20,8 +20,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "gates"))
 
-from check_wiki_migration import (  # noqa: E402
-    EMPTY, MIGRATED, SPLIT, UNMIGRATED, check_leaf, check_project, main,
+from check_wiki_migration import (
+    EMPTY,
+    MIGRATED,
+    SPLIT,
+    UNMIGRATED,
+    check_leaf,
+    check_project,
+    main,
 )
 
 

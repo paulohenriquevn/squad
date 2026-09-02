@@ -105,7 +105,11 @@ jobs:
         run: python3 mechanisms/gates/verify_ecosystem.py
 
       - name: Python static trajectory-review
-        run: ruff check scripts skills hooks tests conftest.py
+        # `scripts/` was renamed to `mechanisms/` on 2026-09-02 and this line was
+        # not. ruff exits 2 on a path that does not exist, so this step failed on
+        # every run from that commit — and `squad/`, the hook library added the
+        # same week, was never linted at all.
+        run: ruff check mechanisms squad skills hooks tests conftest.py
 
       # The kit demanded this gate of every consumer and never ran it on itself.
       # Measured 2026-08-26, on the first run: FAIL_HARD from an `unused variable`
@@ -159,6 +163,23 @@ jobs:
       - name: Install ShellCheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
       - name: Shell static trajectory-review
-        run: shellcheck -x -P hooks --severity=warning hooks/*.sh hooks/environment/*.sh scripts/*.sh tests/hooks/*.sh
+        # Every one of the four globs here matched ZERO files: `hooks/*.sh` and
+        # `hooks/environment/*.sh` because the hooks became Python on 2026-09-02,
+        # `scripts/*.sh` because that tree was renamed the same day, and
+        # `tests/hooks/*.sh` because no shell test remains. shellcheck exits 0 on
+        # an empty argument list, so this job reported a clean shell contract
+        # while checking nothing. `-x` follows sourced files; `-P` seeds the
+        # search path for them.
+        run: shellcheck -x -P mechanisms --severity=warning $(git ls-files '*.sh')
       - name: Hook behavior suites
-        run: for test_file in tests/hooks/test_*.sh; do bash "$test_file"; done
+        # There are no shell test files left; the suites became pytest. The loop
+        # body simply never ran, and a step that runs nothing reports success.
+        # Kept as an explicit statement rather than deleted, so the day one
+        # returns it is wired instead of silently unrun.
+        run: |
+          shell_tests=$(git ls-files "tests/**/test_*.sh")
+          if [ -z "$shell_tests" ]; then
+            echo "no shell test files in this repository — the hook suites are pytest"
+          else
+            for test_file in $shell_tests; do bash "$test_file"; done
+          fi

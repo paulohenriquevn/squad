@@ -6,14 +6,12 @@ every fresh clone, so the inferred case is the one most viewers see first.
 """
 from __future__ import annotations
 
-import re
 import json
+import re
 from pathlib import Path
 
 import pytest
-
 from backlog_fixtures import item_block
-
 from board_state import PHASES, build_state, read_events
 
 
@@ -685,9 +683,8 @@ def test_the_board_and_the_drift_checker_read_the_same_blocking_list() -> None:
     import sys
     kit = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(kit / "mechanisms" / "gates"))
-    from check_phase_drift import load_blocking_verdicts
-
     from board_state import blocking_verdicts
+    from check_phase_drift import load_blocking_verdicts
 
     assert load_blocking_verdicts(kit) == blocking_verdicts(kit)
     assert "FAIL" in blocking_verdicts(kit)
@@ -842,6 +839,7 @@ def test_a_plan_edited_after_attesting_is_reported(tmp_path: Path) -> None:
 
 def test_a_plan_untouched_since_attesting_is_not_reported_as_drifted(tmp_path: Path) -> None:
     import hashlib
+
     from board_state import item_detail
     root = _with_records(tmp_path, "b033-x")
     recs = root / ".claude" / "records"

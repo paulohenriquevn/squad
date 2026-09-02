@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from detect_domains import (  # noqa: E402
+from detect_domains import (
     Domain,
     detect_domains,
     render_table,

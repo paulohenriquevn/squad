@@ -8,8 +8,8 @@ from __future__ import annotations
 import pytest
 from compute_acceptance_verdict import (
     ACCEPTED,
-    FLIP_ALLOWED,
     ACCEPTED_WITH_CAVEATS,
+    FLIP_ALLOWED,
     NOT_VALIDATED,
     REJECTED,
     MalformedEvidence,

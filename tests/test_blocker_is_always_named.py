@@ -33,7 +33,7 @@ def _run(tmp_path: Path) -> tuple[int, str, str, str]:
     findings.mkdir()
     (findings / "smoke.yml").write_text("agent: smoke\nfindings: []\n", encoding="utf-8")
     out = tmp_path / "report.md"
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: PLW1510 — returncode is read below
         [sys.executable, str(SCRIPT), "--findings-dir", str(findings),
          "--output", str(out), "--edge-case-coverage-ratio", "1.0"],
         capture_output=True, text=True, cwd=tmp_path,
@@ -51,7 +51,7 @@ def test_every_counted_blocker_appears_in_the_report(tmp_path: Path) -> None:
 
     section = report.split("## BLOCKER findings", 1)[1]
     section = section.split("\n## ", 1)[0]
-    body = [l for l in section.splitlines()[1:] if l.strip()]
+    body = [line for line in section.splitlines()[1:] if line.strip()]
     assert body, (
         f"the report counts {counted} BLOCKER(s) and lists none — "
         f"the section is a heading with nothing under it")
@@ -60,7 +60,7 @@ def test_every_counted_blocker_appears_in_the_report(tmp_path: Path) -> None:
     # renderer read `summary`, so the heading came out as `### : ` — present,
     # counted, decisive, and anonymous. Evidence without a name makes a reader
     # reconstruct the finding from its remediation text.
-    headings = [l for l in body if l.startswith("### ")]
+    headings = [line for line in body if line.startswith("### ")]
     assert headings, "no finding heading under the BLOCKER section"
     for h in headings:
         assert h.strip(" #:").strip(), f"a BLOCKER is rendered with no title: {h!r}"

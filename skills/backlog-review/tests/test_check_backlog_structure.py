@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from backlog_fixtures import item_block, write_backlog
 import check_backlog_structure
+from backlog_fixtures import item_block, write_backlog
 from check_backlog_structure import check_backlog
 
 

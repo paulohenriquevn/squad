@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
-from kit_agents import kit_agents  # noqa: E402
+from kit_agents import kit_agents
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / "agents"
@@ -33,7 +33,7 @@ def _agent_files() -> set[str]:
 
 
 def _ignored(path: str) -> bool:
-    return subprocess.run(["git", "check-ignore", "-q", path],
+    return subprocess.run(["git", "check-ignore", "-q", path],  # noqa: PLW1510 — returncode is read below
                           cwd=ROOT).returncode == 0
 
 

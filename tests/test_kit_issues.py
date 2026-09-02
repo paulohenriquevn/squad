@@ -17,8 +17,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"))
 
-import kit_issues  # noqa: E402
-from kit_issues import Issue, Unavailable, fleet_work, open_issues  # noqa: E402
+import kit_issues
+from kit_issues import Unavailable, fleet_work, open_issues
 
 
 def _gh(monkeypatch, *, stdout: str = "[]", returncode: int = 0,

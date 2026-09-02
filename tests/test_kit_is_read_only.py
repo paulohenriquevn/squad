@@ -31,9 +31,6 @@ scripts — is read-only.
 """
 from __future__ import annotations
 
-import json
-import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -43,6 +40,8 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from hook_harness import ALLOW, BLOCK, pre_tool_use, run_hook  # noqa: E402
+
+
 def _run(file_path: str, project: Path, plugin_root: Path | None = None) -> int:
     """The hook is addressed by name: it migrated from shell to Python, and a test
     naming the file would have failed on the rename rather than on behaviour."""

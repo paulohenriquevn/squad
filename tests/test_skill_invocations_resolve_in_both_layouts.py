@@ -27,7 +27,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 #: `python3 skills/…` or `bash mechanisms/…` with no layout resolution in front.

@@ -7,17 +7,16 @@ opposite habit pins prose that is free to change.
 from __future__ import annotations
 
 import pytest
-
 from backlog_status import (
     Refused,
+    _blocks,
+    _status_of,
     advance,
     block,
     blocked_by_of,
     effective_state,
     parse_blocked_by,
     unblock,
-    _blocks,
-    _status_of,
 )
 
 
@@ -211,7 +210,11 @@ def test_blocked_by_parsing(raw, expected):
 # Eight items in one install carried `blocked_by` before it was specified, and seven
 # of them named no item at all. These pin that the writer serves that usage.
 
-from backlog_status import declares_impediment, effective_state_of, blocked_by_raw
+from backlog_status import (  # noqa: E402 — imported here, beside the behaviour it covers; the comment above says which
+    blocked_by_raw,
+    declares_impediment,
+    effective_state_of,
+)
 
 
 def test_prose_impediments_yield_no_edges_but_still_block():

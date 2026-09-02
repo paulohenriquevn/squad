@@ -70,7 +70,7 @@ def _install(root: Path) -> None:
     that have nothing to do with preservation — and it did, on the sibling kit,
     for the strict-validation reason above.
     """
-    result = subprocess.run(["bash", str(INSTALL), str(root), "--force"],
+    result = subprocess.run(["bash", str(INSTALL), str(root), "--force"],  # noqa: PLW1510 — returncode is read below
                             capture_output=True, text=True)
     if result.returncode != 0:
         combined = result.stdout + result.stderr
@@ -189,9 +189,9 @@ def test_the_manifest_does_not_claim_more_than_it_covers(tmp_path: Path) -> None
         pytest.skip("this kit writes no manifest, so it makes no claim to check — "
                     "ownership there is decided by presence in the source kit alone")
     text = manifest.read_text(encoding="utf-8")
-    header = "\n".join(l for l in text.splitlines() if l.startswith("#"))
-    covered = {l.split("/")[0] for l in text.splitlines()
-               if l and not l.startswith("#") and "/" in l}
+    header = "\n".join(line for line in text.splitlines() if line.startswith("#"))
+    covered = {line.split("/")[0] for line in text.splitlines()
+               if line and not line.startswith("#") and "/" in line}
 
     if "Anything not here is the project's" in header:
         missing = [i for i in _COPIED_ITEMS

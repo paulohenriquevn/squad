@@ -229,7 +229,7 @@ def _run(engine: str, args: list[str], source: str) -> dict:
         raise SystemExit(
             f"FATAL: `{engine}` not found. Install Graphviz "
             f"(apt install graphviz / brew install graphviz).")
-    proc = subprocess.run([engine, *args, "-Tjson"], input=source,
+    proc = subprocess.run([engine, *args, "-Tjson"], input=source,  # noqa: PLW1510 — returncode is read below
                           capture_output=True, text=True)
     if proc.returncode != 0:
         raise SystemExit(f"FATAL: {engine} failed:\n{proc.stderr.strip()}")

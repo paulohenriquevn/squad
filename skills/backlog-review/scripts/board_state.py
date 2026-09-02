@@ -37,12 +37,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from check_backlog_structure import (  # noqa: E402
+from check_backlog_structure import (
     OPEN_STATUS,
     _parse_items,
     declares_impediment,
     parse_blocked_by,
 )
+
 
 #: The board's columns, in cycle order, READ FROM THE DECLARATION rather than copied.
 #: `killed` is a lane rather than a column: it is a terminal OUTCOME, and the contract

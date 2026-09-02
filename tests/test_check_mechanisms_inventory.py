@@ -17,8 +17,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "gates"))
 
-from check_mechanisms_inventory import (  # noqa: E402
-    DRIFTED, MATCHES, UNREADABLE, check, parse_inventory,
+from check_mechanisms_inventory import (
+    DRIFTED,
+    MATCHES,
+    UNREADABLE,
+    check,
+    parse_inventory,
 )
 
 _REPO = Path(__file__).resolve().parents[1]

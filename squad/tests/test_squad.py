@@ -16,11 +16,20 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from squad import (  # noqa: E402
-    BLOCK, ContextError, PostToolUseContext, PreCompactContext, PreToolUseContext,
-    SessionStartContext, StopContext, SubagentStopContext, UserPromptSubmitContext,
+from squad import (
+    BLOCK,
+    ContextError,
+    PostToolUseContext,
+    PreCompactContext,
+    PreToolUseContext,
+    SessionStartContext,
+    StopContext,
+    SubagentStopContext,
+    UserPromptSubmitContext,
     build_context,
-    create_context, exit_non_block, safe_create_context,
+    create_context,
+    exit_non_block,
+    safe_create_context,
 )
 
 _BASE = {"session_id": "s-1", "transcript_path": "/tmp/t.jsonl", "cwd": "/repo"}

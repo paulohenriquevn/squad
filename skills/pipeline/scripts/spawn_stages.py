@@ -59,7 +59,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from squad.layout import resolve  # noqa: E402
+from squad.layout import resolve
 
 #: The stages this script materialises. IMPLEMENT and beyond are not here yet —
 #: they write to the repository, and a writing stage needs its own review of what

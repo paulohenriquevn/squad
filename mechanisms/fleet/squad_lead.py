@@ -588,7 +588,7 @@ class Lead:
         prompt = (f"Use the `{agent}` subagent for this, and report its answer "
                   f"verbatim without adding to it.\n\n{question}")
         try:
-            out = subprocess.run(
+            out = subprocess.run(  # noqa: PLW1510 — returncode is read below
                 ["claude", "-p", prompt,
                  "--max-budget-usd", str(self.agent_budget_usd),
                  "--no-session-persistence"],
@@ -762,7 +762,7 @@ class Lead:
         if not selector.is_file():
             return None, f"SELECT is not installed at {selector}"
         try:
-            out = subprocess.run(
+            out = subprocess.run(  # noqa: PLW1510 — returncode is read below
                 [sys.executable, str(selector), str(self.project / "BACKLOG.md"), "--json"],
                 capture_output=True, text=True, timeout=60, cwd=str(self.project))
         except (OSError, subprocess.SubprocessError) as error:
@@ -791,7 +791,7 @@ class Lead:
     # ── reading the session ────────────────────────────────────────────────
     def capture(self) -> str | None:
         try:
-            out = subprocess.run(
+            out = subprocess.run(  # noqa: PLW1510 — returncode is read below
                 ["tmux", "capture-pane", "-t", self.session, "-p"],
                 capture_output=True, text=True, timeout=15)
         except (OSError, subprocess.SubprocessError):

@@ -109,9 +109,9 @@ def test_the_two_dishonest_ways_past_a_blocker_are_MECHANISED() -> None:
     """
     import sys
     sys.path.insert(0, str(SKILL_ROOT / "scripts"))
-    from check_finding_continuity import check_finding_continuity
-
     import tempfile
+
+    from check_finding_continuity import check_finding_continuity
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         reviews = root / "records" / "reviews"

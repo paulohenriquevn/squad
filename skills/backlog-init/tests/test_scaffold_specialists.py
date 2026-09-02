@@ -87,7 +87,7 @@ def test_an_existing_specialist_is_never_overwritten(tmp_path: Path) -> None:
     mine.write_text("# written by a person\n", encoding="utf-8")
     (eco / ".claude").mkdir(exist_ok=True)
 
-    out = subprocess.run([sys.executable, str(SCRIPT), "--root", str(eco), "--write"],
+    out = subprocess.run([sys.executable, str(SCRIPT), "--root", str(eco), "--write"],  # noqa: PLW1510 — returncode is read below
                          capture_output=True, text=True, timeout=120)
     assert mine.read_text(encoding="utf-8") == "# written by a person\n", out.stdout
 
@@ -95,6 +95,6 @@ def test_an_existing_specialist_is_never_overwritten(tmp_path: Path) -> None:
 def test_without_write_nothing_is_created(tmp_path: Path) -> None:
     eco = tmp_path / "project"
     (eco / "agents").mkdir(parents=True)
-    subprocess.run([sys.executable, str(SCRIPT), "--root", str(eco)],
+    subprocess.run([sys.executable, str(SCRIPT), "--root", str(eco)],  # noqa: PLW1510 — returncode is read below
                    capture_output=True, text=True, timeout=120)
     assert list((eco / "agents").glob("*.md")) == []

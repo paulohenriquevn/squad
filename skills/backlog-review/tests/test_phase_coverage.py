@@ -27,7 +27,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from phase_coverage import (
-    MANDATORY_PER_ITEM, Phase, coverage_for_item, grade, main, scan_registry,
+    MANDATORY_PER_ITEM,
+    Phase,
+    coverage_for_item,
+    grade,
+    main,
+    scan_registry,
 )
 
 

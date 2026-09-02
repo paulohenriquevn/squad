@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from squad.layout import Layout, has_kit, resolve  # noqa: E402
+from squad.layout import Layout, has_kit, resolve
 
 
 def _kit(at: Path) -> Path:

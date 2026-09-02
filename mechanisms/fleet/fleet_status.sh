@@ -47,9 +47,9 @@ WIDTH="${WIDTH:-${COLUMNS:-$(tput cols 2>/dev/null || echo 100)}}"
 BODY=$((WIDTH - 8))
 
 if [ -t 1 ]; then
-  B=$'\e[1m'; D=$'\e[2m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; C=$'\e[36m'; Z=$'\e[0m'
+  B=$'\e[1m'; D=$'\e[2m'; Y=$'\e[33m'; R=$'\e[31m'; C=$'\e[36m'; Z=$'\e[0m'
 else
-  B=""; D=""; G=""; Y=""; R=""; C=""; Z=""
+  B=""; D=""; Y=""; R=""; C=""; Z=""
 fi
 
 # tmux paints panes with escape sequences; without stripping them the output is

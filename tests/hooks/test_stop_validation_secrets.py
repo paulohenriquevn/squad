@@ -57,8 +57,8 @@ def _run(root: Path, env_extra: dict | None = None) -> int:
     cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
     env = {"PATH": os.environ["PATH"], "HOME": str(root), "CLAUDE_PROJECT_DIR": str(root)}
     env.update(env_extra or {})
-    return subprocess.run(cmd, input=json.dumps({"hook_event_name": "Stop", "stop_hook_active": False}),
-                          capture_output=True,  # noqa: PLW1510
+    return subprocess.run(cmd, input=json.dumps({"hook_event_name": "Stop", "stop_hook_active": False}),  # noqa: PLW1510 — returncode is read below
+                          capture_output=True,
                           text=True, cwd=root, env=env).returncode
 
 

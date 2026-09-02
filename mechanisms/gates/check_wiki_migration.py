@@ -65,7 +65,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 # The family this file lives in, plus `lib/` — the import namespace stayed flat
@@ -74,7 +74,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "conventions"))
 
-from sop_format import DURABLE_LEAVES, knowledge_base_dir, wiki_dir  # noqa: E402
+from sop_format import DURABLE_LEAVES, knowledge_base_dir, wiki_dir
 
 MIGRATED = "MIGRATED"
 UNMIGRATED = "UNMIGRATED"

@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"))
 
-import session_ready  # noqa: E402
+import session_ready
 
 _RENDERER_DIALOG = """\
   Try the new fullscreen renderer?

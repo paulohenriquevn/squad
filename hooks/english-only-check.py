@@ -16,8 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from squad import PostToolUseContext, create_context  # noqa: E402
-from squad.layout import resolve  # noqa: E402
+from squad import PostToolUseContext, create_context
+from squad.layout import resolve
 
 #: Not ours to rewrite, or not prose at all.
 SKIP_DIRS = ("node_modules", ".git", "__pycache__", "study-material", "tools")
