@@ -43,7 +43,8 @@ SOURCE_SUFFIXES = (".go", ".py", ".ts", ".tsx", ".js", ".jsx", ".rs",
                    ".java", ".kt", ".rb", ".cs")
 VENDORED = re.compile(
     r"(^|/)(node_modules|vendor|dist|build|target|\.venv|venv|__pycache__|\.next|\.nuxt)/")
-IS_TEST = re.compile(r"(_test|\.test|\.spec)\.[a-z]+$|(^|/)test_[^/]+\.[a-z]+$")
+IS_TEST = re.compile(r"(_test|\.test|\.spec)\.[a-z]+$|(^|/)test_[^/]+\.[a-z]+$"
+                     r"|(^|/)conftest\.py$")
 IN_TEST_TREE = re.compile(r"(^|/)(tests?|spec|__tests__|testdata|fixtures)/")
 GENERATED = re.compile(r"(^|/)(zz_generated[^/]*\.go|doc\.go)$")
 CONFIG_FILE = re.compile(r"(^|/)[a-z0-9.-]+\.config\.[a-z]+$")
@@ -91,27 +92,69 @@ def is_production_source(name: str) -> bool:
             and not IS_TEST.search(name) and not GENERATED.search(name))
 
 
-def has_paired_test(source: str, root: Path) -> bool:
-    """A test beside the file, or anywhere inside the unit that owns it.
+def _test_files(unit: Path) -> list[Path]:
+    """Every test file inside the unit, skipping the heavy trees."""
+    found = []
+    for path in unit.rglob("*"):
+        if not path.is_file() or VENDORED.search(str(path)):
+            continue
+        if IS_TEST.search(path.name) or path.name.startswith("test_"):
+            found.append(path)
+    return found
 
-    Sibling-only lookup assumes tests sit next to the source — idiomatic in Go,
-    false for most of the JS/TS and Python world, where they live in
-    `tests/unit/`. Reporting those as untested is the noise that gets a
-    warn-first gate ignored, and a warn nobody reads protects nothing.
+
+def _reexported_by_package(module: Path) -> str | None:
+    """The package name whose `__init__.py` re-exports this module, if any.
+
+    `squad/contexts.py` is never imported by name — `squad/__init__.py` re-exports
+    it and every test writes `from squad import PreToolUseContext`. Reading the
+    re-export makes that reachable, where matching symbol names in test text does
+    not: a module defining `run` or `main` would match any test that calls
+    `subprocess.run`, turning a false positive into a silent false NEGATIVE, which
+    is the worse trade for a gate.
+    """
+    init = module.parent / "__init__.py"
+    if not init.is_file() or module.name == "__init__.py":
+        return None
+    try:
+        text = init.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    if re.search(rf"^\s*from \.{re.escape(module.stem)} import", text, re.M):
+        return module.parent.name
+    return None
+
+
+def has_paired_test(source: str, root: Path) -> bool:
+    """Is this file protected by a test — by name, by import, or by execution?
+
+    Four signals, strongest first. The name-mirroring rule alone reported 22 files
+    as untested on 2026-09-01, among them nine hooks covered by 130 tests and a
+    library covered by 91: this repository files tests by AREA
+    (`tests/hooks/test_reference_zone.py`), not by mirrored name. A warn-first
+    gate producing 22 lines of noise every session is the one people stop reading,
+    and the hook's own comment says so.
+
+    What is deliberately NOT a signal: a test mentioning a symbol the module
+    defines. Measured on the same day, that marked `session_catchup.py` covered
+    because it defines `run` — a word every test using `subprocess.run` contains.
     """
     path = Path(source)
     pkg, stem, ext = path.parent, path.stem, path.suffix.lstrip(".")
 
+    # 1. A test named after this file, beside it.
     named = [f"{stem}_test.{ext}", f"{stem}.test.{ext}", f"{stem}.spec.{ext}",
              f"test_{stem}.{ext}", f"{stem}.test.tsx", f"{stem}.spec.tsx"]
     if any((root / pkg / candidate).is_file() for candidate in named):
         return True
-    # Any test at all beside it: a package that tests itself is not untested,
-    # even when the mapping is not one file to one file.
+    # Any test at all beside it: a package that tests itself is not untested, even
+    # when the mapping is not one file to one file.
     for pattern in (f"*_test.{ext}", f"*.test.{ext}", f"*.spec.{ext}", f"test_*.{ext}"):
         if any((root / pkg).glob(pattern)):
             return True
 
+    # The owning unit: the nearest ancestor holding a manifest, so the search stays
+    # inside one package instead of scanning a whole monorepo.
     unit = (root / pkg).resolve()
     stop = root.resolve()
     while unit != unit.parent:
@@ -121,10 +164,27 @@ def has_paired_test(source: str, root: Path) -> bool:
             break
         unit = unit.parent
 
-    for found in unit.rglob("*"):
-        if not found.is_file() or VENDORED.search(str(found)):
+    package = _reexported_by_package(root / path)
+    #: Imported by name, imported through its package, or run as a file. The last
+    #: is how every hook here is tested — a hyphenated filename cannot be imported,
+    #: so the test invokes it by path, and the stem (`boundary-check`) is specific
+    #: enough not to collide with prose.
+    by_import = re.compile(rf"^\s*(from {re.escape(stem)} import|import {re.escape(stem)})\b", re.M)
+    by_package = (re.compile(rf"^\s*(from {re.escape(package)} import|import {re.escape(package)})\b", re.M)
+                  if package else None)
+    by_path = re.compile(rf"(?<![\w.-]){re.escape(path.name)}(?![\w-])|(?<![\w.-]){re.escape(stem)}(?![\w.-])"
+                         if "-" in stem else rf"(?<![\w.-]){re.escape(path.name)}(?![\w-])")
+
+    for test in _test_files(unit):
+        if test.name in named:
+            return True
+        try:
+            text = test.read_text(encoding="utf-8", errors="replace")
+        except OSError:
             continue
-        if found.name in named:
+        if by_import.search(text) or by_path.search(text):
+            return True
+        if by_package and by_package.search(text):
             return True
     return False
 
