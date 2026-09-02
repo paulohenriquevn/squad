@@ -13,11 +13,13 @@ NOT touch, name it for a human decision).
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "mechanisms" / "distribution"))
 
+import sync_consumers
 from sync_consumers import Action, classify
 
 
@@ -137,3 +139,40 @@ def test_agents_are_not_in_the_sync_scope() -> None:
     from sync_consumers import delta_prefixes
     assert "agents/" not in delta_prefixes()
     assert "skills/" in delta_prefixes()
+
+
+def test_the_syncer_pushes_exactly_the_trees_the_installer_copies() -> None:
+    """Two lists of the kit's own trees, in two languages, kept by hand.
+
+    They drifted on 2026-09-02: `scripts/` was renamed to `mechanisms/` and only
+    the installer was updated. From that commit the syncer propagated nothing
+    from that tree — the fleet lead, the pipeline scheduler, the protocol client
+    — while printing a delta as though the delta were whole. Five fixes of that
+    day, one of them closing a gate that let unsigned items into PLAN, would have
+    reached no consumer by the supported path.
+
+    Deriving one from the other at runtime would couple a Python module to a
+    shell script's parse. Failing loudly when they disagree costs nothing and
+    catches the rename, which is the only way they ever diverge.
+    """
+    install = (Path(__file__).resolve().parents[1]
+               / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+
+    copied = re.search(r"^for item in ((?:[a-z_]+ )+[a-z_]+); do$", install, re.M)
+    assert copied, "install.sh no longer has the loop that copies the kit's trees"
+    installed = {f"{name}/" for name in copied.group(1).split()}
+
+    assert set(sync_consumers.delta_prefixes()) == installed, (
+        "the syncer and the installer disagree about which trees the kit owns; "
+        "a tree the installer copies but the syncer skips receives no update, "
+        "and the dry-run reports its absence as a complete delta")
+
+
+def test_no_prefix_names_a_directory_that_is_not_there() -> None:
+    """A dead prefix is how the drift stays invisible: it keeps the tuple looking
+    populated while matching nothing."""
+    kit = Path(__file__).resolve().parents[1]
+
+    missing = [p for p in sync_consumers.delta_prefixes() if not (kit / p).is_dir()]
+
+    assert not missing, f"prefix(es) matching no directory in the kit: {missing}"

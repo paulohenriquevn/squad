@@ -122,12 +122,24 @@ def _read(path: Path) -> str | None:
 def delta_prefixes() -> tuple[str, ...]:
     """What the kit owns and may therefore push.
 
+    MUST match the trees `install.sh` copies, and `test_sync_consumers.py` fails
+    when it does not. That test exists because this tuple silently lost a whole
+    family: `scripts/` was renamed to `mechanisms/` on 2026-09-02 and this line
+    was not touched, so from that commit onward the syncer propagated NOTHING
+    from it — the fleet's lead, the pipeline scheduler, the protocol client, all
+    of it — while reporting a delta as if the delta were complete. Five kit fixes
+    of that same day, including one that closed a gate letting unsigned items
+    through, would have reached no consumer by the supported path.
+
+    That is this kit's most-found defect once more: a matcher that lost its reach
+    and turned the resulting silence into a pass.
+
     `agents/` is out (grill kit-domain-agents-install, decision 5): a domain
     specialist describes the project, not the kit. While it was here, every sync
     reinstalled the origin ecosystem's eight into a consumer that had just removed
-    them.
+    them. `install.sh` agrees — it copies only `agents/README.md`.
     """
-    return ("rules/", "skills/", "scripts/", "hooks/", "commands/")
+    return ("rules/", "skills/", "hooks/", "commands/", "mechanisms/", "squad/")
 
 
 def delta_files(repo: Path, base: str) -> list[str]:
