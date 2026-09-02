@@ -246,3 +246,101 @@ def test_every_shipped_config_file_is_clean(installed_rules: Path):
     }
     dirty = {k: v for k, v in dirty.items() if v}
     assert not dirty, f"shipped configuration citing the origin ecosystem: {dirty}"
+
+
+#: An absolute path under a user's home. `/home/<name>/` on Linux, `/Users/<name>/`
+#: on macOS. Anchored on the separator so a word like "homes" cannot match.
+WORKSTATION_PATH_RE = re.compile(r"(?:^|[\s'\"=(`])(/home/[a-z][a-z0-9_-]*|/Users/[A-Za-z][A-Za-z0-9_-]*)/")
+
+
+def test_no_versioned_file_carries_a_workstation_path():
+    """A path under somebody's home directory is one machine's, and this repository
+    ships to every consumer.
+
+    Found the hard way on 2026-09-02: a workflow definition under `mechanisms/fleet/`
+    defaulted its repository argument to an author's home directory, naming both the
+    workstation and the origin ecosystem. (The file is not named here: "a test names
+    the file" is one of the signals `stop-validation` reads as coverage, and writing
+    it would mark an untested file as tested.) It travelled into an adopter's history and was caught by
+    THAT project's publish-hygiene gate — the kit had no check of its own, and
+    `ORIGIN_RE` did not fire because it matches `theo-[a-z]`, not `theo` followed
+    by a slash.
+
+    History is public retroactively: a path removed tomorrow is still in the commit
+    that shipped it.
+
+    A line that must carry the shape — a fixture reproducing a tool's own error
+    message — declares it with `workstation-path: <why>` on that line or in the comment block above it,
+    the way `rules/english-only.md` handles a quote that must be Portuguese —
+    except that accepting the line above spares a reformat when the offending
+    string is long, which that rule does not.
+    """
+    dirty: dict[str, list[str]] = {}
+    for path in _versioned_files():
+        rel = str(path.relative_to(REPO))
+        if rel in GUARD_FILES or rel == "CHANGELOG.md":
+            continue  # released entries record what was true on their day
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        # Same escape hatch `rules/english-only.md` uses, and for the same reason:
+        # a line that MUST carry the shape — a fixture reproducing a tool's own
+        # error message — says why, on the line, where the next reader sees it.
+        # A silent allow-list elsewhere is a door nobody rereads.
+        lines = text.splitlines()
+        # The mark counts on the line itself OR the one above it. `english-only`
+        # accepts it only inline, and that costs a reformat whenever the offending
+        # string is long enough to wrap — measured while writing this file.
+        def marked(index: int) -> bool:
+            """The line itself, or the contiguous comment block above it.
+
+            A one-line lookback is not enough: a reason worth writing rarely fits
+            on one line, and a rule that forces it to is a rule people answer with
+            a shorter reason.
+            """
+            if "workstation-path:" in lines[index]:
+                return True
+            back = index - 1
+            while back >= 0 and lines[back].lstrip().startswith(("#", "//")):
+                if "workstation-path:" in lines[back]:
+                    return True
+                back -= 1
+            return False
+
+        exempt = {i for i in range(len(lines)) if marked(i)}
+        hits = sorted({
+            m.group(1) for i, line in enumerate(lines) if i not in exempt
+            for m in WORKSTATION_PATH_RE.finditer(line)
+        })
+        if hits:
+            dirty[rel] = hits
+
+    assert not dirty, (
+        f"versioned files carry a workstation path: {dirty}. That path exists on "
+        "one machine; every consumer gets the string and none of them get the "
+        "directory. Take it from an argument, an environment variable, or the "
+        "script's own location."
+    )
+
+
+def test_the_workstation_probe_catches_what_it_is_for():
+    """A guard nobody probes is a guard that may already be broken."""
+    caught = [
+        "const REPO = args?.repo ?? '/home/paulo/Projetos/theo/platform/theo'",
+        'PROJECT="/home/someone/dev/app"',
+        "path = /Users/dev/Projects/thing",
+        "cd /home/ci-runner/work && make",
+    ]
+    for line in caught:
+        assert WORKSTATION_PATH_RE.search(line), f"missed: {line}"
+
+    allowed = [
+        "$HOME/dev/theo-cloud",          # the variable, not the resolved path
+        "~/dev/project",                 # tilde is not a machine
+        "homes/index.md",                # a word containing 'home'
+        "/home",                         # no user, no trailing segment
+        "look under /homelab/notes",     # different word entirely
+    ]
+    for line in allowed:
+        assert not WORKSTATION_PATH_RE.search(line), f"false positive: {line}"

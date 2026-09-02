@@ -300,6 +300,8 @@ class TestRustSetupBlockers:
         assert _setup_blocker("error: two packages named `theodb_rs` in this workspace") is not None
 
     def test_missing_pgrx_is_a_setup_blocker(self) -> None:
+        # workstation-path: pgrx prints the user's home in this error; the fixture
+        # reproduces the message verbatim, which is what the detector matches on.
         assert _setup_blocker("Error: /home/x/.pgrx/config.toml not found.") is not None
 
     def test_an_ordinary_compile_error_is_not_a_setup_blocker(self) -> None:

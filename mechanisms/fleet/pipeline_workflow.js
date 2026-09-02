@@ -39,7 +39,17 @@ if (!Array.isArray(ITEMS) || ITEMS.length === 0) {
     'no queue: pass args.queue from `select_backlog_item.py --json`. ' +
     'A literal list cannot know which items the registry says are blocked.')
 }
-const REPO = args?.repo ?? '/home/paulo/Projetos/theo/platform/theo'
+// No default. A hardcoded path is one machine's, and this file is versioned and
+// shipped to every consumer: the previous default named a workstation's home
+// directory AND the origin ecosystem, and travelled into an adopter's history
+// where it was found by THEIR publish-hygiene gate, not by ours.
+const REPO = args?.repo
+if (!REPO) {
+  throw new Error(
+    'no repo: pass args.repo. There is no sensible default — the workflow runs ' +
+    'against whichever project invoked it, and a path baked in here would be ' +
+    'the author\'s machine.')
+}
 const AGENTS = args?.agentsDir ?? 'records/pipeline-agents'
 
 // The generated file IS the system prompt; the task line is all this script adds.
