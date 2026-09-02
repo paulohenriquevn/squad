@@ -86,3 +86,30 @@ def test_backticked_filenames_are_not_treated_as_links() -> None:
 
     assert "BACKTICK_PATH_RE" not in source
     assert "1451" in source, "the measurement that decided this belongs beside it"
+
+
+def test_a_document_the_kit_keeps_but_does_not_install_is_not_reported(tmp_path: Path) -> None:
+    """`install.sh` copies skills, rules, hooks, commands, mechanisms and squad —
+    not README, CONTRIBUTING, SECURITY, LICENSE or wiki/. A link to one of those
+    resolves where it is written and cannot resolve where the kit is installed.
+
+    Measured on a fresh install on 2026-09-02, which is how this was found: the
+    check's first run against one produced nine identical WARNs, for something no
+    consumer can fix. A finding nobody can act on is how a gate loses its reader.
+    """
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "a.md").write_text(
+        "see [contributing](../CONTRIBUTING.md) and [wiki](../wiki/x.md)\n",
+        encoding="utf-8")
+
+    assert broken_markdown_links(tmp_path) == []
+
+
+def test_the_same_link_IS_reported_where_the_document_should_exist(tmp_path: Path) -> None:
+    """The exemption is for absence by design, not a blanket pardon: in a tree
+    that has a `wiki/`, a link into it that misses is still a broken link."""
+    (tmp_path / "wiki").mkdir()
+    (tmp_path / "wiki" / "real.md").write_text("x\n", encoding="utf-8")
+    (tmp_path / "wiki" / "a.md").write_text("[gone](/missing.md)\n", encoding="utf-8")
+
+    assert broken_markdown_links(tmp_path) == [("wiki/a.md", "/missing.md")]

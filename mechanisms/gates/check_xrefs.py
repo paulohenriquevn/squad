@@ -255,6 +255,24 @@ def _list_cycle_rules(ecosystem_dir: Path) -> dict[str, Path]:
 #: Link targets that are not paths into this repository.
 _NOT_A_REPO_PATH = ("http://", "https://", "#", "mailto:", "file://", "~")
 
+#: Documents that live in the KIT's repository and are deliberately not installed
+#: into a consumer — `install.sh` copies skills, rules, hooks, commands,
+#: mechanisms and squad, and none of these. A link to one is correct where it is
+#: written and unresolvable where the kit is installed, so reporting it would put
+#: nine identical WARNs in front of every consumer, forever, for something no
+#: consumer can fix. Measured on a fresh install on 2026-09-02, which is how this
+#: distinction was found: the gate's first run against one produced exactly that.
+_NOT_INSTALLED_INTO_CONSUMERS = (
+    "README.md", "CONTRIBUTING.md", "SECURITY.md", "LICENSE", "CHANGELOG.md",
+    "HOW-TO-USE.md", "wiki/", "study-material/", "images/", "tests/",
+)
+
+
+def _is_kit_repo_only(target: str) -> bool:
+    """Is this link's target a document the kit keeps and does not ship?"""
+    bare = target.lstrip("./").replace("../", "")
+    return bare.startswith(_NOT_INSTALLED_INTO_CONSUMERS) or bare in _NOT_INSTALLED_INTO_CONSUMERS
+
 
 def broken_markdown_links(ecosystem_dir: Path) -> list[tuple[str, str]]:
     """`(file, target)` for every `[text](path)` pointing at nothing.
@@ -300,8 +318,14 @@ def broken_markdown_links(ecosystem_dir: Path) -> list[tuple[str, str]]:
                 resolved = wiki_root / target.lstrip("/")
             else:
                 resolved = md.parent / target
-            if not resolved.exists():
-                broken.append((rel, url))
+            if resolved.exists():
+                continue
+            # In the kit's own repository these resolve; in an install they are
+            # absent by design, and a finding nobody can act on is how a gate
+            # loses its reader.
+            if _is_kit_repo_only(target) and not (ecosystem_dir / target.lstrip("./")).exists():
+                continue
+            broken.append((rel, url))
     return broken
 
 
