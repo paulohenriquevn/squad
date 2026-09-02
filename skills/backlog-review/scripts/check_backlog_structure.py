@@ -214,6 +214,42 @@ def parse_blocked_by(raw: str) -> list[str]:
     return _ID_IN_TEXT_RE.findall(raw)
 
 
+def carries_prose(raw: str) -> bool:
+    """Does the value say anything beyond a list of ids?
+
+    `blocked_by` is prose by design — of the eight items carrying it when the
+    field was measured, seven named a sponsor decision or an external action and
+    only one named an item. A value stating a reason is the normal case, and an
+    ids-only value is the exception this distinction exists to find.
+    """
+    return bool(_ID_IN_TEXT_RE.sub("", raw).strip(" ,\u2014-"))
+
+
+def impediment_edges(raw: str, own_id: str) -> list[str]:
+    """The ids `raw` names as impediments, which never includes the item itself.
+
+    An item's own id appears in its `blocked_by` prose constantly and innocently,
+    because the prose describes the item: *"Vide report /idea-to-release B-060 de
+    2026-08-31"*. The parser lifts every id it sees, so that sentence made B-060
+    its own blocker — then a ring of one, then a deadlock no work can clear.
+    Measured on a real registry on 2026-09-02: **14 items reported `self_block`
+    and 14 more reported a `B-NNN -> B-NNN` cycle, 28 blockers in total, every
+    one of them false**, and together they refused every push to the repository.
+
+    `select_backlog_item.py:141` had already fixed this for the queue — same
+    field, same reasoning, same one-line filter — and the fix did not travel to
+    the gate. The duplication between the two is deliberate (this gate must read
+    a registry written by anything, so it cannot import the writer), but a rule
+    duplicated is a rule that can be fixed in one copy and stay broken in the
+    other, and that is what happened.
+
+    An ids-only value is left alone: `blocked_by: B-060` written on B-060 is a
+    genuine self-block, it describes nothing, and the gate should still say so.
+    """
+    ids = parse_blocked_by(raw)
+    return [b for b in ids if b != own_id] if carries_prose(raw) else ids
+
+
 def _find_cycles(edges: dict[str, list[str]]) -> list[list[str]]:
     """Every distinct ring in the impediment graph, each reported once.
 
@@ -371,7 +407,7 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     # the index and never typed, so the two halves cannot drift apart. What CAN rot is
     # the edge itself, in four ways, and all four are deterministic.
     raw_values = {i.item_id: i.fields.get("blocked_by", "") for i in items}
-    edges = {iid: parse_blocked_by(raw) for iid, raw in raw_values.items()}
+    edges = {iid: impediment_edges(raw, iid) for iid, raw in raw_values.items()}
     statuses = {i.item_id: i.fields.get("status", "") for i in items}
 
     for item in items:

@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from backlog_fixtures import item_block, write_backlog
+import check_backlog_structure
 from check_backlog_structure import check_backlog
 
 
@@ -386,3 +387,38 @@ def test_effective_state_needs_no_second_edit_when_the_blocker_ships(tmp_path: P
         item_block("B-002", status="shipped"),
     )
     assert "blocked" not in report["items_by_effective_state"]
+
+
+def test_an_item_naming_itself_inside_prose_is_not_its_own_blocker() -> None:
+    """`blocked_by` is prose, and prose about an item mentions that item.
+
+    The parser lifts every id it sees, so *"Vide report /idea-to-release B-060 de
+    2026-08-31"* made B-060 its own blocker — then a ring of one, then a deadlock
+    no work can clear. Measured on a real registry on 2026-09-02: 14 items
+    reported `self_block` and 14 reported a `B-NNN -> B-NNN` cycle, 28 blockers,
+    every one false, and together they refused every push to the repository.
+
+    `select_backlog_item.py` had already fixed this for the queue. The fix did
+    not travel to the gate reading the same field.
+    """
+    raw = ("aguardando disposicao de status: costura entregue em 5b98a494f. "
+           "Vide report /idea-to-release B-060 de 2026-08-31 (4 opcoes A/B/C/D).")
+
+    assert "B-060" in check_backlog_structure.parse_blocked_by(raw), \
+        "the raw parser still sees it — this fix is at the edge, not in the regex"
+    assert check_backlog_structure.impediment_edges(raw, "B-060") == []
+
+
+def test_an_ids_only_value_naming_itself_is_still_a_self_block() -> None:
+    """The narrowing must not swallow the real defect. `blocked_by: B-060` on
+    B-060 describes nothing; it is a typo, and the gate should still say so."""
+    assert check_backlog_structure.impediment_edges("B-060", "B-060") == ["B-060"]
+    assert check_backlog_structure.impediment_edges("B-060, B-061", "B-060") == ["B-060", "B-061"]
+
+
+def test_a_real_impediment_on_another_item_survives_both_shapes() -> None:
+    """The filter removes one id, never the edge."""
+    prose = "aguardando B-075 aterrissar antes de medir de novo"
+
+    assert check_backlog_structure.impediment_edges(prose, "B-060") == ["B-075"]
+    assert check_backlog_structure.impediment_edges("B-075", "B-060") == ["B-075"]
