@@ -525,3 +525,48 @@ def test_the_same_shape_is_fixed_for_the_nfr_criterion(tmp_path) -> None:
 
     assert nfr.score == 0
     assert nfr.why != "no `## Non-Functional Requirements` section"
+
+
+def test_an_open_question_is_charged_once_not_twice(tmp_path) -> None:
+    """kit#18. One failure, one charge.
+
+    An `UNKNOWN` inside `## Questions answered` took 2 points from
+    `no_placeholders` AND 1 from `questions_closed`, and both closed the instant
+    a reviewer answered that single question. Three of 34 points is ~9% against a
+    90% threshold, so a brief whose only imperfection was one honestly declared
+    open question could not clear the gate — and the cheapest way past it was to
+    delete the question, which is the evasion this rubric exists to refuse.
+    """
+    body = ("# Z\n\n## Questions answered\n\n"
+            "- Q1: which cluster? Answered: app-dev.\n"
+            "- Q2: does the live reading split out? UNKNOWN — a reviewer decides.\n")
+
+    placeholders = _score_of(tmp_path, body, "no_placeholders")
+    questions = _score_of(tmp_path, body, "questions_closed")
+
+    assert placeholders.score == 2, (
+        f"the open question is `questions_closed`'s to charge for, not this "
+        f"criterion's: {placeholders.why}")
+    assert questions.score < 2, "and it is still charged, once"
+
+
+def test_a_placeholder_outside_that_section_is_still_a_hole(tmp_path) -> None:
+    """The narrowing is scoped, not a pardon. An `UNKNOWN` in a requirement or an
+    acceptance criterion is a hole in the brief and stays chargeable."""
+    body = ("# Z\n\n## Functional Requirements\n\n"
+            "- FR-001: the system does UNKNOWN when the ledger is written.\n\n"
+            "## Questions answered\n\n- Q1: none open.\n")
+
+    placeholders = _score_of(tmp_path, body, "no_placeholders")
+
+    assert placeholders.score == 0, f"a hole in an FR is a hole: {placeholders.why}"
+
+
+def test_answering_the_question_closes_both_criteria(tmp_path) -> None:
+    """The property that proves they were measuring one thing."""
+    answered = ("# Z\n\n## Questions answered\n\n"
+                "- Q1: which cluster? Answered: app-dev.\n"
+                "- Q2: does it split out? Answered: it splits.\n")
+
+    assert _score_of(tmp_path, answered, "no_placeholders").score == 2
+    assert _score_of(tmp_path, answered, "questions_closed").score == 2

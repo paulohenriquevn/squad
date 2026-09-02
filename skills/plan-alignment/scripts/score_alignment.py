@@ -279,6 +279,21 @@ def _bullets(text: str | None) -> list[str]:
 
 
 
+def _without_section(body: str, *headings: str) -> str:
+    """`body` with the named section removed, heading and all.
+
+    Used where a criterion must not charge for something another criterion owns.
+    Matches `_section`'s heading conventions so the two agree on where a section
+    starts and stops.
+    """
+    for heading in headings:
+        pattern = re.compile(
+            rf"^#{{1,6}}\s*{re.escape(heading)}\s*$.*?(?=^#{{1,6}}\s|\Z)",
+            re.IGNORECASE | re.MULTILINE | re.DOTALL)
+        body = pattern.sub("", body)
+    return body
+
+
 def _absent_or_empty(section: str | None, heading: str) -> str:
     """Why a requirements criterion scored zero — the heading, or the contents.
 
@@ -444,7 +459,23 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
         else f"{len(unquantified)} unquantified: {', '.join(unquantified)}")
 
     # 12 — superpowers' spec self-review, applied to the whole document.
-    placeholders = sorted({m.group(0).upper() for m in _UNRESOLVED_RE.finditer(body)})
+    # Everything EXCEPT the questions section, which owns its own open items.
+    #
+    # kit#18. An `UNKNOWN` inside `## Questions answered` is that section's
+    # legitimate content — a declared open question — and `questions_closed`
+    # already charges for it. Counting it here too took 2 more points, so one
+    # failure cost 3 of 34 and both criteria closed on the same single answer.
+    # Three points is ~9% against a 90% threshold: a brief whose only imperfection
+    # was one honestly declared open question could not clear the gate, and the
+    # cheapest way past it was to delete the question — the exact evasion this
+    # criterion exists to refuse. Found by an ALIGN agent on a real item, which
+    # reported it instead of using it.
+    #
+    # Outside that section nothing changes: an `UNKNOWN` in a requirement or an
+    # acceptance criterion is a hole, and this is what charges for it.
+    outside_questions = _without_section(body, "Questions answered", "Questions")
+    placeholders = sorted({m.group(0).upper()
+                           for m in _UNRESOLVED_RE.finditer(outside_questions)})
     add("no_placeholders", "No unresolved placeholder anywhere in the brief",
         2 if not placeholders else 0,
         "none" if not placeholders else f"{len(placeholders)} found: {', '.join(placeholders)}")
