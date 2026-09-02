@@ -81,6 +81,8 @@ which is why the rule is now computed rather than requested.
 | `squad_lead.py` | Keep an executing session moving, without deciding anything for it |
 | `pipeline_orchestrator.py` | Schedule many backlog items through the cycle, one stage each, concurrently |
 | `pipeline_workflow.js` | The `backlog-pipeline` workflow definition the orchestrator drives |
+| `fleet_status.sh` | Every session at once, from the shell: what each is doing, what the lead handed out, what the queue would pick |
+| `fleet_queue_line.py` | The selector's verdict as one line for `fleet_status.sh` — a file of its own because a heredoc would take the stdin the pipe needs |
 | `session_catchup.py` | Rebuild context after `/clear`, a fresh session, or a compaction |
 | `start_fleet.sh` | Start a fleet of executing sessions and one watchdog over all of them |
 | `statusline.sh` | The single line Claude Code shows in its status bar |
