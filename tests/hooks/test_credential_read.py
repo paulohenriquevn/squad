@@ -34,7 +34,7 @@ def _hook():
     "head -5 config/app.key",
     "base64 ~/.ssh/id_rsa",
     "less deploy/tls.pem",
-    "cat charts/theo-api/templates/secret.yaml",
+    "cat charts/service-api/templates/secret.yaml",
     "cp .env /tmp/x",
     "grep TOKEN .env.production",
 ], ids=lambda c: c.split()[0] + "-" + c.split()[-1])

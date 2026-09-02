@@ -640,7 +640,7 @@ if [ -f "$ECO/settings.json" ]; then
   # So ownership is split by key. The kit owns its wiring; the project owns its
   # permissions; a key the kit does not know is the consumer's and survives.
   python3 - "$ECO/settings.json" "$SRC_DIR/settings.plugin.json" <<'PYEOF'
-import json, sys
+import json, os, sys
 
 target, source = sys.argv[1], sys.argv[2]
 mine = json.load(open(target, encoding="utf-8-sig"))
@@ -669,16 +669,58 @@ for key in ("hooks", "statusLine", "env", "$schema", "_comment_",
 # the mechanism built for exactly this, rather than a merge rule nobody can see.
 _KIT_OWNED_SCALARS = ("defaultMode",)
 
+# A union cannot retire a rule. Additions propagated and removals did not, so
+# every entry the kit ever shipped stayed in every consumer that already had a
+# settings.json — a retirement that is applied, released and inert everywhere but
+# a fresh install. Same shape `defaultMode` had, in the other direction.
+#
+# It is not fixable by comparing two lists: a rule in the consumer and not in the
+# kit is EITHER something the kit retired OR something the project added, and
+# those must not share an outcome. The missing term is the base — what the kit
+# shipped last time — so the install records it.
+#
+# Measured on 2026-09-02: the credential globs were rewritten from
+# `Read(**/*secret*)` to named credential forms, and without this the old glob
+# would have stayed denied in all seventeen consumers alongside the new ones.
+_PROVENANCE = os.path.join(os.path.dirname(target), ".kit-permissions.json")
+try:
+    with open(_PROVENANCE, encoding="utf-8") as _fh:
+        _previous = json.load(_fh)
+except (OSError, ValueError):
+    _previous = {}
+
 merged = mine.setdefault("permissions", {})
+_retired_total = 0
 for key, items in kit.get("permissions", {}).items():
     if not isinstance(items, list):
         if key in _KIT_OWNED_SCALARS:
             merged[key] = items
         continue
     target_list = merged.setdefault(key, [])
+
+    # Retire only what the kit itself shipped last time and ships no longer.
+    # With no record (first install under this scheme) nothing is removed —
+    # every existing entry is indistinguishable from a project's own, and
+    # deleting a project's rule is the worse error by far.
+    retired = [r for r in _previous.get(key, []) if r not in items]
+    for rule in retired:
+        if rule in target_list:
+            target_list.remove(rule)
+            _retired_total += 1
+
     for item in items:
         if item not in target_list:
             target_list.insert(0, item) if key == "deny" else target_list.append(item)
+
+# The base for next time: what the kit shipped now, not what the consumer ended
+# up with. Recording the merged result would make every project rule look like
+# the kit's and hand the next install permission to delete it.
+_kit_lists = {k: v for k, v in kit.get("permissions", {}).items() if isinstance(v, list)}
+with open(_PROVENANCE, "w", encoding="utf-8") as _fh:
+    json.dump(_kit_lists, _fh, indent=2)
+    _fh.write("\n")
+if _retired_total:
+    print(f"    {_retired_total} permission rule(s) retired by the kit were removed")
 
 json.dump(mine, open(target, "w", encoding="utf-8"), indent=2)
 open(target, "a", encoding="utf-8").write("\n")
