@@ -408,3 +408,42 @@ def test_the_empty_placeholder_does_not_survive_into_the_header(tmp_path: Path) 
     body = routing.read_text(encoding="utf-8")
     assert "no domain yet" not in body, "the placeholder outlived the emptiness it described"
     assert "api | svc-a | agents/api.md" in body
+
+
+def test_an_empty_directory_yields_no_domain_rather_than_one_named_after_it(tmp_path) -> None:
+    """The single-repo branch names the domain after the directory, which is right
+    for a real repository and is fabrication for an empty one.
+
+    Run against an empty temp dir on 2026-09-02 it emitted a full routing table
+    for `tmp.ICTIKtMB5K` and demanded that a specialist be written for it — a
+    table nobody can act on, derived from a folder name, under a heading that
+    says "derived from this project". The `no derivable domain` message already
+    existed in the script and nothing could reach it.
+    """
+    assert detect_domains(tmp_path) == []
+
+
+def test_a_directory_with_a_manifest_is_a_project(tmp_path) -> None:
+    """The narrowing must not refuse a real single-repo project, which is the
+    ordinary case this branch exists for."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+
+    domains = detect_domains(tmp_path)
+
+    assert [d.name for d in domains] == [tmp_path.name]
+
+
+def test_a_git_repository_with_nothing_else_still_counts(tmp_path) -> None:
+    """A repository at its first commit has no manifest yet and is still a
+    project — refusing it would break `/backlog-init` on day one."""
+    (tmp_path / ".git").mkdir()
+
+    assert [d.name for d in detect_domains(tmp_path)] == [tmp_path.name]
+
+
+def test_child_repositories_are_unaffected_by_the_guard(tmp_path) -> None:
+    """The umbrella branch never reached the fabricating one and must not start."""
+    for repo in ("alpha", "beta"):
+        (tmp_path / repo / ".git").mkdir(parents=True)
+
+    assert sorted(d.name for d in detect_domains(tmp_path)) == ["alpha", "beta"]

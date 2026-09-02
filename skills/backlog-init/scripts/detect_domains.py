@@ -168,6 +168,20 @@ def _workspace_packages(root: Path) -> list[str]:
     return found + [m for m in _go_workspace_members(root) if m not in found]
 
 
+#: Anything that says a directory holds a project rather than being an empty one.
+#: Deliberately broad — the question is "is there anything here at all", not
+#: "which ecosystem is this".
+_PROJECT_SIGNS = (
+    ".git", "package.json", "go.mod", "pyproject.toml", "setup.py", "Cargo.toml",
+    "pom.xml", "build.gradle", "Gemfile", "composer.json", "Makefile", "Taskfile.yml",
+    "requirements.txt", "README.md",
+)
+
+
+def _looks_like_a_project(root: Path) -> bool:
+    return any((root / sign).exists() for sign in _PROJECT_SIGNS)
+
+
 def detect_domains(root: Path) -> list[Domain]:
     """Derive the domains from the project's real topology."""
     root = root.resolve()
@@ -180,8 +194,18 @@ def detect_domains(root: Path) -> list[Domain]:
             for repo in children
         ]
 
+    packages = _workspace_packages(root)
+    if not packages and not _looks_like_a_project(root):
+        # Nothing to derive a topology FROM. The single-repo branch below names
+        # the domain after the directory, which is right for a real repository
+        # and is fabrication for an empty one: run against an empty temp dir it
+        # emitted a routing table for `tmp.ICTIKtMB5K` and demanded a specialist
+        # be written for it. A table nobody can act on, derived from a folder
+        # name, presented as "derived from this project".
+        return []
+
     name = root.name
-    return [Domain(name=name, repos=[name, *_workspace_packages(root)],
+    return [Domain(name=name, repos=[name, *packages],
                    agent=f"agents/{name}.md")]
 
 
