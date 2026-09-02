@@ -115,3 +115,46 @@ def test_genuinely_local_work_is_still_flagged(tmp_path: Path) -> None:
 
     out = _run(install, kit)
     assert "install_ahead: 1" in out or "diverged: 1" in out, out
+
+
+def test_the_comparison_covers_every_tree_the_installer_carries(tmp_path: Path) -> None:
+    """Four of the six trees were invisible, and the default is why.
+
+    `--kit` defaulted to the kit's `skills/`, which is where the noise is lowest
+    and also where two thirds of what an install carries stops being looked at.
+    Measured on 2026-09-02: `mechanisms/kit_issues.py` and
+    `mechanisms/session_ready.py` existed in the kit and not in a consumer, and
+    nothing reported it — the same afternoon a syncer was found to have dropped
+    that whole tree from distribution after a rename.
+
+    Widening to the entire root is the opposite failure: 5994 files only-in-kit,
+    because the kit also holds tests, wiki, images and study material that no
+    consumer ever receives. The scope is what `install.sh` carries, no more.
+    """
+    kit, install = _trees(tmp_path)
+    for tree in ("skills", "hooks", "commands", "mechanisms", "squad"):
+        (kit / tree).mkdir(exist_ok=True)
+        (kit / tree / "m.py").write_text("kit only\n", encoding="utf-8")
+    (kit / "tests").mkdir()
+    (kit / "tests" / "t.py").write_text("never installed\n", encoding="utf-8")
+
+    out = _run(install, kit)
+
+    # One `m.py` per installed tree is seen; `tests/t.py` is not. The count is the
+    # assertion because the summary does not name files when there are few, and a
+    # test that reads a rendering rather than a result breaks on formatting.
+    assert "only_in_kit: 5" in out, (
+        f"expected the five installed trees to be compared and tests/ to be "
+        f"excluded; got: {out}")
+    assert "tests/t.py" not in out, "tests/ is not carried into a consumer"
+
+
+def test_a_single_tree_can_still_be_compared_on_its_own(tmp_path: Path) -> None:
+    """`--kit ./rules` against a consumer's `rules/`. Restricting the scope there
+    would match nothing and report a clean sweep over an empty comparison — the
+    exact shape of defect this file exists to catch, arriving through its fix."""
+    kit, install = _trees(tmp_path)
+
+    out = _run(install / "rules", kit / "rules")
+
+    assert "identical: 1" in out, out

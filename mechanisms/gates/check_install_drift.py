@@ -129,7 +129,36 @@ def _is_consumer_owned(rel: str) -> bool:
 _INSTALL_TO_KIT_ALIAS = {"settings.json": "settings.plugin.json"}
 
 
-def _relevant(root: Path) -> dict[str, Path]:
+#: What `install.sh` actually carries into a consumer, and therefore the only
+#: thing a drift report between the two roots should compare.
+#:
+#: The default used to be `skills/` alone, which is where the noise is lowest and
+#: also where four of the six trees became invisible. Measured on 2026-09-02: two
+#: mechanisms the kit had and the consumer did not — `kit_issues.py` and
+#: `session_ready.py` — sat undetected, because nothing looked outside `skills/`.
+#: Widening it to the whole root is the other failure: that reports 5994 files
+#: only-in-kit, since the kit also holds tests, wiki, images and study material
+#: that no consumer ever receives.
+INSTALLED_TREES = ("skills", "rules", "hooks", "commands", "mechanisms", "squad")
+
+#: `agents/` is not a tree the kit owns (a domain specialist describes the
+#: project), but the routing README inside it is.
+INSTALLED_FILES = ("agents/README.md",)
+
+
+def _installed_scope(root: Path) -> tuple[str, ...] | None:
+    """The trees to compare under `root`, or None to compare everything.
+
+    None is for the case where `root` IS one of the trees — `--kit ./rules`
+    against a consumer's `rules/`. Restricting then would match nothing and
+    report a clean sweep over an empty comparison, which is the exact shape of
+    defect this file exists to catch.
+    """
+    present = tuple(t for t in INSTALLED_TREES if (root / t).is_dir())
+    return present or None
+
+
+def _relevant(root: Path, scope: tuple[str, ...] | None = None) -> dict[str, Path]:
     found: dict[str, Path] = {}
     for path in root.rglob("*"):
         if not path.is_file():
@@ -138,6 +167,9 @@ def _relevant(root: Path) -> dict[str, Path]:
         if any(part in _CONSUMER_LOCAL for part in rel.parts):
             continue
         if _is_consumer_owned(str(rel)):
+            continue
+        if scope is not None and rel.parts[0] not in scope \
+                and str(rel) not in INSTALLED_FILES:
             continue
         found[str(rel)] = path
     return found
@@ -179,7 +211,11 @@ class DriftReport:
 
 
 def scan(install_root: Path, kit_root: Path) -> DriftReport:
-    install, kit = _relevant(install_root), _relevant(kit_root)
+    # The scope comes from the KIT side: it is the kit that decides which trees
+    # it ships. Taking it from the consumer would let a consumer missing a whole
+    # tree hide that fact by simply not having it.
+    scope = _installed_scope(kit_root)
+    install, kit = _relevant(install_root, scope), _relevant(kit_root, scope)
     # The consumer receives `settings.plugin.json` AS `settings.json`; comparing it
     # against the kit's `settings.json` (the development one) reports DIVERGED on
     # every install.
@@ -206,8 +242,10 @@ def scan(install_root: Path, kit_root: Path) -> DriftReport:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--install", type=Path, required=True,
-                        help="a consumer's installed skills directory (…/.claude/skills)")
-    parser.add_argument("--kit", type=Path, default=Path(__file__).resolve().parents[2] / "skills",
+                        help="a consumer's install root (…/.claude), or one tree inside it")
+    # The kit ROOT, not its `skills/`. The old default silently narrowed every
+    # invocation to one of the six trees an install carries.
+    parser.add_argument("--kit", type=Path, default=Path(__file__).resolve().parents[2],
                         help="this repository's skills directory")
     args = parser.parse_args(argv)
 
