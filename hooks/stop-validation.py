@@ -60,6 +60,10 @@ UNIT_MANIFESTS = ("package.json", "go.mod", "pyproject.toml", "Cargo.toml")
 COMMENT_LEAD = re.compile(r"^\s*(//|\*|/\*|\*/|#).*$")
 
 
+#: Gates this hook tried to run and could not. Same idea as `_GIT_UNREACHABLE`
+#: below, for the checks that live in a separate script.
+_GATE_UNREACHABLE: list[str] = []
+
 #: Set by `git()` when a command could not be asked, as opposed to answering
 #: nothing. Module-level because every caller of `changed_files()` needs the
 #: distinction and none of them should have to thread it.
@@ -243,15 +247,38 @@ def diff_carries_code(name: str, root: Path) -> bool:
     return False
 
 
-def check_leakage(project_dir: Path) -> str | None:
-    script = project_dir / "mechanisms" / "gates" / "check_reference_leakage.py"
+def check_leakage(project_dir: Path, kit_dir: Path) -> str | None:
+    """Layer 3 of `rules/reference-provenance.md` — the only one that catches the
+    RESULT of a paste rather than the act.
+
+    The gate lives with the KIT and runs against the PROJECT, and those are
+    different directories in two of the three layouts `squad.layout` defines: a
+    `copy` install puts the kit at `<project>/.claude/`, a `plugin` install puts
+    it outside the project entirely. Only this repository, where they coincide,
+    ever ran it.
+
+    Until 2026-09-02 this looked for the script under `project_dir`. Reproduced
+    that day in both layouts, with a committed `study-material/ref.md` and an
+    untracked literal copy of it: the hook exited 0 with no output, while the same
+    gate on the same tree printed `SUSPECTED COPY … shares 5 consecutive lines`
+    and exited 1. Not installed and found nothing returned the same `None`, so
+    every consumer's session ended looking clean on a check that never ran.
+    """
+    script = kit_dir / "mechanisms" / "gates" / "check_reference_leakage.py"
     if not script.is_file():
+        # NOT the same as "no leakage". This hook already says so for the
+        # CHANGELOG gate and for git; the third branch was missing here.
+        _GATE_UNREACHABLE.append(
+            f"reference-leakage: {script} is not there, so layer 3 of "
+            f"`rules/reference-provenance.md` did not run")
         return None
     try:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(  # noqa: PLW1510 — returncode is read below
             [sys.executable, str(script), "--repo", str(project_dir), "--strict"],
             capture_output=True, text=True, timeout=120)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as exc:
+        _GATE_UNREACHABLE.append(
+            f"reference-leakage: could not be run ({type(exc).__name__})")
         return None
     out = done.stdout + done.stderr
     if "SUSPECTED COPY" not in out:
@@ -273,7 +300,7 @@ def main() -> None:
     warnings: list[str] = []
     blockers: list[str] = []
 
-    leak = check_leakage(root)
+    leak = check_leakage(root, kit)
     if leak:
         warnings.append(leak)
 
@@ -281,6 +308,11 @@ def main() -> None:
 
     # An empty file list is a verdict only when git was actually asked. If it was
     # not, every gate below is about to pass on a measurement nobody took.
+    if _GATE_UNREACHABLE:
+        detail = "".join(f"\n    - {line}" for line in dict.fromkeys(_GATE_UNREACHABLE))
+        warnings.append(
+            f"A STOP GATE DID NOT RUN — and not running is not passing:{detail}")
+
     if _GIT_UNREACHABLE:
         detail = "".join(f"\n    - {line}" for line in dict.fromkeys(_GIT_UNREACHABLE))
         warnings.append(
