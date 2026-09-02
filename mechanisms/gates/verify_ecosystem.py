@@ -234,6 +234,51 @@ def check_phase_numbering(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
+def _run_gate(ecosystem_dir: Path, gate: str, flag: str = "--repo") -> tuple[bool, list[str]]:
+    """Run a gate that reports by exit code, and relay what it said.
+
+    Both gates wired through this were, until 2026-09-02, executed by nothing at
+    all: not the CI, not a hook, not `verify_ecosystem`. `check_orphan_verdicts`
+    appeared exactly once outside its own tests — inside a COMMENT in
+    `check_phase_emitters.py`. Measured that day, both passed clean, so nothing
+    was hiding behind them. That is luck rather than protection: a gate nobody
+    runs reports its first real failure to nobody.
+    """
+    checker = ecosystem_dir / "mechanisms" / "gates" / f"{gate}.py"
+    if not checker.exists():
+        return True, [f"  {gate}.py not installed — skipping"]
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), flag, str(ecosystem_dir)],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        return True, []
+    lines = (result.stdout + result.stderr).strip().splitlines()
+    return False, [f"  {line}" for line in lines[:12]]
+
+
+def check_orphan_verdicts(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Can anything actually emit each verdict a cycle rule declares?
+
+    A verdict named in a rule and emitted by nothing is a state the chain can
+    never enter, and a reader planning around it plans around a state that does
+    not exist. `NEEDS_SPLIT` lived that way once — documented in SKILL.md's table
+    and implemented nowhere — so briefs needing a split were squeezed into
+    BLOCKED, which tells the reader to close gaps no rewrite can close.
+    """
+    return _run_gate(ecosystem_dir, "check_orphan_verdicts")
+
+
+def check_phase_emitters(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Does every declared phase have something that can emit its verdict?
+
+    The other direction of the same question, and the one that catches a phase
+    added to a chain with no mechanism behind it — silent by construction, and
+    indistinguishable from a phase that ran and found nothing.
+    """
+    return _run_gate(ecosystem_dir, "check_phase_emitters")
+
+
 def check_wiki_migration(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Is this project still reading its durable knowledge from the old root?
 
@@ -464,6 +509,8 @@ def main() -> int:
         ("Skill map", check_skill_map),
         ("Squad map", check_squad_map),
         ("Mechanisms inventory", check_mechanisms_inventory),
+        ("Orphan verdicts", check_orphan_verdicts),
+        ("Phase emitters", check_phase_emitters),
         ("Durable knowledge root", check_wiki_migration),
         ("Skill frontmatter", check_skill_frontmatter),
         ("Smoke chain (detect_domain → spawn_reviewers → consolidate)", check_smoke_chain),
