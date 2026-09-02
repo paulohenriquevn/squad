@@ -53,7 +53,7 @@ interview already happened wherever the work actually is.
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| plan-alignment | item + discover evidence | alignment brief + animated walkthrough + an unticked reviewer checklist | `score_alignment.py` reports ALIGNED — machine score >= 90% AND a human ticked every `## Reviewer sign-off` box. The agent may never tick one (see [`alignment-threshold.md`](alignment-threshold.md)) |
+| plan-alignment | item + discover evidence | alignment brief + animated walkthrough + an unticked reviewer checklist | `score_alignment.py` reports ALIGNED — machine score >= 90% AND a human ticked every `## Reviewer sign-off` box. The agent may never tick one (see [`alignment-threshold.md`](../skills/_kit-rules/alignment-threshold.md)) |
 | plan-write | feature description (+ grill output if Phase 0 ran) | plan with Goal, Tasks, Risks, Test Plan, Open Questions | Coverage Matrix present (every Goal claim mapped to ≥ 1 task) |
 | plan-edge-cases | plan | annotated plan with MUST-FIX | every MUST-FIX has owner + acceptance criterion |
 | deps-audit | plan | dependency report with CVE status | no critical CVE on a planned dependency — **human-enforced, see below** |

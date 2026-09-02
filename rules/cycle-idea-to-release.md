@@ -94,7 +94,7 @@ Any gate failure → pause + surface the blocking finding. The orchestrator does
 
 This cycle chains its phases for ONE item. `/pipeline` sits above it and schedules
 several, one stage each, with a git worktree per lane —
-[`skills/_kit-rules/parallelism-shapes.md`](parallelism-shapes.md) names the two shapes and
+[`skills/_kit-rules/parallelism-shapes.md`](../skills/_kit-rules/parallelism-shapes.md) names the two shapes and
 why this kit had only one of them.
 
 Every gate here still applies per item, unchanged. `/pipeline` decides WHICH item

@@ -192,8 +192,8 @@ paragraph plus a rewrite plus the review that found it.
 
 ## Cross-references
 
-- Skill: [`skills/plan-alignment/SKILL.md`](../skills/plan-alignment/SKILL.md)
+- Skill: [`skills/plan-alignment/SKILL.md`](../plan-alignment/SKILL.md)
 - Scorer: `skills/plan-alignment/scripts/score_alignment.py`
-- Upstream gate on evidence: [`cycle-backlog.md`](cycle-backlog.md) § Hard gates
-- Downstream gate on plans: [`plan-confidence-golden-rule.md`](plan-confidence-golden-rule.md)
+- Upstream gate on evidence: [`cycle-backlog.md`](../../rules/cycle-backlog.md) § Hard gates
+- Downstream gate on plans: [`plan-confidence-golden-rule.md`](../../rules/plan-confidence-golden-rule.md)
 - Honesty principle the unscored items serve: `~/.claude/CLAUDE.md § 3`

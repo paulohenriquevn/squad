@@ -252,24 +252,57 @@ def _list_cycle_rules(ecosystem_dir: Path) -> dict[str, Path]:
     }
 
 
-def _extract_referenced_paths(content: str, base: Path) -> set[Path]:
-    """Extract paths referenced in markdown (backtick + markdown link)."""
-    paths: set[str] = set()
+#: Link targets that are not paths into this repository.
+_NOT_A_REPO_PATH = ("http://", "https://", "#", "mailto:", "file://", "~")
 
-    for match in LINK_RE.finditer(content):
-        url = match.group(2).strip()
-        if url.startswith(("http://", "https://", "#")):
+
+def broken_markdown_links(ecosystem_dir: Path) -> list[tuple[str, str]]:
+    """`(file, target)` for every `[text](path)` pointing at nothing.
+
+    ONLY markdown links. This function replaces one that also resolved every
+    backtick-quoted token that looked like a path, and that function was never
+    called by anything — a checker that existed and did not run, which is the
+    defect this kit keeps finding. Measured before deleting it: run as written it
+    reported **1451** broken references, nearly all of them a bare filename in
+    backticks (`alignment_judge.py`) resolved against whichever directory happened
+    to be citing it. A gate with that signal-to-noise gets switched off, and the
+    silence that follows is indistinguishable from a clean repository.
+
+    A markdown link is unambiguous about its target, so it is checkable. Measured
+    on the same tree: 234 relative links, 21 broken, every one of them real.
+
+    `wiki/` is resolved from its own root: its links are written `/sops/index.md`
+    because the wiki is served from that directory, and reading them as filesystem
+    paths reports ten false positives at once.
+    """
+    broken: list[tuple[str, str]] = []
+    wiki_root = ecosystem_dir / "wiki"
+    for md in sorted(ecosystem_dir.rglob("*.md")):
+        rel = str(md.relative_to(ecosystem_dir))
+        if any(part in rel for part in (".git/", "study-material/", "__pycache__/")):
             continue
-        paths.add(url)
-
-    for match in BACKTICK_PATH_RE.finditer(content):
-        paths.add(match.group(1))
-
-    resolved: set[Path] = set()
-    for p in paths:
-        candidate = (base / p).resolve() if not Path(p).is_absolute() else Path(p)
-        resolved.add(candidate)
-    return resolved
+        try:
+            text = md.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for match in LINK_RE.finditer(text):
+            url = match.group(2).strip()
+            if url.startswith(_NOT_A_REPO_PATH) or not url:
+                continue
+            target = url.split("#")[0]
+            if not target:
+                continue
+            if target.startswith("/"):
+                # Absolute inside the wiki means "from the wiki root"; elsewhere
+                # it is a filesystem path and this gate does not police those.
+                if not md.is_relative_to(wiki_root):
+                    continue
+                resolved = wiki_root / target.lstrip("/")
+            else:
+                resolved = md.parent / target
+            if not resolved.exists():
+                broken.append((rel, url))
+    return broken
 
 
 #: A `file.md § Section` citation. The section name runs to the first delimiter that
@@ -392,6 +425,19 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     cycle_rules = _list_cycle_rules(ecosystem_dir)
 
     findings: list[dict[str, Any]] = []
+
+    # Markdown links, which this gate carried the machinery for and never ran.
+    # WARN rather than FAIL: a broken link misleads a reader and breaks nothing
+    # that executes, and a gate that blocks a release over a moved document is a
+    # gate somebody routes around.
+    for citing, target in broken_markdown_links(ecosystem_dir):
+        findings.append({
+            "severity": "WARN",
+            "check": "markdown_link_resolves",
+            "file": citing,
+            "target": target,
+            "message": f"{citing} links to `{target}`, which does not exist",
+        })
 
     def _rel(p: Path) -> str:
         try:
