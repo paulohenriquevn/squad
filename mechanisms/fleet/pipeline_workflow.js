@@ -7,6 +7,7 @@ export const meta = {
     { title: 'Align',    detail: 'write and score an alignment brief per item' },
     { title: 'Judge',    detail: 'a reviewer who is not the author signs the brief, or refuses' },
     { title: 'Plan',     detail: 'only for items whose brief carries a signature' },
+    { title: 'Implement', detail: 'the first writing stage: its own worktree, RED before GREEN' },
   ],
 }
 
@@ -82,6 +83,51 @@ const JUDGEMENT = {
     exit_code: { type: 'integer' },
     reason: { type: 'string' },
     gaps: { type: 'array', items: { type: 'string' } },
+  },
+}
+
+// PLAN returns structure now, not prose. IMPLEMENT is gated on what it produced,
+// and a gate cannot read a paragraph: the scheduler needs to know whether there
+// are tasks at all before it hands the item to an agent that writes.
+const OUTLINE = {
+  type: 'object',
+  required: ['slug', 'tasks'],
+  properties: {
+    slug: { type: 'string' },
+    tasks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['title', 'tdd'],
+        properties: {
+          title: { type: 'string' },
+          // The RED shape this task can be driven from — an assertion, a GWT, or
+          // a `test_<behavior>` literal. `check_tdd_shape.py` is what judges it,
+          // and IMPLEMENT runs that itself rather than trusting this field.
+          tdd: { type: 'string' },
+        },
+      },
+    },
+    unanswered: { type: 'array', items: { type: 'string' } },
+  },
+}
+
+const IMPLEMENTED = {
+  type: 'object',
+  required: ['slug', 'branch', 'tasks_done', 'tasks_total'],
+  properties: {
+    slug: { type: 'string' },
+    branch: { type: 'string' },
+    worktree: { type: 'string' },
+    tasks_done: { type: 'integer' },
+    tasks_total: { type: 'integer' },
+    // Both runs, not a claim about them: the test must be seen to fail before
+    // the change and pass after, or it is a test written to fit the code.
+    red_evidence: { type: 'string' },
+    green_evidence: { type: 'string' },
+    files_touched: { type: 'array', items: { type: 'string' } },
+    not_done: { type: 'array', items: { type: 'string' } },
+    blocked_by: { type: 'string' },
   },
 }
 
@@ -184,14 +230,51 @@ const results = await pipeline(
     return agent(
       stagePrompt(item, 'plan',
         `The brief was signed by ${'`judge/alignment-judge`'} and the scorer exits 0. ` +
-        `Run your stage now.`),
-      { label: `plan:${item}`, phase: 'Plan' },
-    ).then((text) => ({ slug: item, stage: 'planned', outline: text }))
+        `Run your stage now and return the structured object.`),
+      { label: `plan:${item}`, phase: 'Plan', schema: OUTLINE },
+    ).then((outline) => ({ ...outline, slug: item, stage: 'planned' }))
+  },
+
+  // ── stage 5 · IMPLEMENT, the first stage that writes ──────────────────────
+  //
+  // ALLOWLIST again, and the condition is narrow on purpose: tasks must exist.
+  // An empty outline reaching a writing agent is an agent asked to improvise the
+  // change, and improvised changes are what the alignment gate three stages back
+  // exists to prevent.
+  //
+  // The TDD-shape gate is NOT applied here. `check_tdd_shape.py` is Python and
+  // this file cannot run it, and a scheduler that approximated it would be a
+  // second implementation of a rule that already has one — the defect this kit
+  // found five times on 2026-09-02. IMPLEMENT runs the real gate as its first
+  // action and halts on it, the same way JUDGE runs the real scorer.
+  (planned, item) => {
+    if (planned?.stage === 'parked') return planned
+    const tasks = planned?.tasks ?? []
+    if (!tasks.length) {
+      log(`  ${item} planned nothing to implement — the line keeps moving`)
+      return { ...planned, slug: item, stage: 'planned', implemented: false }
+    }
+    return agent(
+      stagePrompt(item, 'implement',
+        `PLAN produced ${tasks.length} task(s): ${JSON.stringify(tasks)}\n\n` +
+        `Run the TDD-shape gate first and halt if it blocks. Otherwise make your ` +
+        `worktree and work in it. Return the structured object.`),
+      { label: `implement:${item}`, phase: 'Implement', schema: IMPLEMENTED },
+    ).then((done) => ({ ...done, slug: item, stage: 'implemented' }))
   },
 )
 
 const parked = results.filter((r) => r?.stage === 'parked')
 const planned = results.filter((r) => r?.stage === 'planned')
-log(`done · ${planned.length} reached PLAN · ${parked.length} parked at the gate`)
+const implemented = results.filter((r) => r?.stage === 'implemented')
+const partial = implemented.filter((r) => r.tasks_done < r.tasks_total)
+log(`done · ${implemented.length} reached IMPLEMENT (${partial.length} partial) · ` +
+    `${planned.length} stopped after PLAN · ${parked.length} parked at a gate`)
 
-return { planned: planned.map((p) => p.slug), parked: parked.map((p) => p.slug), results }
+return {
+  implemented: implemented.map((r) => ({ slug: r.slug, branch: r.branch,
+                                         done: `${r.tasks_done}/${r.tasks_total}` })),
+  planned: planned.map((p) => p.slug),
+  parked: parked.map((p) => p.slug),
+  results,
+}

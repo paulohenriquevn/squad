@@ -65,8 +65,8 @@ def test_every_stage_is_labelled_and_grouped() -> None:
     labels = re.findall(r"label:\s*`([a-z]+):\$\{item\}`", code)
     phases = re.findall(r"phase:\s*'([A-Za-z]+)'", code)
 
-    assert labels == ["discover", "align", "judge", "plan"]
-    assert phases == ["Discover", "Align", "Judge", "Plan"]
+    assert labels == ["discover", "align", "judge", "plan", "implement"]
+    assert phases == ["Discover", "Align", "Judge", "Plan", "Implement"]
     for phase in phases:
         assert f"title: '{phase}'" in code, f"{phase} has no entry in meta.phases"
 
@@ -157,3 +157,57 @@ def test_the_judge_stage_reports_the_exit_code_it_measured_not_one_it_was_told()
 
     assert "exit_code" in code, "the judgement carries the code"
     assert "exit_code === 0" in code, "and clearing requires it to be zero"
+
+
+# ── IMPLEMENT: the first stage that writes ───────────────────────────────────
+
+def test_the_writing_stage_is_gated_on_tasks_existing() -> None:
+    """An empty outline reaching a writing agent is an agent asked to improvise
+    the change — and improvised changes are what the alignment gate three stages
+    back exists to prevent."""
+    code = _code()
+
+    assert "planned?.tasks ?? []" in code
+    assert "if (!tasks.length)" in code, "IMPLEMENT must not run on an empty plan"
+
+
+def test_the_scheduler_does_not_reimplement_the_tdd_shape_gate() -> None:
+    """`check_tdd_shape.py` is Python and this file cannot run it. A scheduler
+    that approximated it would be a second implementation of a rule that already
+    has one — the defect this kit found five separate times on 2026-09-02.
+
+    IMPLEMENT runs the real gate as its first action, the way JUDGE runs the real
+    scorer rather than accepting a score reported to it.
+    """
+    code = _code()
+    prose = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "check_tdd_shape" not in code, \
+        "the scheduler is judging TDD shape instead of the gate that owns it"
+    assert "check_tdd_shape" in prose, "and the reason must be recorded where it applies"
+
+
+def test_plan_returns_structure_because_a_gate_cannot_read_a_paragraph() -> None:
+    code = _code()
+
+    assert "schema: OUTLINE" in code
+    assert "required: ['slug', 'tasks']" in code
+
+
+def test_the_writing_stage_reports_both_runs_not_a_claim_about_them() -> None:
+    """RED before GREEN is checkable only if both runs are reported. A test
+    written after the code passes on the code you happened to write, and is
+    indistinguishable from one that verifies the requirement."""
+    code = _code()
+
+    assert "red_evidence" in code and "green_evidence" in code
+
+
+def test_a_partial_result_is_reported_as_partial() -> None:
+    """The stage that reports three of five with the second blocked tells a
+    reviewer what to do next. The one that reports five of five by loosening a
+    test tells them nothing and costs more than it saved."""
+    code = _code()
+
+    assert "tasks_done" in code and "tasks_total" in code
+    assert "partial" in code, "the summary must separate partial from complete"

@@ -74,7 +74,14 @@ from squad.layout import resolve
 #: all five were sent to PLAN unsigned. Three of those five PLAN agents refused
 #: the work themselves, which is the gate holding only where an agent chose to
 #: hold it.
-STAGES = ("discover", "align", "judge", "plan")
+#: IMPLEMENT is the first stage that WRITES, and it took until 2026-09-02 to add
+#: because a writing stage needed the question this file used to defer: what tool
+#: list, and writing WHERE. Both are answered in `stage-implement.md` — `Edit` and
+#: `Write` on top of the read-only four, and every edit inside a git worktree the
+#: agent makes itself, of the CONSUMER's repository, on a branch named after the
+#: item. The read-only stages can share one tree and do; two writers in one tree
+#: produce a diff neither of them authored.
+STAGES = ("discover", "align", "judge", "plan", "implement")
 
 DEFAULT_MODEL = "opus"
 

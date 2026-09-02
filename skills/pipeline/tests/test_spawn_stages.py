@@ -135,10 +135,17 @@ def test_no_template_promises_isolation_the_scheduler_does_not_give(tmp_path: Pa
                      if not line.lstrip().startswith("//"))
     scheduler_isolates = "isolation:" in code
 
+    # A template may INSTRUCT an agent to make a worktree — that is the repair for
+    # the defect below, and IMPLEMENT does exactly that. What it may not do is
+    # ASSERT it already has one, which is a claim about what the scheduler did.
+    _ASSERTS_ISOLATION = ("you run in your own git worktree",
+                          "in your own worktree over",
+                          "you are alone in this tree")
+
     _run(tmp_path)
     for stage in STAGES:
         text = (tmp_path / "agents" / f"{stage}.md").read_text(encoding="utf-8").lower()
-        promises = "your own worktree" in text or "you are alone in this tree" in text
+        promises = any(claim in text for claim in _ASSERTS_ISOLATION)
         assert promises == scheduler_isolates, (
             f"{stage}.md and the scheduler disagree: the template "
             f"{'promises' if promises else 'does not promise'} isolation and the "
@@ -261,3 +268,53 @@ def test_a_real_item_id_is_still_accepted(tmp_path: Path) -> None:
         capture_output=True, text=True, check=False)
 
     assert done.returncode == 0, done.stderr
+
+
+def test_only_the_implement_stage_can_write(tmp_path: Path) -> None:
+    """The four read-only stages share one tree safely and do. The writing stage
+    is the reason worktrees exist, and giving `Write` to a stage that does not
+    need it widens the blast radius of a prompt nobody has re-read lately."""
+    _run(tmp_path)
+    agents = tmp_path / "agents"
+
+    writers = set()
+    for stage in STAGES:
+        front = (agents / f"{stage}.md").read_text(encoding="utf-8").split("---")[1]
+        tools = {t.strip() for t in
+                 next(line for line in front.splitlines()
+                      if line.startswith("tools:")).split(":", 1)[1].split(",")}
+        if tools & {"Write", "Edit", "NotebookEdit"}:
+            writers.add(stage)
+
+    assert writers == {"implement"}, f"unexpected writing stage(s): {writers - {'implement'}}"
+
+
+def test_the_writing_stage_makes_its_own_worktree_of_the_consumer(tmp_path: Path) -> None:
+    """Not the harness's `isolation: 'worktree'`, which isolates the CWD's
+    repository — the KIT on a consumer run, not the project under work. That
+    defect was removed on 2026-09-02 rather than repaired; this is the repair."""
+    _run(tmp_path)
+    body = (tmp_path / "agents" / "implement.md").read_text(encoding="utf-8")
+
+    assert "git -C" in body and "worktree add" in body, \
+        "the stage must create a worktree of the repo it was pointed at"
+    assert "pipeline/" in body, "on a branch named after the item"
+
+
+def test_the_writing_stage_states_its_absolute_refusals(tmp_path: Path) -> None:
+    """An unattended agent with Edit and Write needs the list where it works, not
+    in a rule it may not read."""
+    _run(tmp_path)
+    body = (tmp_path / "agents" / "implement.md").read_text(encoding="utf-8")
+
+    for refusal in ("git push", "--no-verify", "--force", "BACKLOG.md",
+                    "threshold", "baseline"):
+        assert refusal in body, f"the stage does not refuse {refusal}"
+
+
+def test_the_writing_stage_runs_the_red_test_before_writing_code(tmp_path: Path) -> None:
+    _run(tmp_path)
+    body = (tmp_path / "agents" / "implement.md").read_text(encoding="utf-8")
+
+    assert "before writing any production code" in body
+    assert "record that it failed" in body, "a RED nobody watched fail is not a RED"
