@@ -50,10 +50,42 @@ from pathlib import Path
 
 MAP_REL = "rules/squad-map.md"
 
+
+def _find_ecosystem_dir(start: Path) -> Path | None:
+    """The directory holding `rules/`, whichever of the three layouts is on disk."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "conventions"))
+    try:
+        from ecosystem_utils import find_ecosystem_dir
+    except ImportError:
+        return None
+    return find_ecosystem_dir(start, require=False)
+
 #: The kit's own agents are the ones `.gitignore` excepts by name. Deriving them
 #: from `git ls-files` rather than restating the list keeps this from becoming a
 #: fourth copy — `tests/kit_agents.py` records what three copies already cost.
 def _kit_agents(root: Path) -> set[str]:
+    """The agents the KIT ships — never the project's domain specialists.
+
+    The install manifest answers this exactly, and is preferred: it is written by
+    the installer and states its own rule, *anything not here is the project's*.
+
+    `git ls-files agents/` is the fallback, and it is only correct in the kit's own
+    repository, where the derived specialists are gitignored. In a consumer the
+    project versions ALL of them, so the fallback returns the specialists too and
+    the map is asked to name agents it has no business knowing about — measured on
+    a consumer 2026-09-02, which reported two of its own domain specialists as
+    absent from a map that describes the kit.
+    """
+    manifest = root / ".kit-manifest.txt"
+    if manifest.is_file():
+        return {
+            Path(line).stem
+            for raw in manifest.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+            for line in [raw.split("#", 1)[0].strip()]
+            if line.startswith("agents/") and line.endswith(".md")
+            and not line.endswith("README.md")
+        }
+
     import subprocess
 
     out = subprocess.run(  # noqa: PLW1510
@@ -170,11 +202,18 @@ def check(root: Path) -> list[dict]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--root", type=Path, default=Path.cwd())
+    #: `Path.cwd()` was the default until 2026-09-02, and it made this gate
+    #: unrunnable in the layout most consumers have: under a `.claude/` install the
+    #: cwd is the PROJECT and the map is at `.claude/rules/squad-map.md`, so the
+    #: check exited FATAL every time and `verify_ecosystem` reported it as failed.
+    #: Measured on a real consumer the day the kit was reinstalled there — it had
+    #: never once run outside the kit's own repository.
+    ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    root = args.root.resolve()
+    root = (args.root.resolve() if args.root is not None
+            else _find_ecosystem_dir(Path.cwd()) or Path.cwd())
     if not (root / MAP_REL).is_file():
         print(f"FATAL: {MAP_REL} not found under {root}", file=sys.stderr)
         return 2

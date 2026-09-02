@@ -800,6 +800,18 @@ MANIFEST="$ECO/.kit-manifest.txt"
   # `hooks/`, `commands/` and `scripts/` had NO entries at all, so for those the
   # manifest answered by omission — the gap this closes. Listed per file, because
   # they have no unit above the file the way a skill does.
+  # `agents/` carries BOTH: the kit's four roles and the project's domain
+  # specialists, which the kit never writes. Only the four are listed, so a reader
+  # of the manifest can tell them apart — before this the manifest held
+  # `agents/README.md` alone, and `check_squad_map` could not tell a kit role from
+  # a specialist, so it asked the map to name agents it has no business knowing.
+  if [ -d "$SRC_DIR/agents" ]; then
+    # README is listed elsewhere; emitting it here too would duplicate the row.
+    ( cd "$SRC_DIR/agents" && find . -maxdepth 1 -name '*.md' \
+        -not -name 'README.md' -print ) \
+      | sed 's|^\./|agents/|' | sort
+  fi
+
   for item in hooks commands mechanisms squad; do
     [ -d "$SRC_DIR/$item" ] || continue
     ( cd "$SRC_DIR/$item" && find . -mindepth 1 \( -type f -o -type l \) \

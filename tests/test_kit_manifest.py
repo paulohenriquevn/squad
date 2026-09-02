@@ -123,16 +123,39 @@ def test_no_specialist_is_ever_installed(tmp_path: Path) -> None:
     )
 
 
-def test_the_manifest_does_not_claim_agents_it_did_not_install(tmp_path: Path) -> None:
+def test_the_manifest_lists_the_agents_the_kit_installs_and_no_others(
+        tmp_path: Path) -> None:
     """A lying manifest is worse than none: the consumer uses it to decide what is
-    theirs."""
+    theirs — and the lie ran in both directions.
+
+    Until 2026-09-02 this asserted the manifest held `agents/README.md` ALONE,
+    while the installer copied the kit's four roles beside it. The manifest states
+    its own rule in its header — *anything not here is the project's* — so omitting
+    them declared kairos, iris, daedalus and hermes to be the consumer's work. A
+    project reading it would conclude it owned four files the next install
+    overwrites.
+
+    It was measured downstream before it was noticed here: `check_squad_map` reads
+    the manifest to tell a kit role from a domain specialist, found no kit roles
+    listed, fell back to `git ls-files agents/` — correct only in the kit's own
+    repository, where specialists are gitignored — and asked a consumer's map to
+    name two of that project's own domain specialists.
+
+    What must NOT appear is a specialist: the kit ships none, and an install that
+    brought one would be carrying another ecosystem's domain into this project.
+    """
     target = tmp_path / "consumidor"
     _install(target)
-    listed = [
+    listed = sorted(
         line.strip() for line in (target / MANIFEST).read_text(encoding="utf-8").splitlines()
         if line.strip().startswith("agents/")
-    ]
-    assert listed == ["agents/README.md"], listed
+    )
+
+    assert listed == sorted({f"agents/{p.name}" for p in (_REPO / "agents").glob("*.md")}), listed
+    assert len(listed) == len(set(listed)), f"duplicate rows: {listed}"
+    on_disk = sorted(f"agents/{p.name}"
+                     for p in (target / ".claude" / "agents").glob("*.md"))
+    assert listed == on_disk, "the manifest and the directory disagree about what arrived"
 
 
 # ---------------------------------------------------------------------------

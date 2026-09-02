@@ -73,13 +73,42 @@ def claimed_count(map_path: Path) -> int | None:
     return int(found.group(1)) if found else None
 
 
+def declared_by_project(root: Path) -> set[str]:
+    """Skills the CONSUMER declares as its own, in `rules/auxiliary-skills.txt`.
+
+    `map.md` is the KIT's inventory: it lists what the kit ships and cannot know
+    what a project wrote for itself. Without reading this file the checker asks a
+    consumer's domain skills for a row in a map they do not belong in, and every
+    finding it produces is about that project's own design.
+
+    `check_xrefs.py` has read this file since the day it was added, and this one
+    did not — a HALF exemption, which is the shape `_is_auto_generated`'s own
+    docstring warns about: the first version of that fix exempted one check and
+    left its sibling charging, traded 26 WARN for 3, and looked like a fix.
+    Measured here on 2026-09-02: a consumer with three domain skills got
+    `missing_from_map` ×3, `missing_sop` ×3 and `count_disagrees`, none of them
+    about the kit.
+    """
+    declared = root / "rules" / "auxiliary-skills.txt"
+    if not declared.is_file():
+        return set()
+    return {
+        line.split("#", 1)[0].strip()
+        for line in declared.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        if line.split("#", 1)[0].strip()
+    }
+
+
 def check(root: Path) -> list[str]:
     skills_dir = root / "skills"
     map_path = skills_dir / "map.md"
     if not map_path.is_file():
         return [f"missing_map: {map_path} does not exist"]
 
-    on_disk = {p.parent.name for p in skills_dir.glob("*/SKILL.md")}
+    #: The project's own skills leave the comparison entirely: they are not in the
+    #: kit's map, they owe it no row, and the count is the kit's count.
+    project_owned = declared_by_project(root)
+    on_disk = {p.parent.name for p in skills_dir.glob("*/SKILL.md")} - project_owned
     listed = listed_skills(map_path)
 
     findings = []
