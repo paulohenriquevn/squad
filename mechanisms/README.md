@@ -81,6 +81,8 @@ which is why the rule is now computed rather than requested.
 | `squad_lead.py` | Keep an executing session moving, without deciding anything for it |
 | `pipeline_orchestrator.py` | Schedule many backlog items through the cycle, one stage each, concurrently |
 | `pipeline_workflow.js` | The `backlog-pipeline` workflow definition the orchestrator drives |
+| `start_lead_session.sh` | The lead as a named Claude session — addressable by peers, and the only shape that can invoke the pipeline |
+| `claude_stream.py` | Talking to Claude Code over its own protocol: verdict, cost and session id as fields instead of prose to be recognised |
 | `fleet_idle.py` | Where the fleet's time went, from the lead's own log: idle vs productive, per decision kind, and which sessions were never handed work |
 | `fleet_wall.sh` | One tmux session showing every executing session side by side, read-only by default, plus a live status pane |
 | `fleet_status.sh` | Every session at once, from the shell: what each is doing, what the lead handed out, what the queue would pick |
