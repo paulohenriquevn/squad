@@ -146,3 +146,40 @@ def test_the_wall_matches_only_fleet_sessions() -> None:
     assert not pattern.search("lead"), "the lead's pane is raw jsonl; the status pane replaces it"
     assert not pattern.search("wall")
     assert not pattern.search("my-other-work"), "a stray session is not a fleet member"
+
+
+def test_the_report_asks_tmux_how_wide_the_pane_is() -> None:
+    """`tput` needs a terminal and COLUMNS is not exported through a subshell, so
+    inside the wall's status pane both answered for the wrong thing: a 110-column
+    pane formatted for 100, and every other line wrapped. tmux sets `TMUX_PANE`
+    for the process it runs, and tmux is the one that knows."""
+    source = SCRIPT.read_text(encoding="utf-8")
+
+    assert "TMUX_PANE" in source
+    assert "pane_width" in source, "it must ask tmux, not guess"
+    assert "tput cols" in source, "and still work outside tmux"
+
+
+def test_the_wall_does_not_run_the_report_through_watch() -> None:
+    """`watch` runs the command in its own environment, which drops TMUX_PANE —
+    the report then measures the wrong pane. A plain loop keeps it."""
+    source = WALL.read_text(encoding="utf-8")
+
+    # Only the lines that RUN something — a comment explaining why `watch` is
+    # avoided, and the word "watchdog", must not fail this.
+    commands = [ln for ln in source.splitlines()
+                if ln.strip() and not ln.lstrip().startswith("#")]
+    running = "\n".join(commands)
+
+    assert "fleet_status.sh" in running, "the wall shows the report somewhere"
+    for line in commands:
+        assert not line.lstrip().startswith("watch "), line
+        assert '"watch ' not in line and "'watch " not in line, line
+
+
+def test_the_status_report_excludes_the_wall_itself() -> None:
+    """Run inside the wall, a report listing every session lists the wall — whose
+    pane is this report. The reader sees the report inside the report."""
+    source = SCRIPT.read_text(encoding="utf-8")
+
+    assert "FLEET_PATTERN" in source, "the report must filter, not list everything"

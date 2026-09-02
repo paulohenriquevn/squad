@@ -69,8 +69,18 @@ fi
 # sessions are gone, and a dead pane looks exactly like an idle one.
 tmux kill-session -t "$NAME" 2>/dev/null
 
+# Each fleet session was created detached, so tmux sized its window to the 80x24
+# default and it stays that size no matter how big the pane showing it is — the
+# rest of the pane renders as dots. `aggressive-resize` makes a window follow the
+# client currently looking at it, which is what a wall needs. It affects display
+# only, it is reversible, and without it every pane wastes most of its area.
+for s in "${SESSIONS[@]}"; do
+  tmux set-window-option -t "$s" aggressive-resize on >/dev/null 2>&1
+done
+
 first="${SESSIONS[0]}"
-tmux new-session -d -s "$NAME" "TMUX= tmux attach $MODE -t '$first'"
+tmux new-session -d -s "$NAME" -x "${WALL_COLS:-220}" -y "${WALL_ROWS:-56}" \
+  "TMUX= tmux attach $MODE -t '$first'"
 for s in "${SESSIONS[@]:1}"; do
   tmux split-window -t "$NAME" "TMUX= tmux attach $MODE -t '$s'"
   tmux select-layout -t "$NAME" tiled >/dev/null
@@ -78,8 +88,11 @@ done
 
 # One cell is the report rather than a session: it says what the lead just decided
 # and what the selector would pick, which is the half of the picture no pane shows.
-tmux split-window -t "$NAME" "watch -t -n 10 -c '$_here/fleet_status.sh' 2>/dev/null \
-                              || while true; do clear; '$_here/fleet_status.sh'; sleep 10; done"
+# A plain loop rather than `watch`: watch runs the command in its own environment
+# and the report then formats itself for the wrong width. A loop keeps TMUX_PANE,
+# which is how the report asks tmux how wide the pane actually is.
+tmux split-window -t "$NAME" \
+  "while true; do clear; '$_here/fleet_status.sh'; sleep 10; done"
 tmux select-layout -t "$NAME" tiled >/dev/null
 
 # The wall's own bar names what is on screen; each inner session draws its own

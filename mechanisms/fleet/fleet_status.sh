@@ -35,7 +35,14 @@ done
 # than a pane in a 2x2 wall — every line wrapped and the report became unreadable
 # exactly where it is most useful. `tput` needs a terminal; inside a pipe there is
 # none, so COLUMNS answers and 100 is the last resort.
-WIDTH="${COLUMNS:-$(tput cols 2>/dev/null || echo 100)}"
+# Inside a tmux pane, ASK TMUX. `tput` needs a terminal and `COLUMNS` is not
+# exported through `watch`, so both answer for the wrong thing — measured in the
+# wall's status pane, where a 110-column pane was formatted for 100 and every
+# other line wrapped. `$TMUX_PANE` is set by tmux for the process it runs.
+if [ -n "${TMUX_PANE:-}" ] && command -v tmux >/dev/null 2>&1; then
+  WIDTH="$(tmux display -p -t "$TMUX_PANE" '#{pane_width}' 2>/dev/null)"
+fi
+WIDTH="${WIDTH:-${COLUMNS:-$(tput cols 2>/dev/null || echo 100)}}"
 [ "$WIDTH" -lt 40 ] 2>/dev/null && WIDTH=40
 BODY=$((WIDTH - 8))
 
@@ -81,10 +88,13 @@ render() {
   fi
 
   local names
-  # `lead` is excluded here and rendered below: its pane is the watchdog's own
-  # jsonl, so printing it as "what the session is doing" shows raw log lines where
-  # every other row shows an agent working.
-  names="$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep -vx lead | sort)"
+  # The same pattern `fleet_wall.sh` uses, for the same reason and with one more:
+  # run INSIDE the wall, a report that lists every session lists the wall itself,
+  # and the wall's pane is this report — so the reader sees the report inside the
+  # report. `lead` is excluded too; its pane is raw jsonl, and the block below
+  # renders its decisions in a form a person can read.
+  names="$(tmux list-sessions -F '#{session_name}' 2>/dev/null \
+           | grep -E "${FLEET_PATTERN:-^squad[0-9]+$}" | sort)"
   [ -n "$ONLY" ] && names="$ONLY"
 
   for name in $names; do
