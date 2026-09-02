@@ -42,6 +42,17 @@ NEEDS_SPLIT
 # emitted nothing; the watchdog then restarted B-059 because no event had
 # appeared, which is the only conclusion it could draw.
 AWAITING_HUMAN
+
+# Release cycle explicitly declares this state as "chain paused at the
+# human-approval gate. Resume automatically once the PR merges" (cycle-release.md
+# § Verdicts). Same semantics as AWAITING_HUMAN, different token. Observed on
+# 2026-08-31 in a consumer: B-167 emitted PR_OPEN_AWAITING_APPROVAL after commits
+# + push + `gh pr create`; SELECT re-invoked the item because the verdict was not
+# in this list, so the watchdog treated it as available when it was in fact paused
+# at an open PR. The queue spent a day re-selecting an item nothing could advance.
+# Adding it makes the pause visible to the same reader that made AWAITING_HUMAN
+# visible.
+PR_OPEN_AWAITING_APPROVAL
 AWAITING_REVIEW
 REJECTED
 NOT_VALIDATED
