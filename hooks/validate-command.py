@@ -23,6 +23,8 @@ matching, so a commit MESSAGE mentioning `main` is not read as a branch.
 """
 from __future__ import annotations
 
+import fnmatch
+import json
 import os
 import re
 import subprocess
@@ -229,6 +231,77 @@ def check_package_install(command: str, cwd: Path) -> str | None:
     return None
 
 
+#: Commands that put a file's CONTENT somewhere the session can see it. Not
+#: exhaustive and cannot be — `python3 -c "print(open('.env').read())"` is not
+#: here and will not be caught. See `check_credential_read`.
+_READERS_RE = re.compile(
+    r"(^|\s|\||;|&&|\()\s*(sudo\s+)?"
+    r"(cat|bat|less|more|head|tail|nl|strings|xxd|od|hexdump|base64|"
+    r"grep|rg|ag|awk|sed|cut|sort|uniq|tee|cp|scp|rsync|curl|wget)(\s|$)")
+
+
+def _credential_globs(project_dir: Path) -> list[str]:
+    """The path shapes `settings.json` already refuses to Read.
+
+    Read from that file rather than restated here, and the reason is the defect
+    this whole guard exists for. `permissions.deny` refused `Read` on these paths
+    and nothing else, so `cat` returned them and `Edit` rewrote them. A second
+    list of the same shapes, kept by hand in Python beside the JSON one, is how
+    that gap reopens: on 2026-09-02 this kit found FOUR separate cases of a rule
+    living in one file and missing from another, and stopped adding new ones.
+    """
+    for candidate in (project_dir / ".claude" / "settings.json",
+                      project_dir / "settings.json",
+                      Path(__file__).resolve().parent.parent / "settings.json"):
+        try:
+            rules = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        deny = rules.get("permissions", {}).get("deny", [])
+        globs = [r[5:-1] for r in deny if r.startswith("Read(") and r.endswith(")")]
+        if globs:
+            return globs
+    return []
+
+
+def check_credential_read(command: str, project_dir: Path) -> str | None:
+    """Refuse a shell command that reads a path `settings.json` denies to `Read`.
+
+    WHAT THIS IS AND IS NOT
+    -----------------------
+    The deny list refused ONE tool. `permissions.allow` carries `Bash(*)`, so
+    `cat .env` returned the file that `Read(.env)` had just refused, and `Edit`
+    was not denied at all — an agent could not read a credential file and could
+    rewrite it blind. Measured in a consumer on 2026-09-02: 157 versioned paths
+    refused to `Read`, 79 of them source code, and not one refusal a session
+    could not step around in a single command.
+
+    This closes the common door. It does NOT make the deny list a sandbox, and
+    saying otherwise would make it the thing it replaces — a guard that reads as
+    protection and is not. A determined session reaches the same bytes through
+    `python3 -c`, a heredoc, an editor, or a path this pattern does not spell.
+    What it stops is the accident and the habit, which is most of what happens.
+    """
+    globs = _credential_globs(project_dir)
+    if not globs or not _READERS_RE.search(command):
+        return None
+
+    for token in re.findall(r"[\w./~@+-]+", command):
+        name = token.rsplit("/", 1)[-1]
+        for glob in globs:
+            bare = glob.removeprefix("**/")
+            if fnmatch.fnmatch(token, glob) or fnmatch.fnmatch(token, bare) \
+                    or fnmatch.fnmatch(name, bare):
+                return (
+                    f"`{token}` matches `{glob}`, which `settings.json` refuses to "
+                    f"Read. A shell command that reads it returns the same bytes "
+                    f"the deny rule exists to withhold.\n\n"
+                    f"If the file genuinely holds no credential, the glob is wrong "
+                    f"and belongs narrowed in `settings.json` — not stepped around "
+                    f"here. If it does hold one, nothing in this session needs it.")
+    return None
+
+
 def main() -> None:
     c = create_context(PreToolUseContext)
     command = c.tool_input.get("command", "")
@@ -247,6 +320,7 @@ def main() -> None:
         check_zone(command, project_dir) if "study-material/" in command else None,
         check_commit_message(command) if "git" in command else None,
         check_package_install(command, Path.cwd()),
+        check_credential_read(command, project_dir),
     ):
         if reason:
             c.output.exit_block(reason)
