@@ -67,7 +67,7 @@ mkdir -p "$MARKERS"
 echo "==> Fleet of $SIZE over $PROJECT (cores: $cores)"
 
 names=()
-started=()
+checked=()
 for i in $(seq 1 "$SIZE"); do
   name="squad$i"
   names+=("$name")
@@ -84,6 +84,12 @@ for i in $(seq 1 "$SIZE"); do
     tmux pipe-pane -t "$name" 2>/dev/null || true
     tmux pipe-pane -t "$name" "cat >> $MARKERS/$name.log"
     echo "    $name already running — left alone, marker re-pointed"
+    # Checked too, and this is not symmetry for its own sake. A preserved session
+    # is one this script did NOT watch start, so it is the likeliest of the two to
+    # be sitting in a dialog nobody answered — that is how three lanes spent forty
+    # minutes in a first-run prompt while the fleet reported them idle. Checking
+    # only what we just created verifies the case we already saw succeed.
+    checked+=("$name")
     continue
   fi
   # `claude` with permissions already granted: this session answers to the watchdog,
@@ -94,12 +100,15 @@ for i in $(seq 1 "$SIZE"); do
   # to tell a session that is thinking from one that has handed the turn back.
   tmux pipe-pane -t "$name" "cat >> $MARKERS/$name.log"
   echo "    $name started"
-  started+=("$name")
+  checked+=("$name")
 done
 
-# Every session just created is CHECKED, and the fleet does not open on the ones
-# that are not at a prompt. Before this, `start_fleet.sh` printed "$name started"
-# for a session it had only asked tmux to create.
+# Every session in the fleet is CHECKED — the ones just created and the ones left
+# alone — and the fleet does not open on any that are not at a prompt. Before
+# this, `start_fleet.sh` printed "$name started" for a session it had only asked
+# tmux to create, and the first version of the check looked at exactly those,
+# leaving a preserved session unexamined: the one most likely to be stuck, since
+# nobody watched it start.
 #
 # Measured on 2026-09-02, right after the CLI was upgraded to 2.1.258: three lanes
 # sat in a first-run dialog nobody had seen before — "Try the new fullscreen
@@ -108,12 +117,12 @@ done
 # have dispatched work into sessions that could not take it. Nothing in the fleet
 # could tell "idle" from "never started", because nothing had looked.
 stuck=()
-for name in "${started[@]}"; do
+for name in "${checked[@]}"; do
   python3 "$_here/session_ready.py" "$name" --quiet || stuck+=("$name")
 done
 if [ ${#stuck[@]} -gt 0 ]; then
   echo "" >&2
-  echo "==> ${#stuck[@]} of ${#started[@]} new session(s) never reached a prompt: ${stuck[*]}" >&2
+  echo "==> ${#stuck[@]} of ${#checked[@]} fleet session(s) never reached a prompt: ${stuck[*]}" >&2
   echo "    The watchdog is NOT being started. A fleet whose lanes are stuck reports" >&2
   echo "    them as idle, and the lead hands work to sessions that cannot take it." >&2
   exit 1
