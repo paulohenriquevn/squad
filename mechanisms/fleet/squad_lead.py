@@ -569,12 +569,16 @@ class Lead:
             return None, "agents are off (pass --agents-when-stuck)"
         if self.project is None:
             return None, "no project to run the agent in"
+        # The fleet's clock when there is a fleet: one cooldown per agent, not one
+        # per agent per session. Falls back to this lead's own dict for a single
+        # session, where the two are the same thing.
+        clock = self.fleet.asked_at if self.fleet is not None else self.agent_asked
         now = time.time()
-        last = self.agent_asked.get(agent, 0.0)
+        last = clock.get(agent, 0.0)
         if now - last < self.agent_cooldown:
             return None, (f"{agent} was asked {int(now - last)}s ago; "
                           f"waiting out the {self.agent_cooldown}s cooldown")
-        self.agent_asked[agent] = now
+        clock[agent] = now
         prompt = (f"Use the `{agent}` subagent for this, and report its answer "
                   f"verbatim without adding to it.\n\n{question}")
         try:
@@ -1196,6 +1200,21 @@ class Fleet:
     """
     #: session name -> the item it was last handed.
     taken: dict[str, str] = field(default_factory=dict)
+
+    #: agent name -> when it was last consulted, shared across the whole fleet.
+    #:
+    #: It lives HERE and not in `Lead` because `main()` builds one `Lead` per
+    #: session, each with its own `agent_asked`, so a per-lead cooldown is a
+    #: cooldown per (agent, session). The question these consultations ask — "the
+    #: queue is stopped, what now" — is about the QUEUE, which is one thing; three
+    #: leads asked it of the same agent within their own clocks.
+    #:
+    #: Measured on a consumer 2026-09-02: five consultations to `hermes-scrum-master`
+    #: in 36 minutes, gaps of 96s, 1035s, 852s and 159s against a declared 1800s
+    #: cooldown, every one of them answered rather than barred, all five carrying the
+    #: same question about the same two items. They cost 49% of the observed window
+    #: and produced no information the first had not.
+    asked_at: dict[str, float] = field(default_factory=dict)
 
     @classmethod
     def restored(cls, log_path: Path | None) -> "Fleet":

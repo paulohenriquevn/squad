@@ -8,6 +8,7 @@ failures `squad-lead`'s README records, all of which are a session being wrong.
 """
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -1244,3 +1245,45 @@ def test_the_lead_accepts_the_budget_flag() -> None:
               / "mechanisms" / "fleet" / "squad_lead.py").read_text(encoding="utf-8")
 
     assert '"--agent-budget-usd"' in source
+
+
+def test_the_agent_cooldown_is_shared_across_the_fleet() -> None:
+    """`main()` builds one Lead per session, so a per-Lead cooldown is a cooldown
+    per (agent, session) — and the question these consultations carry is about the
+    QUEUE, which is one thing.
+
+    Measured on a consumer 2026-09-02: five consultations to the same agent in 36
+    minutes, gaps of 96s, 1035s, 852s and 159s against a declared 1800s cooldown,
+    every one answered rather than barred, all five asking about the same two
+    items. They cost 49% of the observed window and told nobody anything the first
+    had not.
+    """
+    from squad_lead import Fleet, Lead  # noqa: PLC0415
+
+    fleet = Fleet()
+    first = Lead(session="squad1", agents_when_stuck=True, fleet=fleet,
+                 project=Path("/nonexistent"), agent_cooldown=1800)
+    second = Lead(session="squad2", agents_when_stuck=True, fleet=fleet,
+                  project=Path("/nonexistent"), agent_cooldown=1800)
+
+    fleet.asked_at["hermes-scrum-master"] = time.time()
+
+    answer, note = second.ask_agent("hermes-scrum-master", "the queue is stopped")
+
+    assert answer is None, "a second session must not re-ask inside the cooldown"
+    assert "cooldown" in note, note
+    _ = first
+
+
+def test_a_single_session_still_has_its_own_cooldown() -> None:
+    """With one session there is no fleet, and the two clocks are the same thing —
+    the fix must not turn a lone lead into one that never consults."""
+    from squad_lead import Lead  # noqa: PLC0415
+
+    alone = Lead(session="squad1", agents_when_stuck=True, fleet=None,
+                 project=Path("/nonexistent"), agent_cooldown=1800)
+    alone.agent_asked["hermes-scrum-master"] = time.time()
+
+    answer, note = alone.ask_agent("hermes-scrum-master", "the queue is stopped")
+
+    assert answer is None and "cooldown" in note
