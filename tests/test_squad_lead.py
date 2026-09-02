@@ -1217,3 +1217,30 @@ def test_an_empty_screen_keeps_the_default(tmp_path: Path) -> None:
     from squad_lead import DEFAULT_LANGUAGE, detect_language
 
     assert detect_language("") == DEFAULT_LANGUAGE == "en"
+
+
+def test_start_fleet_passes_the_budget_only_when_asked(tmp_path: Path) -> None:
+    """`AGENT_BUDGET_USD` reaches the lead, and its absence changes nothing.
+
+    The default ceiling lives in `squad_lead.py`, whose own comment says 6.00 was
+    measured "with room for a larger project". A real project exceeded it on
+    2026-08-31: the lead exited 1 and the whole fleet stopped — over a ceiling,
+    not over the work. Raising it must not mean editing the script that carries
+    it, and passing the flag unconditionally would override the default with the
+    same number for everyone.
+    """
+    script = (Path(__file__).resolve().parents[1]
+              / "mechanisms" / "fleet" / "start_fleet.sh").read_text(encoding="utf-8")
+
+    assert 'AGENT_BUDGET_USD="${AGENT_BUDGET_USD:-}"' in script, "no knob"
+    assert "${AGENT_BUDGET_USD:+--agent-budget-usd $AGENT_BUDGET_USD}" in script, (
+        "the flag must be conditional: unset means the script's default stands")
+
+
+def test_the_lead_accepts_the_budget_flag() -> None:
+    """The other half — a knob wired to a flag that does not exist is a knob that
+    silently does nothing."""
+    source = (Path(__file__).resolve().parents[1]
+              / "mechanisms" / "fleet" / "squad_lead.py").read_text(encoding="utf-8")
+
+    assert '"--agent-budget-usd"' in source

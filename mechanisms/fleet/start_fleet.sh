@@ -50,6 +50,12 @@ SIZE="${2:-$default}"
 
 MARKERS="${MARKERS:-/tmp/squad-markers}"
 LOG="${LOG:-/tmp/squad-lead.jsonl}"
+# The per-consultation ceiling the lead passes to `--max-budget-usd`. The default
+# lives in `squad_lead.py` and its comment says 6.00 was measured "with room for a
+# larger project" — a real one exceeded it on 2026-08-31 and the lead exited 1,
+# stopping the whole fleet over a ceiling, not over the work. The knob is here
+# because raising it must not mean editing the script that carries it.
+AGENT_BUDGET_USD="${AGENT_BUDGET_USD:-}"
 mkdir -p "$MARKERS"
 
 echo "==> Fleet of $SIZE over $PROJECT (cores: $cores)"
@@ -95,7 +101,9 @@ tmux new-session -d -s lead -c "$PROJECT" \
   "python3 $PROJECT/.claude/mechanisms/fleet/squad_lead.py \
      --session $joined --project $PROJECT \
      --marker-dir $MARKERS --log $LOG \
-     --idle 120 --poll 20 --agents-when-stuck 2>&1 | tee -a /tmp/squad-lead-run.log"
+     --idle 120 --poll 20 --agents-when-stuck \
+     ${AGENT_BUDGET_USD:+--agent-budget-usd $AGENT_BUDGET_USD} \
+     2>&1 | tee -a /tmp/squad-lead-run.log"
 
 sleep 2
 echo "==> Watching: $joined"
