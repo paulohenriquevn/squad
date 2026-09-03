@@ -361,7 +361,7 @@ SQUAD_FACILITATOR = "hermes-scrum-master"
 @dataclass
 class Decision:
     action: str          # confirm · escalate · wait · exhausted · stalled · start
-                         # · asked · choose
+                         # · asked · choose · still_stalled
     reason: str
     option: str = ""
     item: str = ""
@@ -446,6 +446,14 @@ class Lead:
     #: True once a handed-back turn has been reported, so it is not repeated every
     #: poll. Cleared when the session moves again.
     reported_stall: bool = False
+    #: When that report went out, so the stall can be RE-reported on a heartbeat
+    #: rather than never. Silencing every later poll was measured on 2026-09-03:
+    #: the lead was alive and sleeping while its log had been still for 9h11m, and
+    #: from outside a silent lead is indistinguishable from a dead one.
+    stall_reported_at: float = 0.0
+    #: How long a stall may go unmentioned. Long enough that the log stays
+    #: readable, short enough that a person checking it learns the watch is alive.
+    heartbeat_seconds: int = 1800
     #: How many times each item has been unblocked, and every question already
     #: answered. Both are stopping criteria, not statistics.
     interventions: dict[str, int] = field(default_factory=dict)
@@ -767,11 +775,18 @@ class Lead:
                 capture_output=True, text=True, timeout=60, cwd=str(self.project))
         except (OSError, subprocess.SubprocessError) as error:
             return None, f"SELECT could not be run ({error})"
-        if out.returncode != 0:
-            return None, f"SELECT exited {out.returncode}: {out.stderr.strip()[:200]}"
+        # The exit code is read AFTER stdout, not before. SELECT ends on
+        # `return 0 if verdict == "ITEM_SELECTED" else 1`, so a held backlog always
+        # exits 1 with an empty stderr while the reason sits on stdout. Checking the
+        # code first made the branch below unreachable and the lead logged
+        # `SELECT exited 1: ` — an inability to act published as a blank. Measured on
+        # the runner 2026-09-03: three lanes idle 10h33m behind that empty string.
         try:
             answer = json.loads(out.stdout)
         except json.JSONDecodeError as error:
+            if out.returncode != 0:
+                detail = out.stderr.strip() or out.stdout.strip()
+                return None, f"SELECT exited {out.returncode}: {detail[:200] or 'no output'}"
             return None, f"SELECT returned no usable answer ({error})"
         verdict = answer.get("verdict", "")
         if verdict != "ITEM_SELECTED":
@@ -873,7 +888,14 @@ class Lead:
                 why = ("every item in the queue is held — " + "; ".join(held[:3]))
 
             if self.reported_stall:
-                return Decision("wait", "no menu is waiting")
+                # Quiet, but not mute. Past the heartbeat the same stall is stated
+                # again — with its real reason, which is never "no menu is waiting":
+                # the menu is absent because the backlog is walled.
+                if time.time() - self.stall_reported_at < self.heartbeat_seconds:
+                    return Decision("wait", "no menu is waiting")
+                return Decision(
+                    "still_stalled",
+                    f"unchanged after {int(idle // 60)} minute(s) idle: {why}")
             # Either SELECT has nothing to hand out, or it keeps naming one this lead
             # already started. Both are a person's to clear, and both are reported with
             # SELECT's own words rather than a summary of them.
@@ -1378,12 +1400,20 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             # the lead keeps watching — acting on it would be the lead deciding what
             # it just paid an agent to think about.
             lead.reported_stall = True
+            lead.stall_reported_at = time.time()
             time.sleep(poll)
             continue
 
         if decision.action in ("start", "choose"):
             # The session has work again. The next stall is a new fact.
             lead.reported_stall = False
+            time.sleep(poll)
+            continue
+
+        if decision.action == "still_stalled":
+            # The heartbeat. Same stall, restated so the log proves the watch is
+            # running; the clock restarts so the next one is a heartbeat away.
+            lead.stall_reported_at = time.time()
             time.sleep(poll)
             continue
 
@@ -1397,6 +1427,7 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
             # correctly and then died, so a restart was needed before it could see
             # anything again.
             lead.reported_stall = True
+            lead.stall_reported_at = time.time()
             time.sleep(poll)
             continue
 

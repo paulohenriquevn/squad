@@ -37,6 +37,7 @@ import pytest
 _SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "backlog-review" / "scripts"
 sys.path.insert(0, str(_SCRIPTS))
 
+from backlog_status import live_blockers as writer_live_blockers  # noqa: E402
 from check_backlog_structure import (  # noqa: E402
     Item,
     carries_prose,
@@ -44,7 +45,6 @@ from check_backlog_structure import (  # noqa: E402
     impediment_edges,
 )
 from select_backlog_item import live_blockers  # noqa: E402
-from backlog_status import live_blockers as writer_live_blockers  # noqa: E402
 
 #: Real shapes, taken from a consumer's registry rather than invented. The prose
 #: ones are the majority: when the field was first measured, seven of eight items

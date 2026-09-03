@@ -1288,3 +1288,81 @@ def test_a_single_session_still_has_its_own_cooldown() -> None:
     answer, note = alone.ask_agent("hermes-scrum-master", "the queue is stopped")
 
     assert answer is None and "cooldown" in note
+
+
+# ── SELECT's exit code is a verdict, not a failure ────────────────────────────
+# Measured on the runner 2026-09-03: three lanes idle 10h33m and the lead's log
+# reading `SELECT exited 1: ` — the reason blank. The selector ends
+# `return 0 if result.verdict == "ITEM_SELECTED" else 1`, so BACKLOG_BLOCKED
+# ALWAYS exits 1 with an empty stderr while the full verdict sits on stdout. The
+# lead checked the returncode before parsing, so the branch that reports the real
+# reason was unreachable: an inability to act published as a blank.
+
+
+def _selector_answering(tmp_path: Path, payload: str, code: int) -> Path:
+    project = tmp_path / "consumer"
+    script = project / ".claude/skills/backlog-review/scripts/select_backlog_item.py"
+    script.parent.mkdir(parents=True)
+    script.write_text(
+        "import sys\n"
+        f"sys.stdout.write({payload!r})\n"
+        f"sys.exit({code})\n",
+        encoding="utf-8")
+    (project / "BACKLOG.md").write_text("# Backlog\n", encoding="utf-8")
+    return project
+
+
+BLOCKED_ANSWER = (
+    '{"verdict": "BACKLOG_BLOCKED", "item_id": null, "reason": '
+    '"26 selectable item(s) remain and every one is held", "queue": []}')
+
+
+def test_a_blocked_backlog_is_reported_in_the_selectors_own_words(tmp_path: Path) -> None:
+    lead = Lead(session="test", project=_selector_answering(tmp_path, BLOCKED_ANSWER, 1))
+    item, reason = lead.next_item()
+    assert item is None
+    assert "every one is held" in reason, (
+        f"the lead reported {reason!r} instead of the verdict on stdout")
+    assert "exited 1" not in reason
+
+
+def test_an_item_is_started_even_when_select_exits_nonzero(tmp_path: Path) -> None:
+    # A selector that names an item but exits nonzero must not cost the lead the item.
+    answer = '{"verdict": "ITEM_SELECTED", "item_id": "B-136", "reason": "oldest", "queue": ["B-136"]}'
+    lead = Lead(session="test", project=_selector_answering(tmp_path, answer, 3))
+    item, _ = lead.next_item()
+    assert item == "B-136"
+
+
+def test_a_selector_that_writes_nothing_still_reports_its_exit_code(tmp_path: Path) -> None:
+    # The genuine crash must stay legible — this is what the returncode is FOR.
+    lead = Lead(session="test", project=_selector_answering(tmp_path, "", 2))
+    item, reason = lead.next_item()
+    assert item is None
+    assert "exited 2" in reason
+
+
+# ── a silent lead and a dead lead must not look the same ──────────────────────
+# Measured on the runner 2026-09-03: the lead process was alive (10h48m elapsed,
+# sleeping) and its log's last line was 9h11m old. After the first stall report
+# `reported_stall` silences every later poll with the reason "no menu is waiting"
+# — which is not even the true reason; the backlog was entirely walled. Reporting
+# once was right; reporting nothing ever again is the same defect as a lane holding
+# unsent work: from outside, healthy and hung are identical.
+
+
+def test_a_stall_that_persists_is_re_reported_on_the_heartbeat() -> None:
+    lead = _lead()
+    lead.reported_stall = True
+    lead.stall_reported_at = time.time() - (lead.heartbeat_seconds + 1)
+    decision = lead.decide("❯ \n", idle=99_999)
+    assert decision.action == "still_stalled", (
+        f"the lead answered {decision.action!r}/{decision.reason!r} instead of a heartbeat")
+    assert "9999" in decision.reason or "minute" in decision.reason
+
+
+def test_a_fresh_stall_stays_quiet_until_the_heartbeat_is_due() -> None:
+    lead = _lead()
+    lead.reported_stall = True
+    lead.stall_reported_at = time.time()
+    assert lead.decide("❯ \n", idle=99_999).action == "wait"

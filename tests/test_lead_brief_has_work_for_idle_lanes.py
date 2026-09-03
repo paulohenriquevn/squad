@@ -49,8 +49,6 @@ def test_an_idle_lane_has_somewhere_to_go() -> None:
 def test_the_consumers_backlog_still_wins() -> None:
     """A fleet that prefers auditing itself to shipping the product is worse than
     an idle one — it looks busy."""
-    brief = _brief_text()
-
     assert "backlog wins whenever it has anything" in _prose()
     assert "Never let this crowd out" in _prose()
 
