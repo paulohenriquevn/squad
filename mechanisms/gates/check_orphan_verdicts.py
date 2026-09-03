@@ -164,11 +164,15 @@ def check_orphan_verdicts(repo_root: Path) -> OrphanReport:
             verdict = names[0]
             report.total += 1
 
+            # Whole-word, not substring: a verdict name buried inside a longer name in
+            # a comment is not an emitter of it. `re.escape` costs nothing — the
+            # verdict is `[A-Z][A-Z0-9_]{3,}` per `_VERDICT_RE`.
+            pattern = re.compile(rf"\b{re.escape(verdict)}\b")
             if _EXEMPT_RE.search(row):
                 report.exempt += 1
-            elif verdict in code:
+            elif pattern.search(code):
                 report.by_code += 1
-            elif verdict in docs:
+            elif pattern.search(docs):
                 report.by_agent += 1
             else:
                 report.findings.append(VerdictFinding(
