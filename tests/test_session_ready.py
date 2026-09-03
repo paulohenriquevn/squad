@@ -155,3 +155,43 @@ def test_a_gone_session_is_not_given_a_last_screen_it_never_had(monkeypatch, cap
     err = capsys.readouterr().err
     assert "last on its screen" not in err
     assert "it is not there" in err
+
+
+# ── the composer, told apart from the transcript ──────────────────────────────
+# Measured 2026-09-03: `dispatch_to_lane.sh` reported `it was NOT submitted` on
+# three dispatches that had all succeeded — the lanes were already building their
+# worktrees. It grepped the WHOLE pane for the sent text, and Claude Code echoes a
+# submitted prompt into the transcript, so the predicate was true whether the send
+# worked or not. The success branch had never executed. A guard that fires
+# unconditionally cannot distinguish the failure it was written for.
+
+_RULE = "─" * 78
+#: The composer draws U+276F then a NON-BREAKING space. Splitting on ASCII
+#: whitespace alone leaves that character behind and every empty composer reads
+#: as occupied — which is the bug, restored.
+_EMPTY_COMPOSER = f"{_RULE}\n❯ \n{_RULE}\n  ⏵⏵ bypass permissions on (shift+tab to cycle)"
+
+
+def test_an_empty_composer_reports_nothing_waiting() -> None:
+    assert session_ready.composer_text(_EMPTY_COMPOSER) == ""
+
+
+def test_text_left_in_the_composer_is_reported() -> None:
+    screen = _EMPTY_COMPOSER.replace("❯ ", "❯ Read /tmp/lane-work/kit19.md")
+    assert session_ready.composer_text(screen) == "Read /tmp/lane-work/kit19.md"
+
+
+def test_the_same_text_in_the_transcript_is_not_the_composer() -> None:
+    """The false positive itself: a submitted prompt is echoed above the rule."""
+    screen = ("> Read /tmp/lane-work/kit19.md and do exactly what it says.\n"
+              "● Bash(git worktree add …)\n"
+              "✻ Puzzling… (18s)\n" + _EMPTY_COMPOSER)
+    assert session_ready.composer_text(screen) == "", (
+        "the transcript echo was read as unsent text — this is the defect")
+
+
+def test_a_pane_with_no_composer_answers_unknown_not_empty() -> None:
+    """Absence must not be reported as a measurement. A pane the parser cannot
+    find a composer in is exactly the case this kit keeps shipping as a clean
+    result."""
+    assert session_ready.composer_text("some unrelated screen\nwith no prompt") is None

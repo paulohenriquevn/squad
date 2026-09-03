@@ -78,6 +78,35 @@ def state(session: str) -> tuple[str, str]:
     return "starting", tail
 
 
+#: The composer's own prompt glyph. The CLI draws it followed by U+00A0, not by an
+#: ASCII space, so stripping only ASCII whitespace leaves a character behind and
+#: every empty composer reads as occupied.
+_CARET = "\u276f"
+
+
+def composer_text(screen: str) -> str | None:
+    """What is sitting UNSENT in the composer. `""` when empty, `None` when the
+    pane holds no composer at all.
+
+    `None` is not `""`. Measured 2026-09-03: `dispatch_to_lane.sh` decided
+    "submitted or not" by grepping the WHOLE pane for the text it had sent, and
+    the CLI echoes a submitted prompt into the transcript above the composer — so
+    the predicate held whether the send worked or not, and the branch that
+    reports a successful dispatch had never once run. Three lanes were told they
+    had not received work while they were already building their worktrees.
+
+    Only the last caret line counts. Everything above it is transcript: what the
+    session has already been told, which is precisely the text a naive search
+    finds after a send that WORKED.
+    """
+    caret_lines = [ln for ln in screen.splitlines() if ln.lstrip().startswith(_CARET)]
+    if not caret_lines:
+        # Not "the composer is empty" — "this pane has no composer I can read".
+        # Collapsing the two is the defect this whole function exists to close.
+        return None
+    return caret_lines[-1].lstrip()[len(_CARET):].strip().strip("\u00a0").strip()
+
+
 def wait(session: str, timeout: float = 45.0, interval: float = 1.5) -> tuple[str, str]:
     """Poll until ready, or until the answer stops being able to change.
 
