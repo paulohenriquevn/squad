@@ -76,6 +76,24 @@ Each round, in this order:
    reproduces the issue comes before the fix, and the fix is not done until the
    test passes and the issue carries the verification.
 
+6. If BOTH are empty — the consumer blocked and the kit registry clean — the
+   lanes still have work, and it is the work that never runs out: auditing the
+   kit for the defects it keeps shipping.
+
+   Say so, then hand an idle lane one lens from
+   `.claude/mechanisms/fleet/kit_audit_workflow.js` and ask it to sweep the kit
+   for that pattern, reporting findings with a file, a line and evidence it
+   gathered — not an impression. A finding that survives a genuine attempt to
+   refute it becomes an issue; one that does not, does not.
+
+   This is the only branch here that generates its own work, and it exists
+   because measured on 2026-09-02 the fleet ran THIRTEEN rounds and dispatched
+   NOTHING: the queue was legitimately blocked every time, and three lanes sat at
+   a prompt for over two hours. Idle lanes are not evidence of a healthy queue.
+
+   Never let this crowd out the other five. The consumer's backlog wins whenever
+   it has anything, and an audit finding is not a reason to touch the consumer.
+
 Refusals, absolute: no `--no-verify`, no `--force`, no `--allow-dirty-tree`, no
 moving a threshold or a baseline to make something pass, no marking a verdict a
 phase did not emit, no editing BACKLOG.md to unblock what a person must unblock.

@@ -72,6 +72,7 @@ which is why the rule is now computed rather than requested.
 | `cycle_events.py` | The cycle's phase transitions, as a stream instead of an excavation |
 | `route_domain.py` | Route a repo (or a B-NNN item) to its domain specialist |
 | `attest_plan.sh` | Compute a plan's SHA256 and write it to `.attestations/{slug}.sha256` |
+| `run_gates.sh` | A project's quality gates in parallel with a per-gate ceiling: wall-clock becomes the slowest gate instead of their sum, and one hang cannot eat the budget of the rest |
 | `run_slice_tests.sh` | Run every skill slice's test suite in ISOLATION |
 
 ### `fleet/` — many sessions at once
@@ -83,8 +84,10 @@ which is why the rule is now computed rather than requested.
 | `pipeline_workflow.js` | The `backlog-pipeline` workflow definition the orchestrator drives |
 | `start_lead_session.sh` | The lead as a named Claude session — addressable by peers, and the only shape that can invoke the pipeline |
 | `claude_stream.py` | Talking to Claude Code over its own protocol: verdict, cost and session id as fields instead of prose to be recognised |
+| `kit_repair_workflow.js` | N audited findings repaired at once, one git worktree each, test-first, every branch checked by an agent that did not write it |
 | `kit_audit_workflow.js` | The kit hunting itself for its own recurring defect patterns, one lens each, every finding then handed to an agent trying to refute it |
 | `kit_issues.py` | The kit's OWN registry, so an idle fleet can work on the kit: open issues split into what a lane may take and what waits on a person |
+| `run_remote.sh` | Heavy work on the runner instead of the workstation, checked reachable first and refusing to fall back to local — the fallback is how the work comes home without anyone deciding it should |
 | `session_ready.py` | Did a launched session reach a prompt, or is it sitting in a first-run dialog? The check both fleet launchers lacked |
 | `fleet_idle.py` | Where the fleet's time went, from the lead's own log: idle vs productive, per decision kind, and which sessions were never handed work |
 | `fleet_wall.sh` | One tmux session showing every executing session side by side, read-only by default, plus a live status pane |
