@@ -73,8 +73,23 @@ _UNMECHANIZED_RE = re.compile(
     r"_\(not mechanized[^:)]*(?::\s*(?P<reason>[^)]+))?\)_"
 )
 
-#: `## Hard gates`, `### Hard gates (per iteration)`, and so on.
-_SECTION_RE = re.compile(r"^(#{2,})[^\n]*Hard gate[^\n]*\n(.*?)(?=^#{1,6} |\Z)", re.MULTILINE | re.DOTALL)
+#: `## Hard gates`, `### Hard gates (per iteration)`, and so on. The section ends
+#: at the next heading of the SAME level or higher — not at any heading at all.
+#:
+#: It used to stop at `^#{1,6} `, so a subsection under Hard gates truncated it
+#: and the sweep silently covered less. Sibling `check_orphan_verdicts.py` fixed
+#: the same defect on 2026-08-31 with the measurement in its own comment: adding
+#: a `###` under a verdict table dropped its swept count from 51 to 49 with no
+#: finding and nothing in the output to notice. This regex was still the pre-fix
+#: form until a test forced it into line. A coverage gate that loses coverage
+#: without saying so is the failure it exists to prevent, one level up.
+#:
+#: `(?P=level)` requires the closing heading to be at least as shallow: `###` no
+#: longer ends a `##` section, and `##` still does.
+_SECTION_RE = re.compile(
+    r"^(?P<level>#{2,})[^\n]*Hard gate[^\n]*\n(.*?)(?=^(?P=level)(?!#) |\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 
 #: A markdown table's separator row: `|---|---|`.
 _SEPARATOR_CHARS = set("|-: ")

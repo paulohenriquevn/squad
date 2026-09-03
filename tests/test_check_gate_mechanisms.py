@@ -246,6 +246,40 @@ def test_a_rule_with_no_hard_gates_section_contributes_nothing(tmp_path: Path) -
     assert check_gate_mechanisms(root).total_gates == 0
 
 
+def test_a_subsection_does_not_truncate_the_hard_gates_section(tmp_path: Path) -> None:
+    """A coverage gate that loses coverage without saying so is the failure it
+    exists to prevent, one level up.
+
+    Sibling `check_orphan_verdicts.py` fixed the same defect on 2026-08-31 with
+    the measurement in its own comment: adding a `###` under a `## Verdicts`
+    table dropped its swept count from 51 to 49 with no finding and nothing in
+    the output to notice. This sweep's regex was still the pre-fix form until
+    this test forced it up.
+
+    A rule that carries a `### subsection` inside a `## Hard gates` section must
+    have the rows AFTER the subsection swept too — otherwise this gate can only
+    ever report a subset of its own denominator as clean.
+    """
+    root = _rules(tmp_path, "cycle-demo.md", (
+        "# Demo\n\n"
+        "## Hard gates\n\n"
+        "| # | Gate | Enforcer |\n"
+        "|---|---|---|\n"
+        "| G1 | Before the subsection | `first.py` |\n\n"
+        "### Why the second gate exists\n\n"
+        "| G2 | After the subsection, still a gate | `second.py` |\n\n"
+        "## Anti-patterns\n\n"
+        "- Not a gate at all.\n"
+    ))
+    _with_script(root, "scripts/first.py")
+    _with_script(root, "scripts/second.py")
+
+    report = check_gate_mechanisms(root)
+
+    assert report.total_gates >= 2, "the subsection truncated the section again"
+    assert report.findings == []
+
+
 def test_a_table_row_inherits_a_mechanism_named_in_its_section_prose(tmp_path: Path) -> None:
     """A verdict table specifies a mechanism the section already named.
 
