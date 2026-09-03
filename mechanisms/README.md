@@ -125,3 +125,29 @@ Put it in the family whose consumers already call that kind of thing, add the ro
 above, and let the gate confirm the two agree. A file that belongs to exactly one
 skill is not a mechanism — it lives in `skills/{name}/scripts/`, which is a
 different directory with a different owner.
+
+## VERA — Verifiable Engineering Reference Arbiter
+
+The autonomous technical decision-maker. VERA reads problems (B-001 through B-168), applies five FAANG-level lenses (SOLID, DRY, Coupling, Fail-Fast, Clarity), and proposes the obvious solution. She does not equivocate: when DIP says decouple, she says decouple.
+
+**Lenses:**
+- **SOLID** — violations of SRP, OCP, LSP, ISP, DIP cause brittleness at scale
+- **DRY** — knowledge duplicated in two places diverges; consolidate to one authority
+- **Coupling** — low-coupling, high-cohesion; layering must be respected
+- **Fail-Fast** — silent failures are the worst; fail loud and early with context
+- **Clarity** — code as communication; structure must be immediately obvious
+
+**Input:** Problem statement + evidence + code references  
+**Output:** GitHub issue with title, rationale, solution, scope, and labels
+
+Example:
+```bash
+python3 mechanisms/fleet/vera.py B-022 \
+  --problem "Engine blocked by dashboard outages" \
+  --evidence "init() calls dashboard health check" \
+  --refs "api/engine/init.go:156"
+```
+
+Result: Issue titled "[high] Decouple high-level from low-level modules" with DIP rationale, T1 scope.
+
+VERA is not consultative. She does not say "consider" or "maybe". She says what FAANG would do.
