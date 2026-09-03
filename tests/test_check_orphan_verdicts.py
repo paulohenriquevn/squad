@@ -97,6 +97,22 @@ def test_words_that_look_like_verdicts_are_not(tmp_path: Path, noise: str) -> No
     assert check_orphan_verdicts(_repo(tmp_path, body)).total == 0
 
 
+def test_a_substring_of_another_word_is_not_the_verdict(tmp_path: Path) -> None:
+    """`verdict in code` treats a substring as reachability, so `AWAITING_HUMAN` looks
+    emitted by `INVALID_AWAITING_HUMAN` inside a comment.
+
+    Measured on 2026-09-03 in this repo: the sole match for `AWAITING_HUMAN` in the
+    code corpus was that substring, inside a comment recording a wrong verdict — so
+    five rules that declare `AWAITING_HUMAN` (discover, plan, review, release,
+    acceptance) were reported reachable by nothing at all.
+    """
+    report = check_orphan_verdicts(_repo(
+        tmp_path, _TABLE.format(verdict="AWAITING_HUMAN"),
+        code='# recorded INVALID_AWAITING_HUMAN, a name in no contract\n'))
+    assert [f.verdict for f in report.findings] == ["AWAITING_HUMAN"]
+    assert report.by_code == 0
+
+
 # ── the kit itself ────────────────────────────────────────────────────────────
 
 
