@@ -126,6 +126,58 @@ def blocked_by_raw(body: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def carries_prose(raw: str) -> bool:
+    """Does the value say anything beyond a list of ids?
+
+    Mirrors `check_backlog_structure.carries_prose` — one field, three readers,
+    one meaning. The duplication is deliberate for the reason `live_blockers`
+    states, and pinned by `test_blocked_by_readers_agree.py`.
+    """
+    return bool(_ID_IN_TEXT_RE.sub("", raw).strip(" ,—-"))
+
+
+def live_blockers(raw: str, own_id: str, statuses: dict[str, str]) -> list[str] | None:
+    """The writer's answer to "may `own_id` advance to shipped, given `raw`?"
+
+    Same shape as `select_backlog_item.live_blockers` and by design: the writer
+    must refuse a ship on exactly the state the selector calls blocked. A
+    divergence here is either a deadlock — the writer refuses what the selector
+    would clear, so the item cannot close — or a silent ship past a decision a
+    person still owes, when the selector says blocked and the writer permits it.
+
+    Return values carry the same three meanings:
+      - `None`  — nothing blocks; the writer may ship
+      - `[]`    — blocked with no id to name (a stated reason), writer must refuse
+      - `[...]` — blocked by these still-open ids, writer must refuse
+
+    The self-mention filter and the `carries_prose` distinction are duplicated
+    on purpose. The writer does not import the gate any more than the gate may
+    import the writer, and the audit on 2026-09-03 found this was the third
+    reader missing both — a `blocked_by` value whose prose named the item
+    itself made `advance` refuse the ship because the item blocked itself, and
+    the item stayed open precisely because the ship was refused. The fix that
+    already lived in the selector and the gate finally travelled here.
+    """
+    if not declares_impediment(raw):
+        return None
+    ids = parse_blocked_by(raw)
+    # An item cannot block itself. `blocked_by` is prose, and a sentence that
+    # names the item mentioning itself is normal — "Vide report B-060" — not a
+    # self-block. Same reasoning as `select_backlog_item.py:141` and
+    # `check_backlog_structure.impediment_edges`.
+    ids = [b for b in ids if b != own_id]
+    if not ids:
+        return []
+    open_ids = [b for b in ids if statuses.get(b, "") in OPEN_STATUS]
+    if open_ids:
+        return open_ids
+    # Every named id has closed, but a stated reason outlives its id edge: the
+    # ids in it are context, the reason is the barrier, and nothing in this
+    # repository can tell whether the reason is discharged. Same rule the gate
+    # holds for `stale_block` and the selector eventually learned.
+    return [] if carries_prose(raw) else None
+
+
 def effective_state(status: str, blockers: list[str], statuses: dict[str, str]) -> str:
     """The state a reader should see — `blocked` only while a blocker is still open.
 
@@ -198,16 +250,20 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "") -> str:
         if kill_reason:
             body = _write_field(body, "kill_reason", kill_reason, after="status")
 
-    # An item cannot ship while something still blocks it. The check reads the
-    # blockers' own status rather than a flag, so it cannot be fooled by a stale edge.
+    # An item cannot ship while something still blocks it. `live_blockers`
+    # answers the same question the selector and the gate already answer, so
+    # a rule fixed in one copy cannot go stale in the third — the audit on
+    # 2026-09-03 named the two defects this route used to carry: no
+    # self-mention filter (deadlocking the item on its own prose) and no
+    # `carries_prose` distinction (silently shipping past a stated reason
+    # whose id edges had all closed).
     if to == "shipped":
         statuses = {i: _status_of(content[s:e]) or "" for i, (s, e) in spans.items()}
         raw = blocked_by_raw(body)
-        ids = parse_blocked_by(raw)
-        still_open = [b for b in ids if statuses.get(b) in OPEN_STATUS]
-        if still_open:
-            raise Refused(f"{item_id} cannot ship while blocked by {', '.join(still_open)}")
-        if declares_impediment(raw) and not ids:
+        blockers = live_blockers(raw, item_id, statuses)
+        if blockers is not None:
+            if blockers:
+                raise Refused(f"{item_id} cannot ship while blocked by {', '.join(blockers)}")
             raise Refused(f"{item_id} still declares an impediment ({raw[:60]}); clear it or ship after it resolves")
 
     body = STATUS_LINE_RE.sub(f"status: {to}", body, count=1)
