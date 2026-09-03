@@ -5,9 +5,9 @@ table itself". `check_backlog_structure.py` did not ask: gate G1 checks whether 
 is IN the routing table, never whether the table's ANSWER exists. So a registry could
 report SHIPPABLE while every one of its items resolved to a file nobody had written.
 
-Measured on an adopter 2026-09-03: the table named `agents/theocode.md`, that file did
-not exist, `route_domain.py` exited 3 for every repo, and the structure report was clean
-across 136 items.
+Measured on an adopter 2026-09-03: its table named a specialist file that did not exist,
+`route_domain.py` exited 3 for every repo in it, and the structure report was clean across
+136 items. The adopter is not named, for the reason `test_no_origin_ecosystem_leak` gives.
 
 That is the failure the routing gate exists to prevent, one level up, and it failed in
 the reassuring direction — which is the direction that gets a gate trusted while it is

@@ -305,8 +305,15 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     # `route_domain.py` calls that a BROKEN ROUTE and exits 3 — "a defect in the table itself" — but
     # this report never asked. Gate G1 checks whether a repo is IN the table, not whether the table's
     # answer exists, so a registry could read SHIPPABLE while all of its items resolved to a file
-    # nobody had written. Measured on this project 2026-09-03: `TheoCode` named `agents/theocode.md`,
-    # which did not exist, and 106 items routed to nobody with a clean report.
+    # nobody had written. Measured on an adopter 2026-09-03: its table named a specialist file that
+    # did not exist, every repo in it exited 3 from `route_domain.py`, and 106 items routed to nobody
+    # while this report came back clean.
+    #
+    # The measurement is deliberately anonymous. `test_no_origin_ecosystem_leak` refuses a versioned
+    # kit file that names a specific ecosystem's repositories, and its reason applies here: the kit
+    # describes ANY product that adopts it, and a named one makes every consumer inherit a map of
+    # repos they do not have. The first version of this comment named the adopter and the detector
+    # caught it.
     #
     # This is the same failure the routing gate exists to prevent, one level up, and it failed in the
     # reassuring direction.
