@@ -47,7 +47,17 @@ _AT_PROMPT = """\
 
 
 def _screen(monkeypatch, text: str | None) -> None:
+    """Stub the pane AND the turn state.
+
+    Before 2026-09-03 the screen alone decided `ready`, and that was the defect:
+    the status bar these fixtures carry is drawn mid-turn too, so `ready` meant
+    only "the CLI is up". These tests always meant "at a prompt AND free"; the
+    second half was an unstated premise the code did not check. Stubbing the CLI
+    as idle states it, rather than weakening what they assert.
+    """
     monkeypatch.setattr(session_ready, "screen", lambda _session: text)
+    monkeypatch.setattr(session_ready, "pane_pid", lambda _session: 4242)
+    monkeypatch.setattr(session_ready, "_agent_status", lambda: {4242: "idle"})
 
 
 def test_a_session_at_a_prompt_is_ready(monkeypatch) -> None:
@@ -121,6 +131,8 @@ def test_waiting_returns_the_moment_the_answer_can_no_longer_change(monkeypatch)
 def test_a_slow_start_is_polled_until_it_becomes_ready(monkeypatch) -> None:
     screens = ["loading…", "loading…", _AT_PROMPT]
     monkeypatch.setattr(session_ready, "screen", lambda _s: screens.pop(0) if screens else _AT_PROMPT)
+    monkeypatch.setattr(session_ready, "pane_pid", lambda _s: 4242)
+    monkeypatch.setattr(session_ready, "_agent_status", lambda: {4242: "idle"})
     monkeypatch.setattr(session_ready.time, "sleep", lambda _s: None)
 
     verdict, _ = session_ready.wait("squad1", timeout=45.0, interval=0.0)
@@ -195,3 +207,63 @@ def test_a_pane_with_no_composer_answers_unknown_not_empty() -> None:
     find a composer in is exactly the case this kit keeps shipping as a clean
     result."""
     assert session_ready.composer_text("some unrelated screen\nwith no prompt") is None
+
+
+# ── "the CLI is up" is not "this lane can take work" ──────────────────────────
+# Measured 2026-09-03: three lanes mid-turn (reading files, running bash) and
+# session_ready.state() answered `ready` for all three. _READY matches the
+# persistent status bar, which is drawn working or not, so the verdict answered a
+# weaker question than every caller asks. dispatch_to_lane.sh promises in its own
+# header to refuse a lane that is not at a prompt; it could not detect one.
+#
+# The pane cannot settle it — a working lane and an idle one draw the same empty
+# composer. `claude agents --json` can, and is matched to a tmux session by the
+# pane's pid.
+
+_LIVE_PANE = "some transcript\n────\n❯ \n────\n  ⏵⏵ bypass permissions on (shift+tab to cycle)"
+
+
+def test_a_lane_the_cli_calls_busy_is_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(session_ready, "screen", lambda _s: _LIVE_PANE)
+    monkeypatch.setattr(session_ready, "pane_pid", lambda _s: 4242)
+    monkeypatch.setattr(session_ready, "_agent_status", lambda: {4242: "busy"})
+    assert session_ready.state("squad1")[0] == "busy"
+
+
+def test_a_lane_the_cli_calls_idle_is_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(session_ready, "screen", lambda _s: _LIVE_PANE)
+    monkeypatch.setattr(session_ready, "pane_pid", lambda _s: 4242)
+    monkeypatch.setattr(session_ready, "_agent_status", lambda: {4242: "idle"})
+    assert session_ready.state("squad1")[0] == "ready"
+
+
+def test_a_pid_the_cli_does_not_list_is_unknown_not_ready(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """The permissive answer must never be the fallback. Defaulting to `ready`
+    here means typing into a working session on the strength of a check that did
+    not run."""
+    monkeypatch.setattr(session_ready, "screen", lambda _s: _LIVE_PANE)
+    monkeypatch.setattr(session_ready, "pane_pid", lambda _s: 4242)
+    monkeypatch.setattr(session_ready, "_agent_status", lambda: {99: "idle"})
+    assert session_ready.state("squad1")[0] == "unknown"
+
+
+def test_a_cli_that_cannot_answer_is_unknown_not_ready(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(session_ready, "screen", lambda _s: _LIVE_PANE)
+    monkeypatch.setattr(session_ready, "pane_pid", lambda _s: 4242)
+    def unsupported() -> dict[int, str]:
+        raise session_ready.StatusUnavailable("`claude agents --json` is not in this CLI")
+    monkeypatch.setattr(session_ready, "_agent_status", unsupported)
+    verdict, evidence = session_ready.state("squad1")
+    assert verdict == "unknown"
+    assert "not in this CLI" in evidence
+
+
+def test_a_dialog_still_outranks_the_cli_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A modal is waiting for a keystroke whatever the CLI reports about turns."""
+    monkeypatch.setattr(session_ready, "screen",
+                        lambda _s: "Try the new renderer?\nEnter to confirm")
+    monkeypatch.setattr(session_ready, "pane_pid", lambda _s: 4242)
+    monkeypatch.setattr(session_ready, "_agent_status", lambda: {4242: "idle"})
+    assert session_ready.state("squad1")[0] == "dialog"
