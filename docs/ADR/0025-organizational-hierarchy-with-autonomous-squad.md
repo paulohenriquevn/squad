@@ -27,20 +27,41 @@ Implement a **three-layer organizational structure** inspired by AIDLC Workflows
 - **Intervention frequency:** 1-2 times per month (strategic only)
 - **How it works:** CTO approves backlog once per quarter; Squad routes all approved work autonomously
 
-### Layer 2: Management (3 Managers + Architects + Chief Security Officer)
-- **Responsibility:** People allocation, code review standards, documentation, mentorship, security governance
-- **Decision authority:** Who pairs with whom? Are tests clear? Is code maintainable? Is threat model covered?
-- **Intervention frequency:** 1-2 times per week (post-landing review); Security approvals as-needed
-- **How it works:** 
-  - Gerentes monitor Squad logs; code review happens after landing (never blocks)
-  - CSO defines security policies, threat models, incident response; VERA enforces them autonomously
-  - Security Engineer operationalizes: tools, scanning, incident response
+### Layer 2: Management (3 Managers)
+- **Responsibility:** People allocation, pairing, capacity planning, delivery sequencing
+- **Decision authority:** Who pairs with whom? Team composition? Delivery timeline?
+- **Intervention frequency:** 1-2 times per week (team health, capacity planning)
+- **How it works:** Gerentes monitor Squad logs; ensure team health and sustainable pace
 
-### Layer 3: Execution (Developers, QA, SRE)
-- **Responsibility:** Pairing guidance, CX validation, observability, incident response
-- **Decision authority:** "Is this what the user needs?" "Are metrics healthy?" "Do tests protect behavior?"
-- **Intervention frequency:** Continuous monitoring, rare blocking decisions
-- **How it works:** Developers pair with Lane outputs; QA audits test quality; SRE monitors and files issues
+### Layer 3: Specialists (4 Architects + 1 CSO)
+All report directly to CTO (equivalent decision authority)
+
+**Architects (4):**
+- **Arquiteto de Sistemas:** Infrastructure, scaling, SLO, tradeoffs
+- **Arquiteto de Domínio:** Core kits, module structure, contracts
+- **Arquiteto de Segurança (NEW):** Threat modeling, policies, compliance, incident strategy
+- **Product Owner:** Backlog prioritization, user requirements
+
+**Chief Security Officer (NEW):**
+- Reports directly to CTO (equivalent level to Architects)
+- **Responsibility:** Threat modeling execution, security policy definition, incident response, compliance
+- **Decision authority:** Threat models, security policies, incident disclosure, vendor assessment
+- **Intervention frequency:** Strategic approvals (quarterly); incident response (as-needed)
+
+### Layer 4: Execution (Developers, QA, SRE, Security Engineer)
+All report to respective Architects (technical guidance) and Managers (capacity/people)
+
+- **Developers (3-5):** Pair with lanes, clarify requirements, code quality
+- **QA Engineer (1):** Test strategy audit, test quality validation, CX testing
+- **SRE / DevOps (1):** Observability, alerting, on-call, incident support
+- **Security Engineer (1):** Reports to Arquiteto de Segurança
+  - SAST, secret scanning, dependency audit
+  - First responder for security incidents
+  - Forensics and RCA
+  - On-call 24/7 for critical incidents
+
+**Decision authority:** "Is this clear?" "Are metrics healthy?" "Do tests protect?" "Is this secure?"  
+**Intervention frequency:** Continuous monitoring; all blocking decisions flow through automated validation first
 
 ### Squad: 14 Autonomous Agents (100% Technical Execution)
 
