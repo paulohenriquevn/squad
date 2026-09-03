@@ -18,11 +18,15 @@ Sets `$ECO` (`.claude` or `.`) and `$PROJECT_DIR`.
 | `sessionstart-context.py` | SessionStart | Injects git branch, active plan, loop state | 0 always |
 | `userpromptsubmit-inject.py` | UserPromptSubmit | Injects active plan excerpt + SHA256 attestation check | 0 always |
 | `validate-command.py` | PreToolUse (Bash) | Blocks destructive git ops, rm -rf on system paths, read-only boundary | 0=allow, 2=block |
-| `boundary-check.py` | PreToolUse (Edit/Write) | Blocks writes to records/references/ and study-material/ | 0=allow, 2=block |
+| `boundary-check.py` | PreToolUse (Edit/Write) | Blocks writes to study-material/ | 0=allow, 2=block |
 | `post-edit-check.py` | PostToolUse (Edit/Write) | Multi-language linter feedback | 0 always |
 | `public-copy-lint.py` | PostToolUse (Edit/Write) | Bans unverified production claims in README | 0 always (advisory) |
 | `stop-validation.py` | Stop | CHANGELOG gate (HARD), secret leak gate (HARD), TDD gate (warn) | 0=clean, 2=block |
 | `precompact-preserve.py` | PreCompact | Snapshots plan + progress before context compaction | 0 always |
+
+The prior-art study zone under `records/references/` was retired on 2026-09-01
+and is no longer guarded by any hook — a consumer still holding material there
+must move it (`rules/reference-provenance.md`).
 
 ## Design Principles
 
