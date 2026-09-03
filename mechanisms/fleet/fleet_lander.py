@@ -231,6 +231,28 @@ def land(repo: Path, branch: str, *, apply: bool, timeout: int) -> Verdict:
         raise
 
 
+def report_each(branches: list[str], *, land, repo: Path, apply: bool,
+                timeout: int) -> list[Verdict]:
+    """Assess each branch, printing before and after rather than at the end.
+
+    Two full suites per branch is slow on purpose — what it protects is the
+    branch every other lane cuts from — and on a five-branch pass that is over an
+    hour. Collecting the verdicts and printing them at the close made the whole
+    run silent, and a silent process is indistinguishable from a dead one. The
+    branch is named on START as well, so a reader twelve minutes in can tell
+    which of the five it is waiting on.
+    """
+    verdicts: list[Verdict] = []
+    for index, branch in enumerate(branches, 1):
+        print(f"  [{index}/{len(branches)}] {branch}: two suites, this takes a while…",
+              flush=True)
+        verdict = land(repo, branch, apply=apply, timeout=timeout)
+        print(("  landed : " if verdict.land else "  refused: ") + verdict.reason,
+              flush=True)
+        verdicts.append(verdict)
+    return verdicts
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -248,20 +270,20 @@ def main(argv: list[str] | None = None) -> int:
 
     run(["git", "-C", str(repo), "fetch", "--quiet", "origin"], cwd=repo, timeout=300)
     branches = lane_branches(repo)
-    verdicts = [land(repo, b, apply=args.apply, timeout=args.timeout) for b in branches]
-
-    report = {"branches": branches, "applied": args.apply,
-              "landed": [v.reason for v in verdicts if v.land],
-              "refused": [v.reason for v in verdicts if not v.land]}
+    if not branches:
+        # Said out loud. "nothing to land" and "I did not look" must not read the
+        # same, and on this kit they have before.
+        print("swept the repository: no lane branch is ahead of origin/workspace")
+    verdicts = ([] if args.json else
+                report_each(branches, land=land, repo=repo, apply=args.apply,
+                            timeout=args.timeout))
     if args.json:
-        print(json.dumps(report, indent=2, ensure_ascii=False))
-    else:
-        if not branches:
-            # Said out loud. "nothing to land" and "I did not look" must not read
-            # the same, and on this kit they have before.
-            print("swept the repository: no lane branch is ahead of origin/workspace")
-        for verdict in verdicts:
-            print(("landed : " if verdict.land else "refused: ") + verdict.reason)
+        verdicts = [land(repo, b, apply=args.apply, timeout=args.timeout)
+                    for b in branches]
+        print(json.dumps({"branches": branches, "applied": args.apply,
+                          "landed": [v.reason for v in verdicts if v.land],
+                          "refused": [v.reason for v in verdicts if not v.land]},
+                         indent=2, ensure_ascii=False))
     return 1 if any(not v.land for v in verdicts) else 0
 
 

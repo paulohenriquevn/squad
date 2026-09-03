@@ -159,3 +159,40 @@ def test_a_refusal_still_reports_a_failed_cleanup() -> None:
     assert not verdict.land
     assert "3 failed" in verdict.reason
     assert "leak" in verdict.reason.lower()
+
+
+# ── a long run must not look like a hung one ──────────────────────────────────
+# Measured 2026-09-03: the lander ran for 16 minutes across five branches and
+# printed nothing, because every verdict was collected first and reported at the
+# end. Two full suites per branch is slow by design — what it protects is the
+# branch every other lane cuts from — but silence for an hour is the same failure
+# as the lead going quiet: a working process and a dead one look identical.
+
+
+def test_each_verdict_is_reported_as_it_lands(capsys) -> None:
+    seen: list[str] = []
+    verdicts = {"fix/kit19-a": fleet_lander.Verdict(True, "fix/kit19-a: green"),
+                "fix/kit20-b": fleet_lander.Verdict(False, "fix/kit20-b: 3 failed")}
+
+    def fake_land(_repo, branch, **_kw):
+        seen.append(branch)
+        # by the time the SECOND branch starts, the first must already be printed
+        if len(seen) == 2:
+            assert "fix/kit19-a" in capsys.readouterr().out, \
+                "the first verdict was still being held when the second began"
+        return verdicts[branch]
+
+    fleet_lander.report_each(["fix/kit19-a", "fix/kit20-b"], land=fake_land,
+                             repo=Path("/srv/example/kit"), apply=False, timeout=60)
+
+
+def test_the_stream_says_which_branch_it_is_starting(capsys) -> None:
+    """Naming the branch BEFORE the suites run is what tells a reader which of
+    the five it is on, twelve minutes in."""
+    fleet_lander.report_each(
+        ["fix/kit19-a"],
+        land=lambda _r, b, **_k: fleet_lander.Verdict(True, f"{b}: green"),
+        repo=Path("/srv/example/kit"), apply=False, timeout=60)
+    out = capsys.readouterr().out
+    assert out.index("fix/kit19-a") < out.rindex("fix/kit19-a"), \
+        "the branch is named once on start and once on verdict"
