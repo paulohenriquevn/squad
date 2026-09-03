@@ -23,6 +23,7 @@ What it checks instead — the ways a maintenance registry actually rots:
     triaged_without_evidence  triaged but evidence is still none-yet
     raw_with_evidence       raw but carrying evidence — status never advanced
     unroutable_repo         repo in no domain (gate G1)
+    broken_route            domain exists but its specialist file does not
     invalid_mode            suggested_mode outside the four
     renumbered              ids not monotonic — a reused id destroys traceability
     blocker_missing         blocked_by points at an id no block defines
@@ -151,7 +152,7 @@ def _title_overlap(a: str, b: str) -> float:
     return len(wa & wb) / min(len(wa), len(wb))
 
 
-def _known_repos(backlog_dir: Path) -> set[str] | None:
+def _routing(backlog_dir: Path) -> dict[str, dict] | None:
     """Repos the routing table knows. None when the table cannot be read.
 
     None is not an empty set: an unreadable table means we cannot judge routing, and
@@ -180,11 +181,12 @@ def _known_repos(backlog_dir: Path) -> set[str] | None:
     if rule is None:
         return None
     try:
-        return {r for entry in parse_routing_table(rule).values() for r in entry["repos"]}
+        table = parse_routing_table(rule)
     except ValueError:
         # A malformed table is a real problem, but it is `backlog-review`'s job to review
         # items, not the rule. Decline to judge routing rather than blame every item.
         return None
+    return table
 
 
 _ID_IN_TEXT_RE = re.compile(r"\bB-\d{3,}\b")
@@ -293,7 +295,32 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     findings: list[Finding] = []
 
     project_root = backlog_path.resolve().parent
-    known_repos = _known_repos(project_root)
+    routing = _routing(project_root)
+    known_repos = (
+        None if routing is None else {r for e in routing.values() for r in e["repos"]}
+    )
+
+    # A domain whose specialist file is absent routes every one of its items to nobody.
+    #
+    # `route_domain.py` calls that a BROKEN ROUTE and exits 3 — "a defect in the table itself" — but
+    # this report never asked. Gate G1 checks whether a repo is IN the table, not whether the table's
+    # answer exists, so a registry could read SHIPPABLE while all of its items resolved to a file
+    # nobody had written. Measured on this project 2026-09-03: `TheoCode` named `agents/theocode.md`,
+    # which did not exist, and 106 items routed to nobody with a clean report.
+    #
+    # This is the same failure the routing gate exists to prevent, one level up, and it failed in the
+    # reassuring direction.
+    findings: list[Finding] = []
+    if routing is not None:
+        for domain, entry in sorted(routing.items()):
+            agent = entry.get("agent")
+            if agent is None:
+                findings.append(Finding("broken_route", "deterministic", "blocker", domain,
+                    f"domain `{domain}` names no specialist — every item it routes reaches nobody"))
+                continue
+            if not (project_root / agent).exists() and not (project_root / ".claude" / agent).exists():
+                findings.append(Finding("broken_route", "deterministic", "blocker", domain,
+                    f"domain `{domain}` routes to `{agent}`, which is not on disk"))
 
     seen_ids: dict[str, Item] = {}
     numeric_ids: list[int] = []
