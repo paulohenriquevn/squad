@@ -104,7 +104,7 @@ class TestVERAVsTheo:
                 "id": "B-154",
                 "problem": "theo.yaml without runtime fails saying runtime is unsupported",
                 "evidence": "Error message is wrong when field is missing",
-                "refs": ["cmd/theo-yaml-check.go"],
+                "refs": ["cmd/config-check.go"],
                 "impact": "user confusion, unclear fix",
             },
             {

@@ -101,7 +101,7 @@ class TestVERA:
             "Message is confusing",
             {
                 "evidence": "Error says 'runtime is unsupported' when missing",
-                "code_references": ["cmd/theo-yaml-check.go"],
+                "code_references": ["cmd/config-check.go"],
                 "impact": "user confusion",
             }
         )
