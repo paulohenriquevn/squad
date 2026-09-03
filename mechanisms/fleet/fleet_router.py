@@ -105,6 +105,17 @@ class Plan:
 #: never reaped; short enough that a dead lane does not hold a unit for a day.
 GRACE = 1800.0
 
+#: How long the fleet waits before sweeping itself again. A sweep on every idle
+#: pass fills the tracker with the same claims until nobody reads it, and a
+#: tracker nobody reads is worse than an empty one.
+AUDIT_COOLDOWN = 21600.0
+
+#: The one unit that is not an id somebody filed. It exists so that "nothing is
+#: owed" stops meaning "stop", and it is the LAST source for a reason: a fleet
+#: that prefers auditing itself to shipping the product is worse than an idle
+#: one, because it looks busy.
+AUDIT_SLUG = "kit-audit"
+
 
 def record(log: Path, event: str, **fields: object) -> None:
     """Append one event. The log is the state; nothing else is."""
@@ -202,6 +213,36 @@ def _assignment_rows(log: Path) -> dict[str, tuple[str, float]]:
     return held
 
 
+def audit_unit(log: Path, *, has_work: bool, now: float | None = None) -> "Unit | None":
+    """A sweep of the kit, or `None`.
+
+    Offered only when both real sources are empty and the cooldown has passed.
+    The kit HAS a way to find work nobody has filed yet — `kit_audit_workflow.js`
+    hunts the patterns it has shipped more than once and puts every claim through
+    an agent whose only job is to refute it — and until now nothing ever ran it.
+    """
+    if has_work:
+        return None
+    now = time.time() if now is None else now
+    # `None`, not 0.0: a fleet that has never swept must sweep, and starting the
+    # clock at the epoch would make that depend on what today's date happens to be.
+    last: float | None = None
+    if log.is_file():
+        for line in log.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row.get("unit") == AUDIT_SLUG and row.get("event") == "assigned":
+                seen = float(row.get("at_epoch") or 0.0)
+                last = seen if last is None else max(last, seen)
+    if last is not None and now - last < AUDIT_COOLDOWN:
+        return None
+    return Unit(AUDIT_SLUG, "sweep the kit for defects nobody has filed yet", "audit")
+
+
 # ── the sources ───────────────────────────────────────────────────────────────
 
 def kit_units(repo: str, *, timeout: int = 60) -> tuple[list[Unit], str]:
@@ -286,6 +327,42 @@ def lane_states(lanes: list[str]) -> dict[str, str]:
 
 # ── the brief ─────────────────────────────────────────────────────────────────
 
+_AUDIT_BRIEF = """\
+# Work unit: a sweep of the kit
+
+Repository: {repo}
+
+Both real queues are empty — the consumer's backlog is walled on decisions only a
+person can make, and the kit's tracker has nothing a lane may take. That is not a
+reason to stop. It is the moment to look for what nobody has filed yet.
+
+## What to do
+
+1. Run the kit's own audit, which hunts the defect patterns this kit has shipped
+   more than once:
+   `Workflow` with `mechanisms/fleet/kit_audit_workflow.js` and `args.repo = {repo}`
+2. It ends by putting every claim in front of an agent whose only instruction is
+   to REFUTE it, defaulting to refuted when it cannot confirm the behaviour
+   itself. Write the result to a JSON file.
+3. File only what survived that:
+   `python3 {repo}/mechanisms/fleet/file_findings.py --repo {tracker} --findings <file> --apply`
+   It refuses a killed claim, a claim with no evidence, and one the tracker
+   already holds. Read what it skipped — the skips are as much the result as the
+   filings.
+4. Report the counts: claims hunted, claims refuted, issues filed, duplicates.
+
+## Absolute limits — no exception, ever
+
+- Write NO code. This unit produces issues, not commits. There is no worktree
+  because there is nothing to write.
+- Do not file a finding the refuter killed, and do not soften a refutation to
+  keep a finding alive.
+- An empty sweep is a real answer. Report it as one. Padding a sweep to look
+  productive is the failure this whole mechanism exists to avoid.
+- Everything written into the tracker is in ENGLISH, and carries no secrets.
+"""
+
+
 _BRIEF = """\
 # Work unit: {slug}
 
@@ -325,6 +402,8 @@ def brief(unit: Unit, *, repo: str, tracker: str = "paulohenriquevn/squad") -> s
     2026-09-03 one of them sent a lane to the wrong issue because a substitution
     pattern missed `issue view 19`.
     """
+    if unit.source == "audit":
+        return _AUDIT_BRIEF.format(repo=repo, tracker=tracker)
     safe = unit.slug.replace("#", "").replace("/", "-")
     return _BRIEF.format(slug=unit.slug, repo=repo, number=unit.number,
                          tracker=tracker, branch=f"fix/{safe}", safe=safe)
@@ -483,6 +562,15 @@ def main(argv: list[str] | None = None) -> int:
         if "could not be read" in note:
             partial = True
         units.extend(found)
+
+    # Last, and only when both real sources came back empty. `units` being empty
+    # is the condition, not "the sources failed" — a source that could not be read
+    # already said so in its own note above, and sweeping on the strength of a
+    # failed read would be inventing work out of an absent measurement.
+    audit = audit_unit(log, has_work=bool(units))
+    if audit is not None:
+        units.append(audit)
+        notes.append("both queues are empty; offering a sweep of the kit instead of idling")
 
     try:
         states = lane_states(lanes)

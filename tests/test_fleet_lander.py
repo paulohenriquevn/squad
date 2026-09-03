@@ -125,3 +125,37 @@ def test_the_only_force_it_uses_is_on_a_directory_it_made_itself() -> None:
               if "--force" in ln and "run([" in ln]
     assert len(forced) == 1, f"expected exactly one --force, found {len(forced)}: {forced}"
     assert "worktree" in forced[0] and "remove" in forced[0]
+
+
+# ── a cleanup that fails must say so ──────────────────────────────────────────
+# Measured 2026-09-03, on this module's first live run: a scratch worktree
+# survived the branch that created it, and WHY could not be answered — the
+# `finally` block called `run(...)` and discarded the result. A silent cleanup
+# failure leaks a worktree per branch per pass, and over a supervisor loop that
+# fills the disk while every report says the branch was assessed cleanly.
+
+
+def test_a_worktree_that_would_not_be_removed_is_reported() -> None:
+    verdict = fleet_lander.assess(branch="fix/kit19-x", suite=_c(True, "1300 passed"),
+                                  merge=_c(True), after=_c(True, "1305 passed"),
+                                  cleanup=[_c(False, err="fatal: is not a working tree")])
+    assert verdict.land, "cleanup must not change whether the code was good"
+    assert "not a working tree" in verdict.reason
+    assert "leak" in verdict.reason.lower()
+
+
+def test_a_clean_cleanup_adds_nothing_to_the_reason() -> None:
+    verdict = fleet_lander.assess(branch="fix/kit19-x", suite=_c(True, "1300 passed"),
+                                  merge=_c(True), after=_c(True, "1305 passed"),
+                                  cleanup=[_c(True), _c(True)])
+    assert "leak" not in verdict.reason.lower()
+
+
+def test_a_refusal_still_reports_a_failed_cleanup() -> None:
+    """The branch being bad is not a reason to stop reporting a leaked directory."""
+    verdict = fleet_lander.assess(branch="fix/kit19-x", suite=_c(False, "3 failed"),
+                                  merge=None, after=None,
+                                  cleanup=[_c(False, err="fatal: is not a working tree")])
+    assert not verdict.land
+    assert "3 failed" in verdict.reason
+    assert "leak" in verdict.reason.lower()

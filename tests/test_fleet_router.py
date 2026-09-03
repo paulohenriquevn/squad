@@ -272,3 +272,45 @@ def test_a_unit_on_a_lane_of_unknown_state_is_not_reaped(tmp_path: Path) -> None
     fleet_router.record(log, "assigned", unit="kit#19", lane="squad1", at_epoch=1000.0)
     assert fleet_router.reap(log, lanes={"squad1": "unknown"}, branches=set(),
                              now=1000.0 + fleet_router.GRACE * 10) == []
+
+
+# ── when nothing is owed, the fleet goes looking ──────────────────────────────
+# With the consumer walled and the kit's tracker empty, the correct answer used
+# to be "idle" — and it was correct, which is why it went unexamined for a day.
+# The kit HAS a way to find work it does not know about yet: kit_audit_workflow
+# hunts the patterns it has shipped more than once, and every claim meets an
+# agent whose job is to refute it. Nothing ever ran it.
+#
+# It is the LAST source on purpose. A fleet that prefers auditing itself to
+# shipping the product is worse than an idle one — it looks busy — and a fleet
+# that audits on every pass produces a tracker nobody reads.
+
+
+def test_an_audit_is_offered_only_when_both_real_sources_are_empty(tmp_path: Path) -> None:
+    log = tmp_path / "a.jsonl"
+    assert fleet_router.audit_unit(log, has_work=True, now=0.0) is None
+    assert fleet_router.audit_unit(log, has_work=False, now=0.0) is not None
+
+
+def test_a_second_audit_waits_out_the_cooldown(tmp_path: Path) -> None:
+    """Otherwise every idle pass files another sweep, and the tracker fills with
+    the same claims until nobody reads it."""
+    log = tmp_path / "a.jsonl"
+    first = fleet_router.audit_unit(log, has_work=False, now=0.0)
+    assert first is not None
+    fleet_router.record(log, "assigned", unit=first.slug, lane="squad1", at_epoch=0.0)
+    assert fleet_router.audit_unit(log, has_work=False, now=10.0) is None
+    assert fleet_router.audit_unit(
+        log, has_work=False, now=fleet_router.AUDIT_COOLDOWN + 1) is not None
+
+
+def test_the_audit_brief_says_to_file_only_what_survived_refutation() -> None:
+    unit = fleet_router.Unit("kit-audit", "sweep the kit", "audit")
+    text = fleet_router.brief(unit, repo="/srv/example/kit")
+    assert "kit_audit_workflow" in text
+    assert "file_findings" in text
+    assert "refut" in text.lower()
+    # The word may appear — the brief says there is no worktree because there is
+    # nothing to write. What must not appear is the INSTRUCTION to make one.
+    assert "worktree add" not in text, "a sweep writes no code and needs no worktree"
+    assert "Write NO code" in text

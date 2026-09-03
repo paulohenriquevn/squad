@@ -30,8 +30,8 @@ WHAT IT REFUSES
   there is exactly one and says which.
 
 Usage:
-    fleet_lander.py --repo /home/paulo/dev/squad
-    fleet_lander.py --repo /home/paulo/dev/squad --apply
+    fleet_lander.py --repo /path/to/kit
+    fleet_lander.py --repo /path/to/kit --apply
 
 Exit codes:
     0  ran; every branch either landed or was reported with its reason
@@ -78,7 +78,7 @@ class Verdict:
 
 
 def assess(*, branch: str, suite: Ran | None, merge: Ran | None,
-           after: Ran | None) -> Verdict:
+           after: Ran | None, cleanup: list[Ran] | None = None) -> Verdict:
     """Decide whether `branch` may land. Pure — it runs nothing.
 
     Every gate is a measurement someone took, and `None` means the measurement
@@ -87,24 +87,43 @@ def assess(*, branch: str, suite: Ran | None, merge: Ran | None,
     unrun suite through would push it straight to the working branch.
     """
     if suite is None:
-        return Verdict(False, f"{branch}: the branch's suite was not run, so it is unverified")
+        return _with_cleanup(Verdict(False, f"{branch}: the branch's suite was not run, so it is unverified"), cleanup)
     if not suite.ok:
-        return Verdict(False, f"{branch}: the branch's suite failed — {_tail(suite.text)}")
+        return _with_cleanup(Verdict(False, f"{branch}: the branch's suite failed — {_tail(suite.text)}"), cleanup)
     if _looks_empty(suite.text):
-        return Verdict(False, f"{branch}: the suite reported no tests, which is not a pass")
+        return _with_cleanup(Verdict(False, f"{branch}: the suite reported no tests, which is not a pass"), cleanup)
 
     if merge is None:
-        return Verdict(False, f"{branch}: the merge was not attempted")
+        return _with_cleanup(Verdict(False, f"{branch}: the merge was not attempted"), cleanup)
     if not merge.ok:
-        return Verdict(False, f"{branch}: the merge did not apply — {_tail(merge.text)}")
+        return _with_cleanup(Verdict(False, f"{branch}: the merge did not apply — {_tail(merge.text)}"), cleanup)
 
     if after is None:
-        return Verdict(False, f"{branch}: the suite was not run after the merge")
+        return _with_cleanup(Verdict(False, f"{branch}: the suite was not run after the merge"), cleanup)
     if not after.ok:
-        return Verdict(False, f"{branch}: the suite failed after the merge — {_tail(after.text)}")
+        return _with_cleanup(Verdict(False, f"{branch}: the suite failed after the merge — {_tail(after.text)}"), cleanup)
     if _looks_empty(after.text):
-        return Verdict(False, f"{branch}: after the merge the suite reported no tests")
-    return Verdict(True, f"{branch}: green on its own and green merged")
+        return _with_cleanup(Verdict(
+            False, f"{branch}: after the merge the suite reported no tests"), cleanup)
+    return _with_cleanup(Verdict(True, f"{branch}: green on its own and green merged"),
+                         cleanup)
+
+
+def _with_cleanup(verdict: Verdict, cleanup: list[Ran] | None) -> Verdict:
+    """Append a leaked-worktree note without letting it change the code verdict.
+
+    Whether the branch was good and whether a temporary directory was tidied are
+    different questions, and folding one into the other would either hide a leak
+    or refuse a good branch over housekeeping. Measured 2026-09-03: a scratch tree
+    survived its branch and why could not be answered, because the cleanup call
+    discarded its own result.
+    """
+    failed = [c for c in (cleanup or []) if not c.ok]
+    if not failed:
+        return verdict
+    detail = "; ".join(_tail(c.text, 80) for c in failed)
+    return Verdict(verdict.land,
+                   f"{verdict.reason} [cleanup leaked {len(failed)} worktree(s): {detail}]")
 
 
 def _looks_empty(text: str) -> bool:
@@ -156,20 +175,41 @@ def land(repo: Path, branch: str, *, apply: bool, timeout: int) -> Verdict:
     fast-forward fails the tree is still the working branch, so "the branch's
     suite" would be the working branch's suite reported under the branch's name.
     Separating them costs one checkout and removes the ambiguity entirely.
+
+    Cleanup runs whatever happens, and its result is READ. A `finally` that calls
+    a command and discards the answer is how a leaked worktree became
+    unexplainable on this module's first live run.
     """
     stamp = int(time.time())
     root = Path("/tmp/squad-landing")
     alone = root / f"{branch.replace('/', '-')}-alone-{stamp}"
     merged_tree = root / f"{branch.replace('/', '-')}-merged-{stamp}"
-    made_a = run(["git", "-C", str(repo), "worktree", "add", "--detach",
-                  str(alone), branch], cwd=repo, timeout=120)
-    if not made_a.ok:
-        return Verdict(False, f"{branch}: no scratch worktree — {_tail(made_a.text)}")
-    made_b = run(["git", "-C", str(repo), "worktree", "add", "--detach",
-                  str(merged_tree), "origin/workspace"], cwd=repo, timeout=120)
+    made: list[Path] = []
+
+    def add(tree: Path, ref: str) -> bool:
+        ok = run(["git", "-C", str(repo), "worktree", "add", "--detach",
+                  str(tree), ref], cwd=repo, timeout=120)
+        if ok.ok:
+            made.append(tree)
+        return ok.ok
+
+    def tidy() -> list[Ran]:
+        return [run(["git", "-C", str(repo), "worktree", "remove", "--force",
+                     str(tree)], cwd=repo, timeout=120) for tree in made]
+
     try:
-        if not made_b.ok:
-            return Verdict(False, f"{branch}: no merge worktree — {_tail(made_b.text)}")
+        # Re-fetched per branch, not once per pass. `origin/workspace` moves every
+        # time a branch lands, and cutting the next merge tree from a snapshot
+        # taken before that makes its push a non-fast-forward — safely refused,
+        # but it means only ONE branch could ever land in a pass.
+        run(["git", "-C", str(repo), "fetch", "--quiet", "origin"], cwd=repo, timeout=300)
+        if not add(alone, branch):
+            return _with_cleanup(
+                Verdict(False, f"{branch}: no scratch worktree for the branch"), tidy())
+        if not add(merged_tree, "origin/workspace"):
+            return _with_cleanup(
+                Verdict(False, f"{branch}: no scratch worktree for the merge"), tidy())
+
         # 1. the branch on its own, against its own tree
         suite = run([sys.executable, "-m", "pytest", "-q"], cwd=alone, timeout=timeout)
         # 2. the branch merged into the working branch, against a fresh tree
@@ -183,13 +223,12 @@ def land(repo: Path, branch: str, *, apply: bool, timeout: int) -> Verdict:
             pushed = run(["git", "-C", str(merged_tree), "push", "origin",
                           "HEAD:workspace"], cwd=merged_tree, timeout=300)
             if not pushed.ok:
-                return Verdict(False, f"{branch}: verified but the push was refused — "
-                                      f"{_tail(pushed.text)}")
-        return verdict
-    finally:
-        for tree in (alone, merged_tree):
-            run(["git", "-C", str(repo), "worktree", "remove", "--force", str(tree)],
-                cwd=repo, timeout=120)
+                verdict = Verdict(False, f"{branch}: verified but the push was "
+                                         f"refused — {_tail(pushed.text)}")
+        return _with_cleanup(verdict, tidy())
+    except Exception:
+        tidy()
+        raise
 
 
 def main(argv: list[str] | None = None) -> int:

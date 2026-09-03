@@ -18,8 +18,8 @@
 # that up as activity is the failure this kit keeps finding.
 #
 # Usage:
-#   fleet_supervisor.sh --lanes squad1,squad2,squad3 --kit /home/paulo/dev/squad \
-#                       --kit-repo owner/name --project /home/paulo/dev/theo
+#   fleet_supervisor.sh --lanes squad1,squad2,squad3 --kit /path/to/kit \
+#                       --kit-repo owner/name --project /path/to/consumer
 #   ... --once      run a single pass and exit
 #   ... --dry-run   plan and assess without typing or pushing anything
 #
