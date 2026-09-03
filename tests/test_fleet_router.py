@@ -25,6 +25,11 @@ if str(_FLEET) not in sys.path:
     sys.path.insert(0, str(_FLEET))
 
 import fleet_router  # noqa: E402
+
+#: Any absolute path will do; it must not be one that exists on a single machine.
+#: `test_no_origin_ecosystem_leak` fails a versioned file carrying a workstation
+#: path, because every consumer gets the string and none of them get the directory.
+_REPO = "/srv/example/kit"
 from kit_issues import Issue, Unavailable  # noqa: E402
 
 
@@ -133,7 +138,7 @@ def test_held_issues_are_named_rather_than_dropped(monkeypatch: pytest.MonkeyPat
 
 def test_the_brief_names_the_unit_and_forbids_the_bypasses() -> None:
     text = fleet_router.brief(fleet_router.Unit("kit#19", "a defect", "kit"),
-                              repo="/home/paulo/dev/squad")
+                              repo=_REPO)
     assert "19" in text
     for forbidden in ("--no-verify", "--force", "Co-Authored-By", "threshold"):
         assert forbidden in text, f"the brief does not forbid {forbidden}"
@@ -142,9 +147,9 @@ def test_the_brief_names_the_unit_and_forbids_the_bypasses() -> None:
 
 def test_the_brief_isolates_the_lane_in_its_own_worktree() -> None:
     text = fleet_router.brief(fleet_router.Unit("kit#19", "a defect", "kit"),
-                              repo="/home/paulo/dev/squad")
+                              repo=_REPO)
     assert "worktree add" in text
-    assert "/home/paulo/dev/squad" in text
+    assert _REPO in text
 
 
 # ── memory is not the only evidence of work in flight ─────────────────────────
@@ -210,3 +215,60 @@ def test_closed_defaults_to_empty_because_absent_history_is_not_a_hold(tmp_path:
         units=[fleet_router.Unit("kit#22", "t", "kit")],
         lanes={"squad1": "free"}, log=tmp_path / "a.jsonl", branches=set())
     assert [a.unit.slug for a in plan.assignments] == ["kit#22"]
+
+
+# ── work a lane abandoned must come back ──────────────────────────────────────
+# The log holds an assignment until something releases it, and nothing did. A
+# lane that dies mid-unit, or is cleared by a person, leaves its unit assigned
+# forever — the router will never offer it again and no lane is working it. That
+# is the fleet's 10h33m idle failure rebuilt one level up: correct-looking state
+# over work nobody is doing.
+#
+# Three facts have to hold together before a unit is called abandoned, because
+# each alone is normal: the lane is free, no branch exists, and enough time has
+# passed that a lane which merely had not started yet would have.
+
+
+def test_a_unit_whose_lane_died_is_released(tmp_path: Path) -> None:
+    log = tmp_path / "a.jsonl"
+    fleet_router.record(log, "assigned", unit="kit#19", lane="squad1",
+                        at_epoch=1000.0)
+    released = fleet_router.reap(log, lanes={"squad1": "free"}, branches=set(),
+                                 now=1000.0 + fleet_router.GRACE + 1)
+    assert released == ["kit#19"]
+    assert fleet_router.in_flight(log) == {}
+
+
+def test_a_unit_still_inside_the_grace_period_is_left_alone(tmp_path: Path) -> None:
+    log = tmp_path / "a.jsonl"
+    fleet_router.record(log, "assigned", unit="kit#19", lane="squad1", at_epoch=1000.0)
+    assert fleet_router.reap(log, lanes={"squad1": "free"}, branches=set(),
+                             now=1000.0 + 10) == []
+
+
+def test_a_unit_on_a_busy_lane_is_never_reaped(tmp_path: Path) -> None:
+    """The commonest case is a lane taking a long time, and reaping that would
+    hand the same unit to a second lane while the first is still writing."""
+    log = tmp_path / "a.jsonl"
+    fleet_router.record(log, "assigned", unit="kit#19", lane="squad1", at_epoch=1000.0)
+    assert fleet_router.reap(log, lanes={"squad1": "busy"}, branches=set(),
+                             now=1000.0 + fleet_router.GRACE * 10) == []
+
+
+def test_a_unit_that_produced_a_branch_is_not_abandoned(tmp_path: Path) -> None:
+    """The lane did the work and stopped, which is what a lane is supposed to do.
+    Landing it is the lander's job, not the reaper's."""
+    log = tmp_path / "a.jsonl"
+    fleet_router.record(log, "assigned", unit="kit#19", lane="squad1", at_epoch=1000.0)
+    assert fleet_router.reap(log, lanes={"squad1": "free"},
+                             branches={"fix/kit19-readonly-zone"},
+                             now=1000.0 + fleet_router.GRACE * 10) == []
+
+
+def test_a_unit_on_a_lane_of_unknown_state_is_not_reaped(tmp_path: Path) -> None:
+    """`unknown` means the check did not run. Acting on it would be deciding from
+    an absent measurement, which is the defect this kit finds most."""
+    log = tmp_path / "a.jsonl"
+    fleet_router.record(log, "assigned", unit="kit#19", lane="squad1", at_epoch=1000.0)
+    assert fleet_router.reap(log, lanes={"squad1": "unknown"}, branches=set(),
+                             now=1000.0 + fleet_router.GRACE * 10) == []

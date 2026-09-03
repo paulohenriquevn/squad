@@ -51,6 +51,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -99,11 +100,17 @@ class Plan:
 
 # ── the log ───────────────────────────────────────────────────────────────────
 
+#: How long a unit may sit on a free lane with nothing to show before it is
+#: called abandoned. Long enough that a lane which simply had not started yet is
+#: never reaped; short enough that a dead lane does not hold a unit for a day.
+GRACE = 1800.0
+
+
 def record(log: Path, event: str, **fields: object) -> None:
     """Append one event. The log is the state; nothing else is."""
     log.parent.mkdir(parents=True, exist_ok=True)
     row = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-           "event": event, **fields}
+           "at_epoch": time.time(), "event": event, **fields}
     with log.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
@@ -132,6 +139,64 @@ def in_flight(log: Path) -> dict[str, str]:
             continue
         if row.get("event") == "assigned":
             held[unit] = row.get("lane", "")
+        elif row.get("event") == "released":
+            held.pop(unit, None)
+    return held
+
+
+def reap(log: Path, *, lanes: dict[str, str], branches: set[str],
+         now: float | None = None) -> list[str]:
+    """Release units nobody is working on any more, and return what was released.
+
+    Three facts must hold together, because each on its own is normal:
+
+    - the lane is **free** — not busy (a lane taking a long time is the commonest
+      case, and reaping it hands the same unit to a second writer) and not
+      `unknown`, which means the check did not run and is never grounds to act;
+    - **no branch exists** — a branch means the lane did the work and stopped,
+      which is what a lane is supposed to do; landing it belongs to the lander;
+    - the grace period has passed, so a lane that had not started yet is safe.
+
+    Without this the log is correct-looking state over work nobody is doing: the
+    router never re-offers the unit and no lane is on it. That is the fleet's
+    10h33m idle failure rebuilt one level up.
+    """
+    now = time.time() if now is None else now
+    assigned = _assignment_rows(log)
+    released: list[str] = []
+    for unit, (lane, when) in assigned.items():
+        if lanes.get(lane) != "free":
+            continue
+        number = unit.split("#")[-1]
+        if any(re.match(rf"^fix/kit{re.escape(number)}(?![0-9])", b) for b in branches):
+            continue
+        if now - when < GRACE:
+            continue
+        record(log, "released", unit=unit, lane=lane,
+               reason=f"{lane} has been free for over {int(GRACE)}s with no branch "
+                      f"for {unit}; treating it as abandoned so it can be offered again")
+        released.append(unit)
+    return released
+
+
+def _assignment_rows(log: Path) -> dict[str, tuple[str, float]]:
+    """`{unit: (lane, assigned_at)}`, replayed like `in_flight` but keeping the
+    timestamp the reaper needs."""
+    if not log.is_file():
+        return {}
+    held: dict[str, tuple[str, float]] = {}
+    for number, line in enumerate(log.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise StateUnreadable(f"{log}:{number} is not JSON ({exc})") from exc
+        unit = row.get("unit")
+        if not unit:
+            continue
+        if row.get("event") == "assigned":
+            held[unit] = (row.get("lane", ""), float(row.get("at_epoch") or 0.0))
         elif row.get("event") == "released":
             held.pop(unit, None)
     return held
@@ -421,8 +486,16 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         states = lane_states(lanes)
-        the_plan = plan(units=units, lanes=states, log=log,
-                        branches=open_branches(Path(args.kit_path)),
+        branches = open_branches(Path(args.kit_path))
+        if branches is None:
+            raise StateUnreadable(
+                "the repository's branches could not be listed, so whether a unit "
+                "is already being worked on is unknown. Refusing to plan.")
+        # Reaped BEFORE planning: a unit released now is offered in the same run,
+        # which is the difference between recovering and merely noticing.
+        for freed in reap(log, lanes=states, branches=branches):
+            notes.append(f"released {freed}: its lane is free with nothing to show")
+        the_plan = plan(units=units, lanes=states, log=log, branches=branches,
                         closed=closed_in_history(Path(args.kit_path)))
     except StateUnreadable as exc:
         print(str(exc), file=sys.stderr)
