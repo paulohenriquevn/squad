@@ -369,3 +369,68 @@ def test_prose_naming_no_item_at_all_was_already_a_wall_and_stays_one() -> None:
 
     assert live_blockers(
         _item_blocked_by("B-060", "aguardando decisao do sponsor"), statuses) == []
+
+
+def test_an_item_held_by_a_person_is_named_as_such() -> None:
+    """`AWAITING_HUMAN` was declared by five cycle rules with **Emit it.** and
+    emitted by nothing.
+
+    `check_orphan_verdicts` exists to catch exactly that and could not see it: it
+    tested membership by substring, and `AWAITING_HUMAN` matched inside
+    `INVALID_AWAITING_HUMAN`, in a comment. The defect hid itself, and the gate's
+    own test asserted `findings == []` on the strength of that comment.
+
+    The rules say what the absence costs, and it is measurable: "without the event
+    it leaves no trace, and every reader — the board, the drift checker, the
+    selector, the watchdog — sees an item that was never touched." Measured on a
+    consumer on 2026-09-02: **14 items in exactly that state**, indistinguishable
+    from untouched, while a fleet ran thirteen rounds reporting nothing to do.
+    """
+    text = "\n".join([
+        item_block("B-001", status="triaged",
+                   extra="blocked_by: aguardando decisao do sponsor\n"),
+        item_block("B-002", status="triaged", extra="blocked_by: B-003\n"),
+        item_block("B-003", status="triaged"),
+    ])
+
+    result = select(text)
+
+    assert result.awaiting_human == ["B-001"], (
+        "an impediment naming no item is a person's to open, and must be named "
+        "apart from one waiting on another item")
+
+
+def test_it_is_reported_even_when_there_is_work_to_do() -> None:
+    """An item awaiting a person is awaiting one whether or not other work exists.
+    Reporting it only on an empty queue is how 14 of them stayed invisible behind a
+    queue of 5."""
+    text = "\n".join([
+        item_block("B-001", status="triaged",
+                   extra="blocked_by: aguardando decisao do sponsor\n"),
+        item_block("B-002", status="triaged"),
+    ])
+
+    result = select(text)
+
+    assert result.verdict == "ITEM_SELECTED"
+    assert result.item_id == "B-002"
+    assert result.awaiting_human == ["B-001"], "held items vanished behind a non-empty queue"
+
+
+def test_the_field_is_present_even_when_empty() -> None:
+    """A reader that must infer "nobody is waiting on a person" from a missing key
+    cannot tell it apart from a selector too old to report the field."""
+    result = select(item_block("B-001", status="triaged"))
+
+    assert result.as_dict()["awaiting_human"] == []
+
+
+def test_waiting_on_another_item_is_not_awaiting_a_person() -> None:
+    """The distinction is the whole point: one clears itself when the other item
+    ships, the other never clears without a decision."""
+    text = "\n".join([
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="triaged"),
+    ])
+
+    assert select(text).awaiting_human == []

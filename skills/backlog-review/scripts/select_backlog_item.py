@@ -98,6 +98,19 @@ class Selection:
     #: Selectable items in the order they would be picked. Lets a caller take a batch
     #: without re-running, which is what the pipeline needs to fill more than one lane.
     queue: list[str] | None = None
+    #: Items held by something only a PERSON can open — a decision, an approval, a
+    #: dependency in another repository. This is `AWAITING_HUMAN`, the verdict five
+    #: cycle rules declare with **Emit it.** and that nothing emitted until
+    #: 2026-09-02: `check_orphan_verdicts` could not see the gap because it tested
+    #: membership by substring and `AWAITING_HUMAN` matched inside
+    #: `INVALID_AWAITING_HUMAN`, in a comment. The defect hid itself.
+    #:
+    #: Those rules say what the absence costs, and it is measurable: "without the
+    #: event it leaves no trace, and every reader — the board, the drift checker,
+    #: the selector, the watchdog — sees an item that was never touched." Measured
+    #: on a consumer the same day: 14 items in exactly that state, indistinguishable
+    #: from untouched, while a fleet ran 13 rounds reporting nothing to do.
+    awaiting_human: list[str] | None = None
     #: Items a phase stopped on and wrote a BLOCKED report for. Held out of the queue
     #: and named, because they are neither free nor blocked by another item.
     halted: list[str] | None = None
@@ -109,6 +122,11 @@ class Selection:
             "reason": self.reason,
             "walls": self.walls or {},
             "queue": self.queue or [],
+            # Emitted even when empty. A reader that has to infer "no item is
+            # awaiting a person" from a missing key cannot tell it apart from a
+            # selector too old to report the field — and the whole point of this
+            # verdict is that an item held by a person should leave a trace.
+            "awaiting_human": self.awaiting_human or [],
         }
 
 
@@ -224,10 +242,17 @@ def select(text: str, requested: str | None = None,
     ordered = rank(free, unblocking)
     queue = [i.item_id for i in ordered]
 
+    # An empty wall list means the impediment names no item — a person's decision,
+    # an approval, another repository. Reported on EVERY verdict, not only when the
+    # queue is empty: an item awaiting a person is awaiting one whether or not
+    # other work exists, and the rules that declare this verdict say the cost of
+    # not emitting it is that "every reader sees an item that was never touched".
+    awaiting = sorted(k for k, v in walls.items() if not v)
+
     if requested:
         if requested not in by_id:
             return Selection("BACKLOG_BLOCKED", reason=f"{requested} is not in this backlog",
-                             walls=walls, queue=queue, halted=stopped)
+                             walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
         status = statuses.get(requested, "")
         if status not in SELECTABLE:
             verdict = NOT_SELECTABLE.get(status)
@@ -235,20 +260,20 @@ def select(text: str, requested: str | None = None,
                 return Selection("BACKLOG_BLOCKED", item_id=requested,
                                  reason=f"{requested} carries no status this contract knows"
                                         f" ({status or 'the field is absent'})",
-                                 walls=walls, queue=queue, halted=stopped)
+                                 walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
             nexts = {"ITEM_IN_FLIGHT": " It has a plan; continue with /idea-to-release.",
                      "ITEM_SHIPPED": "", "ITEM_KILLED": ""}
             return Selection(verdict, item_id=requested,
                              reason=f"{requested} is {status}, past the point where SELECT hands"
                                     f" out work.{nexts[verdict]}",
-                             walls=walls, queue=queue, halted=stopped)
+                             walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
         if requested in halted:
             return Selection(
                 "ITEM_HALTED", item_id=requested,
                 reason=(f"{requested} is {status}, but a phase stopped on it and wrote a "
                         f"BLOCKED report. Starting it again reruns what halted; read the "
                         f"report first."),
-                walls=walls, queue=queue, halted=stopped)
+                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
         blockers = live_blockers(by_id[requested], statuses)
         if blockers is not None:
             waiting = ", ".join(blockers) if blockers else "something with no item to point at"
@@ -256,10 +281,10 @@ def select(text: str, requested: str | None = None,
                 "BACKLOG_BLOCKED", item_id=requested,
                 reason=(f"{requested} waits on {waiting}. Starting it now would build "
                         f"against a dependency that does not exist yet."),
-                walls=walls, queue=queue, halted=stopped)
+                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
         return Selection("ITEM_SELECTED", item_id=requested,
                          reason=f"{requested} is {status} and nothing blocks it",
-                         walls=walls, queue=queue, halted=stopped)
+                         walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
 
     if ordered:
         chosen = ordered[0]
@@ -273,23 +298,30 @@ def select(text: str, requested: str | None = None,
             reason = (f"{chosen.item_id} is {statuses[chosen.item_id]}, the oldest "
                       f"unblocked item of the highest-ranked status")
         return Selection("ITEM_SELECTED", item_id=chosen.item_id, reason=reason,
-                         walls=walls, queue=queue, halted=stopped)
+                         walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
 
     if walls or stopped:
         held = len(walls) + len(stopped)
+        # An empty wall list means the impediment names no item — a person's
+        # decision, an approval, another repository. That is a different fact from
+        # "waits on B-075", and conflating them is what made 14 items look like a
+        # queue somebody could work through.
+        by_item = len(walls) - len(awaiting)
         return Selection(
             "BACKLOG_BLOCKED",
             reason=(f"{held} selectable item(s) remain and every one is held "
-                    f"({len(walls)} by an impediment, {len(stopped)} by a phase that "
-                    f"halted). "
+                    f"({by_item} by another item, {len(awaiting)} AWAITING_HUMAN — a "
+                    f"decision, approval or dependency only a person opens — and "
+                    f"{len(stopped)} by a phase that halted). "
                     f"This is not an empty backlog — running a sweep would add items "
                     f"beside a wall instead of clearing it."),
-            walls=walls, queue=queue, halted=stopped)
+            walls=walls, queue=queue, halted=stopped,
+            awaiting_human=awaiting)
 
     return Selection("BACKLOG_EMPTY",
                      reason=("nothing is raw or triaged. Not a finish line — "
                              "run /discover-execute --sweep {domain}."),
-                     walls=walls, queue=queue, halted=stopped)
+                     walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
 
 
 def main() -> int:

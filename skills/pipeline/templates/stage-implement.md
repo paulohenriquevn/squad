@@ -19,8 +19,17 @@ it:**
 
 ```bash
 git -C {REPO} worktree add -b pipeline/{ITEM_SLUG} \
-    /tmp/squad-worktrees/{ITEM_SLUG} HEAD
+    "/tmp/squad-worktrees/{ITEM_SLUG}-$(date +%s)" HEAD
 ```
+
+The timestamp is not decoration. `settings.json` denies `Bash(rm -rf *)` — every
+form of it, deliberately — so a worktree path that already exists cannot be
+cleared and the command fails. Measured on 2026-09-02: a fleet lane hit exactly
+this, tried `rm -rf`, was refused, and spent three attempts looking for a way
+around a rule it was right not to break. A fresh path needs no cleanup.
+
+If you must retire a worktree, `git worktree remove <path>` is the tool for it —
+it is not `rm -rf`, and it is not denied.
 
 Then work in `/tmp/squad-worktrees/{ITEM_SLUG}`, not in `{REPO}`.
 
