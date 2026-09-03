@@ -47,10 +47,10 @@ dod:
 """
 
 
-def _project(tmp_path: Path, *, specialist: bool) -> Path:
+def _project(tmp_path: Path, *, specialist: bool, row: str | None = None) -> Path:
     (tmp_path / "rules").mkdir()
     (tmp_path / "rules" / "domain-routing.txt").write_text(
-        "alpha | alpha-repo | agents/alpha.md\n", encoding="utf-8"
+        row or "alpha | alpha-repo | agents/alpha.md\n", encoding="utf-8"
     )
     agents = tmp_path / "agents"
     agents.mkdir()
@@ -92,3 +92,28 @@ def test_the_blocker_names_the_file_that_is_missing(tmp_path: Path) -> None:
         f["message"] if isinstance(f, dict) else f.message for f in report["findings"]
     )
     assert "agents/alpha.md" in messages
+
+
+def test_a_domain_that_names_no_specialist_at_all_is_a_blocker(tmp_path: Path) -> None:
+    """The other arm of the same guard, and it had no test.
+
+    Found by mutation on 2026-09-03: replacing `if agent is None:` with `if False:` left all three
+    cases green. The guard has two arms — a domain naming a file that is not on disk, and a domain
+    naming no file at all — and only the first was covered. Half a guard asserted is not a guard
+    asserted.
+
+    Reachable, not hypothetical: a row with a trailing pipe and an empty third field parses to
+    `agent: None`, which is what a half-finished `detect_domains.py --write` leaves behind. Its
+    consequence is worse than a missing file, because there is no path for a reader to check.
+    """
+    report = check_backlog(_project(tmp_path, specialist=True, row="alpha | alpha-repo |\n"))
+
+    assert "broken_route" in _kinds(report), (
+        "a domain that routes to nobody was reported as healthy"
+    )
+    messages = " ".join(
+        f["message"] if isinstance(f, dict) else f.message for f in report["findings"]
+    )
+    assert "names no specialist" in messages, (
+        "the blocker did not say the domain names no specialist at all"
+    )
