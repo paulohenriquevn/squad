@@ -65,7 +65,7 @@ class ScopeReport:
     reason: str = ""
 
 
-_ITEM_RE = re.compile(r"\bB-\d{3}\b")
+_ITEM_RE = re.compile(r"\bB-\d{3,}\b")
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 
 

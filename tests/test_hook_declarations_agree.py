@@ -22,6 +22,13 @@ complete.
 The third file, `settings.plugin.json`, is generated and already has its own
 check (`generate_plugin_settings.py --check`). This covers the pair that has
 none.
+
+`hooks/README.md` is a FOURTH declaration of the same set — the roster a
+contributor reads to learn what runs when. Measured 2026-09-03: the count line
+said 8 while `hooks/*.py` held 9, and `english-only-check.py` was absent from
+the table entirely. A hand-kept list next to the thing it lists is the shape
+that produced this defect; a fix without a test buys one release, so the
+comparison lives here alongside the other two.
 """
 from __future__ import annotations
 
@@ -77,6 +84,46 @@ def test_both_layouts_declare_the_same_hooks() -> None:
             f"{event}: {sorted(only_standalone)} declared in settings.json only — "
             "absent from the native plugin layout"
         )
+
+
+_README_COUNT_RE = re.compile(r"(\d+)\s+defensive runtime hooks")
+_README_TABLE_ROW_RE = re.compile(r"^\|\s*`([a-z_-]+\.py)`\s*\|", re.MULTILINE)
+
+
+def _readme_roster() -> tuple[int, set[str]]:
+    """Return `(declared_count, table_scripts)` from `hooks/README.md`."""
+    text = (PROJECT_ROOT / "hooks" / "README.md").read_text(encoding="utf-8")
+    count_match = _README_COUNT_RE.search(text)
+    assert count_match, "hooks/README.md does not declare a hook count"
+    return int(count_match.group(1)), set(_README_TABLE_ROW_RE.findall(text))
+
+
+def _hook_scripts_on_disk() -> set[str]:
+    return {p.name for p in (PROJECT_ROOT / "hooks").glob("*.py")}
+
+
+def test_readme_roster_matches_directory() -> None:
+    """The README count and table must agree with `hooks/*.py`.
+
+    A hand-maintained roster beside a directory that grows drifts silently;
+    only the person about to trip the missing hook notices, and by then the
+    guarantee it enforced is already gone.
+    """
+    declared_count, table_scripts = _readme_roster()
+    on_disk = _hook_scripts_on_disk()
+
+    assert declared_count == len(on_disk), (
+        f"hooks/README.md says {declared_count} defensive runtime hooks; "
+        f"hooks/*.py holds {len(on_disk)}"
+    )
+    only_readme = table_scripts - on_disk
+    only_disk = on_disk - table_scripts
+    assert not only_readme, (
+        f"hooks/README.md table lists {sorted(only_readme)} not present in hooks/"
+    )
+    assert not only_disk, (
+        f"hooks/*.py contains {sorted(only_disk)} absent from hooks/README.md table"
+    )
 
 
 @pytest.mark.parametrize("declaration", ["hooks/hooks.json", "settings.json"])
