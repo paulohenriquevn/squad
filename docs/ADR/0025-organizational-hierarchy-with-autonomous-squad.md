@@ -27,11 +27,14 @@ Implement a **three-layer organizational structure** inspired by AIDLC Workflows
 - **Intervention frequency:** 1-2 times per month (strategic only)
 - **How it works:** CTO approves backlog once per quarter; Squad routes all approved work autonomously
 
-### Layer 2: Management (3 Managers + Architects)
-- **Responsibility:** People allocation, code review standards, documentation, mentorship
-- **Decision authority:** Who pairs with whom? Are tests clear? Is code maintainable?
-- **Intervention frequency:** 1-2 times per week (post-landing review)
-- **How it works:** Gerentes monitor Squad logs; code review happens after landing (never blocks)
+### Layer 2: Management (3 Managers + Architects + Chief Security Officer)
+- **Responsibility:** People allocation, code review standards, documentation, mentorship, security governance
+- **Decision authority:** Who pairs with whom? Are tests clear? Is code maintainable? Is threat model covered?
+- **Intervention frequency:** 1-2 times per week (post-landing review); Security approvals as-needed
+- **How it works:** 
+  - Gerentes monitor Squad logs; code review happens after landing (never blocks)
+  - CSO defines security policies, threat models, incident response; VERA enforces them autonomously
+  - Security Engineer operationalizes: tools, scanning, incident response
 
 ### Layer 3: Execution (Developers, QA, SRE)
 - **Responsibility:** Pairing guidance, CX validation, observability, incident response
@@ -62,9 +65,17 @@ Squad runs continuously, 100% autonomously, never requiring human approval for t
 - Handles multiple branches per pass
 
 **Descoberta (VERA + Sweep)**
-- **VERA:** Applies 5 FAANG lenses (SOLID, DRY, Coupling, Fail-Fast, Clarity) to 14 open problems; proposes objective solutions
-- **Sweep:** Runs 6 defect-pattern lenses on diffs before landing; transforms findings into GitHub issues
+- **VERA:** Applies 6 FAANG lenses (SOLID, DRY, Coupling, Fail-Fast, Clarity, **SECURITY**) to 14 open problems; proposes objective solutions
+- **Sweep:** Runs 7 defect-pattern lenses on diffs before landing; transforms findings into GitHub issues
+  - Includes: guard-that-guards-nothing, absence-as-answer, fetch-stale-snapshot, workstation-path-leak, second-copy-of-rule, cleanup-discarded, **secret-in-plaintext**
 - Both are informational; do not block landing
+
+**Security Layer**
+- **Chief Security Officer (CSO):** Reports to CTO; defines threat models, security policies, incident response
+- **Security Engineer:** Operationalizes security via SAST, secret scanning, dependency scanning, incident response
+- **VERA SECURITY lense:** Detects SQL injection, command injection, auth bypass, weak crypto, plaintext secrets, unsafe deserialization
+- **Sweep SECRETS lense:** Detects credentials, API keys, private keys, database passwords, crypto keys in plaintext
+- **Lander validation:** Runs SAST + secret scanning + dependency audit; rejects landing if high-severity findings
 
 ---
 
@@ -174,6 +185,12 @@ Theo uses **14 AI agents** (Lane 1/2/3, Router, Lander, VERA, Sweep, and support
 | Test coverage | > 75% | QA + pytest | Weekly |
 | Tech debt ratio | < 10% | Sweep + CTO | Monthly |
 | VERA adoption (proposals → code) | > 80% | Git logs | Quarterly |
+| **Security findings (SAST)** | **0 high/critical** | **Lander + CSO** | **Every landing** |
+| **Secret leaks detected** | **0** | **Sweep + Security Eng** | **Continuous** |
+| **Vulnerable dependencies** | **0 high/critical** | **Lander + CSO** | **Every landing** |
+| **Threat model coverage** | **100%** | **CSO + VERA** | **Quarterly** |
+| **Incident MTTR (respond)** | **< 15 min** | **Security Eng** | **On-incident** |
+| **Incident MTTR (recover)** | **< 60 min** | **Security Eng + Lane** | **On-incident** |
 
 ---
 
