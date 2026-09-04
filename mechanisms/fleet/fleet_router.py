@@ -363,6 +363,45 @@ reason to stop. It is the moment to look for what nobody has filed yet.
 """
 
 
+_CONSUMER_BRIEF = """\
+# Work unit: {slug}
+
+Repository: {project}
+Read the item first: it is in `{project}/BACKLOG.md`, under the `## {slug}` heading.
+Read the WHOLE block — `evidence`, `why_now`, `dod`, and any dated note under it.
+
+This is a CONSUMER project item, not a kit issue. There is no GitHub issue for
+it and `gh issue view {slug}` will not resolve — the id lives in the registry
+above and nowhere else.
+
+## What to do
+
+Run the project's own cycle over it:
+
+    /idea-to-release {slug}
+
+That cycle decides its own stages. Do not substitute a shape it did not ask for:
+a backlog item is not a repair branch, and inventing a worktree-and-test pass for
+one produces a branch the cycle never asked for.
+
+## What the DoD means
+
+The item's `dod` block is the contract. A bullet that is already satisfied is
+reported as satisfied WITH the measurement that shows it; a bullet that cannot be
+satisfied from this session is reported as such, naming what it needs. Neither is
+a failure. Silently skipping one is.
+
+## Absolute limits — no exception, ever
+
+- No `--no-verify`, no `--force`, no `--allow-dirty-tree`, no `--skip-checks`.
+- Do not move a threshold, a baseline or an allowlist to make anything pass.
+- Do not edit `BACKLOG.md` to unblock an item a person must unblock.
+- Never add a `Co-Authored-By:` trailer or any second author to a commit.
+- Everything written into the repository is in ENGLISH.
+- If the only way forward is a bypass, STOP and report instead of deciding alone.
+"""
+
+
 _BRIEF = """\
 # Work unit: {slug}
 
@@ -395,15 +434,32 @@ Read the issue first: `gh issue view {number} --repo {tracker}`
 """
 
 
-def brief(unit: Unit, *, repo: str, tracker: str = "paulohenriquevn/squad") -> str:
+def brief(unit: Unit, *, repo: str, tracker: str = "paulohenriquevn/squad",
+          project: str = "") -> str:
     """The instruction a lane receives. Written here rather than by hand.
 
     Hand-written briefs were the other half of the missing wiring, and on
     2026-09-03 one of them sent a lane to the wrong issue because a substitution
     pattern missed `issue view 19`.
+
+    Three sources, three briefs. A consumer item and a kit issue are NOT variants
+    of one instruction: they name different repositories, different registries
+    and different entry points. Measured 2026-09-04 (kit#27) when they shared
+    one — B-165 was dispatched telling the lane to work in the kit and run
+    `gh issue view B-165 --repo <kit>`, and neither resolves: the id lives in the
+    consumer's BACKLOG.md and the kit's registry is GitHub issues, which cannot
+    hold a B-NNN. The lane halted rather than guess, which was correct and cost
+    the pass.
     """
     if unit.source == "audit":
         return _AUDIT_BRIEF.format(repo=repo, tracker=tracker)
+    if unit.source == "backlog":
+        if not project:
+            raise ValueError(
+                f"{unit.slug} is a consumer backlog item and no project path was "
+                f"given. Briefing it against the kit would send the lane to a "
+                f"repository the item does not live in (kit#27)")
+        return _CONSUMER_BRIEF.format(slug=unit.slug, project=project)
     safe = unit.slug.replace("#", "").replace("/", "-")
     return _BRIEF.format(slug=unit.slug, repo=repo, number=unit.number,
                          tracker=tracker, branch=f"fix/{safe}", safe=safe)
@@ -496,24 +552,94 @@ def plan(*, units: list[Unit], lanes: dict[str, str], log: Path,
     return result
 
 
+def resolve_unit_payload(unit: Unit, *, repo: str, tracker: str) -> dict:
+    """Fetch full unit metadata and return structured payload for workflow.
+
+    Fetches issue body via gh CLI and returns a dict suitable for passing
+    to fleet_dispatch_workflow.js as args.
+
+    Returns:
+        Dict with keys: repo, tracker, unit{slug, number, title, body, branch},
+        worktreeRoot
+    """
+    # Extract branch name from slug (fix/kit<number>[-suffix])
+    safe = unit.slug.replace("#", "").replace("/", "-")
+    branch = f"fix/{safe}"
+
+    # If the unit has a body already (from kit_issues), use it.
+    # Otherwise, fetch via gh issue view
+    body = ""
+    if tracker == "github":
+        try:
+            # Try to fetch issue body from GitHub
+            result = subprocess.run(
+                ["gh", "issue", "view", unit.number, "--json", "body", "-q", ".body"],
+                capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0:
+                body = result.stdout.strip()
+        except Exception:
+            body = unit.title  # Fallback to title if fetch fails
+
+    return {
+        "repo": repo,
+        "tracker": tracker,
+        "unit": {
+            "slug": unit.slug,
+            "number": int(unit.number),
+            "title": unit.title,
+            "body": body or unit.title,
+            "branch": branch,
+        },
+        "worktreeRoot": "/tmp/squad-dispatch",
+    }
+
+
 def dispatch(assignment: Assignment, *, repo: str, log: Path,
-             tracker: str, apply: bool) -> tuple[bool, str]:
+             tracker: str, apply: bool, mode: str = "tmux",
+             project: str = "") -> tuple[bool, str]:
     """Hand one unit over, and record it only once the keystroke landed.
 
     Recording on the decision rather than on delivery would reserve a unit for a
     lane that never received it — and the log is what stops a re-run from
     assigning it elsewhere.
+
+    Args:
+        assignment: (lane, unit) pair
+        repo: Repository path
+        log: Assignment log path
+        tracker: Tracker type (github, jira, etc.)
+        apply: Whether to actually dispatch (else dry-run)
+        mode: "tmux" (default, backward compatible) or "workflow" (new structured dispatch)
     """
-    text = brief(assignment.unit, repo=repo, tracker=tracker)
-    drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.md"
-    if not apply:
-        return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane}"
-    drop.parent.mkdir(parents=True, exist_ok=True)
-    drop.write_text(text, encoding="utf-8")
+    if mode == "workflow":
+        # New workflow mode: write structured JSON payload
+        payload = resolve_unit_payload(assignment.unit, repo=repo, tracker=tracker)
+        drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.json"
+        if not apply:
+            return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane} (workflow mode)"
+        drop.parent.mkdir(parents=True, exist_ok=True)
+        drop.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        workflow_prompt = (
+            f"Read {drop} and invoke the fleet_dispatch_workflow with this payload. "
+            f"The JSON contains all metadata needed: repo, tracker, unit(slug, number, title, body, branch), worktreeRoot."
+        )
+    else:
+        # Traditional tmux mode: write markdown brief
+        text = brief(assignment.unit, repo=repo, tracker=tracker, project=project)
+        drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.md"
+        if not apply:
+            return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane}"
+        drop.parent.mkdir(parents=True, exist_ok=True)
+        drop.write_text(text, encoding="utf-8")
+        workflow_prompt = (
+            f"Read {drop} and do exactly what it says. "
+            f"Follow every limit in it without exception."
+        )
+
     done = subprocess.run(  # noqa: PLW1510 — every exit code below is meaningful
         ["bash", str(_HERE / "dispatch_to_lane.sh"), "--lane", assignment.lane,
-         "--prompt", f"Read {drop} and do exactly what it says. "
-                     f"Follow every limit in it without exception."],
+         "--prompt", workflow_prompt],
         capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if done.returncode != 0:
         # Not recorded. An unrecorded unit is offered again next run, which is the
@@ -522,8 +648,8 @@ def dispatch(assignment: Assignment, *, repo: str, log: Path,
                        f"{assignment.lane} (exit {done.returncode}): "
                        f"{(done.stderr or done.stdout).strip()[:160]}")
     record(log, "assigned", unit=assignment.unit.slug, lane=assignment.lane,
-           source=assignment.unit.source, brief=str(drop))
-    return True, f"{assignment.unit.slug} -> {assignment.lane}"
+           source=assignment.unit.source, brief=str(drop), mode=mode)
+    return True, f"{assignment.unit.slug} -> {assignment.lane} (mode={mode})"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -593,7 +719,7 @@ def main(argv: list[str] | None = None) -> int:
     for assignment in the_plan.assignments:
         ok, line = dispatch(assignment, repo=args.kit_path, log=log,
                             tracker=args.kit_repo or "paulohenriquevn/squad",
-                            apply=args.apply)
+                            apply=args.apply, project=args.project)
         (delivered if ok else notes).append(line)
 
     report = {

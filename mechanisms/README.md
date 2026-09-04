@@ -71,6 +71,8 @@ which is why the rule is now computed rather than requested.
 | `backlog_status.py` | Mechanize the BACKLOG.md status transitions — and the impediment edges |
 | `cycle_events.py` | The cycle's phase transitions, as a stream instead of an excavation |
 | `route_domain.py` | Route a repo (or a B-NNN item) to its domain specialist |
+| `delegated_decision.py` | The line between a wall a sponsor can delegate and one nobody can: a choice between named alternatives, versus an absent machine, an unelapsed series, or a system that is not standing. Impediments are matched first and win; unrecognised prose stays walled, since no match is not consent |
+| `apply_delegated_decisions.py` | Retires the walls the classifier calls delegable and leaves the decision in their place — never deleting a wall, refusing one with no rationale, and refusing a delegable item nobody actually decided |
 | `attest_plan.sh` | Compute a plan's SHA256 and write it to `.attestations/{slug}.sha256` |
 | `run_gates.sh` | A project's quality gates in parallel with a per-gate ceiling: wall-clock becomes the slowest gate instead of their sum, and one hang cannot eat the budget of the rest |
 | `run_slice_tests.sh` | Run every skill slice's test suite in ISOLATION |

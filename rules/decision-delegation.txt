@@ -1,0 +1,54 @@
+# Decision delegation — what the sponsor handed to the system, and what stayed
+#
+# A backlog item whose `blocked_by` names no other item is AWAITING_HUMAN: the
+# selector holds it because the prose describes something only a person opens.
+# That verdict conflates two different things, and the conflation is what keeps
+# a backlog walled for weeks:
+#
+#   A DECISION  — a choice between alternatives the item already names.
+#                 Nothing physical is missing. What is missing is authority.
+#
+#   AN IMPEDIMENT — access, elapsed time, or a running system the item does not
+#                 have. Authority changes nothing here: delegating "provision
+#                 the host" to a process without host access does not provision
+#                 the host, it only removes the sign saying it was not done.
+#
+# The sponsor can delegate the first class. Nobody can delegate the second.
+#
+# DELEGATED (the system decides, records the decision, and the item proceeds)
+#
+#   scope        Which slice of a DoD bullet is in scope for this pass.
+#   status       Which registry transition an item takes when none fits cleanly.
+#   threshold    Where a floor or target is set, when evidence bounds the range.
+#   binary       A choice the item states as one-or-the-other.
+#   option       A choice among alternatives the item enumerates.
+#
+# RETAINED (stays AWAITING_HUMAN regardless of delegation)
+#
+#   access       Needs a machine, credential, or repository the process lacks.
+#   elapsed      Needs time to pass — a data series, a soak, a deadline.
+#   liveness     Needs a system standing that is not standing.
+#   governance   The item itself names autonomous execution as the bypass its
+#                governance exists to prevent. Delegation cannot authorize the
+#                thing it would be a bypass OF.
+#
+# THE FAIL-SAFE
+#
+# An item that matches no class stays blocked. This is deliberate and it is the
+# opposite of the first attempt at this mechanism, which matched the word
+# "config" in an item about provisioning a host and reported it resolved. An
+# unblocking mechanism that guesses moves items into lanes that cannot do them;
+# the lane then either fabricates the work or halts, and both are worse than the
+# wall. Silence is not consent: no match means no delegation.
+#
+# WHAT A DELEGATED DECISION MUST CARRY
+#
+# The `blocked_by` line is replaced, never deleted. What replaces it names the
+# decider, the choice, and the evidence the choice rests on — so the next reader
+# finds a decision rather than an absence. A removed wall with no decision in its
+# place is indistinguishable from a wall nobody ever wrote.
+
+delegated_classes = scope, status, threshold, binary, option
+retained_classes  = access, elapsed, liveness, governance
+on_no_match       = retain
+require_rationale = true
