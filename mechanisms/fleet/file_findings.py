@@ -178,6 +178,83 @@ def file_one(finding: dict, *, repo: str, apply: bool) -> tuple[bool, str]:
     return True, (done.stdout or "").strip()
 
 
+def already_commented(repo: str, issue_number: int, anchor: str = "FINDING_DUPLICATE_V1",
+                      *, timeout: int = 60) -> bool:
+    """Check if we've already left a comment with this pattern on this issue.
+
+    Uses an anchor string to detect if a recent comment from the bot already exists.
+    This prevents spam when the same finding is re-detected on subsequent runs.
+
+    Args:
+        repo: owner/name of the tracker
+        issue_number: GitHub issue number
+        anchor: Distinctive string in the comment to detect (default: FINDING_DUPLICATE_V1)
+        timeout: Timeout for gh command
+
+    Returns:
+        True if we've already commented, False otherwise.
+    """
+    try:
+        done = subprocess.run(
+            ["gh", "issue", "view", str(issue_number), "--repo", repo,
+             "--json", "comments", "-q", ".comments[].body"],
+            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+    except (FileNotFoundError, subprocess.SubprocessError):
+        # If we can't check, assume we haven't (don't spam on error)
+        return False
+
+    if done.returncode != 0:
+        return False
+
+    comments = done.stdout or ""
+    return anchor in comments
+
+
+def comment_duplicate(repo: str, issue_number: int, anchor: str,
+                      *, apply: bool = True, timeout: int = 60) -> tuple[bool, str]:
+    """Post a 'seen again' comment on an existing (open or closed) issue.
+
+    This is used when `triage()` detected that a finding matches an existing issue
+    we already filed. Instead of filing a duplicate, we comment that the pattern
+    was seen again in this run.
+
+    Args:
+        repo: owner/name of the tracker
+        issue_number: GitHub issue number
+        anchor: File:line anchor (e.g., "file.py:42") to include in comment
+        apply: Whether to actually post (else dry-run)
+        timeout: Timeout for gh command
+
+    Returns:
+        Tuple (success, message)
+    """
+    if not apply:
+        return True, f"dry-run: would comment on #{issue_number}"
+
+    # Check if we've already left a comment
+    if already_commented(repo, issue_number):
+        return True, f"already commented on #{issue_number} (suppressed duplicate)"
+
+    comment_text = (
+        f"**FINDING_DUPLICATE_V1** — This pattern was detected again at `{anchor}`. "
+        f"The issue still tracks the problem. If you've since fixed it elsewhere, "
+        f"please close and we'll stop reporting it."
+    )
+
+    try:
+        done = subprocess.run(
+            ["gh", "issue", "comment", str(issue_number), "--repo", repo,
+             "--body", comment_text],
+            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+    except (FileNotFoundError, subprocess.SubprocessError) as exc:
+        return False, f"could not comment on #{issue_number}: {exc}"
+
+    if done.returncode != 0:
+        return False, f"gh returned exit {done.returncode}: {(done.stderr or '').strip()[:160]}"
+
+    return True, f"commented on #{issue_number}"
+
+
 def run(findings: list[dict], *, repo: str, apply: bool) -> tuple[list[str], list[str], int]:
     try:
         existing = existing_issues(repo)

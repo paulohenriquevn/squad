@@ -86,6 +86,18 @@ def assess(*, branch: str, suite: Ran | None, merge: Ran | None,
     inability to measure published as a measurement, and a lander that lets an
     unrun suite through would push it straight to the working branch.
     """
+    #: The merge is judged FIRST because it is the cheap measurement and the
+    #: caller pays for the others in that order. A branch that cannot merge is
+    #: refused whether or not its suite is green, so running the suite first
+    #: buys an answer nobody can act on. Measured 2026-09-04 (kit#26): three
+    #: branches conflicting on CHANGELOG.md cost two suites each per pass, over
+    #: three passes — an hour spent proving branches correct that git would not
+    #: let land. A conflicting merge with no suite run must say so in the merge's
+    #: words: told "the suite was not run", an operator goes hunting a broken
+    #: test runner instead of a conflict.
+    if merge is not None and not merge.ok:
+        return _with_cleanup(Verdict(False, f"{branch}: the merge did not apply — {_tail(merge.text)}"), cleanup)
+
     if suite is None:
         return _with_cleanup(Verdict(False, f"{branch}: the branch's suite was not run, so it is unverified"), cleanup)
     if not suite.ok:
@@ -95,8 +107,6 @@ def assess(*, branch: str, suite: Ran | None, merge: Ran | None,
 
     if merge is None:
         return _with_cleanup(Verdict(False, f"{branch}: the merge was not attempted"), cleanup)
-    if not merge.ok:
-        return _with_cleanup(Verdict(False, f"{branch}: the merge did not apply — {_tail(merge.text)}"), cleanup)
 
     if after is None:
         return _with_cleanup(Verdict(False, f"{branch}: the suite was not run after the merge"), cleanup)
@@ -210,13 +220,21 @@ def land(repo: Path, branch: str, *, apply: bool, timeout: int) -> Verdict:
             return _with_cleanup(
                 Verdict(False, f"{branch}: no scratch worktree for the merge"), tidy())
 
-        # 1. the branch on its own, against its own tree
-        suite = run([sys.executable, "-m", "pytest", "-q"], cwd=alone, timeout=timeout)
-        # 2. the branch merged into the working branch, against a fresh tree
+        # 1. the merge, first, because it is the cheap one. A branch that cannot
+        # merge is refused regardless of what its suite says, so the suites are
+        # not paid for until the merge is known to apply. Ordering them the other
+        # way cost this fleet an hour over three passes (kit#26).
         merged = run(["git", "-C", str(merged_tree), "merge", "--no-ff", "--no-edit",
                       branch], cwd=merged_tree, timeout=120)
+        if not merged.ok:
+            return _with_cleanup(assess(branch=branch, suite=None, merge=merged,
+                                        after=None), tidy())
+
+        # 2. the branch on its own, against its own tree
+        suite = run([sys.executable, "-m", "pytest", "-q"], cwd=alone, timeout=timeout)
+        # 3. and again against the merged tree
         after = run([sys.executable, "-m", "pytest", "-q"], cwd=merged_tree,
-                    timeout=timeout) if merged.ok else None
+                    timeout=timeout)
         verdict = assess(branch=branch, suite=suite, merge=merged, after=after)
         if verdict.land and apply:
             # Pushed from the tree that was measured, so what lands is what passed.
