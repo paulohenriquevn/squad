@@ -5,6 +5,7 @@ fixture cases plus auditor_unavailable handling plus min-confidence threshold.
 """
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 from pathlib import Path
@@ -94,3 +95,78 @@ def test_python_detector_handles_subprocess_timeout(tmp_path: Path) -> None:
         findings = detector.detect_dead_code(tmp_path)
     assert len(findings) == 1
     assert "auditor" in findings[0].allowlist_key
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("vulture") is None,
+    reason="vulture module not importable by the running interpreter",
+)
+def test_dead_code_is_still_detected_when_no_vulture_binary_is_on_PATH(
+    tmp_path: Path, fixtures_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D1 must resolve vulture through the interpreter, not through PATH.
+
+    `vulture` ships as a library plus a console script, and only the console
+    script lands on PATH. Installing it as a dependency of this skill gives the
+    module; whether the `vulture` executable is reachable depends on how the
+    install happened (`pip install --user` writes `~/.local/bin`, a venv writes
+    its own `bin`, a system package may write neither onto the caller's PATH).
+
+    Measured on a host where the module is importable but no `vulture`
+    executable is on PATH: `subprocess.run(["vulture", ...])` raises
+    FileNotFoundError, D1 degrades to `auditor_unavailable_vulture` SOFT_CAP,
+    and a repository full of dead code audits clean. A gate that reports PASS
+    because its auditor never ran is worse than a gate that is absent.
+
+    Emptying PATH is exactly the condition the item was filed on; the module
+    stays importable, so a run through `sys.executable -m vulture` is unaffected
+    while a bare-name PATH lookup cannot resolve.
+    """
+    src = fixtures_dir / "python" / "dead_code_present"
+    target = tmp_path / "dead_code_present"
+    shutil.copytree(src, target)
+
+    empty_bin = tmp_path / "empty-bin"
+    empty_bin.mkdir()
+    monkeypatch.setenv("PATH", str(empty_bin))
+
+    findings = PythonDetector(min_confidence=60).detect_dead_code(target)
+
+    unavailable = [f for f in findings if "auditor_unavailable" in f.allowlist_key]
+    assert unavailable == [], (
+        "D1 lost its auditor with an empty PATH, so the dead code in the fixture "
+        f"went unreported: {[f.message for f in unavailable]}"
+    )
+    dead_findings = [f for f in findings if f.detector == "d1_dead_code"]
+    assert dead_findings, (
+        "the positive fixture must still report dead code when PATH carries no "
+        "vulture executable"
+    )
+
+
+def test_an_unimportable_vulture_module_caps_the_auditor_instead_of_reporting_clean(
+    tmp_path: Path, fixtures_dir: Path
+) -> None:
+    """Resolving vulture through the interpreter must not trade loud for silent.
+
+    A bare-name PATH lookup that misses raises FileNotFoundError, which D1
+    already turns into a SOFT_CAP. `sys.executable -m vulture` against an
+    interpreter that cannot import vulture does something worse: it exits 1 with
+    the traceback on stderr and NOTHING on stdout, which parses as zero findings
+    — a repository of dead code auditing clean with no cap and no warning.
+
+    So the module has to be checked before the run, not inferred from its
+    output.
+    """
+    src = fixtures_dir / "python" / "dead_code_present"
+    target = tmp_path / "dead_code_present"
+    shutil.copytree(src, target)
+
+    with patch("importlib.util.find_spec", return_value=None):
+        findings = PythonDetector(min_confidence=60).detect_dead_code(target)
+
+    assert len(findings) == 1, (
+        f"expected exactly one auditor cap; got {[f.message for f in findings]}"
+    )
+    assert "auditor_unavailable_vulture" in findings[0].allowlist_key
+    assert findings[0].severity == "SOFT_CAP"
