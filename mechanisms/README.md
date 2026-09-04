@@ -57,6 +57,7 @@ which is why the rule is now computed rather than requested.
 | `check_sop_run.py` | The run record: what was judged, and why it differed |
 | `check_sop_structure.py` | The shape of an operating procedure, checked |
 | `check_squad_map.py` | Confront `rules/squad-map.md` with the directory it claims to describe |
+| `check_readme_advisory_skills.py` | README.md and HOW-TO-USE.md must list only skills that exist on disk |
 | `check_wiki_migration.py` | Report a project still reading its durable knowledge from the old root |
 | `check_xrefs.py` | Cross-reference validator for the planning ecosystem |
 | `check_mechanisms_inventory.py` | This README against this directory, both ways |
@@ -91,6 +92,8 @@ which is why the rule is now computed rather than requested.
 | `session_ready.py` | Did a launched session reach a prompt, or is it sitting in a first-run dialog? The check both fleet launchers lacked |
 | `dispatch_to_lane.sh` | One unit of work to one fleet lane, refusing a lane that is not at a prompt — work typed into a busy lane interrupts its turn, and into one in a dialog answers the dialog |
 | `fleet_router.py` | The wiring between "work exists" and "a lane is doing it". Reads the consumer's queue first and the kit's issues only when it is walled, assigns one unit per free lane, and remembers what it routed in an append-only log so a restart resumes instead of double-assigning |
+| `fleet_dispatch_workflow.js` | Two-phase workflow (Repair RED→GREEN, Verify independent) for executing kit issues; called by `dispatch_to_lane.sh` with structured JSON payload containing issue metadata and branch name |
+| `issue_lifecycle.py` | Issue automation — label with 'in-develop' when a commit reaches develop, close when a verified release tag is detected |
 | `lens_review.py` | The kit's own defect lenses, pointed at a diff instead of at history. It parses the six lenses out of `kit_audit_workflow.js` rather than keeping a second copy, and raises when it cannot — a review against zero lenses reports every diff clean. Its findings never block a landing: a model's opinion is not grounds to stall an unattended fleet, so they become issues and get fixed on the next pass |
 | `file_findings.py` | The step between a sweep and a work queue: audit findings that survived an agent trying to refute them become issues a lane can take. Refuses a killed claim, a claim with no evidence, one the tracker already holds open or closed — and refuses everything when the tracker cannot be read, because filing without dedup turns one defect into a duplicate per run |
 | `fleet_supervisor.sh` | The loop that runs the two above and nothing else: route what is startable, land what is verified, repeat. It makes no decision either mechanism refuses to make, and when both have nothing to do it says so rather than manufacturing activity |
