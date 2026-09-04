@@ -105,8 +105,12 @@ outlives its question is a cost with no reader.
 | `clio-historian` | nothing — what the record says about the past |
 | `metis-oracle` | nothing — what is true right now |
 | `leonardo-researcher` | nothing — supplies what a decision needs |
+| `vigil-sentinel` | what deserves an interruption |
+| `aesculapius-healer` | which impediments have already been cured |
+| `argus-pattern-analyst` | what is common to many cases — the one cause behind N symptoms |
+| `nemesis-claim-auditor` | whether the system's own claims are supported by evidence |
 
-Ten roles, and none may do another's half: a role that could do two is a role
+Fourteen roles, and none may do another's half: a role that could do two is a role
 that can overrule itself.
 
 ## Related

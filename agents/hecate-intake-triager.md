@@ -22,6 +22,10 @@ pass. She is not what lies beyond the door.*
 | `clio-historian` | nothing — what the record says about the past |
 | `metis-oracle` | nothing — what is true right now |
 | `leonardo-researcher` | nothing — supplies what a decision needs |
+| `vigil-sentinel` | what deserves an interruption |
+| `aesculapius-healer` | which impediments have already been cured |
+| `argus-pattern-analyst` | what is common to many cases — the one cause behind N symptoms |
+| `nemesis-claim-auditor` | whether the system's own claims are supported by evidence |
 | `eureka-defect-hunter` | what is wrong — not what to do about it |
 
 **The seam against Kairos is the one that keeps this role honest**, and it is a

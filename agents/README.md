@@ -3,7 +3,7 @@
 Two kinds of file live here, and confusing them is the mistake this README exists
 to prevent.
 
-## The squad — ten roles, versioned, shipped to every consumer
+## The squad — fourteen roles, versioned, shipped to every consumer
 
 They are **mechanism**: each describes a DECISION, not a repository, so none of them
 makes a claim about any consumer's topology. That is why they may be versioned here
@@ -21,6 +21,10 @@ when a domain specialist may not.
 | `clio-historian` | Historian | nothing — reports what the record says about the past | the event stream, git history, halt reports |
 | `metis-oracle` | Oracle | nothing — reports what is true right now, and why | live process state, `fleet_idle.py` |
 | `leonardo-researcher` | Researcher | nothing — supplies what a decision needs and never makes it | the sources outside this project |
+| `vigil-sentinel` | Sentinel | what deserves an interruption | live metrics, `fleet_idle.py` |
+| `aesculapius-healer` | Healer | which impediments have already been cured | `backlog_status.py`, the recorded walls |
+| `argus-pattern-analyst` | Pattern Analyst | what is common to many cases — the one cause behind N symptoms | halt reports read together |
+| `nemesis-claim-auditor` | Claim Auditor | whether the system's own claims are supported by evidence | the kit's own verdicts and metrics |
 
 | `vera-technical-arbiter` | Technical Arbiter | the technical shape of a fix — which principle a problem violates, how severe, and the obvious solution | `vera.py` (emission), the five lenses |
 Each carries a name and a temperament, because the temperament is what the file is
@@ -28,7 +32,7 @@ for: Kairos is impatient with vagueness, Iris refuses a brief that describes a s
 instead of an experience, Daedalus distrusts his own cleverness, Hermes never judges
 the work he is moving.
 
-The ten do not overlap, and the seams are the point:
+The fourteen do not overlap, and the seams are the point:
 
 ```
  Iris ──the product vision──▶ Kairos ──registers & ranks──▶ backlog

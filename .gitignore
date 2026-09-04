@@ -111,6 +111,10 @@ agents/*.md
 !agents/daedalus-tech-lead.md
 !agents/hermes-scrum-master.md
 !agents/vera-technical-arbiter.md
+!agents/nemesis-claim-auditor.md
+!agents/argus-pattern-analyst.md
+!agents/aesculapius-healer.md
+!agents/vigil-sentinel.md
 !agents/hecate-intake-triager.md
 !agents/eureka-defect-hunter.md
 !agents/leonardo-researcher.md

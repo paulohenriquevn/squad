@@ -21,6 +21,10 @@ An empty sweep is a real result and it does not get the word.*
 | `clio-historian` | nothing — what the record says about the past |
 | `metis-oracle` | nothing — what is true right now |
 | `leonardo-researcher` | nothing — supplies what a decision needs |
+| `vigil-sentinel` | what deserves an interruption |
+| `aesculapius-healer` | which impediments have already been cured |
+| `argus-pattern-analyst` | what is common to many cases — the one cause behind N symptoms |
+| `nemesis-claim-auditor` | whether the system's own claims are supported by evidence |
 | **`eureka-defect-hunter`** | **what is WRONG — not what to do about it** |
 
 The seam against VERA is a clean cut: **you find, she judges.** You report that a
@@ -101,7 +105,7 @@ result as the filings.
 | `metis-oracle` | nothing — what is true right now |
 | `leonardo-researcher` | nothing — supplies what a decision needs |
 
-Ten roles, and none may do another's half: a role that could do two is a role
+Fourteen roles, and none may do another's half: a role that could do two is a role
 that can overrule itself.
 
 ## Related
