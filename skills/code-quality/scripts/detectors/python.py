@@ -6,6 +6,7 @@ D3/D4 report explicit capability caps until their external runners are integrate
 """
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
@@ -48,6 +49,25 @@ class PythonDetector(BaseDetector):
             If vulture is unavailable, returns a single SOFT_CAP Finding with
             allowlist_key containing `auditor_unavailable_vulture`.
         """
+        # vulture is resolved through the interpreter running this detector, not
+        # through PATH. It ships as a library plus a console script, and only the
+        # console script lands on PATH — where it lands depends on how the install
+        # happened, so a host can carry a perfectly importable vulture and no
+        # `vulture` executable the gate can reach. Measured on such a host: the
+        # bare-name lookup raised FileNotFoundError, D1 degraded to SOFT_CAP, and
+        # dead code went unreported.
+        #
+        # `-m` moves the failure from PATH to the import system, and an import
+        # failure is quieter than an exec failure: `python -m vulture` without the
+        # module exits 1 with an empty stdout, which parses as zero findings. So
+        # the module is checked here rather than inferred from the output.
+        if importlib.util.find_spec("vulture") is None:
+            return [
+                self._auditor_unavailable(
+                    f"vulture module not importable by {sys.executable} "
+                    "(install it with: python3 -m pip install 'vulture>=2.14')"
+                )
+            ]
         # `--exclude` rather than the bare directory: vulture walks everything
         # below what it is handed, and `_detector_contract.DEFAULT_SKIP_DIRS` — which
         # `enumerate_source_files` already honours — exists to keep this gate on
@@ -56,6 +76,8 @@ class PythonDetector(BaseDetector):
         # adopter's code, with the verdict FAIL_HARD on their strength. Same
         # defect the stop-hook had and fixed; never propagated here.
         cmd = [
+            sys.executable,
+            "-m",
             "vulture",
             "--min-confidence",
             str(self.min_confidence),
@@ -72,7 +94,7 @@ class PythonDetector(BaseDetector):
                 check=False,
             )
         except FileNotFoundError:
-            return [self._auditor_unavailable("vulture not found in PATH")]
+            return [self._auditor_unavailable(f"interpreter {sys.executable} not executable")]
         except subprocess.TimeoutExpired:
             return [self._auditor_unavailable(f"vulture timed out after {_VULTURE_TIMEOUT_SEC}s")]
         except (subprocess.SubprocessError, OSError) as e:

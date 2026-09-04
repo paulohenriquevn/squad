@@ -25,7 +25,7 @@ gate, and an ignored gate protects nothing.
 """
 from __future__ import annotations
 
-import shutil
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -45,7 +45,10 @@ def _project_with_installed_kit(root: Path) -> Path:
     return root
 
 
-@pytest.mark.skipif(shutil.which("vulture") is None, reason="vulture not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("vulture") is None,
+    reason="vulture module not importable by the running interpreter",
+)
 def test_findings_come_from_the_product_and_not_from_the_installed_kit(tmp_path: Path) -> None:
     root = _project_with_installed_kit(tmp_path)
 
@@ -60,7 +63,10 @@ def test_findings_come_from_the_product_and_not_from_the_installed_kit(tmp_path:
     )
 
 
-@pytest.mark.skipif(shutil.which("vulture") is None, reason="vulture not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("vulture") is None,
+    reason="vulture module not importable by the running interpreter",
+)
 def test_the_standalone_repo_still_audits_its_own_scripts(tmp_path: Path) -> None:
     """The exclusion is about `.claude/` as an INSTALL, not about the kit's own
     tree. In the standalone layout the scripts ARE the product, and skipping them

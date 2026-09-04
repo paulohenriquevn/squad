@@ -25,6 +25,8 @@ Each detector wraps an external tool. Without the tool installed, the detector e
 | `mutmut` | Python mutation testing | `pip install 'mutmut>=3.5'` | `^3.5` |
 | `osv-scanner` | Cross-eco CVE (recommended dev prereq) | `go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest` | latest |
 
+`vulture` is the one row that does not have to be reachable as a command. D1 invokes it as `sys.executable -m vulture`, through the interpreter already running the detector, so an install that lands the module without a console script on PATH is enough. An interpreter that cannot import it gets an `auditor_unavailable_vulture` cap naming the install command, rather than a silent pass.
+
 **Pinned versions** were established via `/deps-audit` on 2026-05-22. Update via a new audit run before bumping.
 
 ## Verifying installation

@@ -108,6 +108,8 @@ which is why the rule is now computed rather than requested.
 | `session_catchup.py` | Rebuild context after `/clear`, a fresh session, or a compaction |
 | `start_fleet.sh` | Start a fleet of executing sessions and one watchdog over all of them |
 | `statusline.sh` | The single line Claude Code shows in its status bar |
+| `squad_status.sh` | The state of the squad from any shell — the kit's tree, the consumer's queue, and what is actually executing. Says outright what it cannot see: the coordinating session's own progress lives inside that session, and silence here is not proof of idleness |
+| `workflow_watch.sh` | A running workflow's agents, watched from OUTSIDE the session that spawned them. Reads the JSONL transcripts they write as they work, because the single-instance architecture took the observation surface with it when it retired the tmux lanes. Reports how long a file has been silent and never guesses whether that is thinking, waiting or finished |
 
 ### `distribution/` — into a consumer, and kept in step
 
