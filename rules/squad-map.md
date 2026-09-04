@@ -61,6 +61,7 @@ they may be versioned when a domain specialist may not.
 | `iris-product-designer` | what the product IS, and what the user will experience | `cycle-brainstorm` (4 skills), `/plan-alignment`, `/acceptance` |
 | `daedalus-tech-lead` | one item's technical path — and who builds each part | `/idea-to-release`, the domain specialists |
 | `hermes-scrum-master` | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
+| `vera-technical-arbiter` | the technical shape of a fix — which principle a problem violates, how severe, and the obvious solution | the five lenses; `rules/architecture.md` |
 
 A role that could do two of these could overrule itself — Hermes deciding a stage
 passed, or Daedalus choosing which item he prefers. See

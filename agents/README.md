@@ -3,7 +3,7 @@
 Two kinds of file live here, and confusing them is the mistake this README exists
 to prevent.
 
-## The squad — four roles, versioned, shipped to every consumer
+## The squad — five roles, versioned, shipped to every consumer
 
 They are **mechanism**: each describes a DECISION, not a repository, so none of them
 makes a claim about any consumer's topology. That is why they may be versioned here
@@ -16,12 +16,13 @@ when a domain specialist may not.
 | `daedalus-tech-lead` | Tech Lead | one item's technical path — and who builds each part | `/idea-to-release`, the domain specialists |
 | `hermes-scrum-master` | Scrum Master / Agile Facilitator | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
 
+| `vera-technical-arbiter` | Technical Arbiter | the technical shape of a fix — which principle a problem violates, how severe, and the obvious solution | `vera.py` (emission), the five lenses |
 Each carries a name and a temperament, because the temperament is what the file is
 for: Kairos is impatient with vagueness, Iris refuses a brief that describes a system
 instead of an experience, Daedalus distrusts his own cleverness, Hermes never judges
 the work he is moving.
 
-The four do not overlap, and the seams are the point:
+The five do not overlap, and the seams are the point:
 
 ```
  Iris ──the product vision──▶ Kairos ──registers & ranks──▶ backlog

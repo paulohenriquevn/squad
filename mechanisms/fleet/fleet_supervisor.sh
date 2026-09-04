@@ -30,14 +30,22 @@
 set -uo pipefail
 _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-LANES=""; KIT=""; KIT_REPO=""; PROJECT=""; INTERVAL=300; ONCE=0; APPLY="--apply"
+LANES=""; KIT=""; KIT_REPO=""; PROJECT=""; ONCE=0; APPLY="--apply"
+#: A lane may not sit idle longer than this. Route is seconds of work, so
+#: asking often costs almost nothing and idleness costs the whole point.
+ROUTE_INTERVAL=${ROUTE_INTERVAL:-120}
+#: Land runs two suites per branch. Asking more often than it can finish
+#: just queues a second copy behind the first.
+LAND_INTERVAL=${LAND_INTERVAL:-600}
 while [ $# -gt 0 ]; do
   case "$1" in
     --lanes)    LANES="$2"; shift 2 ;;
     --kit)      KIT="$2"; shift 2 ;;
     --kit-repo) KIT_REPO="$2"; shift 2 ;;
     --project)  PROJECT="$2"; shift 2 ;;
-    --interval) INTERVAL="$2"; shift 2 ;;
+    --interval) ROUTE_INTERVAL="$2"; shift 2 ;;
+    --route-interval) ROUTE_INTERVAL="$2"; shift 2 ;;
+    --land-interval) LAND_INTERVAL="$2"; shift 2 ;;
     --once)     ONCE=1; shift ;;
     --dry-run)  APPLY=""; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -50,23 +58,46 @@ done
 
 _stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-while :; do
-  echo "── $(_stamp) ── route ──"
-  # An empty APPLY must expand to no argument at all, so it is deliberately
-  # unquoted.
-  # shellcheck disable=SC2086
-  python3 "$_here/fleet_router.py" --lanes "$LANES" --kit-path "$KIT" \
-      ${KIT_REPO:+--kit-repo "$KIT_REPO"} ${PROJECT:+--project "$PROJECT"} $APPLY
-  _route=$?
+# Two jobs, two clocks. They were one loop until 2026-09-04, and the measurement
+# that ended that arrangement: routes landed 51, 54 and 53 minutes apart against
+# a configured interval of 10, because land runs two full suites per branch and
+# route waited for it. A lane finishing at 14:35 sat idle until 15:22.
+# `fleet_idle` put the window at 94% idle, 1528 minutes against 92 productive.
+#
+# Nothing was broken. Route is cheap and decides whether a free lane gets work,
+# so it must be frequent. Land is expensive and protects the branch every lane
+# cuts from, so it must be thorough. Letting the second set the first's period
+# is what turned a 10-minute interval into a 50-minute one.
+_route_loop() {
+  while :; do
+    echo "── $(_stamp) ── route ──"
+    # shellcheck disable=SC2086
+    python3 "$_here/fleet_router.py" --lanes "$LANES" --kit-path "$KIT" \
+        ${KIT_REPO:+--kit-repo "$KIT_REPO"} ${PROJECT:+--project "$PROJECT"} $APPLY
+    echo "── $(_stamp) ── route done (next in ${ROUTE_INTERVAL}s) ──"
+    [ "$ONCE" -eq 1 ] && break
+    sleep "$ROUTE_INTERVAL"
+  done
+}
 
-  echo "── $(_stamp) ── land ──"
-  # The lander runs two full suites per branch. It is slow on purpose: what it is
-  # protecting is the working branch every other lane cuts from.
-  # shellcheck disable=SC2086
-  python3 "$_here/fleet_lander.py" --repo "$KIT" $APPLY
-  _land=$?
+_land_loop() {
+  while :; do
+    echo "── $(_stamp) ── land ──"
+    # shellcheck disable=SC2086
+    python3 "$_here/fleet_lander.py" --repo "$KIT" $APPLY
+    echo "── $(_stamp) ── land done (next in ${LAND_INTERVAL}s) ──"
+    [ "$ONCE" -eq 1 ] && break
+    sleep "$LAND_INTERVAL"
+  done
+}
 
-  echo "── $(_stamp) ── pass done (route=$_route land=$_land) ──"
-  [ "$ONCE" -eq 1 ] && break
-  sleep "$INTERVAL"
-done
+_route_loop &
+_route_pid=$!
+_land_loop &
+_land_pid=$!
+
+# Both, not either. A supervisor that keeps printing because one loop survived
+# reads as working while half of it is dead — this kit's most-found defect
+# wearing a new hat.
+trap 'kill "$_route_pid" "$_land_pid" 2>/dev/null' EXIT INT TERM
+wait "$_route_pid" "$_land_pid"

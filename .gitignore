@@ -98,15 +98,16 @@ study-material/**
 agents/*.md
 !agents/README.md
 
-# The kit's own four — the squad. They are mechanism, not domain specialists: each
+# The kit's own five — the squad. They are mechanism, not domain specialists: each
 # describes a DECISION, not a repository, and makes no claim about any consumer's
 # topology. That is the whole reason they may be versioned here when a specialist may
 # not. `squad_lead.py` invokes the facilitator through `claude -p` when the mechanical
 # selector has no answer, and an agent that is not versioned reaches nobody.
 #
 # This list is checked against `mechanisms/distribution/install.sh` by `tests/test_squad_agents.py` —
-# three files naming the same four is three chances to drift.
+# three files naming the same five is three chances to drift.
 !agents/kairos-product-owner.md
 !agents/iris-product-designer.md
 !agents/daedalus-tech-lead.md
 !agents/hermes-scrum-master.md
+!agents/vera-technical-arbiter.md
