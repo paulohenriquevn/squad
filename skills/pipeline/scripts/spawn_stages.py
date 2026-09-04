@@ -106,7 +106,11 @@ _PLACEHOLDER_RE = re.compile(r"\{[A-Z_]+\}")
 _ITEM_RE = re.compile(r"^[A-Za-z]+-\d+$")
 
 
-def _routing(path: Path | None) -> dict[str, str]:
+def _parse_routing_rule(path: Path | None) -> dict[str, str]:
+    """Parse routing rule file into model assignments by stage.
+
+    Returns empty dict if file does not exist or is malformed.
+    """
     if not path or not path.is_file():
         return {}
     out: dict[str, str] = {}
@@ -129,7 +133,7 @@ def spawn(item: str, repo: Path, output_dir: Path,
             f"this was found — check that the caller's shell split it.")
     templates = Path(__file__).resolve().parent.parent / "templates"
     date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    models = _routing(routing_rule)
+    models = _parse_routing_rule(routing_rule)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []

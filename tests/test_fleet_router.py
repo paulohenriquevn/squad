@@ -314,3 +314,107 @@ def test_the_audit_brief_says_to_file_only_what_survived_refutation() -> None:
     # nothing to write. What must not appear is the INSTRUCTION to make one.
     assert "worktree add" not in text, "a sweep writes no code and needs no worktree"
     assert "Write NO code" in text
+
+
+def test_a_consumer_backlog_unit_is_not_briefed_as_a_kit_issue() -> None:
+    """A consumer item is not a kit issue, and the two briefs are not variants.
+
+    Measured 2026-09-04 (kit#27): B-165 was dispatched with the kit-repair
+    template, which told the lane to work in the kit repository and run
+    a `gh issue view B-165` against the kit tracker. Neither resolves —
+    B-165 lives in the consumer's BACKLOG.md, and the kit's registry is GitHub
+    issues, which cannot hold a B-NNN id. The lane halted rather than guess,
+    so every consumer item dispatched this way costs a pass and lands nothing.
+    """
+    unit = fleet_router.Unit("B-165", "an environment lost its edge", "backlog")
+    text = fleet_router.brief(unit, repo="/kit", project="/consumer")
+
+    # It must not send the lane to the kit, nor to a registry that cannot hold it.
+    # A mention of `gh issue view` as a WARNING is fine and wanted; what must not
+    # appear is the instruction form, which carries `--repo <tracker>`.
+    assert "--repo" not in text
+    assert "Read the issue first" not in text
+    assert "/kit" not in text
+    # It must name the consumer and the cycle a consumer item actually runs through.
+    assert "/consumer" in text
+    assert "B-165" in text
+
+
+def test_a_kit_unit_still_gets_the_repair_brief() -> None:
+    """The consumer branch must not disturb the path that already worked."""
+    unit = fleet_router.Unit("kit#19", "a title", "kit")
+    text = fleet_router.brief(unit, repo="/kit", project="/consumer")
+    assert "gh issue view" in text
+    assert "worktree" in text
+
+
+def test_the_consumer_brief_does_not_prescribe_one_cycle_for_every_item() -> None:
+    """A consumer registry carries a `suggested_mode` per item, and the modes
+    enter the cycle at different points.
+
+    Measured 2026-09-04: the first version of this brief hard-coded
+    `/idea-to-release`, and a lane picking up an item whose bullets were all
+    terminal or deferred halted rather than run it — correctly. Its words:
+    *"What would /plan-write plan? Bullet 1 is deferred... A plan for 'no work'
+    is fabrication."* The brief must send the lane to the item's own mode, and
+    must say that an item with no code-shaped work left is a real answer.
+    """
+    unit = fleet_router.Unit("B-067", "gates nobody runs", "backlog")
+    text = fleet_router.brief(unit, repo="/kit", project="/consumer")
+
+    assert "suggested_mode" in text
+    # No single cycle command may be prescribed as the only path.
+    assert "/idea-to-release {slug}" not in text
+    # Reporting that nothing is code-shaped must be named as a valid outcome.
+    assert "fabricat" in text.lower()
+
+
+def test_only_one_consumer_item_is_in_flight_at_a_time(tmp_path) -> None:
+    """Consumer lanes share one checkout, so parallel consumer work cannot run.
+
+    Measured 2026-09-04 (kit#28): three lanes each took a consumer item and
+    wrote cycle artifacts into the same tree. `/implement` requires a clean
+    tree, so the first lane to reach it found 21 dirty files from 6 items and
+    refused — correctly, since the gate was failing on a cause its slice did not
+    create. The steady state of N>1 consumer lanes is that none of them lands
+    anything.
+
+    Kit units keep their parallelism: each cuts its own worktree, so they are
+    genuinely isolated.
+    """
+    log = tmp_path / "assignments.jsonl"
+    units = [fleet_router.Unit("B-079", "", "backlog"),
+             fleet_router.Unit("B-080", "", "backlog"),
+             fleet_router.Unit("B-001", "", "backlog")]
+    lanes = {"squad1": "free", "squad2": "free", "squad3": "free"}
+
+    the_plan = fleet_router.plan(units=units, lanes=lanes, log=log, branches=set())
+
+    assert len(the_plan.assignments) == 1, "a second consumer item shares the first's tree"
+    assert the_plan.assignments[0].unit.slug == "B-079"
+    assert "B-080" in the_plan.unassigned and "B-001" in the_plan.unassigned
+    assert any("one at a time" in n or "shared" in n for n in the_plan.notes)
+
+
+def test_kit_units_still_run_in_parallel(tmp_path) -> None:
+    """The cap is about the shared checkout, not about caution in general."""
+    log = tmp_path / "assignments.jsonl"
+    units = [fleet_router.Unit("kit#19", "", "kit"),
+             fleet_router.Unit("kit#20", "", "kit"),
+             fleet_router.Unit("kit#21", "", "kit")]
+    lanes = {"squad1": "free", "squad2": "free", "squad3": "free"}
+
+    the_plan = fleet_router.plan(units=units, lanes=lanes, log=log, branches=set())
+    assert len(the_plan.assignments) == 3
+
+
+def test_a_consumer_item_already_in_flight_blocks_a_second(tmp_path) -> None:
+    """The cap counts what the log already holds, not just this pass."""
+    log = tmp_path / "assignments.jsonl"
+    fleet_router.record(log, "assigned", unit="B-079", lane="squad1", source="backlog")
+    units = [fleet_router.Unit("B-080", "", "backlog")]
+    lanes = {"squad2": "free", "squad3": "free"}
+
+    the_plan = fleet_router.plan(units=units, lanes=lanes, log=log, branches=set())
+    assert the_plan.assignments == []
+    assert "B-080" in the_plan.unassigned
