@@ -39,9 +39,6 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "What has rotted in the registry?" | auxiliary | `/backlog-review` |
 | "Which specialist owns this repo?" | auxiliary | `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/route_domain.py" {repo}` |
 | "Just locate something in the code" | (no cycle) | Glob/Grep, or `/ast-grep` for structural queries |
-| "Is this operation CP or AP?" | auxiliary | `/cap-theorem-specialist` |
-| "The queue never drains / we OOM under load" | auxiliary | `/backpressure-specialist` |
-| "One slow service took the whole site down" | auxiliary | `/resilience-specialist` |
 | "Boundaries: does this repo have any, and do they still fire?" | auxiliary | `/arch-check` |
 | "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-trajectory-review` | `/trajectory-review [plan-slug]` |
 | "Block code smells automatically on every Write/Edit" | (setup, once) | `/quality-init TARGET` |

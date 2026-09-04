@@ -268,9 +268,6 @@ Beyond the pipeline phases, the bundle ships skills that answer architecture que
 
 | Skill | Answers |
 |---|---|
-| `cap-theorem-specialist` | Consistency vs availability during a network partition; CP/AP classification of an operation |
-| `backpressure-specialist` | A producer outrunning a consumer: buffers, drop policies, flow control |
-| `resilience-specialist` | Timeouts, retries, circuit breakers, bulkheads, load shedding, degradation, recovery |
 | `arch-check` | Whether a repo has architecture boundaries, whether they can still fire, and which ones it already obeys |
 
 Each refuses the shortcut its field is prone to — classifying a product as CP or AP without its configuration, recommending an unbounded buffer, or retrying a non-idempotent operation without protection.

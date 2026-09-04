@@ -496,24 +496,93 @@ def plan(*, units: list[Unit], lanes: dict[str, str], log: Path,
     return result
 
 
+def resolve_unit_payload(unit: Unit, *, repo: str, tracker: str) -> dict:
+    """Fetch full unit metadata and return structured payload for workflow.
+
+    Fetches issue body via gh CLI and returns a dict suitable for passing
+    to fleet_dispatch_workflow.js as args.
+
+    Returns:
+        Dict with keys: repo, tracker, unit{slug, number, title, body, branch},
+        worktreeRoot
+    """
+    # Extract branch name from slug (fix/kit<number>[-suffix])
+    safe = unit.slug.replace("#", "").replace("/", "-")
+    branch = f"fix/{safe}"
+
+    # If the unit has a body already (from kit_issues), use it.
+    # Otherwise, fetch via gh issue view
+    body = ""
+    if tracker == "github":
+        try:
+            # Try to fetch issue body from GitHub
+            result = subprocess.run(
+                ["gh", "issue", "view", unit.number, "--json", "body", "-q", ".body"],
+                capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0:
+                body = result.stdout.strip()
+        except Exception:
+            body = unit.title  # Fallback to title if fetch fails
+
+    return {
+        "repo": repo,
+        "tracker": tracker,
+        "unit": {
+            "slug": unit.slug,
+            "number": int(unit.number),
+            "title": unit.title,
+            "body": body or unit.title,
+            "branch": branch,
+        },
+        "worktreeRoot": "/tmp/squad-dispatch",
+    }
+
+
 def dispatch(assignment: Assignment, *, repo: str, log: Path,
-             tracker: str, apply: bool) -> tuple[bool, str]:
+             tracker: str, apply: bool, mode: str = "tmux") -> tuple[bool, str]:
     """Hand one unit over, and record it only once the keystroke landed.
 
     Recording on the decision rather than on delivery would reserve a unit for a
     lane that never received it — and the log is what stops a re-run from
     assigning it elsewhere.
+
+    Args:
+        assignment: (lane, unit) pair
+        repo: Repository path
+        log: Assignment log path
+        tracker: Tracker type (github, jira, etc.)
+        apply: Whether to actually dispatch (else dry-run)
+        mode: "tmux" (default, backward compatible) or "workflow" (new structured dispatch)
     """
-    text = brief(assignment.unit, repo=repo, tracker=tracker)
-    drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.md"
-    if not apply:
-        return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane}"
-    drop.parent.mkdir(parents=True, exist_ok=True)
-    drop.write_text(text, encoding="utf-8")
+    if mode == "workflow":
+        # New workflow mode: write structured JSON payload
+        payload = resolve_unit_payload(assignment.unit, repo=repo, tracker=tracker)
+        drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.json"
+        if not apply:
+            return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane} (workflow mode)"
+        drop.parent.mkdir(parents=True, exist_ok=True)
+        drop.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        workflow_prompt = (
+            f"Read {drop} and invoke the fleet_dispatch_workflow with this payload. "
+            f"The JSON contains all metadata needed: repo, tracker, unit(slug, number, title, body, branch), worktreeRoot."
+        )
+    else:
+        # Traditional tmux mode: write markdown brief
+        text = brief(assignment.unit, repo=repo, tracker=tracker)
+        drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.md"
+        if not apply:
+            return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane}"
+        drop.parent.mkdir(parents=True, exist_ok=True)
+        drop.write_text(text, encoding="utf-8")
+        workflow_prompt = (
+            f"Read {drop} and do exactly what it says. "
+            f"Follow every limit in it without exception."
+        )
+
     done = subprocess.run(  # noqa: PLW1510 — every exit code below is meaningful
         ["bash", str(_HERE / "dispatch_to_lane.sh"), "--lane", assignment.lane,
-         "--prompt", f"Read {drop} and do exactly what it says. "
-                     f"Follow every limit in it without exception."],
+         "--prompt", workflow_prompt],
         capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if done.returncode != 0:
         # Not recorded. An unrecorded unit is offered again next run, which is the
@@ -522,8 +591,8 @@ def dispatch(assignment: Assignment, *, repo: str, log: Path,
                        f"{assignment.lane} (exit {done.returncode}): "
                        f"{(done.stderr or done.stdout).strip()[:160]}")
     record(log, "assigned", unit=assignment.unit.slug, lane=assignment.lane,
-           source=assignment.unit.source, brief=str(drop))
-    return True, f"{assignment.unit.slug} -> {assignment.lane}"
+           source=assignment.unit.source, brief=str(drop), mode=mode)
+    return True, f"{assignment.unit.slug} -> {assignment.lane} (mode={mode})"
 
 
 def main(argv: list[str] | None = None) -> int:
