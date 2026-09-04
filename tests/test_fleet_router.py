@@ -426,6 +426,12 @@ def test_the_consumer_brief_gives_each_lane_its_own_worktree() -> None:
     assert "ONLY inside" in text or "only inside" in text
 
 
+#: Both briefs must also tell the lane that its worktree does NOT isolate the
+#: stash (kit#31). That rule is asserted in
+#: `tests/test_worktree_briefs_name_the_stash.py`, over every source that hands
+#: out a worktree — five of them — rather than here over two of the five.
+
+
 def test_consumer_items_are_no_longer_capped_at_one(tmp_path) -> None:
     """With per-lane worktrees the cap has nothing left to protect."""
     log = tmp_path / "assignments.jsonl"
