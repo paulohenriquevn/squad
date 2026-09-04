@@ -558,9 +558,42 @@ def plan(*, units: list[Unit], lanes: dict[str, str], log: Path,
             continue
         startable.append(unit)
 
+    #: Consumer items run in the project's own checkout — one tree, shared by
+    #: every lane — while kit repairs each cut their own worktree. So kit units
+    #: parallelise and consumer units cannot: the cycle's `/implement` requires a
+    #: clean tree, and a second lane writing its own cycle artifacts is enough to
+    #: fail the first one's pre-flight. Measured 2026-09-04 (kit#28): three lanes,
+    #: 21 dirty files from 6 items, and the lane that got furthest refused at
+    #: step 1 rather than relax a gate failing on dirt it did not create.
+    #:
+    #: Capping at one is not caution. Three consumer lanes complete ZERO items;
+    #: one completes one. The cap raises throughput — it does not trade it away.
+    #: It comes out when each consumer lane has its own tree, and not before: a
+    #: cap removed on the assumption that isolation works is how this returns
+    #: without anyone noticing.
+    consumer_in_flight = any(
+        slug for slug in held if not slug.startswith("kit#") and slug != AUDIT_SLUG)
+    kept: list[Unit] = []
+    deferred: list[str] = []
+    for unit in startable:
+        if unit.source != "backlog":
+            kept.append(unit)
+            continue
+        if consumer_in_flight:
+            result.notes.append(
+                f"{unit.slug} waits: consumer items share one checkout, so they go "
+                f"one at a time (kit#28)")
+            # Named in `unassigned`, not dropped. A startable item that vanishes
+            # from the plan reads as a shorter queue than there is.
+            deferred.append(unit.slug)
+            continue
+        kept.append(unit)
+        consumer_in_flight = True
+    startable = kept
+
     for lane, unit in zip(free, startable, strict=False):
         result.assignments.append(Assignment(lane, unit))
-    result.unassigned = [u.slug for u in startable[len(result.assignments):]]
+    result.unassigned = [u.slug for u in startable[len(result.assignments):]] + deferred
     return result
 
 
