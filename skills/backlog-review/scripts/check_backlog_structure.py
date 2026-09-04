@@ -317,7 +317,6 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     #
     # This is the same failure the routing gate exists to prevent, one level up, and it failed in the
     # reassuring direction.
-    findings: list[Finding] = []
     if routing is not None:
         for domain, entry in sorted(routing.items()):
             agent = entry.get("agent")
