@@ -57,6 +57,7 @@ which is why the rule is now computed rather than requested.
 | `check_sop_run.py` | The run record: what was judged, and why it differed |
 | `check_sop_structure.py` | The shape of an operating procedure, checked |
 | `check_squad_map.py` | Confront `rules/squad-map.md` with the directory it claims to describe |
+| `check_readme_advisory_skills.py` | README.md and HOW-TO-USE.md must list only skills that exist on disk |
 | `check_wiki_migration.py` | Report a project still reading its durable knowledge from the old root |
 | `check_xrefs.py` | Cross-reference validator for the planning ecosystem |
 | `check_mechanisms_inventory.py` | This README against this directory, both ways |
@@ -71,7 +72,7 @@ which is why the rule is now computed rather than requested.
 | `backlog_status.py` | Mechanize the BACKLOG.md status transitions — and the impediment edges |
 | `cycle_events.py` | The cycle's phase transitions, as a stream instead of an excavation |
 | `route_domain.py` | Route a repo (or a B-NNN item) to its domain specialist |
-| `delegated_decision.py` | The line between a wall a sponsor can delegate and one nobody can: a choice between named alternatives, versus an absent machine, an unelapsed series, or a system that is not standing. Impediments are matched first and win; unrecognised prose stays walled, since no match is not consent |
+| `delegated_decision.py` | The line between a wall a sponsor can delegate and one nobody can: a choice between named alternatives, versus an absent machine, an unelapsed series, or a system that is not standing. Impediments are matched first and win, because a wall that is both is an impediment; unrecognised prose stays walled, since no match is not consent |
 | `apply_delegated_decisions.py` | Retires the walls the classifier calls delegable and leaves the decision in their place — never deleting a wall, refusing one with no rationale, and refusing a delegable item nobody actually decided |
 | `attest_plan.sh` | Compute a plan's SHA256 and write it to `.attestations/{slug}.sha256` |
 | `run_gates.sh` | A project's quality gates in parallel with a per-gate ceiling: wall-clock becomes the slowest gate instead of their sum, and one hang cannot eat the budget of the rest |
@@ -93,10 +94,13 @@ which is why the rule is now computed rather than requested.
 | `session_ready.py` | Did a launched session reach a prompt, or is it sitting in a first-run dialog? The check both fleet launchers lacked |
 | `dispatch_to_lane.sh` | One unit of work to one fleet lane, refusing a lane that is not at a prompt — work typed into a busy lane interrupts its turn, and into one in a dialog answers the dialog |
 | `fleet_router.py` | The wiring between "work exists" and "a lane is doing it". Reads the consumer's queue first and the kit's issues only when it is walled, assigns one unit per free lane, and remembers what it routed in an append-only log so a restart resumes instead of double-assigning |
+| `fleet_dispatch_workflow.js` | Two-phase workflow (Repair RED→GREEN, Verify independent) for executing kit issues; called by `dispatch_to_lane.sh` with structured JSON payload containing issue metadata and branch name |
+| `issue_lifecycle.py` | Issue automation — label with 'in-develop' when a commit reaches develop, close when a verified release tag is detected |
 | `lens_review.py` | The kit's own defect lenses, pointed at a diff instead of at history. It parses the six lenses out of `kit_audit_workflow.js` rather than keeping a second copy, and raises when it cannot — a review against zero lenses reports every diff clean. Its findings never block a landing: a model's opinion is not grounds to stall an unattended fleet, so they become issues and get fixed on the next pass |
 | `file_findings.py` | The step between a sweep and a work queue: audit findings that survived an agent trying to refute them become issues a lane can take. Refuses a killed claim, a claim with no evidence, one the tracker already holds open or closed — and refuses everything when the tracker cannot be read, because filing without dedup turns one defect into a duplicate per run |
 | `fleet_supervisor.sh` | The loop that runs the two above and nothing else: route what is startable, land what is verified, repeat. It makes no decision either mechanism refuses to make, and when both have nothing to do it says so rather than manufacturing activity |
 | `fleet_lander.py` | A lane's verified branch onto the working branch, or the reason it may not. Runs the suite on the branch and again on the merge, in two scratch worktrees, and pushes only what it watched pass. Never closes an issue and never opens the PR to `develop` — both are the operator's |
+| `vera.py` | A measured problem turned into one decision a lane can act on: it picks the dominant engineering lens, states the solution and the severity, and emits the issue body. It DECIDES rather than surveys — the point is a verdict a lane can execute, not a list of options for a person to weigh — and it takes the evidence and the `file:line` references as inputs, so a verdict without them is a verdict about nothing |
 | `fleet_idle.py` | Where the fleet's time went, from the lead's own log: idle vs productive, per decision kind, and which sessions were never handed work |
 | `fleet_wall.sh` | One tmux session showing every executing session side by side, read-only by default, plus a live status pane |
 | `fleet_status.sh` | Every session at once, from the shell: what each is doing, what the lead handed out, what the queue would pick |
@@ -127,3 +131,29 @@ Put it in the family whose consumers already call that kind of thing, add the ro
 above, and let the gate confirm the two agree. A file that belongs to exactly one
 skill is not a mechanism — it lives in `skills/{name}/scripts/`, which is a
 different directory with a different owner.
+
+## VERA — Verifiable Engineering Reference Arbiter
+
+The autonomous technical decision-maker. VERA reads problems (B-001 through B-168), applies five FAANG-level lenses (SOLID, DRY, Coupling, Fail-Fast, Clarity), and proposes the obvious solution. She does not equivocate: when DIP says decouple, she says decouple.
+
+**Lenses:**
+- **SOLID** — violations of SRP, OCP, LSP, ISP, DIP cause brittleness at scale
+- **DRY** — knowledge duplicated in two places diverges; consolidate to one authority
+- **Coupling** — low-coupling, high-cohesion; layering must be respected
+- **Fail-Fast** — silent failures are the worst; fail loud and early with context
+- **Clarity** — code as communication; structure must be immediately obvious
+
+**Input:** Problem statement + evidence + code references  
+**Output:** GitHub issue with title, rationale, solution, scope, and labels
+
+Example:
+```bash
+python3 mechanisms/fleet/vera.py B-022 \
+  --problem "Engine blocked by dashboard outages" \
+  --evidence "init() calls dashboard health check" \
+  --refs "api/engine/init.go:156"
+```
+
+Result: Issue titled "[high] Decouple high-level from low-level modules" with DIP rationale, T1 scope.
+
+VERA is not consultative. She does not say "consider" or "maybe". She says what FAANG would do.
