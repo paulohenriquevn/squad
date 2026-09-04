@@ -3,7 +3,7 @@
 Two kinds of file live here, and confusing them is the mistake this README exists
 to prevent.
 
-## The squad — five roles, versioned, shipped to every consumer
+## The squad — ten roles, versioned, shipped to every consumer
 
 They are **mechanism**: each describes a DECISION, not a repository, so none of them
 makes a claim about any consumer's topology. That is why they may be versioned here
@@ -11,10 +11,16 @@ when a domain specialist may not.
 
 | Agent | Role | Decides | Runs |
 |---|---|---|---|
+| `hecate-intake-triager` | Intake Triager | what crosses from outside into the registry — real, reproducible, not already held | the tracker, `file_findings.py` |
 | `kairos-product-owner` | Product Owner | what work exists, and in what order | `/backlog-item`, `/backlog-review`, `squad_boss.py` |
 | `iris-product-designer` | Product Designer (UX/UI) | what the product IS, and what the user will experience — made visible before it is built | `cycle-brainstorm` (4 skills), `/plan-alignment`, `/acceptance` |
 | `daedalus-tech-lead` | Tech Lead | one item's technical path — and who builds each part | `/idea-to-release`, the domain specialists |
 | `hermes-scrum-master` | Scrum Master / Agile Facilitator | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
+| `vera-technical-arbiter` | Technical Arbiter | the technical shape of a fix — which principle is violated, how severe, the obvious solution | the five lenses, `rules/architecture.md` |
+| `eureka-defect-hunter` | Defect Hunter | what is wrong — not what to do about it | `kit_audit_workflow.js`, `lens_review.py` |
+| `clio-historian` | Historian | nothing — reports what the record says about the past | the event stream, git history, halt reports |
+| `metis-oracle` | Oracle | nothing — reports what is true right now, and why | live process state, `fleet_idle.py` |
+| `leonardo-researcher` | Researcher | nothing — supplies what a decision needs and never makes it | the sources outside this project |
 
 | `vera-technical-arbiter` | Technical Arbiter | the technical shape of a fix — which principle a problem violates, how severe, and the obvious solution | `vera.py` (emission), the five lenses |
 Each carries a name and a temperament, because the temperament is what the file is
@@ -22,7 +28,7 @@ for: Kairos is impatient with vagueness, Iris refuses a brief that describes a s
 instead of an experience, Daedalus distrusts his own cleverness, Hermes never judges
 the work he is moving.
 
-The five do not overlap, and the seams are the point:
+The ten do not overlap, and the seams are the point:
 
 ```
  Iris ──the product vision──▶ Kairos ──registers & ranks──▶ backlog

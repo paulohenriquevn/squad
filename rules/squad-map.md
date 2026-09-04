@@ -62,6 +62,11 @@ they may be versioned when a domain specialist may not.
 | `daedalus-tech-lead` | one item's technical path — and who builds each part | `/idea-to-release`, the domain specialists |
 | `hermes-scrum-master` | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
 | `vera-technical-arbiter` | the technical shape of a fix — which principle a problem violates, how severe, and the obvious solution | the five lenses; `rules/architecture.md` |
+| `eureka-defect-hunter` | what is wrong — not what to do about it | the defect lenses; `rules/architecture.md` |
+| `hecate-intake-triager` | what crosses from outside into the registry | the tracker; `rules/cycle-backlog.md` |
+| `clio-historian` | nothing — reports what the record says about the past | the event stream; `rules/cycle-backlog.md` |
+| `metis-oracle` | nothing — reports what is true right now, and why | live state; `rules/autonomy-envelope.md` |
+| `leonardo-researcher` | nothing — supplies what a decision needs | the sources; `rules/cycle-discover.md` |
 
 A role that could do two of these could overrule itself — Hermes deciding a stage
 passed, or Daedalus choosing which item he prefers. See

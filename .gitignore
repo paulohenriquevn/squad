@@ -111,3 +111,8 @@ agents/*.md
 !agents/daedalus-tech-lead.md
 !agents/hermes-scrum-master.md
 !agents/vera-technical-arbiter.md
+!agents/hecate-intake-triager.md
+!agents/eureka-defect-hunter.md
+!agents/leonardo-researcher.md
+!agents/metis-oracle.md
+!agents/clio-historian.md

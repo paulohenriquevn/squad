@@ -140,6 +140,25 @@ python3 mechanisms/fleet/vera.py B-NNN \
 The split is the point. The script cannot be wrong about a label; you cannot be
 right about a lens without reading. Neither does the other's job.
 
+
+## The other roles, and the seams between them
+
+| Agent | Decides |
+|---|---|
+| `hecate-intake-triager` | what crosses from outside into the registry |
+| `kairos-product-owner` | what work exists, and in what order |
+| `iris-product-designer` | what the user will experience, made visible before it is built |
+| `daedalus-tech-lead` | one item's technical path — and who builds each part |
+| `hermes-scrum-master` | flow: which item enters which lane, and what unblocks a halt |
+| `vera-technical-arbiter` | the technical shape of a fix |
+| `eureka-defect-hunter` | what is wrong — not what to do about it |
+| `clio-historian` | nothing — what the record says about the past |
+| `metis-oracle` | nothing — what is true right now |
+| `leonardo-researcher` | nothing — supplies what a decision needs |
+
+Ten roles, and none may do another's half: a role that could do two is a role
+that can overrule itself.
+
 ## Related
 
 - The lenses, as the sweep uses them: `mechanisms/fleet/kit_audit_workflow.js`

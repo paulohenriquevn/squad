@@ -131,3 +131,21 @@ Plain text, for a log:
 - `LANE FREE: yes | no` — Hermes needs this to schedule the next item
 - `FOR KAIROS:` a cause worth registering as its own item — including a BROKEN
   ROUTE. Omit when there is none
+
+## The other roles, and the seams between them
+
+| Agent | Decides |
+|---|---|
+| `hecate-intake-triager` | what crosses from outside into the registry |
+| `kairos-product-owner` | what work exists, and in what order |
+| `iris-product-designer` | what the user will experience, made visible before it is built |
+| `daedalus-tech-lead` | one item's technical path — and who builds each part |
+| `hermes-scrum-master` | flow: which item enters which lane, and what unblocks a halt |
+| `vera-technical-arbiter` | the technical shape of a fix |
+| `eureka-defect-hunter` | what is wrong — not what to do about it |
+| `clio-historian` | nothing — what the record says about the past |
+| `metis-oracle` | nothing — what is true right now |
+| `leonardo-researcher` | nothing — supplies what a decision needs |
+
+Ten roles, and none may do another's half: a role that could do two is a role
+that can overrule itself.
