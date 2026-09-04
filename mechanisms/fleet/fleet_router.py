@@ -376,13 +376,13 @@ above and nowhere else.
 
 ## What to do
 
-Run the project's own cycle over it:
+The item carries a `suggested_mode` field. Enter the cycle at the point that
+mode asks for — the modes do not share an entry point, and the item's own
+registry rules say which is which. Read the mode, then run the cycle it names.
 
-    /idea-to-release {slug}
-
-That cycle decides its own stages. Do not substitute a shape it did not ask for:
-a backlog item is not a repair branch, and inventing a worktree-and-test pass for
-one produces a branch the cycle never asked for.
+Do not substitute a shape the item did not ask for: a backlog item is not a
+repair branch, and inventing a worktree-and-test pass for one produces a branch
+the cycle never asked for.
 
 ## What the DoD means
 
@@ -390,6 +390,18 @@ The item's `dod` block is the contract. A bullet that is already satisfied is
 reported as satisfied WITH the measurement that shows it; a bullet that cannot be
 satisfied from this session is reported as such, naming what it needs. Neither is
 a failure. Silently skipping one is.
+
+## When there is no code-shaped work left
+
+Check this BEFORE planning anything. An item can be legitimately open while none
+of its bullets is buildable right now — every bullet terminal (shipped, or
+refused with a reason) and the rest deferred behind a measurement nobody has
+taken. Say so and stop. Writing a plan whose content is "do nothing until
+someone measures" is fabrication, and a plan built on it produces a branch that
+implements nothing.
+
+That is a REAL and complete answer. Report which bullets are terminal, which are
+deferred and on what, and hand the item back.
 
 ## Absolute limits — no exception, ever
 
