@@ -81,3 +81,75 @@ def test_the_brief_says_the_stash_escapes_the_worktree(name: str) -> None:
     # Naming the hazard and not the substitute leaves the agent with a clean-tree
     # problem and no move, which is how a documented rule gets stepped around.
     assert "git restore" in brief, f"{name} names no alternative to the stash"
+
+def test_no_unenumerated_site_hands_out_a_worktree() -> None:
+    """The count above catches a brief that DISAPPEARS. This catches one that arrives.
+
+    An auditor found the gap: `_briefs()` is a hardcoded dict, so pinning its length
+    fails when a source is renamed away and passes when a sixth is added — which is
+    the direction that matters, because a new brief handing out a worktree without
+    the stash warning reopens kit#31 through a door nobody is watching.
+
+    So the tree is swept instead of trusted. Anything that tells an agent to cut a
+    worktree must either carry the warning or be enumerated here as a known
+    exception, with the reason.
+    """
+    import subprocess
+
+    #: Files that mention `worktree add` for reasons other than briefing an agent.
+    #: Each needs a reason, because an exemption nobody probes is a door.
+    EXEMPT = {
+        # Cuts its own scratch trees to run suites in. No agent reads it, and it
+        # never stashes — it throws the tree away instead.
+        "mechanisms/fleet/fleet_lander.py",
+        # This file.
+        "tests/test_worktree_briefs_name_the_stash.py",
+
+        # --- read-only reviewers -------------------------------------------------
+        # These five cut `--detach` trees to READ a diff. They are briefed to
+        # review, never to edit, so there is no uncommitted work for a stash to
+        # move. If a reviewer ever gains a writing tool, it stops being exempt and
+        # this list is where that shows up.
+        "skills/review/templates/agent-architecture-reviewer.md",
+        "skills/review/templates/agent-cross-validation-reviewer.md",
+        "skills/review/templates/agent-domain-reviewer.md",
+        "skills/review/templates/agent-test-reviewer.md",
+        "skills/review/templates/agent-wiring-reviewer.md",
+
+        # --- mentions, not instructions ------------------------------------------
+        # The guard itself: it names the command in its own refusal message.
+        "hooks/validate-command.py",
+        # A release procedure a PERSON follows, one tree at a time. The hazard is
+        # concurrent agents; a human cutting one tree has nobody to swap with.
+        "rules/acceptance-target.txt",
+        "rules/templates/acceptance-target.txt",
+        # Prose about what a worktree copies, in a wiring check.
+        "skills/implement/scripts/check_wiring.py",
+        # Test fixtures and assertions that build worktrees to test other things.
+        "skills/implement/tests/conftest.py",
+        "skills/pipeline/tests/test_spawn_stages.py",
+        "tests/test_fleet_router.py",
+        "tests/test_session_ready.py",
+    }
+
+    found = subprocess.run(
+        ["git", "grep", "-l", "worktree add", "--", ":!CHANGELOG.md", ":!*.lock"],
+        cwd=REPO, capture_output=True, text=True,
+    )
+    if found.returncode not in (0, 1):
+        raise AssertionError(f"git grep failed: {found.stderr}")
+
+    sweep = {p for p in found.stdout.split() if p}
+    covered = {
+        "mechanisms/fleet/kit_repair_workflow.js",
+        "mechanisms/fleet/fleet_dispatch_workflow.js",
+        "mechanisms/fleet/fleet_router.py",
+        "skills/pipeline/templates/stage-implement.md",
+    }
+
+    unenumerated = sorted(sweep - covered - EXEMPT)
+    assert not unenumerated, (
+        "these hand out a worktree and are not covered by the stash-warning tests: "
+        f"{unenumerated}. Either add the warning and enumerate it in _briefs(), or "
+        "add it to EXEMPT with the reason it does not brief an agent."
+    )
