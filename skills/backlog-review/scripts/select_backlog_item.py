@@ -78,6 +78,10 @@ _RANK = {status: i for i, status in enumerate(SELECTABLE)}
 #: One verdict was carrying two states — "held back by an impediment" and "already
 #: past this gate" — and only the first is a wall.
 NOT_SELECTABLE = {
+    #: Approved but unplanned: the decision was taken and the plan does not exist
+    #: yet. Not a wall — the next step is `/plan-write`, and saying "in flight"
+    #: would send a reader looking for work nobody has started.
+    "approved": "ITEM_AWAITING_PLAN",
     "planned": "ITEM_IN_FLIGHT",
     "shipped": "ITEM_SHIPPED",
     "killed": "ITEM_KILLED",

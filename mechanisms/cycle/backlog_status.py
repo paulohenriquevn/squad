@@ -43,21 +43,52 @@ import re
 import sys
 from pathlib import Path
 
-LEGAL_STATUS = ("raw", "triaged", "planned", "shipped", "killed")
+LEGAL_STATUS = ("raw", "triaged", "approved", "planned", "shipped", "killed")
 
-#: Where each status may go. `raw -> planned` is absent by contract: nothing reaches
-#: a plan without passing DISCOVER's measurement. `planned -> triaged` is the
-#: send-back — the pipeline returns an item whose plan did not survive review, and
-#: it must land at the stage that produces plans, not at intake.
+#: Where each status may go.
+#:
+#: `raw -> planned` and `triaged -> planned` are absent by contract: nothing reaches a
+#: plan without BOTH passing DISCOVER's measurement AND being approved. Those are two
+#: different questions — "is the hunch real?" and "are we doing it?" — and collapsing
+#: them is what let one registry hold 174 items and exactly 2 `planned`.
+#:
+#: Two send-backs, and they land in different places because they mean different things.
+#: `approved -> triaged` withdraws the decision itself, before any plan existed.
+#: `planned -> approved` returns a plan that did not survive review: the decision to do
+#: the work still stands, only the plan failed, so it lands at the stage that produces
+#: plans rather than at the stage that decides.
 ALLOWED: dict[str, set[str]] = {
     "raw": {"triaged", "killed"},
-    "triaged": {"planned", "killed"},
-    "planned": {"triaged", "shipped", "killed"},
+    "triaged": {"approved", "killed"},
+    "approved": {"planned", "triaged", "killed"},
+    "planned": {"approved", "shipped", "killed"},
     "shipped": set(),
     "killed": set(),
 }
 
-OPEN_STATUS = {"raw", "triaged", "planned"}
+OPEN_STATUS = {"raw", "triaged", "approved", "planned"}
+
+#: Past this line an item stopped being a hypothesis. `killed` from here is a decision
+#: being reversed rather than a measurement coming back negative, and `--kill-reason`
+#: is held to a higher bar: it must name who reversed it and what changed. A reason
+#: that only restates the evidence is what a hypothesis gets; a commitment gets a
+#: person and a change of mind.
+COMMITTED_STATUS = {"approved", "planned"}
+
+#: Does a kill reason name a decision being reversed, rather than only a measurement?
+#:
+#: Deliberately shallow: it looks for a verb of reversal and for someone to attribute it
+#: to. A deeper check would be a judgement, and a mechanism that judges prose is a
+#: mechanism that refuses correct reasons it did not expect. This asks only that the
+#: sentence be ABOUT a reversal — whether the reversal is right is the reader's call.
+_REVERSAL_VERBS = ("reversed", "withdrew", "withdrawn", "cancelled", "canceled",
+                   "rescinded", "revogad", "revertid", "cancelad", "retirad")
+
+
+def _names_a_reversal(reason: str) -> bool:
+    lowered = reason.lower()
+    return any(verb in lowered for verb in _REVERSAL_VERBS)
+
 
 ITEM_ID_RE = re.compile(r"\AB-\d{3,}\Z")
 BLOCK_HEADER_RE = re.compile(r"^##\s+(B-\d+)\s+—\s+.*$", re.MULTILINE)
@@ -247,6 +278,27 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "") -> str:
     if to == "killed":
         if not kill_reason and not KILL_REASON_RE.search(body):
             raise Refused(f"{item_id}: killing an item requires --kill-reason (gate G-K)")
+
+        # Killing a hypothesis and killing a commitment are different acts, and the
+        # reason each needs is different. Before approval the item was a question and
+        # the measurement answered it — "the leak does not reproduce" is the whole
+        # story. After approval somebody with the authority decided the work would be
+        # done, so ending it reverses a decision rather than reporting a result, and a
+        # reason that only restates evidence does not name what is being undone.
+        #
+        # The registry's own doctrine used to say an item "is a hypothesis, not a
+        # commitment" without qualification, which made these two acts cost the same.
+        if current in COMMITTED_STATUS:
+            reason = kill_reason or (KILL_REASON_RE.search(body).group(1) if KILL_REASON_RE.search(body) else "")
+            if not _names_a_reversal(reason):
+                raise Refused(
+                    f"{item_id} is {current}, which is a commitment rather than a "
+                    f"hypothesis: someone decided this would be done. Killing it "
+                    f"reverses that decision, so --kill-reason must name WHO reversed "
+                    f"it and WHAT changed — not only what the evidence showed. "
+                    f"Write it as e.g. 'reversed by <who> <when>: <what changed>'."
+                )
+
         if kill_reason:
             body = _write_field(body, "kill_reason", kill_reason, after="status")
 

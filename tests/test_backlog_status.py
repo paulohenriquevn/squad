@@ -46,9 +46,24 @@ def _blockers(content: str, item_id: str) -> list[str]:
 
 # ── the transition the measurement found missing ──────────────────────────────
 
-def test_triaged_advances_to_planned():
-    """The step that never happened in any install is the one that must work."""
+def test_triaged_advances_to_approved_and_not_straight_to_planned():
+    """The step that never happened in any install now has TWO halves.
+
+    `triaged -> planned` was one move answering two questions: is the hunch real,
+    and are we doing it? That is what let one registry hold 174 items and exactly
+    2 `planned` — the measurement happened and the decision never had a place to
+    be recorded. `approved` is that place.
+    """
     content = _backlog(("B-001", "triaged", ""))
+    assert _status(advance(content, "B-001", "approved"), "B-001") == "approved"
+
+    with pytest.raises(Refused, match="not a legal transition"):
+        advance(content, "B-001", "planned")
+
+
+def test_approved_advances_to_planned():
+    """Once the decision is recorded, the plan is the next step."""
+    content = _backlog(("B-001", "approved", ""))
     assert _status(advance(content, "B-001", "planned"), "B-001") == "planned"
 
 
@@ -58,9 +73,23 @@ def test_raw_cannot_jump_to_planned():
         advance(_backlog(("B-001", "raw", "")), "B-001", "planned")
 
 
-def test_planned_can_be_sent_back_to_triaged():
-    """The pipeline's send-back lands where plans are produced, not at intake."""
+def test_planned_is_sent_back_to_approved_not_to_triaged():
+    """The send-back lands where plans are produced, not where decisions are.
+
+    A plan that failed review did not un-decide the work. Sending it to `triaged`
+    would discard the approval along with the plan, and someone would have to
+    approve the same item twice for one bad draft.
+    """
     content = _backlog(("B-001", "planned", ""))
+    assert _status(advance(content, "B-001", "approved"), "B-001") == "approved"
+
+    with pytest.raises(Refused, match="not a legal transition"):
+        advance(content, "B-001", "triaged")
+
+
+def test_approved_can_be_sent_back_to_triaged():
+    """Withdrawing the decision itself, before any plan existed, is a real move."""
+    content = _backlog(("B-001", "approved", ""))
     assert _status(advance(content, "B-001", "triaged"), "B-001") == "triaged"
 
 

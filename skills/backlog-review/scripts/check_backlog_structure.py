@@ -60,9 +60,9 @@ DOD_BULLET_RE = re.compile(r"^\s*-\s+(.+)$", re.MULTILINE)
 REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 
 REQUIRED_FIELDS = ("domain", "repo", "suggested_mode", "source", "evidence", "why_now", "status")
-LEGAL_STATUS = {"raw", "triaged", "planned", "shipped", "killed"}
+LEGAL_STATUS = {"raw", "triaged", "approved", "planned", "shipped", "killed"}
 LEGAL_MODES = {"review", "live-test", "bug", "evolve"}
-OPEN_STATUS = {"raw", "triaged", "planned"}
+OPEN_STATUS = {"raw", "triaged", "approved", "planned"}
 
 # A DoD bullet built only from these cannot fail, so it cannot close an item.
 VAGUE_TERMS = {

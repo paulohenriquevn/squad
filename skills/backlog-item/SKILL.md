@@ -12,14 +12,16 @@ argument-hint: "{item-slug}"
 
 Take a one-line description of something to improve, fix, verify, or evolve in the governed ecosystem (e.g. *"the trace explorer feels slow"*) and append it as the next `B<N+1>` item in `BACKLOG.md`, with domain routing, a suggested discover mode, and a verifiable Definition of Done.
 
-The item this skill produces is **a hypothesis, not a commitment**. It carries `evidence: none-yet` by design. Proving it — or killing it — is `cycle-discover`'s job.
+The item this skill produces is **a hypothesis, not yet a commitment**. It carries `evidence: none-yet` by design. Proving it — or killing it — is `cycle-discover`'s job.
+
+That word *yet* is the whole distinction. An item stays a hypothesis through `raw` and `triaged`, and killing one there is the cycle working: the measurement did not support the hunch. **`approved` is where it becomes a commitment** — someone with the authority decided it will be done. From there, killing it reverses a decision rather than reporting a result, and `backlog_status.py` refuses a `--kill-reason` that does not name who reversed it and what changed. This skill never produces an approved item: intake is cheap precisely because it commits nobody.
 
 ## Cycle contract
 
 This skill is **phase 0** of [`cycle-backlog`](../../rules/cycle-backlog.md). The cycle rule is the **source of truth** for:
 
 - The item schema and its field semantics
-- Status transitions (`raw → triaged | killed → planned → shipped`)
+- Status transitions (`raw → triaged | killed → approved → planned → shipped`)
 - The 8 registered domains and their repos
 - Hard gates G1–G5, verdicts, anti-patterns, rollback
 - The handoff contract to [`cycle-discover`](../../rules/cycle-discover.md)

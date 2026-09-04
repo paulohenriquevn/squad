@@ -328,10 +328,10 @@ def test_an_illegal_transition_is_returned_not_raised(tmp_path):
 
 def test_one_refusal_does_not_abort_the_others(tmp_path):
     """A run that learns three things and can record two should record two."""
-    backlog = _backlog(tmp_path, ("B-001", "raw"), ("B-002", "triaged"))
+    backlog = _backlog(tmp_path, ("B-001", "raw"), ("B-002", "approved"))
     refusals = apply_writes(backlog, [
         StatusWrite("b-001", status="planned"),   # illegal: raw -> planned
-        StatusWrite("b-002", status="planned"),   # legal
+        StatusWrite("b-002", status="planned"),   # legal: approved -> planned
     ])
     assert len(refusals) == 1
     assert backlog.read_text(encoding="utf-8").count("status: planned") == 1

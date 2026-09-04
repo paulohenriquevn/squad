@@ -8,7 +8,17 @@ Register **one unit of maintenance work** against the governed ecosystem, cheapl
 
 This is phase 0 of the Squad chain. It exists because the downstream cycle (`cycle-discover`) demands measured evidence for everything it accepts, and that demand, applied at intake, would silence the most valuable signal a maintenance team has: the hunch. *"the trace explorer feels slow"* is a legitimate thing to record and an illegitimate thing to plan against. BACKLOG separates the two — it takes the hunch, and hands DISCOVER the job of proving or killing it.
 
-A backlog item is a **hypothesis with an owner and a closing criterion**. It is not a commitment.
+A backlog item is a **hypothesis with an owner and a closing criterion** — until it is
+approved. `raw` and `triaged` are hypotheses, and killing one is the cycle working: the
+measurement did not support the hunch, and the number stays as the record that it was
+asked. `approved` is where that stops. From there the item is a **commitment**: somebody
+with the authority decided it will be done, and reversing that is a decision rather than
+a measurement.
+
+The distinction is not decoration. It changes what killing costs — `killed` from
+`approved` or `planned` requires naming who reversed the decision and why, and the
+mechanism refuses without it. Before approval, `kill_reason` records what the evidence
+showed; after, it records what changed someone's mind.
 
 ## Pre-conditions
 
@@ -80,9 +90,9 @@ dod:
 | `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` |
 | `evidence` | yes | `none-yet` at intake; a pointer once DISCOVER measures |
 | `why_now` | yes | what changed **in our system**; subject to G5 |
-| `status` | yes | `raw` \| `triaged` \| `planned` \| `shipped` \| `killed` |
+| `status` | yes | `raw` \| `triaged` \| `approved` \| `planned` \| `shipped` \| `killed` |
 | `dod` | yes | ≥ 1 verifiable criterion (G4) |
-| `kill_reason` | when `killed` | why the measurement did not support the hypothesis |
+| `kill_reason` | when `killed` | before approval: why the measurement did not support the hypothesis. After: **who reversed the decision, and what changed** |
 | `blocked_by` | when impeded | what stops the item from advancing — see below (G6, G7) |
 
 `suggested_mode` being non-binding is deliberate. A hunch filed as a `bug` that measurement reveals to be a `evolve` must change mode without leaving the backlog — reclassification is a DISCOVER outcome, not a re-intake.
@@ -90,15 +100,27 @@ dod:
 ### Status transitions
 
 ```
-raw ──/discover-execute measures──┬──> triaged ──/plan-write──> planned ──/release──> shipped
-                                  │        ▲                    │
-                                  │        └──── send-back ─────┘
-                                  └──> killed (kill_reason mandatory)
+                  ┌──────── hypothesis ────────┐┌───────── commitment ─────────┐
+
+raw ──measures──┬──> triaged ──approves──> approved ──/plan-write──> planned ──> shipped
+                │        ▲                     │            ▲            │
+                │        └───── send-back ─────┘            └── send-back┘
+                └──> killed                              killed (who reversed it, and why)
+                     (the measurement did not support it)
 ```
 
-`raw → planned` is forbidden. Nothing reaches a plan without passing DISCOVER's
-measurement. `planned → triaged` is the send-back: a plan that did not survive
-review returns to the stage that produces plans, not to intake.
+`raw → planned` and `triaged → planned` are forbidden. Nothing reaches a plan without
+passing DISCOVER's measurement AND being approved — the two are separate questions, and
+collapsing them is what let 174 items in one registry produce exactly 2 `planned`.
+
+`approved → triaged` is the send-back for a decision withdrawn before any plan existed.
+`planned → approved` is the send-back for a plan that did not survive review: the
+decision to do the work still stands, only the plan failed.
+
+**Killing after approval is not the same act as killing before it.** Before, the item was
+a question and the measurement answered it. After, someone had decided, and `kill_reason`
+must say who is reversing that and what changed — the mechanism refuses a bare reason on
+an item past `triaged`.
 
 `shipped` and `killed` are terminal. A killed item keeps its number forever.
 
