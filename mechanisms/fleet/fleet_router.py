@@ -487,6 +487,19 @@ def brief(unit: Unit, *, repo: str, tracker: str = "paulohenriquevn/squad",
                 f"repository the item does not live in (kit#27)")
         safe = unit.slug.replace("#", "").replace("/", "-")
         return _CONSUMER_BRIEF.format(slug=unit.slug, project=project, safe=safe)
+    if unit.source != "kit":
+        # The specific defect in kit#27 was closed by the explicit "backlog"
+        # branch above; the mechanism that let it happen was silent fall-through
+        # here to the kit template for any non-audit non-backlog source. A typo
+        # (`backlogo`) or a source added elsewhere without a brief branch here
+        # reproduces the same bug through a different path — a consumer-shaped
+        # unit dispatched with the kit-repair instructions. Refuse loudly.
+        raise ValueError(
+            f"{unit.slug} has source={unit.source!r}, which brief() does not "
+            f"recognize. Known sources: audit, backlog, kit. Falling back to "
+            f"the kit-repair template silently is the mechanism that let the "
+            f"kit#27 defect land the first time; add a brief branch for this "
+            f"source or fix the source at its origin.")
     safe = unit.slug.replace("#", "").replace("/", "-")
     return _BRIEF.format(slug=unit.slug, repo=repo, number=unit.number,
                          tracker=tracker, branch=f"fix/{safe}", safe=safe)

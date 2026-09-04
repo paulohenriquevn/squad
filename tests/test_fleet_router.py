@@ -348,6 +348,32 @@ def test_a_kit_unit_still_gets_the_repair_brief() -> None:
     assert "worktree" in text
 
 
+def test_brief_refuses_an_unknown_source_rather_than_silently_falling_back_to_the_kit_template() -> None:
+    """The specific defect kit#27 documents (backlog units rendered as kit
+    template) is now caught by the explicit `if unit.source == "backlog"`
+    branch. But the mechanism that let the defect return is unchanged: any
+    source value that is not "audit" or "backlog" falls through to the kit
+    `_BRIEF` template silently.
+
+    A typo (`"backlogo"`, `"backlot"`) or a new source added elsewhere
+    without a matching brief branch reproduces the original bug — a
+    consumer-shaped unit dispatched with the kit-repair instructions —
+    through a different path. The original defect's fix closed the
+    specific instance; this test closes the mechanism by requiring
+    `brief()` to REFUSE an unknown source rather than guess.
+
+    Same shape as the ValueError already raised at line 470 when a
+    backlog unit arrives without `project`: the caller made an error,
+    and silent misrouting is worse than a loud refusal.
+    """
+    unit = fleet_router.Unit("B-165", "an item", "backlogo")  # typo
+    with pytest.raises(ValueError) as exc_info:
+        fleet_router.brief(unit, repo="/kit", project="/consumer")
+    # The refusal must name the source it did not recognize, so the caller
+    # can see what to fix — otherwise it is a stack trace without a diagnosis.
+    assert "backlogo" in str(exc_info.value)
+
+
 def test_the_consumer_brief_does_not_prescribe_one_cycle_for_every_item() -> None:
     """A consumer registry carries a `suggested_mode` per item, and the modes
     enter the cycle at different points.
