@@ -1,7 +1,9 @@
 """The delegation boundary, held against the prose that actually walls a backlog.
 
-Every `blocked_by` string below is copied verbatim from a real registry — the
-Theo backlog on 2026-09-04, where 14 items sat AWAITING_HUMAN. They are here
+Every `blocked_by` string below is taken from a real consumer registry on
+2026-09-04, where 14 items sat AWAITING_HUMAN. Repository names are replaced with
+placeholders — the kit describes any product that adopts it, so a named one would
+make every consumer inherit a map of repos they do not have. They are here
 because the first attempt at this mechanism was tested against invented text and
 reported 6 of these 14 resolvable, including one that asks for a host to be
 provisioned. Invented text agrees with whatever matcher you point at it.
@@ -20,14 +22,14 @@ B139_HOST = (
     "aguardando (1) operador (você) executar migração de ambiente — não é "
     "trabalho de código; requer provisionamento de /opt/theo ou /srv/theo no "
     "host + instalação de unit files systemd + migração do dashboard + "
-    "ownership. (2) Cross-repo: unit files vivem em theo-workspace, sibling repo."
+    "ownership. (2) Cross-repo: unit files vivem em `<sibling>`, sibling repo."
 )
 
 B022_ELAPSED = (
     "decisão T3 do sponsor sobre a fronteira de autenticação do motor (balas 1 e "
     "3 — muda `rules/pre-release-governance.md` T3 → MEET + ADR antes de código; "
     "um loop autônomo escrevendo isto seria o bypass que a governança existe "
-    "para impedir) E acumulação de ~75 dias de série do `theo-cloud`"
+    "para impedir) E acumulação de ~75 dias de série do `<service>`"
 )
 
 B154_LIVENESS = (
@@ -143,7 +145,7 @@ B079_REMEASURE = (
 
 B001_MAP = (
     "decisão de sponsor sobre o mapa da metade `cell` (D2 da opportunity). A "
-    "medição refutou `theo-workload` → `cell-1`: bootstrap-cell-cc.sh:20-22 "
+    "medição refutou `<workload>` → `cell-1`: bootstrap-cell-cc.sh:20-22 "
     "mostra que `cell-1` e `cell-2` já existem como ids de cell"
 )
 

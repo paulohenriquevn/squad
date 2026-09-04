@@ -75,7 +75,7 @@ _IMPEDIMENT_PATTERNS: list[tuple[DecisionClass, str]] = [
     (DecisionClass.ACCESS, r"n[ãa]o\s+[ée]\s+trabalho\s+de\s+c[óo]digo"),
     (DecisionClass.ACCESS, r"sibling\s+repo|cross-repo\s+work\s+fora\s+do\s+escopo"),
     (DecisionClass.ELAPSED, r"acumula[çc][ãa]o\s+de\s+~?\d+\s+dias"),
-    (DecisionClass.ELAPSED, r"s[ée]rie\s+do\s+`?theo-cloud"),
+    (DecisionClass.ELAPSED, r"~?\d+\s+dias\s+de\s+s[ée]rie"),
     (DecisionClass.LIVENESS, r"sess[ãa]o\s+LIVE"),
     (DecisionClass.LIVENESS, r"exige\s+o\s+plano\s+de\s+build\s+de\s+p[ée]"),
     (DecisionClass.LIVENESS, r"n[ãa]o\s+[ée]\s+verific[áa]vel\s+desta\s+sess[ãa]o"),
