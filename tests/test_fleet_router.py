@@ -346,3 +346,24 @@ def test_a_kit_unit_still_gets_the_repair_brief() -> None:
     text = fleet_router.brief(unit, repo="/kit", project="/consumer")
     assert "gh issue view" in text
     assert "worktree" in text
+
+
+def test_the_consumer_brief_does_not_prescribe_one_cycle_for_every_item() -> None:
+    """A consumer registry carries a `suggested_mode` per item, and the modes
+    enter the cycle at different points.
+
+    Measured 2026-09-04: the first version of this brief hard-coded
+    `/idea-to-release`, and a lane picking up an item whose bullets were all
+    terminal or deferred halted rather than run it — correctly. Its words:
+    *"What would /plan-write plan? Bullet 1 is deferred... A plan for 'no work'
+    is fabrication."* The brief must send the lane to the item's own mode, and
+    must say that an item with no code-shaped work left is a real answer.
+    """
+    unit = fleet_router.Unit("B-067", "gates nobody runs", "backlog")
+    text = fleet_router.brief(unit, repo="/kit", project="/consumer")
+
+    assert "suggested_mode" in text
+    # No single cycle command may be prescribed as the only path.
+    assert "/idea-to-release {slug}" not in text
+    # Reporting that nothing is code-shaped must be named as a valid outcome.
+    assert "fabricat" in text.lower()
