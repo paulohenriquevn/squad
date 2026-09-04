@@ -1,6 +1,6 @@
 # Hooks
 
-8 defensive runtime hooks that enforce safety invariants at the shell level.
+9 defensive runtime hooks that enforce safety invariants at the shell level.
 Claude Code executes these automatically at specific lifecycle events, as wired
 in `settings.json`.
 
@@ -21,6 +21,7 @@ Sets `$ECO` (`.claude` or `.`) and `$PROJECT_DIR`.
 | `boundary-check.py` | PreToolUse (Edit/Write) | Blocks writes to study-material/ | 0=allow, 2=block |
 | `post-edit-check.py` | PostToolUse (Edit/Write) | Multi-language linter feedback | 0 always |
 | `public-copy-lint.py` | PostToolUse (Edit/Write) | Bans unverified production claims in README | 0 always (advisory) |
+| `english-only-check.py` | PostToolUse (Edit/Write) | Reports non-English prose in the edited file (rules/english-only.md) | 0 always (advisory) |
 | `stop-validation.py` | Stop | CHANGELOG gate (HARD), secret leak gate (HARD), TDD gate (warn) | 0=clean, 2=block |
 | `precompact-preserve.py` | PreCompact | Snapshots plan + progress before context compaction | 0 always |
 

@@ -47,7 +47,52 @@ _MODAL = "Enter to confirm"
 
 #: The status line the CLI draws once the prompt is live. Matched loosely — the
 #: wording around it changes between versions and the marker has not.
+#:
+#: It says the CLI is UP. It does not say the lane is free: the same bar is drawn
+#: mid-turn, and a working lane draws the same empty composer as an idle one.
+#: Measured 2026-09-03 — three lanes running tools, `ready` for all three. The
+#: turn state comes from `claude agents --json` below, not from the screen.
 _READY = ("shift+tab to cycle", "bypass permissions on")
+
+
+class StatusUnavailable(RuntimeError):
+    """The CLI could not say whether a session is mid-turn.
+
+    Distinct from "the session is idle". Collapsing the two means typing into a
+    working session on the strength of a check that never ran.
+    """
+
+
+def pane_pid(session: str) -> int | None:
+    """The pid tmux runs in the session's first pane — which IS the `claude`
+    process (verified on the fleet: `pane_pid` and the CLI's reported pid match).
+    """
+    done = subprocess.run(  # noqa: PLW1510
+        ["tmux", "list-panes", "-t", session, "-F", "#{pane_pid}"],
+        capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if done.returncode != 0:
+        return None
+    first = (done.stdout or "").strip().splitlines()
+    try:
+        return int(first[0]) if first else None
+    except ValueError:
+        return None
+
+
+def _agent_status() -> dict[int, str]:
+    """`{pid: status}` from `claude agents --json`, the only authoritative source.
+
+    Raises rather than returning an empty map: an empty map and a failed call
+    would be indistinguishable, and one of them means every lane looks idle.
+    """
+    import claude_stream  # local: keeps the import cost off callers that never ask
+    try:
+        rows = claude_stream.sessions()
+    except claude_stream.Unsupported as exc:
+        raise StatusUnavailable(str(exc)) from exc
+    except RuntimeError as exc:
+        raise StatusUnavailable(f"`claude agents --json` did not answer: {exc}") from exc
+    return {int(row["pid"]): str(row.get("status", "")) for row in rows if row.get("pid")}
 
 
 def screen(session: str) -> str | None:
@@ -72,10 +117,57 @@ def state(session: str) -> tuple[str, str]:
     lines = [ln for ln in text.splitlines() if ln.strip()]
     tail = "\n".join(lines[-4:])
     if _MODAL in text:
+        # A modal outranks everything: it is waiting for a keystroke regardless of
+        # what the CLI reports about turns.
         return "dialog", tail
-    if any(marker in text for marker in _READY):
-        return "ready", tail
-    return "starting", tail
+    if not any(marker in text for marker in _READY):
+        return "starting", tail
+
+    # The prompt is live. Whether the lane is mid-turn is a question the screen
+    # cannot answer, so it is asked of the CLI and never guessed.
+    pid = pane_pid(session)
+    if pid is None:
+        return "unknown", f"no pane pid for {session!r}, so its turn state is unknown"
+    try:
+        statuses = _agent_status()
+    except StatusUnavailable as exc:
+        return "unknown", f"{exc}\n{tail}"
+    status = statuses.get(pid)
+    if status is None:
+        return "unknown", (f"pid {pid} is not in `claude agents --json`, so whether "
+                           f"{session!r} is mid-turn is unknown\n{tail}")
+    if status != "idle":
+        return "busy", f"the CLI reports {session!r} as {status}\n{tail}"
+    return "ready", tail
+
+
+#: The composer's own prompt glyph. The CLI draws it followed by U+00A0, not by an
+#: ASCII space, so stripping only ASCII whitespace leaves a character behind and
+#: every empty composer reads as occupied.
+_CARET = "\u276f"
+
+
+def composer_text(screen: str) -> str | None:
+    """What is sitting UNSENT in the composer. `""` when empty, `None` when the
+    pane holds no composer at all.
+
+    `None` is not `""`. Measured 2026-09-03: `dispatch_to_lane.sh` decided
+    "submitted or not" by grepping the WHOLE pane for the text it had sent, and
+    the CLI echoes a submitted prompt into the transcript above the composer — so
+    the predicate held whether the send worked or not, and the branch that
+    reports a successful dispatch had never once run. Three lanes were told they
+    had not received work while they were already building their worktrees.
+
+    Only the last caret line counts. Everything above it is transcript: what the
+    session has already been told, which is precisely the text a naive search
+    finds after a send that WORKED.
+    """
+    caret_lines = [ln for ln in screen.splitlines() if ln.lstrip().startswith(_CARET)]
+    if not caret_lines:
+        # Not "the composer is empty" — "this pane has no composer I can read".
+        # Collapsing the two is the defect this whole function exists to close.
+        return None
+    return caret_lines[-1].lstrip()[len(_CARET):].strip().strip("\u00a0").strip()
 
 
 def wait(session: str, timeout: float = 45.0, interval: float = 1.5) -> tuple[str, str]:
@@ -84,6 +176,12 @@ def wait(session: str, timeout: float = 45.0, interval: float = 1.5) -> tuple[st
     Returns as soon as the verdict is `ready`, `gone` or `dialog`: none of the
     three becomes something else by waiting, and a launcher that sleeps out its
     full timeout on a dialog delays the message the operator needs.
+
+    `busy` is returned as-is even though it DOES clear by waiting. This function
+    waits out a STARTUP, and a caller that blocks here until a lane finishes its
+    turn would hold for as long as the work takes — which is a scheduling
+    decision, not a launch one. Whoever wants a free lane should ask again later;
+    `fleet_router` does exactly that.
     """
     deadline = time.monotonic() + timeout
     verdict, evidence = state(session)

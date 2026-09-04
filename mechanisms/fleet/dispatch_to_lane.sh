@@ -21,8 +21,9 @@
 #
 # Exit codes:
 #   0  delivered
-#   1  the lane is not at a prompt — nothing was typed
+#   1  the lane is not at a prompt, or the text stayed in the composer
 #   2  no such lane
+#   3  the composer could not be read — delivery is UNKNOWN, not confirmed
 
 set -uo pipefail
 _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -88,13 +89,35 @@ tmux send-keys -t "$LANE" "$_line"
 sleep 1
 tmux send-keys -t "$LANE" C-m
 
-# Verify the prompt actually emptied. A line left sitting in the composer is the
-# failure this replaces, and it looks exactly like a lane that finished quickly.
+# Verify the COMPOSER emptied — not that the text vanished from the screen.
+#
+# The first version of this check grepped the whole pane for the text it had just
+# sent. The CLI echoes a submitted prompt into the transcript, so that predicate
+# was true whether the send worked or not: it reported `NOT submitted` on every
+# dispatch, including the three on 2026-09-03 whose lanes were already building
+# their worktrees, and the branch below never once ran. A guard that fires
+# unconditionally cannot distinguish the failure it exists for.
+#
+# `composer_text` reads the last caret line only. Everything above it is what the
+# session has already been told.
 sleep 3
-if tmux capture-pane -p -t "$LANE" 2>/dev/null | grep -qF "$(printf '%s' "$_line" | head -c 40)"; then
-  echo "==> $LANE still shows the text in its prompt — it was NOT submitted." >&2
-  echo "    Nothing to retry automatically: a second C-m could submit whatever a" >&2
-  echo "    person typed there in the meantime." >&2
-  exit 1
-fi
-echo "==> dispatched to $LANE${_drop:+ (instruction at $_drop)}"
+_left="$(tmux capture-pane -p -t "$LANE" 2>/dev/null \
+         | python3 -c 'import sys;sys.path.insert(0,"'"$_here"'");import session_ready as s;t=s.composer_text(sys.stdin.read());print("\x00UNREADABLE" if t is None else t)')"
+case "$_left" in
+  "")
+    echo "==> dispatched to $LANE${_drop:+ (instruction at $_drop)}"
+    ;;
+  *UNREADABLE)
+    # Absent is not empty. Saying "delivered" here would be this kit's most-found
+    # defect: an inability to measure published as a measurement.
+    echo "==> $LANE: could not find a composer on the pane, so whether the text" >&2
+    echo "    was submitted is UNKNOWN. This is not a delivery." >&2
+    exit 3
+    ;;
+  *)
+    echo "==> $LANE still holds the text in its composer — it was NOT submitted." >&2
+    echo "    Nothing to retry automatically: a second C-m could submit whatever a" >&2
+    echo "    person typed there in the meantime." >&2
+    exit 1
+    ;;
+esac
