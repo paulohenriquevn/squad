@@ -1,0 +1,10 @@
+# Notification configuration for Squad releases
+# This file is project-owned, not part of the kit. It is preserved across
+# kit updates and holds only the settings this project chose.
+
+# Enable or disable Slack notifications
+slack_enabled = false
+
+# Environment variable name holding the webhook URL
+# Set this in your shell before running release, never hardcode the URL here
+slack_webhook_env = SQUAD_SLACK_WEBHOOK_URL

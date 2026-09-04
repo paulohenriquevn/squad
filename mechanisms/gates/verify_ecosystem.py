@@ -148,6 +148,29 @@ def check_skill_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return not findings, [f"  {f}" for f in findings]
 
 
+def check_readme_advisory_skills(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Does README.md and HOW-TO-USE.md list only skills that exist on disk?
+
+    Regression test for commit e5527e6, which deleted three skills but never
+    updated the README. This gate ensures README and disk stay in sync.
+    """
+    checker = ecosystem_dir / "mechanisms" / "gates" / "check_readme_advisory_skills.py"
+    if not checker.exists():
+        return True, ["  check_readme_advisory_skills.py not installed — skipping"]
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), "--root", str(ecosystem_dir)],
+        capture_output=True, text=True,
+    )
+    # The gate returns a list of finding dicts; empty list means OK
+    try:
+        # This script returns findings via print, let's just check exit code
+        if result.returncode == 0:
+            return True, []
+        return False, [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+    except Exception:
+        return False, [f"  check_readme_advisory_skills.py failed (exit {result.returncode})"]
+
+
 def check_squad_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Does `rules/squad-map.md` still describe the system that is on disk?
 
@@ -508,6 +531,7 @@ def main() -> int:
         ("Phase numbering", check_phase_numbering),
         ("Skill map", check_skill_map),
         ("Squad map", check_squad_map),
+        ("README advisory skills", check_readme_advisory_skills),
         ("Mechanisms inventory", check_mechanisms_inventory),
         ("Orphan verdicts", check_orphan_verdicts),
         ("Phase emitters", check_phase_emitters),

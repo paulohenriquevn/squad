@@ -1427,3 +1427,26 @@ def test_a_fresh_stall_stays_quiet_until_the_heartbeat_is_due() -> None:
     lead.reported_stall = True
     lead.stall_reported_at = time.time()
     assert lead.decide("❯ \n", idle=99_999).action == "wait"
+
+
+def test_a_halt_report_with_a_suffix_after_blocked_is_still_found(tmp_path):
+    """A lane naming its second report descriptively must not un-halt the item.
+
+    Measured 2026-09-04 (kit#29): B-079 had two halt reports on disk, both named
+    `...-BLOCKED-implement-preflight*.md`, and `halt_reports` returned neither —
+    the glob anchored BLOCKED to the end of the name. The selector kept
+    returning the item as startable, the lane hit the same wall, and wrote
+    another invisible report. A loop, with every surface reporting normally.
+    """
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "backlog-review" / "scripts"))
+    import squad_boss
+
+    records = tmp_path / ".claude" / "records" / "maintenance-runs"
+    records.mkdir(parents=True)
+    (records / "B-079-2026-09-04-BLOCKED-implement-preflight.md").write_text("halt")
+    (records / "B-134-2026-08-31-BLOCKED.md").write_text("halt")
+
+    found = squad_boss.halt_reports(tmp_path)
+    assert "B-134" in found, "the plain form must keep working"
+    assert "B-079" in found, "a suffix after BLOCKED must not hide the halt"

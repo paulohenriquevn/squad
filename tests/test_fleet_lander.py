@@ -196,3 +196,22 @@ def test_the_stream_says_which_branch_it_is_starting(capsys) -> None:
     out = capsys.readouterr().out
     assert out.index("fix/kit19-a") < out.rindex("fix/kit19-a"), \
         "the branch is named once on start and once on verdict"
+
+
+def test_a_conflicting_merge_is_refused_without_paying_for_a_suite() -> None:
+    """The merge check costs seconds; a suite costs minutes. Order matters.
+
+    Measured on the runner 2026-09-04 (kit#26): three branches conflicted on
+    CHANGELOG.md, and the lander ran two suites for each before reaching the
+    merge that could never apply. Three consecutive passes, ~20 minutes each,
+    an hour of fleet time spent proving branches correct that git would not
+    let land regardless.
+    """
+    verdict = fleet_lander.assess(branch="fix/kit19-x", suite=None,
+                                  merge=_c(False, "CONFLICT (content): Merge conflict in CHANGELOG.md"),
+                                  after=None)
+    assert not verdict.land
+    # The reason must name the merge, not the unrun suite: an operator reading
+    # "the suite was not run" goes looking for a broken test runner.
+    assert "merge did not apply" in verdict.reason
+    assert "suite was not run" not in verdict.reason

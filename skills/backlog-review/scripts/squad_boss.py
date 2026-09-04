@@ -111,7 +111,14 @@ def halt_reports(project_root: Path) -> dict[str, Path]:
         directory = records / base
         if not directory.is_dir():
             continue
-        for entry in sorted(directory.glob("*-BLOCKED.md")):
+        # `*BLOCKED*.md`, not `*-BLOCKED.md`: the reports are named by lanes, and a
+        # lane writing its second report for one item adds a descriptive suffix.
+        # Anchoring BLOCKED to the end of the name dropped those files silently,
+        # and a dropped halt is re-offered forever — measured 2026-09-04 (kit#29),
+        # B-079 had two halt reports on disk and this function returned neither.
+        # `_item_of` decides whether a name carries an id; that is its job, and it
+        # already handles both the `B-079-...` and `b165-...` forms.
+        for entry in sorted(directory.glob("*BLOCKED*.md")):
             item = _item_of(entry.name)
             if item:
                 found.setdefault(item, entry)
