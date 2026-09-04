@@ -12,6 +12,7 @@ the directory; nothing could compare a here-document to anything.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -19,8 +20,27 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import SessionStartContext, create_context
-from squad.layout import Layout, resolve
+from squad.layout import Layout, has_kit, resolve
 from squad.plan import resolve as resolve_plan
+
+#: The prefixes of every count line `check_install_drift` prints. Kept in one
+#: place so a new class the gate learns to name lands in this summary the same
+#: way the others do, rather than silently going missing here.
+_DRIFT_COUNT_PREFIXES = (
+    "diverged:",
+    "install_ahead:",
+    "stale:",
+    "kit_ahead:",
+    "unharvested (install-only",
+    "identical:",
+)
+
+#: A count line the gate emits when there is drift to report. `identical:` is on
+#: the summary line, not a header, so it is treated separately below.
+_DRIFT_ATTENTION_PREFIXES = (
+    "diverged:", "install_ahead:", "stale:", "kit_ahead:",
+    "unharvested (install-only",
+)
 
 
 def _git(*args: str) -> str | None:
@@ -55,6 +75,65 @@ def plan_line(eco: Path) -> str | None:
         return (f"Active plan: {active.slug} ({active.path}) "
                 f"— pinned via {eco}/.active_plan")
     return f"Active plan: {active.slug} (resolved by mtime — set {eco}/.active_plan to pin)"
+
+
+def drift_line(layout: Layout) -> str | None:
+    """A stale install learns it, without a person remembering to ask.
+
+    Compares `layout.kit_dir` against `$SQUAD_KIT_SOURCE` via `check_install_drift`
+    and reports the counts as one context line. **Never blocks and never fails
+    the session**: a consumer may deliberately pin an older kit, and a session
+    stopped over that is worse than the drift; the report is a signal, not a
+    gate. Silent by default — the check runs ONLY when the env var names a real
+    kit directory, so a consumer that has not opted in sees nothing.
+
+    Wired in for #23: `check_install_drift` was cited nine times in prose and
+    executed by nothing; a consumer ran ten hours on a stale kit missing three
+    merged repairs. The diagnostic was correct, available, and in a drawer.
+    """
+    source_env = os.environ.get("SQUAD_KIT_SOURCE")
+    if not source_env:
+        return None
+    source = Path(source_env)
+    if not has_kit(source):
+        # An env var that names a wrong path is worth saying so — a reader who
+        # set it expects to hear something on every session, and silence would
+        # look like a clean bill of health.
+        return (f"Kit drift: SQUAD_KIT_SOURCE={source_env} does not contain "
+                "skills/, rules/, hooks/ — cannot compare")
+    try:
+        if source.resolve() == layout.kit_dir.resolve():
+            # `standalone` layout, or SQUAD_KIT_SOURCE pointing at the same
+            # directory the session is running. There is no drift to report
+            # between a tree and itself; silence is correct.
+            return None
+    except OSError:
+        return None
+    checker = layout.kit_dir / "mechanisms" / "gates" / "check_install_drift.py"
+    if not checker.is_file():
+        return None
+    try:
+        result = subprocess.run(  # noqa: PLW1510
+            [sys.executable, str(checker),
+             "--install", str(layout.kit_dir),
+             "--kit", str(source)],
+            capture_output=True, text=True, timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    # The gate exits 1 when there is unharvested work and 2 on argument errors;
+    # both are informational here. Never gate on this hook.
+    counts = [ln for ln in result.stdout.splitlines()
+              if ln.startswith(_DRIFT_COUNT_PREFIXES)]
+    attention = [ln for ln in counts if ln.startswith(_DRIFT_ATTENTION_PREFIXES)]
+    if not attention:
+        return None
+    # Compact the multi-line summary into one line the SessionStart context can
+    # carry. The full per-file listing is a `check_install_drift` invocation away.
+    return ("Kit drift (vs SQUAD_KIT_SOURCE=" + source_env + "): "
+            + " · ".join(attention)
+            + " — report only, never blocks; run `check_install_drift --install "
+            + str(layout.kit_dir) + " --kit " + source_env + "` for the file list")
 
 
 def loop_line(eco: Path) -> str | None:
@@ -95,7 +174,8 @@ def chain_lines(eco: Path) -> list[str]:
 
 
 def build_context(layout: Layout) -> str:
-    lines = [line for line in (git_line(), plan_line(layout.eco), loop_line(layout.eco))
+    lines = [line for line in (git_line(), plan_line(layout.eco),
+                                loop_line(layout.eco), drift_line(layout))
              if line]
     lines.extend(chain_lines(layout.eco))
     return "\n".join(lines) + "\n"

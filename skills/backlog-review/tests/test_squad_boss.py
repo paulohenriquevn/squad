@@ -49,6 +49,52 @@ def test_a_project_with_no_halt_reports_nothing(tmp_path: Path) -> None:
     assert halt_reports(_project(tmp_path, item_block("B-001"))) == {}
 
 
+def test_a_report_with_a_suffix_after_BLOCKED_is_still_found(tmp_path: Path) -> None:
+    """kit#29 — a lane writing a second halt report for one item naturally adds a
+    descriptive suffix (`B-079-2026-09-04-BLOCKED-implement-preflight.md`), and the
+    old glob `*-BLOCKED.md` anchored BLOCKED to the end of the name and dropped
+    every such file silently. The item then kept being re-offered by the selector
+    forever while every surface reported normal operation — measured in the
+    consumer on 2026-09-04, B-079 had two halt reports on disk and neither was
+    returned.
+
+    The fix (glob → `*BLOCKED*.md`) IS in place. This test locks it: reverting
+    the glob to `*-BLOCKED.md` fails this test for the right reason (the
+    suffixed report is silently excluded from the result), which is exactly
+    what the loop failure looked like from outside.
+    """
+    project = _project(tmp_path, item_block("B-079"))
+    project_records = project / ".claude" / "records" / "implementations"
+    # Name shape a lane naturally chooses when writing a second report for one
+    # item — the exact form measured on B-079 in the consumer.
+    (project_records / "B-079-2026-09-04-BLOCKED-implement-preflight.md").write_text(
+        "# BLOCKED\n\nDirty tree from fleet concurrency.\n", encoding="utf-8")
+
+    found = halt_reports(project)
+
+    assert "B-079" in found, (
+        "a halt report whose filename carries anything after `BLOCKED` must still "
+        "hold its item — the suffix is descriptive prose the lane chose, not a "
+        "signal that the file is not a halt.")
+
+
+def test_a_RESOLVED_rename_no_longer_holds_the_item(tmp_path: Path) -> None:
+    """The `-RESOLVED.md` rename is how a halt is retired: the file is renamed out
+    of the glob scope so the selector stops holding the item. The new glob
+    (`*BLOCKED*.md`) must still exclude these — a report renamed to
+    `-RESOLVED.md` no longer contains `BLOCKED` in the filename, so it drops
+    out cleanly. Locking that keeps the retire mechanism whole."""
+    project = _project(tmp_path, item_block("B-001"))
+    project_records = project / ".claude" / "records" / "implementations"
+    (project_records / "B-001-2026-09-04-RESOLVED.md").write_text(
+        "# RESOLVED\n\nWall cleared by 7565db99c.\n", encoding="utf-8")
+
+    assert halt_reports(project) == {}, (
+        "a `-RESOLVED.md` file MUST NOT hold an item — that is precisely how "
+        "the retire path works, and if it were included the item would be "
+        "re-offered after its halt was retired.")
+
+
 # ── reading the cause out of the report ──────────────────────────────────────
 
 
