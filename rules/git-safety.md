@@ -32,7 +32,8 @@ The hook cannot tell a merge that finalizes an approved PR from one that skips i
 | `git checkout` | Ambiguous (branch vs file); easy to discard work | `git switch <branch>` / `git restore <path>` |
 | `git revert` | Hides history behind an auto-commit | A new explicit commit that reverses the change |
 | `git push --force` / `-f` | Rewrites shared history | `git push --force-with-lease` only when explicitly authorized, and never on `main`/`develop` |
-| `git reset --hard` | Destroys uncommitted work irrecoverably | `git stash` or `git reset --soft` |
+| `git reset --hard` | Destroys uncommitted work irrecoverably | `git reset --soft`, or commit on a branch |
+| `git stash` while the repository has more than one worktree | The stack is **shared**: `refs/stash` lives in the common git dir, so every worktree pushes and pops the same stack and `pop` returns the top entry whichever tree pushed it | Copy the files aside with `cp`, or commit them on your own branch, then `git restore` |
 | Any mutation of `main` (commit/merge/rebase/reset/cherry-pick) | `main` is release-only | Do the work on `workspace`; cut the release via PR |
 | Authoring or rewriting on `develop` (commit/rebase/reset/cherry-pick) | `develop` integrates, never originates | Commit on `workspace`; promote via `workspace → develop` PR |
 | Merging a non-`workspace` branch into `develop` | Bypasses the workspace→develop gate | Land the work on `workspace` first, then promote |
@@ -40,10 +41,18 @@ The hook cannot tell a merge that finalizes an approved PR from one that skips i
 `git push --force` is forbidden on `main`, `develop` and `workspace` unconditionally;
 force-push is tolerated only on disposable, never-shared branches.
 
+**The stash is not part of what a worktree isolates.** A worktree owns its index,
+its HEAD and its checkout — which is exactly why the omission is easy to miss.
+Measured 2026-09-04 (kit#31): two agents in separate worktrees ran `git stash`
+concurrently and each popped the other's entry, exchanging uncommitted work
+between two branches. `git stash list` and `git stash show` read the stack and
+stay allowed; everything that pushes to or consumes it does not.
+
 ## § 3 — Enforcement
 
 - `hooks/validate-command.py` (PreToolUse) blocks the mechanizable subset. Exit code 2 = blocked:
   - Any branch: `checkout`, `revert`, `push --force`/`-f`, `reset --hard`.
+  - Any branch, when `git worktree list` shows more than one working tree: `stash` and every subcommand that mutates the stack (`list` and `show` stay allowed). The command's own `-C <path>` is read before the current directory, because the fleet drives git that way.
   - `HEAD` is `main`: `commit`/`merge`/`rebase`/`reset`/`cherry-pick`.
   - `HEAD` is `develop` (G1): `commit`/`rebase`/`reset`/`cherry-pick`, and `merge` from anything other than `workspace` (`origin/`/`upstream/` prefixes accepted).
   - The inline forms (`git switch main && …`, `git switch develop && …`) are covered too — reading the live branch alone is bypassable in a compound command.
@@ -57,6 +66,7 @@ force-push is tolerated only on disposable, never-shared branches.
 - "It's a one-line fix, I'll commit straight to `develop`" — the size of the change is not the criterion; origin is. It goes on `workspace` like everything else.
 - Merging a side branch into `develop` because "it's already reviewed" — if it did not come through `workspace`, the gate did not see it.
 - Force-pushing to recover from a bad rebase on a shared branch — use `--force-with-lease`, and never on `main`/`develop`/`workspace`.
+- "My worktree is my own, so a stash is safe here" — the tree is yours and the stash stack is not. Copy aside or commit; the pop you get back may be someone else's.
 
 ## Cross-references
 

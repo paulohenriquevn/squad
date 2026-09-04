@@ -18,6 +18,11 @@ is how a test starts agreeing with whatever the code does.
 
 The zone cases moved to `test_reference_zone.py`, where the retirement of
 `records/references/` is explained.
+
+The stash cases at the bottom are newer and answer a different question: not
+"which command is forbidden" but "where is it being run". `git stash` is fine in
+a repository with one working tree and a swap of two agents' uncommitted work in
+a repository with two (kit#31).
 """
 from __future__ import annotations
 
@@ -52,13 +57,20 @@ def _repo_on(tmp_path: Path, branch: str) -> Path:
     return tmp_path
 
 
-def _run(root: Path, command: str | None) -> int:
+def _second_worktree(root: Path, at: Path) -> Path:
+    """A second working tree of the same repository — one shared stash stack."""
+    subprocess.run(["git", "-C", str(root), "worktree", "add", "-b", "lane",
+                    str(at), "HEAD"], check=True, capture_output=True)
+    return at
+
+
+def _run(root: Path, command: str | None, cwd: Path | None = None) -> int:
     hook = _hook()
     cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
     tool_input = {} if command is None else {"command": command}
     payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": tool_input}
     return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,  # noqa: PLW1510
-                          text=True, cwd=root,
+                          text=True, cwd=cwd or root,
                           env={"PATH": __import__("os").environ["PATH"],
                                "HOME": str(root),
                                "CLAUDE_PROJECT_DIR": str(root)}).returncode
@@ -155,3 +167,51 @@ def test_trunk_protection_follows_the_repo_not_the_literal_name_main(tmp_path: P
 def test_a_feature_branch_is_not_a_trunk(tmp_path: Path) -> None:
     """The other half of F12: protecting every branch would block all work."""
     assert _run(_repo_on(tmp_path, "fix/some-bug"), "git commit -m 'ok'") == 0
+
+
+# ── kit#31: the stash stack is not part of what a worktree isolates ───────────
+# `git worktree` gives each tree its own index, HEAD and checkout. `refs/stash`
+# is not among them — it lives in the common git dir, so every tree pushes and
+# pops ONE stack and `git stash pop` takes the top entry whoever pushed it.
+#
+# Measured 2026-09-04: two agents in separate worktrees stashed concurrently and
+# each popped the other's entry. Uncommitted work swapped trees, and was only
+# recovered because one of them noticed. The table above keeps the single-tree
+# case allowed: with one working tree there is nobody to swap with.
+
+
+def test_stash_is_refused_from_a_worktree_that_shares_the_stack(tmp_path: Path) -> None:
+    root = _repo_on(tmp_path / "repo", "workspace")
+    lane = _second_worktree(root, tmp_path / "lane")
+
+    assert _run(root, "git stash -u", cwd=lane) == 2
+
+
+def test_the_tree_that_pushed_first_is_refused_too(tmp_path: Path) -> None:
+    """The hazard is symmetric: the entry the main tree pushes is the entry the
+    lane pops. Guarding only the linked trees leaves half the swap open."""
+    root = _repo_on(tmp_path / "repo", "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    assert _run(root, "git stash") == 2
+
+
+def test_reading_the_stack_is_not_the_hazard(tmp_path: Path) -> None:
+    """`list` and `show` mutate nothing. Refusing them would only teach the lane
+    that the guard is noise."""
+    root = _repo_on(tmp_path / "repo", "workspace")
+    lane = _second_worktree(root, tmp_path / "lane")
+
+    assert _run(root, "git stash list", cwd=lane) == 0
+    assert _run(root, "git stash show -p", cwd=lane) == 0
+
+
+def test_the_worktree_is_read_from_dash_c_not_only_from_the_cwd(tmp_path: Path) -> None:
+    """The fleet's own briefs drive git as `git -C <repo> …`, so a guard that
+    only ever asks the current directory misses the form the kit itself uses."""
+    root = _repo_on(tmp_path / "repo", "workspace")
+    lane = _second_worktree(root, tmp_path / "lane")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    assert _run(root, f"git -C {lane} stash", cwd=outside) == 2

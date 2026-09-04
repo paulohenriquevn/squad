@@ -86,6 +86,11 @@ const results = await pipeline(
     `    git -C ${REPO} worktree add -b ${unit.branch} ${WORKTREE_ROOT}/${unit.slug} HEAD\n\n` +
     `Other workflows may be repairing other issues in parallel. Two writers in one tree ` +
     `produce a diff neither authored.\n\n` +
+    `**Never \`git stash\` inside it.** The worktree isolates the index, HEAD and the ` +
+    `checkout — not the stash: \`refs/stash\` lives in the common \`.git\` and every ` +
+    `worktree pops the SAME stack. Measured 2026-09-04: two agents stashed concurrently ` +
+    `and each popped the other's uncommitted work. To reach a clean tree, copy the files ` +
+    `aside with \`cp\` or commit them on your own branch, then \`git restore\`.\n\n` +
     `## The test comes first\n\n` +
     `Write a test that FAILS against the current behaviour, run it, and record that it failed. ` +
     `Then fix. Then run it again. Report both runs — not claims about them. If the test passes ` +

@@ -381,6 +381,14 @@ cycle's pre-flight requires a clean tree, and every lane writing its own records
 into one checkout failed every other lane's gate — 21 dirty files from 6 items,
 and not one of them able to proceed.
 
+**Never `git stash` in it.** A worktree isolates the index, HEAD and the
+checkout. It does NOT isolate the stash: `refs/stash` lives in the common `.git`,
+every worktree pushes and pops the SAME stack, and `git stash pop` returns the
+top entry whichever lane pushed it. Measured 2026-09-04: two lanes stashed at the
+same time and each popped the other's entry, swapping their uncommitted work. To
+reach a clean tree, copy the files aside with `cp` or commit them on your own
+branch, then `git restore` — never the stash stack.
+
 Read the item first: it is in `BACKLOG.md`, under the `## {slug}` heading.
 Read the WHOLE block — `evidence`, `why_now`, `dod`, and any dated note under it.
 
@@ -438,7 +446,12 @@ Read the issue first: `gh issue view {number} --repo {tracker}`
 
 1. Create your own git worktree so you do not collide with the other lanes:
    `git -C {repo} worktree add -b {branch} "/tmp/squad-repair/{safe}-$(date +%s)" origin/workspace`
-   Work ONLY inside that worktree.
+   Work ONLY inside that worktree, and never `git stash` in it. A worktree
+   isolates the index, HEAD and the checkout — not the stash: `refs/stash` lives
+   in the common `.git` and every lane pops the same stack, so on 2026-09-04 two
+   lanes stashed concurrently and each popped the other's uncommitted work. To
+   reach a clean tree, copy the files aside with `cp` or commit them on your own
+   branch, then `git restore`.
 2. Write the FAILING TEST FIRST. Show it failing on the current tree, for the
    right reason, before you touch any production code. A test written after the
    code passes on the code you happened to write.

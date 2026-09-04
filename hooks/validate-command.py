@@ -3,7 +3,8 @@
 
 Everything here guards an action whose cost is asymmetric: `git checkout` loses
 uncommitted work, a force-push rewrites what others pulled, a commit on the trunk
-skips every gate between it and a release, `rm -rf /home` needs no explanation.
+skips every gate between it and a release, `git stash` in one of several
+worktrees pops another worktree's entry, `rm -rf /home` needs no explanation.
 Each is cheap to prevent and expensive to undo, which is the whole case for a
 hook rather than a convention.
 
@@ -48,6 +49,11 @@ _SEGMENTS_WITH_PIPE = re.compile(r"\|\||&&|;|\|")
 
 FORCE_TOKEN_RE = re.compile(r"(--force(\s|$)|(^|\s)-[a-z]*f(\s|$)|\s\+[^\s-]\S*)")
 
+#: Everything that writes to or consumes the stack. `list` and `show` only read
+#: it, and refusing those would teach an agent the guard is noise.
+STASH_MUTATION_RE = re.compile(r"git\s+stash\b(?!\s+(list|show)\b)")
+DASH_C_RE = re.compile(r"git\s+-C\s+(\S+)")
+
 RM_INVOCATION_RE = re.compile(r"(^|\s|;|&&|\|\||\||\()\s*rm\s")
 RM_RECURSIVE_RE = re.compile(r"(^|\s)(-[a-zA-Z]*[rR][a-zA-Z]*(\s|$)|--recursive(\s|=|$))")
 DANGEROUS_PATH_RE = re.compile(
@@ -70,6 +76,34 @@ def _git_out(*args: str) -> str:
     except (OSError, subprocess.SubprocessError):
         return ""
     return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def working_trees(command: str) -> int:
+    """How many working trees share this repository's ONE stash stack.
+
+    `git worktree` gives each tree its own index, HEAD and checkout, and that is
+    what makes the omission expensive: the stash is not among them. `refs/stash`
+    lives in the common git dir, so every tree pushes and pops the same stack and
+    `git stash pop` returns the top entry no matter which tree pushed it.
+
+    The command's own `-C <path>` is honoured before the cwd, because the fleet's
+    briefs drive git that way (`git -C {repo} worktree add …`) and a guard that
+    only ever asks the current directory misses the form the kit itself uses.
+
+    WHAT THIS DOES NOT COVER
+    ------------------------
+    A listing that cannot be read counts as zero trees and the stash is allowed —
+    outside a repository there is no stack to share, and refusing there would
+    block a command that cannot do the damage. The same fail-open applies if git
+    itself is unavailable. And like every guard in this file it matches the
+    command as written: `bash -c 'git stash'`, an alias, or a script that stashes
+    on the agent's behalf reaches the stack unread. It closes the accident and the
+    habit, which is what happened on 2026-09-04; it is not a sandbox.
+    """
+    where = DASH_C_RE.search(command)
+    prefix = ["-C", where.group(1).strip("'\"")] if where else []
+    listing = _git_out(*prefix, "worktree", "list", "--porcelain")
+    return sum(1 for line in listing.splitlines() if line.startswith("worktree "))
 
 
 def strip_git_globals(command: str) -> str:
@@ -124,12 +158,26 @@ def check_git(command: str) -> str | None:
             return ("BLOCKED: force push is forbidden. Use --force-with-lease only "
                     "when explicitly authorized.")
     if re.search(r"git\s+reset\s+--hard", cmd):
-        return ("BLOCKED: 'git reset --hard' is forbidden. Use 'git stash' or create "
-                "a branch instead.")
+        return ("BLOCKED: 'git reset --hard' is forbidden. Use 'git reset --soft', or "
+                "commit on a branch, instead.")
 
     # Quoted text is not a branch name: a commit MESSAGE saying "main" must not
-    # read as switching to it.
+    # read as switching to it — nor one that merely mentions the stash.
     unquoted = _QUOTED.sub("", cmd)
+
+    # The stash is the one thing a worktree does NOT isolate, and the cost is
+    # asymmetric in the way this whole hook is for: measured 2026-09-04 (kit#31),
+    # two agents in separate worktrees stashed concurrently and each popped the
+    # other's entry, swapping uncommitted work. With a single working tree there
+    # is nobody to swap with and the stash stays allowed.
+    if STASH_MUTATION_RE.search(unquoted) and working_trees(command) > 1:
+        return ("BLOCKED: this repository has more than one working tree, and they "
+                "SHARE one stash stack — 'refs/stash' lives in the common git dir, "
+                "so 'git stash pop' returns the top entry whichever tree pushed it. "
+                "Two agents swapped their uncommitted work this way (kit#31). To "
+                "reach a clean tree: copy the files aside with 'cp', or commit them "
+                "on your own branch, then 'git restore'.")
+
     branch = _git_out("branch", "--show-current") or "unknown"
     names = trunks()
 

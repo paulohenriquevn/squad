@@ -38,6 +38,14 @@ other agents are reading and possibly writing the same repository, and two
 writers in one tree produce a diff neither of them authored. The read-only
 stages can share a tree safely and do; you cannot.
 
+**Never `git stash` in it.** The worktree isolates your index, your HEAD and your
+checkout — not the stash. `refs/stash` lives in the common `.git`, every worktree
+pushes and pops the SAME stack, and `git stash pop` returns the top entry
+whichever agent pushed it. Measured 2026-09-04: two agents stashed concurrently
+in their own worktrees and each popped the other's uncommitted work. To reach a
+clean tree, copy the files aside with `cp` or commit them on your branch, then
+`git restore`.
+
 It is also a correction. Until 2026-09-02 the scheduler asked the harness for
 `isolation: 'worktree'`, which isolates the repository of the CWD — and the CWD
 on a consumer run is the KIT, not `{REPO}`. Every stage got a working copy of
