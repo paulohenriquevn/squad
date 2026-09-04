@@ -363,6 +363,45 @@ reason to stop. It is the moment to look for what nobody has filed yet.
 """
 
 
+_CONSUMER_BRIEF = """\
+# Work unit: {slug}
+
+Repository: {project}
+Read the item first: it is in `{project}/BACKLOG.md`, under the `## {slug}` heading.
+Read the WHOLE block — `evidence`, `why_now`, `dod`, and any dated note under it.
+
+This is a CONSUMER project item, not a kit issue. There is no GitHub issue for
+it and `gh issue view {slug}` will not resolve — the id lives in the registry
+above and nowhere else.
+
+## What to do
+
+Run the project's own cycle over it:
+
+    /idea-to-release {slug}
+
+That cycle decides its own stages. Do not substitute a shape it did not ask for:
+a backlog item is not a repair branch, and inventing a worktree-and-test pass for
+one produces a branch the cycle never asked for.
+
+## What the DoD means
+
+The item's `dod` block is the contract. A bullet that is already satisfied is
+reported as satisfied WITH the measurement that shows it; a bullet that cannot be
+satisfied from this session is reported as such, naming what it needs. Neither is
+a failure. Silently skipping one is.
+
+## Absolute limits — no exception, ever
+
+- No `--no-verify`, no `--force`, no `--allow-dirty-tree`, no `--skip-checks`.
+- Do not move a threshold, a baseline or an allowlist to make anything pass.
+- Do not edit `BACKLOG.md` to unblock an item a person must unblock.
+- Never add a `Co-Authored-By:` trailer or any second author to a commit.
+- Everything written into the repository is in ENGLISH.
+- If the only way forward is a bypass, STOP and report instead of deciding alone.
+"""
+
+
 _BRIEF = """\
 # Work unit: {slug}
 
@@ -395,15 +434,32 @@ Read the issue first: `gh issue view {number} --repo {tracker}`
 """
 
 
-def brief(unit: Unit, *, repo: str, tracker: str = "paulohenriquevn/squad") -> str:
+def brief(unit: Unit, *, repo: str, tracker: str = "paulohenriquevn/squad",
+          project: str = "") -> str:
     """The instruction a lane receives. Written here rather than by hand.
 
     Hand-written briefs were the other half of the missing wiring, and on
     2026-09-03 one of them sent a lane to the wrong issue because a substitution
     pattern missed `issue view 19`.
+
+    Three sources, three briefs. A consumer item and a kit issue are NOT variants
+    of one instruction: they name different repositories, different registries
+    and different entry points. Measured 2026-09-04 (kit#27) when they shared
+    one — B-165 was dispatched telling the lane to work in the kit and run
+    `gh issue view B-165 --repo <kit>`, and neither resolves: the id lives in the
+    consumer's BACKLOG.md and the kit's registry is GitHub issues, which cannot
+    hold a B-NNN. The lane halted rather than guess, which was correct and cost
+    the pass.
     """
     if unit.source == "audit":
         return _AUDIT_BRIEF.format(repo=repo, tracker=tracker)
+    if unit.source == "backlog":
+        if not project:
+            raise ValueError(
+                f"{unit.slug} is a consumer backlog item and no project path was "
+                f"given. Briefing it against the kit would send the lane to a "
+                f"repository the item does not live in (kit#27)")
+        return _CONSUMER_BRIEF.format(slug=unit.slug, project=project)
     safe = unit.slug.replace("#", "").replace("/", "-")
     return _BRIEF.format(slug=unit.slug, repo=repo, number=unit.number,
                          tracker=tracker, branch=f"fix/{safe}", safe=safe)
@@ -540,7 +596,8 @@ def resolve_unit_payload(unit: Unit, *, repo: str, tracker: str) -> dict:
 
 
 def dispatch(assignment: Assignment, *, repo: str, log: Path,
-             tracker: str, apply: bool, mode: str = "tmux") -> tuple[bool, str]:
+             tracker: str, apply: bool, mode: str = "tmux",
+             project: str = "") -> tuple[bool, str]:
     """Hand one unit over, and record it only once the keystroke landed.
 
     Recording on the decision rather than on delivery would reserve a unit for a
@@ -569,7 +626,7 @@ def dispatch(assignment: Assignment, *, repo: str, log: Path,
         )
     else:
         # Traditional tmux mode: write markdown brief
-        text = brief(assignment.unit, repo=repo, tracker=tracker)
+        text = brief(assignment.unit, repo=repo, tracker=tracker, project=project)
         drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.md"
         if not apply:
             return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane}"
@@ -662,7 +719,7 @@ def main(argv: list[str] | None = None) -> int:
     for assignment in the_plan.assignments:
         ok, line = dispatch(assignment, repo=args.kit_path, log=log,
                             tracker=args.kit_repo or "paulohenriquevn/squad",
-                            apply=args.apply)
+                            apply=args.apply, project=args.project)
         (delivered if ok else notes).append(line)
 
     report = {

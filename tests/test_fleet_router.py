@@ -314,3 +314,35 @@ def test_the_audit_brief_says_to_file_only_what_survived_refutation() -> None:
     # nothing to write. What must not appear is the INSTRUCTION to make one.
     assert "worktree add" not in text, "a sweep writes no code and needs no worktree"
     assert "Write NO code" in text
+
+
+def test_a_consumer_backlog_unit_is_not_briefed_as_a_kit_issue() -> None:
+    """A consumer item is not a kit issue, and the two briefs are not variants.
+
+    Measured 2026-09-04 (kit#27): B-165 was dispatched with the kit-repair
+    template, which told the lane to work in the kit repository and run
+    a `gh issue view B-165` against the kit tracker. Neither resolves —
+    B-165 lives in the consumer's BACKLOG.md, and the kit's registry is GitHub
+    issues, which cannot hold a B-NNN id. The lane halted rather than guess,
+    so every consumer item dispatched this way costs a pass and lands nothing.
+    """
+    unit = fleet_router.Unit("B-165", "an environment lost its edge", "backlog")
+    text = fleet_router.brief(unit, repo="/kit", project="/consumer")
+
+    # It must not send the lane to the kit, nor to a registry that cannot hold it.
+    # A mention of `gh issue view` as a WARNING is fine and wanted; what must not
+    # appear is the instruction form, which carries `--repo <tracker>`.
+    assert "--repo" not in text
+    assert "Read the issue first" not in text
+    assert "/kit" not in text
+    # It must name the consumer and the cycle a consumer item actually runs through.
+    assert "/consumer" in text
+    assert "B-165" in text
+
+
+def test_a_kit_unit_still_gets_the_repair_brief() -> None:
+    """The consumer branch must not disturb the path that already worked."""
+    unit = fleet_router.Unit("kit#19", "a title", "kit")
+    text = fleet_router.brief(unit, repo="/kit", project="/consumer")
+    assert "gh issue view" in text
+    assert "worktree" in text
