@@ -1,0 +1,17 @@
+# CHANGELOG.md is append-at-the-top by construction: every branch adds its entry
+# under the same `## [Unreleased]` heading, so any two branches that both changed
+# it conflict on the same lines — even though the entries never contradict each
+# other and the correct resolution is always "keep both".
+#
+# Measured on the runner 2026-09-04: three repair branches (kit#19, kit#23,
+# kit#24) each conflicted here, and `fleet_lander.py` refused all three on every
+# pass. Three consecutive passes burned ~20 minutes each running two suites per
+# branch before reaching the merge that could never apply — an hour of fleet time
+# spent proving branches correct that git would not let land regardless.
+#
+# `merge=union` keeps both sides. For a changelog that is the right answer: the
+# entries are independent facts about independent changes, and losing either one
+# loses a record of something that shipped. It can duplicate a line when two
+# branches write the identical text, which is visible in review and is a far
+# cheaper failure than a fleet stalled on a conflict nobody is awake to resolve.
+CHANGELOG.md merge=union
