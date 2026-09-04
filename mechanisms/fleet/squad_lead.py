@@ -1289,14 +1289,19 @@ class Fleet:
         self.taken.pop(session, None)
 
 
-def _log(path: Path | None, payload: dict) -> None:
+def _log(path: Path | None, session: str, payload: dict) -> None:
     """Append one line. A lead nobody can audit is a lead nobody should trust.
 
     The timestamp is stamped here rather than by the caller, so no decision can reach
     the log without one. It was missing at first, and a log of decisions with no time
     on them cannot answer the question anyone actually asks — *when did it stop?*
+
+    The `session` is stamped here for the same reason. It is a property of the
+    watcher, not of the decision, and a fleet log without it cannot tell three
+    lanes stalling once from one lane stalling three times (issue #24).
     """
-    payload = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **payload}
+    payload = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+               "session": session, **payload}
     line = json.dumps(payload, ensure_ascii=False)
     print(line, flush=True)
     if path:
@@ -1351,7 +1356,7 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
         served += 1
         screen = lead.capture()
         if screen is None:
-            _log(log, {"event": "gone", "session": lead.session})
+            _log(log, lead.session, {"event": "gone"})
             return 1
 
         idle = _idle_seconds(marker)
@@ -1388,12 +1393,11 @@ def watch(lead: Lead, marker: Path | None, log: Path | None,
                     # Claimed only once the keystroke landed. Claiming on the decision
                     # would reserve an item for a session that never received it.
                     lead.fleet.claim(lead.session, decision.item)
-                    entry["session"] = lead.session
             else:
                 entry["sent"] = False
                 entry["reason"] = ("the session moved between the decision and the "
                                    "keystrokes; not typing into a working session")
-        _log(log, entry)
+        _log(log, lead.session, entry)
 
         if decision.action == "asked":
             # An answer is not an action. It goes in the log for a person to read, and

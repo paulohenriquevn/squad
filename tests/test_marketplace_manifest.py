@@ -104,26 +104,26 @@ def test_description_and_version_do_not_diverge() -> None:
     )
 
 
-def test_marketplace_json_does_not_touch_install_sh() -> None:
-    """Additive port only — install.sh and sync_consumers.py must be unchanged."""
-    import subprocess
+def test_the_copy_install_does_not_depend_on_the_marketplace() -> None:
+    """The marketplace is an additional door, not a replacement for the existing one.
 
-    # Git check: is install.sh tracked and unchanged?
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "HEAD"],
-        cwd=_REPO,
-        capture_output=True,
-        text=True,
-    )
-    changed_files = result.stdout.strip().split("\n") if result.stdout else []
+    42 consumers install by copy. If `install.sh` came to reference the manifest,
+    the copy path would inherit the marketplace's failure modes and the addition
+    would stop being additive.
 
-    assert "mechanisms/distribution/install.sh" not in changed_files, (
-        "install.sh was modified; the marketplace addition should be purely additive"
+    An earlier version of this test asserted `git diff --name-only HEAD` did not
+    list `install.sh` — which measured whether the working tree was clean, not
+    whether the two paths were independent. It failed the first time anyone edited
+    the installer for an unrelated reason (adding a fifth squad agent), which is
+    the tell: a test that forbids all future change to a file is pinning the file,
+    not the property.
+    """
+    installer = (_REPO / "mechanisms" / "distribution" / "install.sh").read_text()
+    assert "marketplace.json" not in installer, (
+        "install.sh references the marketplace manifest; the copy install must "
+        "stand alone or the addition is not additive"
     )
-    assert "mechanisms/distribution/sync_consumers.py" not in changed_files, (
-        "sync_consumers.py was modified; the marketplace addition should be purely additive"
-    )
-
+    assert ".claude-plugin/marketplace" not in installer
 
 def test_each_plugin_entry_has_required_marketplace_fields() -> None:
     """Each plugin in the array must have name, source, description, version."""

@@ -33,9 +33,14 @@ affect any project using this plugin.
 - **Hooks use `set -euo pipefail`** — fail-fast on any unexpected state.
 - **`validate-command.py`** blocks destructive git operations at the regex level.
 - **`stop-validation.py`** blocks secret file commits (`.env`, `*.pem`, `*.key`).
-- **`boundary-check.py`** enforces read-only access on `records/references/` and `study-material/`.
+- **`boundary-check.py`** enforces read-only access on `study-material/`.
 - **`check_xrefs.py`** validates all internal references exist (anti-hallucination).
 - **`attest_plan.sh`** uses SHA256 for plan tamper detection.
+
+Retired 2026-09-01: the prior-art study zone under `records/references/` is no
+longer guarded, because Squad's DISCOVER stopped studying peer projects and the
+directory left the zone with the practice that filled it. A consumer still
+holding material there must move it (`rules/reference-provenance.md`).
 
 ## Known Limitations
 

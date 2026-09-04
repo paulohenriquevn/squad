@@ -152,6 +152,67 @@ def test_every_decision_is_logged(tmp_path: Path, monkeypatch) -> None:
     assert entry["event"] == "confirm" and entry["item"] == "B-022"
 
 
+# ── every log entry says WHICH SESSION it is about ───────────────────────────
+# Measured on the runner 2026-09-03: three lanes watched by one lead, three log
+# entries `asked / stalled / stalled` twenty seconds apart, and whether that was
+# one lane repeating (a broken heartbeat) or three lanes reporting once (correct
+# behaviour) could not be answered from the log. The reader inspected the code
+# instead — the thing the log exists to make unnecessary. The session is a
+# property of the watcher, not of the decision, so it belongs in the one place
+# every entry is finalised (issue #24).
+
+
+def test_every_log_entry_names_which_session_it_is_about(tmp_path: Path,
+                                                         monkeypatch) -> None:
+    """Fleet logs interleave N lanes into one file. An entry with no `session`
+    field cannot say which lane it describes, so three lanes stalling once and
+    one lane stalling three times look identical — and they call for opposite
+    responses."""
+    import json
+    import os
+    import time as _time
+
+    lead = Lead(session="squad-2", stalled_seconds=10)
+    marker = tmp_path / "log"
+    marker.write_text("x", encoding="utf-8")
+    old = _time.time() - 600
+    os.utime(marker, (old, old))
+
+    screens = iter([REAL_MENU, IDLE_PROMPT])
+    monkeypatch.setattr(lead, "capture", lambda: next(screens))
+    monkeypatch.setattr(lead, "confirm", lambda d: True)
+    monkeypatch.setattr("squad_lead.time.sleep", lambda s: None)
+
+    log = tmp_path / "lead.jsonl"
+    watch(lead, marker, log, poll=0, rounds=2)
+
+    entries = [json.loads(line)
+               for line in log.read_text(encoding="utf-8").splitlines()]
+    kinds = sorted({entry.get("event") for entry in entries})
+    assert "confirm" in kinds and "stalled" in kinds, kinds
+    missing = [entry for entry in entries
+               if entry.get("session") != "squad-2"]
+    assert not missing, (
+        "log entries with no `session` cannot be read across lanes: "
+        f"{missing}")
+
+
+def test_a_vanished_session_still_says_which_one_it_was(tmp_path: Path,
+                                                        monkeypatch) -> None:
+    """The `gone` line is the last thing a dying lane writes. Without a session
+    on it a reader cannot tell which of N lanes died — a fleet-wide false
+    alarm."""
+    import json
+
+    lead = Lead(session="squad-3")
+    monkeypatch.setattr(lead, "capture", lambda: None)
+    log = tmp_path / "lead.jsonl"
+    assert watch(lead, None, log, poll=0, rounds=1) == 1
+    entry = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
+    assert entry["event"] == "gone"
+    assert entry.get("session") == "squad-3"
+
+
 # ── both found by watching it run, minutes after it started ───────────────────
 
 

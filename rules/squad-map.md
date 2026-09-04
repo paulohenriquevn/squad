@@ -61,6 +61,16 @@ they may be versioned when a domain specialist may not.
 | `iris-product-designer` | what the product IS, and what the user will experience | `cycle-brainstorm` (4 skills), `/plan-alignment`, `/acceptance` |
 | `daedalus-tech-lead` | one item's technical path — and who builds each part | `/idea-to-release`, the domain specialists |
 | `hermes-scrum-master` | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
+| `vera-technical-arbiter` | the technical shape of a fix — which principle a problem violates, how severe, and the obvious solution | the five lenses; `rules/architecture.md` |
+| `eureka-defect-hunter` | what is wrong — not what to do about it | the defect lenses; `rules/architecture.md` |
+| `hecate-intake-triager` | what crosses from outside into the registry | the tracker; `rules/cycle-backlog.md` |
+| `clio-historian` | nothing — reports what the record says about the past | the event stream; `rules/cycle-backlog.md` |
+| `metis-oracle` | nothing — reports what is true right now, and why | live state; `rules/autonomy-envelope.md` |
+| `leonardo-researcher` | nothing — supplies what a decision needs | the sources; `rules/cycle-discover.md` |
+| `vigil-sentinel` | what deserves an interruption | live metrics; `rules/autonomy-envelope.md` |
+| `aesculapius-healer` | which impediments have already been cured | recorded walls; `rules/cycle-backlog.md` |
+| `argus-pattern-analyst` | what is common to many cases | halt reports; `rules/cycle-backlog.md` |
+| `nemesis-claim-auditor` | whether the system's own claims are supported | the kit's own verdicts; `rules/architecture.md` |
 
 A role that could do two of these could overrule itself — Hermes deciding a stage
 passed, or Daedalus choosing which item he prefers. See

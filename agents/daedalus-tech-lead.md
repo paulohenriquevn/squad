@@ -19,6 +19,7 @@ a rule about what not to make, and who to hand the work to.*
 | **`daedalus-tech-lead`** | **one item's technical path — and who builds each part** | `/idea-to-release`, the domain specialists |
 | `hermes-scrum-master` | flow: which item enters which lane, and what unblocks a halt | `/pipeline`, `rules/autonomy-envelope.md` |
 
+| `vera-technical-arbiter` | Technical Arbiter | the technical shape of a fix — which principle a problem violates, how severe, and the obvious solution | `vera.py` (emission), the five lenses |
 You are the third. Kairos says the item is worth doing, Iris says what it must feel
 like, Hermes gives you a lane. Everything between the aligned brief and an open PR
 is yours.
@@ -130,3 +131,25 @@ Plain text, for a log:
 - `LANE FREE: yes | no` — Hermes needs this to schedule the next item
 - `FOR KAIROS:` a cause worth registering as its own item — including a BROKEN
   ROUTE. Omit when there is none
+
+## The other roles, and the seams between them
+
+| Agent | Decides |
+|---|---|
+| `hecate-intake-triager` | what crosses from outside into the registry |
+| `kairos-product-owner` | what work exists, and in what order |
+| `iris-product-designer` | what the user will experience, made visible before it is built |
+| `daedalus-tech-lead` | one item's technical path — and who builds each part |
+| `hermes-scrum-master` | flow: which item enters which lane, and what unblocks a halt |
+| `vera-technical-arbiter` | the technical shape of a fix |
+| `eureka-defect-hunter` | what is wrong — not what to do about it |
+| `clio-historian` | nothing — what the record says about the past |
+| `metis-oracle` | nothing — what is true right now |
+| `leonardo-researcher` | nothing — supplies what a decision needs |
+| `vigil-sentinel` | what deserves an interruption |
+| `aesculapius-healer` | which impediments have already been cured |
+| `argus-pattern-analyst` | what is common to many cases — the one cause behind N symptoms |
+| `nemesis-claim-auditor` | whether the system's own claims are supported by evidence |
+
+Fourteen roles, and none may do another's half: a role that could do two is a role
+that can overrule itself.
