@@ -367,7 +367,21 @@ _CONSUMER_BRIEF = """\
 # Work unit: {slug}
 
 Repository: {project}
-Read the item first: it is in `{project}/BACKLOG.md`, under the `## {slug}` heading.
+
+## First, isolate yourself
+
+The other lanes are working in this same project. Cut your own worktree before
+you touch anything:
+
+    git -C {project} worktree add -b cycle/{safe} "/tmp/squad-cycle/{safe}-$(date +%s)" HEAD
+
+Work ONLY inside that worktree, and `cd` into it before running any cycle
+command. Sharing the project checkout is what stalled this fleet for a day: the
+cycle's pre-flight requires a clean tree, and every lane writing its own records
+into one checkout failed every other lane's gate — 21 dirty files from 6 items,
+and not one of them able to proceed.
+
+Read the item first: it is in `BACKLOG.md`, under the `## {slug}` heading.
 Read the WHOLE block — `evidence`, `why_now`, `dod`, and any dated note under it.
 
 This is a CONSUMER project item, not a kit issue. There is no GitHub issue for
@@ -471,7 +485,8 @@ def brief(unit: Unit, *, repo: str, tracker: str = "paulohenriquevn/squad",
                 f"{unit.slug} is a consumer backlog item and no project path was "
                 f"given. Briefing it against the kit would send the lane to a "
                 f"repository the item does not live in (kit#27)")
-        return _CONSUMER_BRIEF.format(slug=unit.slug, project=project)
+        safe = unit.slug.replace("#", "").replace("/", "-")
+        return _CONSUMER_BRIEF.format(slug=unit.slug, project=project, safe=safe)
     safe = unit.slug.replace("#", "").replace("/", "-")
     return _BRIEF.format(slug=unit.slug, repo=repo, number=unit.number,
                          tracker=tracker, branch=f"fix/{safe}", safe=safe)
@@ -558,42 +573,9 @@ def plan(*, units: list[Unit], lanes: dict[str, str], log: Path,
             continue
         startable.append(unit)
 
-    #: Consumer items run in the project's own checkout — one tree, shared by
-    #: every lane — while kit repairs each cut their own worktree. So kit units
-    #: parallelise and consumer units cannot: the cycle's `/implement` requires a
-    #: clean tree, and a second lane writing its own cycle artifacts is enough to
-    #: fail the first one's pre-flight. Measured 2026-09-04 (kit#28): three lanes,
-    #: 21 dirty files from 6 items, and the lane that got furthest refused at
-    #: step 1 rather than relax a gate failing on dirt it did not create.
-    #:
-    #: Capping at one is not caution. Three consumer lanes complete ZERO items;
-    #: one completes one. The cap raises throughput — it does not trade it away.
-    #: It comes out when each consumer lane has its own tree, and not before: a
-    #: cap removed on the assumption that isolation works is how this returns
-    #: without anyone noticing.
-    consumer_in_flight = any(
-        slug for slug in held if not slug.startswith("kit#") and slug != AUDIT_SLUG)
-    kept: list[Unit] = []
-    deferred: list[str] = []
-    for unit in startable:
-        if unit.source != "backlog":
-            kept.append(unit)
-            continue
-        if consumer_in_flight:
-            result.notes.append(
-                f"{unit.slug} waits: consumer items share one checkout, so they go "
-                f"one at a time (kit#28)")
-            # Named in `unassigned`, not dropped. A startable item that vanishes
-            # from the plan reads as a shorter queue than there is.
-            deferred.append(unit.slug)
-            continue
-        kept.append(unit)
-        consumer_in_flight = True
-    startable = kept
-
     for lane, unit in zip(free, startable, strict=False):
         result.assignments.append(Assignment(lane, unit))
-    result.unassigned = [u.slug for u in startable[len(result.assignments):]] + deferred
+    result.unassigned = [u.slug for u in startable[len(result.assignments):]]
     return result
 
 

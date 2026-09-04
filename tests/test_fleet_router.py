@@ -369,33 +369,6 @@ def test_the_consumer_brief_does_not_prescribe_one_cycle_for_every_item() -> Non
     assert "fabricat" in text.lower()
 
 
-def test_only_one_consumer_item_is_in_flight_at_a_time(tmp_path) -> None:
-    """Consumer lanes share one checkout, so parallel consumer work cannot run.
-
-    Measured 2026-09-04 (kit#28): three lanes each took a consumer item and
-    wrote cycle artifacts into the same tree. `/implement` requires a clean
-    tree, so the first lane to reach it found 21 dirty files from 6 items and
-    refused — correctly, since the gate was failing on a cause its slice did not
-    create. The steady state of N>1 consumer lanes is that none of them lands
-    anything.
-
-    Kit units keep their parallelism: each cuts its own worktree, so they are
-    genuinely isolated.
-    """
-    log = tmp_path / "assignments.jsonl"
-    units = [fleet_router.Unit("B-079", "", "backlog"),
-             fleet_router.Unit("B-080", "", "backlog"),
-             fleet_router.Unit("B-001", "", "backlog")]
-    lanes = {"squad1": "free", "squad2": "free", "squad3": "free"}
-
-    the_plan = fleet_router.plan(units=units, lanes=lanes, log=log, branches=set())
-
-    assert len(the_plan.assignments) == 1, "a second consumer item shares the first's tree"
-    assert the_plan.assignments[0].unit.slug == "B-079"
-    assert "B-080" in the_plan.unassigned and "B-001" in the_plan.unassigned
-    assert any("one at a time" in n or "shared" in n for n in the_plan.notes)
-
-
 def test_kit_units_still_run_in_parallel(tmp_path) -> None:
     """The cap is about the shared checkout, not about caution in general."""
     log = tmp_path / "assignments.jsonl"
@@ -408,13 +381,32 @@ def test_kit_units_still_run_in_parallel(tmp_path) -> None:
     assert len(the_plan.assignments) == 3
 
 
-def test_a_consumer_item_already_in_flight_blocks_a_second(tmp_path) -> None:
-    """The cap counts what the log already holds, not just this pass."""
+def test_the_consumer_brief_gives_each_lane_its_own_worktree() -> None:
+    """Isolation is what lets consumer items run in parallel.
+
+    Measured 2026-09-04: with all lanes sharing the project checkout, every
+    /implement pre-flight failed on the other lanes' artifacts, so the router
+    was capped to one consumer item (kit#28) — and with three lanes that left
+    two idle by construction. fleet_idle measured **94% idle over 27 hours**.
+    A worktree per lane removes the cause instead of working around it.
+    """
+    unit = fleet_router.Unit("B-079", "a title", "backlog")
+    text = fleet_router.brief(unit, repo="/kit", project="/consumer")
+
+    assert "worktree add" in text
+    assert "/consumer" in text
+    # The lane must be told to stay inside it — the whole point is not touching
+    # the shared checkout.
+    assert "ONLY inside" in text or "only inside" in text
+
+
+def test_consumer_items_are_no_longer_capped_at_one(tmp_path) -> None:
+    """With per-lane worktrees the cap has nothing left to protect."""
     log = tmp_path / "assignments.jsonl"
-    fleet_router.record(log, "assigned", unit="B-079", lane="squad1", source="backlog")
-    units = [fleet_router.Unit("B-080", "", "backlog")]
-    lanes = {"squad2": "free", "squad3": "free"}
+    units = [fleet_router.Unit("B-079", "", "backlog"),
+             fleet_router.Unit("B-080", "", "backlog"),
+             fleet_router.Unit("B-001", "", "backlog")]
+    lanes = {"squad1": "free", "squad2": "free", "squad3": "free"}
 
     the_plan = fleet_router.plan(units=units, lanes=lanes, log=log, branches=set())
-    assert the_plan.assignments == []
-    assert "B-080" in the_plan.unassigned
+    assert len(the_plan.assignments) == 3, "three free lanes, three isolated items"
