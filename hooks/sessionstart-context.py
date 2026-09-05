@@ -31,7 +31,9 @@ _DRIFT_COUNT_PREFIXES = (
     "install_ahead:",
     "stale:",
     "kit_ahead:",
-    "unharvested (install-only",
+    "install-only,",  # the stable head of the label; the parenthetical after it
+    # is wording and has changed once. Matching the whole label coupled the
+    # hook to a sentence, and a partial upgrade then dropped the line in silence.
     "identical:",
 )
 
@@ -39,7 +41,9 @@ _DRIFT_COUNT_PREFIXES = (
 #: the summary line, not a header, so it is treated separately below.
 _DRIFT_ATTENTION_PREFIXES = (
     "diverged:", "install_ahead:", "stale:", "kit_ahead:",
-    "unharvested (install-only",
+    "install-only,",  # the stable head of the label; the parenthetical after it
+    # is wording and has changed once. Matching the whole label coupled the
+    # hook to a sentence, and a partial upgrade then dropped the line in silence.
 )
 
 

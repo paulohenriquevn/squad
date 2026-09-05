@@ -246,3 +246,63 @@ def test_the_drift_line_names_where_the_source_actually_came_from(
     assert line is not None
     assert "SQUAD_KIT_SOURCE=" in line
     assert ".kit-manifest.txt=" not in line
+
+
+def _printed_label() -> str:
+    """The literal the gate prints, read out of the source before interpolation."""
+    text = (Path(__file__).resolve().parents[1]
+            / "mechanisms" / "gates" / "check_install_drift.py").read_text(encoding="utf-8")
+    line = next(ln for ln in text.splitlines()
+                if "install-only, in a directory the kit" in ln and "print(" in ln)
+    start = line.index('"') + 1
+    return line[start:line.index("{", start)].rstrip(": ")
+
+
+def test_the_install_only_line_does_not_assert_whose_file_it_is() -> None:
+    """One bucket, two meanings, and a diff cannot tell them apart.
+
+    The label was written for B-103's `_layout.py` and `bump_version.py` — real kit
+    work stranded in one consumer, which the kit should indeed harvest. The same
+    bucket holds a project's OWN file living in a directory the kit also ships into,
+    and for that one "unharvested" is the wrong instruction: harvesting a consumer's
+    push gate into the kit would be the mistake.
+
+    Measured 2026-09-05: a consumer's `hooks/delivery-gate.sh` was deleted three times
+    and restored twice. The third deletion stood for days, and the cleanup that did it
+    described nine shell hooks as kit leftovers — true of eight. This line is what a
+    reader consults at that moment, so it must report what was observed and leave the
+    reading open, rather than pick one and print it as the answer.
+
+    Asserted on the printed LABEL, not the source line: the line also names
+    `report.unharvested_files`, which is the field and may keep its name.
+    """
+    label = _printed_label()
+    assert "unharvested" not in label, (
+        f"{label!r} tells the reader the kit should take this file back, which is "
+        f"only one of the two things this bucket holds"
+    )
+    for expected in ("yours", "harvest"):
+        assert expected in label, (
+            f"the label must state both readings; {expected!r} is missing from {label!r}"
+        )
+
+
+def test_the_session_hook_still_matches_the_line_it_surfaces() -> None:
+    """The hook matches by PREFIX. Rewording the gate without the hook is a silence.
+
+    This is the pairing that makes the rename safe: change one and this fails, which
+    is what a cross-file string contract needs in place of a convention.
+    """
+    hook = (Path(__file__).resolve().parents[1]
+            / "hooks" / "sessionstart-context.py").read_text(encoding="utf-8")
+    label = _printed_label()
+    import re
+
+    prefixes = [m.group(1) for ln in hook.splitlines() if "install-only" in ln
+                for m in [re.match(r'\s*"([^"]*)"', ln)] if m]
+    assert prefixes, "the hook no longer carries a prefix for this line at all"
+    for prefix in prefixes:
+        assert label.startswith(prefix), (
+            f"the gate prints {label!r} and the hook matches {prefix!r}, so the line "
+            f"the hook exists to surface would stop being surfaced"
+        )

@@ -278,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
             for rel in files:
                 print(f"    {rel}")
     if report.unharvested_files:
-        print(f"unharvested (install-only, in a directory the kit has): {len(report.unharvested_files)}")
+        print(f"install-only, in a directory the kit has (yours, or work to harvest — this check cannot tell): {len(report.unharvested_files)}")
         for rel in report.unharvested_files:
             print(f"    {rel}")
     consumer_local = len(report.only_in_install) - len(report.unharvested_files)

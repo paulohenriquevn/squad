@@ -227,3 +227,29 @@ def test_the_legacy_scripts_directory_is_migrated_and_project_files_kept(tmp_pat
     assert kept.is_file(), "a file the kit never shipped may not be deleted"
     assert kept.read_text(encoding="utf-8") == "written by the project\n"
     assert (root / ".claude" / "mechanisms" / "gates" / "check_xrefs.py").is_file()
+
+
+def test_the_usage_text_does_not_promise_a_deletion_that_no_longer_happens() -> None:
+    """What a reader is told before they decide how to reinstall.
+
+    Until 2026-09-05 the `--force` line read "anything the source does not have is
+    DELETED", describing behaviour this file stopped having on 2026-08-29 — the same
+    day the preservation pass landed and the tests above were written to pin it.
+
+    It is not a stale comment nobody reads. It is the message printed at the exact
+    moment somebody is deciding how to reinstall, and a reader who believes it has
+    every reason to clear their own files out of the way first. In one consumer a
+    cleanup did precisely that and took a push gate with it, three times.
+
+    Measured before writing this: with the project's `hooks/delivery-gate.sh` in
+    place, `install.sh <target> --force` exits 0 and the file is still there.
+    """
+    usage = (Path(__file__).resolve().parents[1]
+             / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+    force_lines = [ln for ln in usage.splitlines()
+                   if "--force" in ln or "is DELETED" in ln]
+    joined = "\n".join(force_lines)
+    assert "is DELETED" not in joined, (
+        "the usage still promises to delete files the kit does not ship, which is "
+        f"not what --force does:\n{joined}"
+    )

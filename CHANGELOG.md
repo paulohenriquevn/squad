@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The installer promised a deletion it stopped doing, and the drift report named the wrong owner (#11)**
+  `install.sh --force` printed "anything the source does not have is DELETED" — describing behaviour it
+  lost on 2026-08-29, the same day the preservation pass landed. That line is what a reader sees at the
+  moment they decide how to reinstall, and believing it is a reason to clear your own files out of the
+  way first. In one consumer a cleanup did exactly that and took the project's push gate with it, three
+  times. Measured before changing it: with the file in place, `--force` exits 0 and it survives.
+  Separately, the drift report labelled every install-only file in a kit directory `unharvested`, which
+  tells the reader the kit should take it back — right for stranded kit work, wrong for a file the
+  project wrote. It now names what was observed and leaves the reading open. The session hook matches
+  the stable head of that label rather than the whole sentence, because coupling it to a sentence is
+  how a partial upgrade drops the line in silence. (#33)
 - **The ecosystem verifier drew a tick for eight checks it never ran, and ignored the flag naming what to check (#11)**
   Eight of its checks delegate to a gate script and skip when that script is absent — deliberate, so
   a partial consumer install does not fail. But the skip was spelled `True`, so it printed `✓ Cross-references`

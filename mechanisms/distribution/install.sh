@@ -72,10 +72,10 @@ fi
 
 if [ -d "$ECO" ] && [ "$FORCE" -ne 1 ] && [ "$MERGE" -ne 1 ]; then
   echo "ERROR: $ECO already exists." >&2
-  echo "  --merge  add the kit's files, delete nothing. Use this when the target has a .claude/ of" >&2
-  echo "           its own (project skills, project agents) that must survive." >&2
-  echo "  --force  replace skills/rules/hooks/commands/mechanisms/squad/agents wholesale. Snapshots first" >&2
-  echo "           and names what it overwrote, but anything the source does not have is DELETED." >&2
+  echo "  --merge  add the kit's files, delete nothing." >&2
+  echo "  --force  refresh skills/rules/hooks/commands/mechanisms/squad/agents. Snapshots first and" >&2
+  echo "           names what it overwrote. Files the kit does NOT ship are left alone: a name the" >&2
+  echo "           kit ships is the kit's and is replaced; anything else is the project's and stays." >&2
   exit 2
 fi
 
