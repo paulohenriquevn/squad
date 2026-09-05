@@ -7,6 +7,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A sixth place pinned item ids to exactly three digits, and it was in prose where no assertion could see it (#21).** `tests/test_item_id_readers_agree.py` imports five readers and compares their regexes, which covers code and not a `SKILL.md` that states the shape in words — and `skills/idea-to-release/SKILL.md:52` routed backlog-driven mode on `^B-\d{3}$`. A registry crossing B-999 would have routed nowhere from it, silently, which is the failure the file's own header says it exists to prevent one level down. Widened to `^B-\d{3,}$`, and the tree is now swept rather than trusted: anything writing the exactly-three-digit form must be enumerated with the reason it is not a reader, in the shape of the worktree sweep. Mutation-verified — restoring the narrow form fails exactly the new test. (#21)
+
+### Fixed
 - **The fix for #25 added two verdicts and left `main()` unable to print either.** `state()` gained `busy` and `unknown` so a lane mid-turn stops being reported ready — the whole point of that issue — and `_ADVICE` was not extended, while `main()` indexes it unconditionally. So the two verdicts the fix exists to produce were the two that raised `KeyError` at the entry point. It failed CLOSED, which is why nothing was ever typed into a busy lane and why this was not urgent in the dangerous direction; but the operator got a stack trace where the point was a sentence, and `busy` (transient — wait) became indistinguishable from `unknown` (something is wrong — go look), which call for opposite actions. Both now carry advice, and `tests/test_session_ready.py` asserts over the verdict SET rather than the two names, so a seventh verdict added later fails there instead of at an operator's terminal. Found while triaging #25 as genuinely fixed: a fix measured only against the defect it targeted is a fix measured too narrowly. (#25)
 
 ### Fixed

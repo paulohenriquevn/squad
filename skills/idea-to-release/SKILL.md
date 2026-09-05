@@ -49,7 +49,7 @@ Do NOT invoke when:
 
 1. If no arg AND `ROADMAP.md` exists → roadmap-driven mode: select next eligible milestone (see Step 0).
 2. If arg matches `^M[0-8]$` AND `ROADMAP.md` exists → roadmap-driven mode targeting that milestone.
-3. If arg matches `^B-\d{3}$` → backlog-driven mode: read that item from `BACKLOG.md` and use its statement + Definition of Done as the topic. This is the form `cycle-maintenance` delegates.
+3. If arg matches `^B-\d{3,}$` → backlog-driven mode: read that item from `BACKLOG.md` and use its statement + Definition of Done as the topic. This is the form `cycle-maintenance` delegates.
 4. Otherwise → ad-hoc mode with the arg as free-form slug. Emit `INFO ad-hoc: no milestone_id will be persisted; the chain ends at RELEASED with no acceptance phase`.
 
 If no arg AND `ROADMAP.md` is MISSING → refuse with `BLOCKED roadmap-required: ROADMAP.md is hand-authored — no skill generates it (see rules/cycle-acceptance.md § The ROADMAP.md contract). Invoke /idea-to-release B-NNN for backlog work, or /idea-to-release {topic-slug} for ad-hoc work`.

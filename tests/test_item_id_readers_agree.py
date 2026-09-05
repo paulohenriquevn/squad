@@ -120,3 +120,44 @@ def test_the_board_server_fullmatch_agrees_with_the_extractors() -> None:
             f"r'\\bB-\\d{{3,}}\\b'. The endpoint would refuse ids the siblings "
             f"consider live registry — the divergence this test exists to catch"
         )
+
+
+def test_no_unenumerated_place_pins_the_id_to_three_digits() -> None:
+    """The five importable readers agree. A sixth in PROSE would not be seen.
+
+    The tests above import each reader and compare its regex. That covers code.
+    It does not cover a SKILL.md, a rule file or a template that states the shape
+    in words — and `skills/idea-to-release/SKILL.md:52` did exactly that,
+    routing on `^B-\\d{3}$`, invisible to every assertion in this file until an
+    issue triage read the prose by hand.
+
+    So the tree is swept rather than trusted, in the shape of
+    `test_worktree_briefs_name_the_stash.py::test_no_unenumerated_site_hands_out_a_worktree`:
+    anything that writes the exactly-three-digit form must be enumerated here
+    with the reason it is not a reader. An exemption nobody probes is a door.
+    """
+    import subprocess
+
+    #: Places that may name the three-digit form without being a reader of ids.
+    EXEMPT = {
+        # The history of what was true then. Rewriting it destroys the evidence
+        # that the defect existed, which is the point of a changelog.
+        "CHANGELOG.md",
+        # This file: it quotes the broken form to explain it.
+        "tests/test_item_id_readers_agree.py",
+    }
+
+    found = subprocess.run(
+        ["git", "grep", "-lE", r"B-\\d\{3\}"],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    if found.returncode not in (0, 1):
+        raise AssertionError(f"git grep failed: {found.stderr}")
+
+    unenumerated = sorted({p for p in found.stdout.split() if p} - EXEMPT)
+    assert not unenumerated, (
+        "these pin an item id to exactly three digits and are not enumerated: "
+        f"{unenumerated}. A registry crossing B-999 routes nowhere from them. "
+        "Either widen to `B-\\d{3,}` or add the path here with the reason it is "
+        "not a reader of ids."
+    )
