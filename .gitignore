@@ -10,6 +10,12 @@ build/
 .pytest_cache/
 .ruff_cache/
 .coverage
+# The PARALLEL-mode fragments, which the bare `.coverage` pattern does not match:
+# coverage.py writes `.coverage.<host>.<pid>.<random>` per worker and combines
+# them afterwards. Measured 2026-09-05: 1893 of them were committed by three
+# `git add -A` calls made while a coverage run was in flight, and they would have
+# ridden into the promotion PR as 1893 junk files.
+.coverage.*
 coverage.xml
 .mypy_cache/
 .hypothesis/
