@@ -131,6 +131,12 @@ def test_no_unenumerated_site_hands_out_a_worktree() -> None:
         "rules/templates/acceptance-target.txt",
         # Prose about what a worktree copies, in a wiring check.
         "skills/implement/scripts/check_wiring.py",
+        # Asserts that `git-safety.md` § 2 still carries the requirement and the
+        # command that satisfies it. It quotes `worktree add` to check for it, and
+        # briefs nobody. Enumerated the moment it was committed, because until then
+        # it was untracked and `git grep` could not see it — which is its own small
+        # lesson about sweeps that read the index.
+        "tests/test_git_safety_one_tree_per_lane.py",
         # Test fixtures and assertions that build worktrees to test other things.
         "skills/implement/tests/conftest.py",
         "skills/pipeline/tests/test_spawn_stages.py",

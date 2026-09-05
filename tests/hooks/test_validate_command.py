@@ -108,6 +108,17 @@ CASES: list[tuple[str, int, str]] = [
     ("rm -rf /home", 2, "workspace"),  # rm -rf /home is blocked
     ("rm -rf ./build", 0, "workspace"),  # rm -rf ./build (project-relative) is allowed
     ("rm -rf /tmp/something", 0, "workspace"),  # rm -rf /tmp/something is allowed
+    # The three conditions must hold IN THE SAME SEGMENT. Matching them
+    # independently over the whole line assembles a deletion nobody typed: the
+    # `rm` from one command, the `-r` from a `grep`, the root path from a third.
+    # This regressed once already (B-160 in a consumer, fixed in bash and
+    # reintroduced by the Python rewrite), and the consumer's own guard test
+    # could not see it because its payload was incomplete.
+    ("rm nota.txt && grep -rn padrao /etc/hosts", 0, "workspace"),  # rm without -r, -r from grep
+    ("grep -rn foo /etc && rm nota.txt", 0, "workspace"),  # same, order reversed
+    ("ls -R /etc && rm -f nota.txt", 0, "workspace"),  # recursive flag from ls, rm not recursive
+    ("rm -rf build && echo done", 0, "workspace"),  # a real recursive delete, safely scoped
+    ("echo start && rm -rf /etc", 2, "workspace"),  # all three in one segment: still blocked
     ("ls -la", 0, "workspace"),  # ls -la is allowed
     ("git commit -m 'feat: add thing\n\nCo-Authored-By: Someone <s@e.com>'", 2, "workspace"),  # commit with Co-Authored-By trailer is blocked
     ("git commit -m 'feat: add thing'", 0, "workspace"),  # commit without Co-Authored-By on develop is allowed

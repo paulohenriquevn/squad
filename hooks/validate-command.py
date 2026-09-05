@@ -212,10 +212,30 @@ def check_git(command: str) -> str | None:
 
 
 def check_rm(command: str) -> str | None:
-    if (RM_INVOCATION_RE.search(command) and RM_RECURSIVE_RE.search(command)
-            and DANGEROUS_PATH_RE.search(command)):
-        return ("BLOCKED: 'rm -r' on a system/home-root path. Scope recursive deletions "
-                "to project-relative paths, deep project subdirectories, or /tmp/.")
+    """The three conditions have to hold in the SAME segment.
+
+    Searching each of them over the whole line and ANDing the results assembles a
+    deletion nobody typed: the `rm` from one command, the `-r` from a `grep -rn`,
+    the root path from a third. `rm nota.txt && grep -rn padrao /etc/hosts` was
+    refused as "'rm -r' on a system/home-root path" with no `rm -r` and no root
+    path anywhere in it.
+
+    This regressed once before. A consumer measured it, fixed it in the bash
+    hook, and the Python rewrite reintroduced it — which nobody caught, because
+    that consumer's own guard test sent an incomplete payload and every row of it
+    was measuring the fail-closed path rather than this function.
+
+    `segments()` already states the rule in its docstring, and `check_zone` was
+    already the only caller honouring it: *"judged per segment, so an unrelated
+    `cp` in a compound is not blamed on a zone path that appears elsewhere in the
+    same line"*. Blocking a real `rm -rf /etc` inside a compound still works,
+    because there all three conditions live in one segment.
+    """
+    for segment in segments(command):
+        if (RM_INVOCATION_RE.search(segment) and RM_RECURSIVE_RE.search(segment)
+                and DANGEROUS_PATH_RE.search(segment)):
+            return ("BLOCKED: 'rm -r' on a system/home-root path. Scope recursive deletions "
+                    "to project-relative paths, deep project subdirectories, or /tmp/.")
     return None
 
 
