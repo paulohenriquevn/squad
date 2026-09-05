@@ -58,6 +58,24 @@ def test_a_prose_blocker_is_collected_and_an_item_edge_is_not(tmp_path: Path) ->
     assert [b["item"] for b in ag.prose_blockers] == ["B-003"]
 
 
+def test_an_approved_item_still_carries_its_wall_to_the_session(tmp_path: Path) -> None:
+    """The status added to the contract on 2026-09-04, exercised rather than assumed.
+
+    This module decides by the TERMINAL set, negatively — `status not in {shipped,
+    killed}` — which is why `approved` needed no edit here while five other readers
+    did. That shape is the reason, so it is what this pins: rewrite the check as a
+    positive list of open statuses and a wall on an approved item goes silent, which
+    is the failure mode `approved` already caused everywhere it WAS enumerated.
+
+    Behavioural on purpose. Asserting the file does not contain a positive set would
+    pin the spelling; asserting the wall arrives pins the thing that matters.
+    """
+    backlog = _item("B-005", domain="api", repo="search-api", status="approved",
+                    blocked_by="the sponsor must choose between the two vendors")
+    ag = build(_project(tmp_path, backlog))
+    assert [b["item"] for b in ag.prose_blockers] == ["B-005"]
+
+
 def test_a_closed_item_does_not_carry_its_blocker_into_the_session(tmp_path: Path) -> None:
     """`cycle-backlog.md` calls a stale `blocked_by` on a closed item an anti-pattern:
     the registry then tells everyone after you that finished work is stuck."""

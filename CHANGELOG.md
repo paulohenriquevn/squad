@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Two of the three readers the sweep found were enumerated and never checked (#11)**
+  Adding a file to the readers list proves it exists, not that the set inside it is right —
+  a gap measured the same way it was found, by mutation. Deleting `approved` from
+  `check_intake_gates.ACTION_BY_STATUS`, and rewriting `build_agenda`'s terminal-set test as a
+  positive list of open statuses, both left the entire suite green. Each now has an assertion on
+  its behaviour, and each kills its mutant alone. `build_agenda` needed no fix: it decides by the
+  TERMINAL set negatively, which is why `approved` reached it for free while five readers that
+  enumerated the open statuses positively all broke — so what is pinned there is the shape, by
+  exercising a wall on an approved item rather than by reading the source.
 - **The pipeline could not advance an item past PLAN, and the fix was a decision rather than an edit (#11)**
   `approved` entering the contract made `triaged -> planned` illegal, and `pipeline_orchestrator`
   walked exactly that, so every item stopped at the same place. Letting it walk through would have

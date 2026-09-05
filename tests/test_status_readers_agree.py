@@ -354,3 +354,31 @@ def test_the_halt_reader_counts_a_committed_cause_as_live() -> None:
     assert not (set(squad_boss.OPEN_STATUS) & terminal), (
         "a shipped or killed cause cannot be what holds anything"
     )
+
+
+def test_the_intake_reader_folds_a_duplicate_into_every_open_status() -> None:
+    """`check_intake_gates.ACTION_BY_STATUS` decides what a dedup hit means.
+
+    Added to READERS by the sweep on 2026-09-05, which only proves the file exists.
+    Written the same day as the halt-reader pin above and for the same reason: two
+    of the three readers the sweep found had no assertion on their CONTENTS, so a
+    set could go wrong inside a file this suite calls checked.
+
+    An open status with no row falls through to "read the block before deciding",
+    which reads as caution and behaves as a miss — a new item duplicating an
+    approved one gets its own id, and one piece of work becomes two rows nobody
+    reconciles.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "skills" / "backlog-item" / "scripts"))
+    import check_intake_gates
+
+    open_statuses = CONTRACT_STATUSES - {"shipped", "killed"}
+    missing = open_statuses - set(check_intake_gates.ACTION_BY_STATUS)
+    assert not missing, (
+        f"ACTION_BY_STATUS has no row for {sorted(missing)}, so a duplicate of an "
+        f"item in that status falls through the table and is filed as new work."
+    )
+    assert all(check_intake_gates.ACTION_BY_STATUS[s] == "ITEM_MERGED"
+               for s in open_statuses), (
+        "every open status folds the duplicate in; only a terminal one supersedes"
+    )
