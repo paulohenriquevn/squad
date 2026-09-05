@@ -122,3 +122,70 @@ def test_a_directory_the_kit_does_not_have_at_all_is_a_consumer_artifact(tmp_pat
     assert report.unharvested_files == []
     assert report.only_in_install == ["review-b052-tests-knowledge/SKILL.md"]
     assert report.needs_attention is False
+
+
+# --- the gate can only run if something tells it where the kit came from ------
+
+
+def test_the_installer_records_its_source_in_the_manifest() -> None:
+    """`drift_line()` compares the install against a source it must be given.
+
+    Until 2026-09-05 the only way to give it one was exporting `SQUAD_KIT_SOURCE`
+    — a variable named in no README, no rule and no install output, only in the
+    hook's own source. So the gate was wired and inert: #23 reported it cited
+    nine times in prose and executed by nothing, and wiring it did not change
+    that, because a consumer could not learn how to opt in.
+
+    The installer knows the answer without being told. It copies FROM a directory
+    and writes `.kit-manifest.txt` INTO the target on every install, so it
+    records the source there and the opt-in disappears.
+    """
+    installer = (Path(__file__).resolve().parents[1]
+                 / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+    assert '# kit-source: $SRC_DIR' in installer, (
+        "install.sh no longer records where it copied from, so drift_line has "
+        "nothing to fall back to and the gate returns to being opt-in-only"
+    )
+
+
+def test_the_hook_reads_the_manifest_when_the_variable_is_absent(tmp_path: Path) -> None:
+    """The fallback, and the precedence between the two.
+
+    `SQUAD_KIT_SOURCE` must keep winning when it is set: exporting it is an
+    explicit choice, usually a second checkout, and a fallback that overrode it
+    would be a defect of its own.
+    """
+    import importlib.util
+
+    hook_path = (Path(__file__).resolve().parents[1]
+                 / "hooks" / "sessionstart-context.py")
+    spec = importlib.util.spec_from_file_location("_sc", hook_path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["_sc"] = mod
+    spec.loader.exec_module(mod)
+
+    eco = tmp_path / ".claude"
+    eco.mkdir()
+    (eco / ".kit-manifest.txt").write_text(
+        "# Written by install.sh\n"
+        "# kit-source: /srv/example/kit\n"
+        "skills/backlog-review\n",
+        encoding="utf-8",
+    )
+
+    class _Layout:
+        pass
+
+    layout = _Layout()
+    layout.eco = eco
+
+    assert mod._source_from_manifest(layout) == "/srv/example/kit"
+
+    # No line, no answer — and it must not raise on a manifest without one.
+    (eco / ".kit-manifest.txt").write_text("skills/backlog-review\n", encoding="utf-8")
+    assert mod._source_from_manifest(layout) is None
+
+    # Nor on a manifest that is not there at all.
+    (eco / ".kit-manifest.txt").unlink()
+    assert mod._source_from_manifest(layout) is None

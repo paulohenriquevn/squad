@@ -77,6 +77,28 @@ def plan_line(eco: Path) -> str | None:
     return f"Active plan: {active.slug} (resolved by mtime — set {eco}/.active_plan to pin)"
 
 
+
+def _source_from_manifest(layout) -> str | None:
+    """The path `install.sh` copied from, recorded in `.kit-manifest.txt`.
+
+    `SQUAD_KIT_SOURCE` wins when it is set: exporting it is an explicit choice —
+    usually a second checkout — and a fallback that overrode it would be a defect
+    of its own. This is for the consumer who never heard of the variable, which
+    is every consumer, because it is documented in no README and no rule (#23).
+
+    A `#`-prefixed line, so the manifest's existing readers, which all skip
+    comments, are unaffected by its presence.
+    """
+    manifest = Path(layout.eco) / ".kit-manifest.txt"
+    try:
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            if line.startswith("# kit-source:"):
+                value = line.split(":", 1)[1].strip()
+                return value or None
+    except OSError:
+        return None
+    return None
+
 def drift_line(layout: Layout) -> str | None:
     """A stale install learns it, without a person remembering to ask.
 
@@ -91,7 +113,7 @@ def drift_line(layout: Layout) -> str | None:
     executed by nothing; a consumer ran ten hours on a stale kit missing three
     merged repairs. The diagnostic was correct, available, and in a drawer.
     """
-    source_env = os.environ.get("SQUAD_KIT_SOURCE")
+    source_env = os.environ.get("SQUAD_KIT_SOURCE") or _source_from_manifest(layout)
     if not source_env:
         return None
     source = Path(source_env)

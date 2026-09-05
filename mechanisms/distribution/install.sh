@@ -871,6 +871,12 @@ MANIFEST="$ECO/.kit-manifest.txt"
   echo "# One path per line, relative to .claude/. Anything not here is the project's."
   echo "# Covers every directory the installer copies; nothing answers by omission."
   echo "# Regenerated on every install; do not edit by hand."
+  # The source this copy came from, so `check_install_drift` can compare
+  # without anyone exporting SQUAD_KIT_SOURCE. Before this, the drift gate
+  # was wired and inert: a consumer had to read hooks/sessionstart-context.py
+  # to learn a variable existed (#23). A `#`-prefixed line, so every existing
+  # reader — which all skip comments — is unaffected.
+  echo "# kit-source: $SRC_DIR"
   # `skills/` stays one entry per SKILL and `rules/` one per file — that is the
   # granularity every existing reader expects, and changing it broke three tests
   # that had nothing to do with the gap being closed.
