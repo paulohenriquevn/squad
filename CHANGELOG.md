@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The ecosystem verifier drew a tick for eight checks it never ran, and ignored the flag naming what to check (#11)**
+  Eight of its checks delegate to a gate script and skip when that script is absent — deliberate, so
+  a partial consumer install does not fail. But the skip was spelled `True`, so it printed `✓ Cross-references`
+  with `check_xrefs.py not installed — skipping` on the line below. A reader scanning marks was told a
+  gate had checked something that was not on disk. Skips now return a distinct `NOT_RUN`, print `⊘`, and
+  are counted on every run. Separately, `main()` read no arguments at all: `--ecosystem-dir <path>` was
+  accepted and discarded, so the verifier reported on whatever tree it found while its header named that
+  tree — green, complete, and about the wrong subject. The flag is now honoured and an unrecognised
+  argument exits 2.
 - **The drift report named an empty variable as the source of a value it read elsewhere (#11)**
   The manifest fallback added earlier the same day printed `vs SQUAD_KIT_SOURCE=<path>` even when
   the variable was unset and the path had come from `.kit-manifest.txt` — so a reader chasing a

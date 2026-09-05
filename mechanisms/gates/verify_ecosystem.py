@@ -97,6 +97,36 @@ def check_shell_syntax(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return len(issues) == 0, issues
 
 
+class _NotRun:
+    """Neither a pass nor a failure: the check could not look at its subject.
+
+    Eight checks here delegate to a gate script, and skip when that script is not on
+    disk. The skip is deliberate and stays — a consumer with a partial install must
+    not fail over a gate it never installed. What changes is that the skip stops
+    being spelled `True`, because `True` is what a check returns when it looked and
+    found nothing wrong, and the two were printed with the same tick:
+
+        ✓ Cross-references
+          check_xrefs.py not installed — skipping
+
+    Truthy on purpose. Every caller writes `if ok:`, and a falsy sentinel would turn
+    every partial install red — trading a misleading tick for a broken gate, which is
+    the worse of the two. `is NOT_RUN` is how a caller that cares tells them apart.
+    """
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostics only
+        return "NOT_RUN"
+
+
+#: Returned in place of `True` by a check whose gate script is absent.
+NOT_RUN = _NotRun()
+
+
 def check_settings_json(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     issues: list[str] = []
     for json_file in ("settings.json", "settings.local.json", "settings.local.json.example"):
@@ -113,7 +143,7 @@ def check_settings_json(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 def check_xrefs(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     validator = ecosystem_dir / "mechanisms" / "gates" / "check_xrefs.py"
     if not validator.exists():
-        return True, ["  check_xrefs.py not installed — skipping"]
+        return NOT_RUN, ["  check_xrefs.py not installed — skipping"]
     result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(validator), "--ecosystem-dir", str(ecosystem_dir)],
         capture_output=True,
@@ -134,7 +164,7 @@ def check_skill_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """
     checker = ecosystem_dir / "mechanisms" / "gates" / "check_skill_map.py"
     if not checker.exists():
-        return True, ["  check_skill_map.py not installed — skipping"]
+        return NOT_RUN, ["  check_skill_map.py not installed — skipping"]
     result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
         capture_output=True, text=True,
@@ -156,7 +186,7 @@ def check_readme_advisory_skills(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """
     checker = ecosystem_dir / "mechanisms" / "gates" / "check_readme_advisory_skills.py"
     if not checker.exists():
-        return True, ["  check_readme_advisory_skills.py not installed — skipping"]
+        return NOT_RUN, ["  check_readme_advisory_skills.py not installed — skipping"]
     result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(checker), "--root", str(ecosystem_dir)],
         capture_output=True, text=True,
@@ -185,7 +215,7 @@ def check_squad_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """
     checker = ecosystem_dir / "mechanisms" / "gates" / "check_squad_map.py"
     if not checker.exists():
-        return True, ["  check_squad_map.py not installed — skipping"]
+        return NOT_RUN, ["  check_squad_map.py not installed — skipping"]
     result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
         capture_output=True, text=True,
@@ -214,7 +244,7 @@ def check_mechanisms_inventory(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """
     checker = ecosystem_dir / "mechanisms" / "gates" / "check_mechanisms_inventory.py"
     if not checker.exists():
-        return True, ["  check_mechanisms_inventory.py not installed — skipping"]
+        return NOT_RUN, ["  check_mechanisms_inventory.py not installed — skipping"]
     result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
         capture_output=True, text=True,
@@ -241,7 +271,7 @@ def check_phase_numbering(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """
     checker = ecosystem_dir / "mechanisms" / "gates" / "check_phase_numbering.py"
     if not checker.exists():
-        return True, ["  check_phase_numbering.py not installed — skipping"]
+        return NOT_RUN, ["  check_phase_numbering.py not installed — skipping"]
     result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
         capture_output=True, text=True,
@@ -269,7 +299,7 @@ def _run_gate(ecosystem_dir: Path, gate: str, flag: str = "--repo") -> tuple[boo
     """
     checker = ecosystem_dir / "mechanisms" / "gates" / f"{gate}.py"
     if not checker.exists():
-        return True, [f"  {gate}.py not installed — skipping"]
+        return NOT_RUN, [f"  {gate}.py not installed — skipping"]
     result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(checker), flag, str(ecosystem_dir)],
         capture_output=True, text=True,
@@ -320,7 +350,7 @@ def check_wiki_migration(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """
     checker = ecosystem_dir / "mechanisms" / "gates" / "check_wiki_migration.py"
     if not checker.exists():
-        return True, ["  check_wiki_migration.py not installed — skipping"]
+        return NOT_RUN, ["  check_wiki_migration.py not installed — skipping"]
     project_root = (ecosystem_dir.parent if ecosystem_dir.name == ".claude"
                     else ecosystem_dir)
     result = subprocess.run(  # noqa: PLW1510
@@ -515,12 +545,42 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
-def main() -> int:
-    try:
-        ecosystem_dir = _find_ecosystem_dir()
-    except FileNotFoundError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 2
+def main(argv: list[str] | None = None) -> int:
+    """`--ecosystem-dir` names the tree to verify; without it, the tree is found.
+
+    The flag is parsed rather than ignored, and an unrecognised argument is an
+    error. Until 2026-09-05 this function took no arguments at all and read none:
+    `verify_ecosystem.py --ecosystem-dir /somewhere/else` printed a full green report
+    for the tree the finder happened to locate, headed with THAT tree's path. The
+    header was the only signal, and it is easy to read as confirmation when the path
+    is one you also expect. A verifier pointed at the wrong subject must say so.
+    """
+    argv = list(sys.argv[1:] if argv is None else argv)
+    requested: str | None = None
+    while argv:
+        arg = argv.pop(0)
+        if arg == "--ecosystem-dir":
+            if not argv:
+                print("ERROR: --ecosystem-dir needs a path", file=sys.stderr)
+                return 2
+            requested = argv.pop(0)
+        elif arg.startswith("--ecosystem-dir="):
+            requested = arg.split("=", 1)[1]
+        else:
+            print(f"ERROR: unrecognised argument {arg!r}", file=sys.stderr)
+            return 2
+
+    if requested is not None:
+        ecosystem_dir = Path(requested).resolve()
+        if not ecosystem_dir.is_dir():
+            print(f"ERROR: {ecosystem_dir} is not a directory", file=sys.stderr)
+            return 2
+    else:
+        try:
+            ecosystem_dir = _find_ecosystem_dir()
+        except FileNotFoundError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
 
     checks = [
         ("Python syntax", check_python_syntax),
@@ -543,12 +603,23 @@ def main() -> int:
     print(f"=== E2E smoke test — ecosystem: {ecosystem_dir} ===\n")
 
     all_pass = True
+    not_run = 0
     for name, check in checks:
         try:
             ok, issues = check(ecosystem_dir)
         except Exception as exc:  # noqa: BLE001
             ok, issues = False, [f"  exception: {exc}"]
-        if ok:
+        if ok is NOT_RUN:
+            # Not a failure, and not a pass either. Drawing it as a tick told a
+            # reader scanning the marks that a gate had checked something when the
+            # gate was not on disk.
+            not_run += 1
+            print(f"⊘ {name}")
+            for note in issues[:5]:
+                print(note)
+            if len(issues) > 5:
+                print(f"  ... and {len(issues) - 5} more")
+        elif ok:
             print(f"✓ {name}")
             # A passing check may still have something to say — a skipped
             # validator, a migration in progress. Printing only on failure meant
@@ -566,6 +637,11 @@ def main() -> int:
                 print(f"  ... and {len(issues) - 5} more")
 
     print()
+    # Said on every run, pass or fail. A count that only appears when something is
+    # wrong is a count nobody calibrates against, and the number that matters here
+    # is how much of the suite did not execute.
+    if not_run:
+        print(f"({not_run} not run — the gate script was not installed)")
     if all_pass:
         print("=== ALL CHECKS PASSED ===")
         return 0
