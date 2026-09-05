@@ -205,8 +205,15 @@ def test_finishing_discover_records_triaged():
 
 
 def test_finishing_plan_records_planned():
-    """The transition that was in the contract and in zero items anywhere."""
-    p = _one()
+    """The transition that was in the contract and in zero items anywhere.
+
+    The item must say `approved` for this to be the outcome. That is not a fixture
+    detail: `planned` is legal from `approved` alone, and when `approved` entered the
+    contract on 2026-09-04 this test kept passing on an item with no status at all —
+    which is how kit#32 went unnoticed. What an unapproved item does instead is
+    pinned in `test_pipeline_does_not_approve.py`; it parks and says what it needs.
+    """
+    p = Pipeline([Item(slug="b-001", status="approved")], lanes=3)
     p.force_stage("b-001", "PLAN")
     p.schedule()
     p.complete("b-001")
@@ -238,12 +245,21 @@ def test_draining_twice_yields_nothing_the_second_time():
 
 
 def test_a_send_back_demotes_the_registry():
-    """An item whose plan review rejected is no longer `planned`."""
-    p = _one()
+    """An item whose plan review rejected is no longer `planned`.
+
+    It lands at `approved`, not `triaged`. The expectation was changed on 2026-09-05
+    because the old one had become impossible, not because it was inconvenient:
+    `backlog_status.ALLOWED["planned"]` is `{approved, shipped, killed}`, so the
+    write this asserted would be REFUSED by the mechanism that applies it. Review
+    rejected the plan; it did not withdraw the decision to do the work, and landing
+    at `triaged` would put the decision back in front of the only thing present to
+    make it — this pipeline, which may not.
+    """
+    p = Pipeline([Item(slug="b-001", status="planned")], lanes=3)
     p.force_stage("b-001", "REVIEW")
     p.schedule()
     p.send_back("b-001", "PLAN", commit="abc1234")
-    assert [w.status for w in p.drain_writes()] == ["triaged"]
+    assert [w.status for w in p.drain_writes()] == ["approved"]
 
 
 # ── the impediment ────────────────────────────────────────────────────────────

@@ -44,6 +44,10 @@ READERS = {
     "skills/backlog-item/scripts/check_intake_gates.py": "decides what a dedup hit means",
     "skills/backlog-review/scripts/squad_boss.py": "decides whether a halt's cause is still live",
     "skills/brainstorm-vision/scripts/build_agenda.py": "decides what reaches the agenda",
+    # Moved out of EXEMPT on 2026-09-05, when the governance question kit#32 was
+    # waiting on got an answer. It gates on status now (REQUIRES_STATUS), so it
+    # decides, so it is pinned like the rest.
+    "mechanisms/fleet/pipeline_orchestrator.py": "decides which status a finished stage may write",
 }
 
 
@@ -279,11 +283,7 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         "skills/backlog-review/tests/test_board_state.py",
         "skills/backlog-init/tests/test_detect_domains.py",
         "tests/test_pipeline_orchestrator.py",
-        # KNOWN GAP, kit#32: it decides on status, does not know `approved`, and
-        # fixing it needs a governance decision (may a pipeline approve?) rather
-        # than an edit. Listed rather than silently swept, so removing this entry
-        # has to be a fix.
-        "mechanisms/fleet/pipeline_orchestrator.py",
+        "tests/test_pipeline_does_not_approve.py",
         # Names statuses only in a comment about queue order.
         "mechanisms/fleet/squad_lead.py",
         # Tests OF the readers. They assert on statuses, they do not route on

@@ -89,6 +89,12 @@ class Item:
     #: decision, an external action — which is a real impediment, so `None` is the
     #: only value that means "not blocked".
     blocked_by: list[str] | None = None
+    #: What the registry said this item was when the queue was built, carried for the
+    #: same reason `blocked_by` is: the scheduler must not read `BACKLOG.md`. It is
+    #: needed because some transitions are legal only from a specific status, and a
+    #: pipeline that cannot see the current one emits writes that get refused.
+    #: `None` means the caller did not supply it — then nothing gated on it may run.
+    status: str | None = None
 
     @property
     def blocked(self) -> bool:
@@ -110,6 +116,43 @@ STATUS_ON_ENTERING = {
     "PLAN": "triaged",
     "IMPLEMENT": "planned",
     "__done__": "shipped",
+}
+
+#: The same mapping for a BACKWARD hop, and deliberately not the same table.
+#:
+#: A send-back to PLAN means review rejected the plan. It did not withdraw the
+#: decision to do the work, so the item lands at `approved` — the stage that
+#: PRODUCES plans — and not at `triaged`, which is where the decision has not been
+#: made yet. Reusing the forward map demotes past the decision and then requires
+#: it to be made again, by the only thing present, which is this pipeline.
+#:
+#: `planned -> triaged` is not in `backlog_status.ALLOWED` either, so the shared
+#: table did not merely mean the wrong thing — it emitted a write that `advance()`
+#: refuses.
+STATUS_ON_SEND_BACK = {
+    "PLAN": "approved",
+}
+
+#: What the registry must ALREADY say before the pipeline may write a status.
+#:
+#: Only one entry, and it is the whole governance question. `planned` is legal from
+#: `approved` alone, so an item that has not been approved cannot be planned — and
+#: the pipeline may not approve it on the way past.
+#:
+#: That refusal is read, not chosen. `rules/decision-delegation.txt` sorts walls
+#: into a delegable set and a retained one, and retains `governance`: "the item
+#: itself names autonomous execution as the bypass its governance exists to
+#: prevent. Delegation cannot authorize the thing it would be a bypass OF."
+#: `approved` records that somebody with the authority decided; a pipeline writing
+#: it makes the state mean "the pipeline got here" instead. So no consumer's
+#: delegation file can hand this over — moving `governance` to the delegated column
+#: is the exact move that clause forbids.
+#:
+#: The cost is that automation stops where a person is required. That is what the
+#: state is for, and it is the reason this is a park with a stated reason rather
+#: than a silent halt.
+REQUIRES_STATUS = {
+    "planned": ("approved",),
 }
 
 
@@ -183,9 +226,28 @@ class Pipeline:
         item.merge_only = None
         nxt = STAGES.index(item.stage) + 1
         item.stage = STAGES[nxt] if nxt < len(STAGES) else "__done__"
-        status = STATUS_ON_ENTERING.get(item.stage)
-        if status:
-            self.pending_writes.append(StatusWrite(item.slug, status=status))
+        self._record(item, STATUS_ON_ENTERING.get(item.stage))
+
+    def _record(self, item: Item, status: str | None) -> None:
+        """Queue a registry write, or park if the contract will not accept it.
+
+        The item has ALREADY moved to the new stage when this runs, so parking here
+        leaves it at the stage it reached — unparking resumes the work rather than
+        discarding the phase that just finished.
+        """
+        if not status:
+            return
+        needed = REQUIRES_STATUS.get(status, ())
+        if needed and item.status not in needed:
+            self.park(item.slug, surface=True, reason=(
+                f"{status} is legal only from {' or '.join(needed)}; the registry says "
+                f"{item.status or 'nothing'}. The pipeline may not approve — "
+                f"rules/decision-delegation.txt retains governance decisions, and "
+                f"approving is the autonomous-execution bypass that clause names."
+            ))
+            return
+        self.pending_writes.append(StatusWrite(item.slug, status=status))
+        item.status = status
 
     def fail(self, slug: str, reason: str) -> None:
         item = self.item(slug)
@@ -243,10 +305,9 @@ class Pipeline:
         item.parked = False
         # A send-back demotes the registry too. An item whose plan did not survive
         # review is no longer `planned`, and leaving it so tells every later reader
-        # that a plan exists which review already rejected.
-        status = STATUS_ON_ENTERING.get(to)
-        if status:
-            self.pending_writes.append(StatusWrite(slug, status=status))
+        # that a plan exists which review already rejected. It lands at the decision
+        # that still stands, not before it — see STATUS_ON_SEND_BACK.
+        self._record(item, STATUS_ON_SEND_BACK.get(to))
 
     def force_stage(self, slug: str, stage: str) -> None:
         """Test and recovery seam: place an item without running the stages."""

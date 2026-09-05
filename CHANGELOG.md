@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The pipeline could not advance an item past PLAN, and the fix was a decision rather than an edit (#11)**
+  `approved` entering the contract made `triaged -> planned` illegal, and `pipeline_orchestrator`
+  walked exactly that, so every item stopped at the same place. Letting it walk through would have
+  made `approved` mean "the pipeline reached this item" instead of "somebody with the authority
+  decided", which is the entire content of the state. It now parks there and names the decision it
+  is missing. That refusal is read rather than chosen: `rules/decision-delegation.txt` retains
+  `governance` — *delegation cannot authorize the thing it would be a bypass OF* — so no consumer's
+  delegation file can hand approving over. A second defect surfaced in the same function: a
+  send-back to PLAN wrote `triaged`, which `ALLOWED["planned"]` does not permit, so a rejected plan
+  emitted a write the registry refuses. Send-backs now have their own map and land at `approved` —
+  review rejected the plan, not the commitment. (kit#32)
 - **kit#28's closing measurement, taken against real git instead of argued (#28).** The reported defect was N consumer items dispatched into ONE working tree: 21 dirty files from 6 items, every lane's `/implement` pre-flight failing on another lane's artifacts, and the router capped to one consumer item as a workaround — a cap removed in the same commit that added a worktree per lane, so nothing falls back if the isolation does not hold. The unit test added earlier proves the router hands out three distinct paths; it cannot prove three worktrees at those paths are independent, because that is a property of git. This creates them the way the brief prescribes — taking the path FROM the brief rather than retyping it, since a test that invents the command proves nothing about what a lane is told — dirties ONE, and asserts the other two stay clean. Mutation-verified: pointing every lane at a shared path fails both tests, one on the collision and one on the dirt crossing between trees. What it still does not establish, and why the issue stays open: that a lane given the brief obeys it. This measures the mechanism the brief relies on, not the agent reading it. (#28)
 
 ### Fixed
