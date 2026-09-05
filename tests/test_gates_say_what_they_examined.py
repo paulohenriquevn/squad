@@ -35,6 +35,11 @@ ROOT_FLAG = {
     "check_orphan_verdicts": "--repo",
     "check_phase_emitters": "--repo",
     "check_phase_numbering": "--root",
+    # Joined the roster on 2026-09-05, the day it gained an entry point. It was
+    # registered in `verify_ecosystem` and defined no `__main__`, so it was not a
+    # gate that takes a root — it was a module that exited 0. This test noticing it
+    # is the roster working: a gate joins the class by becoming runnable.
+    "check_readme_advisory_skills": "--root",
     "check_reference_leakage": "--repo",
     "check_semantic_names": "--repo",
     "check_skill_map": "--root",
