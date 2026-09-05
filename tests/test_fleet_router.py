@@ -426,6 +426,50 @@ def test_the_consumer_brief_gives_each_lane_its_own_worktree() -> None:
     assert "ONLY inside" in text or "only inside" in text
 
 
+def test_two_lanes_are_never_sent_to_the_same_worktree_path() -> None:
+    """The previous test proves ONE lane is told to cut a worktree. It would pass
+    identically if every lane were told to cut the SAME one — which is the defect
+    kit#28 reported, one indirection along: N items into one working tree.
+
+    So the property is asserted over a SET. Three units must yield three distinct
+    paths, each carrying its own item id, because a path keyed only by a timestamp
+    collides whenever two lanes are dispatched inside the same second — and the
+    router dispatches them in a loop.
+
+    What this does NOT establish: that a lane obeys. The router controls the
+    instruction, not the behaviour, and kit#28's closing measurement — a live
+    multi-lane run reaching /implement Step 1 with a clean `git status` in each
+    worktree — has still not been taken. This pins the half the router owns.
+    """
+    import re
+
+    paths = []
+    for slug in ("B-001", "B-002", "B-003"):
+        text = fleet_router.brief(
+            fleet_router.Unit(slug, f"the {slug} item", "backlog"),
+            repo=_REPO, project="/consumer",
+        )
+        # The QUOTED PATH, not the whole line. The line also carries `-b
+        # cycle/<slug>`, which differs per lane by construction — asserting on it
+        # proved the BRANCH was distinct while the worktree path collided. That
+        # version of this test passed against a mutant that sent every lane to
+        # `/tmp/squad-cycle/shared`, which is the exact defect kit#28 reported.
+        found = re.findall(r'worktree add[^"]*"([^"]+)"', text)
+        assert found, f"{slug}: the brief stopped handing out a worktree"
+        paths.append((slug, found[0]))
+
+    distinct = {p for _, p in paths}
+    assert len(distinct) == 3, (
+        f"three lanes, {len(distinct)} distinct worktree path(s) — two of them "
+        f"would land in the same tree: {sorted(distinct)}"
+    )
+
+    # And each path must carry ITS item, so the collision cannot come back
+    # through a shared prefix plus a timestamp that ties.
+    for slug, path in paths:
+        assert slug in path, f"{slug}: its worktree path does not name it — {path}"
+
+
 #: Both briefs must also tell the lane that its worktree does NOT isolate the
 #: stash (kit#31). That rule is asserted in
 #: `tests/test_worktree_briefs_name_the_stash.py`, over every source that hands
