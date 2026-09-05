@@ -39,6 +39,11 @@ READERS = {
     "skills/backlog-review/scripts/select_backlog_item.py": "decides what may start",
     "skills/backlog-review/scripts/board_state.py": "maps status to phase",
     "skills/backlog-review/scripts/backlog_index.py": "renders the index",
+    # Added 2026-09-05 by the sweep below, which found the list three short. Each
+    # was missing `approved` in a way the enumerated tests could not see.
+    "skills/backlog-item/scripts/check_intake_gates.py": "decides what a dedup hit means",
+    "skills/backlog-review/scripts/squad_boss.py": "decides whether a halt's cause is still live",
+    "skills/brainstorm-vision/scripts/build_agenda.py": "decides what reaches the agenda",
 }
 
 
@@ -240,3 +245,112 @@ def test_a_commitment_killed_with_a_named_reverser_is_allowed() -> None:
                     "requirement this was approved for",
     )
     assert "status: killed" in out
+
+
+def test_no_unenumerated_reader_decides_on_a_status() -> None:
+    """READERS is a hardcoded list, and a hardcoded list drifts from the tree.
+
+    Measured 2026-09-05, and the drift had already cost something: this file pinned
+    five readers while the kit held seven. `pipeline_orchestrator.STATUS_ON_ENTERING`
+    and `check_intake_gates.ACTION_BY_STATUS` both decide on status values and
+    neither knew `approved`, so the pipeline could not advance an item past PLAN and
+    a duplicate of an approved item fell through the dedup table. A Go reader in a
+    consumer made eight.
+
+    A test that enumerates the thing it guards has the defect it guards against.
+    So the tree is swept: anything holding two or more status literals in one file
+    either appears in READERS or is exempted here with the reason it does not
+    decide. Two literals rather than one, because a single mention is usually prose.
+    """
+    import subprocess
+
+    #: Files that name statuses without deciding on them. Each needs a reason —
+    #: an exemption nobody probes is a door.
+    EXEMPT = {
+        # The contract itself, and this file, which quotes it.
+        "rules/cycle-backlog.md",
+        "tests/test_status_readers_agree.py",
+        # History. Rewriting it destroys the evidence of what was true then.
+        "CHANGELOG.md",
+        # Tests of the readers above: they assert on statuses, they do not route on
+        # them, and pinning them here would pin the pins.
+        "tests/test_backlog_status.py",
+        "skills/backlog-review/tests/test_select_backlog_item.py",
+        "skills/backlog-review/tests/test_board_state.py",
+        "skills/backlog-init/tests/test_detect_domains.py",
+        "tests/test_pipeline_orchestrator.py",
+        # KNOWN GAP, kit#32: it decides on status, does not know `approved`, and
+        # fixing it needs a governance decision (may a pipeline approve?) rather
+        # than an edit. Listed rather than silently swept, so removing this entry
+        # has to be a fix.
+        "mechanisms/fleet/pipeline_orchestrator.py",
+        # Names statuses only in a comment about queue order.
+        "mechanisms/fleet/squad_lead.py",
+        # Tests OF the readers. They assert on statuses, they do not route on
+        # them, and enumerating them here would pin the pins.
+        "skills/backlog-review/tests/test_backlog_index.py",
+        "skills/backlog-review/tests/test_check_backlog_structure.py",
+        "skills/backlog-review/tests/test_squad_boss.py",
+        "skills/brainstorm-vision/tests/test_build_agenda.py",
+        "tests/test_advance_items.py",
+        "tests/test_blocked_by_readers_agree.py",
+        # The board's renderer, in JS. It branches on `shipped` and `killed` by
+        # NAME and falls through for everything else, so a status added to the
+        # contract renders in the default column rather than vanishing. Safe by
+        # construction, and it would need a JS harness to pin from here.
+        "skills/backlog-review/scripts/board.html",
+    }
+
+    found = subprocess.run(
+        # `--untracked`: `git grep` reads the INDEX, so a reader added and not yet
+        # committed is invisible to it. Measured here by mutation — dropping a new
+        # file holding two status literals into the tree left this test green.
+        ["git", "grep", "--untracked", "-lE",
+         r'"(raw|triaged|approved|planned|shipped|killed)"'],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    if found.returncode not in (0, 1):
+        raise AssertionError(f"git grep failed: {found.stderr}")
+
+    candidates = set()
+    for rel in (p for p in found.stdout.split() if p):
+        body = (REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace")
+        hits = {s for s in CONTRACT_STATUSES if f'"{s}"' in body}
+        if len(hits) >= 2:
+            candidates.add(rel)
+
+    unenumerated = sorted(candidates - set(READERS) - EXEMPT)
+    assert not unenumerated, (
+        f"these decide on two or more status values and are neither pinned nor "
+        f"exempted: {unenumerated}. A status added to the contract reaches the "
+        f"pinned readers and silently misses these — which is how `approved` "
+        f"stopped the pipeline advancing (kit#32)."
+    )
+
+
+def test_the_halt_reader_counts_a_committed_cause_as_live() -> None:
+    """`squad_boss.OPEN_STATUS` decides whether a halt's cause still holds it.
+
+    Enumerating the file in READERS proves it exists. It does not prove the set
+    inside it is right — measured by mutation on 2026-09-05: removing `approved`
+    from that tuple left every assertion in this file green.
+
+    The direction of the failure is the bad one. A halt whose cause had been
+    APPROVED — committed to by somebody with the authority — would read as no
+    longer live, so the halt is reported resolvable while the thing holding it is
+    open. An approved cause is more owned than a triaged one, not less.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "skills" / "backlog-review" / "scripts"))
+    import squad_boss
+
+    terminal = {"shipped", "killed"}
+    expected = CONTRACT_STATUSES - terminal
+    missing = expected - set(squad_boss.OPEN_STATUS)
+    assert not missing, (
+        f"squad_boss.OPEN_STATUS is missing {sorted(missing)}. A halt whose cause "
+        f"sits in one of those would be reported resolvable while the cause is "
+        f"still open."
+    )
+    assert not (set(squad_boss.OPEN_STATUS) & terminal), (
+        "a shipped or killed cause cannot be what holds anything"
+    )

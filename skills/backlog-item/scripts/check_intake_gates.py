@@ -119,6 +119,12 @@ _ACTION_BY_REASON = {
 ACTION_BY_STATUS = {
     "raw": "ITEM_MERGED",
     "triaged": "ITEM_MERGED",
+    # `approved` is open, so a duplicate folds into it exactly as it does into a
+    # triaged or planned item. It was missing from 2026-09-04, when the status
+    # entered the contract, until 2026-09-05 — a new item duplicating an approved
+    # one fell through this table and got its own id, which is how one piece of
+    # work becomes two rows nobody reconciles.
+    "approved": "ITEM_MERGED",
     "planned": "ITEM_MERGED",
     "killed": "supersedes",
     "shipped": "regression_of",

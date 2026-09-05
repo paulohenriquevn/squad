@@ -410,3 +410,4 @@ def test_a_prose_wall_carries_an_empty_list_not_none():
 
 def test_an_empty_selection_yields_an_empty_pipeline():
     assert from_selection({"queue": [], "walls": {}}).items == []
+

@@ -76,7 +76,14 @@ HALT_DIRS = {
 
 #: Statuses that mean an item is still work. A shipped or killed cause cannot be what
 #: holds anything, however the report's prose reads.
-OPEN_STATUS = ("raw", "triaged", "planned")
+#:
+#: `approved` belongs here and was missing from 2026-09-04, when the status entered
+#: the contract, until 2026-09-05. The effect was the worst direction for this
+#: function: a halt whose cause had been APPROVED — committed to, by somebody with
+#: the authority — read as no longer live, so the halt was reported as resolvable
+#: while the thing holding it was still open. An approved cause is more owned than
+#: a triaged one, not less.
+OPEN_STATUS = ("raw", "triaged", "approved", "planned")
 
 _ITEM_RE = re.compile(r"\bB-(\d{3,})\b")
 _SLUG_ITEM_RE = re.compile(r"\bb-?(\d{3,})\b", re.IGNORECASE)
