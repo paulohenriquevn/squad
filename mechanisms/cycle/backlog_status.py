@@ -364,6 +364,23 @@ def unblock(content: str, item_id: str, blockers: list[str] | None = None) -> st
     start, end = spans[item_id]
     body = content[start:end]
     current = blocked_by_of(body)
+
+    #: A bare `--unblock` means "clear whatever is there", and what is there may be
+    #: prose. The two readers of this field disagreed about what counts: `advance`
+    #: asks `blocked_by_raw` and refuses to ship while the line says anything at
+    #: all, while this function asked `blocked_by_of`, which extracts item ids, and
+    #: refused with "is not blocked" when the line held a decision instead of an
+    #: id. An item impeded by prose — the shape `--because` exists to write — could
+    #: therefore neither ship nor be cleared, and hand-editing the registry is
+    #: precisely what this module exists to prevent, so the deadlock had no
+    #: legitimate exit.
+    #:
+    #: Measured 2026-09-05: B-168 in a consumer declared "fix estrutural pertence
+    #: ao repo do kit", the fix landed in the kit and was verified in that
+    #: consumer, and the mechanism could not move the item.
+    if not current and not blockers and declares_impediment(blocked_by_raw(body)):
+        return content[:start] + _drop_field(body, "blocked_by") + content[end:]
+
     if not current:
         raise Refused(f"{item_id} is not blocked")
     remaining = [b for b in current if b not in blockers] if blockers else []

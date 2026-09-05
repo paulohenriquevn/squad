@@ -270,6 +270,35 @@ def test_a_prose_blocked_item_cannot_ship():
         advance(content, "B-001", "shipped")
 
 
+def test_a_prose_impediment_can_be_cleared():
+    """Otherwise the item is stuck forever, and it was.
+
+    The two readers of `blocked_by` disagreed about what counts. `advance` asks
+    `blocked_by_raw` and refuses to ship while the line says anything; `unblock`
+    asked `blocked_by_of`, which extracts item ids, and refused with "is not
+    blocked" when the line held prose. So an item blocked by a decision — the
+    shape `--because` exists to write — could neither ship nor be cleared.
+
+    Measured 2026-09-05 on a real registry: B-168 declared "fix estrutural
+    pertence ao repo do kit", the fix landed and was verified, and the item could
+    not be moved by the mechanism at all. Hand-editing the file is what this
+    module exists to prevent, so the deadlock had no legitimate exit.
+    """
+    content = _backlog(("B-001", "planned", "blocked_by: awaiting the sponsor\n"))
+    cleared = unblock(content, "B-001")
+    assert "blocked_by" not in cleared
+    # And the point of clearing it: the item can now finish.
+    assert "status: shipped" in advance(cleared, "B-001", "shipped")
+
+
+def test_clearing_named_blockers_still_refuses_when_the_item_has_none():
+    """The refusal is right when the caller NAMES ids that are not there; it was
+    only wrong for the bare `--unblock`, which means "clear whatever is there"."""
+    content = _backlog(("B-001", "planned", "blocked_by: awaiting the sponsor\n"))
+    with pytest.raises(Refused):
+        unblock(content, "B-001", ["B-002"])
+
+
 def test_effective_state_of_reads_prose_as_blocked():
     content = _backlog(("B-001", "planned", "blocked_by: awaiting the sponsor\n"))
     start, end = _blocks(content)["B-001"]
