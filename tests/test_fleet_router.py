@@ -486,3 +486,68 @@ def test_consumer_items_are_no_longer_capped_at_one(tmp_path) -> None:
 
     the_plan = fleet_router.plan(units=units, lanes=lanes, log=log, branches=set())
     assert len(the_plan.assignments) == 3, "three free lanes, three isolated items"
+
+
+def test_three_lanes_do_not_dirty_each_others_trees(tmp_path) -> None:
+    """kit#28's closing measurement, taken against real git rather than argued.
+
+    The reported defect: N consumer items dispatched into ONE working tree, so
+    every lane's `/implement` pre-flight failed on the other lanes' artifacts —
+    21 dirty files from 6 items, and the router capped to one consumer item as a
+    workaround. The cap was removed in the same commit that added a worktree per
+    lane, so nothing falls back if the isolation does not hold.
+
+    The unit test above proves the router HANDS OUT three distinct paths. It
+    cannot prove that three worktrees at those paths are actually independent —
+    that is a property of git, and this exercises it: create them the way the
+    brief prescribes, dirty ONE, and assert the other two stay clean.
+
+    What this still does not establish, and why the issue stays open until someone
+    runs the fleet: that a lane, given the brief, obeys it. This measures the
+    mechanism the brief relies on, not the agent reading it.
+    """
+    import re
+    import subprocess
+
+    def git(cwd, *args):
+        r = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+        assert r.returncode == 0, f"git {' '.join(args)}: {r.stderr.strip()}"
+        return r.stdout
+
+    project = tmp_path / "consumer"
+    project.mkdir()
+    (project / "BACKLOG.md").write_text("# BACKLOG\n", encoding="utf-8")
+    git(project, "init", "-q", "-b", "workspace")
+    git(project, "-c", "user.email=t@e", "-c", "user.name=t", "add", "-A")
+    git(project, "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-qm", "initial")
+
+    # The path each brief prescribes, taken FROM the brief rather than retyped —
+    # a test that invents the command proves nothing about what a lane is told.
+    trees = []
+    for slug in ("B-001", "B-002", "B-003"):
+        text = fleet_router.brief(
+            fleet_router.Unit(slug, f"the {slug} item", "backlog"),
+            repo=_REPO, project=str(project),
+        )
+        quoted = re.findall(r'worktree add[^"]*"([^"]+)"', text)
+        assert quoted, f"{slug}: the brief hands out no worktree path"
+        # The brief's path carries `$(date +%s)`; substitute a fixed suffix so the
+        # test is deterministic while keeping the per-item prefix it produced.
+        path = tmp_path / (quoted[0].split("/")[-1].replace("$(date +%s)", slug.lower()))
+        git(project, "worktree", "add", "-q", "-b", f"cycle/{slug}", str(path), "HEAD")
+        trees.append(path)
+
+    assert len({str(t) for t in trees}) == 3, "two lanes landed in one tree"
+
+    for t in trees:
+        assert git(t, "status", "--porcelain") == "", f"{t} did not start clean"
+
+    # The property the issue is about: one lane working does not fail the others.
+    (trees[0] / "scratch.md").write_text("a lane's work in progress\n", encoding="utf-8")
+    assert git(trees[0], "status", "--porcelain") != "", "the dirt did not land"
+    for other in trees[1:]:
+        assert git(other, "status", "--porcelain") == "", (
+            f"{other} is dirty because another lane wrote in ITS tree — this is "
+            f"kit#28 exactly: N items in one working tree, every pre-flight failing "
+            f"on somebody else's artifacts"
+        )
