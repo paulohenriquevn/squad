@@ -20,13 +20,25 @@ The failure mode is quiet by nature: a second records never errors. It just accu
 
 Consumers do **not** share a records. Each project owns its `ROADMAP.md` and its `.claude/records/`, and no cycle artifact in one project may reference another's. A goal, a gate or a report pointing outside the project couples two autonomous repositories and makes one milestone's completion depend on another repository's state.
 
-`install_goal_hook.py` enforces this: a `--roadmap` or `--acceptance-dir` resolving outside the project root is refused.
+Nothing enforces this today. `install_goal_hook.py` did — it refused a `--roadmap` or `--acceptance-dir` resolving outside the project root — and it was deleted in `77501b0` with the `session-goal` skill it belonged to. The rule survived the deletion still describing it in the present tense. Measured 2026-09-05: the file exists in no commit's worktree and in no tracked path.
 
 ## Enforcement
 
+Measured 2026-09-05, because this section named three mechanisms and two of them do not exist.
+A rule that lists enforcement a reader cannot find is worse than one that lists none: it stops them
+looking.
+
 - `install.sh` and `patch_install.sh` scaffold `.claude/records/{acceptance,acceptance/evidence,roadmap-runs}`.
-- `install_goal_hook.py` defaults to `.claude/records/acceptance` in plugin layout, and refuses paths outside the project.
-- `backlog-review --records` emits `split_knowledge_base` (MAJOR) when a second records holds `.md` files.
+  **This one holds** — `install.sh:772` and `patch_install.sh:386`.
+- ~~`install_goal_hook.py` refuses paths outside the project.~~ **GONE.** Deleted in `77501b0`
+  with the `session-goal` skill. No replacement was written, so the constraint above is a
+  convention now, not a gate.
+- ~~`backlog-review --records` emits `split_knowledge_base` (MAJOR).~~ **NEVER EXISTED.** The
+  `--records` flag is real (`phase_coverage.py:222`); the finding is not. `split_knowledge_base`
+  appears in this file and nowhere else in the repository.
+
+So the honest statement: the scaffold is created, and a second records directory is caught by
+nobody. Closing that is worth an item; asserting it is closed is what this section did.
 
 ## Cross-references
 

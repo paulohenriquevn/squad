@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A rule's Enforcement section named three mechanisms and two of them do not exist (#11)**
+  `rules/records-location.md` told every reader the one-records-per-project constraint was enforced
+  three ways. Measured: the scaffold holds (`install.sh:772`, `patch_install.sh:386`);
+  `install_goal_hook.py` was deleted in `77501b0` with the `session-goal` skill it belonged to; and
+  the finding `split_knowledge_base` appears in that rule and nowhere else in the repository — the
+  `--records` flag is real, the finding never was. A section like that is worse than listing none,
+  because a reader told a gate exists stops looking for the gap. The rule now says what holds and
+  strikes what does not, and a sweep over `rules/` fails when any of them names a script the kit
+  ships nowhere.
 - **A registered gate had no entry point, so it has never checked anything (#11)**
   `check_readme_advisory_skills.py` defines a correct `check()` and had no `if __name__ == "__main__"`
   block. `verify_ecosystem` runs it with `sys.executable <path>`, which defined three functions and
