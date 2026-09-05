@@ -48,6 +48,29 @@ concurrently and each popped the other's entry, exchanging uncommitted work
 between two branches. `git stash list` and `git stash show` read the stack and
 stay allowed; everything that pushes to or consumes it does not.
 
+**Two agents must never share a working tree.** Whoever dispatches concurrent lanes into one
+project gives each its own worktree before any of them writes:
+
+```
+git -C <project> worktree add -b <branch> /tmp/<lane>-$(date +%s) HEAD
+```
+
+and the lane works only inside it. A branch is not isolation — `git switch` moves the one
+checkout, and uncommitted changes travel with it into whatever branch is switched to.
+
+Measured 2026-09-04: two lanes were dispatched to the same project with instructions that said
+"cut a branch" and did not say "cut your own worktree". Both used the main checkout. **35 dirty
+paths** belonging to two different items sat in one tree with nothing committed on either
+side, and the first `git add -A` would have swept one item's work into the other's branch. The
+file sets happened to be disjoint and were separated by reading every diff; nothing in the
+mechanism would have caught it.
+
+The instruction exists in `mechanisms/fleet/fleet_router.py`'s consumer brief and had for
+weeks. It is here because a dispatcher that does not go through `brief()` re-derives the rule
+from nothing — which is what happened, on the third such dispatcher — and a constraint that
+lives inside one caller is a constraint the next caller does not inherit. Cite this section
+rather than restating it.
+
 ## § 3 — Enforcement
 
 - `hooks/validate-command.py` (PreToolUse) blocks the mechanizable subset. Exit code 2 = blocked:
@@ -67,6 +90,7 @@ stay allowed; everything that pushes to or consumes it does not.
 - Merging a side branch into `develop` because "it's already reviewed" — if it did not come through `workspace`, the gate did not see it.
 - Force-pushing to recover from a bad rebase on a shared branch — use `--force-with-lease`, and never on `main`/`develop`/`workspace`.
 - "My worktree is my own, so a stash is safe here" — the tree is yours and the stash stack is not. Copy aside or commit; the pop you get back may be someone else's.
+- "Each lane is on its own branch, so they cannot collide" — a branch names a commit, it does not isolate a checkout. Two lanes on two branches in one working tree are two lanes in one working tree, and the second `git switch` carries the first one's uncommitted edits across.
 
 ## Cross-references
 

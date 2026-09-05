@@ -119,6 +119,12 @@ def test_no_unenumerated_site_hands_out_a_worktree() -> None:
         # --- mentions, not instructions ------------------------------------------
         # The guard itself: it names the command in its own refusal message.
         "hooks/validate-command.py",
+        # The rule the briefs implement. It states the requirement and shows the
+        # command that satisfies it, so it matches the sweep — but it is the
+        # contract, not a brief handed to an agent, and it carries the stash
+        # hazard at length in the same section (§ 2's table plus the paragraph
+        # under it). Exempt from the brief check, not from the rule.
+        "rules/git-safety.md",
         # A release procedure a PERSON follows, one tree at a time. The hazard is
         # concurrent agents; a human cutting one tree has nobody to swap with.
         "rules/acceptance-target.txt",
