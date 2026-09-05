@@ -106,22 +106,32 @@ def drift_line(layout: Layout) -> str | None:
     and reports the counts as one context line. **Never blocks and never fails
     the session**: a consumer may deliberately pin an older kit, and a session
     stopped over that is worse than the drift; the report is a signal, not a
-    gate. Silent by default — the check runs ONLY when the env var names a real
-    kit directory, so a consumer that has not opted in sees nothing.
+    gate.
+
+    The source comes from `$SQUAD_KIT_SOURCE`, or from the manifest when the
+    variable is unset — so a consumer who never heard of the variable, which is
+    every consumer, still gets the report. WHICH of the two answered is carried
+    through to the message: naming the env var for a value that came from the
+    manifest sends the reader to check something that is empty.
 
     Wired in for #23: `check_install_drift` was cited nine times in prose and
     executed by nothing; a consumer ran ten hours on a stale kit missing three
     merged repairs. The diagnostic was correct, available, and in a drawer.
     """
-    source_env = os.environ.get("SQUAD_KIT_SOURCE") or _source_from_manifest(layout)
+    source_env = os.environ.get("SQUAD_KIT_SOURCE")
+    if source_env:
+        origin = "SQUAD_KIT_SOURCE"
+    else:
+        source_env = _source_from_manifest(layout)
+        origin = ".kit-manifest.txt"
     if not source_env:
         return None
     source = Path(source_env)
     if not has_kit(source):
-        # An env var that names a wrong path is worth saying so — a reader who
-        # set it expects to hear something on every session, and silence would
-        # look like a clean bill of health.
-        return (f"Kit drift: SQUAD_KIT_SOURCE={source_env} does not contain "
+        # A path that names a wrong directory is worth saying so — silence would
+        # look like a clean bill of health. The origin matters most here: it is
+        # the one line that tells the reader WHERE to go correct it.
+        return (f"Kit drift: {origin}={source_env} does not contain "
                 "skills/, rules/, hooks/ — cannot compare")
     try:
         if source.resolve() == layout.kit_dir.resolve():
@@ -152,7 +162,7 @@ def drift_line(layout: Layout) -> str | None:
         return None
     # Compact the multi-line summary into one line the SessionStart context can
     # carry. The full per-file listing is a `check_install_drift` invocation away.
-    return ("Kit drift (vs SQUAD_KIT_SOURCE=" + source_env + "): "
+    return ("Kit drift (vs " + origin + "=" + source_env + "): "
             + " · ".join(attention)
             + " — report only, never blocks; run `check_install_drift --install "
             + str(layout.kit_dir) + " --kit " + source_env + "` for the file list")

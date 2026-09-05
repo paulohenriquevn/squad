@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The drift report named an empty variable as the source of a value it read elsewhere (#11)**
+  The manifest fallback added earlier the same day printed `vs SQUAD_KIT_SOURCE=<path>` even when
+  the variable was unset and the path had come from `.kit-manifest.txt` — so a reader chasing a
+  wrong path would inspect the variable, find it empty, and find nothing wrong with it. The line
+  now names whichever of the two actually answered. Found by running the hook in a real install;
+  the unit test for the fallback stayed green throughout, because it called the resolver and never
+  read the message. (#23)
 - **Two of the three readers the sweep found were enumerated and never checked (#11)**
   Adding a file to the readers list proves it exists, not that the set inside it is right —
   a gap measured the same way it was found, by mutation. Deleting `approved` from

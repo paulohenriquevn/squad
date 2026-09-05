@@ -189,3 +189,60 @@ def test_the_hook_reads_the_manifest_when_the_variable_is_absent(tmp_path: Path)
     # Nor on a manifest that is not there at all.
     (eco / ".kit-manifest.txt").unlink()
     assert mod._source_from_manifest(layout) is None
+
+
+def test_the_drift_line_names_where_the_source_actually_came_from(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The message is the reader's only pointer to what to go correct.
+
+    The fallback shipped on 2026-09-05 printed `vs SQUAD_KIT_SOURCE=<path>` for a
+    value that came from the manifest, so a reader debugging a wrong path would go
+    inspect a variable that is empty and find nothing wrong with it. Found by
+    running the hook in a real install rather than by reading it — the unit test
+    for the fallback passed throughout, because it only ever called
+    `_source_from_manifest` and never looked at what the message said.
+
+    Asserted on the cannot-compare branch: a source that is not a kit returns the
+    label without running the checker, which is the cheapest place the provenance
+    is visible.
+    """
+    import importlib.util
+
+    hook_path = (Path(__file__).resolve().parents[1]
+                 / "hooks" / "sessionstart-context.py")
+    spec = importlib.util.spec_from_file_location("_sc2", hook_path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["_sc2"] = mod
+    spec.loader.exec_module(mod)
+
+    eco = tmp_path / ".claude"
+    eco.mkdir()
+    not_a_kit = tmp_path / "not-a-kit"
+    not_a_kit.mkdir()
+    (eco / ".kit-manifest.txt").write_text(
+        f"# kit-source: {not_a_kit}\nskills/backlog-review\n", encoding="utf-8")
+
+    class _Layout:
+        pass
+
+    layout = _Layout()
+    layout.eco = eco
+    layout.kit_dir = eco
+
+    monkeypatch.delenv("SQUAD_KIT_SOURCE", raising=False)
+    line = mod.drift_line(layout)
+    assert line is not None
+    assert ".kit-manifest.txt=" in line, (
+        "the value came from the manifest; naming the env var sends the reader to "
+        f"check something empty. Got: {line}"
+    )
+    assert "SQUAD_KIT_SOURCE=" not in line
+
+    # And the other way: when the variable IS what answered, it is what is named.
+    monkeypatch.setenv("SQUAD_KIT_SOURCE", str(not_a_kit))
+    line = mod.drift_line(layout)
+    assert line is not None
+    assert "SQUAD_KIT_SOURCE=" in line
+    assert ".kit-manifest.txt=" not in line
