@@ -11,7 +11,14 @@
 #   2. Refuses to overwrite an existing target/.claude/ unless --force.
 #   3. Copies skills/, rules/, hooks/, commands/, mechanisms/, squad/, plugin.json,
 #      HOW-TO-USE.md into target/.claude/.
-#   4. Writes settings.plugin.json as target/.claude/settings.json.
+#   4. settings.json: MERGED by key ownership when the target already has one —
+#      the kit owns its wiring (hooks, statusLine, env, defaultMode), the project
+#      owns `permissions`, and the kit's are unioned in as a floor with the
+#      consumer's kept. Written whole from settings.plugin.json only when the
+#      target has none. (This line said "writes settings.plugin.json as
+#      target/.claude/settings.json" until 2026-09-04, describing the behaviour
+#      issue #8 reported and this merge replaced in August. A reader who trusted
+#      it avoided the installer to protect permissions the merge would have kept.)
 #   5. Creates empty scaffold under target/.claude/records/
 #      (plans, implementations, reviews, audits, discoveries/{plans,opportunities,snapshots},
 #      adrs, grills, honesty-gate, judge-codex, backlog, maintenance-runs, tools).
