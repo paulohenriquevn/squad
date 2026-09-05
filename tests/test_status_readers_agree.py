@@ -116,6 +116,62 @@ def test_the_gate_knows_every_status_the_transition_owner_can_write() -> None:
     )
 
 
+def test_the_index_buckets_every_status() -> None:
+    """Every status must land in a bucket, or the item vanishes from the board.
+
+    Written after this test file shipped WITHOUT it and missed exactly that. The
+    `approved` status was added to the transition owner, the gate and the
+    selector; `backlog_index.BUCKETS` was not, and the four assertions above all
+    passed, because each of them checks a subset relation and a MISSING entry is
+    a subset. The gap was caught by a skill-local test in a consumer, three
+    commits later, through a failing gate chain.
+
+    A subset check answers "does this reader invent statuses". It cannot answer
+    "does this reader handle the ones that exist", and those are the two
+    different ways the set can drift.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "skills" / "backlog-review" / "scripts"))
+    import backlog_index
+
+    missing = CONTRACT_STATUSES - set(backlog_index.BUCKETS)
+    assert not missing, (
+        f"backlog_index.BUCKETS has no bucket for {sorted(missing)}. Those items "
+        f"are collected as `unknown` and rendered outside every bucket count."
+    )
+
+
+def test_the_board_places_every_status() -> None:
+    """Same invariant, the other renderer.
+
+    `board_state.STATUS_PHASE` decides where an item sits when no stream event
+    exists for it — which is the common case, since most items never emit one. A
+    status absent from this map is an item the board cannot place at all.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "skills" / "backlog-review" / "scripts"))
+    import board_state
+
+    missing = CONTRACT_STATUSES - set(board_state.STATUS_PHASE)
+    assert not missing, (
+        f"board_state.STATUS_PHASE cannot place {sorted(missing)}."
+    )
+
+
+def test_the_index_can_still_see_an_impediment_on_a_committed_item() -> None:
+    """An item somebody committed to and then walled is the worst one to lose.
+
+    `_STOPPABLE` decides whether a `blocked_by` line is still drawn. It listed
+    the two open statuses and `planned`, so an `approved` item carrying an
+    impediment would have rendered as unobstructed — and an approved item is
+    precisely the one where a reader is waiting on the outcome.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "skills" / "backlog-review" / "scripts"))
+    import backlog_index
+
+    assert "approved" in backlog_index._STOPPABLE, (
+        "an approved item with a blocked_by line would render as unobstructed"
+    )
+
+
 def test_the_selector_classifies_every_status() -> None:
     """The selector must place every status somewhere: startable, or held.
 

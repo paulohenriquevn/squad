@@ -57,9 +57,19 @@ END = "<!-- BACKLOG-INDEX:END -->"
 
 #: status -> bucket. Statuses absent here are reported rather than silently bucketed: an unknown
 #: status means the contract changed and this file did not.
+#:
+#: `approved` is in-flight rather than open, and the reason is the line the status
+#: was added to draw. The buckets answer "is this being pursued?" — `open` is the
+#: intake pool where nobody has decided yet, `in-flight` is what somebody committed
+#: to. An approved item has no plan, so it is tempting to file it with the
+#: hypotheses; but that is exactly the conflation that let a registry hold 174
+#: items and 2 `planned`, and it puts a commitment in the same count as a hunch
+#: nobody has read. The per-row `status` column still shows which of the two
+#: in-flight statuses an item holds, so the grouping loses nothing.
 BUCKETS: dict[str, str] = {
     "raw": "open",
     "triaged": "open",
+    "approved": "in-flight",
     "planned": "in-flight",
     "shipped": "closed",
     "killed": "closed",
@@ -95,7 +105,12 @@ def heading_of(content: str, item: Item) -> str:
 
 #: Statuses from which an impediment can still stop the work. A shipped item is done
 #: whatever its `blocked_by` line says.
-_STOPPABLE = {"raw", "triaged", "planned"}
+#:
+#: `approved` belongs here for the obvious reason and one less obvious: an item that
+#: was committed to and then walled is the most expensive kind to lose track of,
+#: because somebody is expecting it. Omitting it would have rendered such an item as
+#: unobstructed on the board while its `blocked_by` line sat unread underneath.
+_STOPPABLE = {"raw", "triaged", "approved", "planned"}
 
 
 def bucket_of(item: Item) -> str | None:

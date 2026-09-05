@@ -91,9 +91,17 @@ PHASES = _declared_phases()
 #: `release` put 133 of 170 items in one column and left `done` — a column the board
 #: has always rendered — permanently empty. The operator could not read the board,
 #: and the reason was that the column meaning "finished" was never given anyone.
+#: `approved` maps to `discover`, the same as `triaged`, and that is not an
+#: oversight. This map answers "what is the last phase this status PROVES ended",
+#: and approval is a decision, not a phase — `rules/cycle-phases.txt` declares
+#: nine and none of them is where a sponsor says yes. An approved item has ended
+#: discover and has not entered plan, which is exactly what `triaged` also means
+#: positionally. The two differ in commitment, not in position, and inventing a
+#: column for the difference would draw a phase the cycle does not have.
 STATUS_PHASE = {
     "raw": "backlog",
     "triaged": "discover",
+    "approved": "discover",
     "planned": "plan",
     "shipped": "done",
     "killed": "killed",
