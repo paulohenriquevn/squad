@@ -149,3 +149,68 @@ def check(root: Path) -> list[dict[str, Any]]:
             })
 
     return findings
+
+
+def main(argv: list[str] | None = None) -> int:
+    """The door `verify_ecosystem` knocks on, which did not exist until 2026-09-05.
+
+    Every test for this module called `check()` directly and every one was green.
+    The module had no `__main__` block, so `python3 check_readme_advisory_skills.py
+    --root <tree>` defined three functions and exited 0. The verifier runs it exactly
+    that way and drew a tick for it, on every run since the gate was added.
+
+    A correct checker with no way to be run is the same silence as a wrong one, and
+    the tick is worse than no line at all: it is a reader being told this was checked.
+
+    Prints what it examined on every outcome. A pass with no output cannot be told
+    apart from a no-op, which is the failure this function exists because of.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="README/HOW-TO-USE cite only skills that exist on disk.")
+    parser.add_argument("--root", type=Path, default=Path.cwd(),
+                        help="tree holding README.md, HOW-TO-USE.md and skills/")
+    parser.add_argument("--json", action="store_true",
+                        help="emit the findings as JSON instead of prose")
+    args = parser.parse_args(argv)
+
+    root: Path = args.root
+    readme = root / "README.md"
+    how_to = root / "HOW-TO-USE.md"
+    disk = existing_skills(root)
+
+    if not readme.is_file() and not how_to.is_file():
+        # The subject is absent, so nothing was compared. Not a failure — a consumer
+        # install legitimately has neither file — but it is NOT a pass, and saying so
+        # is the whole difference between this and the silence it replaced.
+        print(f"README advisory skills — {root}")
+        print("  NOT CHECKED: neither README.md nor HOW-TO-USE.md is here, so nothing "
+              "was compared against the 0 skill(s) on disk"
+              if not disk else
+              f"  NOT CHECKED: neither README.md nor HOW-TO-USE.md is here, so the "
+              f"{len(disk)} skill(s) on disk were compared against nothing")
+        return 0
+
+    findings = check(root)
+    if args.json:
+        import json
+        print(json.dumps({"findings": findings}, indent=2))
+        return 1 if findings else 0
+
+    cited = advisory_skills_in_readme(root) | advisory_skills_in_how_to_use(root)
+    print(f"README advisory skills — {root}")
+    print(f"  examined: {len(cited)} skill(s) cited across "
+          f"{sum(1 for p in (readme, how_to) if p.is_file())} document(s), "
+          f"{len(disk)} skill(s) on disk")
+    for finding in findings:
+        print(f"  {finding['type']}: {finding['context']}")
+    print(f"  {'FAIL' if findings else 'PASS'} — {len(findings)} citation(s) name a "
+          f"skill that is not on disk")
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main())

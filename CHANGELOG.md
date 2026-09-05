@@ -7,6 +7,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A registered gate had no entry point, so it has never checked anything (#11)**
+  `check_readme_advisory_skills.py` defines a correct `check()` and had no `if __name__ == "__main__"`
+  block. `verify_ecosystem` runs it with `sys.executable <path>`, which defined three functions and
+  exited 0 — and the verifier drew `✓ README advisory skills` for it on every run since the gate was
+  added. Measured against a planted inconsistency: a README citing a skill absent from disk produced
+  exit 0 and no output. Every test for the module called `check()` directly, so all of them were green.
+  It now has a `main()`, prints what it examined on every outcome, exits 1 on findings, and reports
+  NOT CHECKED rather than passing when neither document is present. A sweep asserts no gate the
+  verifier runs as a script lacks an entry point; it found exactly this one.
+- **The README described three skills deleted eighteen months of commits ago (#11)**
+  Found by making the gate above actually run: it reported `1 skill(s) cited … 31 on disk`, and the
+  paragraph under the one-row table still read "**Each** refuses the shortcut its field is prone to"
+  followed by three shortcuts — CP-or-AP, unbounded buffer, non-idempotent retry. Those are
+  `cap-theorem-specialist`, `backpressure-specialist` and a resilience skill, all removed in `e5527e6`,
+  the commit this gate exists because of. The table was trimmed and the prose was not. The gate cannot
+  see it — it matches names in table cells and prose describes without naming — so a test pins the one
+  relationship that already went wrong: a one-row table may not be described in the plural.
 - **The installer promised a deletion it stopped doing, and the drift report named the wrong owner (#11)**
   `install.sh --force` printed "anything the source does not have is DELETED" — describing behaviour it
   lost on 2026-08-29, the same day the preservation pass landed. That line is what a reader sees at the

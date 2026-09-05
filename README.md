@@ -264,13 +264,13 @@ Rules are the contract; a SKILL.md carries only phase-specific detail and points
 
 ## Advisory skills
 
-Beyond the pipeline phases, the bundle ships skills that answer architecture questions rather than driving a cycle. They are auxiliary — bound to no `cycle-*.md`, invoked on demand:
+Beyond the pipeline phases, the bundle ships one skill that answers architecture questions rather than driving a cycle. It is auxiliary — bound to no `cycle-*.md`, invoked on demand:
 
 | Skill | Answers |
 |---|---|
 | `arch-check` | Whether a repo has architecture boundaries, whether they can still fire, and which ones it already obeys |
 
-Each refuses the shortcut its field is prone to — classifying a product as CP or AP without its configuration, recommending an unbounded buffer, or retrying a non-idempotent operation without protection.
+It refuses the shortcut its field is prone to: calling a boundary enforced because a linter names it, without checking the rule can still fire.
 
 ## Unbreakable principles
 
