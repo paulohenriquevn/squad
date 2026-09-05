@@ -65,7 +65,7 @@ class WallVerdict:
 #: Impediments are matched FIRST and win outright. A wall that is both a choice
 #: and an impediment is an impediment: the choice can be made and the item still
 #: cannot move. Reading the delegable half first is precisely how the previous
-#: mechanism cleared B-139, whose prose says "não é trabalho de código" in the
+#: mechanism cleared B-139, whose prose says "não é trabalho de código" in the  # english-only: verbatim quotation from item B-139
 #: same breath as naming a migration.
 _IMPEDIMENT_PATTERNS: list[tuple[DecisionClass, str]] = [
     (DecisionClass.GOVERNANCE, r"loop\s+aut[ôo]nomo[^.]{0,80}bypass"),
@@ -87,7 +87,7 @@ _IMPEDIMENT_PATTERNS: list[tuple[DecisionClass, str]] = [
 _DELEGABLE_PATTERNS: list[tuple[DecisionClass, str]] = [
     (DecisionClass.BINARY, r"decis[ãa]o\s+bin[áa]ria"),
     (DecisionClass.STATUS, r"disposi[çc][ãa]o\s+de\s+status"),
-    (DecisionClass.STATUS, r"nenhuma\s+transi[çc][ãa]o\s+can[ôo]nica"),
+    (DecisionClass.STATUS, r"nenhuma\s+transi[çc][ãa]o\s+can[ôo]nica"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.SCOPE, r"decis[ãa]o\s+de\s+escopo"),
     (DecisionClass.THRESHOLD, r"decis[ãa]o\s+de\s+piso"),
     (DecisionClass.OPTION, r"\bOU\b.{0,200}\bSe\s+(retire|manter)\b"),

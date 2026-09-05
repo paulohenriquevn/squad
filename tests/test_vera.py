@@ -35,7 +35,7 @@ class TestVERA:
         v = vera.VERA()
         verdict = v.analyze(
             "B-060",
-            "Quatro domínios vivem em pasta de arquivos irmãos sem costura clara",
+            "Quatro domínios vivem em pasta de arquivos irmãos sem costura clara",  # english-only: fixture in the language the classifier reads
             {
                 "evidence": "Four domain folders at same level; no routing spec",
                 "code_references": ["infra/terraform", "infra/helm", "api/", "cmd/"],
@@ -124,7 +124,7 @@ class TestVERA:
         v = vera.VERA()
         verdict = v.analyze(
             "B-001",
-            "Os quatro clusters têm nomes que mentem sobre o que são",
+            "Os quatro clusters têm nomes que mentem sobre o que são",  # english-only: fixture in the language the classifier reads
             {
                 "evidence": "Cluster named 'dev' serves prod traffic",
                 "code_references": ["infra/k3d/values.yaml"],

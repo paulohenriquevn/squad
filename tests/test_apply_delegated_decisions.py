@@ -24,7 +24,7 @@ severity: alta
 ## B-060 — Four planes meet in a folder   [ ]
 
 status: triaged
-blocked_by: aguardando disposição de status: nenhuma transição canônica encaixa limpa.
+blocked_by: aguardando disposição de status: nenhuma transição canônica encaixa limpa.  # english-only: fixture in the language the classifier reads
 severity: media
 """
 

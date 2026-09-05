@@ -191,7 +191,7 @@ class VERA:
         full_context = (problem_lower + " " + evidence_lower).lower()
 
         # Fail-Fast violations (highest priority)
-        if any(w in full_context for w in ["silent", "silencio", "não percebe", "undetected",
+        if any(w in full_context for w in ["silent", "silencio", "não percebe", "undetected",  # english-only: these are the words matched in Portuguese context
                                              "orfan", "orphan", "invisível", "unnoticed"]):
             violations.append(Violation(
                 lens=Lens.FAIL_FAST,
@@ -228,7 +228,7 @@ class VERA:
             ))
         
         # Fail-Fast violations
-        if any(w in problem_lower for w in ["silent", "silencio", "não percebe", "undetected", "orfan"]):
+        if any(w in problem_lower for w in ["silent", "silencio", "não percebe", "undetected", "orfan"]):  # english-only: these are the words matched in Portuguese context
             violations.append(Violation(
                 lens=Lens.FAIL_FAST,
                 file_or_area=context.get("code_references", ["unknown"])[0],
@@ -262,7 +262,7 @@ class VERA:
         
         # BLOCKER: silent failures in critical paths
         if any(w in problem_lower for w in ["silent", "silencio", "undetect", "orfan", "orphan", 
-                                             "segredo", "secret", "crypto", "não percebe"]):
+                                             "segredo", "secret", "crypto", "não percebe"]):  # english-only: these are the words matched in Portuguese context
             return Severity.BLOCKER
         if any(w in problem_lower for w in ["arquitetura", "architecture", "acoplad", "depend"]):
             return Severity.HIGH

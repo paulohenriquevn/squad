@@ -69,7 +69,7 @@ HALT_DIRS = {
     # and it was missing here — so a BLOCKED report from the cycle that ORCHESTRATES
     # the queue was invisible to the reader of that queue. A consumer measured it
     # from the inside on 2026-08-31: "meus BLOCKED reports desta data ficam
-    # invisíveis ao SELECT até isso", filed as its own blocker and then waiting on a
+    # invisíveis ao SELECT até isso", filed as its own blocker and then waiting on a  # english-only: verbatim quotation from a measured item
     # kit fix nobody upstream knew was needed.
     "maintenance-runs": "maintenance",
 }

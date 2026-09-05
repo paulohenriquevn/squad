@@ -1,127 +1,127 @@
 # 🔬 Leonardo — Deep Research Agent
 
-## Visão Geral
+## Overview
 
-**Leonardo** é o agente de pesquisa profunda que transforma descobertas vagas em conhecimento cristalino. Antes de qualquer implementação, Leonardo esclarece 100% do contexto, aumentando a confiabilidade do plano para **99%**.
+**Leonardo** is the deep research agent that turns vague findings into crystal-clear knowledge. Before any implementation, Leonardo clarifies 100% of the context, raising the plan's reliability to **99%**.
 
-**Papel:** Pre-discover research  
-**Entrada:** Issue vaga, proposal, problema indefinido  
-**Saída:** Contexto 100% claro, plano 99% confiável  
-**Latência:** 5-15 minutos (paralelo ao resto do ciclo)
+**Role:** Pre-discover research  
+**Input:** Vague issue, proposal, undefined problem  
+**Output:** 100% clear context, 99% reliable plan  
+**Latency:** 5-15 minutes (in parallel with the rest of the cycle)
 
 ---
 
-## Responsabilidades
+## Responsibilities
 
-### 1. **Documentação Search**
-Busca e lê toda documentação relevante:
+### 1. **Documentation Search**
+Finds and reads every relevant document:
 - `README.md`, `docs/`, `CONTRIBUTING.md`
 - Architecture Decision Records (ADRs)
 - API documentation, type signatures
 - Implementation guides
-- Migration guides (se aplicável)
+- Migration guides (when applicable)
 
-**Exemplo:**
+**Example:**
 ```
-Issue: "Adicionar autenticação via OAuth"
+Issue: "Add OAuth authentication"
 
-Leonardo busca:
-  ✓ docs/authentication.md (atual)
+Leonardo searches:
+  ✓ docs/authentication.md (current)
   ✓ docs/oauth-implementation.md (spec)
-  ✓ CONTRIBUTING.md (requisitos)
-  ✓ ADR-0015: Auth Strategy (decisões passadas)
-  ✓ examples/oauth/ (código exemplo)
+  ✓ CONTRIBUTING.md (requirements)
+  ✓ ADR-0015: Auth Strategy (past decisions)
+  ✓ examples/oauth/ (sample code)
 ```
 
 ### 2. **Implementation Search**
-Procura por implementações similares:
+Looks for similar implementations:
 - Open source projects (GitHub)
 - Company internal code (similar patterns)
 - Stack Overflow solutions (tested approaches)
 - Best practices libraries
 
-**Exemplo:**
+**Example:**
 ```
-Issue: "Otimizar query N+1 em User listing"
+Issue: "Optimize the N+1 query in User listing"
 
-Leonardo busca:
-  ✓ 3 repos open source com mesmo padrão
-  ✓ 2 internal implementations em codebase
-  ✓ 5 Stack Overflow threads com soluções testadas
-  ✓ 2 papers sobre query optimization patterns
+Leonardo searches:
+  ✓ 3 open source repos with the same pattern
+  ✓ 2 internal implementations in the codebase
+  ✓ 5 Stack Overflow threads with tested solutions
+  ✓ 2 papers on query optimization patterns
 ```
 
 ### 3. **Articles & Papers**
-Lê artigos técnicos e papers relevantes:
+Reads relevant technical articles and papers:
 - Medium articles
 - Dev.to posts
 - Research papers (arxiv.org)
-- Blog posts de experts
-- Conference talks (transcritas)
+- Blog posts from experts
+- Conference talks (transcripts)
 
-**Exemplo:**
+**Example:**
 ```
-Issue: "Implementar Circuit Breaker pattern"
+Issue: "Implement the Circuit Breaker pattern"
 
-Leonardo lê:
-  ✓ 2 Medium articles sobre Circuit Breaker
-  ✓ 3 blog posts de empresas que implementaram
-  ✓ 1 paper sobre resilience patterns
+Leonardo reads:
+  ✓ 2 Medium articles on Circuit Breaker
+  ✓ 3 blog posts from companies that implemented it
+  ✓ 1 paper on resilience patterns
   ✓ AWS/Azure documentation (cloud providers)
 ```
 
 ### 4. **Discussion Mining**
-Procura discussões em:
+Looks for discussions in:
 - GitHub issues/discussions
-- Pull requests (comentários, decisões)
+- Pull requests (comments, decisions)
 - RFC (Request For Comments)
 - Team notes/meeting logs
-- Slack threads (interna)
+- Slack threads (internal)
 
-**Exemplo:**
+**Example:**
 ```
-Issue: "Por que escolhemos Redis vs Memcached?"
+Issue: "Why did we choose Redis over Memcached?"
 
-Leonardo encontra:
-  ✓ ADR-0012 com decisão + rationale
-  ✓ Issue #5421 com discussão completa
-  ✓ PR #7834 com implementação
-  ✓ Slack thread com consenso do time
+Leonardo finds:
+  ✓ ADR-0012 with the decision + rationale
+  ✓ Issue #5421 with the full discussion
+  ✓ PR #7834 with the implementation
+  ✓ Slack thread with the team's consensus
 ```
 
 ### 5. **Context Synthesis**
-Monta um documento único com:
-- **Status quo:** o que existe hoje
-- **Problem statement:** o que está quebrado
-- **Requirements:** requisitos explícitos
-- **Constraints:** limitações técnicas/negócio
-- **Design space:** opções viáveis
-- **Precedents:** o que foi feito antes
-- **Risks:** armadilhas conhecidas
-- **Recommended approach:** solução respaldada por evidência
+Assembles a single document with:
+- **Status quo:** what exists today
+- **Problem statement:** what is broken
+- **Requirements:** the explicit requirements
+- **Constraints:** technical and business limits
+- **Design space:** the viable options
+- **Precedents:** what was done before
+- **Risks:** the known traps
+- **Recommended approach:** a solution backed by evidence
 
 ---
 
-## Fluxo de Trabalho
+## Workflow
 
 ### Phase 1: Intake (2 min)
 ```
-Input: Issue #9999: "Adicionar rate limiting"
+Input: Issue #9999: "Add rate limiting"
 
-Leonardo pergunta:
-  • Qual endpoint? (específico?)
-  • Qual métrica? (requests/min? por usuário? por IP?)
-  • Qual ação? (reject vs queue vs delay?)
-  • Qual storage? (Redis? in-memory? database?)
+Leonardo asks:
+  • Which endpoint? (a specific one?)
+  • Which metric? (requests/min? per user? per IP?)
+  • Which action? (reject vs queue vs delay?)
+  • Which storage? (Redis? in-memory? database?)
 ```
 
 ### Phase 2: Search (8 min)
-Leonardo paralleliza 4 buscas:
+Leonardo runs 4 searches in parallel:
 
 1. **Internal Search** (2 min)
-   - Grep do codebase por "rate_limit", "throttle", "quota"
-   - ADRs sobre rate limiting
-   - Implementações existentes
+   - Grep the codebase for "rate_limit", "throttle", "quota"
+   - ADRs on rate limiting
+   - Existing implementations
 
 2. **Documentation Search** (2 min)
    - docs/ folder
@@ -130,54 +130,54 @@ Leonardo paralleliza 4 buscas:
 
 3. **Open Source Search** (2 min)
    - GitHub trending rate limiting libraries
-   - 3 repos com implementação similar
-   - Comparação de approaches
+   - 3 repos with a similar implementation
+   - Comparison of approaches
 
 4. **Research Search** (2 min)
    - Medium/Dev.to articles
-   - Papers sobre rate limiting algorithms
-   - Blog posts de Stripe, GitHub, AWS
+   - Papers on rate limiting algorithms
+   - Blog posts from Stripe, GitHub, AWS
 
 ### Phase 3: Synthesis (5 min)
-Leonardo monta documento:
+Leonardo assembles the document:
 
 ```markdown
 # Rate Limiting Implementation Research
 
 ## Current State
-- Sem rate limiting atualmente
-- API exposta a usuários externos
-- Falhas passadas: #8821 (DDoS), #9114 (recursos)
+- No rate limiting today
+- API exposed to external users
+- Past failures: #8821 (DDoS), #9114 (resources)
 
-## Requirements (Inferidos)
-- Proteção contra DDoS
-- Justo para usuários legítimos
-- Simples de entender e debugar
+## Requirements (Inferred)
+- Protection against DDoS
+- Fair to legitimate users
+- Simple to understand and debug
 
 ## Design Space
 1. **Token Bucket** ✓ (Stripe, GitHub)
-   - Flexível, smooth burst
-   - Redis recomendado
+   - Flexible, smooth burst
+   - Redis recommended
    
 2. **Leaky Bucket** (AWS)
-   - Rígido, previsível
-   - In-memory OK para baixo volume
+   - Rigid, predictable
+   - In-memory OK for low volume
    
 3. **Sliding Window** (Redis-native)
-   - Exato, sem approximation
-   - Custoso em memory
+   - Exact, no approximation
+   - Expensive in memory
 
 ## Recommendation
-**Token Bucket + Redis** porque:
-- Stripe/GitHub usam (battle-tested)
+**Token Bucket + Redis** because:
+- Stripe/GitHub use it (battle-tested)
 - Allows burst (user experience)
-- Redis já temos (no cost)
-- Paper [1] prova efetividade
+- We already run Redis (no cost)
+- Paper [1] proves it works
 
 ## Risks
-- Redis failure = sem rate limit (degrade gracefully)
-- Clock skew (sincronizar servers)
-- False positives (usuarios legítimos bloqueados?)
+- Redis failure = no rate limit (degrade gracefully)
+- Clock skew (sync the servers)
+- False positives (legitimate users blocked?)
 
 ## Precedents
 - Kit#8 implemented bucket (line 234)
@@ -186,268 +186,268 @@ Leonardo monta documento:
 
 ### Phase 4: Delivery (30 sec)
 ```
-Output: Leonardo entrega documento + links
+Output: Leonardo delivers the document + links
 
-VERA pode agora:
-  ✓ Decidir com 99% confiança (era 30% antes)
-  ✓ Propor implementação específica (era vaga antes)
-  ✓ Identificar risks (era cego antes)
+VERA can now:
+  ✓ Decide with 99% confidence (30% before)
+  ✓ Propose a specific implementation (vague before)
+  ✓ Identify risks (blind before)
 
-Lanes podem agora:
-  ✓ Implementar com plano 99% confiável (era guess work antes)
-  ✓ Ter referências para copiar (era descobrir sozinho antes)
-  ✓ Evitar armadilhas conhecidas (era trial-and-error antes)
+Lanes can now:
+  ✓ Implement with a 99% reliable plan (guesswork before)
+  ✓ Have references to copy from (find out alone before)
+  ✓ Avoid known traps (trial-and-error before)
 ```
 
 ---
 
-## Recursos que Leonardo Acessa
+## What Leonardo Can Access
 
-### Internos
-- Codebase completo (grep, ast-grep)
+### Internal
+- The whole codebase (grep, ast-grep)
 - git history (commits, PRs, discussions)
 - ADRs + documentation
-- Slack threads (com permissão)
+- Slack threads (with permission)
 - Internal papers/notes
 
-### Externos (Autorizados)
+### External (Authorized)
 - GitHub (public repos)
 - Stack Overflow (Q&A)
 - Medium/Dev.to (articles)
 - arxiv.org (papers)
 - Official docs (AWS, Azure, etc)
 
-### Restrições
-- ❌ Sem credentials armazenadas em resultado
-- ❌ Sem vendoring de código (link only)
-- ❌ Sem proprietary code de competitors
-- ✓ Aprende de padrões (não código literal)
+### Restrictions
+- ❌ No credentials stored in the output
+- ❌ No vendoring of code (link only)
+- ❌ No proprietary code from competitors
+- ✓ Learns from patterns (not literal code)
 
 ---
 
-## Impacto na Cadeia
+## Impact on the Chain
 
-### Antes (sem Leonardo)
+### Before (without Leonardo)
 
 ```
-Issue vaga → VERA (30% context) → proposta com gaps
+Vague issue → VERA (30% context) → proposal with gaps
                                     ↓
                             Lanes (guesswork)
                                     ↓
-                        Resultado: 70% confiabilidade
+                        Result: 70% reliability
 ```
 
-### Depois (com Leonardo)
+### After (with Leonardo)
 
 ```
-Issue vaga → Leonardo (5 min) → Contexto 100%
+Vague issue → Leonardo (5 min) → 100% context
                                     ↓
-                            VERA (99% context) → proposta cristalina
+                            VERA (99% context) → crystal-clear proposal
                                     ↓
-                            Lanes (plano 99% confiável)
+                            Lanes (99% reliable plan)
                                     ↓
-                        Resultado: 99% confiabilidade
+                        Result: 99% reliability
 ```
 
 ---
 
-## Comparação com VERA
+## Compared to VERA
 
-| Aspecto | VERA | Leonardo |
+| Aspect | VERA | Leonardo |
 |---------|------|----------|
-| **Quando** | Durante execução | Antes (pre-discover) |
-| **O quê** | Valida princípios (SOLID/DRY) | Pesquisa contexto |
-| **Como** | Aplica lentes FAANG | Busca + síntese |
-| **Output** | Decisão técnica | Conhecimento completo |
-| **Confiança** | Design sound | Informed decision |
-| **Risco** | Implementação errada | Direção errada |
+| **When** | During execution | Before (pre-discover) |
+| **What** | Validates principles (SOLID/DRY) | Researches context |
+| **How** | Applies FAANG lenses | Search + synthesis |
+| **Output** | Technical decision | Complete knowledge |
+| **Confidence** | Design sound | Informed decision |
+| **Risk** | Wrong implementation | Wrong direction |
 
 ---
 
-## Exemplos de Contexto que Leonardo Fornece
+## Examples of Context Leonardo Provides
 
-### Exemplo 1: Database Optimization
+### Example 1: Database Optimization
 ```
-Issue: "Queries estão lentas em tabela users"
+Issue: "Queries are slow on the users table"
 
-Leonardo descobre:
-  ✓ Tabela tem 10M registros
-  ✓ Não há índices (vejo no schema.sql)
-  ✓ 3 queries N+1 (achei no codebase)
-  ✓ Paper sobre indexing strategies
-  ✓ AWS recommendations para escala
-  ✓ Precedent: Kit#5 otimizou similar (PR#2341)
+Leonardo finds:
+  ✓ The table has 10M rows
+  ✓ There are no indexes (visible in schema.sql)
+  ✓ 3 N+1 queries (found in the codebase)
+  ✓ A paper on indexing strategies
+  ✓ AWS recommendations for this scale
+  ✓ Precedent: Kit#5 optimized something similar (PR#2341)
 
-VERA pode agora:
-  ✓ Propor: "Adicione 4 índices, refatore 3 queries"
-  ✓ Com 99% confiança (não é guess)
+VERA can now:
+  ✓ Propose: "Add 4 indexes, refactor 3 queries"
+  ✓ With 99% confidence (not a guess)
 
-Lanes implementam:
-  ✓ Com plano cristalino (não é descoberta)
+Lanes implement:
+  ✓ With a crystal-clear plan (not a discovery)
 ```
 
-### Exemplo 2: Architecture Decision
+### Example 2: Architecture Decision
 ```
-Issue: "Trocar de REST para GraphQL?"
+Issue: "Move from REST to GraphQL?"
 
-Leonardo pesquisa:
-  ✓ Pros/cons (20 artigos)
-  ✓ Quando fazem (Stripe mantém REST, GitHub tem ambos)
-  ✓ Migration path (como fazem)
+Leonardo researches:
+  ✓ Pros/cons (20 articles)
+  ✓ When others do it (Stripe stays on REST, GitHub runs both)
+  ✓ Migration path (how they do it)
   ✓ Cost (performance, complexity)
-  ✓ Team capability (sabe GraphQL?)
-  ✓ Competitors (qual escolheram)
+  ✓ Team capability (do we know GraphQL?)
+  ✓ Competitors (what they chose)
 
-VERA pode agora:
-  ✓ Dizer "Sim" ou "Não" com evidence
-  ✓ Não é debate, é decision
+VERA can now:
+  ✓ Say "Yes" or "No" with evidence
+  ✓ It is not a debate, it is a decision
 
-Decisão é:
-  ✓ Informada (não política)
-  ✓ Reversível (conhecemos custo)
+The decision is:
+  ✓ Informed (not political)
+  ✓ Reversible (we know the cost)
 ```
 
-### Exemplo 3: Bug Investigation
+### Example 3: Bug Investigation
 ```
-Issue: "App crashes 1x/day, stack trace vago"
+Issue: "App crashes 1x/day, vague stack trace"
 
-Leonardo descobre:
-  ✓ Padrão: sempre às 15:00 (cron job?)
-  ✓ Logs mostram: memory spike before crash
-  ✓ Similar issues: 2 outras em codebase (PRs #X, #Y)
-  ✓ Root cause: cada fix tentou approach diferente
-  ✓ Paper sobre memory leaks em [language]
-  ✓ Tool recomendado: [profiler name]
+Leonardo finds:
+  ✓ Pattern: always at 15:00 (cron job?)
+  ✓ Logs show: memory spike before crash
+  ✓ Similar issues: 2 others in the codebase (PRs #X, #Y)
+  ✓ Root cause: every fix tried a different approach
+  ✓ Paper on memory leaks in [language]
+  ✓ Recommended tool: [profiler name]
 
-VERA pode agora:
-  ✓ Diagnosticar com 95% confiança
-  ✓ Propor fix respaldada por precedent
+VERA can now:
+  ✓ Diagnose with 95% confidence
+  ✓ Propose a fix backed by precedent
 
-Lanes implementam:
-  ✓ Sabem exatamente o que procurar
-  ✓ Conhecem tool correto para debug
+Lanes implement:
+  ✓ They know exactly what to look for
+  ✓ They know the right tool to debug with
 ```
 
 ---
 
-## Integração com Squad
+## Integration with the Squad
 
 ```
-┌─ Maestro: "Novo ciclo"
-│  └─ Hermes: "Despachando..."
-│     ├─ Leonardo: "Pesquisando contexto..." (paralelo, 5 min)
-│     │  └─ [output: contexto 100% claro]
+┌─ Maestro: "New cycle"
+│  └─ Hermes: "Dispatching..."
+│     ├─ Leonardo: "Researching context..." (parallel, 5 min)
+│     │  └─ [output: 100% clear context]
 │     │
-│     ├─ Artemis: [trabalho blocker]
-│     ├─ Atena: [trabalho refactor]
-│     └─ Apolo: [trabalho explore]
+│     ├─ Artemis: [blocker work]
+│     ├─ Atena: [refactor work]
+│     └─ Apolo: [explore work]
 │
-│  Uma vez Leonardo termina:
-│  └─ VERA: "Com Leonardo, tenho 99% contexto, proposta X"
-│     └─ Lanes: [implementam com plano cristalino]
+│  Once Leonardo finishes:
+│  └─ VERA: "With Leonardo, I have 99% context, proposal X"
+│     └─ Lanes: [implement with a crystal-clear plan]
 │
-│  Resultado: 99% confiabilidade vs 70% antes
+│  Result: 99% reliability vs 70% before
 ```
 
 ---
 
-## Métricas
+## Metrics
 
-### Antes (sem Leonardo)
-- Clareza do plano: 30%
-- Confiabilidade: 70%
-- False starts: 3-4 por mês
-- Retrabalho: ~15% ciclos
+### Before (without Leonardo)
+- Plan clarity: 30%
+- Reliability: 70%
+- False starts: 3-4 per month
+- Rework: ~15% of cycles
 
-### Depois (com Leonardo)
-- Clareza do plano: 100%
-- Confiabilidade: 99%
-- False starts: < 1 por mês
-- Retrabalho: < 2% ciclos
+### After (with Leonardo)
+- Plan clarity: 100%
+- Reliability: 99%
+- False starts: < 1 per month
+- Rework: < 2% of cycles
 
 ---
 
-## Como Leonardo Funciona (Interno)
+## How Leonardo Works (Internals)
 
-### Tools Leonardo Acessa
-1. **Bash/Grep** — busca no codebase
+### Tools Leonardo Uses
+1. **Bash/Grep** — search the codebase
 2. **Git** — history, blame, discussions
 3. **WebSearch/WebFetch** — articles, papers, GitHub
-4. **Claude API** — análise de textos encontrados
+4. **Claude API** — analysis of the texts found
 5. **Documentation tools** — parse README, ADRs
 
-### Algoritmo
+### Algorithm
 ```
 for issue in incoming_issues:
     context = {}
     
-    # Busca paralela (4 threads)
+    # Parallel search (4 threads)
     context.internal = search_codebase(issue)
     context.docs = search_documentation(issue)
     context.opensource = search_github(issue)
     context.research = search_papers(issue)
     
-    # Síntese
+    # Synthesis
     synthesis = synthesize(context)
     
-    # Validação
+    # Validation
     if clarity(synthesis) >= 95%:
         return synthesis
     else:
-        # Refina busca
+        # Refine the search
         context.extended = deeper_search(issue)
         return synthesize(context)
 ```
 
 ---
 
-## Como Usar Leonardo
+## How to Use Leonardo
 
-### Para VERA
+### For VERA
 ```
-VERA: "Qual é a melhor forma de implementar rate limiting?"
-Leonardo: "Vi que você está decidindo isso. Aqui está tudo que encontrei..."
-VERA: "Com isso, recomendo X porque [evidence-based]"
-```
-
-### Para Lanes
-```
-Artemis: "Preciso corrigir esse bug"
-Leonardo: "Encontrei precedent em Kit#8, aqui está como fizeram..."
-Artemis: "Ótimo, sigo exatamente isso"
+VERA: "What is the best way to implement rate limiting?"
+Leonardo: "I see you are deciding this. Here is everything I found..."
+VERA: "With that, I recommend X because [evidence-based]"
 ```
 
-### Para CSO (Security)
+### For Lanes
 ```
-CSO: "Vamos usar biblioteca X?"
-Leonardo: "Pesquisei: 2 security audits, 0 CVEs, 50k stars, maintained"
-CSO: "Aprovado com confiança"
+Artemis: "I need to fix this bug"
+Leonardo: "I found a precedent in Kit#8, here is how they did it..."
+Artemis: "Great, I will follow exactly that"
+```
+
+### For CSO (Security)
+```
+CSO: "Should we use library X?"
+Leonardo: "I researched it: 2 security audits, 0 CVEs, 50k stars, maintained"
+CSO: "Approved with confidence"
 ```
 
 ---
 
 ## Status
 
-✅ Definição de papel  
-✅ Arquitetura descrita  
-✅ Integração mapeada  
+✅ Role defined  
+✅ Architecture described  
+✅ Integration mapped  
 
-⏳ Implementação  
+⏳ Implementation  
 ⏳ Testing  
-⏳ Integração ao fleet  
+⏳ Integration into the fleet  
 
 ---
 
-## Próximas Etapas
+## Next Steps
 
-1. **Implementar Leonardo** como agente autônomo
-2. **Integrar ao ciclo** de discover (antes de VERA)
-3. **Medir impacto** (confiabilidade 70% → 99%)
-4. **Treinar VERA** a consumir output de Leonardo
-5. **Treinar Lanes** a usar contexto de Leonardo
+1. **Implement Leonardo** as an autonomous agent
+2. **Integrate it into the discover cycle** (before VERA)
+3. **Measure the impact** (reliability 70% → 99%)
+4. **Train VERA** to consume Leonardo's output
+5. **Train the Lanes** to use Leonardo's context
 
 ---
 
-**O 15º Agente — Elevando a Confiabilidade para 99%**
+**The 15th Agent — Raising Reliability to 99%**
 
-Com Leonardo, o Squad vai de "acho que é assim" para "tenho 99% certeza disso".
+With Leonardo, the Squad goes from "I think that's how it works" to "I am 99% sure of this."

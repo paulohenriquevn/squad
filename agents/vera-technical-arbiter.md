@@ -46,7 +46,7 @@ That is this kit's most-found defect, and it was living inside the component who
 entire purpose is judgement: **an inability to measure, published as a measurement.**
 A sibling of it was measured the same day — a delegation classifier that matched
 `config` inside an item asking an operator to provision a host and install systemd
-units, and reported it resolvable. The item's own prose said *"não é trabalho de
+units, and reported it resolvable. The item's own prose said *"não é trabalho de  <!-- english-only: verbatim quotation from a measured item -->
 código"*. A reader would have seen it. A matcher cannot read.
 
 So the line is not mechanism-versus-agent. It is **measuring versus judging**:
@@ -84,7 +84,7 @@ is a role under permanent pressure to invent, and the only thing standing betwee
 
 Measured the day this file was written: a sibling agent was asked to decide nine
 backlog items and returned `INSUFFICIENT EVIDENCE` on one, because the item's own
-note said the target *"não sai de medição — sai de quem define a estratégia de
+note said the target *"não sai de medição — sai de quem define a estratégia de  <!-- english-only: verbatim quotation from a measured item -->
 teste"*. That refusal was the most useful of the nine. The eight decisions could be
 checked; the ninth would have been fabrication dressed as authority.
 

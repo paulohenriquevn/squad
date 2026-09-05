@@ -19,7 +19,7 @@ from delegated_decision import DecisionClass, classify_wall, rewrite_wall
 # ── The prose that must stay walled ────────────────────────────────────────────
 
 B139_HOST = (
-    "aguardando (1) operador (você) executar migração de ambiente — não é "
+    "aguardando (1) operador (você) executar migração de ambiente — não é "  # english-only: fixture in the language the classifier reads
     "trabalho de código; requer provisionamento de /opt/theo ou /srv/theo no "
     "host + instalação de unit files systemd + migração do dashboard + "
     "ownership. (2) Cross-repo: unit files vivem em `<sibling>`, sibling repo."
@@ -35,8 +35,8 @@ B022_ELAPSED = (
 B154_LIVENESS = (
     "aguardando sessão LIVE per cleanroom-up-live-test-mandate.md. Balas 1, 2 e "
     "primeira metade da 3 CLOSED 2026-08-19. Segunda metade da bala 3 (um push "
-    "real chega ao construtor com runtime não vazio) explicitamente marcada como "
-    "'não é verificável desta sessão: exige o plano de build de pé'"
+    "real chega ao construtor com runtime não vazio) explicitamente marcada como "  # english-only: fixture in the language the classifier reads
+    "'não é verificável desta sessão: exige o plano de build de pé'"  # english-only: fixture in the language the classifier reads
 )
 
 # ── The prose that may be delegated ────────────────────────────────────────────
@@ -44,15 +44,15 @@ B154_LIVENESS = (
 B165_BINARY = (
     "aguardando decisão binária DoD bala 1: retire standalone-public (alinhando "
     "com rótulo legacy em docs/operations/local-public-dashboard.md:216 — "
-    "canonical é dev-public) OU dá borda própria a ele. Se retire: change default "
+    "canonical é dev-public) OU dá borda própria a ele. Se retire: change default "  # english-only: fixture in the language the classifier reads
     "de task infra:install:core-dashboard-only (taskfiles/infra.yml:141) para "
     "dev-public + update do doc. Severity baixa mas decisão pendente."
 )
 
 B060_STATUS = (
-    "aguardando disposição de status: bala 1 foi refused-with-reason "
+    "aguardando disposição de status: bala 1 foi refused-with-reason "  # english-only: fixture in the language the classifier reads
     "(arquitetura), bala 2 movida para B-061 (shipped), costura entregue em "
-    "5b98a494f. Nenhuma transição canônica encaixa limpa — triaged→planned "
+    "5b98a494f. Nenhuma transição canônica encaixa limpa — triaged→planned "  # english-only: fixture in the language the classifier reads
     "produziria plano vazio"
 )
 
@@ -121,9 +121,9 @@ def test_access_wins_over_a_binary_word_in_the_same_sentence():
 # ── Walls that delegation DOES move ───────────────────────────────────────────
 
 B137_SPONSOR = (
-    "aguardando sponsor decision by design — o próprio item termina 'É decisão "
-    "do sponsor, não minha' e a nota de 2026-08-19 delimita: 'O que continua "
-    "sendo do sponsor: se 7,4% de jornada é certo para um produto cujo objeto É "
+    "aguardando sponsor decision by design — o próprio item termina 'É decisão "  # english-only: fixture in the language the classifier reads
+    "do sponsor, não minha' e a nota de 2026-08-19 delimita: 'O que continua "  # english-only: fixture in the language the classifier reads
+    "sendo do sponsor: se 7,4% de jornada é certo para um produto cujo objeto É "  # english-only: fixture in the language the classifier reads
     "implantar'. Medição feita 3x"
 )
 
@@ -135,23 +135,23 @@ B126_ENUMERATED = (
 B146_OPTIONS = (
     "aguardando decisão operacional: prazo ADR-2026-05-12 venceu há 21 dias. "
     "Bala 2 explicitamente bloqueada — provisionar ConfigMap fará gate bloquear "
-    "imediatamente. Três opções todas fora de código."
+    "imediatamente. Três opções todas fora de código."  # english-only: fixture in the language the classifier reads
 )
 
 B079_REMEASURE = (
-    "aguardando (1) commit do batch de kit-sync não commitado (91 arquivos dirty "
-    "em .claude/**) e (2) re-medição dos 69 arquivos (services 51 + cmd 18)"
+    "aguardando (1) commit do batch de kit-sync não commitado (91 arquivos dirty "  # english-only: fixture in the language the classifier reads
+    "em .claude/**) e (2) re-medição dos 69 arquivos (services 51 + cmd 18)"  # english-only: fixture in the language the classifier reads
 )
 
 B001_MAP = (
     "decisão de sponsor sobre o mapa da metade `cell` (D2 da opportunity). A "
     "medição refutou `<workload>` → `cell-1`: bootstrap-cell-cc.sh:20-22 "
-    "mostra que `cell-1` e `cell-2` já existem como ids de cell"
+    "mostra que `cell-1` e `cell-2` já existem como ids de cell"  # english-only: fixture in the language the classifier reads
 )
 
 
 def test_sponsor_decision_is_delegated_once_the_sponsor_delegated():
-    """B-137 says 'é decisão do sponsor' — and the sponsor handed it over."""
+    """B-137 says 'é decisão do sponsor' — and the sponsor handed it over."""  # english-only: fixture in the language the classifier reads
     verdict = classify_wall(B137_SPONSOR)
     assert verdict.delegated is True
 
@@ -164,7 +164,7 @@ def test_choice_between_enumerated_alternatives_is_delegated():
 
 
 def test_a_counted_set_of_options_is_delegated():
-    """B-146: 'Três opções' — enumerated, therefore choosable."""
+    """B-146: 'Três opções' — enumerated, therefore choosable."""  # english-only: fixture in the language the classifier reads
     assert classify_wall(B146_OPTIONS).delegated is True
 
 
