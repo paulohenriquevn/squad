@@ -267,3 +267,43 @@ def test_a_dialog_still_outranks_the_cli_status(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(session_ready, "pane_pid", lambda _s: 4242)
     monkeypatch.setattr(session_ready, "_agent_status", lambda: {4242: "idle"})
     assert session_ready.state("squad1")[0] == "dialog"
+
+
+def test_every_verdict_main_can_reach_has_advice(monkeypatch, capsys) -> None:
+    """`main()` indexes `_ADVICE` unconditionally, so a verdict without an entry
+    is a KeyError on the path that exists to explain the verdict.
+
+    Measured 2026-09-05: the #25 fix added `busy` and `unknown` to `state()` and
+    not to `_ADVICE`, so the two verdicts that fix EXISTS to produce were the two
+    that crashed. It failed closed — the traceback exits non-zero and the shell
+    callers still refuse — but a stack trace is not advice, and `busy` (wait) and
+    `unknown` (go look) call for opposite actions.
+
+    Asserted over the verdict SET rather than over two names, so a seventh verdict
+    added later fails here instead of at an operator's terminal.
+    """
+    reachable = {"dialog", "starting", "gone", "busy", "unknown"}
+    missing = reachable - set(session_ready._ADVICE)
+    assert not missing, (
+        f"main() can reach {sorted(missing)} and would raise KeyError on them"
+    )
+
+    # And each renders: `.format(session=...)` must not raise on any of them.
+    for verdict in sorted(reachable):
+        session_ready._ADVICE[verdict].format(session="squad1")
+
+
+def test_busy_and_unknown_reach_the_operator_as_sentences(monkeypatch, capsys) -> None:
+    """The two states differ in what to DO — wait, versus go and look — and an
+    operator who cannot tell them apart treats both as the more expensive one."""
+    monkeypatch.setattr(session_ready, "state", lambda s: ("busy", "the CLI reports it busy"))
+    assert session_ready.main(["squad1"]) != 0
+    err = capsys.readouterr().err
+    assert "mid-turn" in err and "wait" in err
+    assert "Traceback" not in err
+
+    monkeypatch.setattr(session_ready, "state", lambda s: ("unknown", "no pane pid"))
+    assert session_ready.main(["squad1"]) != 0
+    err = capsys.readouterr().err
+    assert "tmux attach -t squad1" in err, "it must say how to look"
+    assert "Traceback" not in err

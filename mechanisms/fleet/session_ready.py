@@ -201,6 +201,17 @@ _ADVICE = {
                  "Look at it before assuming it will:\n  tmux attach -t {session}"),
     "gone": ("it is not there. It was created and did not survive — check whether "
              "something was typed into it before it was ready."),
+    # The two verdicts the #25 fix introduced. Without entries here, `main()`
+    # raised KeyError on precisely the states that fix exists to report — it
+    # failed closed, so nothing was ever typed into a busy lane, but the operator
+    # got a traceback where the point was to get a sentence.
+    "busy": ("it is mid-turn. This one clears by itself — wait and ask again "
+             "rather than attaching, because anything typed now lands in the "
+             "turn that is already running."),
+    "unknown": ("its turn state could not be established — either its pane has "
+                "no pid, or the pid is not one `claude agents --json` lists, or "
+                "the CLI could not answer. Not the same as busy: busy passes, "
+                "this does not until you look:\n  tmux attach -t {session}"),
 }
 
 
