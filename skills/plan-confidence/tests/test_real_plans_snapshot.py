@@ -24,9 +24,18 @@ RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"
 THRESHOLDS = SKILL_ROOT.parent.parent / "rules" / "plan-confidence-thresholds.txt"
 
 
+FIXTURES_DIR = SKILL_ROOT / "fixtures"
+
+
 def _resolve_plan(filename: str) -> Path | None:
-    """Find plan in active dir OR completed/ subdir."""
-    for candidate in (PLANS_DIR / filename, COMPLETED_DIR / filename):
+    """The kit's own corpus first, then a consumer's plans if it has any.
+
+    Order matters. `records/plans/` is gitignored and consumer-owned, so a suite
+    that resolves there FIRST is a suite whose result depends on a directory the
+    kit does not ship — which is how nine pinned plans became nine silent skips.
+    """
+    for candidate in (FIXTURES_DIR / filename, PLANS_DIR / filename,
+                      COMPLETED_DIR / filename):
         if candidate.exists():
             return candidate
     return None
@@ -34,63 +43,50 @@ def _resolve_plan(filename: str) -> Path | None:
 
 # Pinned snapshots — band + expected hard caps. Scores may shift ±5; bands MUST NOT.
 # Covers diverse plan styles: active, completed, with/without out-of-scope items.
+#: The pinned corpus. These four live in `skills/plan-confidence/fixtures/`, are
+#: versioned with the kit, and were scored on 2026-09-05 to derive the bands
+#: below. Scores may drift +/-5 with detector refinements; BANDS MUST NOT.
+#:
+#: This replaced nine plans under `records/plans/` — a directory `.gitignore`
+#: excludes and `test_kit_is_read_only.py` declares consumer-owned. All nine were
+#: absent, every case skipped, and the file reported green having compared
+#: nothing (kit#30). One of the nine survives in a backup outside any repository;
+#: eight were never versioned. A corpus that cannot be checked out is not a
+#: corpus, whatever the dict says.
 SNAPSHOTS: dict[str, dict[str, object]] = {
-    # Active plan, no caps, structurally clean
-    "observability-cache-maturity-plan.md": {
-        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS"},
-        "score_min": 70,
+    # Structurally clean, no caps. The upper anchor: if a detector change drops
+    # this out of SHIPPABLE, the change is wrong or the rubric moved.
+    "good-plan.md": {
+        "verdict_in": {"SHIPPABLE"},
+        "score_min": 95,
         "expected_hard_caps_subset": set(),
     },
-    # Completed: real plan that uses 5-column matrix; tests #2 fix (out-of-scope detection)
-    "cli-tool-cohesion-remediation-plan.md": {
-        "verdict_in": {"SHIPPABLE_WITH_CAVEATS", "SHIPPABLE"},
+    # No TDD evidence. Lands mid-band: enough structure to ship, enough missing
+    # to caveat. The interesting one — it is where a sloppy detector change shows
+    # up first, by pushing it either way.
+    "no-tdd-plan.md": {
+        "verdict_in": {"SHIPPABLE_WITH_CAVEATS"},
         "score_min": 60,
-        "expected_hard_caps_subset": set(),  # after #2 fix, F-CODE-01 deferred not unmapped
-    },
-    # Completed: known to be INVALID (5 unmapped phased to v2); allowlisted
-    "sota-gaps-remediation-plan.md": {
-        "verdict_in": {"INVALID"},
-        "score_max": 49,
-        "expected_hard_caps_subset": {"coverage_lt_100"},
-    },
-    # Completed: large refactor plan, tests scale
-    "journeys-as-sdk-consumers-v2-plan.md": {
-        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
-        "score_min": 0,  # just verify it runs without error
+        "score_max": 85,
         "expected_hard_caps_subset": set(),
     },
-    # Completed: dogfood-related plan
-    "dogfood-2026-05-15-fix-plan.md": {
-        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
-        "score_min": 0,
+    # Weak imperatives ("should", "consider") instead of committed ones. Same
+    # band as no-tdd by a different route, which is itself worth pinning: two
+    # distinct defects must not collapse into one score.
+    "weak-imperatives-plan.md": {
+        "verdict_in": {"SHIPPABLE_WITH_CAVEATS"},
+        "score_min": 60,
+        "score_max": 85,
         "expected_hard_caps_subset": set(),
     },
-    # Completed: another diverse style
-    "memory-gaps-remediation-plan.md": {
-        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
+    # The lower anchor. Missing coverage is a hard failure and must stay one.
+    "missing-coverage-plan.md": {
+        "verdict_in": {"INVALID", "NON_SHIPPABLE"},
         "score_min": 0,
-        "expected_hard_caps_subset": set(),
-    },
-    # Active plans added 2026-06-08 SOTA upgrade — accept any band (just verify the
-    # plan loads + scores without error). Tighten the envelope after the plans
-    # complete their migration to the new template.
-    "harden-fabrication-and-cq-gate-plan.md": {
-        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
-        "score_min": 0,
-        "expected_hard_caps_subset": set(),
-    },
-    "slice-s0-walking-skeleton-plan.md": {
-        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
-        "score_min": 0,
-        "expected_hard_caps_subset": set(),
-    },
-    "slice-s0b-walking-skeleton-crd-first-plan.md": {
-        "verdict_in": {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"},
-        "score_min": 0,
+        "score_max": 59,
         "expected_hard_caps_subset": set(),
     },
 }
-
 
 @pytest.mark.parametrize("plan_filename,expected", list(SNAPSHOTS.items()))
 def test_real_plan_snapshot(plan_filename: str, expected: dict[str, object]) -> None:
@@ -166,3 +162,38 @@ def test_score_determinism_real_plans() -> None:
         )
         assert r1.verdict == r2.verdict
         assert r1.hard_caps_triggered == r2.hard_caps_triggered
+
+
+def test_the_corpus_is_not_empty() -> None:
+    """A snapshot suite that resolves nothing passes having compared nothing.
+
+    That is the defect this file exists to catch, and it lived here: nine pinned
+    plans under a gitignored directory, nine `pytest.skip`, one green file
+    (kit#30). A skip is invisible in the default report — `-q` prints a dot for a
+    pass and an `s` for a skip, and nobody reads the letter.
+
+    So the floor is asserted directly. If the committed corpus stops resolving,
+    this fails and names it, instead of the parametrised cases quietly emptying.
+    """
+    unresolved = [name for name in SNAPSHOTS if _resolve_plan(name) is None]
+    assert not unresolved, (
+        f"{len(unresolved)} of {len(SNAPSHOTS)} pinned plans do not resolve: "
+        f"{unresolved}. The suite would report green having compared nothing — "
+        f"the exact failure kit#30 reported. Fixtures live in {FIXTURES_DIR}."
+    )
+
+
+def test_every_committed_fixture_is_pinned() -> None:
+    """A fixture nobody pinned is a fixture nobody scores.
+
+    The dict is a list, and a list drifts from the directory it describes. The
+    four fixtures existed here for weeks while this suite pinned nine plans
+    elsewhere, and no test read any of them.
+    """
+    on_disk = {p.name for p in FIXTURES_DIR.glob("*.md")}
+    unpinned = sorted(on_disk - set(SNAPSHOTS))
+    assert not unpinned, (
+        f"these fixtures are committed and pinned by nothing: {unpinned}. "
+        f"Either pin the band it should hold, or delete it — an unscored fixture "
+        f"is a file that looks like coverage."
+    )
