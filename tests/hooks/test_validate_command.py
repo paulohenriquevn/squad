@@ -119,6 +119,13 @@ CASES: list[tuple[str, int, str]] = [
     ("ls -R /etc && rm -f nota.txt", 0, "workspace"),  # recursive flag from ls, rm not recursive
     ("rm -rf build && echo done", 0, "workspace"),  # a real recursive delete, safely scoped
     ("echo start && rm -rf /etc", 2, "workspace"),  # all three in one segment: still blocked
+    # A NEWLINE separates commands exactly as `;` does, and the Bash tool is given
+    # multi-line blocks routinely. Splitting on `;`/`&&`/`||` alone leaves every
+    # multi-line block as one segment, which is where this false positive survived
+    # its first fix.
+    ("rm -f x_test.go\ngrep -rn foo cmd | sed 's/^/  /'", 0, "workspace"),  # newline-separated
+    ("ls /usr/lib > /dev/null\nrm -f BACKLOG.md.bak\ngrep -rn foo .", 0, "workspace"),  # three lines, three commands
+    ("echo start\nrm -rf /etc", 2, "workspace"),  # still blocked when the line itself is dangerous
     ("ls -la", 0, "workspace"),  # ls -la is allowed
     ("git commit -m 'feat: add thing\n\nCo-Authored-By: Someone <s@e.com>'", 2, "workspace"),  # commit with Co-Authored-By trailer is blocked
     ("git commit -m 'feat: add thing'", 0, "workspace"),  # commit without Co-Authored-By on develop is allowed

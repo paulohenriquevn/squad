@@ -44,8 +44,13 @@ ZONE_RE = re.compile(ZONE)
 _GIT_GLOBALS = re.compile(
     r"(^|[^\w.])git\s+(--git-dir=\S+|--work-tree=\S+|-[cC]\s+\S+|--paginate|-p)\s+")
 _QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
-_SEGMENTS = re.compile(r"\|\||&&|;")
-_SEGMENTS_WITH_PIPE = re.compile(r"\|\||&&|;|\|")
+#: A NEWLINE separates two commands exactly as `;` does, and the Bash tool is
+#: handed multi-line blocks routinely. Leaving it out kept every such block as a
+#: single segment, which is where the recursive-delete false positive survived its
+#: first fix: `rm -f x_test.go\ngrep -rn foo cmd` is two commands, and judging it
+#: as one assembled an `rm -r` out of parts belonging to neither.
+_SEGMENTS = re.compile(r"\|\||&&|;|\n")
+_SEGMENTS_WITH_PIPE = re.compile(r"\|\||&&|;|\n|\|")
 
 FORCE_TOKEN_RE = re.compile(r"(--force(\s|$)|(^|\s)-[a-z]*f(\s|$)|\s\+[^\s-]\S*)")
 
