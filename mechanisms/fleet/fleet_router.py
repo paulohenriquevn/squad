@@ -389,6 +389,14 @@ same time and each popped the other's entry, swapping their uncommitted work. To
 reach a clean tree, copy the files aside with `cp` or commit them on your own
 branch, then `git restore` — never the stash stack.
 
+**Long text goes in a file you copy, never through a command line.** A heredoc
+sent inside `ssh host "… <<'QUOTED' …"` is read by the LOCAL shell first, so
+backticked words run as commands here and arrive as empty strings: the command
+succeeds, the file is written, and words are missing from the middle of a
+sentence. Measured five times on 2026-09-04 and 05, the last of them inside a
+comment about avoiding it. Write the file, `scp` it, run the file
+(`rules/loop-engine-convention.md § How to invoke`).
+
 Read the item first: it is in `BACKLOG.md`, under the `## {slug}` heading.
 Read the WHOLE block — `evidence`, `why_now`, `dod`, and any dated note under it.
 

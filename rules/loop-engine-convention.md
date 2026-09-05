@@ -40,6 +40,20 @@ Decision rule for picking between Skill, Agent (subagent), and ralph-loop (halt-
 prompt — backticks, fenced code blocks, `$(...)` — breaks loop startup with a
 bash parse error, before a single iteration runs.
 
+**The same hazard has a second door, and it fails quietly instead of loudly.**
+Long text sent through `ssh host "… <<'QUOTED' …"` is read by the LOCAL shell
+before the remote heredoc protects anything, so backticked words are executed
+here and arrive as empty strings. The command succeeds, the file is written, and
+two words are missing from the middle of a sentence. Measured five times across
+2026-09-04 and 05 by a coordinator driving a remote host — the last one while
+writing a comment about avoiding it, which is how well "remember to escape"
+works as a control.
+
+So the rule is not about the loop. It is: **text with shell metacharacters goes
+to a file that is copied, never through a command line.** `scp` the file and run
+the file; the loop's positional prompt below is one instance of that, not the
+statement of it.
+
 So the prompt goes to a file and the positional argument points at it:
 
 1. Write the substituted prompt to `.claude/halt-loop-prompts/{skill}-{slug}.md`
