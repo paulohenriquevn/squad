@@ -44,9 +44,10 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at fifty-four files is
-not one — a model told to read fifty-four files before an architectural decision
+That makes the pointer the whole interface, and a pointer at fifty-two files is
+not one — a model told to read fifty-two files before an architectural decision
 reads none of them. See the doctrine list the hook names.
+`tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
 ## Cycle Contracts
 
@@ -59,6 +60,7 @@ Each `cycle-{name}.md` defines:
 
 | Contract | Cycle | Key Verdicts |
 |---|---|---|
+| `cycle-brainstorm.md` | Product alignment (phase −1) — the only phase a person attends | PRODUCT_ALIGNED / NEEDS_REVISION / AWAITING_REVIEW / INVALID |
 | `cycle-backlog.md` | Intake (phase 0) | ITEM_REGISTERED / ITEM_REJECTED |
 | `cycle-maintenance.md` | Macro super-loop | ITEM_SHIPPED / ITEM_KILLED / BACKLOG_EMPTY |
 | `cycle-discover.md` | Measurement of our own system | SHIPPABLE_WITH_CAVEATS / ITEM_KILLED |
@@ -78,9 +80,9 @@ Each `cycle-{name}.md` defines:
 | `code-quality-golden-rule.md` | Code quality severity levels |
 | `discover-opportunity-golden-rule.md` | Opportunity confidence hard caps |
 | `plan-confidence-golden-rule.md` | Plan confidence scoring rubric |
-| `discover-plan-golden-rule.md` | Discovery plan scoring rubric |
 | `deps-audit-golden-rule.md` | Dependency audit severity |
-| `dogfood-golden-rule.md` | Anchor scenario + status vocab |
+| `honesty-gate-golden-rule.md` | Anchor scenario + status vocab |
+| `skills/_kit-rules/discover-plan-golden-rule.md` | Discovery plan scoring rubric — **not here**: two skills read it, so it lives where the kit replaces it on update |
 
 ## Thresholds and Allowlists
 
@@ -97,13 +99,27 @@ Each `cycle-{name}.md` defines:
 | `live-target.txt` | Declared live environments per domain (live-test refuses without one) |
 | `current-constraint.md` | The constraint lens — advisory, never a gate |
 | `discover-plan-thresholds.txt` | Discovery plan scoring thresholds |
-| `review-model-routing.txt` | Agent model routing for review |
+| `code-quality-baseline.txt` | Findings accepted as the starting state, so a new one stands out |
+| `acceptance-target.txt` | Where `/acceptance` exercises the released delivery |
+| `domain-routing.txt` | Which repositories exist here and who owns each — **the project's**, derived from disk |
+| `auxiliary-skills.txt` | Skills bound to no cycle, so the orphan sweep does not report them |
+| `retired-permissions.txt` | Permissions withdrawn, kept so a reinstall does not reintroduce them |
+| `notifications.txt` | Where the kit sends what a person must see |
+| `skills/_kit-rules/review-model-routing.txt` | Agent model routing for review — **not here**: kit-owned, replaced on update |
 
 ## Other Rules
 
 | File | Purpose |
 |---|---|
 | `cycle-rule-schema.md` | Canonical schema + verdict matrix for all `cycle-*.md` |
+| `squad-map.md` | The 360º view: every phase, who owns it, and what it reads |
+| `cycle-phases.txt` | The chain itself, declared once and machine-readable |
+| `blocking-verdicts.txt` | Verdicts that stop an item where it is — one definition, two readers |
+| `autonomy-envelope.md` | What runs unattended, and the floors that make it defensible |
+| `decision-delegation.txt` | What a consumer may delegate, and what delegation can never authorize |
+| `records-location.md` | Where run output goes, and why `wiki/` and `records/` are two directories |
+| `sop-schema.md` | The shape of a procedure performed on the kit |
+| `english-only.md` | Everything the repository versions is written in English |
 | `architecture.md` | Layering and DIP boundaries |
 | `testing.md` | TDD discipline and pyramid |
 | `error-handling.md` | Fail-fast discipline, typed errors (Unbreakable Rule 8) |
@@ -111,8 +127,8 @@ Each `cycle-{name}.md` defines:
 | `reference-provenance.md` | Keeping third-party study material out of the project (4 layers) |
 | `parsimony-ladder.md` | Pre-write minimalism ladder (YAGNI/KISS/Don't-Reinvent) enforced in GREEN phase |
 | `public-copy.md` | Banned framings in README/marketing |
-| `audit-trail-rotation.md` | When to archive/delete artifacts |
 | `loop-engine-convention.md` | Skill vs Agent vs ralph-loop |
+| `skills/_kit-rules/audit-trail-rotation.md` | When to archive/delete artifacts — **not here**: kit-owned, replaced on update |
 
 ## Modifying Rules
 

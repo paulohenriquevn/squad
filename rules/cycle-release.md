@@ -208,5 +208,5 @@ where the reasoning was written down and measured.
 - Skill: `skills/release/SKILL.md`
 - Upstream: `cycle-review.md` (consumes its `READY_TO_MERGE` verdict)
 - Macro super-loop: `rules/cycle-maintenance.md` — defines the single-flip invariant + the roadmap-runs file contract
-- Conventions: `architecture.md`, `public-copy.md` (release notes lint), `audit-trail-rotation.md`, `git-safety.md`
+- Conventions: `architecture.md`, `public-copy.md` (release notes lint), `skills/_kit-rules/audit-trail-rotation.md`, `git-safety.md`
 - Unbreakable rules consumed: Rule 4 (no commit to `main`; release is the only path — see `git-safety.md`), Rule 6 (CHANGELOG discipline)

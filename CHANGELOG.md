@@ -7,7 +7,81 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
-- **A rule's Enforcement section named three mechanisms and two of them do not exist (#11)**
+- **The inventory of `rules/` sent readers to four files that were not in it, and the validator could not see a single one (#11)**
+  `rules/README.md` is the document that answers *where does a rule live*, and it states the
+  ownership doctrine the rest of the kit follows. Measured 2026-09-07: four names in its tables did
+  not resolve. `discover-plan-golden-rule.md`, `review-model-routing.txt` and
+  `audit-trail-rotation.md` moved to `skills/_kit-rules/` on 2026-09-01 and the tables did not
+  follow; `dogfood-golden-rule.md` was residue of the `dogfood` → `honesty-gate` rename in `7d6f228`
+  and had been standing in for the `honesty-gate-golden-rule.md` row that is on disk — so the one
+  golden rule missing from the list was the one the stale name displaced. Two other documents
+  misdirect the same way, found by the same sweep: `cycle-release.md` lists
+  `audit-trail-rotation.md` among three siblings that ARE in `rules/`, and `english-only.md` cites
+  `rubric-v1.md`, which is in `skills/plan-confidence/templates/`.
+  `check_xrefs.py` reported PASS on all six for two independent reasons, and the second is the one
+  worth fixing: Check 7 needs the literal `rules/` prefix, which the inventory never uses because
+  its reader is already in the directory; and Check 3 resolves a bare leaf with `rglob` across the
+  whole tree, so **a file that moved OUT of `rules/` still resolves** — and it only reads the
+  `## Cross-references` section of `cycle-*.md`, never the README. New Check 11 closes both: inside
+  `rules/*.md`, a bare name whose file lives elsewhere in the kit FAILS unless the same document
+  also gives the real path (which is what keeps `alignment-threshold.md` silent — `cycle-brainstorm`
+  and `cycle-plan` cite it bare and locate it in the same breath), and in `rules/README.md` alone, a
+  name resolving nowhere FAILS. The "lives elsewhere" arm deliberately cannot reach a name that
+  exists nowhere, which is what keeps the eleven legitimate bare cites quiet: the four documents a
+  consumer produces, an external plugin's state file, and the golden rule `cycle-judge-codex.md`
+  names in a sentence saying it never existed here. Mutation-verified — restoring any moved name
+  fails the new check alone.
+- **The same inventory omitted fifteen of the fifty-one files it inventories (#11)**
+  Found by repairing the four dangling rows above and then asking the opposite question.
+  `cycle-brainstorm.md` was absent from a table that purports to list the cycle contracts;
+  `squad-map.md`, the 360º view the kit points readers at, and `autonomy-envelope.md`, cited by two
+  cycle rules as the authority for what runs unattended, were absent from every table. An omission
+  reads differently from a dangling row and is worse in one way: a reader who checks the inventory
+  and does not find `decision-delegation.txt` concludes the kit has no such rule, rather than that
+  the list is short. Half-fixing an inventory is also how the first defect was born — this file
+  already records a table trimmed while the prose describing it was not. All fifteen are now listed,
+  and a test sweeps the directory rather than trusting the tables, with no exemption category:
+  every file under `rules/` is something a reader may have to find.
+- **An orchestrator branched on a verdict the cycle it named has never emitted (#11)**
+  `cycle-idea-to-release.md` stated that *"`cycle-maintenance` emits `ROADMAP_BLOCKED`"*. That token
+  appears zero times in `cycle-maintenance.md`; the one it emits is `BACKLOG_BLOCKED`, declared in
+  three places with a table row explaining why it is not `BACKLOG_EMPTY`. `ROADMAP_BLOCKED` is
+  residue from the `cycle-roadmap` → `cycle-maintenance` rename — the same rename `check_xrefs.py`
+  Check 8 exists because of, surviving one layer deeper: Check 8 validates that the CYCLE named
+  exists and never asks whether the TOKEN attributed to it does. This is worse than a dangling
+  reference, because a branch wired against it is structurally correct, passes every gate, and can
+  never fire. A sweep now asserts that a verdict a rule attributes to a named cycle appears in that
+  cycle's own contract, and fails on vacuity so a rotted pattern cannot report green.
+- **Four verdicts could stop an item while being absent from the vocabulary that defines verdicts (#11)**
+  `cycle-rule-schema.md` closes its matrix with *"Do NOT introduce a new verdict token without
+  adding it to this matrix"*, and four tokens in `blocking-verdicts.txt` were not in it. The one
+  that matters is `AWAITING_HUMAN`: declared in the `## Verdicts` sections of `cycle-plan.md` and
+  `cycle-release.md` with **"Emit it."** in bold, named in six of the twelve contracts, carrying the
+  B-058/B-059 measurement that put it on the blocking list — and invisible to anyone learning the
+  vocabulary from the schema. `INVALID_AWAITING_HUMAN`, `NEEDS_SPLIT` and `FAIL` were absent for the
+  same reason, and they are why the fix is a new `### Tokens that belong to no single cycle` section
+  rather than four table rows: none belongs to one cycle's column, and forcing them into a row would
+  file a token under a cycle that does not own it. A test now fails when a blocking verdict is
+  undocumented, so the two lists cannot drift apart again.
+- **The protocol for changing a LOCKED rule required a record in a directory git ignores (#11)**
+  `cycle-rule-schema.md § Golden Rule Change Protocol` required, as step 1, an ADR in
+  `records/adrs/`. `.gitignore:66` excludes `records/` wholesale, so the justification for changing
+  the kit's most locked contracts went somewhere that reaches nobody who clones. The contradiction
+  was already load-bearing rather than theoretical: `plan-confidence-golden-rule.md` extended a gate
+  on 2026-08-26 and wrote its reasoning into the golden rule instead, saying so in the file —
+  *"the files under `records/adrs/` are gitignored and do not reach whoever clones, so the record
+  lives here, in the file that travels."* Somebody following the protocol had to break it to be
+  useful. Step 1 now names `docs/ADR/`, which is versioned and where the kit's only ADR already
+  lives; a consumer's run-local ADRs stay under `records/adrs/`, which is what the two allowlist
+  files mean when they require one for an exemption. A test resolves the path step 1 names through
+  `git check-ignore`, so the destination cannot silently become unversioned again.
+- **An argument against reading fifty-four files counted files nobody had recounted (#11)**
+  `rules/README.md` argues the injected pointer is the whole interface and that "a pointer at
+  fifty-four files is not one". The directory holds 52. The argument survives the correction — the
+  number did not, and `pyproject.toml` already states the doctrine, written after a count there said
+  64 while the tree held 80: *a number nothing recomputes is a claim that rots*. The count is now
+  recomputed by a test rather than asserted, and the test is scoped to the sentence making the claim
+  so the document stays free to quote a figure it has since corrected.
   `rules/records-location.md` told every reader the one-records-per-project constraint was enforced
   three ways. Measured: the scaffold holds (`install.sh:772`, `patch_install.sh:386`);
   `install_goal_hook.py` was deleted in `77501b0` with the `session-goal` skill it belonged to; and

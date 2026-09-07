@@ -55,7 +55,7 @@ The three legitimate cases seen so far:
 1. **A verbatim quotation** of something written in Portuguese.
 2. **A fixture that must be Portuguese** to exercise the rule it tests — the
    PT-BR demonstrative smell cannot be tested in English.
-3. **A detector naming what it detects** — `rubric-v1.md` lists the
+3. **A detector naming what it detects** — `skills/plan-confidence/templates/rubric-v1.md` lists the
    demonstratives it looks for.
 
 Anything else is a translation waiting to happen.

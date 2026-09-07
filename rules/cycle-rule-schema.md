@@ -82,6 +82,27 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 - **honesty-gate** emits **evidence-readiness** because its decision is "is the v1.0 claim supported by recorded usage?"
 - **judge-codex** mirrors the **upstream cycle's vocabulary** intentionally — `:discover`/`:plan` reuse the SHIPPABLE band; `:implementation` mirrors `cycle-implement` exit states adapted to a verdict; `:final` mirrors `cycle-review`'s merge-readiness plus two **meta-verdicts** (`META_DEFECT_FOUND`, `AGGREGATOR_BUG_SUSPECTED`) that exist only at the review-of-review stage. The plugin is **delivered externally** (`usetheodev/judge-codex-plugin-cc`) and consumes `plan`'s golden-rule files by path convention.
 
+### Tokens that belong to no single cycle
+
+The matrix above is organised per cycle, and four verdicts do not fit a column because
+they are emitted from more than one. They were absent from this document until
+2026-09-07 while being live in `blocking-verdicts.txt` — so a reader learning the
+vocabulary here did not know they existed, and a reader meeting one in a contract did
+not know it blocks. `tests/test_blocking_verdicts_are_in_the_schema.py` now fails when
+a blocking verdict is missing from this file.
+
+| Token | Emitted by | Meaning |
+|---|---|---|
+| `AWAITING_HUMAN` | any phase — declared in `cycle-plan`, `cycle-release`, `cycle-review`, `cycle-discover`, `cycle-acceptance`, `cycle-maintenance` | The phase ran and stopped at a gate only a person opens. **Emit it** — the work happened, and without the event the board, the drift checker, the selector and the watchdog all see an item nobody touched. Measured 2026-08-31: B-058 and B-059 halted at such a gate, emitted nothing, and the watchdog restarted B-059 because no event had appeared |
+| `INVALID_AWAITING_HUMAN` | scoring phases | Structurally invalid **and** waiting on a person. Distinct from `INVALID` because the two take different next actions: one is edited, the other is escalated |
+| `NEEDS_SPLIT` | `cycle-plan` (`plan-alignment`) | The item describes two subsystems, and no rewrite of the brief closes that. Kept distinct from `NEEDS_REVISION`, which is recoverable by editing |
+| `FAIL` | `cycle-implement` validation checks | A check inside a phase failed. Not a cycle verdict — it is a check outcome that `blocking-verdicts.txt` treats as a wall, which is why it is documented here rather than in a cycle's row |
+
+`FAIL_SOFT` is deliberately NOT on this list and deliberately not in
+`blocking-verdicts.txt`: it sends work back to be redone without forbidding the chain
+from advancing once it is, and treating it as a wall would report every ordinary rework
+loop as a violation.
+
 Do NOT introduce a new verdict token without adding it to this matrix and explaining why an existing token does not fit.
 
 ## Section conventions
@@ -100,7 +121,16 @@ keeps only its own deviations.
 
 A golden rule is LOCKED. Changing it requires ALL of:
 
-1. An ADR in `records/adrs/` proposing the change.
+1. An ADR in `docs/ADR/` proposing the change — **versioned, because the record has to
+   reach whoever clones**. This step named `records/adrs/` until 2026-09-07, and
+   `.gitignore` excludes `records/` wholesale, so the justification for changing the
+   kit's most locked contracts went to a directory that travels nowhere. The
+   contradiction was already load-bearing: `plan-confidence-golden-rule.md` extended a
+   gate on 2026-08-26 and had to write its reasoning into the golden rule instead,
+   saying so in the file — somebody following the protocol had to break it to be
+   useful. A **consumer's** run-local ADRs stay under `records/adrs/`; that is their
+   repository and their trail, and it is what `code-quality-allowlist.txt` and
+   `deps-audit-allowlist.txt` mean when they require one for an exemption.
 2. A CHANGELOG entry under `[Unreleased] § Changed`.
 3. `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/check_xrefs.py"` and `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/verify_ecosystem.py"` both PASS.
 

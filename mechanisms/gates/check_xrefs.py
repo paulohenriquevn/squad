@@ -778,6 +778,78 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                             f"and that document has no such heading"),
             })
 
+    # Check 11: inside `rules/`, a bare filename is a claim that the file is HERE.
+    #
+    # Check 7 needs the literal `rules/` prefix, and the one document that never uses
+    # it is `rules/README.md` — an inventory written for a reader already standing in
+    # the directory, so every cell of every table cites by bare name. Check 3 does
+    # accept a bare leaf, but it resolves with `rglob` across the whole tree (a file
+    # that MOVED OUT of `rules/` still resolves) and it only reads the
+    # `## Cross-references` section of `cycle-*.md`, never the README.
+    #
+    # Measured 2026-09-07: four names in those tables did not resolve to `rules/`.
+    # `discover-plan-golden-rule.md`, `review-model-routing.txt` and
+    # `audit-trail-rotation.md` had moved to `skills/_kit-rules/` on 2026-09-01 and
+    # the tables did not follow; `dogfood-golden-rule.md` existed nowhere. PASS on
+    # all four.
+    #
+    # TWO ARMS, AND WHY NEITHER IS WIDER
+    # ----------------------------------
+    # (a) EVERYWHERE in `rules/*.md`: a bare name whose file lives elsewhere in the
+    #     kit. That is the misdirection worth failing on — the reader is sent to a
+    #     directory the file has left, and finds a plausible absence rather than an
+    #     error. A document that ALSO cites the real path is exempt: it has already
+    #     told the reader where to go (`alignment-threshold.md`, cited bare and
+    #     located in the same breath by `cycle-brainstorm.md` and `cycle-plan.md`).
+    #
+    # (b) `rules/README.md` ONLY: a bare name that resolves nowhere. The inventory's
+    #     rows are the claim "this is a file in rules/", so a row naming nothing is
+    #     a defect there and nowhere else.
+    #
+    # Arm (a) deliberately cannot reach a name that exists nowhere, which is what
+    # keeps the eleven legitimate bare cites in `rules/*.md` silent: the four
+    # documents a consumer produces (`product-vision.md` and siblings), an external
+    # plugin's state file (`ralph-loop.local.md`), and the golden rule
+    # `cycle-judge-codex.md` names in a sentence saying it never existed here.
+    _BARE_RULE_NAME_RE = re.compile(r"`([a-z0-9][a-z0-9._-]*\.(?:md|txt))`")
+    if rules_dir.is_dir():
+        for rule_md in sorted(rules_dir.glob("*.md")):
+            try:
+                body = rule_md.read_text(encoding="utf-8-sig")
+            except (OSError, UnicodeDecodeError):
+                continue
+            is_inventory = rule_md.name == "README.md"
+            for m in _BARE_RULE_NAME_RE.finditer(body):
+                name = m.group(1)
+                if name == rule_md.name or name in existing_rule_files:
+                    continue
+                # The document located it itself — no reader was misdirected.
+                if re.search(rf"[A-Za-z0-9_/-]+/{re.escape(name)}", body):
+                    continue
+                elsewhere = [p for p in ecosystem_dir.rglob(name)
+                             if p.is_file() and "__pycache__" not in p.parts]
+                if not elsewhere and not is_inventory:
+                    continue
+                # Same split as Check 8, for the reason measured there: a consumer may
+                # add rules of its own, and one of them citing a file the kit does not
+                # ship is worth reporting without calling the install broken.
+                own = _kit_owned(rule_md)
+                message = (
+                    f"{_rel(rule_md)} cites `{name}` as if it were in rules/; "
+                    f"the file is in {(_rel(elsewhere[0].parent) or '.')}/"
+                    if elsewhere else
+                    f"{_rel(rule_md)} inventories `{name}`, which exists nowhere "
+                    "in the ecosystem"
+                )
+                findings.append({
+                    "severity": "FAIL" if own else "WARN",
+                    "owner": "kit" if own else "project",
+                    "check": "bare_rule_name_resolves",
+                    "source": _rel(rule_md),
+                    "missing_rule": name,
+                    "message": message,
+                })
+
     # Check 4: orphan skills (not in any cycle, not auxiliary)
     skills_in_cycles: set[str] = set()
     for skills_set in cycle_to_skills.values():
