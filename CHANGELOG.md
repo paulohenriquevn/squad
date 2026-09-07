@@ -7,6 +7,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Fifty permission rules were spelled in a form the permission checks never consult (#11)**
+  Claude Code matches file permission rules on `Edit(path)` only — an `Edit` rule covers every
+  file-editing tool, `Write` included — and it now warns once per inert rule at startup.
+  `settings.json` carried 49 deny rules spelled `Write(...)`, over `.env` and its nine environment
+  variants, private keys, keystores, `kubeconfig`, `credentials.json`, `secrets.y*ml` and
+  `study-material/**`, plus one `Write(*)` in `allow`. **Nothing was unprotected**: every one of the
+  50 already had an exact `Edit(...)` twin, verified as a set comparison before anything was
+  touched. They were therefore deleted rather than rewritten — converting `Write(X)` to `Edit(X)`
+  would have produced 50 duplicates of rules already in the file. Verified after the edit by
+  diffing the parsed JSON against `HEAD`: everything outside `permissions` is byte-identical, and
+  each array is exactly its old self minus the `Write(` entries. `settings.plugin.json` was
+  regenerated, so a plugin install gets the same file. A test now fails on any rule spelled
+  `Write(`, in either file and any of the three arrays, and — because asserting only the absence
+  would also pass on a file with no file-permission rules at all — pins that the paths that matter
+  are still denied through the spelling the harness honours.
+  One existing test had to change with it, and it is the one that matters most here:
+  `test_every_denied_read_path_is_also_denied_to_edit_and_write` swept every `Read(` denial and
+  required a twin under **both** `Edit` and `Write`. That second leg was a belt that was never
+  attached — the intent behind it was real, and only the spelling carrying it moved. It now sweeps
+  `Edit` alone, still over every `Read(` path, and refuses to pass on an empty set. Verified by
+  mutation: deleting `Edit(**/id_rsa)` fails it. Before removing anything, the tree was checked for
+  code that parses `Write(` rules — there is none; the credential guard in `validate-command.py`
+  builds its globs from the `Read(` entries alone, so no kit-side enforcement rested on them.
 - **The inventory of `rules/` sent readers to four files that were not in it, and the validator could not see a single one (#11)**
   `rules/README.md` is the document that answers *where does a rule live*, and it states the
   ownership doctrine the rest of the kit follows. Measured 2026-09-07: four names in its tables did

@@ -76,16 +76,31 @@ def test_the_hook_reads_the_globs_from_settings_rather_than_keeping_its_own() ->
     assert set(globs) == declared and globs, "the hook must not keep a second copy"
 
 
-def test_every_denied_read_path_is_also_denied_to_edit_and_write() -> None:
+def test_every_denied_read_path_is_also_denied_to_edit() -> None:
     """The original asymmetry: unreadable and freely rewritable. Whatever a
-    consumer may not see, it may not blindly overwrite either."""
+    consumer may not see, it may not blindly overwrite either.
+
+    This asserted `Edit` AND `Write` until 2026-09-07, when the harness began
+    reporting each `Write(path)` rule as inert: file permission checks match
+    `Edit(path)` only, and an `Edit` rule covers every file-editing tool, `Write`
+    included. So the `Write` leg required 49 rules that were never consulted — a
+    second belt, unattached. The intent behind adding them was real and is
+    unchanged; what moved is which spelling carries it.
+
+    `Edit` is now the whole guarantee, which is why this still sweeps every
+    `Read(` path rather than being deleted alongside the rules. That no kit code
+    reads `Write(` rules either was checked before removing them: the guard above
+    builds its globs from the `Read(` entries alone.
+    `tests/test_no_inert_write_permission_rules.py` keeps the inert spelling from
+    coming back.
+    """
     for name in ("settings.json", "settings.plugin.json"):
         deny = json.loads((_REPO / name).read_text(encoding="utf-8"))["permissions"]["deny"]
         readable = {r[5:-1] for r in deny if r.startswith("Read(")}
-        for tool in ("Edit", "Write"):
-            covered = {r[len(tool) + 1:-1] for r in deny if r.startswith(f"{tool}(")}
-            assert readable <= covered, (
-                f"{name}: {sorted(readable - covered)} refused to Read and not to {tool}")
+        covered = {r[len("Edit("):-1] for r in deny if r.startswith("Edit(")}
+        assert readable, f"{name}: no Read( denials, so this proves nothing"
+        assert readable <= covered, (
+            f"{name}: {sorted(readable - covered)} refused to Read and not to Edit")
 
 
 def test_the_guard_does_not_claim_to_be_a_sandbox() -> None:
