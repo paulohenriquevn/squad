@@ -229,6 +229,40 @@ def check_squad_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return not findings, [f"  {f['message']}" for f in findings]
 
 
+def check_verdict_bands(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Does every declared verdict say which band it is in?
+
+    Sibling of `check_orphan_verdicts`: that one asks whether anything can EMIT a
+    verdict, this one whether anything knows what it MEANS for the flow.
+
+    Measured 2026-09-08, before `rules/verdict-bands.txt` existed: 23 of 47 verdicts
+    were classified nowhere, and `check_phase_drift` fell back to not-clean for every
+    one of them — so its out-of-order check switched itself off for half the
+    vocabulary, including three success verdicts, with nothing in the output to
+    notice.
+    """
+    checker = ecosystem_dir / "mechanisms" / "gates" / "check_verdict_bands.py"
+    if not checker.exists():
+        return NOT_RUN, ["  check_verdict_bands.py not installed — skipping"]
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
+        capture_output=True, text=True,
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, [f"  check_verdict_bands.py produced no usable JSON "
+                       f"(exit {result.returncode})"]
+    coverage = payload.get("coverage")
+    if coverage == "unreadable":
+        return False, [f"  rules/verdict-bands.txt could not be read: "
+                       f"{payload.get('detail', 'no detail')}"]
+    rows = payload.get("unclassified", []) + payload.get("blocking_unclassified", [])
+    if rows:
+        return False, [f"  {v} is declared and names no band" for v in rows]
+    return True, []
+
+
 def check_panel_capability(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Can a DISCOVER/PLAN review panel be formed from what the project declared?
 
@@ -253,10 +287,16 @@ def check_panel_capability(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         return NOT_RUN, [f"  check_panel_capability.py produced no usable JSON "
                          f"(exit {result.returncode})"]
     verdict = payload.get("result")
-    if verdict == "violated":
+    if verdict in ("violated", "unchecked"):
+        # Both are the repository's: a declaration that cannot form a panel on any
+        # machine, or one that does not parse. Either fails everywhere, CI included.
         return False, ["  " + line for line in str(payload.get("message", "")).splitlines()]
-    if verdict == "unchecked":
-        return NOT_RUN, ["  the panel declaration could not be parsed — this is not a pass"]
+    if verdict == "unreachable":
+        # A declared binary is missing on THIS machine. The operator about to run the
+        # chain needs to know; a CI runner checking the repository does not, and
+        # failing there would go red for a repository with nothing wrong with it.
+        return NOT_RUN, ["  a declared reviewer is not on PATH here — the declaration "
+                         "is valid, this machine is short a tool"]
     return True, []
 
 
@@ -662,6 +702,7 @@ def main(argv: list[str] | None = None) -> int:
         ("Mechanisms inventory", check_mechanisms_inventory),
         ("Merge autonomy (envelope floor 2)", check_merge_autonomy),
         ("Review panel can be formed", check_panel_capability),
+        ("Verdict bands", check_verdict_bands),
         ("Orphan verdicts", check_orphan_verdicts),
         ("Phase emitters", check_phase_emitters),
         ("Durable knowledge root", check_wiki_migration),

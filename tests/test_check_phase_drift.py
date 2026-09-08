@@ -66,12 +66,28 @@ review        | conditional | absent when implement never ran
 #: checked separately (see the shipped-rules tests below).
 _BLOCKING = "FAIL\nFAIL_HARD\nINVALID\nNEEDS_FIXES\nNOT_VALIDATED\n"
 
+#: Same reasoning for the band registry, added 2026-09-08 when `_CLEAN_VERDICTS`
+#: stopped being a frozenset inside the checker. Only the tokens these fixtures
+#: actually emit are classified — a fixture that mirrored the shipped file would pass
+#: while the shipped file said something else, and the shipped file has its own test.
+_BANDS = """
+PASS                    | clean      | the fixture's ordinary success
+IMPLEMENTATION_COMPLETE | clean      | the completion promise
+FAIL                    | structural | the fixture's ordinary failure
+FAIL_HARD               | structural | a hard cap
+FAIL_SOFT               | redo       | soft caps fired; sends work back without blocking
+INVALID                 | structural | a broken contract
+NEEDS_FIXES             | redo       | findings that return the slice to implement
+NOT_VALIDATED           | structural | the run established neither outcome
+"""
+
 
 def _project(tmp_path: Path, plan: str = _PLAN,
-             blocking: str = _BLOCKING) -> Path:
+             blocking: str = _BLOCKING, bands: str = _BANDS) -> Path:
     (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
     (tmp_path / "rules" / "cycle-phases.txt").write_text(plan, encoding="utf-8")
     (tmp_path / "rules" / "blocking-verdicts.txt").write_text(blocking, encoding="utf-8")
+    (tmp_path / "rules" / "verdict-bands.txt").write_text(bands, encoding="utf-8")
     (tmp_path / ".claude" / "records").mkdir(parents=True, exist_ok=True)
     return tmp_path
 

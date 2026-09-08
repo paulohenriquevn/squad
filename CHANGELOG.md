@@ -7,6 +7,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`rules/verdict-bands.txt` — every verdict declares its band, in one table with an owner (#49)**
+  `blocking-verdicts.txt` exists because the list of *what holds an item* had been written twice
+  and the two copies disagreed. Its complement — what counts as CLEAN — was then born as
+  `_CLEAN_VERDICTS`, a frozenset hardcoded inside `check_phase_drift.py` with no file and no
+  owner: the same defect, one file along. **Measured 2026-09-08: of 47 verdicts reachable in the
+  event stream, 14 were in the blocking list, 16 in the frozenset, and 23 in neither.**
+  The consequence was silent. `check_phase_drift` reads *was the previous verdict clean?* to tell
+  legitimate rework from a step out of sequence, and an unclassified verdict fell to the not-clean
+  default — so the out-of-order check switched itself off for half the vocabulary with nothing in
+  the output to notice. Reproduced before and after: `release → PRE_RELEASED` followed by a return
+  to `implement` was SILENT, as were `ITEM_VERIFIED_LOCAL` and `PRODUCT_ALIGNED`. All three are
+  success verdicts, and `cycle-rule-schema.md` says of `ITEM_VERIFIED_LOCAL` that it is *"in the OK
+  column on purpose — reporting it as blocked would file finished work as outstanding"*. The only
+  mechanism computing bands disagreed with the document that declares them.
+  **This is not a renaming.** `cycle-rule-schema.md § Why each vocabulary differs` argues per cycle
+  why the tokens diverge, and those arguments hold: collapsing `ITEM_KILLED` into `INVALID` would
+  file the cycle's most valuable result as a failure and create a standing incentive to ship weak
+  findings rather than kill them. The names carry domain meaning a band cannot; only the
+  classification is unified. That document is where a band is ARGUED, the registry is where it is
+  COMPUTED, and a disagreement between them is a defect in the registry rather than a second opinion.
+  **`orthogonal` is a band of its own**, because forcing `AWAITING_REVIEW`, `BACKLOG_EMPTY` and
+  `AWAITING_HUMAN` into a scoring column is what produced a classification nobody could state.
+  **Band and blocking stay separate axes.** `FAIL_SOFT` is `redo` and blocks nothing; `NEEDS_FIXES`
+  is `redo` and blocks. Deriving either from the other would wall every working rework loop, or let
+  a real wall advance.
+- **`mechanisms/gates/check_verdict_bands.py` (#49)**
+  Sibling of `check_orphan_verdicts.py`: that one asks whether anything can EMIT a verdict, this
+  asks whether anything knows what it MEANS for the flow. Sweeps in two directions — declared but
+  unclassified, and blocking but unclassified — and reports an unreadable registry rather than
+  treating it as full coverage. It reuses its sibling's extraction rather than repeating it: two
+  definitions of "a declared verdict" would drift, and this gate would pass while sweeping a
+  different set.
+
+### Fixed
+- **`check_panel_capability.py` would have turned the CI red for a healthy repository (#49)**
+  Introduced one commit earlier and caught by running it under a PATH with no `codex`: the gate
+  collapsed two facts with opposite audiences into one `VIOLATED`. A declaration that cannot form a
+  panel on ANY machine — fewer than three reviewers, or one family supplying every vote — is the
+  repository's defect and must fail everywhere. A declared binary missing on THIS machine is not,
+  and `verify_ecosystem` runs in CI, where `codex` is absent by definition. `UNREACHABLE` is now its
+  own result with its own exit code, reported as NOT_RUN by `verify_ecosystem` and as a real
+  obstacle to whoever is about to start a run. Verified: with the tools a runner has and no `codex`,
+  `verify_ecosystem` exits 0.
+  An unparseable registry moved the other way, from NOT_RUN to a failure — it is a repository file,
+  and its own gate already treated the equivalent as a defect.
+
+### Changed
+- **`check_phase_drift.py` no longer carries its own copy of the clean-verdict list (#49)**
+  `_CLEAN_VERDICTS` is gone; the checker reads `rules/verdict-bands.txt` through
+  `verdict_bands.clean_verdicts()`. An absent registry raises rather than defaulting to an empty
+  set, on the same grounds `blocking-verdicts.txt` states for itself: an empty list makes every
+  stream conform while checking nothing. A test asserts the frozenset does not come back — the
+  defect was never a wrong value, it was a second place to hold one.
+- **`verdict-bands.txt` is the kit's, not the project's (#49)**
+  Added to `kit_owns_txt()` in `install.sh` alongside `cycle-phases.txt` and
+  `blocking-verdicts.txt`, for the reason already written there: preserved by extension, a consumer
+  keeps whatever classification it first received while the kit ships a corrected one — and an
+  unclassified verdict silently disables the drift check.
+
 - **DISCOVER and PLAN are judged by a panel of three, and advance on 2 of 3 (#48)**
   Both phases produce a document no script can judge. `discover-confidence` and
   `plan-confidence` are deterministic and score STRUCTURE — pointers resolve, corners are

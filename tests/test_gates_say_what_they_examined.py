@@ -41,6 +41,9 @@ ROOT_FLAG = {
     # is the roster working: a gate joins the class by becoming runnable.
     "check_readme_advisory_skills": "--root",
     "check_reference_leakage": "--repo",
+    # Joined 2026-09-08 with `rules/verdict-bands.txt`. It sweeps the rules tree for
+    # declared verdicts, so it takes a root like its sibling `check_orphan_verdicts`.
+    "check_verdict_bands": "--root",
     "check_semantic_names": "--repo",
     "check_skill_map": "--root",
     "check_squad_map": "--root",

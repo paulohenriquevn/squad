@@ -171,6 +171,13 @@ kit_owns_txt() {
     # to answer one question. Preserved by extension, a consumer keeps whatever list
     # it first received while the kit ships a corrected one.
     blocking-verdicts.txt) return 0 ;;
+    # The third of the same shape, and the one that made the pattern explicit: it
+    # classifies every verdict into a band, the consumer never edits it, and
+    # `check_phase_drift.py` reads it to tell legitimate rework from a step out of
+    # sequence. Preserved by extension, a consumer keeps whatever classification it
+    # first received — and an unclassified verdict silently disables the check, which
+    # is the defect the registry was created to end.
+    verdict-bands.txt) return 0 ;;
     # The kit's own record of the permission rules it has withdrawn. A consumer
     # never writes to it — only the kit knows what the kit used to ship — and it
     # is the half of retirement that works with no recorded base, so a frozen

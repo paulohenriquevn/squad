@@ -57,13 +57,28 @@ BUILTIN = "builtin"
 
 
 class PanelCapability(Enum):
+    """Four facts with different audiences, deliberately not collapsed.
+
+    `VIOLATED` and `UNREACHABLE` were one value until 2026-09-08, and the conflation
+    had a measured cost: with a PATH holding no `codex`, the gate reported VIOLATED,
+    so `verify_ecosystem` — which the CI runs — would have gone red on a GitHub runner
+    for a repository with nothing wrong with it. A declaration that cannot form a panel
+    on ANY machine is the repository's defect; a binary missing on THIS machine is not.
+    """
+
     HOLDS = "holds"
+    #: The declaration itself cannot form a panel — fewer than three reviewers, or
+    #: every one of them from the same family. Fails everywhere, CI included.
     VIOLATED = "violated"
+    #: The registry does not parse. Nothing was tested, and that is not a pass.
     UNCHECKED = "unchecked"
+    #: The declaration is valid and a declared binary is absent HERE. The operator
+    #: about to run the chain needs this; the CI checking the repository does not.
+    UNREACHABLE = "unreachable"
 
     @property
     def exit_code(self) -> int:
-        return {"holds": 0, "violated": 1, "unchecked": 2}[self.value]
+        return {"holds": 0, "violated": 1, "unchecked": 2, "unreachable": 3}[self.value]
 
 
 def default_panel_path() -> Path:
@@ -117,14 +132,16 @@ def check_panel_capability(
     if not (families - {HOME_FAMILY, "unknown"}):
         return PanelCapability.VIOLATED
 
+    # Reachability is checked LAST and reported separately, because it is the only
+    # question here whose answer depends on the machine rather than on the repository.
     for _, model, invocation in reviewers:
         if invocation == BUILTIN:
             continue
         if resolve(invocation) is None:
-            # An unreachable reviewer shrinks the panel below its size. When it is
-            # the orthogonal one, it also removes the only thing the diversity rule
-            # was protecting.
-            return PanelCapability.VIOLATED
+            # The panel is short a member here. When it is the orthogonal one, this
+            # also removes the only thing the diversity rule was protecting — so it
+            # still stops a real run, it just is not the repository's fault.
+            return PanelCapability.UNREACHABLE
 
     return PanelCapability.HOLDS
 
@@ -146,6 +163,17 @@ _MESSAGES = {
         "  item, for a cause knowable before the first was selected.\n"
         "\n"
         "rules/review-panel.txt records why the panel must not be one family."
+    ),
+    PanelCapability.UNREACHABLE: (
+        "NOT FORMABLE HERE — the declaration is valid and a declared reviewer is not on "
+        "PATH of this machine.\n"
+        "\n"
+        "  The panel would be short a member, and if the missing one is the orthogonal\n"
+        "  reviewer, the diversity rule has nothing left to protect. A run started now\n"
+        "  would return every item to the registry with an `access` impediment.\n"
+        "\n"
+        "This is NOT a repository defect, which is why it is reported apart from "
+        "VIOLATED: `rules/review-panel.txt` is fine and this machine is missing a tool."
     ),
     PanelCapability.UNCHECKED: (
         "NOT CHECKED — rules/review-panel.txt exists and does not parse.\n"

@@ -54,28 +54,52 @@ _PHASES_RULE = "cycle-phases.txt"
 #: `cycle-review.md` blocks on NEEDS_FIXES. FAIL_SOFT is deliberately absent —
 #: `check_upstream_gate.py` judges it with the ADRs in hand, which is more
 #: information than a stream has.
-#: Verdicts that mean a phase approved cleanly. Anything else — including a soft cap —
-#: is a reason to work the phase again, which is why "sends work back" is a DIFFERENT
-#: set from "forbids advancing".
+#: What "a phase approved cleanly" means is read from `rules/verdict-bands.txt`, not
+#: held here.
 #:
-#: `FAIL_SOFT` is the case that made the distinction necessary. It does not forbid
-#: advancing, so it is absent from `rules/blocking-verdicts.txt` and rightly so — but a session
-#: that sees it and goes back to implement is doing the correct thing, and calling that
-#: a defect punishes the chain for working.
+#: This WAS a frozenset in this file — a second list with no owner, which is exactly
+#: the shape `blocking-verdicts.txt` exists to prevent, one file along. Measured
+#: 2026-09-08: of 47 verdicts reachable in the stream, 14 were in the blocking list,
+#: 16 in that frozenset, and 23 in neither. Since an unclassified verdict fell to the
+#: not-clean default, the disorder check below switched itself off for half the
+#: vocabulary with nothing in the output to notice — including three SUCCESS verdicts
+#: (`PRE_RELEASED`, `ITEM_VERIFIED_LOCAL`, `PRODUCT_ALIGNED`).
 #:
-#: Defined by what passes rather than by listing every failure, because the failures
-#: are open-ended and the approvals are not: a verdict nobody has enumerated should
-#: count as a reason to redo, not as a clean pass.
-_CLEAN_VERDICTS = frozenset({
-    "PASS", "SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "PASS_WITH_CAVEATS",
-    "READY_TO_MERGE", "READY_TO_MERGE_WITH_FOLLOWUPS", "RELEASED", "ACCEPTED",
-    "ACCEPTED_WITH_CAVEATS", "VALIDATED", "ITEM_REGISTERED", "ITEM_SHIPPED",
-    "OPPORTUNITY_COMPLETE", "PLAN_WRITTEN", "MILESTONE_RELEASED",
-    # The Step 4 milestone. Absent from this set, a return after it read as rework
-    # rather than disorder — the conservative error, but by omission rather than by
-    # decision. It appeared in the stream on 2026-08-31 and in twelve rule files.
-    "IMPLEMENTATION_COMPLETE",
-})
+#: `FAIL_SOFT` remains the case that makes the distinction necessary. It does not
+#: forbid advancing, so it is absent from `blocking-verdicts.txt` and rightly so — but
+#: a session that sees it and goes back to implement is doing the correct thing, and
+#: calling that a defect punishes the chain for working. It is `redo` in the registry
+#: and blocks nothing: two axes, kept separate on purpose.
+_BANDS_RULE = "verdict-bands.txt"
+
+
+def load_clean_verdicts(project_root: Path) -> frozenset[str]:
+    """Read the clean band from `rules/verdict-bands.txt`.
+
+    An absent registry raises, on the same grounds as an absent blocking list: an
+    empty set would make every verdict read as not-clean, and the disorder check
+    would pass every stream while checking nothing.
+    """
+    project_root = Path(project_root)
+    for relative in ("rules", ".claude/rules"):
+        candidate = project_root / relative / _BANDS_RULE
+        if candidate.is_file():
+            path = candidate
+            break
+    else:
+        raise FileNotFoundError(
+            f"{_BANDS_RULE} not found under {project_root}. An absent registry is not "
+            "an empty one: every verdict would read as not-clean and the out-of-order "
+            "check would report nothing while appearing to run."
+        )
+
+    tooling = Path(__file__).resolve().parent.parent / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    from verdict_bands import clean_verdicts
+
+    return clean_verdicts(path)
+
 
 _VERDICTS_RULE = "blocking-verdicts.txt"
 
@@ -195,6 +219,7 @@ def check_phase_drift(project_root: Path, *, expect_complete: bool = False) -> D
     project_root = Path(project_root)
     declared = load_declared_phases(project_root)
     blocking_verdicts = load_blocking_verdicts(project_root)
+    clean = load_clean_verdicts(project_root)
     by_name = {phase.name: phase for phase in declared}
 
     events = _events_for(project_root)
@@ -212,7 +237,7 @@ def check_phase_drift(project_root: Path, *, expect_complete: bool = False) -> D
     report.slugs_seen = sorted(per_slug)
 
     for slug, slug_events in per_slug.items():
-        report.findings.extend(_judge_one(slug, slug_events, declared, blocking_verdicts, by_name, expect_complete))
+        report.findings.extend(_judge_one(slug, slug_events, declared, blocking_verdicts, clean, by_name, expect_complete))
     return report
 
 
@@ -221,6 +246,7 @@ def _judge_one(
     events: list[dict],
     declared: list[DeclaredPhase],
     blocking_verdicts: frozenset[str],
+    clean_verdicts: frozenset[str],
     by_name: dict[str, DeclaredPhase],
     expect_complete: bool,
 ) -> list[DriftFinding]:
@@ -279,7 +305,7 @@ def _judge_one(
         highest_position = max(highest_position, phase.position)
 
         last_verdict_was_clean = (
-            not isinstance(verdict, str) or verdict.upper() in _CLEAN_VERDICTS)
+            not isinstance(verdict, str) or verdict.upper() in clean_verdicts)
 
         if isinstance(verdict, str) and verdict.upper() in blocking_verdicts:
             blocking = (cycle, verdict.upper())

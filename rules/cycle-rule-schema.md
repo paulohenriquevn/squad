@@ -69,6 +69,26 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 | `cycle-judge-codex` (optional, external plugin) | `SHIPPABLE` / `READY_TO_MERGE` (`:final` only) | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` / `NEEDS_FIXES` / `NEEDS_DEEPER` (`:final` only) | `FAIL_HARD` / `INVALID` / `META_DEFECT_FOUND` (`:final` only) / `AGGREGATOR_BUG_SUSPECTED` (`:final` only) |
 | `honesty-gate` (utility) | `EVIDENCE_SUFFICIENT` | `EVIDENCE_WITH_CAVEATS` | — | `EVIDENCE_INSUFFICIENT` |
 
+### The band is argued here and computed in `verdict-bands.txt`
+
+**Added 2026-09-08.** The section below argues, per cycle, why the tokens diverge —
+and those arguments are the reason this kit does not unify the NAMES. What was never
+computable is the classification: which band a given token falls into.
+
+Measured before [`verdict-bands.txt`](verdict-bands.txt) existed: of 47 verdicts
+reachable in the event stream, 14 were in `blocking-verdicts.txt`, 16 in a frozenset
+hardcoded inside `check_phase_drift.py`, and **23 in neither**. That checker reads
+*was the previous verdict clean?* to tell legitimate rework from a step out of
+sequence, so an unclassified verdict fell to the not-clean default and the check
+switched itself off — including for `PRE_RELEASED`, `ITEM_VERIFIED_LOCAL` and
+`PRODUCT_ALIGNED`, all three of which this document places in an OK column.
+
+So: **this document is where a band is argued, and the registry is where it is
+computed.** A disagreement between them is a defect in the registry, not a second
+opinion, and `check_verdict_bands.py` fails when a verdict declared here names no
+band. Band and blocking stay separate axes — `FAIL_SOFT` is `redo` and blocks
+nothing, `NEEDS_FIXES` is `redo` and blocks.
+
 ### Why each vocabulary differs
 
 - **brainstorm** grades a **cascade of four documents plus the agreement over them**, so its bands split on a distinction no other cycle needs. `NEEDS_REVISION` means the rubric scored below the floor and editing the documents can lift it; `INVALID` means a document is absent or an id cites a referent that does not exist, which no editing of the citing document can fix. **`AWAITING_REVIEW` is orthogonal to all three** — the same shape as `cycle-discover`'s `ITEM_KILLED`: it grades nothing. The structure is complete and the judgement has not been made, and it is the only cycle where that judgement may not be delegated to a judge (`cycle-brainstorm.md § Why the judge may not sign this one`). Reused rather than renamed because `cycle-plan` already emits it for the identical state and `rules/blocking-verdicts.txt` already holds it.

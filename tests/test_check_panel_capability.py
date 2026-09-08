@@ -78,14 +78,39 @@ reviewer = b | gpt-5-codex   | codex
     assert check_panel_capability(_write(tmp_path, body), which=_on_path("codex")) is PanelCapability.VIOLATED
 
 
-def test_an_unreachable_reviewer_is_violated(tmp_path: Path) -> None:
-    """Declared is not the same as available.
+def test_an_unreachable_reviewer_is_unreachable_not_violated(tmp_path: Path) -> None:
+    """The distinction that keeps this gate out of the CI's way.
 
-    The orthogonal reviewer is the one the diversity rule depends on, so a `codex`
-    that is not installed means the panel cannot be formed — and saying so here is
-    the whole reason this gate runs at intake.
+    Renamed from `..._is_violated`, which conflated two facts with opposite audiences:
+
+      VIOLATED     the DECLARATION cannot form a panel on any machine — three
+                   reviewers from one family, or fewer than three. A repository
+                   defect, and it must fail everywhere, CI included.
+      UNREACHABLE  the declaration is fine and a declared binary is absent HERE. A
+                   fact about this machine.
+
+    Measured 2026-09-08 with a PATH holding no `codex`: the conflated version returned
+    VIOLATED, so `verify_ecosystem` — which the CI runs — would have gone red on a
+    GitHub runner for a repository with nothing wrong with it. The operator about to
+    run the chain still needs to know; the CI checking the repo does not.
     """
-    assert check_panel_capability(_write(tmp_path, VALID), which=_on_path()) is PanelCapability.VIOLATED
+    result = check_panel_capability(_write(tmp_path, VALID), which=_on_path())
+
+    assert result is PanelCapability.UNREACHABLE
+    assert result.exit_code == 3
+
+
+def test_a_single_family_declaration_stays_violated_even_when_reachable(tmp_path: Path) -> None:
+    """The other side of the same split: this one IS the repository's defect."""
+    body = """
+reviewer = a | claude-opus-5    | builtin
+reviewer = b | claude-sonnet-5  | builtin
+reviewer = c | claude-haiku-4-5 | builtin
+"""
+    result = check_panel_capability(_write(tmp_path, body), which=_on_path())
+
+    assert result is PanelCapability.VIOLATED
+    assert result.exit_code == 1
 
 
 def test_builtin_reviewers_need_no_binary(tmp_path: Path) -> None:
