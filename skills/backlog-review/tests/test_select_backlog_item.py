@@ -434,3 +434,70 @@ def test_waiting_on_another_item_is_not_awaiting_a_person() -> None:
     ])
 
     assert select(text).awaiting_human == []
+
+
+# ── `--check <B-NNN>` on an item past the selection point ─────────────────────
+#
+# Nothing exercised this path, and the two tables it reads had already drifted:
+# `NOT_SELECTABLE` gained `approved -> ITEM_AWAITING_PLAN` when the hypothesis /
+# commitment split entered `cycle-backlog.md`, and the `nexts` lookup beside it
+# did not. Every `--check` against an approved item raised KeyError instead of
+# answering. Measured on a consumer's registry: 196 items, 5 approved, 5 crashes.
+
+def test_checking_an_approved_item_answers_instead_of_crashing() -> None:
+    text = _backlog(item_block("B-001", status="approved"))
+
+    result = select(text, requested="B-001")
+
+    assert result.verdict == "ITEM_AWAITING_PLAN"
+    assert result.item_id == "B-001"
+
+
+def test_every_unselectable_status_says_what_comes_next() -> None:
+    """The note is the point of the verdict: it tells the reader where to go.
+
+    A total lookup with an empty fallback would also have stopped the crash, and
+    it would have answered `approved` with silence — the one status whose whole
+    reason for existing is that a specific next step exists.
+    """
+    expected_next = {
+        "approved": "/plan-write",
+        "planned": "/idea-to-release",
+    }
+    for status, phrase in expected_next.items():
+        result = select(_backlog(item_block("B-001", status=status)), requested="B-001")
+
+        assert phrase in result.reason, f"{status} does not say where to go next"
+
+
+def test_no_unselectable_status_can_lose_its_note() -> None:
+    """The two tables cannot drift, because there is only one.
+
+    This is the assertion that would have caught the original defect: a status
+    added to the contract and not to the note table.
+    """
+    import select_backlog_item as sel
+
+    for status in sel.NOT_SELECTABLE:
+        result = select(_backlog(item_block("B-001", status=status)), requested="B-001")
+
+        assert result.verdict == sel.NOT_SELECTABLE[status][0]
+        assert result.reason, f"{status} produced no reason"
+
+
+def test_a_terminal_status_is_answered_without_a_next_step() -> None:
+    """`shipped` and `killed` are over. Pointing anywhere would be wrong."""
+    for status in ("shipped", "killed"):
+        result = select(_backlog(item_block("B-001", status=status)), requested="B-001")
+
+        assert result.verdict in ("ITEM_SHIPPED", "ITEM_KILLED")
+        assert "/" not in result.reason.split("past the point")[-1]
+
+
+def test_checking_an_item_with_no_status_is_still_refused_by_the_contract() -> None:
+    text = _backlog(item_block("B-001", status="wat"))
+
+    result = select(text, requested="B-001")
+
+    assert result.verdict == "BACKLOG_BLOCKED"
+    assert "wat" in result.reason

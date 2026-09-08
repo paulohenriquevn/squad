@@ -77,14 +77,30 @@ _RANK = {status: i for i, status in enumerate(SELECTABLE)}
 #: direction that matters. Nothing was blocking it; it was ready for the next phase.
 #: One verdict was carrying two states — "held back by an impediment" and "already
 #: past this gate" — and only the first is a wall.
+#: status -> (verdict, what the reader should do next).
+#:
+#: ONE table, because these are one piece of knowledge. They were two — this map
+#: and a `nexts` dict beside the `--check` return — and they drifted the moment
+#: the hypothesis/commitment split added `approved` to the contract: the verdict
+#: was added here and the note was not, so `nexts[verdict]` raised KeyError and
+#: every `--check` against an approved item answered with a traceback. Measured
+#: on a consumer's registry: 196 items, 5 approved, 5 crashes (#35).
+#:
+#: A traceback is the wrong silence. It reads as "the tool is broken" when the
+#: honest answer is "this item is past the point where SELECT hands out work" —
+#: and for `approved` that answer has a specific next step, which is the whole
+#: reason the status exists.
 NOT_SELECTABLE = {
     #: Approved but unplanned: the decision was taken and the plan does not exist
     #: yet. Not a wall — the next step is `/plan-write`, and saying "in flight"
     #: would send a reader looking for work nobody has started.
-    "approved": "ITEM_AWAITING_PLAN",
-    "planned": "ITEM_IN_FLIGHT",
-    "shipped": "ITEM_SHIPPED",
-    "killed": "ITEM_KILLED",
+    "approved": ("ITEM_AWAITING_PLAN",
+                 " The decision is taken and no plan exists yet;"
+                 " run /plan-write to produce it."),
+    "planned": ("ITEM_IN_FLIGHT", " It has a plan; continue with /idea-to-release."),
+    #: Terminal. Naming a next step here would invent one.
+    "shipped": ("ITEM_SHIPPED", ""),
+    "killed": ("ITEM_KILLED", ""),
 }
 
 
@@ -259,17 +275,16 @@ def select(text: str, requested: str | None = None,
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
         status = statuses.get(requested, "")
         if status not in SELECTABLE:
-            verdict = NOT_SELECTABLE.get(status)
-            if verdict is None:
+            entry = NOT_SELECTABLE.get(status)
+            if entry is None:
                 return Selection("BACKLOG_BLOCKED", item_id=requested,
                                  reason=f"{requested} carries no status this contract knows"
                                         f" ({status or 'the field is absent'})",
                                  walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
-            nexts = {"ITEM_IN_FLIGHT": " It has a plan; continue with /idea-to-release.",
-                     "ITEM_SHIPPED": "", "ITEM_KILLED": ""}
+            verdict, next_step = entry
             return Selection(verdict, item_id=requested,
                              reason=f"{requested} is {status}, past the point where SELECT hands"
-                                    f" out work.{nexts[verdict]}",
+                                    f" out work.{next_step}",
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
         if requested in halted:
             return Selection(

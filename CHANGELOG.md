@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`select_backlog_item.py --check` crashed on any approved item (#35)**
+  `NOT_SELECTABLE` gained `approved -> ITEM_AWAITING_PLAN` when the hypothesis/commitment split
+  entered `cycle-backlog.md`, and the `nexts` dict beside the `--check` return did not, so
+  `nexts[verdict]` raised `KeyError: 'ITEM_AWAITING_PLAN'`. Measured on a consumer's registry: 196
+  items, 5 approved, 5 crashes. A traceback is the wrong silence — it reads as "the tool is broken"
+  when the honest answer is "this item is past the point where SELECT hands out work", and for
+  `approved` that answer has a specific next step, which is the whole reason the status exists. The
+  two tables are now one: `NOT_SELECTABLE` maps each status to `(verdict, next step)`, so a status
+  added to the contract cannot arrive without its note. Nothing had exercised `--check` at all;
+  five tests now do, one of which sweeps every entry of the table so the next addition is covered
+  by construction.
 - **Plan attestation was inert in the plugin-native layout: the writer and the readers resolved two different roots (#36)**
   `attest_plan.sh` probed for `skills/+rules/+hooks/` under `.`, `.claude/` and `.claude/plugins/cycle/`
   — a path named after the ancestor project — and fell back to `.`. In the plugin-native layout the kit
