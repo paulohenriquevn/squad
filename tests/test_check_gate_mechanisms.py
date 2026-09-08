@@ -442,8 +442,8 @@ def test_a_partially_mechanized_gate_is_counted_apart(tmp_path: Path) -> None:
     root = _rules(tmp_path, "cycle-demo.md", (
         "# Demo\n\n## Hard gates\n\n"
         "- No flip without a green verdict — enforced after the fact by "
-        "`check_goal_met.py` _(not mechanized at the point of action: the flip "
-        "script never reads the verdict)_\n"
+        "`check_goal_met.py` _(not mechanized at the point of action: debt since "
+        "2026-08-27 — the flip script never reads the verdict)_\n"
     ))
     _with_script(root, "skills/session-goal/scripts/check_goal_met.py")
 
@@ -505,3 +505,120 @@ def test_the_cli_reports_the_count_it_swept(tmp_path: Path, verb: str) -> None:
 
     assert result.returncode == 0
     assert "1 gate" in result.stdout
+
+
+# ===========================================================================
+# EXEMPTION CLASSES — added 2026-09-08
+#
+# `0 unresolved` proved every gate either names a mechanism or carries a reason.
+# What the report could not say is WHICH KIND of reason, and the seventeen
+# exemptions turned out to hold three unrelated claims:
+#
+#   judgement   automating it would produce verdicts about LANGUAGE, not about
+#               the work. Permanent by decision, and measured: four of them were
+#               pressure-tested across model tiers on 2026-08-28 — redundant on
+#               Opus, and one caught a fabricated justification on Haiku
+#               (`wiki/references/judgement-gates-are-insurance.md`).
+#   debt        it is missing, and the line says what is missing.
+#   regression  a mechanism EXISTED and was withdrawn. This is lost coverage, not
+#               debt that was never paid, and reading it as debt hides that the
+#               kit used to be stricter here.
+#   external    a third-party plugin enforces it; this kit can state the wiring
+#               and cannot verify it.
+#
+# Summing them into one number says "17 gates are not mechanized", which invites
+# the wrong conclusion in both directions: that the kit has 17 holes, or that
+# 17 deliberate decisions are all equally fine.
+#
+# `debt` and `regression` also carry a date, so the report can age them. It does
+# NOT fail on age by default — how long a debt may live is the operator's call,
+# not the kit's — but `--max-debt-age` makes it enforceable for a project that
+# wants a ceiling.
+# ===========================================================================
+
+def test_the_kit_declares_a_class_on_every_exemption() -> None:
+    """The regression. Every exemption in the shipped rules names its class."""
+    report = check_gate_mechanisms(REPO_ROOT)
+
+    assert not [f for f in report.findings if f.kind == "exemption_without_class"], [
+        (f.rule, f.gate) for f in report.findings if f.kind == "exemption_without_class"
+    ]
+
+
+def test_the_report_separates_the_classes() -> None:
+    """A single 'not mechanized' count is the thing this replaces."""
+    report = check_gate_mechanisms(REPO_ROOT)
+
+    assert set(report.by_class) <= {"judgement", "debt", "regression", "external", "composed"}
+    assert sum(report.by_class.values()) == report.unmechanized + report.partial
+    # The kit does have judgement gates, and it does have declared debt. If either
+    # became zero, this test should be read again rather than deleted.
+    assert report.by_class.get("judgement", 0) > 0
+
+    # `composed` is not a hole: the release LOCKED gate reads verdicts the chain
+    # already emitted. Counting it as debt would report an enforced gate as missing.
+    assert report.by_class.get("composed", 0) > 0
+
+
+def test_an_exemption_without_a_class_is_a_finding(tmp_path: Path) -> None:
+    root = _rules(tmp_path, "cycle-example.md", """
+## Hard gates
+
+- **Something** — _(not mechanized: nobody got to it yet)_
+""")
+    report = check_gate_mechanisms(root)
+
+    kinds = [f.kind for f in report.findings]
+    assert "exemption_without_class" in kinds, kinds
+
+
+def test_debt_must_carry_a_date_and_regression_too(tmp_path: Path) -> None:
+    """Without a date, an ageing report cannot age anything.
+
+    `judgement` and `external` are exempt from this: neither is expected to end,
+    so a date on them would be decoration that goes stale.
+    """
+    root = _rules(tmp_path, "cycle-example.md", """
+## Hard gates
+
+- **A** — _(not mechanized: debt — no script confronts the list)_
+- **B** — _(not mechanized: regression — a retired skill used to do it)_
+- **C** — _(not mechanized: judgement — a regex would grade language)_
+""")
+    report = check_gate_mechanisms(root)
+
+    dated = [f for f in report.findings if f.kind == "undated_exemption"]
+    assert len(dated) == 2, [f.gate for f in dated]
+    assert all("judgement" not in f.gate for f in dated)
+
+
+def test_a_dated_debt_passes_and_reports_its_age(tmp_path: Path) -> None:
+    root = _rules(tmp_path, "cycle-example.md", """
+## Hard gates
+
+- **A** — _(not mechanized: debt since 2026-01-15 — no script confronts the list)_
+""")
+    report = check_gate_mechanisms(root)
+
+    assert not [f for f in report.findings if f.kind in ("undated_exemption", "exemption_without_class")]
+    assert report.by_class.get("debt") == 1
+    assert report.oldest_debt == "2026-01-15"
+
+
+def test_max_debt_age_is_opt_in(tmp_path: Path) -> None:
+    """How long a debt may live is the operator's call.
+
+    The kit reports the age always and refuses only when a project sets a ceiling —
+    a gate that failed on age by default would fire on every consumer that has not
+    decided what its ceiling is.
+    """
+    root = _rules(tmp_path, "cycle-example.md", """
+## Hard gates
+
+- **A** — _(not mechanized: debt since 2020-01-01 — ancient)_
+""")
+
+    assert not [f for f in check_gate_mechanisms(root).findings if f.kind == "debt_too_old"]
+
+    aged = check_gate_mechanisms(root, max_debt_age_days=30)
+    assert [f for f in aged.findings if f.kind == "debt_too_old"]

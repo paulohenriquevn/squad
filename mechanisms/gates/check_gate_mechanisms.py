@@ -45,6 +45,7 @@ import argparse
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import date as _date_cls
 from pathlib import Path
 
 #: An executable named in backticks. Bare prose mentions do not count: a gate
@@ -63,6 +64,14 @@ from pathlib import Path
 _EXECUTABLE_RE = re.compile(r"`([\w./-]+\.(?:py|sh))(?:[ \t][^`]*)?`")
 
 #: A markdown link to a sibling rule, used when another cycle owns the gate.
+#: Resolved once so a long sweep cannot straddle midnight and report two ages.
+_TODAY = _date_cls.today()
+
+
+def _date(text: str) -> _date_cls:
+    return _date_cls.fromisoformat(text)
+
+
 _RULE_POINTER_RE = re.compile(r"\]\((?:\./)?((?:rules/)?[\w./-]+\.md)(?:#[\w-]+)?\)")
 
 #: The deliberate exemption. The reason after the colon is mandatory.
@@ -71,6 +80,39 @@ _RULE_POINTER_RE = re.compile(r"\]\((?:\./)?((?:rules/)?[\w./-]+\.md)(?:#[\w-]+)
 #: push the author to drop the precision rather than keep it.
 _UNMECHANIZED_RE = re.compile(
     r"_\(not mechanized[^:)]*(?::\s*(?P<reason>[^)]+))?\)_"
+)
+
+#: The FOUR claims an exemption can make. Added 2026-09-08, because `0 unresolved`
+#: proved every gate carried a reason and could not say which KIND of reason — and
+#: the seventeen exemptions held three unrelated ones summed into a single number.
+#:
+#:   judgement   automating it would produce verdicts about LANGUAGE, not about the
+#:               work. Permanent by decision, and measured: four were pressure-tested
+#:               across model tiers on 2026-08-28 — redundant on Opus, and one caught
+#:               a fabricated justification on Haiku. See
+#:               `wiki/references/judgement-gates-are-insurance.md`.
+#:   debt        it is missing, and the line says what is missing.
+#:   regression  a mechanism EXISTED and was withdrawn. Lost coverage, not debt never
+#:               paid — and reading it as debt hides that the kit used to be stricter.
+#:   external    a third-party plugin enforces it; this kit can state the wiring and
+#:               cannot verify it.
+#:
+#: "17 gates are not mechanized" invites the wrong conclusion in both directions: that
+#: the kit has 17 holes, or that 17 deliberate decisions are equally fine.
+#:   composed    it IS enforced, by reading verdicts other mechanisms already
+#:               emitted, rather than by one script of its own. Filing this as debt
+#:               would report an enforced gate as a hole.
+EXEMPTION_CLASSES = ("judgement", "debt", "regression", "external", "composed")
+
+#: `debt` and `regression` end; `judgement` and `external` do not. Only the first two
+#: carry a date, so a date on the others would be decoration that goes stale.
+_DATED_CLASSES = frozenset({"debt", "regression"})
+
+#: `debt since 2026-01-15 — …` / `judgement — …`
+_CLASS_RE = re.compile(
+    r"^(?P<klass>" + "|".join(EXEMPTION_CLASSES) + r")\b"
+    r"(?:\s+since\s+(?P<date>\d{4}-\d{2}-\d{2}))?\s*[—:-]",
+    re.IGNORECASE,
 )
 
 #: `## Hard gates`, `### Hard gates (per iteration)`, and so on. The section ends
@@ -121,6 +163,16 @@ class GateReport:
     unmechanized: int = 0
     rules_swept: int = 0
     findings: list[GateFinding] = field(default_factory=list)
+
+    #: How many exemptions of each class. Reported separately because the four make
+    #: unrelated claims — see EXEMPTION_CLASSES.
+    by_class: dict = field(default_factory=dict)
+
+    #: The earliest date on a `debt` or `regression` exemption, so the report can say
+    #: how long the oldest one has stood. Ageing is REPORTED and not enforced by
+    #: default: how long a debt may live is the operator's call, and a gate that
+    #: failed on age would fire on every consumer that has not set a ceiling.
+    oldest_debt: str | None = None
 
 
 def _is_separator(stripped: str) -> bool:
@@ -190,7 +242,7 @@ def _executables(repo_root: Path) -> set[str]:
     return names
 
 
-def check_gate_mechanisms(repo_root: Path) -> GateReport:
+def check_gate_mechanisms(repo_root: Path, *, max_debt_age_days: int | None = None) -> GateReport:
     """Sweep `rules/cycle-*.md` and report every gate with no reachable mechanism."""
     repo_root = Path(repo_root)
     report = GateReport()
@@ -231,6 +283,7 @@ def check_gate_mechanisms(repo_root: Path) -> GateReport:
                     rule_path, gate, executables, rules_dir, report,
                     inherited=inherited if is_row else [],
                     inherited_exemption=inherited_exemption and is_row,
+                    max_debt_age_days=max_debt_age_days,
                 )
                 if finding is not None:
                     report.findings.append(finding)
@@ -253,6 +306,7 @@ def _classify(
     report: GateReport,
     inherited: list[str],
     inherited_exemption: bool = False,
+    max_debt_age_days: int | None = None,
 ) -> GateFinding | None:
     exemption = _UNMECHANIZED_RE.search(gate)
     cited = _EXECUTABLE_RE.findall(gate)
@@ -271,6 +325,36 @@ def _classify(
                 rule_path.name, _excerpt(gate), "fabricated_mechanism",
                 f"names {', '.join(missing)}, which does not exist in this repository",
             )
+        klass_match = _CLASS_RE.match(reason)
+        if klass_match is None:
+            return GateFinding(
+                rule_path.name, _excerpt(gate), "exemption_without_class",
+                "the reason names no class — one of "
+                f"{', '.join(EXEMPTION_CLASSES)} must open it, because "
+                "'not mechanized' alone conflates a permanent decision, a declared "
+                "debt, withdrawn coverage, and somebody else's enforcement",
+            )
+        klass = klass_match.group("klass").lower()
+        date = klass_match.group("date")
+        if klass in _DATED_CLASSES and not date:
+            return GateFinding(
+                rule_path.name, _excerpt(gate), "undated_exemption",
+                f"'{klass}' must carry `since YYYY-MM-DD` — without a date nothing "
+                "can say how long it has stood, and an undated debt is one nobody "
+                "can notice ageing",
+            )
+        report.by_class[klass] = report.by_class.get(klass, 0) + 1
+        if date and (report.oldest_debt is None or date < report.oldest_debt):
+            report.oldest_debt = date
+        if date and max_debt_age_days is not None:
+            age = (_TODAY - _date(date)).days
+            if age > max_debt_age_days:
+                return GateFinding(
+                    rule_path.name, _excerpt(gate), "debt_too_old",
+                    f"{klass} standing since {date} ({age} days) exceeds the "
+                    f"{max_debt_age_days}-day ceiling this project set",
+                )
+
         # A script cited beside a declared residue: mechanized in part, and the
         # part that is not says so.
         if cited:
@@ -328,13 +412,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument(
+        "--max-debt-age", type=int, default=None, metavar="DAYS",
+        help="fail when a `debt` or `regression` exemption has stood longer than "
+             "DAYS. Off by default: how long a debt may live is the operator's call, "
+             "and failing on age by default would fire on every consumer that has not "
+             "decided its ceiling",
+    )
+    parser.add_argument(
         "--strict", action="store_true",
         help="accepted for symmetry with the other checkers; this one always fails "
              "on a finding, because a gate nobody can trace is not a warning",
     )
     args = parser.parse_args(argv)
 
-    report = check_gate_mechanisms(args.repo_root)
+    report = check_gate_mechanisms(args.repo_root, max_debt_age_days=args.max_debt_age)
 
     # The counts print on every run, pass or fail. A checker that says PASS
     # without saying how much it inspected is the empty gate this ecosystem
@@ -346,6 +437,27 @@ def main(argv: list[str] | None = None) -> int:
         f"{report.unmechanized} declared exempt, {len(report.findings)} unresolved"
     )
 
+    # The classes print separately, because summing them says "N gates are not
+    # mechanized" and invites the wrong conclusion in both directions: that the kit
+    # has N holes, or that N deliberate decisions are equally fine.
+    if report.by_class:
+        MEANING = {
+            "judgement": "permanent by decision — a script would grade language",
+            "debt": "missing, and the line says what",
+            "regression": "a mechanism EXISTED and was withdrawn — lost coverage",
+            "external": "a third-party plugin enforces it",
+            "composed": "enforced by reading verdicts other mechanisms emitted",
+        }
+        print("  exemptions by class:")
+        for klass in EXEMPTION_CLASSES:
+            n = report.by_class.get(klass, 0)
+            if n:
+                print(f"    {klass:11} {n:2}  — {MEANING[klass]}")
+        if report.oldest_debt:
+            age = (_TODAY - _date(report.oldest_debt)).days
+            print(f"  oldest debt/regression: {report.oldest_debt} ({age} days). "
+                  "Reported, not enforced — see --max-debt-age.")
+
     for finding in report.findings:
         print(f"  [{finding.kind}] {finding.rule}: {finding.gate}")
         if finding.detail:
@@ -355,7 +467,9 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "\nEvery hard gate must name what computes it: an executable in "
             "backticks, a link to the rule that owns it, or "
-            "`_(not mechanized: <reason>)_`."
+            "`_(not mechanized: <class> — <reason>)_`, where <class> is one of "
+            f"{', '.join(EXEMPTION_CLASSES)} and `debt`/`regression` carry "
+            "`since YYYY-MM-DD`."
         )
         return 1
     return 0

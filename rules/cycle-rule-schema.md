@@ -69,6 +69,34 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 | `cycle-judge-codex` (optional, external plugin) | `SHIPPABLE` / `READY_TO_MERGE` (`:final` only) | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` / `NEEDS_FIXES` / `NEEDS_DEEPER` (`:final` only) | `FAIL_HARD` / `INVALID` / `META_DEFECT_FOUND` (`:final` only) / `AGGREGATOR_BUG_SUSPECTED` (`:final` only) |
 | `honesty-gate` (utility) | `EVIDENCE_SUFFICIENT` | `EVIDENCE_WITH_CAVEATS` | — | `EVIDENCE_INSUFFICIENT` |
 
+### An exemption declares its class
+
+**Added 2026-09-08.** A `## Hard gates` line may say `_(not mechanized: … )_` instead of
+naming a script, and `check_gate_mechanisms.py` has always required a reason. What it
+could not say is which KIND of reason — and the exemptions held five unrelated claims
+summed into one number:
+
+| Class | Claims | Dated? |
+|---|---|---|
+| `judgement` | automating it would grade LANGUAGE, not the work. Permanent by decision, and pressure-tested across model tiers ([judgement-gates-are-insurance](../wiki/references/judgement-gates-are-insurance.md)) | no |
+| `debt` | it is missing, and the line says what | **yes** — `since YYYY-MM-DD` |
+| `regression` | a mechanism **existed and was withdrawn**. Lost coverage, not debt never paid | **yes** |
+| `external` | a third-party plugin enforces it; this kit states the wiring and cannot verify it | no |
+| `composed` | it IS enforced, by reading verdicts other mechanisms emitted, rather than by one script | no |
+
+    _(not mechanized: judgement — a regex would settle nothing here)_
+    _(not mechanized: debt since 2026-08-27 — no script confronts the caveat list)_
+
+**Why the split.** "17 gates are not mechanized" invites the wrong conclusion in both
+directions: that the kit has 17 holes, or that 17 deliberate decisions are equally fine.
+Two of them were **regressions** — a retired skill used to enforce them — and read exactly
+like debt that had never been paid.
+
+**Why ageing is reported and not enforced.** `debt` and `regression` carry a date so the
+report can say how long the oldest has stood. Failing on age by default would fire on
+every consumer that has not decided its own ceiling; `--max-debt-age DAYS` makes it a gate
+for a project that has.
+
 ### The band is argued here and computed in `verdict-bands.txt`
 
 **Added 2026-09-08.** The section below argues, per cycle, why the tokens diverge —

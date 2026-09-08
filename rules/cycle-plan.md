@@ -112,7 +112,7 @@ the `#### Pseudo-code / Signatures` blocks. It reports three things:
 `/implement`, when the mismatched calls already exist. Two tasks disagreeing about a
 signature are cheapest to reconcile while both are still prose.
 
-**Advisory, not a cap** _(not mechanized: judgement, by decision — the signature block is
+**Advisory, not a cap** _(not mechanized: judgement — the signature block is
 optional by template, so an absent one is unknown rather than wrong, and capping on silence
 would push authors to write blocks that satisfy a parser)_. Tasks with no block are counted
 and reported as **unchecked**, never as clean.

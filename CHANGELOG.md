@@ -7,6 +7,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`plan-confidence`'s property tests shared one directory across every generated example (#51)**
+  Four `@given` tests took pytest's `tmp_path`, a function-scoped fixture that runs **once** for
+  the whole test and is therefore shared by all thirty examples Hypothesis generates. Pytest's own
+  health check says exactly this, and all four suppressed the warning rather than heed it — so the
+  examples were not independent of one another, which is the property the file exists to assert
+  about the code under test.
+  **Measured, including what is still open:** 2 failures in 15 runs before (~13%), 1 in 85 after
+  (~1.2%). Both original failures were in `test_end_to_end_score_invariants` and
+  `test_smell_idempotent`, and **neither reproduced when its counter-example was replayed alone** —
+  the inputs pass in isolation, which is what pointed at shared state rather than at the scorer.
+  Each example now opens its own directory. The remaining 1-in-85 was **not captured**: sixty
+  consecutive runs after it produced nothing to read, so this is an elevenfold reduction that was
+  measured and not a fix that was proven. If it fires again, the thing to do is capture the failing
+  output rather than re-run until it passes — recorded in the test's own header so the next reader
+  does not have to rediscover it.
+
+### Changed
+
+- **Every gate exemption declares its class, and the report stops summing them (#51)**
+  `check_gate_mechanisms.py` has always required a reason on an exemption, and reported
+  `0 unresolved` — no gate lacks both a mechanism and an explanation. What it could not say is
+  which KIND of explanation, and the exemptions turned out to hold **five unrelated claims**
+  collapsed into one number:
+  `judgement` (automating it would grade LANGUAGE rather than the work — permanent by decision,
+  and pressure-tested across model tiers on 2026-08-28: redundant on Opus, and one caught a
+  fabricated justification on Haiku), `debt` (missing, and the line says what), `regression`
+  (**a mechanism existed and was withdrawn**), `external` (a third-party plugin enforces it), and
+  `composed` (enforced by reading verdicts other mechanisms emitted, rather than by one script).
+  **Two of the twelve were regressions and read exactly like debt never paid** — a retired
+  session-binding skill used to refuse a session release on a bad verdict, and a retired skill
+  refused to arm a goal until the target file was filled. Lost coverage and unpaid debt are
+  different facts with different owners, and "N gates are not mechanized" hid the difference in
+  both directions: it invites the reading that the kit has N holes, or that N deliberate
+  decisions are equally fine. The sweep now prints:
+  `judgement 3 · debt 6 · regression 2 · composed 1`.
+  **`debt` and `regression` carry a date** (`since YYYY-MM-DD`, taken from `git blame` on each
+  line rather than estimated), so the report can say how long the oldest has stood — 2026-08-27,
+  12 days at the time of writing. **Ageing is reported and not enforced**: failing on age by
+  default would fire on every consumer that has not decided its own ceiling, so `--max-debt-age
+  DAYS` makes it a gate for a project that has. `judgement` and `external` take no date, because
+  neither is expected to end and a date on them would be decoration that goes stale.
+  The syntax is documented in `rules/cycle-rule-schema.md § An exemption declares its class`.
+
+### Fixed
+
 - **`done` was a task status the schema accepted and no consumer recognised (#50)**
   Found while reviewing the loop's own documentation. `done` was in `_VALID_STATUSES`, so a
   checkpoint carrying it validated clean — but the halt-loop's exit condition is `committed` OR

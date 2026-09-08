@@ -88,8 +88,8 @@ A task is **not** complete until all three are present:
 
 ## Hard gates (per iteration)
 
-- Parsimony ladder walked before GREEN-phase code is written (`rules/parsimony-ladder.md`) — guardrail items (tests/validation/error-handling/security/accessibility) never sacrificed. `userpromptsubmit-inject.py` re-injects the ladder every turn — _(not mechanized: injecting a deliberation prompt is not checking that the deliberation happened; nothing reads the resulting code and decides which rung it stopped at)_
-- Test suite green before commit — `suite_runners.py`, via `run_validation.py` after the halt-loop, and `ci.yml` on every push. _(not mechanized at the point of action: no hook runs the suite before a commit lands, so "before commit" is honoured by discipline and caught afterwards)_
+- Parsimony ladder walked before GREEN-phase code is written (`rules/parsimony-ladder.md`) — guardrail items (tests/validation/error-handling/security/accessibility) never sacrificed. `userpromptsubmit-inject.py` re-injects the ladder every turn — _(not mechanized: debt since 2026-09-01 — injecting a deliberation prompt is not checking that the deliberation happened; nothing reads the resulting code and decides which rung it stopped at)_
+- Test suite green before commit — `suite_runners.py`, via `run_validation.py` after the halt-loop, and `ci.yml` on every push. _(not mechanized at the point of action: debt since 2026-08-27 — no hook runs the suite before a commit lands, so "before commit" is honoured by discipline and caught afterwards)_
 - Linter clean (project-specific — see `rules/code-quality-languages.txt`) — `post-edit-check.py` on every edit, scoped to the edited file, and `run_code_quality.py` over the tree at Step 5.
 - No new symbols left dangling (every new function/class has a caller or a test exercising it) — `check_wiring.py`, whose pillar (a) is the non-negotiable one.
 - CHANGELOG `[Unreleased]` updated (Unbreakable Rule 6) — `stop-validation.py`.
