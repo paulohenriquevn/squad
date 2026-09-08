@@ -12,8 +12,9 @@
 #   3. Copies skills/, rules/, hooks/, commands/, mechanisms/, squad/, plugin.json,
 #      HOW-TO-USE.md into target/.claude/.
 #   4. settings.json: MERGED by key ownership when the target already has one —
-#      the kit owns its wiring (hooks, statusLine, env, defaultMode), the project
-#      owns `permissions`, and the kit's are unioned in as a floor with the
+#      the kit owns its wiring (statusLine, env, defaultMode), `hooks` and
+#      `permissions` are merged per ENTRY so a consumer's own survive, and the
+#      kit's are unioned in as a floor with the
 #      consumer's kept. Written whole from settings.plugin.json only when the
 #      target has none. (This line said "writes settings.plugin.json as
 #      target/.claude/settings.json" until 2026-09-04, describing the behaviour
@@ -643,6 +644,12 @@ if [ ! -f "$SRC_DIR/settings.plugin.json" ]; then
   echo "ERROR: $SRC_DIR/settings.plugin.json missing — required for plugin install layout." >&2
   exit 1
 fi
+if [ ! -f "$SRC_DIR/mechanisms/distribution/merge_settings.py" ]; then
+  echo "ERROR: $SRC_DIR/mechanisms/distribution/merge_settings.py missing — the settings" >&2
+  echo "  merge cannot run, and copying over the consumer's file would delete their" >&2
+  echo "  hooks and permissions. Refusing rather than overwriting." >&2
+  exit 1
+fi
 if [ -f "$ECO/settings.json" ]; then
   # One file, two owners — and replacing it wholesale was wrong in both
   # directions. `boundary-check.py` allowlists `settings.json` as "this project's
@@ -657,113 +664,14 @@ if [ -f "$ECO/settings.json" ]; then
   #
   # So ownership is split by key. The kit owns its wiring; the project owns its
   # permissions; a key the kit does not know is the consumer's and survives.
-  python3 - "$ECO/settings.json" "$SRC_DIR/settings.plugin.json" <<'PYEOF'
-import json, os, sys
-
-target, source = sys.argv[1], sys.argv[2]
-mine = json.load(open(target, encoding="utf-8-sig"))
-kit = json.load(open(source, encoding="utf-8"))
-
-# Keys the KIT owns: they wire the kit's own scripts, and a stale copy is a gate
-# that quietly stopped running.
-for key in ("hooks", "statusLine", "env", "$schema", "_comment_",
-            "skipDangerousModePermissionPrompt"):
-    if key in kit:
-        mine[key] = kit[key]
-
-# `permissions` is the project's. The kit's are a floor, not a replacement:
-# union, with the consumer's kept. `deny` goes first because an entry that
-# forbids must be read before one that allows.
-#
-# The LIST keys work that way. The scalar ones do not, and the difference cost a
-# defect: the loop below used to `continue` on anything that was not a list, so
-# `defaultMode` — a string — was skipped in silence. A change to it in the
-# template would have reached only consumers with no settings.json yet, and none
-# of the seventeen that already had one: applied, shipped, inert.
-#
-# `defaultMode` is the kit's POSTURE, not the project's preference, so the kit
-# owns it. A consumer that wants a different one sets it in
-# `.claude/settings.local.json`, which the harness reads at higher precedence —
-# the mechanism built for exactly this, rather than a merge rule nobody can see.
-_KIT_OWNED_SCALARS = ("defaultMode",)
-
-# A union cannot retire a rule. Additions propagated and removals did not, so
-# every entry the kit ever shipped stayed in every consumer that already had a
-# settings.json — a retirement that is applied, released and inert everywhere but
-# a fresh install. Same shape `defaultMode` had, in the other direction.
-#
-# It is not fixable by comparing two lists: a rule in the consumer and not in the
-# kit is EITHER something the kit retired OR something the project added, and
-# those must not share an outcome. The missing term is the base — what the kit
-# shipped last time — so the install records it.
-#
-# Measured on 2026-09-02: the credential globs were rewritten from
-# `Read(**/*secret*)` to named credential forms, and without this the old glob
-# would have stayed denied in all seventeen consumers alongside the new ones.
-_PROVENANCE = os.path.join(os.path.dirname(target), ".kit-permissions.json")
-try:
-    with open(_PROVENANCE, encoding="utf-8") as _fh:
-        _previous = json.load(_fh)
-except (OSError, ValueError):
-    _previous = {}
-
-# The declared half. A rule the kit withdrew is named in `rules/retired-permissions.txt`
-# and removed on every run, base or no base — which is what makes the FIRST
-# install under this scheme able to migrate at all.
-_declared_retired = set()
-try:
-    # `source` is `<kit>/settings.plugin.json`; the heredoc is quoted, so shell
-    # variables do not reach here and the kit root is derived from what does.
-    with open(os.path.join(os.path.dirname(source), "rules",
-                           "retired-permissions.txt"), encoding="utf-8") as _fh:
-        _declared_retired = {ln.strip() for ln in _fh
-                             if ln.strip() and not ln.lstrip().startswith("#")}
-except OSError:
-    pass
-
-merged = mine.setdefault("permissions", {})
-_retired_total = 0
-for _key, _list in merged.items():
-    if isinstance(_list, list):
-        for _rule in list(_list):
-            if _rule in _declared_retired:
-                _list.remove(_rule)
-                _retired_total += 1
-for key, items in kit.get("permissions", {}).items():
-    if not isinstance(items, list):
-        if key in _KIT_OWNED_SCALARS:
-            merged[key] = items
-        continue
-    target_list = merged.setdefault(key, [])
-
-    # Retire only what the kit itself shipped last time and ships no longer.
-    # With no record (first install under this scheme) nothing is removed —
-    # every existing entry is indistinguishable from a project's own, and
-    # deleting a project's rule is the worse error by far.
-    retired = [r for r in _previous.get(key, []) if r not in items]
-    for rule in retired:
-        if rule in target_list:
-            target_list.remove(rule)
-            _retired_total += 1
-
-    for item in items:
-        if item not in target_list:
-            target_list.insert(0, item) if key == "deny" else target_list.append(item)
-
-# The base for next time: what the kit shipped now, not what the consumer ended
-# up with. Recording the merged result would make every project rule look like
-# the kit's and hand the next install permission to delete it.
-_kit_lists = {k: v for k, v in kit.get("permissions", {}).items() if isinstance(v, list)}
-with open(_PROVENANCE, "w", encoding="utf-8") as _fh:
-    json.dump(_kit_lists, _fh, indent=2)
-    _fh.write("\n")
-if _retired_total:
-    print(f"    {_retired_total} permission rule(s) retired by the kit were removed")
-
-json.dump(mine, open(target, "w", encoding="utf-8"), indent=2)
-open(target, "a", encoding="utf-8").write("\n")
-PYEOF
-  echo "==> settings.json merged (kit wiring refreshed, your permissions kept)"
+  # The merge itself lives in `merge_settings.py`, not in a heredoc here. It was
+  # 100 lines inside this file, so nothing could run it and nothing did — and it
+  # shipped a wholesale `mine["hooks"] = kit["hooks"]` that deleted a consumer's
+  # own hook wiring on every run while carefully preserving the hook's FILE (#34).
+  # A gate present on disk and wired to nothing reads as installed to everyone.
+  python3 "$SRC_DIR/mechanisms/distribution/merge_settings.py" \
+      "$ECO/settings.json" "$SRC_DIR/settings.plugin.json"
+  echo "==> settings.json merged (kit wiring refreshed; your hooks and permissions kept)"
 else
   cp "$SRC_DIR/settings.plugin.json" "$ECO/settings.json"
   echo "==> settings.json written (plugin install variant)"

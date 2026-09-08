@@ -119,6 +119,7 @@ which is why the rule is now computed rather than requested.
 | `patch_install.sh` | Apply one session's delta to a consumer's `.claude/` tree |
 | `sync_consumers.py` | Propagate a kit delta to consumers WITHOUT erasing local improvement |
 | `generate_plugin_settings.py` | Generate `settings.plugin.json` from `settings.json` |
+| `merge_settings.py` | Merge the kit's `settings.json` into a consumer's, entry by entry: the kit's wiring is refreshed, the consumer's own hooks and permissions survive, and a recorded baseline is what lets a retirement be told from a project's own addition |
 
 ### `conventions/` — where things live and what shape they have
 

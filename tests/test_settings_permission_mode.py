@@ -72,9 +72,9 @@ def test_the_merge_carries_the_mode_to_an_existing_consumer(tmp_path: Path) -> N
         "theirOwnKey": {"keep": "me"},
     }), encoding="utf-8")
 
-    merge = _extract_merge_script()
-    subprocess.run([sys.executable, "-c", merge, str(consumer),
-                    str(ROOT / "settings.plugin.json")], check=True)
+    subprocess.run([sys.executable,
+                    str(ROOT / "mechanisms" / "distribution" / "merge_settings.py"),
+                    str(consumer), str(ROOT / "settings.plugin.json")], check=True)
 
     out = json.loads(consumer.read_text(encoding="utf-8"))
     perms = out["permissions"]
@@ -84,13 +84,16 @@ def test_the_merge_carries_the_mode_to_an_existing_consumer(tmp_path: Path) -> N
     assert out["theirOwnKey"] == {"keep": "me"}, "an unknown key was not preserved"
 
 
-def _extract_merge_script() -> str:
-    """The merge lives inside install.sh as a heredoc; run the real one, not a copy.
+def test_the_installer_runs_the_same_merge_this_test_does() -> None:
+    """Run the real merge, not a copy — and prove the installer runs that one.
 
-    A test against a transcribed copy passes while the shipped script differs —
-    which is how a merge defect survives a green suite.
+    This test used to EXTRACT the heredoc out of `install.sh` and exec it, because
+    the merge had no other entry point. That worked and it hid the cost: 100 lines
+    of the most consequential code in the installer were reachable only by string
+    surgery, so almost nothing was tested and #34 shipped inside them. The merge is
+    now `merge_settings.py`, and what this pins is that the installer calls it.
     """
-    text = (ROOT / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
-    start = text.index("python3 - \"$ECO/settings.json\"")
-    body = text[text.index("<<'PYEOF'", start) + len("<<'PYEOF'"):]
-    return body[:body.index("\nPYEOF")]
+    installer = (ROOT / "mechanisms" / "distribution" / "install.sh").read_text(
+        encoding="utf-8")
+
+    assert "merge_settings.py" in installer

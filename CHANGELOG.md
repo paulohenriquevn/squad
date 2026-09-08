@@ -7,6 +7,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`install.sh` deleted a consumer's own hook wiring while preserving the hook file (#34)**
+  Ownership of `settings.json` was modelled per top-level key, and `hooks` is the one key both the
+  kit and the consumer legitimately write to. `mine["hooks"] = kit["hooks"]` therefore deleted a
+  project's own hook entry on every run — no diff, no warning, and a success message — while the
+  same installer walked `hooks/` file by file, ~300 lines earlier, precisely so the script would
+  not be lost. The file survived; the line that runs it did not, which is the worst of the three
+  states because a hook present on disk reads as installed. Measured in one consumer: its only
+  mandatory pre-push checkpoint was present and inert for four days, cited in four documents as
+  covering a check, while two tests asserting the hook's existence stayed green — they read the
+  file, and the file was never what went missing.
+  `hooks` is now merged per ENTRY, the treatment `permissions` already had: a hook is identified by
+  its command, the kit's entries are refreshed from the kit, and an entry whose command the kit does
+  not ship is the consumer's and survives. Retirement needs the term a union cannot supply — an
+  entry in the consumer and not in the kit is either something the kit withdrew or something the
+  project added — so the install records what the kit shipped in `.kit-hooks.json`, the same
+  provenance `.kit-permissions.json` keeps. With no baseline nothing is removed, because on a first
+  install every entry is indistinguishable from a project's own. The installer now also names each
+  consumer hook it kept and each kit hook it retired, so the operation stops being silent.
+  The merge moved out of the 100-line heredoc into `mechanisms/distribution/merge_settings.py`. That
+  was not incidental: it is the most consequential code in the installer — it rewrites a file in
+  seventeen repositories — and being unreachable except by string surgery is why almost none of it
+  was tested. The one test that did reach it EXTRACTED the heredoc from the shell and exec'd it.
+  22 tests now cover the merge directly, and `install.sh` refuses to run rather than copying its own
+  settings over a consumer's when the module is absent.
 - **`select_backlog_item.py --check` crashed on any approved item (#35)**
   `NOT_SELECTABLE` gained `approved -> ITEM_AWAITING_PLAN` when the hypothesis/commitment split
   entered `cycle-backlog.md`, and the `nexts` dict beside the `--check` return did not, so
