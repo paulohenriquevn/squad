@@ -180,6 +180,54 @@ def test_unblocking_everything_drops_the_line():
     assert "blocked_by" not in content[start:end]
 
 
+def test_clearing_one_id_keeps_the_stated_reason_beside_it():
+    """The prose outlives the id edge, and `unblock` has to honour that too.
+
+    `live_blockers` states the rule: "the ids in it are context, the reason is
+    the barrier, and nothing in this repository can tell whether the reason is
+    discharged." `advance` implements it — it refuses to ship while the line says
+    anything. `unblock` did not: removing the named id left `remaining` empty and
+    dropped the whole field, prose included, so the ship that had just been
+    refused was allowed and the registry kept no trace of the impediment.
+    """
+    content = _backlog(("B-001", "planned", ""), ("B-002", "shipped", ""))
+    content = block(content, "B-001", ["B-002"], "awaiting the sponsor's decision on hosting")
+    with pytest.raises(Refused):
+        advance(content, "B-001", "shipped")
+
+    content = unblock(content, "B-001", ["B-002"])
+
+    start, end = _blocks(content)["B-001"]
+    body = content[start:end]
+    assert "B-002" not in body
+    assert "awaiting the sponsor's decision on hosting" in body
+    with pytest.raises(Refused):
+        advance(content, "B-001", "shipped")
+
+
+def test_clearing_one_of_two_ids_keeps_both_the_other_id_and_the_reason():
+    content = _backlog(("B-001", "planned", ""), ("B-002", "raw", ""), ("B-003", "raw", ""))
+    content = block(content, "B-001", ["B-002", "B-003"], "and the sponsor has to sign")
+
+    content = unblock(content, "B-001", ["B-002"])
+
+    start, end = _blocks(content)["B-001"]
+    body = content[start:end]
+    assert _blockers(content, "B-001") == ["B-003"]
+    assert "and the sponsor has to sign" in body
+
+
+def test_clearing_every_id_of_a_pure_id_edge_still_drops_the_line():
+    """No prose to keep means nothing to keep. The field goes."""
+    content = _backlog(("B-001", "planned", ""), ("B-002", "raw", ""))
+    content = block(content, "B-001", ["B-002"])
+
+    content = unblock(content, "B-001", ["B-002"])
+
+    start, end = _blocks(content)["B-001"]
+    assert "blocked_by" not in content[start:end]
+
+
 def test_unblocking_an_unblocked_item_is_refused():
     with pytest.raises(Refused):
         unblock(_backlog(("B-001", "planned", "")), "B-001")

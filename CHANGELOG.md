@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`backlog_status.py --unblock` deleted the stated impediment beside the id it was clearing (#40)**
+  `unblock` rebuilt the field from the surviving ids, so clearing `B-002` out of
+  `blocked_by: B-002 — awaiting the sponsor's decision on hosting` dropped the whole line. The ship that
+  `advance` had refused one command earlier was then allowed, and the registry retained no trace that a
+  barrier had existed. This contradicted the rule `live_blockers` states in the same file — *"the ids in
+  it are context, the reason is the barrier"* — which the 2026-09-03 audit had already fixed in the
+  selector, the structure gate and `advance`; `unblock` was the fourth reader nobody counted. The value
+  is now rebuilt from the raw field with only the named ids removed, so the prose survives and the ship
+  stays refused. A bare `--unblock`, which means "clear whatever is there", still clears everything.
 - **`generate_plugin_settings.py` rewrote `scripts/`, renamed away on 2026-09-01, and not `mechanisms/` (#41)**
   `REWRITE_DIRS` was a hand-curated tuple that the rename never reached, so every `mechanisms/` path in
   `settings.json` was copied into `settings.plugin.json` unprefixed. The one such path is the status

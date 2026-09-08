@@ -167,6 +167,28 @@ def carries_prose(raw: str) -> bool:
     return bool(_ID_IN_TEXT_RE.sub("", raw).strip(" ,—-"))
 
 
+def without_ids(raw: str, ids: list[str]) -> str:
+    """`raw` with `ids` removed, and whatever a human wrote left standing.
+
+    The field is prose that MAY contain ids (`parse_blocked_by`), so clearing an
+    id cannot be done by rebuilding the value from the ids that remain — that
+    silently discards the reason beside them. `advance` refuses to ship while the
+    line says anything at all, so a reason dropped here turns a refused ship into
+    an allowed one with nothing recording that a barrier was removed.
+
+    Returns `""` when nothing but separators is left, which is the caller's
+    signal to drop the field entirely.
+    """
+    remaining = raw
+    for item_id in ids:
+        remaining = re.sub(rf"\b{re.escape(item_id)}\b", "", remaining)
+    remaining = re.sub(r"\s+", " ", remaining)
+    # Separators orphaned by the removal: a leading comma from `B-002, B-003`,
+    # a dangling em dash from `B-002 — the sponsor has to sign`.
+    remaining = re.sub(r"(?:^|(?<=\s)),", " ", remaining)
+    return remaining.strip(" ,—-")
+
+
 def live_blockers(raw: str, own_id: str, statuses: dict[str, str]) -> list[str] | None:
     """The writer's answer to "may `own_id` advance to shipped, given `raw`?"
 
@@ -364,6 +386,7 @@ def unblock(content: str, item_id: str, blockers: list[str] | None = None) -> st
     start, end = spans[item_id]
     body = content[start:end]
     current = blocked_by_of(body)
+    raw = blocked_by_raw(body)
 
     #: A bare `--unblock` means "clear whatever is there", and what is there may be
     #: prose. The two readers of this field disagreed about what counts: `advance`
@@ -378,7 +401,7 @@ def unblock(content: str, item_id: str, blockers: list[str] | None = None) -> st
     #: Measured 2026-09-05: B-168 in a consumer declared "fix estrutural pertence
     #: ao repo do kit", the fix landed in the kit and was verified in that
     #: consumer, and the mechanism could not move the item.
-    if not current and not blockers and declares_impediment(blocked_by_raw(body)):
+    if not current and not blockers and declares_impediment(raw):
         return content[:start] + _drop_field(body, "blocked_by") + content[end:]
 
     if not current:
@@ -386,7 +409,14 @@ def unblock(content: str, item_id: str, blockers: list[str] | None = None) -> st
     remaining = [b for b in current if b not in blockers] if blockers else []
     if blockers and remaining == current:
         raise Refused(f"{item_id} is not blocked by {', '.join(blockers)}")
-    body = _write_field(body, "blocked_by", ", ".join(remaining), after="status") if remaining else _drop_field(body, "blocked_by")
+
+    # Rebuilt from the RAW value, never from the surviving ids. `", ".join(remaining)`
+    # was the whole defect: an item blocked by `B-002 — awaiting the sponsor` lost the
+    # sponsor along with B-002, and the ship `advance` had just refused went through.
+    # A bare `--unblock` still clears everything, which is what it means.
+    value = without_ids(raw, blockers) if blockers else ""
+    body = (_write_field(body, "blocked_by", value, after="status") if value
+            else _drop_field(body, "blocked_by"))
     return content[:start] + body + content[end:]
 
 
