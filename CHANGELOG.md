@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`generate_plugin_settings.py` rewrote `scripts/`, renamed away on 2026-09-01, and not `mechanisms/` (#41)**
+  `REWRITE_DIRS` was a hand-curated tuple that the rename never reached, so every `mechanisms/` path in
+  `settings.json` was copied into `settings.plugin.json` unprefixed. The one such path is the status
+  line, which therefore pointed at `$CLAUDE_PROJECT_DIR/mechanisms/fleet/statusline.sh` in a layout where
+  the kit lives at `$CLAUDE_PROJECT_DIR/.claude/`. `--check` could not see it — it compares the generated
+  output against the committed file and both come from the same table — and neither could the test, which
+  looped over `REWRITE_DIRS` and so only ever confirmed the generator is self-consistent with itself. The
+  table now names every tree the installer copies, and the test reads that list out of `install.sh` and
+  confronts it with the generated file, so the next tree added to the installer fails here instead of
+  shipping a broken path. The generated `_comment_` also stopped calling the kit "the Cycle ecosystem".
 - **Fifty permission rules were spelled in a form the permission checks never consult (#11)**
   Claude Code matches file permission rules on `Edit(path)` only — an `Edit` rule covers every
   file-editing tool, `Write` included — and it now warns once per inert rule at startup.

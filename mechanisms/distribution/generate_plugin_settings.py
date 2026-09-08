@@ -18,8 +18,22 @@ from pathlib import Path
 STANDALONE_PREFIX = "$CLAUDE_PROJECT_DIR/"
 PLUGIN_PREFIX = "$CLAUDE_PROJECT_DIR/.claude/"
 
-# Paths that get the prefix rewrite (relative to $CLAUDE_PROJECT_DIR)
-REWRITE_DIRS = ("hooks/", "scripts/", "records/")
+#: Paths that get the prefix rewrite (relative to $CLAUDE_PROJECT_DIR).
+#:
+#: EVERY tree the installer copies, plus `records/`. Not a curated subset: this
+#: list named `scripts/` — renamed to `mechanisms/` on 2026-09-01 — and never
+#: gained `mechanisms/`, so the status line shipped to plugin installs pointing at
+#: `$CLAUDE_PROJECT_DIR/mechanisms/fleet/statusline.sh`, a path that exists only in
+#: the standalone layout. `--check` could not see it: it compares the generated
+#: output against the committed file, and both come from this table.
+#:
+#: `tests/test_generate_plugin_settings.py` reads the tree list out of
+#: `install.sh` and confronts it with this one, so the next tree added to the
+#: installer fails here instead of shipping a broken path.
+REWRITE_DIRS = (
+    "skills/", "rules/", "hooks/", "commands/", "mechanisms/", "squad/",
+    "records/",
+)
 
 
 def rewrite_value(value: str) -> str:
@@ -53,8 +67,8 @@ def main() -> int:
     # Add the explanatory comment
     data["_comment_"] = (
         "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains "
-        "the Cycle ecosystem). Used by mechanisms/distribution/install.sh. For standalone use "
-        "(the Cycle repo itself), see settings.json."
+        "the Squad kit). Used by mechanisms/distribution/install.sh. For standalone "
+        "use (the Squad repo itself), see settings.json."
     )
 
     transformed = transform(data)

@@ -5,7 +5,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash \"$CLAUDE_PROJECT_DIR/mechanisms/fleet/statusline.sh\""
+    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/mechanisms/fleet/statusline.sh\""
   },
   "permissions": {
     "defaultMode": "bypassPermissions",
@@ -247,5 +247,5 @@
     ]
   },
   "skipDangerousModePermissionPrompt": true,
-  "_comment_": "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains the Cycle ecosystem). Used by mechanisms/distribution/install.sh. For standalone use (the Cycle repo itself), see settings.json."
+  "_comment_": "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains the Squad kit). Used by mechanisms/distribution/install.sh. For standalone use (the Squad repo itself), see settings.json."
 }
