@@ -27,6 +27,13 @@ from squad import PostToolUseContext, create_context
 
 FULL = os.environ.get("POST_EDIT_FULL_TYPECHECK", "0") == "1"
 
+#: Seconds per linter, against the 60s `hooks.json` gives this hook. `check_go`
+#: runs two of them one after the other, so a per-call budget equal to the hook's
+#: own meant the pair could not both finish — and the runtime kills the hook
+#: rather than reporting a partial result, so the second linter's output simply
+#: never appeared and nothing said why.
+_TOOL_TIMEOUT = 25
+
 
 def _run(*command: str) -> str:
     """The tool's output, or empty when it is absent or unusable.
@@ -36,7 +43,8 @@ def _run(*command: str) -> str:
     here prints a positive verdict, so silence never reads as approval.
     """
     try:
-        done = subprocess.run(command, capture_output=True, text=True, timeout=60)  # noqa: PLW1510
+        done = subprocess.run(command, capture_output=True, text=True,  # noqa: PLW1510
+                              timeout=_TOOL_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return ""
     return (done.stdout + done.stderr).strip()

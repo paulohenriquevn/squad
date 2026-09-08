@@ -13,6 +13,7 @@ honest sentences, and the first fix anybody reaches for is to disable it.
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -23,8 +24,21 @@ from hook_harness import post_tool_use, run_hook
 
 
 def _lint(path: str, content: str) -> str:
-    result = run_hook("public-copy-lint",
-                      post_tool_use("Edit", file_path=path, new_string=content))
+    """The hook judges the FILE, so the file has to exist to be judged.
+
+    It read `new_string` until 2026-09-08 — the fragment an `Edit` replaced —
+    which made the two conditional checks unreliable in the direction that
+    matters: a benchmark link elsewhere in the same README could not excuse the
+    claim beside it, so the hook warned about honest sentences. These cases are
+    unchanged; what moved is where the text comes from.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        result = run_hook("public-copy-lint",
+                          post_tool_use("Edit", file_path=str(target),
+                                        new_string=content))
     assert result.returncode == 0, "advisory: it must never block a README"
     return result.stdout
 

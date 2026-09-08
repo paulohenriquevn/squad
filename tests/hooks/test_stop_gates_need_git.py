@@ -97,3 +97,57 @@ def test_the_hook_says_the_gates_did_not_run(hook) -> None:
     assert "This is not a pass" in source
     assert "_GIT_UNREACHABLE" in source.split("def main")[1], \
         "main must consult the record before allowing"
+
+
+# ── the states that are ANSWERS, not failures to measure ─────────────────────
+
+def _repo(tmp_path: Path, *, commits: int = 1) -> Path:
+    git = ["git", "-C", str(tmp_path)]
+    subprocess.run([*git, "init", "-b", "workspace", "--quiet"], check=True)
+    subprocess.run([*git, "config", "user.email", "t@t.invalid"], check=True)
+    subprocess.run([*git, "config", "user.name", "T"], check=True)
+    for n in range(commits):
+        (tmp_path / f"f{n}.txt").write_text("x\n", encoding="utf-8")
+        subprocess.run([*git, "add", "-A"], check=True)
+        subprocess.run([*git, "commit", "-m", f"c{n}", "--quiet"], check=True)
+    return tmp_path
+
+
+def test_having_no_upstream_is_an_answer_not_a_broken_measurement(
+        monkeypatch, hook, tmp_path: Path) -> None:
+    """`has_upstream` exists BECAUSE a branch may not have one.
+
+    The absent upstream is a case the code handles two lines later, and it still
+    landed in `_GIT_UNREACHABLE` — so every local branch that was never pushed
+    ended its session under *"STOP GATES DID NOT RUN … This is not a pass"*.
+    An alarm that fires on the normal case is the alarm people learn to scroll
+    past, which costs exactly what the alarm was built to buy.
+    """
+    monkeypatch.chdir(_repo(tmp_path, commits=2))
+    hook.changed_files()
+
+    assert not hook._GIT_UNREACHABLE, \
+        f"a branch with no upstream was reported as unmeasurable: {hook._GIT_UNREACHABLE}"
+
+
+def test_a_repository_with_one_commit_is_an_answer_too(
+        monkeypatch, hook, tmp_path: Path) -> None:
+    """`HEAD~1` does not resolve in a repository whose history is one commit.
+    That is the repository saying so, not git failing to answer."""
+    monkeypatch.chdir(_repo(tmp_path, commits=1))
+    hook.changed_files()
+
+    assert not hook._GIT_UNREACHABLE, \
+        f"a single-commit repository was reported as unmeasurable: {hook._GIT_UNREACHABLE}"
+
+
+def test_the_warning_does_not_claim_an_empty_list_it_did_not_check(hook) -> None:
+    """The sentence said the gates *"graded an empty file list"* whether or not
+    the list was empty. Reproduced with one changed file present and named in the
+    TDD gate three paragraphs below the claim it was not there."""
+    hook._GIT_UNREACHABLE.append("`git whatever` exited 128: boom")
+
+    assert "empty file list" not in hook.unreachable_warning(["b.py"]), \
+        "the warning asserts an empty list while holding a non-empty one"
+    assert "empty file list" in hook.unreachable_warning([]), \
+        "and still says so when the list really is empty"

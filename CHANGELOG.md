@@ -7,6 +7,120 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`validate-command.py` read the verb from one repository and the branch from another (#42)**
+  `strip_git_globals` removed `git -C <path>` so the commit would still be seen, and then the
+  branch was resolved in the current directory — so the guard judged the right verb against the
+  wrong repository, in both directions. `git -C <repo-on-main> commit` was allowed because the
+  session happened to sit on `workspace`, which is a commit onto a trunk walking through the hard
+  gate Rule 4 exists for; and the same command against a feature branch was refused naming a
+  branch that repository was not on. `working_trees()` in the same file has honoured `-C` since
+  kit#31, for the reason its docstring gives — the fleet's briefs drive git that way — and the
+  branch guards never got the same treatment. The prefix is now resolved once by `_git_prefix()`
+  and passed to every git call the decision rests on.
+- **The credential guard read a search TERM as a file PATH (#43)**
+  Every token of the command was matched against the deny globs, so `grep -rn credentials src/`
+  was blocked: `credentials` matches `**/credentials`, and looking for where credentials are used
+  is one of the commonest security reviews there is. `kubeconfig`, `id_rsa` and `.netrc` have the
+  same shape. Worse than the block was its advice — *narrow the glob in `settings.json`* — which
+  sends the reader to correct a glob that was right. A token now counts as a path when it carries
+  a separator, a suffix or a leading dot, or when a file by that name is actually on disk; a bare
+  word is prose. The leading dot is not decoration: `Path(".env").suffix` is empty, so the
+  commonest credential file of all would otherwise have walked through the narrowing.
+- **The kit boundary held against `Edit` and not against `sed -i` (#44)**
+  `boundary-check` refused `Edit`/`Write` into an installed kit for a reason that says nothing
+  about which tool does the writing — *a fix written inside an installed kit protects exactly one
+  machine and is erased by the next install*, with the cost on record in `check_install_drift.py`
+  as twenty-two kit fixes stranded in one consumer's `.claude/`. The shell reached the same files
+  unread: `sed -i`, `>`, `rm`, `cp`, `mv` and `tee` all passed. The other read-only zone,
+  `study-material/`, has had a shell-side guard since the beginning, so the protection existed for
+  the tool an agent uses when it is being careful and not for the one it reaches for when it is
+  being quick. Where the line runs moved to `squad/boundaries.py` and both hooks now ask it, so
+  the two halves of one boundary cannot disagree about where it is. The module carries its own
+  unit suite rather than being exercised only through the hooks that call it: it is now the single
+  source of one rule, and a rule whose only test is indirect has its next edit checked by whichever
+  caller happens to cover it.
+- **`git branch -D workspace` was not refused (#45)**
+  Every rule about `workspace` assumes it exists — it is a single permanent branch, never deleted
+  and never recreated per task. Deleting it discards whatever was not promoted and leaves the next
+  `git switch workspace` to create a branch with the same name and none of the history the rules
+  refer to. `develop` is refused on the same grounds. A disposable branch stays the caller's
+  business.
+- **`cd /etc && rm -rf *` passed the recursive-delete guard (#46)**
+  Judging each segment alone fixed a false positive and opened its mirror: the dangerous path
+  moved into a `cd` that the `rm` segment no longer carried, so the three conditions were never
+  all present in one segment. Both halves are needed — the segment rule stays, and a `cd` onto a
+  system or home root now travels with it to the segments that follow.
+- **`stop-validation.py` never read `stop_hook_active`, so a blocker it could not clear had no exit (#47)**
+  The kit's own library documents the trap twice — `squad/contexts.py`: *"A hook that calls
+  `prevent()` without checking it makes the session unstoppable"* — and the hook ignored the field.
+  With a blocker the model cannot resolve (a `.env` that is deliberately there, a CHANGELOG entry
+  it will not invent) the Stop was refused, the model tried again, and the hook answered the same
+  way; the only exit was an environment variable the model cannot set for the hook's own process.
+  Nothing tested it, because every Stop payload in the suite sent `false`. The gate now fires
+  once: on the second attempt the blockers are reported in full and the session ends, saying that
+  is what happened and that nothing was resolved by being downgraded.
+- **Two states git reports as answers were recorded as failures to measure (#48)**
+  `git rev-parse @{upstream}` on a branch that was never pushed and `git diff HEAD~1..HEAD` in a
+  one-commit repository both exit 128, and neither message says *not a git repository*, so both
+  landed in `_GIT_UNREACHABLE`. Every session on a local branch therefore ended under *"STOP GATES
+  DID NOT RUN … This is not a pass"* — an alarm firing on the normal case, which is the alarm
+  people learn to scroll past, and this one is the mechanism that keeps a secrets gate from
+  passing in silence. Both are states the caller handles two lines later. The warning also claimed
+  the gates *"graded an empty file list"* whether or not the list was empty; reproduced with one
+  changed file present and named by the TDD gate three paragraphs under the claim it was not
+  there. It now reports what it actually held.
+- **Hooks granted subprocesses the whole budget the runtime granted them (#49)**
+  `stop-validation` gave the leakage scan 120s of its own 120s, plus six git calls at 15s;
+  `post-edit-check` gave each of two sequential linters the full 60s; `sessionstart-context` spent
+  20s on drift plus four git calls of 5s against a 30s budget; `validate-command` allowed three
+  5s git calls inside 10s. Being killed at the runtime's limit is the ONE failure these hooks
+  cannot record — the process that would write the note is the process that died — so a
+  `stop-validation` that dies takes the secrets blocker with it and leaves a session looking
+  clean. Every hook that shells out now declares `*_TIMEOUT` constants, and
+  `tests/hooks/test_hook_time_budget.py` checks the worst sequential path against what
+  `hooks.json` allows. `validate-command` also stopped evaluating all seven of its guards into a
+  tuple before reading the first verdict: three of them shell out to git and one resolves the
+  layout from disk, so a command the first guard had already refused still paid for the rest.
+- **`sessionstart-context.py` said nothing about git inside a worktree (#50)**
+  `git_line()` tested `Path(".git").is_dir()`. In a git worktree `.git` is a file pointing at the
+  common git dir, so the branch, the dirty count and the distance from upstream all vanished, with
+  nothing saying why — in the environment the kit uses most, since `/review` runs its agents in
+  isolated worktrees and `validate-command` carries a whole guard about the stash they share. The
+  line that tells an agent which branch it is on disappeared exactly where the git discipline is
+  hardest to keep from memory. It now asks git whether this is a work tree, which answers for both
+  shapes, and resolves `layout.project_dir` instead of reading the process's working directory —
+  a hook does not choose its CWD.
+- **The public-copy rule existed twice, and the shorter copy ran last (#51)**
+  `public-copy-lint` carries nine checks; `stop-validation` had rewritten two of them by hand, so
+  'battle-tested', 'enterprise-grade', 'drop-in replacement', 'zero downtime', 'lock-in free',
+  '<X> killer' and an unbacked 'faster than' were warned about at edit time and passed the
+  end-of-session gate untouched. This kit already refuses that shape — `_credential_globs` reads
+  the deny list from `settings.json` rather than keeping a second copy — and the checks now live
+  in `squad/public_copy.py`, with its own unit suite, and both hooks read them.
+- **`public-copy-lint.py` judged the fragment an `Edit` replaced, not the file (#52)**
+  Two of the nine checks are conditional: a comparative claim is honest WITH a benchmark link, an
+  SLA number is honest when qualified as a target. Reading `new_string` meant the evidence two
+  paragraphs above in the same README was invisible, so the hook warned about honest sentences —
+  and the first fix anybody reaches for is to switch the hook off. It reads the file, falling back
+  to the fragment only when the path cannot be read.
+- **`precompact-preserve.py` named a file the snapshot did not hold (#53)**
+  Its closing line — read after the context is cut, when the session can no longer check it
+  against anything it remembers — announced *"plan + progress are on disk under
+  `.compaction-snapshots/`"*, and only the plan was ever copied there. The progress log is the
+  half that matters: the plan is a stable document that survives on its own, while the progress
+  log is the record of THIS session and the thing compaction makes unreproducible. Both are now
+  snapshotted, the sentence names only what was actually copied, and the progress path comes from
+  `ActivePlan.slug` rather than from slicing the plan's filename a second time — the duplication
+  `squad/plan.py` was created to end.
+- **`hooks/README.md` still described the shell era in the half nothing checked (#54)**
+  `test_hook_declarations_agree.py` verifies the count line and the inventory table. The rest had
+  rotted: *"Every hook uses `set -euo pipefail`"*, *"Create `hooks/{name}.sh` with
+  `#!/bin/bash`"*, *"Add tests in `tests/hooks/test_{name}.sh`"* — there is no `.sh` in `hooks/`
+  or in `tests/hooks/` — and a Shared Library section claiming `squad.layout` *"sets `$ECO` and
+  `$PROJECT_DIR`"*, which it does not, being a module that returns a dataclass. The instructions a
+  contributor follows pointed at the wrong language and at only one of the two files a hook must
+  be wired into.
+
 - **`install.sh` deleted a consumer's own hook wiring while preserving the hook file (#34)**
   Ownership of `settings.json` was modelled per top-level key, and `hooks` is the one key both the
   kit and the consumer legitimately write to. `mine["hooks"] = kit["hooks"]` therefore deleted a
@@ -1148,4 +1262,3 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 - **`hooks/validate-command.sh`: closed 2 over-blocks that rejected legitimate commands (#2, #4).** Both guards matched raw text over the whole command string with no notion of context, so commands that never ran git — or never targeted a dangerous path — were rejected with exit 2. (1) **F9 (#2):** the F4 main-protection matched `git switch main` + `git commit` anywhere in the command text, so any command that merely *quoted* them was blocked — an `echo`, a commit message, and notably `gh issue create --body "…"` describing the F4 bypass itself, which made it impossible to document the very rule the hook enforces. The trigger was also terminator-sensitive (`git commit'` did not fire, `git commit ` did), so the false positive looked intermittent. Quoted content is now blanked before main-protection matching only — every other guard still matches the raw command, because there a quoted argument (`rm -rf "$HOME"`) is a real target, not a citation. (2) **F10 (#4):** `DANGEROUS_PATH_RE`'s `/\*` alternative had no anchor, so any `dir/sub/*` matched like a root glob and `rm -rf /tmp/deep/dir/sub/*` was blocked — contradicting the hook's own message, which tells the operator to scope deletions to deep subdirectories and `/tmp/`. The alternative is now anchored to the start of an argument. Regression tests written first (TDD, RED: 4 failing): `tests/hooks/test_validate_command.sh` covers both over-blocks plus the guards that must stay closed — the real `git switch main && git commit` bypass (quoted `-m` included), `checkout -b main`, `rm -rf /*`, `/home/<user>`, `$HOME`, `/etc/foo` — 49/49 pass. Honest limit recorded in #4 and deliberately NOT fixed: the three `rm` greps remain uncorrelated (they scan the whole command, not the same invocation). It bit this very commit — a message citing dangerous commands tripped the guard and had to be passed via `-F` instead of inline. Two fixes were tried and rejected as worse: blanking quoted content in that guard too would destroy real targets (a quoted argument there IS the target), and requiring command position per segment would let indirect execution through `xargs` and `find -exec` slip past, both caught today. A safe fix needs real shell tokenization. **Not yet propagated to consumers** — the hook is in the `scripts/patch_install.sh` manifest, so a kit patch run ships both fixes, but that run has not happened.
 - **`hooks/validate-command.sh`: closed 5 git-safety guard bypasses + 1 over-block (#1).** The `rm -rf`, force-push, and git-rule guards matched a single fixed spelling/position, so equivalent rewrites of the same destructive command slipped through: `rm -fr`/`-Rf`/`-f -r`/`--recursive --force` (flag order), `git push origin main --force` and `+refspec` (force token not right after `push`), and `git -C DIR <subcmd>`/`-c K=V` (global options smuggled a forbidden subcommand past the `git <subcmd>` anchor; main-protection also read the cwd branch, not the `-C` target). Also `git switch main && git commit` (stale single branch read) and a jq fail-OPEN (missing/broken jq exited non-2 under `set -e`, which Claude treats as allow → all checks silently disabled). Fixes: strip git global options before matching; detect recursive intent in any flag order; match the force token anywhere in push args + leading-`+` refspec; apply main-protection on an inline `git switch/checkout main`; fail CLOSED when jq is unavailable/parse fails. Also narrowed the `/home` guard to bare roots so legitimate deep project paths under `/home` are allowed. Repro confirmed against the pre-fix hook; regression tests added first (TDD): `tests/hooks/test_validate_command.sh` now covers all bypasses (39/39 pass). Found while building the `review-cycle` project (which mirrored this hook); its M1 adversarial review + a 49-case bypass suite caught these.
 - **`hooks/validate-command.sh` now blocks every local mutation of `main`, not just `git commit` (rules-audit 2026-06-28).** The "no work on main" gate only intercepted `git commit`, so `git merge`/`rebase`/`reset`/`cherry-pick` onto `main` slipped through — a hole in the PR-only invariant that `cycle-release.md` promises. The gate now blocks `commit`/`merge`/`rebase`/`reset`/`cherry-pick` when `HEAD` is `main`. `push` is intentionally NOT blocked (release legitimately pushes a tag; `push --force` is already blocked globally on every branch). Regression test added first (TDD): `tests/hooks/test_validate_command.sh` now covers merge/rebase/reset/cherry-pick blocked-on-main and allowed-on-develop (28/28 pass).
-

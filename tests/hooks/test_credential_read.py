@@ -121,3 +121,42 @@ def test_the_guard_does_not_claim_to_be_a_sandbox() -> None:
     assert "does not make the deny list a sandbox" in prose, \
         "and the guard must not read as more than it is"
     assert "python3 -c" in source, "the named example of what still gets through"
+
+
+@pytest.mark.parametrize("command", [
+    "grep -rn credentials src/",
+    "grep -rn kubeconfig docs/",
+    "rg credentials",
+], ids=lambda c: c.replace(" ", "_").replace("/", "_"))
+def test_a_search_TERM_is_not_a_path(command: str) -> None:
+    """`grep -rn credentials src/` is an audit, not an exfiltration.
+
+    Every token of the command was matched against the deny globs, so the WORD
+    being searched for was read as the FILE being opened. `**/credentials` and
+    `**/kubeconfig` have no extension and no separator, which is exactly the
+    shape a search term has — and looking for where credentials are used is one
+    of the commonest security reviews there is.
+
+    Worse than the block was its advice: *narrow the glob in settings.json*. The
+    glob is right. What was wrong is calling a bare word a path.
+
+    A term that LOOKS like a filename (`secret.yaml`) stays refused. The doubt is
+    real there and this is a security gate: a token carrying a separator or a
+    suffix is treated as a path, and only a bare word is read as prose.
+    """
+    assert _hook().check_credential_read(command, _REPO) is None, \
+        f"{command!r} was refused, but nothing in it names a file"
+
+
+def test_a_bare_word_that_IS_a_file_on_disk_is_still_refused(tmp_path: Path) -> None:
+    """The narrowing must not reopen the door it was cut beside.
+
+    `credentials` with no separator and no suffix is a search term — unless a
+    file by that name is sitting there, which is the case the deny glob was
+    written for.
+    """
+    (tmp_path / "settings.json").write_text(
+        json.dumps({"permissions": {"deny": ["Read(**/credentials)"]}}), encoding="utf-8")
+    (tmp_path / "credentials").write_text("token=1\n", encoding="utf-8")
+
+    assert _hook().check_credential_read("cat credentials", tmp_path)

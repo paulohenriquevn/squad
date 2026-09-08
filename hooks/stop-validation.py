@@ -13,7 +13,16 @@ Four questions, in increasing order of how much they cost to get wrong:
 
 `STOP_VALIDATION_WARN_ONLY=1` turns every blocker into a warning. It exists for
 the bulk reorganisation whose rationale lives elsewhere, and it is the ONLY thing
-that opens these gates.
+that opens these gates deliberately.
+
+THE GATE FIRES ONCE
+-------------------
+`stop_hook_active` says this stop attempt was already interrupted by a Stop hook.
+On that second pass the blockers become warnings and the session ends. A gate
+answering the same way forever is not a stricter gate — it is a session with no
+exit, because the environment variable above is not something the model can set
+for this hook's own process. The finding is still reported in full; what stops is
+the refusal, after the one reader it had has already seen it and stopped anyway.
 
 WHAT COUNTS AS THIS SESSION'S WORK
 -----------------------------------
@@ -36,6 +45,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import StopContext, create_context
 from squad.layout import resolve
+from squad.public_copy import is_public
+from squad.public_copy import warnings as public_copy_warnings
 
 WARN_ONLY = os.environ.get("STOP_VALIDATION_WARN_ONLY", "0") == "1"
 
@@ -59,6 +70,15 @@ UNIT_MANIFESTS = ("package.json", "go.mod", "pyproject.toml", "Cargo.toml")
 #: Comment openers stripped before deciding whether a diff carried code.
 COMMENT_LEAD = re.compile(r"^\s*(//|\*|/\*|\*/|#).*$")
 
+#: Seconds for the leakage scan, against the 120s `hooks.json` gives this hook.
+#: The margin is not spare capacity — being killed at the runtime's limit is the
+#: ONE failure this file cannot record, because the process that would write the
+#: note is the process that died. Everything else here is spent on up to six git
+#: calls, and on the tree walk the TDD gate does.
+_LEAKAGE_TIMEOUT = 60
+#: Seconds per git call. Six of them plus the leakage scan must still fit.
+_GIT_TIMEOUT = 8
+
 
 #: Gates this hook tried to run and could not. Same idea as `_GIT_UNREACHABLE`
 #: below, for the checks that live in a separate script.
@@ -68,6 +88,22 @@ _GATE_UNREACHABLE: list[str] = []
 #: nothing. Module-level because every caller of `changed_files()` needs the
 #: distinction and none of them should have to thread it.
 _GIT_UNREACHABLE: list[str] = []
+
+
+#: Answers, not failures. Each is git reporting the state of the repository, and
+#: each is a state the caller handles two lines later: a branch that was never
+#: pushed has no upstream, and `HEAD~1` does not resolve in a one-commit history.
+#: Recording them as unmeasurable fired the "GATES DID NOT RUN" alarm on the
+#: normal case, which is how an alarm becomes something people scroll past.
+#: Kept narrow on purpose. A blanket "unknown revision" would also swallow a
+#: real failure — a bad SHA, a corrupted ref — and this list exists to separate
+#: those from the states below, not to widen the silence.
+_EXPECTED_ABSENCE = (
+    "not a git repository",
+    "no upstream configured",
+    "does not have an upstream",
+    "ambiguous argument 'head~1",
+)
 
 
 def git(*args: str) -> str:
@@ -81,7 +117,8 @@ def git(*args: str) -> str:
     a secret gate that did not run and a session that ended clean.
     """
     try:
-        done = subprocess.run(["git", *args], capture_output=True, text=True, timeout=15)  # noqa: PLW1510
+        done = subprocess.run(["git", *args], capture_output=True, text=True,  # noqa: PLW1510
+                              timeout=_GIT_TIMEOUT)
     except (OSError, subprocess.SubprocessError) as exc:
         _GIT_UNREACHABLE.append(f"`git {' '.join(args)}`: {type(exc).__name__}")
         return ""
@@ -90,12 +127,31 @@ def git(*args: str) -> str:
         # Outside a repository there is genuinely nothing to validate, and saying
         # so on every prompt in a scratch directory is noise. Every OTHER failure
         # is a measurement that did not happen.
-        if not any("not a git repository" in line.lower() for line in detail):
+        if not any(phrase in line.lower()
+                   for line in detail for phrase in _EXPECTED_ABSENCE):
             _GIT_UNREACHABLE.append(
                 f"`git {' '.join(args)}` exited {done.returncode}: "
                 f"{(detail[0] if detail else '')[:120]}")
         return ""
     return done.stdout
+
+
+def unreachable_warning(files: list[str]) -> str:
+    """What the gates below were actually graded against, said honestly.
+
+    The sentence used to assert the checks *"graded an empty file list"* whether
+    or not the list was empty — reproduced with one changed file present, named
+    by the TDD gate three paragraphs under the claim it was not there. A warning
+    about unreliable measurement that misreports its own input teaches the reader
+    to discount it, which is the one thing it cannot afford.
+    """
+    detail = "".join(f"\n    - {line}" for line in dict.fromkeys(_GIT_UNREACHABLE))
+    graded = ("an empty file list rather than this session's work"
+              if not files else
+              f"{len(files)} file(s), which may be only part of this session's work")
+    return ("STOP GATES DID NOT RUN — git could not be asked what changed, so the "
+            f"leakage, test, changelog and secret checks below graded {graded}:{detail}\n"
+            "  This is not a pass. Re-run the checks once git is reachable.")
 
 
 def changed_files() -> list[str]:
@@ -275,7 +331,7 @@ def check_leakage(project_dir: Path, kit_dir: Path) -> str | None:
     try:
         done = subprocess.run(  # noqa: PLW1510 — returncode is read below
             [sys.executable, str(script), "--repo", str(project_dir), "--strict"],
-            capture_output=True, text=True, timeout=120)
+            capture_output=True, text=True, timeout=_LEAKAGE_TIMEOUT)
     except (OSError, subprocess.SubprocessError) as exc:
         _GATE_UNREACHABLE.append(
             f"reference-leakage: could not be run ({type(exc).__name__})")
@@ -292,6 +348,8 @@ def check_leakage(project_dir: Path, kit_dir: Path) -> str | None:
 
 def main() -> None:
     c = create_context(StopContext)
+    # Already refused once on this stop attempt. Report, do not refuse again.
+    second_pass = c.stop_hook_active
     layout = resolve()
     root = layout.project_dir if layout else Path.cwd()
     kit = layout.kit_dir if layout else root
@@ -314,17 +372,12 @@ def main() -> None:
             f"A STOP GATE DID NOT RUN — and not running is not passing:{detail}")
 
     if _GIT_UNREACHABLE:
-        detail = "".join(f"\n    - {line}" for line in dict.fromkeys(_GIT_UNREACHABLE))
-        warnings.append(
-            "STOP GATES DID NOT RUN — git could not be asked what changed, so the "
-            "leakage, test, changelog and secret checks below graded an empty file "
-            f"list rather than this session's work:{detail}\n"
-            "  This is not a pass. Re-run the checks once git is reachable.")
+        warnings.append(unreachable_warning(files))
     elif not files and not warnings:
         c.output.allow()
 
     def gate(message: str) -> None:
-        (warnings if WARN_ONLY else blockers).append(message)
+        (warnings if (WARN_ONLY or second_pass) else blockers).append(message)
 
     # ── tests ────────────────────────────────────────────────────────────────
     sources = [f for f in files if is_production_source(f)]
@@ -366,20 +419,18 @@ def main() -> None:
              f"before stopping:{listed}")
 
     # ── public copy ──────────────────────────────────────────────────────────
-    if any(re.search(r"(^|/)README\.md$", f) for f in files):
-        added = [ln for ln in git("diff", "--", "*README.md").splitlines()
-                 if ln.startswith("+")]
-        joined = "\n".join(added)
-        if re.search(r"\bproduction[ ]?-?[ ]?(ready|grade)\b", joined, re.IGNORECASE):
-            warnings.append(
-                "README.md introduces a 'production-ready' claim. Until v1.0 with "
-                "measured evidence, prefer 'designed for' or 'targeted at' framings "
-                f"({kit}/rules/public-copy.md).")
-        if re.search(r"\b(99\.9|99\.95|99\.99)[ ]?%[ ]?(uptime|sla)", joined, re.IGNORECASE):
-            warnings.append(
-                "README.md introduces a specific SLA/uptime number. Per the honesty "
-                "rule, specific SLAs require sustained production measurement. Remove "
-                "or qualify with 'target SLO' / 'designed to support'.")
+    # The same nine checks `public-copy-lint` applies after an edit, from the
+    # same module. This gate used to carry two of them, rewritten by hand, so
+    # 'battle-tested', 'enterprise-grade', 'drop-in replacement', 'zero
+    # downtime', 'lock-in free', '<X> killer' and an unbacked 'faster than' were
+    # warned about at edit time and passed the end-of-session gate untouched.
+    for name in (f for f in files if is_public(f)):
+        try:
+            content = (root / name).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for claim in public_copy_warnings(content):
+            warnings.append(f"{name}: {claim} ({kit}/rules/public-copy.md)")
 
     # ── report ───────────────────────────────────────────────────────────────
     if blockers:
@@ -393,6 +444,12 @@ def main() -> None:
         print("-" * 44, file=sys.stderr)
         print("Resolve every BLOCK above before stopping. To override for a documented "
               "reason, re-run with STOP_VALIDATION_WARN_ONLY=1.", file=sys.stderr)
+    if warnings and second_pass:
+        warnings.append(
+            "This is the second stop attempt (stop_hook_active), so the gates above "
+            "are reported and NOT enforced — a hook that refuses every attempt "
+            "leaves no way to end the session. Nothing above was resolved by being "
+            "downgraded; it is owed exactly as it was on the first pass.")
     if warnings:
         print("=" * 44)
         print("  STOP VALIDATION — ADVISORY WARNINGS")

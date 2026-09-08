@@ -23,6 +23,12 @@ from squad import SessionStartContext, create_context
 from squad.layout import Layout, has_kit, resolve
 from squad.plan import resolve as resolve_plan
 
+#: Seconds per call, against the 30s `hooks.json` gives this hook. Four git
+#: calls run before the drift check, so the two budgets have to fit together:
+#: being killed here costs the session its whole opening context, silently.
+_GIT_TIMEOUT = 4
+_DRIFT_TIMEOUT = 10
+
 #: The prefixes of every count line `check_install_drift` prints. Kept in one
 #: place so a new class the gate learns to name lands in this summary the same
 #: way the others do, rather than silently going missing here.
@@ -47,24 +53,39 @@ _DRIFT_ATTENTION_PREFIXES = (
 )
 
 
-def _git(*args: str) -> str | None:
+def _git(root: Path, *args: str) -> str | None:
     try:
-        done = subprocess.run(["git", *args], capture_output=True, text=True,  # noqa: PLW1510
-                              timeout=5)
+        done = subprocess.run(["git", "-C", str(root), *args],  # noqa: PLW1510
+                              capture_output=True, text=True, timeout=_GIT_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return None
     return done.stdout.strip() if done.returncode == 0 else None
 
 
-def git_line() -> str | None:
-    if not Path(".git").is_dir():
+def git_line(root: Path) -> str | None:
+    """Branch, dirty count and distance from upstream — or nothing, outside a repo.
+
+    Two things this must not do, both of which it did.
+
+    It must not decide by looking for a `.git` DIRECTORY. Inside a git worktree
+    `.git` is a file pointing at the common git dir, so the check was false and
+    the whole line vanished — in the environment the kit uses most, since
+    `/review` runs its agents in isolated worktrees and `validate-command` guards
+    the stash they share. Asking git whether this is a work tree is the question
+    that was meant, and it answers for both shapes.
+
+    And it must not read the process's working directory. A hook does not choose
+    its CWD; the project is `layout.project_dir`, which is what every other hook
+    here resolves before doing anything.
+    """
+    if _git(root, "rev-parse", "--is-inside-work-tree") != "true":
         return None
-    branch = _git("branch", "--show-current") or "(detached)"
-    porcelain = _git("status", "--porcelain")
+    branch = _git(root, "branch", "--show-current") or "(detached)"
+    porcelain = _git(root, "status", "--porcelain")
     if porcelain is None:
         return None
     dirty = len([ln for ln in porcelain.splitlines() if ln.strip()])
-    ahead = _git("rev-list", "--count", "@{upstream}..HEAD") or "0"
+    ahead = _git(root, "rev-list", "--count", "@{upstream}..HEAD") or "0"
     state = "clean" if dirty == 0 else f"{dirty} uncommitted files"
     return f"Git: branch={branch} ({state}, {ahead} ahead of upstream)"
 
@@ -153,7 +174,7 @@ def drift_line(layout: Layout) -> str | None:
             [sys.executable, str(checker),
              "--install", str(layout.kit_dir),
              "--kit", str(source)],
-            capture_output=True, text=True, timeout=20,
+            capture_output=True, text=True, timeout=_DRIFT_TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -210,7 +231,7 @@ def chain_lines(eco: Path) -> list[str]:
 
 
 def build_context(layout: Layout) -> str:
-    lines = [line for line in (git_line(), plan_line(layout.eco),
+    lines = [line for line in (git_line(layout.project_dir), plan_line(layout.eco),
                                 loop_line(layout.eco), drift_line(layout))
              if line]
     lines.extend(chain_lines(layout.eco))

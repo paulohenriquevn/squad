@@ -18,11 +18,8 @@ a time, and the assertions live one directory over from the wiring they lock.
 from __future__ import annotations
 
 import importlib.util
-import os
 import sys
 from pathlib import Path
-
-import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _HOOK_PATH = _REPO / "hooks" / "sessionstart-context.py"

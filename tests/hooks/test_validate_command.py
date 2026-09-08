@@ -233,3 +233,57 @@ def test_the_worktree_is_read_from_dash_c_not_only_from_the_cwd(tmp_path: Path) 
     outside.mkdir()
 
     assert _run(root, f"git -C {lane} stash", cwd=outside) == 2
+
+
+def test_the_branch_is_read_from_dash_c_not_only_from_the_cwd(tmp_path: Path) -> None:
+    """`git -C <repo> commit` is judged by the branch of THAT repo.
+
+    `strip_git_globals` removed `-C <path>` so the commit would still be seen,
+    and then the branch was resolved in the cwd — so the guard read the right
+    verb against the wrong repository. Both directions were wrong: a commit onto
+    a trunk was allowed because the current directory happened to sit on
+    `workspace`, and a legitimate commit was refused naming a branch the target
+    repo was not on.
+
+    `working_trees()` in the same file already honours `-C`, for the reason its
+    docstring gives: the fleet's briefs drive git that way.
+    """
+    here = _repo_on(tmp_path / "here", "workspace")
+    there = _repo_on(tmp_path / "there", "main")
+
+    assert _run(here, f"git -C {there} commit -m x") == 2, \
+        "a commit onto another repo's trunk walked through"
+    assert _run(there, f"git -C {here} commit -m x") == 0, \
+        "a commit onto workspace was refused because the CWD sat on a trunk"
+
+
+def test_the_permanent_branch_cannot_be_deleted(tmp_path: Path) -> None:
+    """`workspace` is a single permanent branch, never deleted, never recreated.
+
+    Every rule about it assumed it exists. Deleting it discards whatever was not
+    promoted, and the next `git switch workspace` creates a branch with the same
+    name and none of the history the rules refer to.
+    """
+    root = _repo_on(tmp_path, "workspace")
+
+    assert _run(root, "git branch -D workspace") == 2
+    assert _run(root, "git branch -d develop") == 2
+    assert _run(root, "git branch -D fix/some-bug") == 0, \
+        "a disposable branch is the caller's business"
+
+
+def test_a_cd_earlier_in_the_chain_is_part_of_the_deletion(tmp_path: Path) -> None:
+    """`cd /etc && rm -rf *` is the same deletion as `rm -rf /etc/*`.
+
+    Judging each segment alone fixed a false positive and opened its mirror: the
+    dangerous path moved into a `cd` that the `rm` segment no longer carries.
+    Both halves are needed — the segment rule stays, and a `cd` onto a system or
+    home root travels with it.
+    """
+    root = _repo_on(tmp_path, "workspace")
+
+    assert _run(root, "cd /etc && rm -rf *") == 2
+    assert _run(root, "cd /home/someone\nrm -rf .") == 2
+    assert _run(root, "cd build && rm -rf *") == 0, \
+        "a project-relative cd is not a system root"
+    assert _run(root, "cd /etc && ls -la") == 0, "reading there is not deleting there"

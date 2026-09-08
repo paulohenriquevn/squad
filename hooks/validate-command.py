@@ -35,6 +35,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import PreToolUseContext, create_context
+from squad.boundaries import violation
+from squad.layout import resolve
 
 # ── the read-only zone (rules/reference-provenance.md § 1) ────────────────────
 ZONE = r"(\./)?(\.claude/)?study-material/"
@@ -71,13 +73,50 @@ EXPORT_PIPE_RE = re.compile(r"\|\s*(tee|dd)(\s|$)")
 ZONE_WRITE_RE = re.compile(
     rf"(^|\s|;|&&|\|\||\||\()\s*((rm|mv|cp|sed\s+-i|tee)\s+[^;&|]*{ZONE}|>{{1,2}}\s+{ZONE})")
 
+#: The two branches the flow depends on existing. `workspace` is a single
+#: permanent branch and `develop` is where promotion lands; deleting either
+#: discards work that was never promoted and leaves the next `git switch` to
+#: recreate the name with none of the history every rule refers to.
+BRANCH_DELETE_RE = re.compile(r"git\s+branch\s+(-\S*\s+)*-\S*[dD]\S*\s+"
+                              r"(?P<name>(origin/)?(workspace|develop))(\s|$)")
+
+#: A command that writes to a file, and the tokens it writes to. `>`/`>>` name
+#: their target directly; the verbs take theirs as operands. Not exhaustive and
+#: cannot be — the same honest limit `check_credential_read` states.
+WRITE_VERB_RE = re.compile(
+    r"(^|\s|;|&&|\|\||\||\()\s*(sudo\s+)?"
+    r"(sed\s+-i\S*|rm|mv|cp|tee|truncate|chmod|chown|install|dd|touch)(\s|$)")
+REDIRECT_TARGET_RE = re.compile(r">{1,2}\s*(?P<target>[^\s&>|;]+)")
+
 PKG_INSTALL_RE = re.compile(
     r"(pip|poetry|uv|npm|pnpm|yarn|cargo|go\s+(get|mod))\s+(install|add|tidy|download)")
 
 
+#: Seconds per git call, against the 10s `hooks.json` gives this hook. Three run
+#: in sequence on the worst path — the worktree listing, the current branch and
+#: the remote's default. At the old 5s each that path could not fit, and a
+#: PreToolUse hook killed at its limit blocks nothing while looking like it ran.
+#: Local git answers these in milliseconds; the budget is for a cold cache.
+_GIT_TIMEOUT = 2
+
+
+def _git_prefix(command: str) -> list[str]:
+    """The `-C <path>` the command itself carries, as arguments for `git`.
+
+    The repository a command acts on is the one it NAMES, not the one the session
+    happens to sit in. `working_trees()` has honoured this since kit#31; the
+    branch guards did not, so `strip_git_globals` correctly saw `git commit` and
+    then asked the wrong repository which branch it was on. That read a trunk as
+    `workspace` and `workspace` as a trunk, one release apart.
+    """
+    where = DASH_C_RE.search(command)
+    return ["-C", where.group(1).strip("'\"")] if where else []
+
+
 def _git_out(*args: str) -> str:
     try:
-        done = subprocess.run(["git", *args], capture_output=True, text=True, timeout=5)  # noqa: PLW1510
+        done = subprocess.run(["git", *args], capture_output=True, text=True,  # noqa: PLW1510
+                              timeout=_GIT_TIMEOUT)
     except (OSError, subprocess.SubprocessError):
         return ""
     return done.stdout.strip() if done.returncode == 0 else ""
@@ -105,9 +144,7 @@ def working_trees(command: str) -> int:
     on the agent's behalf reaches the stack unread. It closes the accident and the
     habit, which is what happened on 2026-09-04; it is not a sandbox.
     """
-    where = DASH_C_RE.search(command)
-    prefix = ["-C", where.group(1).strip("'\"")] if where else []
-    listing = _git_out(*prefix, "worktree", "list", "--porcelain")
+    listing = _git_out(*_git_prefix(command), "worktree", "list", "--porcelain")
     return sum(1 for line in listing.splitlines() if line.startswith("worktree "))
 
 
@@ -127,7 +164,7 @@ def segments(command: str, *, with_pipe: bool = False) -> list[str]:
     return pattern.split(command)
 
 
-def trunks() -> list[str]:
+def trunks(prefix: list[str] | None = None) -> list[str]:
     """`main`, `master`, and whatever the remote actually calls its default.
 
     F12: a project whose trunk is `trunk` or `release` installed this kit, read
@@ -136,7 +173,8 @@ def trunks() -> list[str]:
     they have their own rules and are never the trunk.
     """
     names = ["main", "master"]
-    default = _git_out("symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+    default = _git_out(*(prefix or []), "symbolic-ref", "--short",
+                       "refs/remotes/origin/HEAD")
     default = default.removeprefix("origin/")
     if default and default not in ("workspace", "develop") and default not in names:
         names.append(default)
@@ -158,6 +196,13 @@ def check_git(command: str) -> str | None:
     if re.search(r"git\s+revert(\s|$)", cmd):
         return ("BLOCKED: 'git revert' is forbidden by Unbreakable Rule 4. "
                 "Create a new commit that reverses the change explicitly.")
+    deleting = BRANCH_DELETE_RE.search(_QUOTED.sub("", cmd))
+    if deleting:
+        return (f"BLOCKED: '{deleting.group('name')}' is a permanent branch of the "
+                f"flow (git-safety.md § 1) and is never deleted. Deleting it "
+                f"discards whatever was not promoted, and the next 'git switch' "
+                f"recreates the name with none of the history the rules refer to. "
+                f"Delete the disposable branch instead, or leave it.")
     for segment in segments(cmd, with_pipe=True):
         if re.search(r"git\s+push(\s|$)", segment) and FORCE_TOKEN_RE.search(segment):
             return ("BLOCKED: force push is forbidden. Use --force-with-lease only "
@@ -183,8 +228,9 @@ def check_git(command: str) -> str | None:
                 "reach a clean tree: copy the files aside with 'cp', or commit them "
                 "on your own branch, then 'git restore'.")
 
-    branch = _git_out("branch", "--show-current") or "unknown"
-    names = trunks()
+    prefix = _git_prefix(command)
+    branch = _git_out(*prefix, "branch", "--show-current") or "unknown"
+    names = trunks(prefix)
 
     on_trunk = branch in names
     moving_to_trunk = any(_targets(unquoted, name) for name in names)
@@ -216,6 +262,22 @@ def check_git(command: str) -> str | None:
     return None
 
 
+CD_RE = re.compile(r"(^|\s)cd\s+(?P<path>[^\s;&|]+)")
+
+
+def _dangerous_cwd(segment: str) -> bool:
+    """Did this segment move the shell onto a system or home root?
+
+    A `cd` carries its path to every segment after it, so `cd /etc && rm -rf *`
+    is the deletion `rm -rf /etc/*` spells out. Judging segments in isolation is
+    right — it is what stopped an `rm` from one command being read against a path
+    from another — but the isolation has to end where the shell's own state
+    crosses the boundary.
+    """
+    found = CD_RE.search(segment)
+    return bool(found and DANGEROUS_PATH_RE.search(found.group("path").rstrip("/") + " "))
+
+
 def check_rm(command: str) -> str | None:
     """The three conditions have to hold in the SAME segment.
 
@@ -236,11 +298,16 @@ def check_rm(command: str) -> str | None:
     same line"*. Blocking a real `rm -rf /etc` inside a compound still works,
     because there all three conditions live in one segment.
     """
+    at_risk = False
     for segment in segments(command):
-        if (RM_INVOCATION_RE.search(segment) and RM_RECURSIVE_RE.search(segment)
-                and DANGEROUS_PATH_RE.search(segment)):
+        if RM_INVOCATION_RE.search(segment) and RM_RECURSIVE_RE.search(segment) \
+                and (DANGEROUS_PATH_RE.search(segment) or at_risk):
             return ("BLOCKED: 'rm -r' on a system/home-root path. Scope recursive deletions "
                     "to project-relative paths, deep project subdirectories, or /tmp/.")
+        # Evaluated after the `rm`, because a `cd` in the SAME segment runs after
+        # it too — `rm -rf * ; cd /etc` deletes the current directory's contents.
+        if _dangerous_cwd(segment):
+            at_risk = True
     return None
 
 
@@ -297,6 +364,40 @@ def check_commit_message(command: str) -> str | None:
     return None
 
 
+def check_kit_boundary(command: str, project_dir: Path) -> str | None:
+    """Refuse a shell write into the installed kit — the same line `Edit` holds.
+
+    `boundary-check` guards `Edit`/`Write` and this guards the shell; both ask
+    `squad.boundaries` where the line is, so the two halves cannot drift apart.
+    While only the first existed, `sed -i` reached the file the other had just
+    refused, and the reason the boundary exists — a fix inside an installed kit
+    protects one machine and the next install erases it — says nothing about
+    which tool did the writing.
+
+    Reading stays allowed everywhere: an agent that cannot read its own contracts
+    cannot follow them.
+    """
+    # `warn` stays on. `squad.layout` says why in its own docstring — *"a hook
+    # that silences the broken-install warning reproduces the exact failure the
+    # warning was added for"* — and a broken install is precisely when this
+    # guard is not running while the session looks protected. The repetition is
+    # the point: it only fires when something is wrong.
+    layout = resolve(project_dir)
+    if layout is None or layout.kind == "standalone":
+        return None
+
+    for segment in segments(command, with_pipe=True):
+        targets: list[str] = []
+        if WRITE_VERB_RE.search(segment):
+            targets += re.findall(r"(?<!\S)(/[^\s;&|>]+|\.{1,2}/[^\s;&|>]+)", segment)
+        targets += [m.group("target") for m in REDIRECT_TARGET_RE.finditer(segment)]
+        for token in targets:
+            reason = violation(Path(token.strip("'\"")), layout)
+            if reason:
+                return reason
+    return None
+
+
 def check_package_install(command: str, cwd: Path) -> str | None:
     if PKG_INSTALL_RE.search(command) and ZONE_RE.search(str(cwd) + "/"):
         return ("BLOCKED: never install dependencies inside study-material/. "
@@ -337,6 +438,32 @@ def _credential_globs(project_dir: Path) -> list[str]:
     return []
 
 
+def _names_a_path(token: str, project_dir: Path) -> bool:
+    """Is this token a FILE the command opens, or a WORD it searches for?
+
+    Every token used to be compared against the deny globs, so the term being
+    searched for was read as the file being opened: `grep -rn credentials src/`
+    was refused because `credentials` matches `**/credentials`. The globs with no
+    separator and no suffix — `credentials`, `kubeconfig`, `id_rsa` — are exactly
+    the shape a search term has, and looking for where credentials are USED is
+    one of the commonest reviews there is. The refusal then sent the reader to
+    narrow a glob that was correct.
+
+    A separator, a suffix or a leading dot means path, and stays refused:
+    `secret.yaml` as a search term is collateral this gate accepts, because the
+    doubt is real and the cost of guessing wrong runs one way. The leading dot is
+    not decoration — `Path(".env").suffix` is empty, so a dotfile reads as a bare
+    word and the commonest credential file of all would walk straight through.
+    A bare word is prose unless a file by that name is actually there.
+    """
+    if "/" in token or Path(token).suffix or token.startswith(("~", ".")):
+        return True
+    try:
+        return (project_dir / token).exists()
+    except OSError:
+        return False
+
+
 def check_credential_read(command: str, project_dir: Path) -> str | None:
     """Refuse a shell command that reads a path `settings.json` denies to `Read`.
 
@@ -360,6 +487,8 @@ def check_credential_read(command: str, project_dir: Path) -> str | None:
         return None
 
     for token in re.findall(r"[\w./~@+-]+", command):
+        if not _names_a_path(token, project_dir):
+            continue
         name = token.rsplit("/", 1)[-1]
         for glob in globs:
             bare = glob.removeprefix("**/")
@@ -387,14 +516,23 @@ def main() -> None:
     # zone filter tested for `records/` and the guards had moved to
     # `study-material/`, every zone guard was unreachable and its silence read
     # as a clean pass.
-    for reason in (
-        check_git(command) if "git" in command else None,
-        check_rm(command) if "rm" in command else None,
-        check_zone(command, project_dir) if "study-material/" in command else None,
-        check_commit_message(command) if "git" in command else None,
-        check_package_install(command, Path.cwd()),
-        check_credential_read(command, project_dir),
-    ):
+    #
+    # Deferred rather than evaluated into a tuple, so the first refusal is the
+    # last work done. Three of these shell out to git and one resolves the
+    # layout from disk; a tuple ran all of them for a command the first guard
+    # had already refused, inside the 10s this hook gets before the runtime
+    # kills it — and a PreToolUse hook killed at its limit blocks nothing.
+    checks = (
+        lambda: check_git(command) if "git" in command else None,
+        lambda: check_rm(command) if "rm" in command else None,
+        lambda: check_zone(command, project_dir) if "study-material/" in command else None,
+        lambda: check_commit_message(command) if "git" in command else None,
+        lambda: check_package_install(command, Path.cwd()),
+        lambda: check_credential_read(command, project_dir),
+        lambda: check_kit_boundary(command, project_dir),
+    )
+    for check in checks:
+        reason = check()
         if reason:
             c.output.exit_block(reason)
 
