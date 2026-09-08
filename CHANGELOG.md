@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`route_domain.py` resolved the project root from its own file, so a plugin install routed by the kit's empty table (#37)**
+  `_find_project_root(Path(__file__))` walked up from the mechanism's own location. In the plugin-native
+  layout that location is inside the kit, and the kit has a `rules/`, so the walk stopped on its first
+  step. A consumer with a valid `rules/domain-routing.txt` and its specialist on disk got
+  `FATAL: <kit>/rules/domain-routing.txt: has no routing row` — which reads as "you never derived your
+  table" and sends the reader to fix something already correct, the same symptom the README attributes
+  to an underived table. The root is now derived from the invocation: an explicit `--project-root` wins
+  outright, then `CLAUDE_PROJECT_DIR`, then the working directory walking up to the first `.git`, and
+  the `__file__` walk remains last so the standalone repository and the copy install behave exactly as
+  before. `check_intake_gates.py` now passes `--project-root` instead of relying on the inference, which
+  is where the same defect sat one level up. Four tests cover the resolution; every existing test passed
+  `--rule` or called the parser directly, which is why nothing saw it.
 - **VERA asserted severity, work size and a solution from substring matches (#38)**
   `agents/vera-technical-arbiter.md` already stated the contract — *"`vera.py` still owns the emission …
   It is a formatter … You supply the judgement it used to fake"* — and the code still did the faking.

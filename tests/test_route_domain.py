@@ -15,10 +15,16 @@ table and the specialists on disk — whatever they are.
 """
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+_REPO = Path(__file__).resolve().parents[1]
+_SCRIPT = _REPO / "mechanisms" / "cycle" / "route_domain.py"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
 from kit_agents import kit_agents
@@ -467,3 +473,132 @@ def test_a_broken_route_says_what_goes_in_the_missing_file(tmp_path, capsys) -> 
     assert "invariants" in out.lower(), "must name what the file has to carry"
     assert "svc-a" in out and "svc-b" in out, "must hand over the repos already derived"
     assert "agents/README.md" in out, "must point at the contract rather than restate it whole"
+
+
+# ── where the table is looked for ─────────────────────────────────────────────
+#
+# Every test above either passes `--rule` or calls the parser directly, which is
+# how the defect below survived: nothing exercised the resolution that decides
+# WHICH table gets parsed.
+
+def _consumer_tree(root: Path, *, under_dot_claude: bool = False) -> Path:
+    """A project with its own routing table and its own specialist on disk."""
+    base = root / ".claude" if under_dot_claude else root
+    (base / "rules").mkdir(parents=True, exist_ok=True)
+    (base / "agents").mkdir(parents=True, exist_ok=True)
+    (base / "rules" / "domain-routing.txt").write_text(
+        "backend | my-service | agents/backend.md\n", encoding="utf-8"
+    )
+    (base / "agents" / "backend.md").write_text("# backend\n", encoding="utf-8")
+    return root
+
+
+def _route(project: Path, target: str, env_extra: dict[str, str]) -> subprocess.CompletedProcess:
+    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project), **env_extra}
+    env.pop("CLAUDE_PLUGIN_ROOT", None)
+    env.update(env_extra)
+    return subprocess.run(  # noqa: PLW1510 — the returncode is the assertion
+        [sys.executable, str(_SCRIPT), target, "--json"],
+        capture_output=True, text=True, cwd=str(project), env=env,
+    )
+
+
+def test_it_routes_from_the_consumers_table_when_the_kit_lives_outside_the_project(
+    tmp_path: Path,
+) -> None:
+    """The plugin-native layout, which is the one the manifest describes.
+
+    `.claude-plugin/plugin.json`: "the kit's CODE lives outside the project, under
+    $CLAUDE_PLUGIN_ROOT, and the project keeps only the cycle's DATA (records/,
+    rules/*.txt, agents/*.md)."
+
+    The root was derived from `Path(__file__)` — the mechanism's own location —
+    which in that layout is inside the kit, and the kit has `rules/`, so the walk
+    stopped there on its first step and parsed the empty table the kit ships.
+    Reproduced 2026-09-08 (#37): exit 2, FATAL, naming the kit's path, with a
+    perfectly good table sitting in the project.
+    """
+    project = _consumer_tree(tmp_path / "proj")
+
+    done = _route(project, "my-service", {"CLAUDE_PLUGIN_ROOT": str(_REPO)})
+
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+    payload = json.loads(done.stdout)
+    assert payload["routed"] is True
+    assert payload["domain"] == "backend"
+
+
+def test_it_finds_the_table_under_dot_claude_in_a_copy_install(tmp_path: Path) -> None:
+    """The copy install keeps working — `.claude/rules/` and `.claude/agents/`."""
+    project = _consumer_tree(tmp_path / "proj", under_dot_claude=True)
+
+    done = _route(project, "my-service", {})
+
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+    assert json.loads(done.stdout)["routed"] is True
+
+
+def test_it_routes_from_a_subdirectory_of_the_project(tmp_path: Path) -> None:
+    """An agent invokes this from wherever it is standing."""
+    project = _consumer_tree(tmp_path / "proj")
+    deep = project / "services" / "api"
+    deep.mkdir(parents=True)
+
+    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project),
+           "CLAUDE_PLUGIN_ROOT": str(_REPO)}
+    done = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(_SCRIPT), "my-service", "--json"],
+        capture_output=True, text=True, cwd=str(deep), env=env,
+    )
+
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+    assert json.loads(done.stdout)["routed"] is True
+
+
+def test_an_explicit_rule_path_still_wins(tmp_path: Path) -> None:
+    """`--rule` is the operator saying which table; nothing may second-guess it."""
+    project = _consumer_tree(tmp_path / "proj")
+    other = tmp_path / "elsewhere"
+    (other / "agents").mkdir(parents=True)
+    (other / "rules").mkdir(parents=True)
+    (other / "rules" / "domain-routing.txt").write_text(
+        "infra | terraform | agents/infra.md\n", encoding="utf-8"
+    )
+    (other / "agents" / "infra.md").write_text("# infra\n", encoding="utf-8")
+
+    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project)}
+    done = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(_SCRIPT), "terraform", "--json",
+         "--rule", str(other / "rules" / "domain-routing.txt")],
+        capture_output=True, text=True, cwd=str(project), env=env,
+    )
+
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+    assert json.loads(done.stdout)["domain"] == "infra"
+
+
+def test_an_explicit_project_root_is_the_only_subject_considered(tmp_path: Path) -> None:
+    """A caller that names its subject is not second-guessed.
+
+    `check_intake_gates.py` judges the project it was pointed at, which need not
+    be the one the shell stands in — and before `--project-root` existed it relied
+    on the `__file__` walk to infer that, which is #37 one level up.
+    """
+    project = _consumer_tree(tmp_path / "proj")
+    elsewhere = _consumer_tree(tmp_path / "other")
+    (elsewhere / "rules" / "domain-routing.txt").write_text(
+        "infra | my-service | agents/infra.md\n", encoding="utf-8"
+    )
+    (elsewhere / "agents" / "infra.md").write_text("# infra\n", encoding="utf-8")
+
+    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(elsewhere)}
+    done = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(_SCRIPT), "my-service", "--json",
+         "--project-root", str(project)],
+        capture_output=True, text=True, cwd=str(elsewhere), env=env,
+    )
+
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+    assert json.loads(done.stdout)["domain"] == "backend", (
+        "the named project lost to the environment or the working directory"
+    )

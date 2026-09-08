@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -59,6 +60,56 @@ def _find_project_root(start: Path) -> Path:
             return current
         current = current.parent
     return start.resolve()
+
+
+def _candidate_roots(declared_root: Path | None = None) -> list[Path]:
+    """Where the CONSUMER's table might be, in the order it should be trusted.
+
+    Derived from the INVOCATION, never from this file's own location. Deriving it
+    from `Path(__file__)` is what broke the plugin-native layout: the kit lives
+    outside the project there, the kit has a `rules/`, so the walk stopped on its
+    first step and parsed the empty table the kit ships. Measured 2026-09-08
+    (#37) — a consumer with a valid table and its specialist on disk got
+    `FATAL: <kit>/rules/domain-routing.txt: has no routing row`, which reads as
+    "you never derived your table" and sends the reader to fix something that is
+    already correct.
+
+    `.claude-plugin/plugin.json` states why the project is the right subject:
+    "the kit's CODE lives outside the project ... and the project keeps only the
+    cycle's DATA (records/, rules/*.txt, agents/*.md)".
+
+    The walk up from the working directory stops at the first `.git`, so a
+    mechanism run inside a subdirectory finds its own project and never a parent
+    project's table.
+    """
+    roots: list[Path] = []
+
+    def add(path: Path) -> None:
+        resolved = path.resolve()
+        if resolved not in roots:
+            roots.append(resolved)
+
+    # `--project-root` is a caller naming its subject, and nothing may second-guess
+    # it. `check_intake_gates.py` judges a project it was pointed at, which is not
+    # necessarily the one the shell is standing in — before this existed it relied
+    # on the `__file__` walk to infer it, which is the defect one level up.
+    if declared_root is not None:
+        return [declared_root.resolve()]
+
+    declared = os.environ.get("CLAUDE_PROJECT_DIR")
+    if declared:
+        add(Path(declared))
+
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        add(candidate)
+        if (candidate / ".git").exists():
+            break
+
+    # Last: the walk this function used to be. It is what makes the standalone
+    # repository and the copy install keep behaving exactly as they did.
+    add(_find_project_root(Path(__file__)))
+    return roots
 
 
 #: Where the routing table lives, newest first. `rules/domain-routing.txt` is the
@@ -225,13 +276,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Route a repo to its domain specialist.")
     parser.add_argument("target", help="repo name, or a path to a B-NNN item file")
     parser.add_argument("--rule", type=Path, default=None, help="override the routing table path")
+    parser.add_argument("--project-root", type=Path, default=None,
+                        help="the project whose table to read; without it the root is "
+                             "resolved from CLAUDE_PROJECT_DIR, then the working directory")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
-    project_root = _find_project_root(Path(__file__))
-    rule_path = args.rule or _routing_table_path(project_root)
+    rule_path = args.rule
+    if rule_path is None:
+        for candidate in _candidate_roots(args.project_root):
+            rule_path = _routing_table_path(candidate)
+            if rule_path is not None:
+                break
     if rule_path is None or not rule_path.is_file():
-        print("FATAL: rules/cycle-backlog.md not found — cannot route", file=sys.stderr)
+        # Name where it looked. "not found" over an unstated search is what makes
+        # a layout defect read as a missing file the reader is supposed to create.
+        looked = ", ".join(str(r) for r in _candidate_roots(args.project_root)[:4])
+        print(f"FATAL: no rules/domain-routing.txt (nor a legacy cycle-backlog.md) "
+              f"under any of: {looked} — cannot route", file=sys.stderr)
         return 2
 
     try:

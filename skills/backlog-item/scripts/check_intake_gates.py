@@ -163,8 +163,13 @@ def _route(repo: str, project_root: Path) -> dict[str, Any]:
         return {"routed": False, "outcome": "inconclusive", "reason": "route_domain_missing",
                 "error": "route_domain.py not found under scripts/ or .claude/scripts/"}
 
+    # The project is NAMED, never inferred. This used to rely on `route_domain.py`
+    # deducing its root from `Path(__file__)` — which only worked because the copy
+    # install puts the mechanism inside the project being judged, and silently read
+    # the wrong table anywhere else (#37).
     result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(script), repo, "--json"],
+        [sys.executable, str(script), repo, "--json",
+         "--project-root", str(project_root)],
         capture_output=True, text=True,
     )
     outcome, reason = _ROUTE_OUTCOME.get(
