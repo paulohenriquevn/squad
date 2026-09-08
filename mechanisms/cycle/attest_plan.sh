@@ -6,9 +6,25 @@
 # hash and compares against the live file. Mismatch → injection blocked +
 # tamper warning to the agent.
 #
-# Supports dual-mode layouts:
-#   - Standalone — CWD contains skills/+rules/+hooks/ directly.
-#   - Plugin install — CWD has .claude/ or .claude/plugins/cycle/ subdir.
+# WHERE IT WRITES, AND WHY IT NO LONGER DECIDES THAT ITSELF
+#
+# The ecosystem is resolved by `squad.layout`, the same module the three hooks
+# that CONSUME the attestation resolve through (`squad/plan.py`). One definition,
+# because the writer and the reader must agree or the guarantee is not there.
+#
+# It used to probe for `skills/+rules/+hooks/` under `.`, `.claude/` and
+# `.claude/plugins/cycle/` — a path named after the ancestor project — and fall
+# back to `.`. In the plugin-native layout the kit lives OUTSIDE the project, so
+# none of the three matched, the fallback fired, and this script operated on
+# `<project>/records/plans/` and `<project>/.attestations/` while the hooks read
+# `<project>/.claude/`. Measured 2026-09-08 (#36): with the plan where
+# `rules/records-location.md` mandates it, `/plan-attest` exited 1 with "plan file
+# not found"; with the plan at the root, an attestation was written that no hook
+# would ever open, and `Attestation.tampered` is False when there is nothing to
+# compare against — so an edited plan was injected every turn, silently.
+#
+# A layout that does not resolve is now an error. The old fallback wrote into a
+# directory no reader consults, and `--verify` then reported OK about it.
 #
 # Workflow:
 #   1. After editing a plan file, run: bash mechanisms/cycle/attest_plan.sh {slug}
@@ -26,19 +42,24 @@ set -eu
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 cd "$PROJECT_DIR" || exit 1
 
-# Resolve ecosystem dir: standalone (.) → user config (.claude/) → plugin (.claude/plugins/cycle/)
-resolve_ecosystem_dir() {
-  for candidate in "." ".claude" ".claude/plugins/cycle"; do
-    if [ -d "$candidate/skills" ] && [ -d "$candidate/rules" ] && [ -d "$candidate/hooks" ]; then
-      printf '%s' "$candidate"
-      return 0
-    fi
-  done
-  # Fallback: standalone
-  printf '%s' "."
-}
+# The kit's own root, from this script's location: `mechanisms/cycle/` is two deep.
+# Only used to put `squad` on the import path — never to decide where DATA goes.
+KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-ECOSYSTEM_DIR=$(resolve_ecosystem_dir)
+# One resolver, shared with the hooks that read what this writes.
+ECOSYSTEM_DIR="$(PYTHONPATH="$KIT_ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 -c '
+from squad.layout import resolve
+layout = resolve()
+print(layout.eco if layout else "")
+' || true)"
+
+if [ -z "$ECOSYSTEM_DIR" ]; then
+  echo "ERROR: no Squad layout resolves from $PROJECT_DIR." >&2
+  echo "  The attestation has to land where the hooks read it, and that is" >&2
+  echo "  decided by squad/layout.py. Refusing rather than writing somewhere" >&2
+  echo "  nothing will look — an attestation nobody reads verifies nothing." >&2
+  exit 1
+fi
 ATTEST_DIR="${ECOSYSTEM_DIR}/.attestations"
 PLANS_DIR="${ECOSYSTEM_DIR}/records/plans"
 

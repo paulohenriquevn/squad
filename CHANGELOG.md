@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Plan attestation was inert in the plugin-native layout: the writer and the readers resolved two different roots (#36)**
+  `attest_plan.sh` probed for `skills/+rules/+hooks/` under `.`, `.claude/` and `.claude/plugins/cycle/`
+  — a path named after the ancestor project — and fell back to `.`. In the plugin-native layout the kit
+  lives outside the project, so the fallback always fired and the script operated on
+  `<project>/records/plans/` and `<project>/.attestations/`, while the three hooks that consume the
+  attestation read `<project>/.claude/` through `squad/plan.py`. With the plan where
+  `rules/records-location.md` mandates it, `/plan-attest` exited 1 with "plan file not found", so an
+  attestation could not be produced at all; with the plan at the project root, one was written where no
+  hook would ever open it. Either way `Attestation.expected` stayed `None`, and `tampered` is False when
+  there is nothing to compare against — so an edited plan was injected every turn with no warning, and
+  the SHA256 tamper detection `SECURITY.md` advertises never fired. The script now asks `squad.layout`
+  for the ecosystem, the same module the hooks resolve through, and a layout that does not resolve is an
+  error rather than a write into a directory nothing consults. New suite `tests/test_attest_plan.py`
+  pins the property that was missing — the file the writer produces is the file the reader opens — in
+  both the plugin and standalone layouts, including that an edited plan comes back `tampered` end to end.
 - **`route_domain.py` resolved the project root from its own file, so a plugin install routed by the kit's empty table (#37)**
   `_find_project_root(Path(__file__))` walked up from the mechanism's own location. In the plugin-native
   layout that location is inside the kit, and the kit has a `rules/`, so the walk stopped on its first
