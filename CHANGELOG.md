@@ -7,6 +7,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`issue_lifecycle.py` reported labelling and closing issues it never touched (#39)**
+  Three defects, compounding into one clean report over nothing. `_find_issue_numbers_in_log` assigned
+  its git command three times and the last assignment was `git log HEAD`, so the `branch` argument had
+  no effect — `label_in_develop(branch="develop")` scanned whatever was checked out, in repositories
+  with no `develop` at all. `_run(..., check=False)` never raised, so every `except` guarding it was
+  unreachable and `labeled.append()`/`closed.append()` ran unconditionally: reproduced in a repository
+  with no remote, `gh issue edit` failed and the result was `{'labeled': [42], 'errors': []}`. And
+  closing was gated on `git tag --verify`, which demands a GPG signature, so in a project that does not
+  sign tags every tag was skipped by a bare `continue` and the answer was byte-identical to "nothing to
+  close". `_run` now returns `Ran(ok=…)` — the shape `fleet_lander.py` already uses in this directory —
+  and nothing is recorded as done without it; a branch that does not resolve raises `LookupFailed`
+  instead of returning an empty set; signature verification is opt-in via `--require-signature` and its
+  refusals are reported in `skipped`; and `Closes #N` is read from the range since the previous tag plus
+  the tag's own annotation, rather than from the tagged commit alone, which for a release cut as a
+  `develop → main` pull request carries none. `fleet_supervisor.sh` now actually calls the module after
+  the lander: the loop's docstring promised "route -> land -> label/close" and the old test asserted the
+  order by checking the file had "3+ steps", so the module was executed by nothing.
 - **`backlog_status.py --unblock` deleted the stated impediment beside the id it was clearing (#40)**
   `unblock` rebuilt the field from the surviving ids, so clearing `B-002` out of
   `blocked_by: B-002 — awaiting the sponsor's decision on hosting` dropped the whole line. The ship that

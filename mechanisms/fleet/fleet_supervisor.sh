@@ -85,6 +85,22 @@ _land_loop() {
     echo "── $(_stamp) ── land ──"
     # shellcheck disable=SC2086
     python3 "$_here/fleet_lander.py" --repo "$KIT" $APPLY
+
+    # The third step, and it was missing entirely until 2026-09-08. The loop's own
+    # docstring said "route -> land -> label/close" and the suite asserted the
+    # order by checking the file had "3+ steps" — so `issue_lifecycle.py` was
+    # executed by nothing, and the rule it enforces (label on develop, close only
+    # on release) stayed a manual chore while the automation reported nothing to
+    # do. See #39.
+    #
+    # It writes to the tracker, which is outside this machine, so a dry run says
+    # what it would do rather than doing it.
+    echo "── $(_stamp) ── issues ──"
+    if [ -n "$APPLY" ]; then
+      python3 "$_here/issue_lifecycle.py" --repo "$KIT" || true
+    else
+      echo "   (dry run: the tracker is not touched)"
+    fi
     echo "── $(_stamp) ── land done (next in ${LAND_INTERVAL}s) ──"
     [ "$ONCE" -eq 1 ] && break
     sleep "$LAND_INTERVAL"
