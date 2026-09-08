@@ -83,7 +83,7 @@ LOOP BACK to SELECT
 | `ITEM_SHIPPED` | The item reached `RELEASED` — the FINAL cut — and its block says `shipped` | Loop back to SELECT. Written by `mechanisms/cycle/advance_items.py`, which reads `RELEASED` and never `PRE_RELEASED`: a pre-release must not close work it did not finish |
 | `ITEM_KILLED` | Measurement refuted the hypothesis | Loop back to SELECT. **A successful outcome** |
 | `ITEM_VERIFIED_LOCAL` | The fix is implemented and verified, and every file it changed is untracked, so no release can carry it. Decided by `all_changes_are_untracked()` in `mechanisms/cycle/advance_items.py`, which runs the `git check-ignore` test defined below | Loop back to SELECT. **A terminal state, not a failure** |
-| `ITEM_IN_FLIGHT` | Paused where only a person can act — branch protection requiring a reviewer, a T3 call, a dependency in another repository | Resume when the human answers |
+| `ITEM_IN_FLIGHT` | Held on a **material impediment** — a machine, a credential, elapsed time, a system not standing (`halt_disposition.py`, `decision-delegation.txt § retained_classes`). Branch protection requiring a reviewer is no longer one of these: it is a violated premise caught at intake | Resume when the impediment is cleared. **The queue does not wait on it** — it takes the next item |
 | `ITEM_BLOCKED` | A sub-cycle blocked, recoverably | Surface, then loop back to SELECT — other items still move | _(emitted externally: the maintenance runner that owns ADVANCE does not exist yet — SELECT is mechanized by `select_backlog_item.py`, the phases after it are not, and this row is the declared debt rather than a silent gap)_
 | `ITEM_UNROUTABLE` | `repo` is in no domain | Surface. The item cannot proceed until the repo is cloned or the routing table names it. _(emitted externally: the CONDITION is detected by `route_domain.py`, which prints `UNROUTED` and exits 3; the token is written by the runner that surfaces it. The skill that named it was retired 2026-08-31, and the detector was not)_ |
 | `BACKLOG_EMPTY` | Nothing `raw` or `triaged` | **Run `/discover-execute --sweep {domain}`.** Not a finish line |
@@ -250,11 +250,17 @@ happened to be watching.
 Read it before adding a stop to any phase: a gate that waits for an answer nobody will
 give is not a gate.
 
-### Stopping at a human gate is a phase ending, not a phase skipping
+### Stopping on a material impediment is a phase ending, not a phase skipping
 
-A phase that runs and stops because only a person can open the next door ends with
-`AWAITING_HUMAN`, and **the event is emitted**. The work happened; the item is held;
-both are facts, and neither reaches any reader on its own.
+A phase that runs and stops because the item needs something no authority supplies —
+a machine, a credential, elapsed time — ends with `AWAITING_HUMAN`, and **the event is
+emitted**. The work happened; the item is held; both are facts, and neither reaches any
+reader on its own.
+
+**This is now the only way a phase between DISCOVER and ACCEPTANCE ends on a person**
+(`autonomy-envelope.md § The autonomous span`). A gate that failed, a loop that stopped
+improving and a plan that cannot be levelled are all the queue's own work, and they end
+with the item back in the registry rather than in front of somebody.
 
 An item worked this way and left silent is indistinguishable from one nobody touched:
 zero events, zero artefacts, the status it started with. The board draws it as

@@ -7,7 +7,8 @@ Bump-level resolution:
   - major: ### Removed non-empty OR any ### Changed entry starts with 'BREAKING:'
   - minor: ### Added non-empty AND no major trigger
   - patch: only ### Fixed / ### Security entries
-  - ambiguous: prints 'AMBIGUOUS' to stdout, exits 3.
+  - minor: any ### Changed entry (see cycle-release.md — resolved, not guessed)
+  - undeterminable (an [Unreleased] with no entries at all): prints 'AMBIGUOUS', exits 3.
 
 Usage:
     python3 compute_next_version.py --current v1.2.3 --bump auto --changelog CHANGELOG.md
@@ -101,46 +102,68 @@ def _is_breaking(entry: str) -> bool:
     return bool(_BREAKING.match(_without_emphasis(entry).upper()))
 
 
-def derive_bump(unreleased: dict[str, list[str]]) -> str | None:
+#: Which clause of § Bump-level derivation decided, so a caller can say WHY without
+#: re-deriving it. Split out when the `changed` clause stopped pausing (2026-09-08):
+#: a level that resolves a genuinely undecidable question must be able to name the rule
+#: that resolved it, or it is indistinguishable from a guess to everyone downstream.
+_RULE_TO_LEVEL = {
+    "removed": "major",
+    "breaking": "major",
+    "added": "minor",
+    "changed": "minor",
+    "fixed": "patch",
+}
+
+
+def deciding_rule(unreleased: dict[str, list[str]]) -> str | None:
+    """Name the clause that decides this body's level, or None if none does.
+
+    Order is the contract, not an implementation detail — each clause is reached only
+    when every clause above it declined. `changed` sits ABOVE `fixed` deliberately:
+    control used to fall through to `patch` without `changed` ever being consulted, and
+    the real 0.72.0 release shipped as a patch because of it.
+    """
     if not unreleased:
         return None
 
-    removed = unreleased.get("Removed", [])
-    changed = unreleased.get("Changed", [])
-    added = unreleased.get("Added", [])
-    fixed = unreleased.get("Fixed", [])
-    security = unreleased.get("Security", [])
-
-    breaking_in_changed = any(_is_breaking(c) for c in changed)
-    if removed or breaking_in_changed:
-        return "major"
-    if added:
-        # Decided BEFORE `changed` on purpose. Under 0.x a breaking change is a minor bump, so when
-        # `Added` is present the answer is minor whether or not the `Changed` entry breaks anyone —
-        # the undecidable fact stops mattering. Pausing here would ask a question whose two answers
-        # agree, and a pause nobody can act on differently is how pauses stop being read.
-        return "minor"
-    if changed:
-        # B-094 — UNDECIDABLE, and therefore a pause rather than a guess.
+    if unreleased.get("Removed"):
+        return "removed"
+    if any(_is_breaking(c) for c in unreleased.get("Changed", [])):
+        return "breaking"
+    if unreleased.get("Added"):
+        # Decided BEFORE `changed` on purpose. Under 0.x a breaking change is a minor bump,
+        # so when `Added` is present the answer is minor whether or not the `Changed` entry
+        # breaks anyone — the undecidable fact stops mattering.
+        return "added"
+    if unreleased.get("Changed"):
+        # B-094 — undecidable from the section, and resolved to `minor` rather than asked.
         #
-        # `cycle-release.md § Bump-level derivation` already argues this: a non-breaking `Changed`
-        # is a MINOR if a caller depended on the old behaviour and a PATCH if not, and the section
-        # text does not carry that fact. The pause is how the question reaches a human.
+        # A non-breaking `Changed` is a MINOR under 0.x if a caller depended on the old
+        # behaviour and a PATCH if not, and the section text does not carry that fact. It
+        # never will: a CHANGELOG records what changed, not who depended on it.
         #
-        # It used to fire only when `Changed` was ALONE. Beside `Fixed` or `Security` — the common
-        # shape — control fell through to `patch` below without `changed` ever being consulted.
-        # Measured on the real 0.72.0 CHANGELOG: `--bump auto` returned `0.71.1`, exit 0, no pause,
-        # for a release whose `### Changed` entry says two published functions now reject an input
-        # class they previously accepted. That release went out as a minor only because a human
-        # overrode the derivation by hand.
+        # Until 2026-09-08 this returned None and paused the chain for a person. Nobody is
+        # coming — `rules/autonomy-envelope.md § The autonomous span` places RELEASE inside
+        # the system's own authority — so the pause was a stopped release wearing the
+        # costume of caution.
         #
-        # Guessing either way is worse than asking. `minor` turns every reworded entry into a
-        # compatibility signal; `patch` understates a real break and delivers it silently to anyone
-        # on a caret range — the exact failure semver exists to prevent.
-        return None
-    if fixed or security:
-        return "patch"
+        # `minor` is not a coin toss between two equal errors. `patch` on a real break
+        # delivers it SILENTLY to everyone on a caret range, the single failure semver
+        # exists to prevent; `minor` on a compatible change leaves a version number larger
+        # than it needed to be, which a caret range does not even pick up. One error reaches
+        # a consumer and the other does not, so the rule decides toward the recoverable
+        # side. `rules/cycle-release.md § Why a `Changed`-only release resolves to `minor``
+        # carries the argument and the stated cost.
+        return "changed"
+    if unreleased.get("Fixed") or unreleased.get("Security"):
+        return "fixed"
     return None
+
+
+def derive_bump(unreleased: dict[str, list[str]]) -> str | None:
+    """The level the [Unreleased] sections imply, or None when there are no entries."""
+    rule = deciding_rule(unreleased)
+    return _RULE_TO_LEVEL[rule] if rule else None
 
 
 def level_under_zerover(level: str, current: tuple[int, int, int]) -> str:
@@ -251,38 +274,50 @@ def main() -> int:
             print(f"changelog not found for auto-bump: {args.changelog}", file=sys.stderr)
             return 2
         unreleased = extract_unreleased_subsections(args.changelog)
+        rule = deciding_rule(unreleased)
         derived = derive_bump(unreleased)
+
+        if rule == "changed":
+            # The one level this script RESOLVES rather than reads. It travels with its
+            # reason on stderr, where stdout stays exactly the version string every caller
+            # parses. A resolved question that leaves no trace of having been resolved is
+            # how a rule decays back into a guess nobody can audit.
+            print(
+                "bump: minor — derived from `### Changed` with no `Added`, no `Removed` "
+                "and no `BREAKING:` entry.\n"
+                "Under 0.x this body cannot distinguish a break from a compatible change, "
+                "so it resolves toward the recoverable error: `patch` would ship a break "
+                "silently to every caret range.\n"
+                "See rules/cycle-release.md \u00a7 Why a `Changed`-only release resolves "
+                "to `minor`. Pass --bump patch to override.",
+                file=sys.stderr,
+            )
         if derived is not None:
             # B-100 — the DERIVED class is placed under 0.x semantics here, where we know it came
             # from an inference rather than from a person.
             derived = level_under_zerover(derived, current)
         if derived is None:
-            # B-047 — the pause STAYS, and it stops being one word.
+            # The `Changed`-only body stopped arriving here on 2026-09-08 — it now resolves
+            # to `minor` above. What still reaches this branch is an [Unreleased] with NO
+            # entries in any section, and that is not an undecidable level: it is a release
+            # with nothing in it.
             #
-            # A `Changed`-only [Unreleased] is an ordinary release shape — "we changed how something
-            # already published behaves, without adding or removing anything" — and it is genuinely
-            # undecidable from the section alone, BECAUSE this package is 0.x. Under 0.x a breaking
-            # change is a MINOR bump and a compatible one is a PATCH, so the level depends on a fact
-            # the section does not contain. Guessing minor turns every reworded entry into a
-            # compatibility signal; guessing patch understates a real break — the failure semver
-            # exists to prevent, delivered silently to anyone on a caret range.
+            # It stays a refusal rather than becoming a default, and it is the one exit-3 the
+            # autonomous span tolerates, because no choice of level makes an empty release
+            # correct. `changelog_section_nonempty.py` is the gate that normally catches this
+            # first; this is the same fact reaching the version computation.
             #
-            # stdout keeps EXACTLY `AMBIGUOUS` because `skills/release/SKILL.md` parses it and a
-            # caller may capture it into a version variable. The question goes to stderr, where a
-            # human reading a paused chain looks.
+            # stdout keeps EXACTLY `AMBIGUOUS` because `skills/release/SKILL.md` parses it and
+            # a caller may capture it into a version variable.
             print("AMBIGUOUS")
             print(
                 "\n"
-                "The [Unreleased] sections do not determine a level: no `Added`, no `Removed`,\n"
-                "and no entry opening with `BREAKING:`.\n"
+                "The [Unreleased] section carries no entries at all — there is nothing to\n"
+                "release, which is a different problem from an underivable level.\n"
                 "\n"
-                "  The question: does this change behaviour a caller depends on?\n"
-                "\n"
-                "    yes -> minor   (under 0.x, MINOR is the breaking level)\n"
-                "    no  -> patch   (a compatible change: internals, wording, performance)\n"
-                "\n"
-                "Re-run with --bump minor or --bump patch. rules/cycle-release.md\n"
-                "\u00a7 Bump-level derivation records why this is not derived.",
+                "  Write what this release contains under Added / Changed / Fixed /\n"
+                "  Removed / Security, then re-run. rules/cycle-release.md\n"
+                "  \u00a7 Bump-level derivation lists what each section derives.",
                 file=sys.stderr,
             )
             return 3

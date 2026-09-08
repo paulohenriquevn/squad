@@ -229,6 +229,42 @@ def check_squad_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return not findings, [f"  {f['message']}" for f in findings]
 
 
+def check_merge_autonomy(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """May the system merge its own passing PRs to the trunk?
+
+    `rules/autonomy-envelope.md` floor 2 makes that a PREMISE of running the kit rather
+    than a capability a project may withhold. A remote requiring a human approving review
+    does not narrow the envelope — it parks every item at an open PR at the end of its
+    chain, and the queue drains into branches nobody merges.
+
+    Asked here because this is the check that runs before anything else does. Discovering
+    it per-item costs the run; discovering it here costs one API call.
+
+    **A remote that cannot be reached is NOT_RUN, not a pass.** The gate reports its three
+    states separately for exactly this reason, and collapsing UNCHECKED into success would
+    make a partial install read as a verified premise.
+    """
+    checker = ecosystem_dir / "mechanisms" / "gates" / "check_merge_autonomy.py"
+    if not checker.exists():
+        return NOT_RUN, ["  check_merge_autonomy.py not installed — skipping"]
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), "--json"],
+        capture_output=True, text=True, cwd=str(ecosystem_dir),
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return NOT_RUN, [f"  check_merge_autonomy.py produced no usable JSON "
+                         f"(exit {result.returncode}) — the premise was not tested"]
+    verdict = payload.get("result")
+    if verdict == "violated":
+        return False, ["  " + line for line in str(payload.get("message", "")).splitlines()]
+    if verdict == "unchecked":
+        return NOT_RUN, ["  the merge premise was not tested (gh absent, unauthenticated, "
+                         "or unparseable) — this is not a pass"]
+    return True, []
+
+
 def check_mechanisms_inventory(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Does `mechanisms/README.md` still list what `mechanisms/` holds?
 
@@ -593,6 +629,7 @@ def main(argv: list[str] | None = None) -> int:
         ("Squad map", check_squad_map),
         ("README advisory skills", check_readme_advisory_skills),
         ("Mechanisms inventory", check_mechanisms_inventory),
+        ("Merge autonomy (envelope floor 2)", check_merge_autonomy),
         ("Orphan verdicts", check_orphan_verdicts),
         ("Phase emitters", check_phase_emitters),
         ("Durable knowledge root", check_wiki_migration),

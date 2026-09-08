@@ -50,6 +50,14 @@ defensible because BRAINSTORM happened — see
 [`rules/autonomy-envelope.md`](autonomy-envelope.md) floor 2 and
 [`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md).
 
+**DISCOVER through ACCEPTANCE is closed to human intervention** (2026-09-08). Ten phase
+rules used to end a halt with *escalate to the human*; all ten now return the item to the
+registry instead, and `mechanisms/cycle/halt_disposition.py` decides which of the two ways
+it goes back. The one door that still reaches a person is a **material impediment** — a
+machine, a credential, elapsed time, a system that is not standing — and it reaches them
+through the registry, never by a session standing still. See
+[`autonomy-envelope.md § The autonomous span`](autonomy-envelope.md).
+
 ## The four roles, and the seam between them
 
 They are **mechanism**: each describes a DECISION, not a repository, which is why

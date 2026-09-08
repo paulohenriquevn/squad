@@ -59,7 +59,7 @@ flowchart TD
     A -->|no| C[Stop — every release traces to a READY_TO_MERGE audit]
     A -->|yes| B
     B -->|no| D[Pause and ask; a guessed bump is a wrong contract]
-    B -->|yes| E[Tag, open the PR, and wait for a human merge]
+    B -->|yes| E[Tag, open the PR, and merge it once the chain passed]
 ```
 
 ## Escalation

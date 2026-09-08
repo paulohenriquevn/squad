@@ -63,7 +63,7 @@ Each cycle has its own verdict vocabulary because the **shape of the decision** 
 | `cycle-implement` | `IMPLEMENTATION_COMPLETE` (completion promise) | — | (halt-loop pauses for human) | — |
 | `cycle-code-quality` | `PASS` | `PASS_WITH_CAVEATS` | `FAIL_SOFT` | `FAIL_HARD` / `INVALID` |
 | `cycle-review` | `READY_TO_MERGE` | `READY_TO_MERGE_WITH_FOLLOWUPS` | `NEEDS_FIXES` | `NEEDS_DEEPER` |
-| `cycle-release` | `RELEASED` (final cut) | `PRE_RELEASED` (an `-rc.N` batch: installable, scope unfinished) | `PR_OPEN_AWAITING_APPROVAL` (a gate did not pass, or branch protection needs a reviewer) | `BLOCKED` |
+| `cycle-release` | `RELEASED` (final cut) | `PRE_RELEASED` (an `-rc.N` batch: installable, scope unfinished) | `PR_OPEN_AWAITING_APPROVAL` (a gate did not pass — a remote needing a reviewer is a violated premise, not a state) | `BLOCKED` |
 | `cycle-acceptance` | `ACCEPTED` | `ACCEPTED_WITH_CAVEATS` | `REJECTED` | `NOT_VALIDATED` |
 | `cycle-idea-to-release` | (delegates to each chained cycle's verdict) | — | (pause + ask human at any gate failure) | — |
 | `cycle-judge-codex` (optional, external plugin) | `SHIPPABLE` / `READY_TO_MERGE` (`:final` only) | `SHIPPABLE_WITH_CAVEATS` | `NEEDS_REVISION` / `NEEDS_FIXES` / `NEEDS_DEEPER` (`:final` only) | `FAIL_HARD` / `INVALID` / `META_DEFECT_FOUND` (`:final` only) / `AGGREGATOR_BUG_SUSPECTED` (`:final` only) |

@@ -222,7 +222,7 @@ Skill(/review {topic-slug})
 - review verdict = `READY_TO_MERGE` → proceed to Phase Rel (unless `--no-release`).
 - review verdict = `READY_TO_MERGE_WITH_FOLLOWUPS` → proceed to Phase Rel, and carry the registered followups into the release PR description. The verdict already proves every HIGH is owned (`consolidate_findings.py` fails closed otherwise), so re-litigating it here would only re-open a question the gate answered.
 - review verdict = `NEEDS_FIXES` → loop once back to `/implement` for targeted fixes, then re-run `/review`. After 1 loop attempt, halt with `BLOCKED`.
-- review verdict = `NEEDS_DEEPER` → halt; loop back to `/plan-write` requires fresh human decision.
+- review verdict = `NEEDS_DEEPER` → halt; the item returns to the registry and re-enters at `/plan-write`.
 
 #### Phase Rel — Release (full-pipeline only; SKIPPED when `--plan-only` OR `--no-release`)
 
@@ -233,7 +233,7 @@ Skill(/release [--bump={forwarded}])
 `/release` opens a develop→main PR and merges it once the chain verifies. The orchestrator emits final verdict:
 
 - `RELEASED` — PR was already merged when this chain ran (`/release` resumed after merge).
-- `PR_OPEN_AWAITING_APPROVAL` — PR is open; cycle is complete on the orchestrator's side. Human approves the PR through GitHub UI to finalize.
+- `PR_OPEN_AWAITING_APPROVAL` — PR is open and the system declined to merge it because a gate did not pass. A remote that requires a human reviewer is a violated premise caught at intake by `check_merge_autonomy.py`, not a state reached here (`autonomy-envelope.md` floor 2).
 
 ### Step 4 — Deliver
 
@@ -265,14 +265,14 @@ Attestation hash: {sha256}
 Next step:
   - plan-only       → /implement {slug} when ready
   - full + no-release → manual /release when ready
-  - PR_OPEN_AWAITING_APPROVAL → approve the PR on GitHub
+  - PR_OPEN_AWAITING_APPROVAL → read which gate did not pass; the PR merges once it does
   - RELEASED + milestone_id   → /acceptance {milestone-id} (the checkbox flips there)
   - RELEASED, no milestone_id → start a new cycle
   - ACCEPTED*       → milestone closed; start a new cycle
   - REJECTED | NOT_VALIDATED  → the release stands, the milestone does not; fix and re-accept
 ```
 
-If any phase blocked → honest report listing what blocked + recommended human action.
+If any phase blocked → honest report listing what blocked, and the disposition `halt_disposition.py` gave the item.
 
 ## Hard gates (cannot proceed)
 
@@ -281,8 +281,8 @@ If any phase blocked → honest report listing what blocked + recommended human 
 3. **Confidence < 30 without `--force-override`** → refuse with suggested next actions.
 4. **`/discover-confidence` final verdict INVALID after improve** → halt; surface blockers; do NOT proceed to plan.
 5. **`/plan-confidence` final verdict INVALID after improve** → halt; surface gaps; do NOT deliver as "ready".
-6. **`/code-quality` returns FAIL_HARD or INVALID** → halt; do NOT proceed to `/review`. Loop back to `/implement` once; if still failing, surface to human.
-7. **`/review` returns NEEDS_DEEPER** → halt; the human re-scopes via a fresh `/plan-write` invocation.
+6. **`/code-quality` returns FAIL_HARD or INVALID** → halt; do NOT proceed to `/review`. Loop back to `/implement` once; if still failing, return the item to the registry with the gate named as its cause (`halt_disposition.py`).
+7. **`/review` returns NEEDS_DEEPER** → halt; the item returns to the registry, and re-scoping is the next pass's work rather than a person's.
 8. **Merging a PR whose chain did not pass** → forbidden. `/release` owns the merge and verifies the verdicts first; the orchestrator never merges on its own, and never with `--admin`.
 
 ## Soft gates (proceed with warning)

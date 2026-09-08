@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from compute_next_version import (
     bump_version,
+    deciding_rule,
     derive_bump,
     level_under_zerover,
     parse_semver,
@@ -99,23 +100,25 @@ def test_the_published_rule_table_is_pinned_end_to_end() -> None:
     # Precedence: a removal outranks an addition, and both outrank a fix.
     assert derive_bump({"Removed": ["x"], "Added": ["y"], "Fixed": ["z"]}) == "major"
     assert derive_bump({"Added": ["y"], "Fixed": ["z"]}) == "minor"
-    # Nothing at all is not a bump — it is the AMBIGUOUS path the caller must handle (B-047).
+    # Nothing at all is not a bump — an [Unreleased] with no entries is a release with
+    # nothing in it, and it is the only remaining AMBIGUOUS path (B-047).
     assert derive_bump({}) is None
 
 
-# B-047 — a `Changed`-only release derives AMBIGUOUS, and the pause is one word.
+# B-047 — a `Changed`-only release USED to derive AMBIGUOUS and pause the chain.
 #
 # Measured 2026-08-18 cutting B-021: `--current 0.61.0 --bump auto` -> `AMBIGUOUS`, on an
-# [Unreleased] with one `### Changed` entry. The script is behaving CORRECTLY — `cycle-release.md`
-# says the chain pauses when the rule cannot pick deterministically, and this is that case.
+# [Unreleased] with one `### Changed` entry.
 #
-# The pause STAYS. Under 0.x a breaking change is a MINOR bump and a compatible one is a PATCH, so
-# `Changed` maps to either depending on a fact the section does not contain: did behaviour a caller
-# depends on change? Guessing minor turns every reworded entry into a compatibility signal; guessing
-# patch understates a real break, which is the failure semver exists to prevent. And guessing is
-# what B-043, B-044 and B-046 — the three sibling findings of the same session — are all about.
+# The pause was correct for as long as somebody was coming to answer it. Since 2026-09-08 nobody
+# is: `rules/autonomy-envelope.md § The autonomous span` puts the whole of RELEASE inside the
+# system's authority, so a pause addressed to an absent person is a stopped release rather than a
+# careful one.
 #
-# What changes is that the pause says what it is asking.
+# The undecidable fact has not become decidable. What changed is that the question is answered
+# ONCE, in writing, toward the recoverable error — see `cycle-release.md § Why a `Changed`-only
+# release resolves to `minor``. Guessing `patch` ships a break silently to everyone on a caret
+# range; guessing `minor` overstates a version number. Only one of those two reaches a consumer.
 
 def _changelog(tmp_path: Path, section: str, entry: str = "- something") -> Path:
     p = tmp_path / "CHANGELOG.md"
@@ -178,46 +181,84 @@ def test_fixed_only_derives_patch(tmp_path: Path) -> None:
     assert result.stdout.strip() == "0.61.1"
 
 
-def test_changed_only_pauses_and_says_why(tmp_path: Path) -> None:
+def test_changed_only_resolves_to_minor_and_never_pauses(tmp_path: Path) -> None:
+    """Renamed from `test_changed_only_pauses_and_says_why`, not edited in place.
+
+    The old name asserted the pause as the contract, and a reader meeting it would go on
+    believing a `Changed`-only body is supposed to stop the chain. It is not, since
+    2026-09-08.
+
+    `minor` is the answer because the two possible errors are not symmetric: `patch` on a
+    real break ships it silently to every caret range, and `minor` on a compatible change
+    only overstates a number.
+    """
     result = _run(_changelog(tmp_path, "Changed"))
 
-    # The parse contract: `SKILL.md` reads stdout, so the token and the exit code must not move.
-    assert result.returncode == 3
-    assert result.stdout.strip() == "AMBIGUOUS"
-    assert "\n" not in result.stdout.strip(), "no prose may leak into stdout"
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "0.62.0"
+    assert "AMBIGUOUS" not in result.stdout
 
-    # The question the human actually has to answer, and what each answer means under 0.x.
-    assert "minor" in result.stderr
-    assert "patch" in result.stderr
-    assert "behaviour" in result.stderr.lower() or "behavior" in result.stderr.lower()
+    # The reason travels with the decision — a derived level nobody can trace back to a
+    # rule is indistinguishable from a guess.
+    assert "minor" in result.stderr.lower()
 
-def test_non_breaking_changed_is_undecidable_even_beside_fixed_or_security() -> None:
+
+def test_no_changelog_shape_pauses_the_release_chain(tmp_path: Path) -> None:
+    """The span promise, asserted directly: `--bump auto` never exits 3 on a body that has
+    any entry at all.
+
+    An empty `[Unreleased]` is a different failure — there is nothing to release — and
+    `changelog_section_nonempty.py` owns it.
+    """
+    for section in ("Added", "Changed", "Fixed", "Security", "Removed"):
+        result = _run(_changelog(tmp_path, section))
+        assert result.returncode == 0, f"{section} paused: {result.stderr}"
+        assert "AMBIGUOUS" not in result.stdout, f"{section} returned AMBIGUOUS"
+
+def test_non_breaking_changed_outranks_fixed_and_security() -> None:
     """B-094 — the shape that shipped 0.72.0 as a patch until a human overrode it.
 
-    `Changed` without an explicit BREAKING marker cannot be derived under 0.x: it is a MINOR if a
-    caller depended on the old behaviour and a PATCH if not, and the section text does not carry
-    that fact. `cycle-release.md § Bump-level derivation` argues exactly this, and the pause is how
-    the question gets asked.
+    Renamed from `..._is_undecidable_...`: the fact is still undecidable from the section,
+    but the OUTCOME is no longer a pause, and the old name asserted the pause.
 
-    The defect was that the pause only fired when `Changed` was ALONE. Beside `Fixed` or
-    `Security` — the common shape — control reached `if fixed or security: return "patch"` without
-    `changed` ever being consulted, and the question was never asked.
+    What this test has always really protected is the CLAUSE ORDER, and that is unchanged.
+    The defect was that `changed` was consulted only when it stood ALONE; beside `Fixed` or
+    `Security` — the common shape — control reached `if fixed or security: return "patch"`
+    without `changed` ever being read.
 
-    Measured on the real 0.72.0 CHANGELOG: `--current 0.71.0 --bump auto` returned `0.71.1`, exit 0,
-    no pause, for a release whose own `### Changed` entry says two published functions now reject an
-    input class they previously accepted.
+    Measured on the real 0.72.0 CHANGELOG: `--current 0.71.0 --bump auto` returned `0.71.1`,
+    exit 0, for a release whose own `### Changed` entry says two published functions now
+    reject an input class they previously accepted. Under the current rule that body derives
+    `minor`, which is what a human had to supply by hand at the time.
     """
     real_072 = {
         "Security": ["setTerminalTitle and osc8Link refuse control bytes."],
         "Changed": ["setTerminalTitle and osc8Link reject inputs they previously accepted."],
         "Fixed": ["The exported VERSION constant reports 0.72.0."],
     }
-    assert derive_bump(real_072) is None
+    assert derive_bump(real_072) == "minor"
+    assert deciding_rule(real_072) == "changed"
 
     # Each pairing on its own, so a future reader can see it is the PRESENCE of `Changed` that
     # decides, not some interaction between the other two sections.
-    assert derive_bump({"Changed": ["reworded"], "Fixed": ["a bug"]}) is None
-    assert derive_bump({"Changed": ["reworded"], "Security": ["a CVE"]}) is None
+    assert derive_bump({"Changed": ["reworded"], "Fixed": ["a bug"]}) == "minor"
+    assert derive_bump({"Changed": ["reworded"], "Security": ["a CVE"]}) == "minor"
+
+    # And `Fixed` alone still reaches the clause below it.
+    assert deciding_rule({"Fixed": ["a bug"]}) == "fixed"
+
+
+def test_the_resolved_level_names_the_rule_that_resolved_it() -> None:
+    """A `Changed`-only body is the one level this script decides rather than reads.
+
+    `deciding_rule` exists so that decision can be named without re-deriving it. A resolved
+    question that leaves no trace of having been resolved is a guess to everyone downstream.
+    """
+    assert deciding_rule({"Changed": ["reworded"]}) == "changed"
+    assert deciding_rule({"Added": ["a feature"], "Changed": ["reworded"]}) == "added"
+    assert deciding_rule({"Removed": ["an API"]}) == "removed"
+    assert deciding_rule({"Changed": ["BREAKING: foo takes two args"]}) == "breaking"
+    assert deciding_rule({}) is None
 
 
 def test_added_beside_changed_is_decidable_and_must_not_pause() -> None:
@@ -318,9 +359,12 @@ def test_a_final_with_no_rc_standing_bumps_normally() -> None:
 
 
 def test_a_standing_rc_needs_no_level_and_never_pauses(tmp_path: Path) -> None:
-    """A `Changed`-only body returns AMBIGUOUS and pauses the chain — but with an rc
-    standing the core is already fixed, so no level can change the answer and asking
-    would pause over a number that does not matter."""
+    """With an rc standing the core version is already fixed, so no level can change the
+    answer and deriving one would be work whose result is discarded.
+
+    The fixture is a `Changed`-only body because that was the shape which used to pause
+    here. It no longer pauses anywhere, and this test keeps asserting the stronger
+    property: the rc path does not consult the CHANGELOG for a level at all."""
     changed_only = _changelog(tmp_path, "Changed")
     for mode in ("pre", "final"):
         result = subprocess.run(

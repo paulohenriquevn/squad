@@ -48,7 +48,7 @@ Run DISCOVER through ACCEPTANCE for one item without invoking nine commands by h
 | Verdict | What it means | What follows |
 |---|---|---|
 | `PR_OPEN_AWAITING_APPROVAL` | The chain ran to the end | A person merges. The queue moves on |
-| `AWAITING_REVIEW` | The alignment gate needs a human tick | Ask for the review; the chain cannot clear this itself |
+| `AWAITING_REVIEW` | The alignment gate has no non-author signature yet | Run `alignment_judge.py` when no person is coming — it reads the item's evidence, signs under its own name, and can refuse |
 | `BLOCKED` | A gate stopped on something the chain cannot pass | Read the report; register the causes as items |
 | `ITEM_KILLED` | Discover refuted the hypothesis | A successful outcome. Nothing further |
 

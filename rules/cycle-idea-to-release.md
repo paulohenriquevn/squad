@@ -78,17 +78,17 @@ Ad-hoc (`/idea-to-release {topic-slug}` with arbitrary slug):
 - Before CODE-QUALITY starts: implementation emitted `IMPLEMENTATION_COMPLETE`.
 - Before REVIEW starts: code-quality verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`}.
 - Before RELEASE starts: review verdict ∈ {`READY_TO_MERGE`, `READY_TO_MERGE_WITH_FOLLOWUPS`}. The second is not a softening: it is only reachable when zero BLOCKER remain and every HIGH is a *registered* followup, which `consolidate_findings.py` verifies against the plan's `## Followups` before emitting it.
-- Final gate: the release PR merges only when its whole chain passed — envelope floor 2. It pauses at `PR_OPEN_AWAITING_APPROVAL` when a gate did not pass, or when branch protection requires a reviewer the system cannot be.
+- Final gate: the release PR merges only when its whole chain passed — envelope floor 2. It pauses at `PR_OPEN_AWAITING_APPROVAL` when **a gate did not pass** — the system declining to merge its own work. A remote whose branch protection requires a human reviewer is no longer a supported configuration but a **violated premise**, reported by `check_merge_autonomy.py` before the first item is selected (envelope floor 2).
 - Before ACCEPTANCE starts: `cycle-release` emitted `RELEASED` AND the plan carries a `milestone_id`. No `milestone_id` → the chain ends at `RELEASED`; there is no milestone to accept.
 
-Any gate failure → pause + surface the blocking finding. The orchestrator does NOT loop indefinitely; after 1 fix-and-retry attempt at the same gate, it halts with `BLOCKED` and asks the human.
+Any gate failure → pause + record the blocking finding. The orchestrator does NOT loop indefinitely; after 1 fix-and-retry attempt at the same gate it halts with `BLOCKED`, **returns the item to the registry with the finding on it, and the queue takes the next item** (`autonomy-envelope.md § A loop ran out of attempts`). It does not wait for a person: an orchestrator parked mid-chain holds a worktree and a branch as well as the item.
 
 ## Stop conditions
 
 - Any cycle's stop condition fires.
-- A hard gate failure that the orchestrator cannot resolve autonomously (e.g., merge conflict, missing credential).
+- A hard gate failure that the orchestrator cannot resolve autonomously (e.g., merge conflict, missing credential). The item returns to the registry; a missing credential is `access` and stays retained there, a merge conflict is the chain's own work and does not.
 - `cycle-acceptance` returns `ACCEPTED` or `ACCEPTED_WITH_CAVEATS` — the milestone is done and its checkbox flipped.
-- `cycle-acceptance` returns `REJECTED` or `NOT_VALIDATED` — halt and surface. The release stands; the milestone does not.
+- `cycle-acceptance` returns `REJECTED` or `NOT_VALIDATED` — halt and return the item to the registry with the acceptance record as its evidence. The release stands; the milestone does not.
 
 ## Scheduling many items at once
 

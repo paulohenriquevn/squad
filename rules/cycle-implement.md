@@ -101,7 +101,7 @@ When a commit closes a `## Phase N` of the plan, `skills/implement/scripts/mini_
 | Verdict | Trigger | Action |
 |---|---|---|
 | `PHASE_REVIEW_PASS` | No HIGH or BLOCKER findings | Proceed to next phase |
-| `PHASE_REVIEW_NEEDS_FIX` | ≥ 1 HIGH/BLOCKER finding | Halt-loop emits BLOCKED with report path; surface to human; resume via § Step 4 "Resume after recovered blocker" only after fix |
+| `PHASE_REVIEW_NEEDS_FIX` | ≥ 1 HIGH/BLOCKER finding | Halt-loop emits BLOCKED with report path; the item returns to the registry carrying it; resume via § Step 4 "Resume after recovered blocker" only after fix |
 
 Aggregated checks: phase completeness, diff cohesion (declared scope vs modified files), wiring summary (pillar a non-negotiable across all phase symbols), delta audit coverage — whether Step 5's audit will look at the phase's files at all (a language not `ENABLED` in `rules/code-quality-languages.txt` is audited by nobody). It replaced an unconditional SKIP: `cq_invoke` scores a whole plan, not a file subset, so no delta-scoped audit was ever running behind that line.
 
@@ -125,7 +125,7 @@ Skipping mini review on phase boundary is a documented anti-pattern: design prob
 - **Test-obligation gate** — `check_test_obligations.py`. Declared concurrency tests / failure scenarios must have at least one matching test in the tree; total absence when the plan promised them is a FAIL (a generic green suite never exercised them).
 - **`/code-quality` verdict ∉ {FAIL_HARD, INVALID}** — `cq_invoke.py`, called internally by `run_validation.py`. FAIL_SOFT and PASS_WITH_CAVEATS surface as WARN in the report but do not block. Override only with `--no-code-quality` (pre-code phase or CQ not installed).
 
-Exit codes: `0` = `PASS` or `PARTIAL` (proceed); `1` = `FAIL` (trigger validation halt-loop — see below); `2` = invocation error (escalate to human).
+Exit codes: `0` = `PASS` or `PARTIAL` (proceed); `1` = `FAIL` (trigger validation halt-loop — see below); `2` = invocation error — the check itself could not run, which is a broken contract rather than a failing slice: register it as its own item and return this one to the registry.
 
 ## Validation halt-loop (mandatory when `run_validation.py` exits 1)
 
@@ -150,18 +150,18 @@ the caller declares which it is.
 
 **Step 4 — TDD halt-loop:**
 
-- Hard gate fails twice on the same task → halt-loop pauses, escalate to human.
+- Hard gate fails twice on the same task → halt-loop pauses; the item returns to the registry with the gate named as its cause.
 - Plan task list exhausted → emit completion promise (`IMPLEMENTATION_COMPLETE`).
 
 **Step 5.5 — Validation halt-loop:**
 
-- Same check FAIL × 3 consecutive iterations with **no observable progress** (identical diagnostic, identical failure shape, no new diff direction) → HALT; surface BLOCKED report to the human. **Do NOT emit `VALIDATION_GATE_PASSED`** — the gate did not pass.
-- `code_quality INVALID` (contract itself broken) → HALT immediately; surface to human.
+- Same check FAIL × 3 consecutive iterations with **no observable progress** (identical diagnostic, identical failure shape, no new diff direction) → HALT; write the BLOCKED report and return the item to the registry with it. **Do NOT emit `VALIDATION_GATE_PASSED`** — the gate did not pass.
+- `code_quality INVALID` (contract itself broken) → HALT immediately; register the broken contract as its own item and return this one blocked on it. Do not file work against a measurement nothing can trust (`autonomy-envelope.md § A loop ran out of attempts`).
 - Unremediatable `FAIL_HARD` (`symbol_fabrication_*` / `dead_code_unallowlisted_*` cannot be fixed without scope-creeping the plan) → HALT; surface BLOCKED report; recommend loop back to `cycle-plan`. **Do NOT emit the completion promise** — the validation gate has NOT passed.
 
 The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation.py` exits `0`. There is no graceful-exit path that emits the promise on a partial pass. Honest BLOCKED > false PASS (Unbreakable Rule 3).
 
-**Either loop emitting a BLOCKED report blocks downstream:** `/review` and `/release` MUST NOT run until the human resolves the blocker.
+**Either loop emitting a BLOCKED report blocks downstream:** `/review` and `/release` MUST NOT run while the blocker stands. **That is a bar on this item, not a wait for a person** — the report returns to the registry as the item's evidence, and the queue takes the next one.
 
 ## Anti-patterns
 

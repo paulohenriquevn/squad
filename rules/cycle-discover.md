@@ -125,8 +125,16 @@ The **Blast radius** corner is the one whose shape depends most on the project. 
 ## Stop conditions
 
 - Verdict `INVALID` → return to `/discover-plan` (the measurement plan was wrong, not necessarily the hypothesis).
-- 3 consecutive iterations with no confidence improvement → escalate to a human.
-- Measurement cannot be run at all (target unreachable, credential absent, tool missing) → **stop and ask the human.** Do not substitute a weaker measurement, do not reason about what the measurement would probably have shown, and do not record `ITEM_KILLED` — nothing was measured, so nothing was disproved.
+- 3 consecutive iterations with no confidence improvement → return the item to the registry
+  with the diagnosis on it and take the next one (`autonomy-envelope.md § A loop ran out of
+  attempts`). Nothing here waits for a person.
+- Measurement cannot be run at all (target unreachable, credential absent, tool missing) → **return the item to the registry with a retained impediment.** Do not substitute a weaker measurement, do not reason about what the measurement would probably have shown, and do not record `ITEM_KILLED` — nothing was measured, so nothing was disproved.
+
+  This is the one shape in the whole DISCOVER→ACCEPTANCE span that legitimately reaches a
+  person, and it reaches them **through the registry rather than by holding the session**: an
+  absent target, credential or tool is `access` or `liveness` in
+  [`decision-delegation.txt`](decision-delegation.txt), and authority does not conjure any of
+  them. `halt_disposition.py` classifies it; the queue moves on.
 - Either halt-loop emits BLOCKED → the cycle pauses; `/discover-confidence` must not honour the artifact.
 
 ## Halt-loop contracts

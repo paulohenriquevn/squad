@@ -32,8 +32,64 @@ way twice, and the rule that produced each one can be read back.
 definition of done. That is where a person's judgement is irreplaceable, because it is
 the only judgement that is about the product rather than about the work.
 
+**And the product it serves.** `cycle-brainstorm` is the one phase a person attends, and
+its sign-off is the agreement everything downstream executes against. No judge may sign
+it (`cycle-brainstorm.md § Why the judge may not sign this one`).
+
 **And this file.** Changing the envelope is a human act. The system operates inside it
 and may report that a case is missing from it, but never widens it on its own.
+
+Everything else in the chain — DISCOVER through ACCEPTANCE — is the system's, without
+exception and without a waiting state addressed to a person. See § *The autonomous span*
+below for the one door that still returns.
+
+## The autonomous span — DISCOVER through ACCEPTANCE
+
+**Decided 2026-09-08.** Between the moment an item leaves the registry to be measured
+and the moment its delivery is accepted, **nothing waits for a person.** Not a gate that
+failed twice, not a loop that stopped improving, not a version the CHANGELOG cannot
+level, not a dependency with a CVE. Every one of those was written as *escalate to the
+human*, and each was a place the queue could stop for as long as nobody happened to
+look.
+
+The span does not become autonomous by removing the stops. A loop that cannot finish
+must still stop; a gate that fails must still hold. What changes is **who the stop is
+addressed to**:
+
+| Before | Now |
+|---|---|
+| the phase halts and waits for a person | the phase halts, **returns the item to the registry** with the impediment written on it, and the queue takes the next item |
+
+That is not new doctrine — it is § *Nothing here fits* applied everywhere the phase
+rules had written their own exception. One item waiting is not the backlog waiting.
+
+### The one door that still returns to a person
+
+An item goes back to a person when — and only when — its impediment is one of the
+**retained classes** of [`decision-delegation.txt`](decision-delegation.txt):
+
+| Class | What is missing | Why authority does not move it |
+|---|---|---|
+| `access` | a machine, credential or repository the process lacks | delegating *"provision the host"* to a process without host access does not provision the host |
+| `elapsed` | time: a data series, a soak, a deadline | nobody can delegate the passage of time |
+| `liveness` | a system that must be standing, and is not | the same |
+| `governance` | the item names autonomous execution as the bypass its governance exists to prevent | delegation cannot authorise the thing it would be a bypass OF |
+
+The first three are the shape the sponsor named when setting this policy: **a clear
+blockage that costs something to clear** — provisioning another VM is the example, and
+it is `access`. The fourth is retained on a different argument, which is why it is
+listed separately: it is self-referential rather than material.
+
+Everything else — scope, status, threshold, a binary choice, a choice among stated
+options — the system decides, records with its rationale, and proceeds on
+(§ *The doctrine* below).
+
+**The fail-safe is unchanged and it points the safe way**: an impediment matching no
+class stays retained. No match is not consent. A mechanism that guesses moves items into
+lanes that cannot do them, and the lane then either fabricates the work or stalls.
+
+`mechanisms/cycle/halt_disposition.py` is what decides this at the moment a phase stops,
+so the same halt gets the same disposition in every phase that can produce one.
 
 ## The floor — what the system never crosses
 
@@ -62,10 +118,22 @@ agent moves them.
    alternatives rejected and what it costs are in
    [`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md).
 
-   **Branch protection outranks this.** Where the remote requires a human reviewer, the
-   system cannot merge and must not try: it emits `PR_OPEN_AWAITING_APPROVAL` and takes
-   the next item. A project that wants the old behaviour turns that on, which is the
-   honest place for the switch — enforced rather than promised.
+   **Merging to the trunk is a PREMISE, not a capability the project may withhold**
+   (decided 2026-09-08). Branch protection that requires a human reviewer does not
+   narrow the envelope — it makes the chain unrunnable, and it must be reported as a
+   violated premise before the first item is selected rather than discovered at the last
+   step. `mechanisms/gates/check_merge_autonomy.py` asks the remote and fails loudly.
+
+   This reverses the previous reading, which treated such a remote as a supported
+   configuration: the system emitted `PR_OPEN_AWAITING_APPROVAL` and took the next item.
+   That is exactly the pause this floor's own amendment identified as a stop — moved one
+   layer out, where it is harder to see. Every item then completes its whole chain, parks
+   at an open PR, and the queue drains into a pile of branches nobody merges. Announcing
+   that at intake costs one gate; discovering it per-item costs the whole run.
+
+   `PR_OPEN_AWAITING_APPROVAL` survives for the one case that is not a premise failure:
+   **a gate did not pass**. That is the system declining to merge its own work, which is
+   floor 3 doing its job.
 
 3. **No mechanical gate is switched off, and no threshold is moved to pass one.** A
    failing gate is a fact to work with. Disabling it, skipping it, forcing past it, or
@@ -164,6 +232,31 @@ Observed before this clause existed: a session measured eight defects, was instr
 by doctrine to register them, and refused — the fixture had been incomplete, so what
 had been measured was the test's own gap rather than the code's. The refusal was
 correct and the doctrine had no way to have reached it.
+
+### A loop ran out of attempts
+
+*A halt-loop stopped without reaching its target — the same gate failed twice, or three
+iterations produced no observable progress.*
+
+**Write the BLOCKED report, return the item to the registry with the diagnosis on it,
+and take the next one.** Never emit the completion promise, never loosen the gate, and
+never keep iterating past the stop condition in the hope that the next pass differs.
+
+The stop condition is not the problem this clause solves — it is correct, and a loop
+without one burns a session on an unchanging failure. What was wrong is where the item
+went afterwards: it went to a person. So the phase produced a real diagnosis and then
+parked it, and the diagnosis was worth nothing until somebody read it.
+
+Returning it to the registry keeps everything the halt earned. The report is the item's
+evidence; the failing gate is a named cause; and the queue puts a named cause at the
+front precisely because something is blocked on it. That is the difference between a
+stopped item and a work order.
+
+**`code_quality INVALID` is the one shape that is NOT this.** It says the contract
+itself is broken — the thing that computes the verdict, not the code under it. Returning
+the item would file work against a measurement nobody can trust, which is
+§ *The measurement behind the item turned out to be wrong* one level up. Register the
+broken contract as its own item, and let the queue work the contract.
 
 ### A case that resembles one already decided
 

@@ -69,8 +69,8 @@ Consequences for this cycle:
 
 - `RELEASED` — PR merged, tag created, GitHub release published. Cycle complete. **Only a final cut emits this**; it is what `cycle-maintenance`'s ADVANCE consumes to write `shipped`.
 - `PRE_RELEASED` — an `X.Y.Z-rc.N` tag and a GitHub pre-release exist. The batch is installable and the scope is not finished. Items stay at their stage; nothing is marked `shipped`, because nothing was finally released.
-- `PR_OPEN_AWAITING_APPROVAL` — the PR is open and the system did not merge it: a gate did not pass, or branch protection requires a human reviewer. **The exception now, not the terminal state.** Resume automatically once the PR merges.
-- `BLOCKED` — pre-condition failed OR a hard gate fired during the chain. Surface to human.
+- `PR_OPEN_AWAITING_APPROVAL` — the PR is open and the system did not merge it because **a gate did not pass**. That is the system declining to merge its own work, and it is the only meaning this verdict still carries: a remote requiring a human reviewer is a violated premise caught at intake by `check_merge_autonomy.py`, not a state the chain reaches (envelope floor 2). Resume automatically once the PR merges.
+- `BLOCKED` — pre-condition failed OR a hard gate fired during the chain. The item returns to the registry carrying the cause; the queue takes the next one.
 - `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
 ## Two cuts: the rc series, and the final
@@ -142,35 +142,55 @@ When the user does not pass `{bump-level}` explicitly:
 - `minor` — `[Unreleased] § Added` is non-empty AND no major triggers.
 - `patch` — only `[Unreleased] § Fixed` / `Security` entries.
 
-If the rule cannot pick deterministically, the chain pauses and the human chooses.
+- `minor` — only `### Changed` / `### Fixed` / `### Security`, with at least one `Changed` entry.
 
-### Why a `Changed`-only release pauses, and stays pausing
+The rule always picks. There is no ambiguous outcome and no pause.
+
+### Why a `Changed`-only release resolves to `minor`
 
 A `[Unreleased]` carrying only `### Changed` — *"we changed how something already published
-behaves, without adding or removing"* — matches none of the three rules above. It is an
-**ordinary** release shape, not an exotic one, and it hits the pause every time. Measured on
-an adopter on 2026-08-18:
+behaves, without adding or removing"* — matches none of the first three rules. It is an
+**ordinary** release shape, not an exotic one, and until 2026-09-08 it paused the chain every
+time. Measured on an adopter on 2026-08-18:
 `compute_next_version.py --current 0.61.0 --bump auto` → `AMBIGUOUS`.
 
-**It is not derived, and that is a decision rather than a gap.** Under 0.x — where
+**The fact it depends on is genuinely absent from the section.** Under 0.x — where
 `public-copy.md § 3` holds the package until there is evidence of sustained production use — a
-break is **minor** and a compatible change is **patch**. So `Changed` maps to either of the two,
-depending on a fact the section does not contain:
+break is **minor** and a compatible change is **patch**. So `Changed` maps to either, depending
+on a question the CHANGELOG does not answer:
 
-> **The question: does this change a behaviour a caller depends on?**
+> **Does this change a behaviour a caller depends on?**
 
-Chutar `minor` transforma toda entrada reescrita em sinal de incompatibilidade. Chutar `patch`
-understates a real break — exactly the failure semver exists to prevent, delivered silently to
-anyone on a caret range. Inferring from the entry's prose is the same guess with a longer regex,
-and the same source measured how a formatting variation (`**BREAKING:`) defeats that
-kind of match in this very script.
+That was the argument for pausing, and it was a good argument for **as long as somebody was
+coming to answer it**. Nobody is: `autonomy-envelope.md § The autonomous span` places the whole
+of RELEASE inside the system's own authority, and a pause addressed to an absent person is a
+stopped release, not a careful one.
 
-The pause stays, and **carries the question** instead of a guess. Harvested from an adopter,
-where the reasoning was written down and measured.
+**So the question is answered once, in writing, in the safe direction: `minor`.** The two
+candidate errors are not symmetric, and that asymmetry is the whole justification:
+
+| Guess | When it is wrong | What it costs |
+|---|---|---|
+| `patch` | the change broke a caller | the break ships **silently** to everyone on a caret range — precisely the failure semver exists to prevent |
+| `minor` | the change was compatible | a version number is larger than it needed to be, and callers on a caret range do not pick it up automatically |
+
+One error is a wrong number. The other is a broken consumer who was told nothing. A rule that
+must decide without the fact decides toward the recoverable error — which is the same fail-safe
+that makes `decision-delegation.txt` retain an unmatched wall.
+
+**The cost, stated.** Under this rule a release that only reworded a log line takes a minor
+bump, and the version series will overstate how much changed. That is accepted. What is not
+accepted is inferring the answer from the entry's prose: it is the same guess with a longer
+regex, and this very script has already measured how a formatting variation (`**BREAKING:`)
+defeats that kind of match.
+
+**`major` is untouched.** An entry that opens with `BREAKING:`, or any `### Removed`, still
+derives `major` before this rule is reached. The rule below decides only what a bare `Changed`
+means, never whether something is breaking at all.
 
 ## Hard gates
 
-- **Gates-passed gate (LOCKED)** — _(not mechanized as one check: it reads the verdicts the chain already emitted — `/review` `READY_TO_MERGE`, `/code-quality` not `FAIL_HARD`, no BLOCKED report standing)_ The merge step merges ONLY a PR whose full chain passed. Merging anything else, or moving a threshold so that it passes, violates envelope floor 2 and floor 3. **This replaced a human-approval gate on 2026-09-01**; what it does not replace is the topology — the PR itself is still mandatory, and branch protection is still what makes it so on the remote.
+- **Gates-passed gate (LOCKED)** — _(not mechanized as one check: it reads the verdicts the chain already emitted — `/review` `READY_TO_MERGE`, `/code-quality` not `FAIL_HARD`, no BLOCKED report standing)_ The merge step merges ONLY a PR whose full chain passed. Merging anything else, or moving a threshold so that it passes, violates envelope floor 2 and floor 3. **This replaced a human-approval gate on 2026-09-01**; what it does not replace is the topology — the PR itself is still mandatory. Branch protection is what makes it mandatory on the remote, and since 2026-09-08 it may enforce the PR **without requiring a human reviewer**: a remote that requires one makes the chain unrunnable and is reported by `check_merge_autonomy.py` at intake.
 - **No direct commits to `main`** — `validate-command.py`, which resolves the real trunk rather than matching the literal name. Even from this skill: every change reaches `main` via the PR opened above. **Unchanged by the amendment** — merging a PR and committing to the trunk are different acts, and only the first moved.
 - **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. _(not mechanized: nothing inspects the tag object's type or the branch it was cut from; `validate-command.py` blocks the commit paths, not the tag)_
 - **CHANGELOG must have content** — `changelog_section_nonempty.py` refuses if `[Unreleased]` is empty after stripping headers.
@@ -181,11 +201,11 @@ where the reasoning was written down and measured.
 
 - `gh pr create` fails → halt; surface stderr.
 - PR is closed without merge → halt; record the rationale in `records/releases/{version}-release.md`.
-- Tag already exists for the computed version → halt; ask the human to pick the next version explicitly.
+- Tag already exists for the computed version → the computed version is already cut, so the chain advances to the next free patch level and records that it did. It halts only if that level is taken too, which means the tag series disagrees with the CHANGELOG — a broken record rather than a version choice, registered as its own item.
 
 ## Anti-patterns
 
-- Auto-merging the release PR. Always human-gated.
+- **Merging a PR whose chain did not pass.** Auto-merging one that did is the design since 2026-09-01 (envelope floor 2); what is forbidden is merging past a gate or moving a threshold so that it passes. `gh pr merge --admin` is banned by name.
 - Editing `[Unreleased]` directly during the release chain — entries should be in place beforehand (CHANGELOG discipline is Unbreakable Rule 6).
 - Producing a release without a corresponding `cycle-review` audit. Released artifacts must be traceable to a `READY_TO_MERGE` verdict.
 - Skipping the GitHub release creation step. Downstream consumers (changelogs, dependency updates) read GitHub releases, not local tags.

@@ -169,6 +169,7 @@ nobody. See [`agents/README.md`](agents/README.md).
 |---|---|
 | Branching `workspace → develop → trunk` | `hooks/validate-command.py` blocks commits on the trunk and on `develop`. The trunk is detected — `main`, `master`, or whatever `origin/HEAD` points at — so a repo on `master` is protected too |
 | `gh` CLI, authenticated | `/release` opens the develop→trunk PR through it |
+| Branch protection that does **not** require a human approving review | The system merges its own passing PRs to the trunk — envelope floor 2. A required reviewer makes the chain unrunnable: every item completes and parks at an open PR. `mechanisms/gates/check_merge_autonomy.py` reports it at intake rather than per-item |
 | `CHANGELOG.md`, Keep a Changelog format | The Rule 6 gate activates when the file exists; without it the Stop hook says so rather than passing silently |
 | Go, Python, TypeScript or Rust | Only these have `code-quality` detectors. Other stacks run the rest of the pipeline fine |
 
@@ -280,6 +281,7 @@ It refuses the shortcut its field is prone to: calling a boundary enforced becau
 - **`unknown` is a complete answer** — for the constraint corner, and only there. We do not instrument flow, so demanding a constraint claim would be answered by assertion.
 - **Ids are never reused or renumbered.** A killed `B-007` stays `B-007` forever; the number is the audit trail.
 - **Measuring is reading.** Discover produces a document, never a patch.
+- **Nothing between DISCOVER and ACCEPTANCE waits for a person.** A phase may stop; it may not hold the session. The item returns to the registry — behind a wall only when its impediment is material (a machine, a credential, elapsed time), which nobody's authority supplies.
 - **Verdicts are derived from findings**, never asserted.
 
 ## Relationship to Cycle

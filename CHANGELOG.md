@@ -6,6 +6,77 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING (doctrine) — nothing between DISCOVER and ACCEPTANCE waits for a person (#47)**
+  Ten places in the phase rules ended a halt with *escalate to the human*, *surface to human*
+  or *ask the human*: a gate failing twice, a halt-loop with no observable progress, a
+  `code_quality INVALID`, a CVE on a planned dependency, a plan the CHANGELOG could not level,
+  a tag already cut. Each is correct while somebody is coming, and each is a queue that stops
+  for as long as nobody happens to look — the failure `rules/autonomy-envelope.md` names in its
+  own opening, distributed across ten phases instead of one. The span is now closed:
+  `rules/autonomy-envelope.md § The autonomous span` replaces every one of them with a return
+  to the registry, and `mechanisms/cycle/halt_disposition.py` decides which of the two ways an
+  item goes back. **Removing the stops is only half a policy** — a loop that cannot finish must
+  still stop and a failing gate must still hold, so what changed is who the stop is addressed
+  to, not whether it exists. The one door that still reaches a person is a material impediment
+  (a machine, a credential, elapsed time, a system not standing), it is reached through the
+  registry rather than by a session standing still, and it is the four `retained_classes` of
+  `rules/decision-delegation.txt` unchanged.
+- **BREAKING (premise) — merging to the trunk is now a requirement of adoption, not a setting (#47)**
+  Envelope floor 2 treated a remote whose branch protection requires a human approving review as
+  a supported configuration: the system emitted `PR_OPEN_AWAITING_APPROVAL` and took the next
+  item. That is the same pause the floor's own amendment had already identified as a stop, moved
+  one layer out where it is harder to see — every item clears DISCOVER through RELEASE, parks at
+  an open PR, and the queue drains into a pile of branches nobody merges. Such a remote now makes
+  the chain unrunnable and is reported **before the first item is selected** by
+  `mechanisms/gates/check_merge_autonomy.py`, wired into `verify_ecosystem.py`. Announcing it at
+  intake costs one API call; discovering it per item costs the run. The gate reports NOT CHECKED
+  distinctly from PASS — an absent or unauthenticated `gh` tested nothing, and a gate that looks,
+  sees nothing and approves produces confidence where there was no verification.
+  `PR_OPEN_AWAITING_APPROVAL` survives with one meaning only: a gate did not pass, which is the
+  system declining to merge its own work.
+- **A `Changed`-only release derives `minor` instead of pausing the chain (#47)**
+  `compute_next_version.py` returned `AMBIGUOUS` and exited 3 for an `[Unreleased]` carrying only
+  `### Changed` — an ordinary release shape, measured hitting the pause on an adopter on
+  2026-08-18. The fact it needs is genuinely absent from the section and always will be: a
+  CHANGELOG records what changed, not who depended on it. So the question is answered once, in
+  writing, toward the recoverable error. The two mistakes are not symmetric — `patch` on a real
+  break ships it silently to every caret range, which is the single failure semver exists to
+  prevent, while `minor` on a compatible change leaves a version number larger than it needed to
+  be and a caret range does not even pick it up. The stated cost: a release that only reworded a
+  log line takes a minor bump. `AMBIGUOUS` now means only that the section has no entries at all
+  — a release with nothing in it — and stays a refusal rather than becoming a default.
+- **The alignment gate stopped saying *a human signed* in the two places that still said it (#47)**
+  `cycle-plan.md` described the gate as *machine ≥ 90% AND a human signed off* in its flow diagram
+  and its phase table, contradicting `skills/_kit-rules/alignment-threshold.md § Amended
+  2026-09-01` — which requires a reviewer who is not the author, a condition `alignment_judge.py`
+  satisfies — and contradicting `cycle-implement.md`, corrected at the time. Honoured literally,
+  the stale wording re-froze every unattended run at `AWAITING_REVIEW`, which is the exact halt
+  that amendment exists to end. The same sentence had already been fixed once elsewhere; this is
+  the copy that was missed.
+- **`deps-audit` is a step of the chain rather than a human errand (#47)**
+  `cycle-plan.md` called running the audit *"the human step that remains"* while everything below
+  `cycle-backlog` was already meant to run unattended, which left the cycle's strongest gate
+  depending on somebody remembering. The verdict was already mechanized by `check_deps_audit.py`;
+  what was missing was who runs the scanner.
+
+### Added
+- **`mechanisms/cycle/halt_disposition.py` — where an item goes when a phase stops (#47)**
+  Two dispositions, neither of which holds the session: `RETURN_TO_QUEUE` for a halt that is the
+  queue's own work, `RETAIN_FOR_PERSON` for a material impediment. **Its fail-safe is deliberately
+  the opposite of `delegated_decision.py`'s**, because the two read input from different authors:
+  an unmatched `blocked_by` line a person wrote stays walled, since no match is not consent; an
+  unmatched halt the system emitted with a known verdict is work, since reading a failing gate as
+  an impediment would send every ordinary rework loop to a person. What keeps that default honest
+  is a measurement rather than a regex — an item the queue has already returned twice for the
+  same cause has demonstrated an impediment the queue cannot move, and is retained on that
+  evidence. A wrong guess costs two passes and corrects itself; it does not cost a stopped queue.
+- **`mechanisms/gates/check_merge_autonomy.py` — is the system actually allowed to merge? (#47)**
+  Asks the remote whether the trunk requires a human approving review, and reports three states
+  the caller must not collapse: HOLDS, VIOLATED, and NOT CHECKED. It objects to nothing else —
+  required status checks, linear history and a force-push ban are all compatible with the
+  envelope, and floor 3 asks for them.
+
 ### Fixed
 - **`validate-command.py` read the verb from one repository and the branch from another (#42)**
   `strip_git_globals` removed `git -C <path>` so the commit would still be seen, and then the

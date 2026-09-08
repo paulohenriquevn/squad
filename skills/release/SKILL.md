@@ -37,7 +37,7 @@ Refuse to start when any pre-condition declared in `cycle-release.md § Pre-cond
 | `### Added` non-empty AND no major trigger | `minor` |
 | Only `### Fixed` / `### Security` entries | `patch` |
 
-If derivation is ambiguous, the skill pauses and asks the human ONCE.
+Derivation always picks. An `[Unreleased]` with no entries at all is refused as a release with nothing in it.
 
 ## Workflow
 
@@ -85,7 +85,7 @@ manifest it recognizes: `package.json`, `[project].version` in `pyproject.toml`,
 Each source alone has a measured failure mode — published versions may have no tag, while a manifest
 can lag a tag between the release commit and the merge.
 
-If `compute_next_version.py` returns `AMBIGUOUS`, AskUserQuestion ONCE (major / minor / patch) and re-run with the chosen value.
+`compute_next_version.py` always derives a level from a non-empty `[Unreleased]`; a `Changed`-only body resolves to `minor` and prints the rule that resolved it on stderr (`cycle-release.md § Why a `Changed`-only release resolves to `minor`). `AMBIGUOUS` now means only one thing — the section has no entries at all, so there is nothing to release — and it is a refusal, not a question.
 
 If a tag for `$NEXT_VERSION` already exists, halt — never overwrite a published tag.
 
