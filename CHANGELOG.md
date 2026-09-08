@@ -7,6 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **VERA asserted severity, work size and a solution from substring matches (#38)**
+  `agents/vera-technical-arbiter.md` already stated the contract — *"`vera.py` still owns the emission …
+  It is a formatter … You supply the judgement it used to fake"* — and the code still did the faking.
+  `_detect_violations` matched keywords; `_estimate_work` contained `"57" in str(context)`, so
+  `--refs app/main.py:57` sized a typo as a two-week refactor because it matched the LINE NUMBER;
+  `_propose_solution` returned one of five hard-coded solutions chosen by the lens alone and never read
+  its `problem` parameter, so a secret logged in plaintext was answered with "Make structure immediately
+  obvious". The `FAIL_FAST` block appeared twice, double-weighting that lens in the `max()` that picked
+  the winner, whose `default=` was dead code and whose ties were broken by the Enum's declaration order.
+  Six Portuguese default strings reached GitHub issue bodies in an English-by-policy repository. The
+  module is now the formatter its contract describes: lens, severity and the solution's parts are
+  required inputs, and their absence is a refusal (exit 2) rather than a default. Size is still computed
+  because it is countable — from the number of distinct files cited — with `--size` to override it.
+  The suite that guarded the old behaviour pinned it against fourteen items from one consumer's registry,
+  in Portuguese, one of which reads "costs 57 call sites"; it was the source of the magic literal and was
+  deleted with it.
 - **`issue_lifecycle.py` reported labelling and closing issues it never touched (#39)**
   Three defects, compounding into one clean report over nothing. `_find_issue_numbers_in_log` assigned
   its git command three times and the last assignment was `git log HEAD`, so the `branch` argument had

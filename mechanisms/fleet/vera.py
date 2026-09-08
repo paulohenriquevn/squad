@@ -1,27 +1,82 @@
 #!/usr/bin/env python3
-"""VERA — Verifiable Engineering Reference Arbiter.
+"""VERA — the emitter behind `vera-technical-arbiter`.
 
-The autonomous technical decision-maker for Squad. VERA reads problems,
-applies FAANG-level engineering lenses, proposes the obvious solution,
-and creates actionable issues for lanes to execute.
+WHAT THIS IS, AND WHAT IT IS NOT
+================================
+It is a **formatter**. It turns a judgement somebody made into one issue a lane
+can execute: the title, the body, the labels, the schema. Formatting is
+computation, and computation is what a mechanism may do.
 
-VERA does not equivocate. When SOLID says decouple, VERA says decouple.
-When DRY says consolidate, VERA says consolidate. VERA speaks with the
-authority of Dijkstra, McConnell, and Martin — not because she invented
-these principles, but because software at scale requires them.
+It is not the arbiter. The arbiter is the agent — `agents/vera-technical-arbiter.md`
+— who read the code. That file already stated the split before this module
+implemented it:
+
+    `mechanisms/fleet/vera.py` still owns the emission — the issue body, the
+    labels, the schema. It is a formatter, and formatting is computation. You
+    supply the judgement it used to fake.
+
+    The split is the point. The script cannot be wrong about a label; you cannot
+    be right about a lens without reading. Neither does the other's job.
+
+WHAT IT USED TO DO, AND WHY THAT WAS THE DEFECT
+===============================================
+Until 2026-09-08 (#38) the "fake" was literal. `_detect_violations` matched a list
+of substrings against the problem text; `_assess_severity` matched another;
+`_estimate_work` contained `"57" in str(context)`, so a `file:line` reference
+whose LINE NUMBER was 57 turned a typo into a two-week refactor; and
+`_propose_solution` returned one of five hard-coded Solutions chosen by the lens
+alone — its `problem` and `violations` parameters were never read, so the fix
+proposed for a secret in a log was "Make structure immediately obvious".
+
+Two further consequences of guessing, both measured:
+
+- The `FAIL_FAST` block appeared twice, so a fail-fast match counted double and
+  skewed the `max()` that picked the lens; and on the ordinary tie that `max()`
+  returned the first member in the Enum's declaration order. The "dominant lens"
+  was decided by the order someone wrote an Enum.
+- Its default evidence strings were Portuguese and went into GitHub issue bodies
+  in a repository that is English by policy.
+
+This is the shape `mechanisms/cycle/delegated_decision.py` names in its own
+docstring — *"a number that measured nothing but its own matcher"* — and it was
+already fixed there once. Now here.
+
+REFUSAL IS THE FEATURE
+======================
+Given no lens, no severity, no evidence or no `file:line`, this module raises
+rather than supplying one. An inability to judge must never leave here as a
+judgement: the output is filed as an issue, and a lane executes what it says.
+
+Usage:
+    python3 mechanisms/fleet/vera.py B-022 \\
+      --problem      "<the violation, in one sentence>" \\
+      --evidence     "<what you found>" \\
+      --refs         "<path:line>,<path:line>" \\
+      --lens         solid \\
+      --severity     high \\
+      --solution     "<the title of the fix>" \\
+      --what-changes "<what actually changes in the code>" \\
+      --how-to-verify "<how anyone knows it is done>"
+
+Exit codes: 0 — the issue was emitted · 2 — the judgement was incomplete
 """
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+import sys
+from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Optional
 
 # ── The Five Lenses ────────────────────────────────────────────────────────────
 
 class Lens(Enum):
-    """Engineering principles that decide technical choices."""
+    """Engineering principles a verdict can rest on.
+
+    The value is the principle's definition, not a matcher. Nothing in this module
+    reads a problem statement to choose between them — that is the agent's reading,
+    and a substring is not a reading.
+    """
     SOLID = "single-responsibility, open-closed, liskov, interface-segregation, dependency-inversion"
     DRY = "don't-repeat-yourself: knowledge must have one authoritative place"
     COUPLING = "low-coupling, high-cohesion: minimize dependencies across boundaries"
@@ -30,7 +85,7 @@ class Lens(Enum):
 
 
 class Severity(Enum):
-    """How bad is this violation."""
+    """How bad this is. Supplied, never inferred."""
     BLOCKER = "blocker"  # Production-critical, breaks invariants
     HIGH = "high"  # Architecture violated, refactor required
     MEDIUM = "medium"  # Debt accumulated, affects maintainability
@@ -45,31 +100,50 @@ class WorkSize(Enum):
     EPIC = "epic"  # Multiple phases, coordination required
 
 
-@dataclass(frozen=True)
-class Violation:
-    """A technical principle being violated."""
-    lens: Lens
-    file_or_area: str
-    evidence: str
-    consequence: str
+#: What each lens says, as a principle. Selected by the lens the agent chose, so
+#: it states a definition rather than analysing anything — the one thing this
+#: module can be right about without reading the code.
+_PRINCIPLE: dict[Lens, str] = {
+    Lens.SOLID: "Principle: Single Responsibility, Open/Closed, Liskov Substitution, "
+                "Interface Segregation, Dependency Inversion. SOLID violations cause "
+                "brittleness at scale.",
+    Lens.DRY: "Principle: Don't Repeat Yourself. Knowledge must have one authoritative "
+              "source. When duplicated, versions diverge.",
+    Lens.COUPLING: "Principle: Low coupling, high cohesion. Layering must be respected. "
+                   "Infrastructure leakage breaks abstractions.",
+    Lens.FAIL_FAST: "Principle: Fail loud and early. Silent failures hide bugs until "
+                    "cascading damage. Better to fail immediately, with context.",
+    Lens.CLARITY: "Principle: Code is communication. Structure must be immediately "
+                  "obvious to the next maintainer.",
+}
+
+
+class JudgementMissing(ValueError):
+    """The caller did not supply something only a reader of the code can supply.
+
+    Raised rather than defaulted. Every field this refuses on was, at some point,
+    filled in by a guess — and the guess reached a GitHub issue that a lane then
+    executed.
+    """
 
 
 @dataclass(frozen=True)
 class Solution:
-    """The obvious fix."""
+    """The fix, as the arbiter stated it."""
     title: str
     description: str
-    why_this: str  # Why this solution, not others
-    what_changes: str  # What actually changes in the code
-    how_to_verify: str  # How to know it's done right
+    why_this: str  # the principle of the lens — the one part this module supplies
+    what_changes: str  # what actually changes in the code
+    how_to_verify: str  # how to know it is done right
 
 
 @dataclass
 class Verdict:
-    """VERA's analysis of a problem."""
+    """One arbitrated problem, ready to be filed."""
     problem_id: str
     problem_statement: str
-    violations: list[Violation]
+    evidence: str
+    code_references: list[str]
     dominant_lens: Lens
     severity: Severity
     work_size: WorkSize
@@ -80,11 +154,18 @@ class Verdict:
 
     def to_issue(self) -> dict:
         """Format as a GitHub issue."""
+        references = "\n".join(f"- `{ref}`" for ref in self.code_references)
         return {
             "title": f"[{self.severity.value}] {self.solution.title}",
             "body": f"""## Problem
 
 {self.problem_statement}
+
+## Evidence
+
+{self.evidence}
+
+{references}
 
 ## Root Cause
 
@@ -110,9 +191,9 @@ Violation of **{self.dominant_lens.name}**: {self.rationale}
 
 - Size: **{self.work_size.value}**
 - Severity: **{self.severity.value}**
-
+{self.scope_notes and chr(10) + self.scope_notes}
 ---
-*This issue was created by VERA, Squad's autonomous technical arbiter.*
+*Emitted by `mechanisms/fleet/vera.py` from `vera-technical-arbiter`'s judgement.*
 *Ref: {self.problem_id}*
 """,
             "labels": [
@@ -123,248 +204,100 @@ Violation of **{self.dominant_lens.name}**: {self.rationale}
         }
 
 
-# ── VERA's Decision Engine ─────────────────────────────────────────────────────
+def size_from_reach(code_references: list[str], override: WorkSize | None = None) -> WorkSize:
+    """How big the fix is, from how many places it touches.
 
-@dataclass
-class VERA:
-    """The Verifiable Engineering Reference Arbiter.
-    
-    VERA is given a technical problem, applies five FAANG-level lenses,
-    and produces a verdict: the obvious solution and why it's obvious.
+    Countable, and that is the whole justification for computing it here: the
+    number of distinct files a verdict cites is a fact about the verdict, not a
+    reading of the problem. Anything less countable — "is this a major refactor?"
+    — belongs to the arbiter, which is what `override` is for.
+
+    The predecessor derived this from `"57" in str(context)`, which matched the
+    line number of `app/main.py:57` and called a typo a two-week refactor.
     """
-    
-    def analyze(self, problem_id: str, problem_statement: str, 
-                context: dict) -> Verdict:
-        """Analyze a technical problem and produce a verdict.
-        
-        Args:
-            problem_id: B-001, B-022, etc.
-            problem_statement: What's wrong
-            context: {
-                "evidence": "measured facts",
-                "code_references": ["file:line"],
-                "current_approach": "how it's currently done",
-                "impact": "who/what is affected"
-            }
-        
-        Returns:
-            Verdict with solution and rationale
-        """
-        # Identify violations by applying each lens
-        violations = self._detect_violations(problem_statement, context)
-        
-        # Pick the dominant lens (the one most violated)
-        dominant_lens = max(
-            (l for l in Lens),
-            key=lambda l: sum(1 for v in violations if v.lens == l),
-            default=Lens.CLARITY
+    if override is not None:
+        return override
+    files = {ref.split(":", 1)[0] for ref in code_references if ref.strip()}
+    if len(files) > 5:
+        return WorkSize.T3
+    if len(files) > 2:
+        return WorkSize.T2
+    return WorkSize.T1
+
+
+def emit(
+    problem_id: str,
+    problem_statement: str,
+    *,
+    lens: Lens | None,
+    severity: Severity | None,
+    solution_title: str,
+    what_changes: str,
+    how_to_verify: str,
+    evidence: str,
+    refs: list[str],
+    description: str = "",
+    size: WorkSize | None = None,
+    scope_notes: str = "",
+) -> Verdict:
+    """Assemble a `Verdict` from a judgement, refusing to fill any part of it in.
+
+    Each refusal below replaced a default that used to fire silently, and every
+    one of those defaults ended up in an issue somebody was asked to execute.
+    """
+    if lens is None:
+        raise JudgementMissing(
+            "no lens: which principle this violates is a reading of the code, and "
+            "this module does not read code. Supply --lens."
         )
-        
-        # Determine severity and size
-        severity = self._assess_severity(problem_statement, violations)
-        size = self._estimate_work(violations, context)
-        
-        # Generate the solution
-        solution = self._propose_solution(problem_statement, dominant_lens, 
-                                         violations, context)
-        
-        # Rationale: why this lens decides it
-        rationale = self._explain_rationale(dominant_lens, violations)
-        
-        return Verdict(
-            problem_id=problem_id,
-            problem_statement=problem_statement,
-            violations=violations,
-            dominant_lens=dominant_lens,
-            severity=severity,
-            work_size=size,
-            solution=solution,
-            rationale=rationale,
+    if severity is None:
+        raise JudgementMissing(
+            "no severity: how bad this is depends on what the code does, not on "
+            "which words the problem statement contains. Supply --severity."
         )
-    
-    def _detect_violations(self, problem: str, context: dict) -> list[Violation]:
-        """Apply the five lenses and identify violations."""
-        violations: list[Violation] = []
+    if not evidence.strip():
+        raise JudgementMissing(
+            "no evidence: an issue without a measurement spends a maintainer's "
+            "attention and teaches them to skim the next one."
+        )
+    cited = [ref.strip() for ref in refs if ref.strip()]
+    if not cited:
+        raise JudgementMissing(
+            "no file reference: a verdict nobody can go and check is a verdict "
+            "about nothing."
+        )
+    if not solution_title.strip():
+        raise JudgementMissing("no solution title: the issue would have no subject.")
+    if not what_changes.strip():
+        raise JudgementMissing(
+            "the solution does not say what changes: a lane cannot execute a "
+            "principle, only an edit."
+        )
+    if not how_to_verify.strip():
+        raise JudgementMissing(
+            "the solution does not say how to verify it: without that, 'done' is "
+            "an opinion."
+        )
 
-        problem_lower = problem.lower()
-        evidence_lower = context.get("evidence", "").lower()
-        full_context = (problem_lower + " " + evidence_lower).lower()
-
-        # Fail-Fast violations (highest priority)
-        if any(w in full_context for w in ["silent", "silencio", "não percebe", "undetected",  # english-only: these are the words matched in Portuguese context
-                                             "orfan", "orphan", "invisível", "unnoticed"]):
-            violations.append(Violation(
-                lens=Lens.FAIL_FAST,
-                file_or_area=context.get("code_references", ["unknown"])[0],
-                evidence=context.get("evidence", "falha silenciosa detectada"),
-                consequence="errors go unnoticed until they cause cascading failures"
-            ))
-
-        # SOLID violations
-        if any(w in full_context for w in ["acoplad", "coupled", "depend", "tight", "bloqueada"]):
-            violations.append(Violation(
-                lens=Lens.SOLID,
-                file_or_area=context.get("code_references", ["unknown"])[0],
-                evidence=context.get("evidence", "acoplamento detectado"),
-                consequence="high-level module cannot be deployed independently"
-            ))
-        
-        # DRY violations
-        if any(w in problem_lower for w in ["duplic", "repeat", "duas árvore", "dois lugar"]):
-            violations.append(Violation(
-                lens=Lens.DRY,
-                file_or_area=context.get("code_references", ["unknown"])[0],
-                evidence=context.get("evidence", "duplicação detectada"),
-                consequence="knowledge lives in multiple places; changes become brittle"
-            ))
-        
-        # Coupling violations
-        if any(w in problem_lower for w in ["acoplam", "depend", "boundary", "fronteira"]):
-            violations.append(Violation(
-                lens=Lens.COUPLING,
-                file_or_area=context.get("code_references", ["unknown"])[0],
-                evidence=context.get("evidence", "coupling detectado"),
-                consequence="layering violated; infrastructure leaks into domain"
-            ))
-        
-        # Fail-Fast violations
-        if any(w in problem_lower for w in ["silent", "silencio", "não percebe", "undetected", "orfan"]):  # english-only: these are the words matched in Portuguese context
-            violations.append(Violation(
-                lens=Lens.FAIL_FAST,
-                file_or_area=context.get("code_references", ["unknown"])[0],
-                evidence=context.get("evidence", "falha silenciosa detectada"),
-                consequence="errors go unnoticed until they cause cascading failures"
-            ))
-        
-        # Clarity violations
-        if any(w in problem_lower for w in ["confus", "ment", "unclear", "nome", "structure", "organiz"]):
-            violations.append(Violation(
-                lens=Lens.CLARITY,
-                file_or_area=context.get("code_references", ["unknown"])[0],
-                evidence=context.get("evidence", "falta clareza"),
-                consequence="next maintainer cannot find or understand what is where"
-            ))
-        
-        # Default if nothing matched: it's a clarity issue
-        if not violations:
-            violations.append(Violation(
-                lens=Lens.CLARITY,
-                file_or_area=context.get("code_references", ["unknown"])[0],
-                evidence=context.get("evidence", problem),
-                consequence="structure is not immediately obvious"
-            ))
-        
-        return violations
-    
-    def _assess_severity(self, problem: str, violations: list[Violation]) -> Severity:
-        """Judge how bad this is."""
-        problem_lower = problem.lower()
-        
-        # BLOCKER: silent failures in critical paths
-        if any(w in problem_lower for w in ["silent", "silencio", "undetect", "orfan", "orphan", 
-                                             "segredo", "secret", "crypto", "não percebe"]):  # english-only: these are the words matched in Portuguese context
-            return Severity.BLOCKER
-        if any(w in problem_lower for w in ["arquitetura", "architecture", "acoplad", "depend"]):
-            return Severity.HIGH
-        if any(w in problem_lower for w in ["dívid", "debt", "test", "runbook"]):
-            return Severity.MEDIUM
-        if any(w in problem_lower for w in ["nome", "mensag", "message", "ux", "clarity"]):
-            return Severity.LOW
-        
-        return Severity.MEDIUM
-    
-    def _estimate_work(self, violations: list[Violation], context: dict) -> WorkSize:
-        """Estimate effort to fix."""
-        code_refs = context.get("code_references", [])
-        impact = context.get("impact", "unknown")
-        
-        if len(code_refs) > 5 or "múltiplo" in impact.lower() or "57" in str(context):
-            return WorkSize.T3
-        elif len(code_refs) > 2:
-            return WorkSize.T2
-        else:
-            return WorkSize.T1
-    
-    def _propose_solution(self, problem: str, lens: Lens,
-                         violations: list[Violation],
-                         context: dict) -> Solution:
-        """Propose the obvious solution."""
-        
-        if lens == Lens.SOLID:
-            return Solution(
-                title="Decouple high-level from low-level modules",
-                description="Introduce an abstraction layer. High-level module depends on "
-                           "interface, low-level implements it. This is dependency inversion.",
-                why_this="SOLID DIP is the principle that lets large systems scale. When violated, "
-                        "every change to infrastructure breaks every consumer.",
-                what_changes="New interface in domain package; implementations in infrastructure package; "
-                            "dependency arrow reversed.",
-                how_to_verify="High-level module can be deployed independently of low-level. "
-                             "Change one implementation without touching others.",
-            )
-        
-        elif lens == Lens.DRY:
-            return Solution(
-                title="Consolidate duplicated knowledge into one authority",
-                description="Identify the duplicated concept. Extract it to a single, "
-                           "authoritative location. All consumers import from there.",
-                why_this="DRY is about knowledge, not lines. When the same rule lives in two places, "
-                        "they diverge. Which one is the truth?",
-                what_changes="New shared module/package; remove copies; all sites import from one place.",
-                how_to_verify="Search the codebase for the concept. One canonical definition remains.",
-            )
-        
-        elif lens == Lens.COUPLING:
-            return Solution(
-                title="Move infrastructure out of domain boundary",
-                description="Identify what leaked. Infrastructure (persistence, transport, secrets) "
-                           "should not be known by domain logic.",
-                why_this="Coupling across boundaries locks abstractions together. "
-                        "Changes to one layer force changes across the boundary.",
-                what_changes="Move persistence/transport references out of domain classes. "
-                            "Introduce interface at boundary.",
-                how_to_verify="Domain classes have zero imports from infrastructure packages.",
-            )
-        
-        elif lens == Lens.FAIL_FAST:
-            return Solution(
-                title="Detect and fail immediately when invariant is violated",
-                description="Silent failures are the worst kind. When the invariant is violated, "
-                           "fail loud. Throw an exception with the specific context.",
-                why_this="Silent failures hide bugs until they cause cascading damage. "
-                        "Fail fast means debugging cost is low (happens immediately, context preserved).",
-                what_changes="Add explicit check. Throw meaningful exception if check fails. "
-                            "Add test for both pass and fail case.",
-                how_to_verify="Add test: normal case passes, violation case throws with specific message.",
-            )
-        
-        else:  # CLARITY
-            return Solution(
-                title="Make structure immediately obvious",
-                description="Structure must communicate intent. Names must tell the truth. "
-                           "Organization must reflect responsibility.",
-                why_this="Code is read 10x more than it's written. Structure is the first thing "
-                        "the next maintainer sees.",
-                what_changes="Rename for truth. Reorganize by responsibility. Document the organization.",
-                how_to_verify="A person unfamiliar with the code can navigate it and find what they need.",
-            )
-    
-    def _explain_rationale(self, lens: Lens, violations: list[Violation]) -> str:
-        """Why this lens decides it."""
-        explanations = {
-            Lens.SOLID: "Principle: Single Responsibility, Open/Closed, Liskov Substitution, "
-                       "Interface Segregation, Dependency Inversion. SOLID violations cause "
-                       "brittleness at scale.",
-            Lens.DRY: "Principle: Don't Repeat Yourself. Knowledge must have one authoritative "
-                     "source. When duplicated, versions diverge.",
-            Lens.COUPLING: "Principle: Low coupling, high cohesion. Layering must be respected. "
-                          "Infrastructure leakage breaks abstractions.",
-            Lens.FAIL_FAST: "Principle: Fail loud and early. Silent failures hide bugs until "
-                           "cascading damage. Better to fail immediately with context.",
-            Lens.CLARITY: "Principle: Code is communication. Structure must be immediately "
-                         "obvious to the next maintainer.",
-        }
-        return explanations.get(lens, "Engineering principle violation.")
+    solution = Solution(
+        title=solution_title.strip(),
+        description=(description.strip() or solution_title.strip()),
+        why_this=_PRINCIPLE[lens],
+        what_changes=what_changes.strip(),
+        how_to_verify=how_to_verify.strip(),
+    )
+    return Verdict(
+        problem_id=problem_id,
+        problem_statement=problem_statement,
+        evidence=evidence.strip(),
+        code_references=cited,
+        dominant_lens=lens,
+        severity=severity,
+        work_size=size_from_reach(cited, size),
+        solution=solution,
+        rationale=_PRINCIPLE[lens],
+        scope_notes=scope_notes.strip(),
+    )
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
@@ -372,26 +305,55 @@ class VERA:
 def main(argv: list[str] | None = None) -> int:
     """VERA CLI."""
     import argparse
-    ap = argparse.ArgumentParser(description=__doc__)
+
+    ap = argparse.ArgumentParser(
+        description=__doc__.splitlines()[0],
+        epilog="Every judgement flag is required: this emits an issue a lane will "
+               "execute, and a guess here is executed too.",
+    )
     ap.add_argument("problem_id")
     ap.add_argument("--problem", required=True)
-    ap.add_argument("--evidence", default="")
-    ap.add_argument("--refs", default="", help="comma-separated code references")
-    ap.add_argument("--impact", default="")
+    ap.add_argument("--evidence", required=True,
+                    help="what you measured, in your words")
+    ap.add_argument("--refs", required=True,
+                    help="comma-separated code references (path:line)")
+    ap.add_argument("--lens", required=True,
+                    choices=[lens.name.lower() for lens in Lens],
+                    help="the principle violated — YOUR reading, not a keyword match")
+    ap.add_argument("--severity", required=True,
+                    choices=[s.value for s in Severity])
+    ap.add_argument("--solution", required=True, help="the title of the fix")
+    ap.add_argument("--description", default="",
+                    help="the fix in a paragraph (defaults to the title)")
+    ap.add_argument("--what-changes", required=True,
+                    help="what actually changes in the code")
+    ap.add_argument("--how-to-verify", required=True,
+                    help="how anyone knows it is done right")
+    ap.add_argument("--size", choices=[w.value for w in WorkSize], default=None,
+                    help="override the size derived from how many files are cited")
+    ap.add_argument("--scope-notes", default="")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    
-    vera = VERA()
-    verdict = vera.analyze(
-        args.problem_id,
-        args.problem,
-        {
-            "evidence": args.evidence,
-            "code_references": [r.strip() for r in args.refs.split(",") if r.strip()],
-            "impact": args.impact,
-        }
-    )
-    
+
+    try:
+        verdict = emit(
+            args.problem_id,
+            args.problem,
+            lens=Lens[args.lens.upper()],
+            severity=Severity(args.severity),
+            solution_title=args.solution,
+            description=args.description,
+            what_changes=args.what_changes,
+            how_to_verify=args.how_to_verify,
+            evidence=args.evidence,
+            refs=args.refs.split(","),
+            size=WorkSize(args.size) if args.size else None,
+            scope_notes=args.scope_notes,
+        )
+    except JudgementMissing as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 2
+
     if args.json:
         print(json.dumps(verdict.to_issue(), indent=2, ensure_ascii=False))
     else:
@@ -402,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nSolution: {verdict.solution.title}")
         print(f"{verdict.solution.description}")
         print(f"\nRationale: {verdict.rationale}")
-    
+
     return 0
 
 

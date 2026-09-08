@@ -100,7 +100,7 @@ which is why the rule is now computed rather than requested.
 | `file_findings.py` | The step between a sweep and a work queue: audit findings that survived an agent trying to refute them become issues a lane can take. Refuses a killed claim, a claim with no evidence, one the tracker already holds open or closed — and refuses everything when the tracker cannot be read, because filing without dedup turns one defect into a duplicate per run |
 | `fleet_supervisor.sh` | The loop that runs the two above and nothing else: route what is startable, land what is verified, repeat. It makes no decision either mechanism refuses to make, and when both have nothing to do it says so rather than manufacturing activity |
 | `fleet_lander.py` | A lane's verified branch onto the working branch, or the reason it may not. Runs the suite on the branch and again on the merge, in two scratch worktrees, and pushes only what it watched pass. Never closes an issue and never opens the PR to `develop` — both are the operator's |
-| `vera.py` | A measured problem turned into one decision a lane can act on: it picks the dominant engineering lens, states the solution and the severity, and emits the issue body. It DECIDES rather than surveys — the point is a verdict a lane can execute, not a list of options for a person to weigh — and it takes the evidence and the `file:line` references as inputs, so a verdict without them is a verdict about nothing |
+| `vera.py` | The EMITTER behind `vera-technical-arbiter`: one arbitrated problem turned into one issue a lane can execute — title, body, labels, schema. It formats a judgement and never supplies one, so the lens, the severity and the solution are inputs; given none it refuses rather than guessing. It used to guess, by matching substrings against the problem text (#38) |
 | `fleet_idle.py` | Where the fleet's time went, from the lead's own log: idle vs productive, per decision kind, and which sessions were never handed work |
 | `fleet_wall.sh` | One tmux session showing every executing session side by side, read-only by default, plus a live status pane |
 | `fleet_status.sh` | Every session at once, from the shell: what each is doing, what the lead handed out, what the queue would pick |
@@ -134,28 +134,47 @@ above, and let the gate confirm the two agree. A file that belongs to exactly on
 skill is not a mechanism — it lives in `skills/{name}/scripts/`, which is a
 different directory with a different owner.
 
-## VERA — Verifiable Engineering Reference Arbiter
+## VERA — the arbiter and the emitter
 
-The autonomous technical decision-maker. VERA reads problems (B-001 through B-168), applies five FAANG-level lenses (SOLID, DRY, Coupling, Fail-Fast, Clarity), and proposes the obvious solution. She does not equivocate: when DIP says decouple, she says decouple.
+Two things share the name, and the split is what keeps the verdict honest.
 
-**Lenses:**
-- **SOLID** — violations of SRP, OCP, LSP, ISP, DIP cause brittleness at scale
-- **DRY** — knowledge duplicated in two places diverges; consolidate to one authority
-- **Coupling** — low-coupling, high-cohesion; layering must be respected
-- **Fail-Fast** — silent failures are the worst; fail loud and early with context
-- **Clarity** — code as communication; structure must be immediately obvious
+**`agents/vera-technical-arbiter.md` is the arbiter.** It reads the code, decides
+which principle a problem violates, how severe it is, and what the fix is. That is
+a reading, and only a reader can do it.
 
-**Input:** Problem statement + evidence + code references  
-**Output:** GitHub issue with title, rationale, solution, scope, and labels
+**`mechanisms/fleet/vera.py` is the emitter.** It takes that judgement and formats
+one issue a lane can execute: the title, the body, the labels, the schema. It is a
+formatter, and formatting is computation.
 
-Example:
+**Lenses:** SOLID · DRY · Coupling · Fail-Fast · Clarity. The module holds each
+principle's canonical statement, and selects one by the lens it was handed — never
+by reading the problem.
+
+**It refuses instead of guessing.** No lens, no severity, no evidence, no
+`file:line`, or a solution that does not say what changes and how to verify it:
+each is a refusal (exit 2), because the output is filed as an issue and a lane
+executes what it says.
+
+Until 2026-09-08 it guessed all of it, by substring. `--refs app/main.py:57` sized
+a typo as a two-week refactor, because the literal `"57"` was matched against the
+stringified context; a secret in a log was answered with "Make structure
+immediately obvious", because the five solutions were selected by lens alone and
+never read the problem. That is the shape `mechanisms/cycle/delegated_decision.py`
+names in its own docstring — *"a number that measured nothing but its own
+matcher"* — fixed there first, and now here (#38).
+
 ```bash
 python3 mechanisms/fleet/vera.py B-022 \
-  --problem "Engine blocked by dashboard outages" \
-  --evidence "init() calls dashboard health check" \
-  --refs "api/engine/init.go:156"
+  --problem       "Engine cannot deploy while the dashboard is down" \
+  --evidence      "init() calls the dashboard health check before serving" \
+  --refs          "api/internal/routes/engine/init.go:156" \
+  --lens          solid \
+  --severity      high \
+  --solution      "Decouple the engine from the dashboard health check" \
+  --what-changes  "init() stops calling the dashboard; the check moves behind a port" \
+  --how-to-verify "the engine deploys with the dashboard down"
 ```
 
-Result: Issue titled "[high] Decouple high-level from low-level modules" with DIP rationale, T1 scope.
-
-VERA is not consultative. She does not say "consider" or "maybe". She says what FAANG would do.
+Result: an issue titled `[high] Decouple the engine from the dashboard health
+check`, labelled `severity:high`, `size:t1`, `lens:solid`, carrying the evidence
+and the reference it was given.

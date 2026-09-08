@@ -132,10 +132,22 @@ judgement it used to fake:
 
 ```bash
 python3 mechanisms/fleet/vera.py B-NNN \
-  --problem "<the violation, in one sentence>" \
-  --evidence "<what you found, with file:line>" \
-  --refs "<path:line>,<path:line>"
+  --problem       "<the violation, in one sentence>" \
+  --evidence      "<what you found, with file:line>" \
+  --refs          "<path:line>,<path:line>" \
+  --lens          <solid|dry|coupling|fail_fast|clarity> \
+  --severity      <blocker|high|medium|low> \
+  --solution      "<the title of the fix>" \
+  --what-changes  "<what actually changes in the code>" \
+  --how-to-verify "<how anyone knows it is done>"
 ```
+
+Every judgement flag is required, and omitting one is a refusal (exit 2) rather
+than a default. Until 2026-09-08 the script accepted the first three alone and
+invented the rest by matching substrings — a typo whose reference ended in `:57`
+came back sized as a two-week refactor (#38). Size is still computed, because it
+is countable: it comes from how many distinct files you cite, and `--size`
+overrides it when your reading says otherwise.
 
 The split is the point. The script cannot be wrong about a label; you cannot be
 right about a lens without reading. Neither does the other's job.
