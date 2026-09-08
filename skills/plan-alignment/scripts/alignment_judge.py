@@ -31,7 +31,20 @@ decide — and it answers them against evidence.
 
 Usage:
     python3 alignment_judge.py <brief.md> --verdict signed|refused \\
-        --reason "<why>" [--judge <name>]
+        --reason "<why>" --model <model-id> [--judge <name>]
+
+WHAT THIS STILL DOES NOT DO, STATED PLAINLY
+-------------------------------------------
+It takes its verdict on the command line. It does not read the evidence itself, and
+nothing here can verify that the caller did — constraint 1 above is a promise made
+BY the invoker, not a property of this file. `--model` is required so that the
+promise is at least attributable: a record that cannot name which model judged
+cannot be checked for correlation with the author.
+
+For a judgement that IS structurally independent rather than attributably claimed,
+see `rules/review-panel.txt` and `mechanisms/cycle/review_panel.py`, which refuse
+a panel where the author sits, where one family supplies every vote, or where an
+abstention would be counted as agreement.
 
 Exit codes:
     0 — the brief was signed
@@ -57,7 +70,13 @@ def _evidence_paths(brief: str) -> list[str]:
     return sorted({m.group(0) for m in re.finditer(r"`[^`]+\.(?:md|py|ts|go|yaml|yml)`", brief)})
 
 
-def sign(brief_path: Path, judge: str, reason: str) -> str:
+#: Written when a caller does not say which model judged. Visible on purpose: a
+#: reader must be able to see that the provenance is incomplete, rather than assume
+#: it was checked. The CLI refuses to produce this — only a direct API call can.
+UNRECORDED_MODEL = "unrecorded"
+
+
+def sign(brief_path: Path, judge: str, reason: str, model: str | None = None) -> str:
     text = brief_path.read_text(encoding="utf-8")
     if not _SIGNOFF_RE.search(text):
         raise SystemExit("FATAL: the brief has no `## Reviewer sign-off` section to sign")
@@ -69,7 +88,8 @@ def sign(brief_path: Path, judge: str, reason: str) -> str:
     tail = _BOX_RE.sub(lambda m: f"{m.group(1)}[x]{m.group(2)}{marker}", tail)
 
     tail += (
-        f"\n**Judged {date.today().isoformat()} by `{judge}`, not by a person.**\n\n"
+        f"\n**Judged {date.today().isoformat()} by `{judge}` "
+        f"(model: `{model or UNRECORDED_MODEL}`), not by a person.**\n\n"
         f"{reason.strip()}\n\n"
         f"A judge signature is worth less than a human one and the record says so "
         f"rather than blurring it. The operator can overturn this by unticking a "
@@ -78,10 +98,11 @@ def sign(brief_path: Path, judge: str, reason: str) -> str:
     return head + "## Reviewer sign-off" + tail
 
 
-def refuse(brief_path: Path, judge: str, reason: str) -> str:
+def refuse(brief_path: Path, judge: str, reason: str, model: str | None = None) -> str:
     text = brief_path.read_text(encoding="utf-8")
     return text.rstrip() + (
-        f"\n\n**REFUSED {date.today().isoformat()} by `{judge}`.**\n\n"
+        f"\n\n**REFUSED {date.today().isoformat()} by `{judge}` "
+        f"(model: `{model or UNRECORDED_MODEL}`).**\n\n"
         f"{reason.strip()}\n\n"
         f"The boxes stay unticked. A refusal is the judge doing the one thing that "
         f"makes it more than a rubber stamp, and it costs the same as approving.\n"
@@ -97,6 +118,10 @@ def main(argv: list[str] | None = None) -> int:
                          "with no reasoning is a tick, and a tick is what this "
                          "exists to be more than.")
     ap.add_argument("--judge", default=DEFAULT_JUDGE)
+    ap.add_argument("--model", required=True,
+                    help="which model reached this verdict. Required: `rules/review-panel.txt` "
+                         "rests on models being distinguishable, and a record that cannot name "
+                         "the judge cannot be checked for correlation with the author")
     args = ap.parse_args(argv)
 
     if len(args.reason.split()) < 15:
@@ -105,8 +130,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        out = sign(args.brief, args.judge, args.reason) if args.verdict == "signed" \
-            else refuse(args.brief, args.judge, args.reason)
+        out = sign(args.brief, args.judge, args.reason, args.model) \
+            if args.verdict == "signed" \
+            else refuse(args.brief, args.judge, args.reason, args.model)
     except OSError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2

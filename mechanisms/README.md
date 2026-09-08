@@ -45,6 +45,7 @@ which is why the rule is now computed rather than requested.
 |---|---|
 | `check_english_only.py` | Refuse Portuguese in a repository that is English by policy |
 | `check_gate_mechanisms.py` | Every declared hard gate names the mechanism that computes it |
+| `check_panel_capability.py` | Can a review panel be formed from `rules/review-panel.txt` at all? Three reviewers, at least one from a recognised family outside the kit's own, every non-builtin one on PATH. Asked at intake because otherwise every item is measured, planned, and returned at a panel that was never formable |
 | `check_merge_autonomy.py` | Does the remote let the system merge its own passing PRs to the trunk? Envelope floor 2 makes that a premise of running the kit, so it is asked at intake — a required human approving review would park every item at an open PR at the end of its chain. Reports NOT CHECKED distinctly from PASS: an absent or unauthenticated `gh` tested nothing |
 | `check_install_drift.py` | Has a consumer's install and this kit drifted, and which way? |
 | `check_orphan_verdicts.py` | Every verdict a contract declares must be reachable by something |
@@ -73,6 +74,7 @@ which is why the rule is now computed rather than requested.
 | `backlog_status.py` | Mechanize the BACKLOG.md status transitions — and the impediment edges |
 | `cycle_events.py` | The cycle's phase transitions, as a stream instead of an excavation |
 | `route_domain.py` | Route a repo (or a B-NNN item) to its domain specialist |
+| `review_panel.py` | Tallies the three reviewers that judge a DISCOVER opportunity and a PLAN plan: 2 of 3 advances the document, below that it returns as `NEEDS_REVISION`. The counting is trivial and is not the point — what it REFUSES is: the author on their own panel, three votes from one model family, an abstention read as agreement, a verdict with no reasoning, one reviewer voting twice |
 | `halt_disposition.py` | Where an item goes when a phase stops, now that no phase between DISCOVER and ACCEPTANCE may address a person. A halt is the queue's own work unless it names a material impediment — and an item the queue returned twice for the same cause is retained on that evidence rather than on a regex |
 | `delegated_decision.py` | The line between a wall a sponsor can delegate and one nobody can: a choice between named alternatives, versus an absent machine, an unelapsed series, or a system that is not standing. Impediments are matched first and win, because a wall that is both is an impediment; unrecognised prose stays walled, since no match is not consent |
 | `apply_delegated_decisions.py` | Retires the walls the classifier calls delegable and leaves the decision in their place — never deleting a wall, refusing one with no rationale, and refusing a delegable item nobody actually decided |

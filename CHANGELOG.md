@@ -6,7 +6,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **DISCOVER and PLAN are judged by a panel of three, and advance on 2 of 3 (#48)**
+  Both phases produce a document no script can judge. `discover-confidence` and
+  `plan-confidence` are deterministic and score STRUCTURE — pointers resolve, corners are
+  populated, the contract is satisfied — and what they cannot ask is whether evidence that
+  *resolves* actually *supports* the conclusion drawn from it. That question now goes to
+  three reviewers declared in `rules/review-panel.txt`, and below the majority the document
+  returns as `NEEDS_REVISION` — a verdict that already existed and already held an item, so
+  no token was invented for a state the vocabulary had.
+  **At least one reviewer must come from a recognised model family outside the kit's own.**
+  Three Claudes asked three times are three correlated opinions: a plausible fabrication
+  that survives one tends to survive its siblings, which is the single thing an orthogonal
+  reviewer catches. An unrecognised model supplies neither side — otherwise `--model
+  anything` would prove orthogonality by typing.
+  **The counting is not the point.** `review_panel.py` refuses the author sitting on their
+  own panel, three votes from one family, a reviewer voting twice, a verdict with no
+  reasoning, and — the one most likely to be "fixed" later — an abstention counted as
+  agreement. Two approvals out of two is not 2-of-3: the threshold is over a FULL panel, so
+  a missing reviewer means the panel did not convene, which is a different fact from the
+  document being wrong and takes a different action (an `access` impediment for
+  `halt_disposition.py`). Collapsing the two would either send an author to rewrite a
+  document nobody found fault with, or let a panel of one report a majority.
+  **The dissent is kept.** A minority vote that loses is the most interesting thing in the
+  record — the same argument `cycle-judge-codex.md` already makes about Claude and Codex
+  disagreeing — so it is reported beside the outcome rather than discarded for losing.
+- **`mechanisms/gates/check_panel_capability.py` — can a panel be formed at all? (#48)**
+  Asked at intake, for the reason `check_merge_autonomy.py` gives at the other end of the
+  chain: without it every item is measured, planned, and then returned to the registry at a
+  panel that was never formable — one impediment per item, for a cause knowable before the
+  first item was selected. An absent declaration is VIOLATED (determinable from disk); a
+  declaration that does not parse is NOT CHECKED, which is not a pass.
+- **`rules/review-panel.txt`** — who sits on the panel, in the layer the installer
+  preserves. Which models a project can reach and what they cost it are not the kit's
+  business; the kit owns only the rule that a majority is needed and that the panel must
+  not be one family. (#48)
+
 ### Changed
+- **`alignment_judge.py` must now name the model that reached the verdict (#48)**
+  `signed_by` already separated a person from a judge; it did not say WHICH judge, and the
+  panel rests entirely on models being distinguishable. A signature that cannot name the
+  model behind it cannot be checked for correlation with the author — it is the same
+  unfalsifiable claim the judge exists to be more than. `--model` is now required on the
+  CLI, and a direct API call that omits it writes `unrecorded` into the brief rather than
+  silence, so incomplete provenance is visible instead of assumed.
+  **What this does not fix, stated in the file:** the judge still takes its verdict on the
+  command line and does not read the evidence itself. Its docstring promises that it does;
+  nothing in it verifies that, and nothing can — the promise is made by the invoker. The
+  module now says so and points at `review_panel.py`, which is structurally independent
+  rather than attributably claimed.
+
 - **BREAKING (doctrine) — nothing between DISCOVER and ACCEPTANCE waits for a person (#47)**
   Ten places in the phase rules ended a halt with *escalate to the human*, *surface to human*
   or *ask the human*: a gate failing twice, a halt-loop with no observable progress, a

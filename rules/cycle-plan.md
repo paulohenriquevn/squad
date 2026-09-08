@@ -122,6 +122,46 @@ The method comes from an observed run of `obra/superpowers`' `subagent-driven-de
 and found six defects in the plan — including `assert.throws` returning `undefined` at eight
 call sites, which would have failed every test in two files.
 
+## The review panel
+
+**Decided 2026-09-08.** The plan this cycle produces is judged by **three reviewers**, and
+**2 of 3 approvals** advance it. Below the majority it returns as `NEEDS_REVISION` — a
+verdict that already exists and already holds an item, so no new token was invented for a
+state the vocabulary already had.
+
+| | |
+|---|---|
+| Who sits | [`rules/review-panel.txt`](review-panel.txt) — **the project's**, because which models a project can reach is not the kit's business |
+| What the kit imposes | Three reviewers; at least one from a recognised family **outside** the one the kit runs on; the author never sits |
+| Computes | [`mechanisms/cycle/review_panel.py`](../mechanisms/cycle/review_panel.py) |
+| Premise | [`mechanisms/gates/check_panel_capability.py`](../mechanisms/gates/check_panel_capability.py), at intake |
+
+**Why a script cannot do this job.** `/plan-confidence` is deterministic and scores
+STRUCTURE — the coverage matrix, citations that resolve, criteria that are executable.
+What it cannot ask is whether the plan actually does what the item asked for, and whether
+the evidence behind it supports the approach chosen. That is what the panel is for.
+
+**Why the panel must not be one family.** Three Claudes asked three times are three
+correlated opinions: a plausible fabrication that survives one tends to survive its
+siblings, which is the single thing an orthogonal reviewer catches. An **unrecognised**
+model supplies neither side — otherwise `--model anything` would prove orthogonality by
+typing.
+
+**An incomplete panel is not a rejection.** Two approvals out of two is not 2-of-3: the
+threshold is over a FULL panel, so a missing reviewer is an abstention, and an abstention
+approves nothing and rejects nothing. The panel did not convene, the item returns to the
+registry with an `access` impediment (`halt_disposition.py`), and the queue takes the next
+item.
+
+**The dissent is kept.** A minority vote that loses is the most interesting thing in the
+record, and `review_panel.py` reports it beside the outcome — the same argument
+`cycle-judge-codex.md` already makes about Claude and Codex disagreeing.
+
+**This does not replace the alignment gate.** `/plan-alignment` asks whether the item is
+understood before anything is built; the panel asks whether the plan that came out of it
+holds up. Two different questions, two different artifacts, and passing one has never
+implied the other.
+
 ## Verdicts
 
 - `INVALID` — hard cap blew (e.g., Coverage Matrix incomplete, fabricated citation). Return to `/plan-write`. **`/plan-improve` does not fix hard caps.**

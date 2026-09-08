@@ -141,3 +141,37 @@ def test_a_placeholder_in_the_brief_itself_is_still_caught_after_signing(tmp_pat
     after = next(c for c in score_alignment(brief).criteria if c.key == "no_placeholders")
 
     assert after.score == 0, f"a TODO in an FR survived the signature: {after.why}"
+
+
+# ---------------------------------------------------------------------------
+# WHICH MODEL JUDGED — added 2026-09-08
+#
+# `signed_by` already separated a person from a judge. It did not say WHICH judge,
+# and under `rules/review-panel.txt` that gap matters: the whole argument for an
+# orthogonal reviewer is that correlated models share failure modes, and a record
+# that does not name the model cannot be checked for correlation at all.
+#
+# A signature that says "a judge approved this" and cannot say which one is not
+# auditable — it is the same claim `alignment_judge.py` makes about a tick.
+# ---------------------------------------------------------------------------
+
+def test_the_signature_records_which_model_judged(tmp_path: Path) -> None:
+    brief = _write(tmp_path, "- [ ] CHK001 a judgement\n")
+    out = sign(brief, "judge/alignment-judge", "checked the evidence and it holds up "
+               "against every pointer cited in the brief", model="gpt-5-codex")
+
+    assert "gpt-5-codex" in out, "the model that judged must appear in the record"
+
+
+def test_an_unrecorded_model_is_visible_rather_than_absent(tmp_path: Path) -> None:
+    """The honest failure mode: silence about the model reads as no model at all.
+
+    A caller that omits it gets `unrecorded` written into the brief, not a blank —
+    a reader can then see that the provenance is incomplete instead of assuming it
+    was checked.
+    """
+    brief = _write(tmp_path, "- [ ] CHK001 a judgement\n")
+    out = sign(brief, "judge/alignment-judge", "checked the evidence and it holds up "
+               "against every pointer cited in the brief")
+
+    assert "unrecorded" in out

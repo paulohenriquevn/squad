@@ -229,6 +229,37 @@ def check_squad_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return not findings, [f"  {f['message']}" for f in findings]
 
 
+def check_panel_capability(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Can a DISCOVER/PLAN review panel be formed from what the project declared?
+
+    Same argument as `check_merge_autonomy` at the other end of the chain: without
+    this, every item is measured, planned, and then returned to the registry at a
+    panel that was never formable — one `access` impediment per item, for a cause
+    knowable before the first item was selected.
+
+    An absent declaration is a VIOLATION rather than a skip: a project that never
+    configured a panel cannot form one, and that is determinable from disk.
+    """
+    checker = ecosystem_dir / "mechanisms" / "gates" / "check_panel_capability.py"
+    if not checker.exists():
+        return NOT_RUN, ["  check_panel_capability.py not installed — skipping"]
+    result = subprocess.run(  # noqa: PLW1510
+        [sys.executable, str(checker), "--json"],
+        capture_output=True, text=True, cwd=str(ecosystem_dir),
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return NOT_RUN, [f"  check_panel_capability.py produced no usable JSON "
+                         f"(exit {result.returncode})"]
+    verdict = payload.get("result")
+    if verdict == "violated":
+        return False, ["  " + line for line in str(payload.get("message", "")).splitlines()]
+    if verdict == "unchecked":
+        return NOT_RUN, ["  the panel declaration could not be parsed — this is not a pass"]
+    return True, []
+
+
 def check_merge_autonomy(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """May the system merge its own passing PRs to the trunk?
 
@@ -630,6 +661,7 @@ def main(argv: list[str] | None = None) -> int:
         ("README advisory skills", check_readme_advisory_skills),
         ("Mechanisms inventory", check_mechanisms_inventory),
         ("Merge autonomy (envelope floor 2)", check_merge_autonomy),
+        ("Review panel can be formed", check_panel_capability),
         ("Orphan verdicts", check_orphan_verdicts),
         ("Phase emitters", check_phase_emitters),
         ("Durable knowledge root", check_wiki_migration),

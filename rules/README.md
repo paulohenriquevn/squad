@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at fifty-two files is
-not one — a model told to read fifty-two files before an architectural decision
+That makes the pointer the whole interface, and a pointer at fifty-three files is
+not one — a model told to read fifty-three files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
@@ -117,6 +117,7 @@ Each `cycle-{name}.md` defines:
 | `blocking-verdicts.txt` | Verdicts that stop an item where it is — one definition, two readers |
 | `autonomy-envelope.md` | What runs unattended, and the floors that make it defensible |
 | `decision-delegation.txt` | What a consumer may delegate, and what delegation can never authorize |
+| `review-panel.txt` | Who judges a DISCOVER opportunity and a PLAN plan — **the project's**, because which models it can reach is not the kit's business. The kit imposes only the rule: three reviewers, 2 of 3 to advance, and never all from one model family |
 | `records-location.md` | Where run output goes, and why `wiki/` and `records/` are two directories |
 | `sop-schema.md` | The shape of a procedure performed on the kit |
 | `english-only.md` | Everything the repository versions is written in English |

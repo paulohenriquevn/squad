@@ -63,6 +63,29 @@ addressed to**:
 That is not new doctrine — it is § *Nothing here fits* applied everywhere the phase
 rules had written their own exception. One item waiting is not the backlog waiting.
 
+### What replaces the human reviewer, and what it does not replace
+
+Closing the span removed the person from every gate between DISCOVER and ACCEPTANCE. In
+two of those phases the thing the person was doing was **judgement over a document**, and
+that does not disappear because nobody is coming — it has to be performed by somebody
+else, under a rule that says who.
+
+That is [`rules/review-panel.txt`](review-panel.txt): DISCOVER and PLAN are each judged by
+three reviewers, **2 of 3** advance the document, and at least one reviewer must come from
+a recognised model family outside the one the kit runs on. Below the majority the document
+returns as `NEEDS_REVISION`.
+
+**Correlated approval is not independent approval.** Three reviewers from one family are
+three chances to make the same mistake: a plausible fabrication that survives one tends to
+survive its siblings. A panel that cannot tell those apart is a signature ceremony with
+extra latency — which is what `alignment_judge.py` was before this existed, since it takes
+its verdict on the command line and stamps it.
+
+What a panel does NOT replace is the deterministic scoring beneath it. `discover-confidence`
+and `plan-confidence` run first, cost nothing, and have **zero error correlation** with the
+generator by construction — a property no second model can claim. The panel answers only
+what a script cannot: whether evidence that resolves actually supports the conclusion.
+
 ### The one door that still returns to a person
 
 An item goes back to a person when — and only when — its impediment is one of the

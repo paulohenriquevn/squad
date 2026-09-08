@@ -112,6 +112,45 @@ The **Blast radius** corner is the one whose shape depends most on the project. 
 
 `ITEM_KILLED` is orthogonal to the other four: they grade a document, it reports an outcome. A killed item produces no opportunity to score.
 
+## The review panel
+
+**Decided 2026-09-08.** The document this phase produces is judged by **three
+reviewers**, and **2 of 3 approvals** advance it. Below the majority it returns as
+`NEEDS_REVISION` — a verdict that already exists and already holds an item, so no new
+token was invented for a state the vocabulary already had.
+
+| | |
+|---|---|
+| Who sits | [`rules/review-panel.txt`](review-panel.txt) — **the project's**, because which models a project can reach is not the kit's business |
+| What the kit imposes | Three reviewers; at least one from a recognised family **outside** the one the kit runs on; the author never sits |
+| Computes | [`mechanisms/cycle/review_panel.py`](../mechanisms/cycle/review_panel.py) |
+| Premise | [`mechanisms/gates/check_panel_capability.py`](../mechanisms/gates/check_panel_capability.py), at intake |
+
+**Why a script cannot do this job.** ``/discover-confidence`` is deterministic and scores
+STRUCTURE — pointers resolve, the shape is complete, the contract is satisfied. What it
+cannot ask is whether evidence that *resolves* actually *supports* the conclusion drawn
+from it. That question is what the panel is for, and it is the one place in this phase
+where a second opinion buys something a rule cannot.
+
+**Why the panel must not be one family.** Three Claudes asked three times are three
+correlated opinions: a plausible fabrication that survives one tends to survive its
+siblings, which is the single thing an orthogonal reviewer catches. An **unrecognised**
+model supplies neither side — otherwise `--model anything` would prove orthogonality by
+typing.
+
+**An incomplete panel is not a rejection.** Two approvals out of two is not 2-of-3: the
+threshold is over a FULL panel, so a missing reviewer is an abstention, and an abstention
+approves nothing and rejects nothing. The panel did not convene, the item returns to the
+registry with an `access` impediment (`halt_disposition.py`), and the queue takes the next
+item. Collapsing the two would send an author to rewrite a document nobody found fault
+with — or, far worse, let a panel of one report a majority.
+
+**The dissent is kept.** A minority vote that loses is the most interesting thing in the
+record, and `review_panel.py` reports it beside the outcome. This kit already argues the
+point about Claude and Codex disagreeing in `cycle-judge-codex.md`: the disagreement is
+the highest-value signal in the pipeline, and discarding it because it lost a vote throws
+away what the panel was convened to produce.
+
 ## Hard gates
 
 | # | Gate | Blocks on |

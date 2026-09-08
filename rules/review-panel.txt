@@ -1,0 +1,63 @@
+# The review panel — who judges a DISCOVER opportunity and a PLAN plan
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Decided 2026-09-08. Both phases produce a document that no script can judge:
+# `discover-confidence` and `plan-confidence` are deterministic and score STRUCTURE
+# — pointers resolve, corners are populated, the mode contract is satisfied. What
+# they cannot ask is whether the evidence that resolves actually SUPPORTS the
+# conclusion drawn from it. That is the judgement a panel is for.
+#
+# Three reviewers, 2 of 3 to advance. Below the majority the document returns as
+# NEEDS_REVISION, a verdict that already exists and already holds an item.
+#
+# WHY THE PANEL IS THE PROJECT'S TO CONFIGURE
+# -------------------------------------------
+# This is a `.txt` under `rules/`, which is the layer the installer PRESERVES
+# (`rules/README.md`: the question that places a file is not who reads it, it is
+# who owns it). Which models a project can reach, what they cost it, and what its
+# risk tolerance is are not the kit's business — the kit owns the RULE that a
+# majority is needed and that the panel must not be one family.
+#
+# THE ONE CONSTRAINT THE KIT DOES IMPOSE
+# --------------------------------------
+# At least one counted vote must come from a recognised family outside the one the
+# kit itself runs on. Three Claudes asked three times share their failure modes:
+# a plausible fabrication that survives one tends to survive its siblings, which is
+# the single thing an orthogonal reviewer is there to catch. Correlated approval is
+# not the same as independent approval, and a panel that cannot tell the difference
+# is a signature ceremony with extra latency.
+#
+# An UNRECOGNISED model supplies neither side. Otherwise `--model anything` would
+# prove orthogonality by typing.
+#
+# WHAT AN ABSENT REVIEWER MEANS
+# -----------------------------
+# It does NOT mean the document was rejected. Two approvals out of two is not
+# 2-of-3: the threshold is over a full panel, so a missing reviewer is an
+# abstention, and an abstention approves nothing and rejects nothing. The panel did
+# not convene, the item returns to the registry with an `access` impediment
+# (`halt_disposition.py`), and the queue takes the next item.
+#
+# That is why `check_panel_capability.py` asks the question AT INTAKE instead:
+# discovering per-item that the panel cannot be formed costs the run, exactly as
+# `check_merge_autonomy.py` argues about branch protection.
+#
+# FORMAT
+# ------
+#   reviewer = <id> | <model> | <how to invoke>
+#
+# `<how to invoke>` is `builtin` for a reviewer that runs as a sub-agent in this
+# session, or the name of an executable that must be on PATH. The lens each
+# reviewer applies belongs in its own agent file; this table answers only WHO sits
+# on the panel and whether they can be reached.
+
+reviewer = evidence-lens     | claude-opus-5   | builtin
+reviewer = orthogonal-lens   | gpt-5-codex     | codex
+reviewer = completeness-lens | claude-sonnet-5 | builtin
+
+# The phases a panel gates. A phase not listed here advances on its own verdict.
+# CODE-QUALITY and RELEASE are deliberately absent: both already derive their
+# verdict from a script, and a panel voting on a decision already made
+# deterministically adds cost and no information.
+panel_phases = discover, plan

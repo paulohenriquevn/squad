@@ -115,6 +115,12 @@ the verdict. **No verdict in this kit is asserted in prose.**
 | Produces | `wiki/product/` — vision, objectives, trd, technical-pieces, alignment · `records/brainstorms/` for what was discarded |
 | Gates | G-B1…G-B5. **A judge may not sign this one** — a product vision has no independent evidence to be scored against |
 
+**Two phases are gated by a panel, not by one judgement.** DISCOVER and PLAN each need
+**2 of 3** signed approvals, with at least one reviewer from a model family outside the
+kit's own — [`rules/review-panel.txt`](review-panel.txt), computed by
+[`review_panel.py`](../mechanisms/cycle/review_panel.py). A panel that cannot be formed is
+a violated premise reported at intake, never a per-item halt.
+
 ### BACKLOG — phase 0 · Kairos
 
 | | |

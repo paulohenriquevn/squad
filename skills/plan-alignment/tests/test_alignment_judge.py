@@ -100,12 +100,28 @@ def test_a_brief_with_no_signoff_section_is_not_signable(tmp_path: Path) -> None
         sign(_brief(tmp_path / "b.md", section=False), DEFAULT_JUDGE, _REASON)
 
 
+def test_the_cli_refuses_a_verdict_that_does_not_name_its_model() -> None:
+    """Added 2026-09-08 with `rules/review-panel.txt`.
+
+    The panel rests on models being distinguishable — the entire argument for an
+    orthogonal reviewer is that correlated models share failure modes. A signature
+    that cannot name which model produced it cannot be checked for correlation with
+    the author, so the CLI will not produce one.
+
+    SystemExit(2) is argparse refusing a missing required argument, which is the
+    right layer for this: it is a caller error, not a judgement.
+    """
+    import pytest as _pytest
+    with _pytest.raises(SystemExit):
+        main(["brief.md", "--verdict", "signed", "--reason", _REASON])
+
+
 def test_a_reason_too_short_to_be_a_judgement_is_refused(tmp_path: Path) -> None:
     """A verdict with no reasoning is a tick, and a tick is what this exists to be
     more than."""
     brief = _brief(tmp_path / "b.md")
 
-    assert main([str(brief), "--verdict", "signed", "--reason", "looks fine"]) == 2
+    assert main([str(brief), "--verdict", "signed", "--reason", "looks fine", "--model", "claude-opus-5"]) == 2
     assert "[ ]" in brief.read_text(encoding="utf-8")
 
 
@@ -127,8 +143,8 @@ def test_a_refusal_exits_non_zero_and_a_signature_exits_zero(tmp_path: Path) -> 
     signed = _brief(tmp_path / "signed.md")
     refused = _brief(tmp_path / "refused.md")
 
-    assert main([str(signed), "--verdict", "signed", "--reason", _REASON]) == 0
-    assert main([str(refused), "--verdict", "refused", "--reason", _REASON]) == 1
+    assert main([str(signed), "--verdict", "signed", "--reason", _REASON, "--model", "claude-opus-5"]) == 0
+    assert main([str(refused), "--verdict", "refused", "--reason", _REASON, "--model", "claude-opus-5"]) == 1
 
 
 def test_a_refusal_is_written_to_disk_and_survives_the_next_run(tmp_path: Path) -> None:
@@ -136,7 +152,7 @@ def test_a_refusal_is_written_to_disk_and_survives_the_next_run(tmp_path: Path) 
     that produced it."""
     brief = _brief(tmp_path / "b.md")
 
-    main([str(brief), "--verdict", "refused", "--reason", _REASON])
+    main([str(brief), "--verdict", "refused", "--reason", _REASON, "--model", "claude-opus-5"])
     text = brief.read_text(encoding="utf-8")
 
     assert "REFUSED" in text
@@ -147,7 +163,7 @@ def test_a_refused_brief_can_still_be_signed_after_the_gap_closes(tmp_path: Path
     """A refusal is not a death sentence for the item — it names what to fix, and
     the boxes are still there to tick once it is fixed."""
     brief = _brief(tmp_path / "b.md")
-    main([str(brief), "--verdict", "refused", "--reason", _REASON])
+    main([str(brief), "--verdict", "refused", "--reason", _REASON, "--model", "claude-opus-5"])
 
-    assert main([str(brief), "--verdict", "signed", "--reason", _REASON]) == 0
+    assert main([str(brief), "--verdict", "signed", "--reason", _REASON, "--model", "claude-opus-5"]) == 0
     assert "[ ]" not in brief.read_text(encoding="utf-8").split("## Reviewer sign-off", 1)[-1]
