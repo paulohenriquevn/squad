@@ -1,6 +1,21 @@
 # ADR-0025: Organizational Hierarchy with Autonomous Squad
 
-**Status:** Approved  
+**Status:** Superseded by [`rules/autonomy-envelope.md`](../../rules/autonomy-envelope.md) and [`rules/squad-map.md`](../../rules/squad-map.md) (2026-09-08)
+
+> **What superseded it.** This ADR describes a hierarchy of PEOPLE around the system —
+> CTO, managers, architects — and states that Squad's fourteen agents handle "100% of
+> technical execution". The kit does not implement an organisation chart, and the two
+> questions this ADR actually answers are now answered by mechanisms rather than by an
+> org structure:
+>
+> - *what does the system decide, and what stays with a person?* →
+>   `rules/autonomy-envelope.md`, whose five floors and retained decision classes are
+>   read by `halt_disposition.py`;
+> - *who are the fourteen, and what does each one decide?* → `rules/squad-map.md`,
+>   verified against `agents/` by `check_squad_map.py`.
+>
+> It is kept because an ADR records a decision that was taken, and deleting one hides
+> that it ever was. It is not a description of the running system.
 **Date:** 2026-09-03  
 **Context:** Building out Theo as a complete software development organization with human leadership and fully autonomous AI execution infrastructure.
 
@@ -31,15 +46,15 @@ Implement a **three-layer organizational structure** inspired by AIDLC Workflows
 - **Responsibility:** People allocation, pairing, capacity planning, delivery sequencing
 - **Decision authority:** Who pairs with whom? Team composition? Delivery timeline?
 - **Intervention frequency:** 1-2 times per week (team health, capacity planning)
-- **How it works:** Gerentes monitor Squad logs; ensure team health and sustainable pace
+- **How it works:** Managers monitor Squad logs; ensure team health and sustainable pace
 
 ### Layer 3: Specialists (4 Architects + 1 CSO)
 All report directly to CTO (equivalent decision authority)
 
 **Architects (4):**
-- **Arquiteto de Sistemas:** Infrastructure, scaling, SLO, tradeoffs
-- **Arquiteto de Domínio:** Core kits, module structure, contracts
-- **Arquiteto de Segurança (NEW):** Threat modeling, policies, compliance, incident strategy
+- **Systems Architect:** Infrastructure, scaling, SLO, tradeoffs
+- **Domain Architect:** Core kits, module structure, contracts
+- **Security Architect (NEW):** Threat modeling, policies, compliance, incident strategy
 - **Product Owner:** Backlog prioritization, user requirements
 
 **Chief Security Officer (NEW):**
@@ -54,7 +69,7 @@ All report to respective Architects (technical guidance) and Managers (capacity/
 - **Developers (3-5):** Pair with lanes, clarify requirements, code quality
 - **QA Engineer (1):** Test strategy audit, test quality validation, CX testing
 - **SRE / DevOps (1):** Observability, alerting, on-call, incident support
-- **Security Engineer (1):** Reports to Arquiteto de Segurança
+- **Security Engineer (1):** Reports to Security Architect
   - SAST, secret scanning, dependency audit
   - First responder for security incidents
   - Forensics and RCA
@@ -121,7 +136,7 @@ Squad runs continuously, 100% autonomously, never requiring human approval for t
 **Humans decide quarterly or strategically** — minimal interruption.
 
 ### Humans Monitor (Managers + SRE)
-👀 Are we going too fast? (Gerente — code review post-landing)  
+👀 Are we going too fast? (Manager — code review post-landing)  
 👀 Is tech debt growing? (CTO — monthly metric review)  
 👀 Are metrics healthy? (SRE — continuous)  
 👀 Do tests protect behavior? (QA — weekly spot check)  

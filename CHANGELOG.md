@@ -6,7 +6,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **`done` was a task status the schema accepted and no consumer recognised (#50)**
+  Found while reviewing the loop's own documentation. `done` was in `_VALID_STATUSES`, so a
+  checkpoint carrying it validated clean — but the halt-loop's exit condition is `committed` OR
+  `blocked`, and `check_phase_completeness.py` computes pendency the same way:
+  `pending = [t for t in tasks if t.get("status") not in ("committed", "blocked")]`. A task marked
+  `done` therefore counted as PENDING **forever**: the completion promise was never emitted, and
+  the loop ran until the no-observable-progress brake or a cancellation, with a diagnostic that
+  pointed nowhere near the cause. Of the six consumers, the only occurrence of the word in any of
+  them was inside a comment.
+  **The trap was cheap to fall into**: `done` is the word an agent reaches for to say "finished".
+  Accepted-then-ignored is the defect `check_progress_schema.py` was written to end — it already
+  did it for the `tasks` envelope, for `task_id`, and for a missing `phase`; this was the fourth.
+  Retired from the valid set with its own HIGH finding (`task_status_done`) rather than the generic
+  "not one of […]", because that message sends the reader to a list and the answer is not in the
+  list. Also corrected in the canonical `templates/progress-schema.json`, the driver prompt (whose
+  dependency rule said `committed` or `done`), the task template's status legend, and an anti-pattern
+  in `SKILL.md`.
+- **Three documents described a roster that no longer exists (#50)**
+  `SQUAD_AGENTS.md` counts "14 specialized agents", and fourteen is right by coincidence rather than
+  by correspondence: most entries are SCRIPTS (`kit_audit_workflow.js`, `file_findings.py`,
+  `lens_review.py`, `check_install_drift.py`), and only VERA is one of the fourteen agent files.
+  `docs/SQUAD_AGENTS_NAMED.md` numbers fourteen too, five of which do not exist (Artemis, Atena,
+  Apolo, Cerberus, Maestro) while five that do are absent (`daedalus`, `hecate`, `kairos`,
+  `leonardo`, `metis`). Both are design material from 2026-09-03 that `agents/` and
+  `rules/squad-map.md` overtook, and both read as authoritative to whoever lands on them first —
+  two of the three were reachable from no index at all, which is how they drifted unnoticed.
+  Each now carries a status header naming what superseded it and what specifically differs. Nothing
+  was deleted: the personalities in the named roster informed the agents that shipped.
+- **ADR-0025 is marked superseded, and its job titles are in English (#50)**
+  It describes a hierarchy of PEOPLE around the system and claims the fourteen agents handle "100%
+  of technical execution". The kit implements no org chart, and the two questions the ADR actually
+  answers now have mechanisms: `rules/autonomy-envelope.md` for what the system decides versus what
+  stays with a person, and `rules/squad-map.md` for who the fourteen are. Kept rather than deleted —
+  an ADR records a decision that was taken, and removing one hides that it ever was. Six lines
+  carried Portuguese job titles in a repository that is English by policy; `check_english_only.py`
+  does not catch them by design (precision over recall, argued in its own docstring), so they were
+  corrected by hand.
+
 ### Added
+
 - **`rules/verdict-bands.txt` — every verdict declares its band, in one table with an owner (#49)**
   `blocking-verdicts.txt` exists because the list of *what holds an item* had been written twice
   and the two copies disagreed. Its complement — what counts as CLEAN — was then born as

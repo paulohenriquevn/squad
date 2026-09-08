@@ -22,7 +22,7 @@ If the Primary path returns "Agent type not found", switch to Fallback for the r
 
 ## Your contract for this iteration
 
-1. **Read the progress file.** Find the next task whose status is `pending` AND whose dependencies are `committed` or `done`.
+1. **Read the progress file.** Find the next task whose status is `pending` AND whose dependencies are `committed` or `blocked` — the two terminal statuses. (This said `committed` or `done` until 2026-09-08. `done` is not a status: nothing in the loop treated it as terminal, so a dependency carrying it would never unblock its dependants.)
 
 2. **For the picked task, run the complete TDD cycle in order:**
 
@@ -209,7 +209,7 @@ If conditions NOT met, do NOT emit the promise. STOP your current turn — the S
 ## Inviolable rules (cycle-implement.md § Anti-patterns)
 
 - NEVER write production code without a failing test first (TDD-first)
-- NEVER mark a task `done` with red/skipped tests
+- NEVER mark a task `committed` with red/skipped tests
 - NEVER edit the implementation plan (`{PLAN_PATH}`) mid-iteration — the plan is the contract
 - NEVER commit directly to `main` (verify `git branch --show-current` != `main` before each commit)
 - NEVER use `git checkout`, `git revert`, `git push --force`, `git reset --hard` — use `git switch`, `git restore --staged`, `git stash`

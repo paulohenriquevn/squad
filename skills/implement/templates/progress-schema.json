@@ -57,7 +57,7 @@
         },
         "status": {
           "type": "string",
-          "description": "Current TDD-cycle stage. `committed` means the task HAS A COMMIT — not that its acceptance criteria hold (B-041: b020's T1.4 was 'committed' against a commit whose own body reported the DoD unmet). Record the proof in `dod_evidence`.",
+          "description": "Current TDD-cycle stage. Five in-flight states and two TERMINAL ones (`committed`, `blocked`) — the loop's exit condition is exactly those two, so any other value leaves the task PENDING forever. `done` was in this enum until 2026-09-08 and no consumer recognised it, which stalled the loop with a diagnostic pointing nowhere near the cause. `committed` means the task HAS A COMMIT — not that its acceptance criteria hold (B-041: b020's T1.4 was 'committed' against a commit whose own body reported the DoD unmet). Record the proof in `dod_evidence`.",
           "enum": [
             "pending",
             "red",
@@ -65,8 +65,7 @@
             "refactor",
             "wired",
             "committed",
-            "blocked",
-            "done"
+            "blocked"
           ]
         },
         "files": {

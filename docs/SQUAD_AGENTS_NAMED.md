@@ -1,5 +1,18 @@
 # 🤖 Squad — 14 Named Agents with Personalities
 
+> **Status: HISTORICAL — superseded by `agents/` and `rules/squad-map.md` (2026-09-08).**
+>
+> This page describes an EARLIER generation of the roster. Five of the fourteen it names
+> — Artemis, Atena, Apolo, Cerberus, Maestro — do not exist, and five that do are absent
+> from it: `daedalus-tech-lead`, `hecate-intake-triager`, `kairos-product-owner`,
+> `leonardo-researcher`, `metis-oracle`.
+>
+> The roster on disk is `agents/*.md`, and what each member DECIDES is
+> [`rules/squad-map.md`](../rules/squad-map.md), which `check_squad_map.py` verifies
+> against the directory. This file is kept as design material — the personalities and
+> voices here informed the agents that shipped — and it is not a description of the
+> running system.
+
 ## Meet the Team
 
 Every agent has a real name, a personality, and a role in the autonomous collective. They are not robots — they are specialists with a voice, a style, and an opinion.

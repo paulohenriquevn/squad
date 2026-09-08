@@ -1,5 +1,10 @@
 # 🔬 Leonardo — Deep Research Agent
 
+> **Status: HISTORICAL — the shipped agent is `agents/leonardo-researcher.md` (2026-09-08).**
+>
+> This is the design document that produced that agent. Where the two disagree, the
+> agent file is what runs.
+
 ## Overview
 
 **Leonardo** is the deep research agent that turns vague findings into crystal-clear knowledge. Before any implementation, Leonardo clarifies 100% of the context, raising the plan's reliability to **99%**.

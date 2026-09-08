@@ -453,7 +453,7 @@ In all BLOCKED cases, `/review` and `/release` MUST NOT run until the human reso
 
 These are anti-patterns INSIDE the halt-loop that go beyond the cycle-level anti-patterns documented in `cycle-implement.md`:
 
-1. **Marking a task `done` because "tests pass" without running wiring triad** — the triad is the difference between code-that-compiles and code-that-runs-in-the-system.
+1. **Marking a task `committed` because "tests pass" without running wiring triad** — the triad is the difference between code-that-compiles and code-that-runs-in-the-system.
 2. **Skipping REFACTOR phase to "save time"** — refactor is where SOLID/Clean Code violations are caught. Skipping it accumulates debt by the iteration.
 3. **Writing tests AFTER code "just to verify"** — that's not TDD; that's regression testing. RED must precede GREEN.
 4. **Inventing a Design Pattern not declared in the plan** — if the plan didn't specify Strategy here, don't introduce it mid-task. If a pattern is clearly missing, halt and revise plan.

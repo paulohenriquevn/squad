@@ -1,5 +1,17 @@
 # Squad — Complete Agent Manifest
 
+> **Status: HISTORICAL — superseded by `agents/` and `rules/squad-map.md` (2026-09-08).**
+>
+> The heading below counts "14 specialized agents", and fourteen is the right number by
+> coincidence rather than by correspondence: most of the entries are SCRIPTS
+> (`kit_audit_workflow.js`, `file_findings.py`, `lens_review.py`, `kit_issues.py`,
+> `check_install_drift.py`), and only VERA is one of the fourteen agent files on disk.
+>
+> An inventory that mixes agents with the scripts they run is useful as a map of the
+> autonomous machinery, and misleading as a roster. Read it as the former. For the
+> roster: `agents/*.md`, and [`rules/squad-map.md`](rules/squad-map.md) for what each
+> member decides.
+
 **Total: 14 specialized agents + 3 human decision points**
 
 ## Core Fleet (Execution Layer)

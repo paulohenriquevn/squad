@@ -26,7 +26,7 @@ Each task below MUST complete its TDD cycle (RED → GREEN → REFACTOR → WIRI
 | T1.2 | Phase 1 / T1.2 | pending | — | — | — | — |
 | T2.1 | Phase 2 / T2.1 | pending | — | — | — | — |
 
-Status legend: `pending` / `red` / `green` / `refactor` / `wired` / `committed` / `blocked` / `done`
+Status legend — five in flight, two TERMINAL: `pending` / `red` / `green` / `refactor` / `wired` → `committed` or `blocked`. Those last two are the loop's exit condition; any other value leaves the task pending forever.
 
 Wiring legend: `✓` = pillar passed; `✗` = pillar failed; `defer` = ADR-deferred; `—` = not yet checked.
 
