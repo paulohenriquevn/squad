@@ -98,6 +98,27 @@ def parse_trailer(output: str) -> list[SuiteRow]:
     return rows
 
 
+def failing_output(output: str, path: str) -> str:
+    """The runner's captured pytest block for one suite.
+
+    The runner prints every suite inside `::group::pytest <path>` … `::endgroup::` and
+    this command captures all of it — the first version then threw the failing half
+    away and printed `FAIL` with no reason, which makes the caller run the suite again
+    to learn what this run already knew.
+
+    It cost a real capture to notice. A flaky test fired during a full run, and the
+    CHANGELOG's instruction for that very test is "capture the failing output rather
+    than re-run until it passes".
+    """
+    marker = f"::group::pytest {path}"
+    start = output.find(marker)
+    if start == -1:
+        return ""
+    end = output.find("::endgroup::", start)
+    block = output[start + len(marker):end if end != -1 else None]
+    return block.strip("\n")
+
+
 def build_report(
     root: Path,
     *,
@@ -105,9 +126,25 @@ def build_report(
     selected: set[str] | None,
     skipped_slices: list[str],
     base: str | None,
+    nothing_changed: bool = False,
+    raw: str = "",
 ) -> Report:
     """Turn what ran into a report that also states what did not."""
     report = Report(verb="test", observed=[f"{len(rows)} suite(s)", *describe(root)])
+
+    if nothing_changed:
+        # A clean tree means there is nothing to test — which is NOT the same as "test
+        # the root suite". The first implementation let an empty slice list fall through
+        # to the root, so `--touched` on a clean tree ran 1929 tests for eight minutes
+        # to report nothing.
+        report.lines.append("no changed files — nothing to run")
+        report.not_checked.append(
+            f"everything: {len(skipped_slices)} slice suite(s) and the root suite NOT RUN, "
+            f"because nothing changed to make them worth running"
+        )
+        report.not_checked.append("run them anyway with: sq test")
+        report.exit_code = OK
+        return report
 
     total = sum(r.passed for r in rows if r.passed is not None)
     for row in sorted(rows, key=lambda r: r.path):
@@ -133,6 +170,16 @@ def build_report(
 
     empty = [r for r in rows if r.rc == _NOTHING_COLLECTED]
     failed = [r for r in rows if r.rc not in (0, _NOTHING_COLLECTED)]
+
+    # The reason, beside the verdict. A runner that says FAIL and nothing else makes
+    # the caller run it again to learn what this run already captured.
+    for row in failed:
+        block = failing_output(raw, row.path)
+        if block:
+            report.lines.append("")
+            report.lines.append(f"  --- {row.path} ---")
+            report.lines.extend(f"  {ln}" for ln in block.splitlines()[-25:])
+            report.detail.setdefault("failures", {})[row.path] = block
 
     if empty:
         report.exit_code = UNMEASURED
@@ -206,7 +253,10 @@ def _run(root: Path, only: list[str] | None) -> tuple[str, int]:
         )
         return done.stdout, done.returncode
 
-    chunks: list[str] = []
+    # The SAME wire format the runner emits, so `failing_output` has one shape to read
+    # and a filtered run explains a failure exactly as a full run does.
+    blocks: list[str] = []
+    trailer: list[str] = []
     worst = 0
     for path in only:
         done = subprocess.run(  # noqa: PLW1510
@@ -215,14 +265,15 @@ def _run(root: Path, only: list[str] | None) -> tuple[str, int]:
             capture_output=True, text=True, cwd=root,
         )
         out = done.stdout + done.stderr
+        blocks.append(f"::group::pytest {path}\n{out}\n::endgroup::")
         passed = _first(out, r"(\d+) passed")
         failed = _first(out, r"(\d+) failed")
         collected = _first(out, r"collected (\d+)")
-        chunks.append(
+        trailer.append(
             f"SUITE\t{path}\t{done.returncode}\t{passed}\t{failed}\t{collected}"
         )
         worst = max(worst, done.returncode)
-    return "\n".join(chunks), worst
+    return "\n".join([*blocks, *trailer]), worst
 
 
 def _first(text: str, pattern: str) -> str:
@@ -278,10 +329,16 @@ def main(argv: list[str] | None = None) -> int:
             selection = select(paths, frozenset(known))
         if selection.everything:
             only = None  # run the lot
+        elif not selection.slices and not selection.root_suite:
+            return emit(
+                build_report(root, rows=[], selected=set(),
+                             skipped_slices=sorted(known), base=base, nothing_changed=True),
+                as_json=args.json,
+            )
         else:
             selected = set(selection.slices)
             only = [f"skills/{name}/tests" for name in sorted(selected)]
-            if selection.root_suite or not only:
+            if selection.root_suite:
                 only.insert(0, " ".join(root_paths(root)))
 
     output, _ = _run(root, only)
@@ -295,7 +352,8 @@ def main(argv: list[str] | None = None) -> int:
     ran = {r.path for r in rows}
     skipped = sorted(name for name in known if f"skills/{name}/tests" not in ran)
     return emit(
-        build_report(root, rows=rows, selected=selected, skipped_slices=skipped, base=base),
+        build_report(root, rows=rows, selected=selected, skipped_slices=skipped,
+                     base=base, raw=output),
         as_json=args.json,
     )
 

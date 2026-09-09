@@ -42,6 +42,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from squad.cli.paths import resolve_roots
 from squad.cli.provenance import describe
 from squad.cli.render import emit
 from squad.cli.report import FINDING, OK, UNMEASURED, Report
@@ -244,9 +245,20 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root: Path = args.root
-    workflow = args.workflow or (root / ".github" / "workflows" / "ci.yml")
+    # The mechanisms live in the kit; the workflow lives in the PROJECT. Under a copy
+    # install those are `<project>/.claude` and `<project>` — conflating them is how a
+    # gate ends up reporting on a tree that is not there.
+    where = resolve_roots(root)
+    workflow = args.workflow or where.workflow()
 
-    commands = gate_commands(workflow, root)
+    if workflow is None:
+        print(f"sq check: no .github/workflows/ci.yml under {where.project} — "
+              f"nothing to replay, so nothing was checked", file=sys.stderr)
+        print("    this is expected in a consumer install, where the kit ships no workflow",
+              file=sys.stderr)
+        return UNMEASURED
+
+    commands = gate_commands(workflow, where.kit)
     if not commands:
         # An empty list is not a pass. `run_gates.sh` carries the same refusal, for the
         # same reason: a sweep over nothing that reports success is the defect this kit
@@ -268,13 +280,13 @@ def main(argv: list[str] | None = None) -> int:
 
     invoked = " ".join(" ".join(c.argv) for c in commands)
     scripts = [t for c in commands for t in c.argv if t.endswith(".py")]
-    indirect = reached_within(root, scripts)
+    indirect = reached_within(where.kit, scripts)
     unreached = sorted(
-        name for name in known_gates(root) if name not in invoked and name not in indirect
+        name for name in known_gates(where.kit) if name not in invoked and name not in indirect
     )
 
     if args.list:
-        report = Report(verb="check", observed=[f"{len(commands)} command(s)", *describe(root)])
+        report = Report(verb="check", observed=[f"{len(commands)} command(s)", *describe(where.kit)])
         report.lines = [f"  {' '.join(c.argv)}" for c in commands]
         report.not_checked.append(
             f"{len(unreached)} gate(s) not reached directly or one level in: "
@@ -286,11 +298,11 @@ def main(argv: list[str] | None = None) -> int:
     results: list[Result] = []
     for command in commands:
         done = subprocess.run(  # noqa: PLW1510
-            command.argv, capture_output=True, text=True, cwd=root
+            command.argv, capture_output=True, text=True, cwd=where.kit
         )
         results.append(Result(command, done.returncode, (done.stdout + done.stderr).strip()))
 
-    return emit(build_report(root, results=results, unreached=unreached), as_json=args.json)
+    return emit(build_report(where.kit, results=results, unreached=unreached), as_json=args.json)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+### Fixed
+- **`sq test` reported FAIL and threw away the reason (#57)**
+  The runner already prints every suite's pytest output inside `::group::` blocks and the
+  command captured all of it — then printed `FAIL` and nothing else, making the caller run
+  the suite again to learn what that run already knew.
+  It took a real capture to notice, and the capture was the point: a flaky test in
+  `plan-confidence` fired during a full run, and **the CHANGELOG's own instruction for that
+  test is "capture the failing output rather than re-run until it passes"**. This command
+  had discarded it. The failing suite's block is now printed beneath the verdict and
+  carried in `--json` under `failures`.
+  A filtered run (`--slice`, `--touched`) went through a different path that built the
+  trailer by hand and emitted no blocks at all, so it explained nothing either. Both paths
+  now emit the same wire format, which is why `failing_output` has one shape to read.
+
+- **`sq` on a clean tree ran the root suite to report nothing, and looked in the wrong root on a consumer (#57)**
+  Both found by exercising paths the tests had not: writing a test for every branch is not
+  the same as running the command.
+  **`--touched` with nothing changed ran 1929 tests for eight minutes.** The selection was
+  empty, an empty slice list fell through to `not only`, and the root suite was inserted.
+  A clean tree means there is nothing to test — which is not the same as "test the root
+  suite". It now reports `no changed files — nothing to run` and names every suite it
+  skipped, at exit 0.
+  **`sq check` looked for `.github/workflows/ci.yml` inside the kit.** In this repository
+  `kit_dir`, `eco` and `project_dir` are one directory, so the conflation works perfectly
+  here and breaks on every consumer, where the kit is `<project>/.claude` and the workflow
+  is not. This is the shape of kit#36 and kit#37 — two roots resolved differently, and a
+  gate reporting on a tree that is not there. `squad/cli/paths.py` now states which of the
+  two a verb means, with the structural rule first: `resolve(project_dir=kit_dir)` handed
+  `.claude` finds a kit right there and reports both roots as the same directory, which is
+  the very conflation being fixed. A consumer without a workflow gets exit 2 and the reason.
+
 - **`sq` documented, and its ADR accepted (#57)**
   `README.md` gains a *Finding your way* section, `CONTRIBUTING.md` prescribes `./sq test`
   while saying plainly that it is a façade over `run_slice_tests.sh` — which stays the

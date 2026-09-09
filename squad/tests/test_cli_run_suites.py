@@ -105,3 +105,68 @@ def test_a_full_run_still_states_that_it_skipped_nothing() -> None:
         base=None,
     )
     assert report.not_checked, "even a complete run must say that it was complete"
+
+
+def test_nothing_changed_runs_nothing_and_says_every_suite_was_skipped() -> None:
+    """A clean tree means there is nothing to test, not "test the root suite".
+
+    Found by running it: with no changes, the selection was empty, an empty slice list
+    fell through to `not only` and the root suite was inserted — so `--touched` on a
+    clean tree ran 1929 tests for eight minutes to tell the caller nothing.
+    """
+    report = run_suites.build_report(
+        ROOT, rows=[], selected=set(), skipped_slices=sorted(run_suites.discover_slices(ROOT)),
+        base="working tree", nothing_changed=True,
+    )
+    assert report.exit_code == OK, "nothing to do is not a failure"
+    body = " ".join(report.lines + report.not_checked)
+    assert "no changed file" in body.lower(), body
+    assert "NOT RUN" in " ".join(report.not_checked), report.not_checked
+
+
+def test_a_failing_suite_shows_the_pytest_output_it_captured() -> None:
+    """FAIL without the reason is a runner that makes the caller run it again.
+
+    The runner already prints each suite's pytest output inside `::group::` blocks and
+    `sq test` captures all of it — the first version threw the failing half away. It
+    cost a real capture to notice: a flaky test in `plan-confidence` fired during a
+    full run, and the CHANGELOG's own instruction for that test is "capture the failing
+    output rather than re-run until it passes". This command had discarded it.
+    """
+    lines = [
+        "::group::pytest tests",
+        "all good",
+        "PASS  tests",
+        "::endgroup::",
+        "::group::pytest skills/review/tests",
+        "E   assert 1 == 2",
+        "FAILED test_x.py::test_y",
+        "FAIL  skills/review/tests",
+        "::endgroup::",
+    ]
+    output = "\n".join(lines) + "\n"
+    captured = run_suites.failing_output(output, "skills/review/tests")
+    assert "assert 1 == 2" in captured
+    assert "all good" not in captured, "only the failing suite's block belongs here"
+
+
+def test_a_suite_absent_from_the_output_yields_no_capture() -> None:
+    output = "::group::pytest tests\nfine\nPASS  tests\n::endgroup::\n"
+    assert run_suites.failing_output(output, "skills/nope/tests") == ""
+
+
+def test_the_failure_block_reaches_the_report() -> None:
+    lines = [
+        "::group::pytest skills/review/tests",
+        "E   assert 1 == 2",
+        "FAIL  skills/review/tests",
+        "::endgroup::",
+    ]
+    report = run_suites.build_report(
+        ROOT,
+        rows=[run_suites.SuiteRow("skills/review/tests", 1, 9, 1, 10)],
+        selected={"review"}, skipped_slices=[], base=None,
+        raw="\n".join(lines) + "\n",
+    )
+    assert any("assert 1 == 2" in line for line in report.lines), report.lines
+    assert "failures" in report.detail, "--json must carry the reason too"
