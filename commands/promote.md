@@ -10,8 +10,9 @@ Move finished work from `workspace` to `develop`, and **only** that.
 Until 2026-09-09 the sole place in this kit that opened that PR sat in the middle of
 `/release`'s chain, between the version bump and the tag — so **integrating required
 versioning**, and a project that did not want to publish a version simply did not
-integrate. Measured here: 349 commits on `workspace`, zero tags, and finished work
-unreachable behind a step nobody wanted to take yet.
+integrate. Measured here on 2026-09-09: 349 commits on `workspace`, zero tags, and
+finished work unreachable behind a step nobody wanted to take yet — promoted the same day
+by this command, in one run, with no version cut.
 
 This command is that step alone.
 

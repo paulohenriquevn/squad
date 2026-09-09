@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   zero tags** — finished, reviewed and verified work unreachable behind a step nobody wanted to
   take yet, and 45 issues closed against the kit's own lifecycle rule because there was no
   version to name in the closing note.
+  Those 349 commits reached `develop` on 2026-09-09 through this command — one run, no version
+  cut — which is the argument for the split, exercised rather than asserted.
   `mechanisms/cycle/promote_to_develop.py` is that step alone. **It cuts no version**: no bump,
   no CHANGELOG promotion, no tag — and a test asserts the file never reaches for
   `bump_version`, `compute_next_version`, `promote_unreleased` or `git tag`, because a promotion

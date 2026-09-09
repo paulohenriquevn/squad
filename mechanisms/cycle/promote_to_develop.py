@@ -14,9 +14,13 @@ Until 2026-09-09 the single place in this kit that opened that PR was the middle
 Promotion and cut were one command, so **integrating required versioning**. A project
 that did not want to publish a version simply did not integrate.
 
-Measured on this repository: **349 commits on `workspace`, zero tags.** Work that was
-finished, reviewed and verified sat unreachable, and 45 issues were closed against the
-kit's own lifecycle rule because there was no version to name in the closing note.
+Measured on this repository on 2026-09-09, before this file existed: **349 commits on
+`workspace`, zero tags.** Work that was finished, reviewed and verified sat unreachable,
+and 45 issues were closed against the kit's own lifecycle rule because there was no
+version to name in the closing note.
+
+That backlog of commits was promoted the same day, by this mechanism, in one command and
+without cutting a version — which is the whole argument for the split, exercised once.
 
 Splitting the two is what lets integration be frequent and cheap while a version stays
 cadenced — which is the whole argument for the two cuts `cycle-release.md` already
