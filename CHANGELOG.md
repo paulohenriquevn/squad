@@ -32,9 +32,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   and `lineage_wrong_status` (the target exists but is not in the terminal state the field asserts —
   a duplicate of an OPEN item folds in as `ITEM_MERGED` instead). **Deliberately no cycle gate:** a
   lineage edge points only at a terminal item and a terminal item is not reopened, so a ring is
-  unreachable and G7 has no analogue. Not done, and stated rather than implied: the index does not
-  yet walk the chain, so *"third attempt at this hypothesis"* is still not a question the registry
-  can answer.
+  unreachable and G7 has no analogue.
+  **The index walks the chain**, so the registry answers the question it always held the pieces of:
+  a row whose item has ancestors reads `3rd attempt — after B-050, B-012`. Items with no ancestor
+  are absent from the result rather than mapped to empty — most items are a first attempt, and
+  printing that on every row would bury the rare one. The walker deliberately does two things the
+  contract calls unnecessary, because it renders registries the checker has not passed yet: an edge
+  naming an undefined id is followed and KEPT in the chain (dropping it would hide the visible half
+  of the history), and a ring terminates rather than hanging the index. `LINEAGE_EDGES` is imported
+  from the checker rather than restated, so the two readers of these fields cannot disagree about
+  which fields they are.
 
 ### Fixed
 - **`check_backlog_structure`'s own inventory of findings did not match what it emits (#55)**
