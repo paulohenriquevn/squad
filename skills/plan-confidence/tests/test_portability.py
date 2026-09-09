@@ -80,7 +80,8 @@ def test_run_structural_works_in_fresh_project() -> None:
 
         runner = target / ".claude" / "skills" / "plan-confidence" / "scripts" / "run_structural.py"
         proc = subprocess.run(
-            [sys.executable, str(runner), str(plan_path), "--no-warn"],
+            [sys.executable, str(runner), str(plan_path), "--no-warn",
+             "--structural-only"],
             capture_output=True,
             text=True,
             check=False,
@@ -126,7 +127,8 @@ def test_auto_detect_finds_project_root_via_walk_up() -> None:
 
         runner = target / ".claude" / "skills" / "plan-confidence" / "scripts" / "run_structural.py"
         proc = subprocess.run(
-            [sys.executable, str(runner), str(plan_path), "--no-warn"],
+            [sys.executable, str(runner), str(plan_path), "--no-warn",
+             "--structural-only"],
             capture_output=True,
             text=True,
             check=False,

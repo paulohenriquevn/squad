@@ -73,12 +73,70 @@ def staged(project_root: Path):
             table.write_text(restore, encoding="utf-8")
 
 
-def test_good_opportunity_scores_shippable(good_opportunity: Path, project_root: Path) -> None:
+def test_a_structurally_perfect_opportunity_is_held_until_the_panel_sits(
+    good_opportunity: Path, project_root: Path
+) -> None:
+    """Structure alone no longer advances a document.
+
+    The score is perfect and the verdict is still not SHIPPABLE, because
+    `rules/review-panel.txt` gates DISCOVER on 2 of 3 signed approvals and no panel
+    has judged this one. `AWAITING_REVIEW` is the existing token for exactly this — "the structure is
+    complete and the judgement has not been made; not a failure and not a pass" — so the
+    author is NOT sent to rewrite a document nobody found fault with. It is deliberately
+    NOT `ITEM_IN_FLIGHT`, which means a panel could not convene AT ALL: "nobody has
+    reviewed this yet" and "nobody can review it here" take different actions.
+
+    The score is deliberately untouched: the panel gates the verdict, never the
+    number, because "this document is weak" and "nobody has reviewed it" take
+    opposite actions.
+    """
     rc, data = _run(good_opportunity, project_root)
-    assert rc == 0, f"Expected exit 0, got {rc}: {data}"
-    assert data["verdict"] == "SHIPPABLE"
+
     assert data["final_score_after_caps"] >= 90
     assert data["hard_caps_triggered"] == []
+    assert data["verdict"] == "AWAITING_REVIEW"
+    assert data["panel"]["status"] == "no_record"
+    assert rc == 0, f"held is not a failure of the run: {rc}"
+
+
+def test_the_panel_carries_a_good_opportunity_to_shippable(
+    good_opportunity: Path, project_root: Path, tmp_path: Path
+) -> None:
+    """The other side: convened, approved, and the structural verdict stands."""
+    slug = good_opportunity.stem.replace("-opportunity", "")
+    # Resolve exactly as the gate does: `.claude/records` wins where it exists.
+    base = next((project_root / b for b in (".claude/records", "records")
+                 if (project_root / b).is_dir()), project_root / "records")
+    panels = base / "panels"
+    panels.mkdir(parents=True, exist_ok=True)
+    assignment = panels / f"{slug}-discover.assignment.json"
+    record = panels / f"{slug}-discover.json"
+    why = ("checked every pointer in corner one against the tree at the cited revision "
+           "and the conclusion follows from what the evidence actually shows")
+    try:
+        assignment.write_text(json.dumps(
+            {"assigned": ["nemesis-claim-auditor", "leonardo-researcher",
+                          "judge-codex:discover-judge"]}), encoding="utf-8")
+        record.write_text(json.dumps({
+            "slug": slug, "phase": "discover", "artifact": str(good_opportunity),
+            "author": "daedalus-tech-lead",
+            "votes": [
+                {"reviewer": "nemesis-claim-auditor", "model": "claude-opus-5",
+                 "verdict": "approve", "reason": why},
+                {"reviewer": "leonardo-researcher", "model": "claude-sonnet-5",
+                 "verdict": "approve", "reason": why},
+                {"reviewer": "judge-codex:discover-judge", "model": "gpt-5-codex",
+                 "verdict": "return", "reason": why},
+            ]}), encoding="utf-8")
+
+        rc, data = _run(good_opportunity, project_root)
+
+        assert data["panel"]["status"] == "approved"
+        assert data["verdict"] == "SHIPPABLE"
+        assert rc == 0
+    finally:
+        assignment.unlink(missing_ok=True)
+        record.unlink(missing_ok=True)
 
 
 def test_fabricated_evidence_is_invalid(good_opportunity: Path, staged) -> None:

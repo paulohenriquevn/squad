@@ -92,12 +92,46 @@ def _verdict_for(score: float, bands: dict[str, int]) -> str:
     return "INVALID"
 
 
+def _panel_state(project_root: Path, slug: str) -> dict:
+    """What the review panel decided about this opportunity, if anything.
+
+    The panel is NOT a scoring dimension and deliberately does not move the score.
+    `check_panel_approval.py` answers a different question — whether the evidence that
+    resolves actually SUPPORTS the conclusion — and folding it into the number would
+    conflate "this document is weak" with "nobody has reviewed it yet", two facts that
+    take opposite actions.
+
+    Failing to reach the gate is NOT a pass: an unreadable panel machinery leaves the
+    document held, never advanced.
+    """
+    gates = project_root / "mechanisms" / "gates"
+    if not gates.is_dir():
+        gates = project_root / ".claude" / "mechanisms" / "gates"
+    if not gates.is_dir():
+        return {"status": "unchecked",
+                "detail": "no mechanisms/gates in this project; the panel could not be "
+                          "consulted, and an unconsulted panel is not an approval"}
+    if str(gates) not in sys.path:
+        sys.path.insert(0, str(gates))
+    try:
+        from check_panel_approval import check as _panel_check
+    except ImportError as exc:  # pragma: no cover - environment, not logic
+        return {"status": "unchecked", "detail": f"cannot load the panel gate: {exc}"}
+
+    _, result = _panel_check(slug, "discover", project=project_root)
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run M2 structural opportunity-confidence scoring.")
     parser.add_argument("opportunity", help="opportunity slug or .md path")
     parser.add_argument("--rubric", type=Path, default=None)
     parser.add_argument("--thresholds", type=Path, default=None)
     parser.add_argument("--no-warn", action="store_true", help="suppress calibration warning")
+    parser.add_argument(
+        "--structural-only", action="store_true",
+        help="score structure and do NOT apply the review-panel gate. The choice is "
+             "recorded in the output; it does not hide.")
     args = parser.parse_args()
 
     try:
@@ -177,6 +211,42 @@ def main() -> int:
     final_score = min(weighted, cap_value)
     verdict = _verdict_for(final_score, bands)
 
+    # The panel gates the VERDICT, never the score. `rules/review-panel.txt`: a script
+    # scores structure, a panel judges whether the evidence supports the conclusion.
+    # Both tokens below already exist in `rules/verdict-bands.txt` — a state the
+    # vocabulary already has must not get a new name.
+    #
+    # The panel may only ever DOWNGRADE a passing verdict. A structural INVALID wins
+    # outright: `fabricated_evidence` is the one unrecoverable defect in this cycle,
+    # and letting "nobody has reviewed this yet" overwrite it would turn the new gate
+    # into a way of hiding the oldest one. Caught by this file's own tests, which went
+    # from exit 1 to exit 0 on a fabricated pointer.
+    slug = opportunity_path.stem.replace("-opportunity", "")
+    if args.structural_only:
+        panel = {"status": "not_consulted",
+                 "detail": "--structural-only: the panel gate was not applied. This "
+                           "verdict describes STRUCTURE and does not say the document "
+                           "may advance"}
+        panel_gate = "skipped: --structural-only"
+    else:
+        panel = _panel_state(_find_project_root(opportunity_path), slug)
+        panel_gate = "applied"
+    if args.structural_only or verdict == "INVALID":
+        pass
+    elif panel["status"] == "returned":
+        # The panel judged it and did not carry it: editing can lift this.
+        verdict = "NEEDS_REVISION"
+    elif panel["status"] == "no_record":
+        # Structure is complete and the judgement has not been made. Neither a failure
+        # nor a pass, and NOT an impediment — the panel simply has not sat yet, and the
+        # action is to convene it.
+        verdict = "AWAITING_REVIEW"
+    elif panel["status"] not in ("approved", "not_gated"):
+        # A panel that could not convene, or a record that does not check out: held on
+        # a material impediment. Distinct from the line above, because "nobody has
+        # reviewed it yet" and "nobody CAN review it here" take different actions.
+        verdict = "ITEM_IN_FLIGHT"
+
     reasons = {
         "corner_coverage": {
             "contributors": coverage["contributors"],
@@ -230,6 +300,8 @@ def main() -> int:
         "weighted_avg": round(weighted, 1),
         "hard_caps_triggered": hard_caps_triggered,
         "final_score_after_caps": round(final_score, 1),
+        "panel": panel,
+        "panel_gate": panel_gate,
         "verdict": verdict,
         "calibration": {
             "status": "PROVISIONAL_v1",

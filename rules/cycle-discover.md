@@ -121,10 +121,26 @@ token was invented for a state the vocabulary already had.
 
 | | |
 |---|---|
-| Who sits | [`rules/review-panel.txt`](review-panel.txt) — **the project's**, because which models a project can reach is not the kit's business |
-| What the kit imposes | Three reviewers; at least one from a recognised family **outside** the one the kit runs on; the author never sits |
+| Who sits | [`rules/review-panel.txt`](review-panel.txt) — **the project's own specialists**, because which agents a project has and which models it can reach is not the kit's business |
+| Convened here | `nemesis-claim-auditor` (does the evidence support the claim — verbatim what it decides), `leonardo-researcher` (the gap between what the decision needs and what was read), and the orthogonal `judge-codex:discover-judge` |
+| What the kit imposes | Three seats for this phase; at least one from a recognised family **outside** the one the kit runs on; the author never sits |
+| Assigns | [`mechanisms/cycle/convene_panel.py`](../mechanisms/cycle/convene_panel.py) — resolves each seat against the agents this project actually has, and writes the assignment the votes are checked against |
 | Computes | [`mechanisms/cycle/review_panel.py`](../mechanisms/cycle/review_panel.py) |
+| **Blocks** | [`mechanisms/gates/check_panel_approval.py`](../mechanisms/gates/check_panel_approval.py) — **a missing record is not an approval** |
 | Premise | [`mechanisms/gates/check_panel_capability.py`](../mechanisms/gates/check_panel_capability.py), at intake |
+
+**The reviewers are agents, not model strings.** Until 2026-09-09 a seat named a model
+and a lens, which said how a reviewer would be reached and never who was reviewing —
+and nothing convened them, so this section described a gate that no phase ran
+([#65](https://github.com/paulohenriquevn/squad/issues/65)). A seat now names an agent
+that must exist in the running project, and `convene_panel.py` refuses a seat it
+cannot fill rather than quietly seating nobody.
+
+**The record must match the assignment.** Convening buys nothing if the panel that
+voted may differ from the panel that was convened: a document could be routed to the
+specialists its content demands and signed off by three others. `review_panel.py`
+refuses such a record, and the assignment comes from disk — never from the record,
+which would let a document supply the very list it is checked against.
 
 **Why a script cannot do this job.** ``/discover-confidence`` is deterministic and scores
 STRUCTURE — pointers resolve, the shape is complete, the contract is satisfied. What it
@@ -160,6 +176,7 @@ away what the panel was convened to produce.
 | G-L | **Live target declared** (`check_measurement_targets.py`, at plan time) | `--mode live-test` on a domain with no block in `rules/live-target.txt`. |
 | G-C | **Corners populated** (`check_corner_coverage.py`) | Any of the four corners empty. `unknown` populates Constraint relation; it is an answer, not a blank. |
 | G-K | **Kill is reasoned** — mechanised on two layers: `backlog_status.py` REFUSES a transition to `killed` without a `--kill-reason` (point of action), and `check_backlog_structure.py` reports `killed_without_reason` as MAJOR (after the fact). Both name this gate by id. _(not mechanized: debt since 2026-08-31 — the SUBSTANCE of the reason — nothing confronts what the reason claims against what was measured, and a `kill_reason` of "n/a" satisfies both layers)_ | `ITEM_KILLED` without a `kill_reason` naming what was measured and what it showed. An unexplained kill is indistinguishable from an abandoned run. |
+| G-P | **Panel approved** (`check_panel_approval.py`) | A document no panel carried. Three states, not two: *returned* is `NEEDS_REVISION` and editing can lift it; *no record yet* is `AWAITING_REVIEW` — complete and unsigned, neither a failure nor a pass, and the action is to convene; *did not convene* — an absent reviewer, a voter nobody assigned — is `ITEM_IN_FLIGHT`, held on a material impediment. Sending the author to rewrite a document nobody found fault with is the wrong action in both. **A missing record fails**: a phase that skipped its panel must not be indistinguishable from one whose reviewers all approved. |
 
 ## Stop conditions
 

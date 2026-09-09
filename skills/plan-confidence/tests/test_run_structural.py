@@ -52,7 +52,7 @@ def test_renormalize_weights_m3_proportions_correct() -> None:
 
 def test_run_structural_good_plan_passes() -> None:
     """fixture good-plan.md: coverage 100%, ADRs with alternatives, bug-fix with TDD."""
-    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     # Verdict should NOT be INVALID
     assert report.verdict != "INVALID"
     assert report.hard_caps_triggered == []
@@ -65,27 +65,27 @@ def test_run_structural_good_plan_passes() -> None:
 
 def test_run_structural_m2_score_can_reach_above_50() -> None:
     """v1.1 EC-2 fix: with renormalization, score is NOT capped at 50 in M2."""
-    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert report.final_score_after_caps > 50, (
         "EC-2 fix: M2 renormalization must allow scores above 50"
     )
 
 
 def test_run_structural_missing_coverage_capped() -> None:
-    report = run_structural(FIXTURES / "missing-coverage-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "missing-coverage-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert "coverage_lt_100" in report.hard_caps_triggered
     assert report.verdict == "INVALID"
     assert report.final_score_after_caps <= 49
 
 
 def test_run_structural_no_tdd_capped() -> None:
-    report = run_structural(FIXTURES / "no-tdd-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "no-tdd-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert "bugfix_without_tdd" in report.hard_caps_triggered
     assert report.final_score_after_caps <= 70
 
 
 def test_run_structural_weak_imperatives_penalty() -> None:
-    report = run_structural(FIXTURES / "weak-imperatives-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "weak-imperatives-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     # Should have structural_risk < 100 due to smells, but no hard cap from smells
     assert report.structural_risk_score < 100
     assert "coverage_lt_100" not in report.hard_caps_triggered
@@ -95,7 +95,7 @@ def test_run_structural_weak_imperatives_penalty() -> None:
 
 def test_run_structural_emits_valid_json_compatible_data() -> None:
     """Verify the report can be serialized to valid JSON."""
-    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     # dataclass to dict (no Reason nesting issue here since list is empty for M2 evidence/calibration)
     from dataclasses import asdict
     d = asdict(report)
@@ -107,7 +107,7 @@ def test_run_structural_emits_valid_json_compatible_data() -> None:
 
 
 def test_run_structural_reasons_has_4_keys() -> None:
-    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert set(report.reasons.keys()) == {"completeness", "evidence", "calibration", "structural_risk"}
 
 
@@ -126,19 +126,19 @@ def test_run_structural_evidence_inactive_in_m2_weights() -> None:
     not a contract of the orchestrator — the renamed assertion below pins
     the actual contract.
     """
-    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     # Evidence dimension is not part of the M2 weighted formula.
     assert "evidence" not in (report.active_dimensions or [])
 
 
 def test_run_structural_calibration_empty_in_m2() -> None:
-    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert report.reasons["calibration"] == []
 
 
 def test_run_structural_output_includes_active_dimensions() -> None:
     """v1.1 EC-2: output must include active_dimensions and weight_normalization_factor."""
-    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert report.active_dimensions == M2_ACTIVE_DIMENSIONS
     assert report.weight_normalization_factor > 0
 
@@ -147,7 +147,7 @@ def test_run_structural_output_includes_active_dimensions() -> None:
 
 def test_run_structural_cli_exit_code_0_on_pass() -> None:
     proc = subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "run_structural.py"), str(FIXTURES / "good-plan.md")],
+        [sys.executable, str(SCRIPTS_DIR / "run_structural.py"), str(FIXTURES / "good-plan.md"), "--structural-only"],
         capture_output=True,
         text=True,
         check=False,
@@ -157,7 +157,7 @@ def test_run_structural_cli_exit_code_0_on_pass() -> None:
 
 def test_run_structural_cli_exit_code_1_on_invalid() -> None:
     proc = subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "run_structural.py"), str(FIXTURES / "missing-coverage-plan.md")],
+        [sys.executable, str(SCRIPTS_DIR / "run_structural.py"), str(FIXTURES / "missing-coverage-plan.md"), "--structural-only"],
         capture_output=True,
         text=True,
         check=False,
@@ -167,7 +167,7 @@ def test_run_structural_cli_exit_code_1_on_invalid() -> None:
 
 def test_run_structural_cli_exit_code_2_on_error() -> None:
     proc = subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "run_structural.py"), "/tmp/__not_a_plan__"],
+        [sys.executable, str(SCRIPTS_DIR / "run_structural.py"), "/tmp/__not_a_plan__", "--structural-only"],
         capture_output=True,
         text=True,
         check=False,
@@ -177,7 +177,7 @@ def test_run_structural_cli_exit_code_2_on_error() -> None:
 
 def test_run_structural_cli_outputs_valid_json() -> None:
     proc = subprocess.run(
-        [sys.executable, str(SCRIPTS_DIR / "run_structural.py"), str(FIXTURES / "good-plan.md")],
+        [sys.executable, str(SCRIPTS_DIR / "run_structural.py"), str(FIXTURES / "good-plan.md"), "--structural-only"],
         capture_output=True,
         text=True,
         check=False,
@@ -192,7 +192,7 @@ def test_run_structural_cli_outputs_valid_json() -> None:
 
 def test_runtime_metric_proof_missing_coverage_triggers_cap() -> None:
     """Runtime-metric proof per Global DoD: observed non-zero in real workload."""
-    report = run_structural(FIXTURES / "missing-coverage-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "missing-coverage-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert "coverage_lt_100" in report.hard_caps_triggered, (
         "Runtime-metric proof: missing-coverage-plan fixture MUST trigger coverage_lt_100 cap "
         "and verdict INVALID. This is the smoke test for the entire pipeline."
@@ -322,7 +322,7 @@ def test_ignored_patterns_skill_caps_invalid() -> None:
     plan = _eco_with_pgvector_patterns(
         "# Plan: pgvector schema migration\n## Goal\nEnable pgvector indexing so queries are fast.\n"
     )
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
     assert "patterns_skill_ignored" in report.hard_caps_triggered
     assert report.final_score_after_caps <= 49
     assert report.verdict == "INVALID"
@@ -334,5 +334,29 @@ def test_overridden_patterns_skill_not_capped() -> None:
         "## ADRs\n### D1 — Diverge from pgvector-patterns\n"
         "- **Decision:** override `pgvector-patterns` Pattern P1 because Y.\n"
     )
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
     assert "patterns_skill_ignored" not in report.hard_caps_triggered
+
+
+def test_the_panel_gate_is_on_by_default() -> None:
+    """`--structural-only` must stay the exception, and this is what keeps it one.
+
+    Every structural test in this slice passes `structural_only=True`, which is
+    correct — they measure structure. The risk in that is real: with no test holding
+    the default, the flag could become the actual behaviour and nothing would notice.
+
+    A plan that scores 100 does NOT advance on structure alone. `rules/review-panel.txt`
+    gates PLAN on 2 of 3 signed approvals, and with no panel record the verdict is
+    AWAITING_REVIEW — complete and unsigned, which is neither a failure nor a pass, and
+    not returned for edits because nobody found fault with it.
+    """
+    gated = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    structural = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS,
+                                structural_only=True)
+
+    assert structural.verdict == "SHIPPABLE"
+    assert gated.verdict == "AWAITING_REVIEW"
+    # The panel gates the VERDICT and never the score: the two runs agree on the number.
+    assert gated.final_score_after_caps == structural.final_score_after_caps
+    assert gated.sub_reports["panel"]["status"] != "approved"
+    assert structural.sub_reports["panel"]["status"] == "not_consulted"

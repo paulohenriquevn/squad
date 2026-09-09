@@ -63,7 +63,7 @@ def test_run_structural_triggers_fabricated_citation_hard_cap(tmp_path: Path) ->
     plan_path.write_text(plan_body, encoding="utf-8")
 
     thresholds_path = SKILL_ROOT.parent.parent / "rules" / "plan-confidence-thresholds.txt"
-    report = run_structural(plan_path, RUBRIC, thresholds_path)
+    report = run_structural(plan_path, RUBRIC, thresholds_path, structural_only=True)
     assert "fabricated_citation" in report.hard_caps_triggered, (
         f"expected fabricated_citation in hard_caps_triggered; got {report.hard_caps_triggered}"
     )
@@ -78,7 +78,7 @@ def test_run_structural_no_fabrication_when_citations_resolve(tmp_path: Path) ->
     plan_path.write_text(plan_body, encoding="utf-8")
 
     thresholds_path = SKILL_ROOT.parent.parent / "rules" / "plan-confidence-thresholds.txt"
-    report = run_structural(plan_path, RUBRIC, thresholds_path)
+    report = run_structural(plan_path, RUBRIC, thresholds_path, structural_only=True)
     assert "fabricated_citation" not in report.hard_caps_triggered
     assert report.verdict in ("SHIPPABLE", "SHIPPABLE_WITH_CAVEATS")
 
@@ -90,7 +90,7 @@ def test_run_structural_evidence_subreport_present(tmp_path: Path) -> None:
     plan_path.write_text(plan_body, encoding="utf-8")
 
     thresholds_path = SKILL_ROOT.parent.parent / "rules" / "plan-confidence-thresholds.txt"
-    report = run_structural(plan_path, RUBRIC, thresholds_path)
+    report = run_structural(plan_path, RUBRIC, thresholds_path, structural_only=True)
     assert "evidence" in report.sub_reports
     sub = report.sub_reports["evidence"]
     assert "total_citations" in sub

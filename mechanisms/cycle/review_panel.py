@@ -86,6 +86,9 @@ _FAMILIES: tuple[tuple[str, str], ...] = (
 #: rather than against a hardcoded "anthropic" in three places.
 HOME_FAMILY = "anthropic"
 
+#: A reviewer that runs as a sub-agent of this session needs no binary on PATH.
+BUILTIN = "builtin"
+
 
 class PanelInvalid(Exception):
     """The panel did not convene validly. NOT a rejection of the document."""
@@ -107,6 +110,67 @@ def family_of(model: str) -> str:
         if name.startswith(prefix):
             return fam
     return "unknown"
+
+
+@dataclass(frozen=True)
+class Seat:
+    """One declared seat: which phase, which agent, on what model, reached how."""
+
+    phase: str
+    agent: str
+    model: str
+    invocation: str
+
+    @property
+    def family(self) -> str:
+        return family_of(self.model)
+
+    @property
+    def is_builtin(self) -> bool:
+        """A sub-agent of this session rather than an executable on PATH."""
+        return self.invocation.strip().lower() == BUILTIN
+
+
+def parse_roster(text: str) -> list[Seat]:
+    """Every declared seat, in file order.
+
+    ONE parser, imported by everything that reads the roster. Two readers of the
+    same table drift apart silently, and for THIS table the drift would be a panel
+    that one tool says is formable and another seats differently.
+
+    Raises ValueError on a row that announces a reviewer and does not describe one:
+    a malformed row must never parse to "no reviewer" and read as a small panel.
+    """
+    seats: list[Seat] = []
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line or not line.startswith("reviewer"):
+            continue
+        _, _, value = line.partition("=")
+        parts = [p.strip() for p in value.split("|")]
+        if len(parts) != 4 or not all(parts):
+            raise ValueError(
+                f"malformed reviewer row: {raw.strip()!r} — expected "
+                "`reviewer = <phase> | <agent> | <model> | <how to invoke>`"
+            )
+        seats.append(Seat(phase=parts[0].lower(), agent=parts[1],
+                          model=parts[2], invocation=parts[3]))
+    return seats
+
+
+def parse_panel_phases(text: str) -> list[str]:
+    """The phases a panel gates. A phase absent from this list is not gated."""
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line.startswith("panel_phases"):
+            _, _, value = line.partition("=")
+            return [p.strip().lower() for p in value.split(",") if p.strip()]
+    return []
+
+
+def seats_for(text: str, phase: str) -> list[Seat]:
+    """The seats declared for one phase."""
+    return [s for s in parse_roster(text) if s.phase == phase.lower()]
 
 
 @dataclass(frozen=True)
@@ -142,6 +206,11 @@ class Panel:
     author: str
     votes: list[Vote] = field(default_factory=list)
 
+    #: The agents `convene_panel.py` assigned to this artifact, when the caller has
+    #: the assignment. `None` means nobody checked, which is a weaker claim and is
+    #: reported as such rather than silently treated as a match.
+    assigned: list[str] | None = None
+
     # -- validity ---------------------------------------------------------
 
     def _validate(self) -> None:
@@ -164,6 +233,22 @@ class Panel:
             raise PanelInvalid(
                 "a reviewer voted twice; a panel needs distinct reviewers, or the "
                 "majority is one opinion counted more than once"
+            )
+
+        if self.assigned is not None and set(reviewers) != set(self.assigned):
+            missing = sorted(set(self.assigned) - set(reviewers))
+            extra = sorted(set(reviewers) - set(self.assigned))
+            detail = []
+            if missing:
+                detail.append(f"never voted: {', '.join(missing)}")
+            if extra:
+                detail.append(f"voted unassigned: {', '.join(extra)}")
+            raise PanelInvalid(
+                "the panel that voted is not the panel that was convened "
+                f"({'; '.join(detail)}). Convening is theatre if the record may name "
+                "different reviewers than the assignment did — a document could be "
+                "sent to the specialists its content demands and signed off by three "
+                "others"
             )
 
         counted = [v for v in self.votes if v.counted]
@@ -255,6 +340,10 @@ def load(path: Path) -> Panel:
         phase=data["phase"],
         artifact=data.get("artifact", ""),
         author=data["author"],
+        # `assigned` is deliberately NOT read from the record. A document that
+        # supplies the list it is checked against proves nothing; the assignment
+        # comes from `convene_panel.py`, and the caller sets it.
+
         votes=[
             Vote(
                 reviewer=v["reviewer"],

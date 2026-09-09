@@ -30,7 +30,7 @@ def schema() -> dict:
 
 
 def _report_to_dict(plan_path: Path) -> dict:
-    report = run_structural(plan_path, RUBRIC, THRESHOLDS)
+    report = run_structural(plan_path, RUBRIC, THRESHOLDS, structural_only=True)
     d = asdict(report)
     d["reasons"] = {k: [asdict(m) for m in v] for k, v in report.reasons.items()}
     return d

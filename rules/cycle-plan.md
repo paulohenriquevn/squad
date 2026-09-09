@@ -131,10 +131,26 @@ state the vocabulary already had.
 
 | | |
 |---|---|
-| Who sits | [`rules/review-panel.txt`](review-panel.txt) — **the project's**, because which models a project can reach is not the kit's business |
-| What the kit imposes | Three reviewers; at least one from a recognised family **outside** the one the kit runs on; the author never sits |
+| Who sits | [`rules/review-panel.txt`](review-panel.txt) — **the project's own specialists**, because which agents a project has and which models it can reach is not the kit's business |
+| Convened here | `vera-technical-arbiter` (the technical shape, and it refuses a verdict it cannot ground on disk), `nemesis-claim-auditor` (the plan's claims), and the orthogonal `judge-codex:plan-judge` |
+| What the kit imposes | Three seats for this phase; at least one from a recognised family **outside** the one the kit runs on; the author never sits |
+| Assigns | [`mechanisms/cycle/convene_panel.py`](../mechanisms/cycle/convene_panel.py) — resolves each seat against the agents this project actually has, and writes the assignment the votes are checked against |
 | Computes | [`mechanisms/cycle/review_panel.py`](../mechanisms/cycle/review_panel.py) |
+| **Blocks** | [`mechanisms/gates/check_panel_approval.py`](../mechanisms/gates/check_panel_approval.py) — **a missing record is not an approval** |
 | Premise | [`mechanisms/gates/check_panel_capability.py`](../mechanisms/gates/check_panel_capability.py), at intake |
+
+**The reviewers are agents, not model strings.** Until 2026-09-09 a seat named a model
+and a lens, which said how a reviewer would be reached and never who was reviewing —
+and nothing convened them, so this section described a gate that no phase ran
+([#65](https://github.com/paulohenriquevn/squad/issues/65)). A seat now names an agent
+that must exist in the running project, and `convene_panel.py` refuses a seat it
+cannot fill rather than quietly seating nobody.
+
+**The record must match the assignment.** Convening buys nothing if the panel that
+voted may differ from the panel that was convened: a document could be routed to the
+specialists its content demands and signed off by three others. `review_panel.py`
+refuses such a record, and the assignment comes from disk — never from the record,
+which would let a document supply the very list it is checked against.
 
 **Why a script cannot do this job.** `/plan-confidence` is deterministic and scores
 STRUCTURE — the coverage matrix, citations that resolve, criteria that are executable.
@@ -167,7 +183,16 @@ implied the other.
 - `INVALID` — hard cap blew (e.g., Coverage Matrix incomplete, fabricated citation). Return to `/plan-write`. **`/plan-improve` does not fix hard caps.**
 - `NEEDS_REVISION` — soft caps blew (risks under-addressed, test plan thin). Use `/plan-improve`.
 - `SHIPPABLE_WITH_CAVEATS` — proceed to `/implement`; caveats are explicit, not hidden.
-- `SHIPPABLE` — green light.
+- `SHIPPABLE` — green light. **Structure alone does not reach it**: the panel gates
+  every verdict above, and `run_structural.py` applies that gate by default. A plan
+  scoring 100 with no panel record is `AWAITING_REVIEW`, not `SHIPPABLE`.
+- `AWAITING_REVIEW` — the structure is complete and no panel has judged it. Neither a
+  failure nor a pass; the action is to convene, not to rewrite.
+- `ITEM_IN_FLIGHT` — the panel could not convene at all: an absent reviewer, or a voter
+  nobody assigned. Held on a material impediment, and **not** a rejection —
+  sending the author to rewrite a plan nobody found fault with is the wrong action.
+  `check_panel_approval.py` computes this; `--structural-only` measures structure
+  without the gate, and records that it did so.
 - `ALIGNED` — phase 0 only: machine score ≥ 90% and a reviewer who is not the author signed off. Proceed to `/plan-write`.
 - `AWAITING_REVIEW` — phase 0 only: the brief is complete and nobody has signed. Ask for the review, or run `alignment_judge.py` when none is coming.
 - `BLOCKED` — phase 0 only: below the machine threshold. The item is **not** built.

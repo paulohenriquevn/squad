@@ -128,6 +128,15 @@ kit's own — [`rules/review-panel.txt`](review-panel.txt), computed by
 [`review_panel.py`](../mechanisms/cycle/review_panel.py). A panel that cannot be formed is
 a violated premise reported at intake, never a per-item halt.
 
+**The reviewers are this project's own specialists**, resolved by
+[`convene_panel.py`](../mechanisms/cycle/convene_panel.py) against the agents actually on
+disk, and the phase does not advance without them:
+[`check_panel_approval.py`](../mechanisms/gates/check_panel_approval.py) treats a missing
+record as what it is — not an approval. A structural score alone no longer carries a
+document; scoring 100 with no panel is `AWAITING_REVIEW`, held rather than returned,
+because nobody found fault with it. A panel that cannot convene AT ALL is
+`ITEM_IN_FLIGHT` — a different fact, and a different action.
+
 ### BACKLOG — phase 0 · Kairos
 
 | | |

@@ -223,7 +223,7 @@ def test_e2e_robust_to_no_adrs_section(tmp_path: Path) -> None:
     )
     # No ADRs section — adr_completeness returns total_adrs=0, ratio=1.0 (vacuous)
     # End-to-end should succeed, not crash
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
     assert report.verdict != "INVALID"  # no cap fires for vacuous ADR rule
 
 

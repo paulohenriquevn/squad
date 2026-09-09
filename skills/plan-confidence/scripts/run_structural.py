@@ -182,6 +182,30 @@ def _load_thresholds(thresholds_path: Path) -> list[tuple[str, int]]:
     return bands
 
 
+def _panel_state(project_root: Path, slug: str) -> dict:
+    """What the review panel decided about this plan, if anything.
+
+    Deliberately does not move the score — see the call site. Failing to reach the
+    gate is NOT a pass: an unconsulted panel leaves the plan held, never advanced.
+    """
+    gates = project_root / "mechanisms" / "gates"
+    if not gates.is_dir():
+        gates = project_root / ".claude" / "mechanisms" / "gates"
+    if not gates.is_dir():
+        return {"status": "unchecked",
+                "detail": "no mechanisms/gates in this project; the panel could not be "
+                          "consulted, and an unconsulted panel is not an approval"}
+    if str(gates) not in sys.path:
+        sys.path.insert(0, str(gates))
+    try:
+        from check_panel_approval import check as _panel_check
+    except ImportError as exc:  # pragma: no cover - environment, not logic
+        return {"status": "unchecked", "detail": f"cannot load the panel gate: {exc}"}
+
+    _, result = _panel_check(slug, "plan", project=project_root)
+    return result
+
+
 def _lookup_verdict(score: float, bands: list[tuple[str, int]]) -> str:
     for band_name, min_score in bands:
         if score >= min_score:
@@ -288,8 +312,16 @@ def run_structural(
     plan_path: Path,
     rubric_path: Path = DEFAULT_RUBRIC,
     thresholds_path: Path = DEFAULT_THRESHOLDS,
+    *,
+    structural_only: bool = False,
 ) -> StructuralScoreReport:
-    """Main orchestrator."""
+    """Main orchestrator.
+
+    The review-panel gate is ON by default: a plan no panel carried must not reach a
+    verdict that advances it. `structural_only=True` measures structure alone, and the
+    choice is RECORDED in `sub_reports["panel"]` rather than left invisible — a bypass
+    nobody can see in the artifact is a bypass that quietly becomes the norm.
+    """
     plan_version = _read_plan_version(plan_path)
     # Validate rubric parses (raises if malformed) — content used inside check_spec_smells.
     load_rubric(rubric_path)
@@ -426,6 +458,28 @@ def run_structural(
     ):
         verdict = "INVALID"
 
+    # The panel gates the VERDICT, never the score. A script scores structure; the
+    # panel judges whether the evidence supports the conclusion drawn from it, and
+    # folding the two would conflate "this plan is weak" with "nobody reviewed it".
+    # Both tokens below already exist in `rules/verdict-bands.txt`.
+    if structural_only:
+        panel = {"status": "not_consulted",
+                 "detail": "--structural-only: the panel gate was not applied. This "
+                           "verdict describes STRUCTURE and does not say the plan may "
+                           "advance"}
+    else:
+        panel = _panel_state(PROJECT_ROOT, plan_path.stem.removesuffix("-plan"))
+        if verdict != "INVALID":
+            if panel["status"] == "returned":
+                verdict = "NEEDS_REVISION"
+            elif panel["status"] == "no_record":
+                # Complete, and nobody has signed — the same shape phase 0 already
+                # calls AWAITING_REVIEW. The action is to convene, not to rewrite.
+                verdict = "AWAITING_REVIEW"
+            elif panel["status"] not in ("approved", "not_gated"):
+                # Cannot convene here: held on a material impediment.
+                verdict = "ITEM_IN_FLIGHT"
+
     evidence_reasons: list[Reason] = []
     if evidence.total_citations > 0:
         resolved_count = evidence.total_citations - len(evidence.unresolved_citations)
@@ -464,6 +518,7 @@ def run_structural(
         verdict=verdict,
         reasons=reasons_by_dimension,
         sub_reports={
+            "panel": panel,
             "coverage_matrix": {
                 "total_gaps": cov.total_gaps,
                 "mapped_gaps": cov.mapped_gaps,
@@ -750,6 +805,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--thresholds", default=str(DEFAULT_THRESHOLDS))
     parser.add_argument("--no-warn", action="store_true", help="suppress calibration warning")
     parser.add_argument(
+        "--structural-only",
+        action="store_true",
+        help="score structure and do NOT apply the review-panel gate; recorded in the "
+             "report, it does not hide",
+    )
+    parser.add_argument(
         "--no-code-quality",
         action="store_true",
         help="skip /code-quality runtime integration (T6.5)",
@@ -763,7 +824,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        report = run_structural(plan_path, Path(args.rubric), Path(args.thresholds))
+        report = run_structural(plan_path, Path(args.rubric), Path(args.thresholds),
+                                structural_only=args.structural_only)
     except (FileNotFoundError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

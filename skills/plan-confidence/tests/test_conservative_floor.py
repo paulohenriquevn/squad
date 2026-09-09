@@ -28,7 +28,7 @@ def test_high_smell_density_caps_at_89(tmp_path: Path) -> None:
         f"| 1 | g | T1.1 | done |\n",
         encoding="utf-8",
     )
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
     assert report.final_score_after_caps <= 89, (
         f"high-smell plan got {report.final_score_after_caps} > 89 (should be capped)"
     )
@@ -59,7 +59,7 @@ def test_soft_floor_marker_fires_when_floor_binds(tmp_path: Path) -> None:
         f"| 1 | g | T1.1 | done |\n",
         encoding="utf-8",
     )
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
     # Either soft_floor fires OR composite already pushed below 89 — both are valid
     assert report.final_score_after_caps <= 89
 
@@ -82,7 +82,7 @@ def test_high_deferred_ratio_caps_at_89(tmp_path: Path) -> None:
         + "\n".join(rows),
         encoding="utf-8",
     )
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
     assert report.final_score_after_caps <= 89, (
         f"high-deferred plan got {report.final_score_after_caps} > 89"
     )
@@ -100,7 +100,7 @@ def test_clean_plan_can_still_score_high(tmp_path: Path) -> None:
         "| 1 | gap a | T1.1 | done |\n",
         encoding="utf-8",
     )
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
     assert report.final_score_after_caps >= 70
 
 
@@ -117,7 +117,7 @@ def test_borderline_deferred_does_not_cap(tmp_path: Path) -> None:
         + "\n".join(rows),
         encoding="utf-8",
     )
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
+    report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
     # 1/10 = 10% deferred — under threshold, no soft cap from deferred
     soft_caps = [c for c in report.hard_caps_triggered if "soft_floor" in c]
     assert "soft_floor_high_deferred_ratio" not in soft_caps

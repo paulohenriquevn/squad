@@ -146,7 +146,7 @@ def test_real_plan_snapshot(plan_filename: str, expected: dict[str, object]) -> 
     if plan_path is None:
         pytest.skip(f"plan not found in plans/ or completed/: {plan_filename}")
 
-    report = run_structural(plan_path, RUBRIC, THRESHOLDS)
+    report = run_structural(plan_path, RUBRIC, THRESHOLDS, structural_only=True)
 
     # Verdict band
     verdict_in = expected["verdict_in"]
@@ -251,8 +251,8 @@ def test_score_determinism_real_plans() -> None:
         plan_path = _resolve_plan(filename)
         if plan_path is None:
             continue
-        r1 = run_structural(plan_path, RUBRIC, THRESHOLDS)
-        r2 = run_structural(plan_path, RUBRIC, THRESHOLDS)
+        r1 = run_structural(plan_path, RUBRIC, THRESHOLDS, structural_only=True)
+        r2 = run_structural(plan_path, RUBRIC, THRESHOLDS, structural_only=True)
         assert r1.final_score_after_caps == r2.final_score_after_caps, (
             f"{filename}: nondeterministic score {r1.final_score_after_caps} != {r2.final_score_after_caps}"
         )
