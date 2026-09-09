@@ -7,6 +7,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`sq ci` fetches the annotations, which is the whole verb (#57)**
+  Diagnosing a red CI cost roughly eight calls on 2026-09-09: every job died in three
+  seconds with zero steps executed, `gh run view --log-failed` returned nothing, and the
+  logs had expired. The reason lived in a check-run **annotation** and nowhere else —
+  *"The job was not started because recent account payments have failed"*. Through the web
+  UI and through job output, that is indistinguishable from a test failure. A `sq ci` that
+  reported conclusions without annotations would reproduce the eight calls rather than
+  replace them, so it fetches them per failed job. Against this repository it now prints
+  the billing reason **in one call**.
+  A repeated annotation is marked `(same annotation as above)` rather than dropped: five
+  jobs failing for one reason must not read as one reason and four silences. `gh` absent,
+  unauthenticated, or returning no runs are all **exit 2** — an empty run list answers
+  nothing, and reading it as success is the defect this kit finds most. The `gh` runner is
+  injected, so the eight tests need neither network nor token, following
+  `check_merge_autonomy.py`. And because this is the only verb that reads the network, it
+  says so in its own `not_checked` — a reader cannot otherwise tell a fresh answer from a
+  stale one.
+
 - **`sq check` replays the workflow instead of globbing the gates (#57)**
   The obvious design — glob `mechanisms/gates/check_*.py` and run each — is not
   implementable, and finding that out changed the command. The root-path flag is not
