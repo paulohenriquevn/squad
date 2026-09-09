@@ -6,6 +6,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **152 tests ran in no CI job, because an optimisation reopened the hole a testpath had closed (#58)**
+  `pyproject.toml` declares `testpaths = ["tests", "hooks/tests", "squad/tests"]`, and its own
+  comment says why the last two are there: *"fourteen tests for `stop-validation` and the whole
+  hook library sat outside the collected set. A test the suite does not collect is a test that
+  passed once."* `run_slice_tests.sh` then passed `tests` to pytest **explicitly**, and an
+  explicit path argument suppresses `testpaths` — so the two paths added to close that hole fell
+  straight back out of it.
+  **Measured 2026-09-09:** a bare `pytest` collects 1894; `pytest tests` collects 1742; the 152
+  in between ran in **no CI job at all**, because `ci.yml` runs this script and nothing else.
+  The cause was not neglect: `ci.yml:132-134` records that a second root-suite step was removed
+  on 2026-08-26 to save *"45s duplicated per run"*, and that step was the pipeline's only bare
+  `pytest`. **The 45-second optimisation cost 152 tests**, and `CONTRIBUTING.md` prescribed the
+  same `pytest tests` as the house instruction, so the hole was documented rather than hidden.
+  The root slot now carries all three testpaths in one pytest process — which is what a bare
+  `pytest` already does, so it is the configuration already proven to work; none of the three is
+  under `skills/`, so `conftest.py`'s multi-slice guard does not fire. **Verified: 23 suites,
+  3556 tests, ALL SUITES GREEN**, with the root suite at 1896 (1894 plus the two tests added
+  below). The relationship is now asserted rather than the number:
+  `tests/test_slice_runner_covers_every_testpath.py` fails when a declared testpath is not
+  passed to pytest by the runner, so a path added later is covered without anyone remembering
+  that file exists.
+  **And the exit code is no longer collapsed to a boolean.** `run_suite` recorded `"0"`/`"1"`
+  instead of `$?`, so pytest 5 (nothing collected) and 1 (a real failure) were the same fact:
+  a slice whose tests all vanished reported `FAIL` with no hint that the cause was an empty set.
+
+
 ### Added
 - **ADR: the CLI navigates, the mechanisms compute (#57)**
   Recorded in `wiki/decisions/the-cli-navigates-mechanisms-compute.md`, status `proposed`.

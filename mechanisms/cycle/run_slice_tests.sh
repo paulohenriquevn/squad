@@ -44,8 +44,31 @@ LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
 
 # Fixed order: root suite first, then the slices in directory order.
+#
+# THE ROOT SUITE IS ALL THREE TESTPATHS, NOT `tests`
+# ---------------------------------------------------
+# `pyproject.toml` declares testpaths = tests, hooks/tests, squad/tests, and says why
+# the last two are there: fourteen stop-validation tests and the whole hook library
+# had sat outside the collected set. Passing `tests` alone here suppressed that
+# declaration — an explicit path argument always does — so the two paths added to
+# close the hole fell straight back out of it.
+#
+# Measured 2026-09-09: a bare `pytest` collects 1894, `pytest tests` collects 1742,
+# and the 152 in between ran in NO CI job, because `ci.yml` runs this script and
+# nothing else. The hole was reopened by an optimisation rather than by neglect —
+# `ci.yml` records that a second root-suite step was removed on 2026-08-26 to save
+# "45s duplicated per run", and that step was the pipeline's only bare `pytest`.
+#
+# All three go to ONE pytest process, which is what a bare `pytest` already does:
+# none of them is under `skills/`, so `conftest.py`'s multi-slice guard does not
+# fire, and the coverage extra below keys on one root slot rather than three.
+ROOT_SUITE=()
+for d in tests hooks/tests squad/tests; do
+    [ -d "$d" ] && ROOT_SUITE+=("$d")
+done
+
 SUITES=()
-[ -d tests ] && SUITES+=(tests)
+[ ${#ROOT_SUITE[@]} -gt 0 ] && SUITES+=("${ROOT_SUITE[*]}")
 for d in skills/*/tests; do
     [ -d "$d" ] && SUITES+=("$d")
 done
@@ -77,7 +100,9 @@ run_suite() {
     local path="$1" log_dir="$2" slot="$3"
     local out="$log_dir/$slot.out"
     local -a extra=()
-    if [ "$path" = "tests" ] && [ "${ROOT_SUITE_COV:-0}" = "1" ]; then
+    # The root slot carries every testpath, space-separated, so it is matched by its
+    # FIRST word rather than by equality.
+    if [ "${path%% *}" = "tests" ] && [ "${ROOT_SUITE_COV:-0}" = "1" ]; then
         # `--cov=scripts` measured a directory renamed away on 2026-09-02, so the
         # report was 0.00% and the floor failed on every CI run that enabled it —
         # which the CI does, unconditionally. A floor that always fails is worth
@@ -85,11 +110,13 @@ run_suite() {
         extra=(--cov=mechanisms --cov=squad --cov-report=term
                "--cov-fail-under=${ROOT_SUITE_COV_MIN:-55}")
     fi
-    if python3 -m pytest -q -p no:cacheprovider --no-header "${extra[@]+"${extra[@]}"}" "$path" > "$out" 2>&1; then
-        echo "0" > "$log_dir/$slot.rc"
-    else
-        echo "1" > "$log_dir/$slot.rc"
-    fi
+    # Unquoted on purpose: the root slot is several paths in one string.
+    # shellcheck disable=SC2086
+    python3 -m pytest -q -p no:cacheprovider --no-header "${extra[@]+"${extra[@]}"}" $path > "$out" 2>&1
+    # The REAL exit code, not a boolean. pytest 5 (nothing collected) and 1 (a real
+    # failure) are different facts, and collapsing them left a slice whose tests all
+    # vanished reporting FAIL with no hint that the cause was an empty set.
+    echo "$?" > "$log_dir/$slot.rc"
 }
 export -f run_suite
 

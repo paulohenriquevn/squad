@@ -197,10 +197,26 @@ close.
 CLI is a bug in the pipeline. It also means the CLI is covered by the pipeline that
 depends on it, which is the correct direction for that dependency.
 
-**Consumers gain an entry point that must keep working across installs.** The kit is
-installed as a plugin in some layouts and copied in others, and
-[`squad/layout.py`](../../squad/layout.py) already resolves that difference. `sq` must
-use it rather than assume a path.
+**A consumer does NOT get the `sq` file, and this ADR said otherwise until 2026-09-09.**
+The sentence here used to read *"Consumers gain an entry point that must keep working
+across installs"*. That was false when written and was caught during implementation
+planning: [`install.sh:235`](../../mechanisms/distribution/install.sh) iterates
+DIRECTORIES — `for item in skills rules hooks commands mechanisms squad` — and hands each
+to `copy_tree`. A loose file at the repository root is copied by nothing, and the manifest
+loop at `:820` does not list it either.
+
+An ADR asserting a property the implementation does not have is the defect class this
+repository exists to catch, so the correction is recorded rather than quietly edited.
+
+**What actually travels is the package.** `squad/` IS on that list, so `squad/cli/`
+reaches every consumer and `python3 .claude/squad/cli` works there. The root `sq` is a
+convenience for this repository alone. Making the short name travel would mean
+special-casing a file in the copy loop and in the manifest writer — a separate item,
+deliberately not folded into this one.
+
+Either way the entry point resolves its own location through
+[`squad/layout.py`](../../squad/layout.py), which already distinguishes plugin, copy and
+standalone, rather than assuming a path.
 
 **`--touched` can be wrong in a way that is silent.** A file-to-slice map that misses an
 edge runs fewer tests and still reports success. It must therefore state the slices it

@@ -26,11 +26,14 @@ the short checklist.
    `/plan-write → /implement → /code-quality → /review`.
 2. **Test-first (TDD).** Write the failing test before the code. Every bug fix
    starts with a regression test that fails, then passes.
-3. **Keep the suite green.** Run both:
+3. **Keep the suite green.** One command covers everything:
    ```bash
-   python3 -m pytest tests -q        # root suite
-   bash mechanisms/cycle/run_slice_tests.sh   # every skills/*/tests slice, isolated
+   bash mechanisms/cycle/run_slice_tests.sh   # root suite + every skills/*/tests slice
    ```
+   For the root suite alone, run `python3 -m pytest -q` with **no path argument** — an
+   explicit path suppresses `testpaths`, so `pytest tests` silently drops `hooks/tests`
+   and `squad/tests`. That is not hypothetical: this file prescribed `pytest tests` and
+   the runner passed the same path, so 152 tests ran in no CI job until 2026-09-09.
    Slice tests run **isolated per slice** (one pytest process each) because slices
    ship colliding module basenames by design — see the header of
    `mechanisms/cycle/run_slice_tests.sh`. Add new slice tests under `skills/<slice>/tests/`
