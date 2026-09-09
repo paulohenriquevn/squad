@@ -217,6 +217,31 @@ Each mode defines what counts as a measurement. Evidence from one does not satis
 
 `bug` has a hard floor: **no failing test, no bug.** A defect nobody can express as a failing test is not understood well enough to fix. `live-test` refuses on a domain with no declared target — six of eight have none, by design, because a Go library and a Terraform module have no surface a browser can probe.
 
+## Finding your way — `sq`
+
+The tree is organised by **who owns a file**, which is what lets an installer preserve your
+configuration and overwrite the kit's contracts. It is also what makes it unsearchable by
+task. `sq` is the projection of one onto the other:
+
+```bash
+./sq test               # every suite — and it NAMES the ones that did not run
+./sq test --touched     # only the suites your changes can affect
+./sq check              # replay what CI verifies, and name what it does not reach
+./sq ci                 # why the pipeline is red, annotations included
+./sq where check_xrefs  # where a mechanism lives, and how to invoke it
+```
+
+**Every command states what it did not check**, and that is the point rather than a
+courtesy. This kit's most-found defect is an inability to measure published as a
+measurement, and the tooling used to measure did not have that property: a session once
+reported `1894 passed` as full coverage while 152 tests collected nowhere and 22 slice
+suites had not run.
+
+`sq` computes no verdict — it runs the mechanisms and reports what they said. A consumer
+gets it as `python3 .claude/squad/cli`, since the installer copies directories and the root
+`sq` is a convenience for this repository. The reasoning is in
+[`wiki/decisions/the-cli-navigates-mechanisms-compute.md`](wiki/decisions/the-cli-navigates-mechanisms-compute.md).
+
 ## Project structure
 
 Every directory is named for what it holds, and the name is checked:

@@ -7,7 +7,7 @@ tags: [decision, cli, discoverability, adr, tooling]
 generated:
   by: claude/opus-5
   at: 2026-09-09
-status: proposed
+status: stable
 sources:
   - id: ownership
     resource: ../../rules/README.md
@@ -25,7 +25,7 @@ sources:
 
 # The CLI navigates; the mechanisms compute
 
-**Status:** proposed · **Date:** 2026-09-09 · **Requested by:** Paulo Henrique (owner)
+**Status:** accepted · **Date:** 2026-09-09 · **Requested by:** Paulo Henrique (owner)
 · **Drafted by:** the agent · **Owner review:** not performed
 
 The owner asked for a CLI and accepted the shape recommended below. Everything after
@@ -150,9 +150,13 @@ logic it needs — the file-to-slice map behind `--touched` — belongs in
 `mechanisms/conventions/`, which is literally *where things live and what shape they
 have*.
 
-**Open, and the owner's to settle:** whether a two-letter root-level entry point
-satisfies [`check_semantic_names.py`](../../mechanisms/gates/check_semantic_names.py),
-which refuses names that state nothing.
+**Settled during implementation:** `sq` passes `check_semantic_names` — `"sq"` is not on
+its bin list, and its docstring requirement applies only to `.py`/`.sh` suffixes. But the
+same suffix filter means **no gate reads the shim at all**: `verify_ecosystem` compiles
+`*.py` and `bash -n`s three `*.sh` globs, `ruff` is handed directories, and `shellcheck`
+reads `git ls-files '*.sh'`. So the shim is six lines and
+[`tests/test_sq_entry_point.py`](../../tests/test_sq_entry_point.py) executes it — that
+test is the other half of the trade between the short name and the syntax gate.
 
 ## What is deliberately not in it
 

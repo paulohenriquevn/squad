@@ -1,5 +1,24 @@
 # Change log
 
+## 2026-09-09 — later the same day
+
+**`decisions/the-cli-navigates-mechanisms-compute` moves to `accepted`.** All four verbs
+are implemented and the two things it left open are settled.
+
+`sq` passes `check_semantic_names`, and the same suffix filter that lets it through means
+**no gate reads the shim at all** — so the shim is six lines and a test executes it.
+
+The ADR's claim about consumers was FALSE and is corrected in place, with the error
+recorded rather than edited away: `install.sh` copies directories, so a loose root file
+reaches nobody. What travels is `squad/cli/`.
+
+**And one design in the ADR did not survive contact.** It said `sq check` would be "a
+façade over `verify_ecosystem`" discovering gates by glob. That is not implementable: the
+root-path flag takes seven different spellings across the 23 gates, so a glob-and-run
+carries a table of conventions — a second list of what "verified" means, which the ADR
+itself forbids. The command replays `ci.yml` instead, which makes "the CLI reaches what CI
+reaches" true by construction.
+
 ## 2026-09-09
 
 **`decisions/the-cli-navigates-mechanisms-compute` added**, status `proposed`. A single

@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`sq` documented, and its ADR accepted (#57)**
+  `README.md` gains a *Finding your way* section, `CONTRIBUTING.md` prescribes `./sq test`
+  while saying plainly that it is a façade over `run_slice_tests.sh` — which stays the
+  definition of "the suites" and is what CI invokes — and `rules/squad-map.md` names `sq`
+  as its own executable half. The four strings other tests assert on were left untouched.
+  The ADR moves to `accepted`, with both open questions settled and one design recorded as
+  **not having survived contact**: it proposed discovering gates by glob, which is not
+  implementable across seven flag conventions.
+
 - **`sq ci` fetches the annotations, which is the whole verb (#57)**
   Diagnosing a red CI cost roughly eight calls on 2026-09-09: every job died in three
   seconds with zero steps executed, `gh run view --log-failed` returned nothing, and the

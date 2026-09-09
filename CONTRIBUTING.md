@@ -26,10 +26,16 @@ the short checklist.
    `/plan-write → /implement → /code-quality → /review`.
 2. **Test-first (TDD).** Write the failing test before the code. Every bug fix
    starts with a regression test that fails, then passes.
-3. **Keep the suite green.** One command covers everything:
+3. **Keep the suite green.**
    ```bash
-   bash mechanisms/cycle/run_slice_tests.sh   # root suite + every skills/*/tests slice
+   ./sq test                 # every suite, and it names the ones that did not run
+   ./sq test --touched       # only the suites your changes can affect
+   ./sq check                # replay what CI verifies
    ```
+   `sq` is a façade — it runs the same
+   `bash mechanisms/cycle/run_slice_tests.sh` underneath, which stays the definition of
+   "the suites" and is what CI invokes. Use the script directly whenever you prefer; the
+   only thing `sq` adds is the report of what was **not** run.
    For the root suite alone, run `python3 -m pytest -q` with **no path argument** — an
    explicit path suppresses `testpaths`, so `pytest tests` silently drops `hooks/tests`
    and `squad/tests`. That is not hypothetical: this file prescribed `pytest tests` and

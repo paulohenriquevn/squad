@@ -17,6 +17,13 @@ and the four roles. That copy is deliberately partial and points here.
 | Configuration — `rules/*.txt`, thresholds, allow-lists | the project | **Yes.** Preserved, because it is what a consumer calibrates |
 | Domain specialists — `agents/*.md` | the project, derived from disk | **Yes**, and the kit ships zero of them |
 
+**Finding any of it: `sq`.** This file answers *where am I and who decides this*; `sq` is
+its executable half — `sq where <name>` resolves a mechanism to a path and an invocation,
+`sq test` runs the suites and names the ones it did not, `sq check` replays what CI
+verifies. It computes no verdict; it is a façade over the mechanisms, which is why it lives
+at the root and in `squad/cli/` rather than as a sixth family under `mechanisms/`
+([the ADR](../wiki/decisions/the-cli-navigates-mechanisms-compute.md)).
+
 The question that places a file is **not who reads it — it is who owns it**
 (`rules/README.md`). A file a consumer tunes must live where the installer
 preserves it, or the next update destroys their configuration in silence.
