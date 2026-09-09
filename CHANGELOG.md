@@ -6,7 +6,74 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **REVIEW consumes an independent audit it did not produce (#67)**
+  `/review` spawns 5-7 Claude sub-agents with ad-hoc prompts. Nothing behind them refuses a
+  finding that was never grounded: no versioned catalog to cite, no tool measuring what the
+  prose estimates, no store that rejects an invented id. The `loop-*` plugins audit the same
+  domains with instruments that refuse their own theatre — a finding whose catalog id is not
+  registered is rejected at the database boundary, complexity comes from radon / lizard /
+  gocyclo rather than from reading, and a run that found nothing is a hard block instead of a
+  success. `cycle-judge-codex.md` already made this argument for cycle ARTIFACTS; this extends
+  it to the CODE.
+  **The selection is derived, never chosen.** `rules/review-auditors.txt` maps each domain
+  `detect_domain.py` already computes to the plugin that audits it, and `select_auditors.py`
+  resolves that against the plugins actually installed. The reviewing agent may WIDEN the
+  selection and never narrow it — the same rule the review panel enforces by refusing to seat
+  an author, because the CHOICE is already a judgement. Point a concurrency change at a docs
+  auditor and the report comes back clean, honestly, having examined nothing that mattered:
+  an independent report about the wrong thing is worse than none, because it reads as coverage.
+  **Scope is passed and the mode is recorded.** Each auditor receives `--diff-base`, and what
+  that does depends on the domain: `analysis-scoped` reads only the changed files, while
+  `report-filtered` reads the whole tree and reports only what the change touched — because
+  reachability, duplication and dependency cycles are properties of the whole graph, and
+  analysing the diff alone would make every new function look orphaned. A run with no base
+  says in writing that it covered the whole tree; the base is never guessed.
+  **`check_auditor_coverage.py` blocks**, entering `consolidate_findings.py` as BLOCKER
+  findings so the verdict cannot be computed while ignoring it — the shape
+  `check_upstream_gate.py` established and argued for. It fires on a missing report, a report
+  the plugin's OWN checker rejects, or a plugin this machine does not have. A project that
+  declares no auditor is not blocked: that opt-out is a visible edit to a file the installer
+  preserves, never a silence.
+  **The report contract is the plugins', not a copy of it.** The gate runs each plugin's own
+  report checker from its install path. A second copy would diverge the day the contract
+  changes, and the kit would accept a shape the plugin itself rejects.
+  Two sections travel out of every report on purpose: `## Verdict`, quoted rather than
+  re-graded, and `## What Was NOT Analyzed`, which the contract never omits and which is the
+  single thing stopping partial coverage from reading as complete — the seam between two
+  honest halves is exactly where that caveat gets dropped.
+  **Severity is carried as a SIGNAL and never gates.** An earlier draft blocked on Critical
+  findings read from the report's markdown; the first smoke run showed that a subsection
+  holding an empty table plus "_(none)_ unless critical findings were registered" is not
+  decidable by prefix. The finding stores would be decidable, but their schema differs per
+  plugin and is not declared to consumers, so reading them would be a second copy of another
+  project's internals. This kit's governing sentence cuts both ways: an inability to measure
+  must not become a passing measurement, and it must not become a failing one either.
+
+- **The auditor registry cannot name a domain the detector never emits (#67)**
+  A row mapping a domain `detect_domain.py` does not produce is an auditor that never runs,
+  and nothing would say so — the review would pass with one fewer independent audit than the
+  registry claims to require. That is the silent-coverage failure this integration exists to
+  prevent, arriving through its own configuration file. A test holds the registry against the
+  detector's own domain table, and two more refuse a plugin declared with two different diff
+  modes or two output directories: the first would make the recorded scope depend on which
+  domain happened to select it, and the second would send an audit somewhere the gate does not
+  look.
+
+- **`installed_plugins.py` — where a Claude Code plugin lives, read instead of guessed (#67)**
+  `rules/review-panel.txt` recorded on 2026-09-09 that verifying a plugin-supplied reviewer
+  "means asking Claude Code which plugins are installed, which nothing in this kit does yet".
+  That was true of the kit and false of the machine: `~/.claude/plugins/installed_plugins.json`
+  carries an `installPath` per plugin. Measured here — 31 plugins, 17 of them the loop family,
+  152 agent files underneath them.
+
 ### Fixed
+- **A `plugin:agent` panel seat was accepted without verification, and no longer is (#65)**
+  `convene_panel.py` skipped the existence check for any seat whose name contained a colon,
+  because there is no file for it in this tree. So the largest pool of specialists a project
+  has — 152 plugin agents against the kit's 14 — was exactly the one the panel took on the
+  strength of a name, in a mechanism that refuses that everywhere else. A plugin seat is now
+  resolved through the manifest: the plugin must be installed AND supply that agent.
 - **The DISCOVER and PLAN review panel is now convened, and blocks (#65)**
   `rules/review-panel.txt`, `review_panel.py`, an intake premise gate and 377 lines of tests
   shipped on 2026-09-08 declaring that both phases advance on **2 of 3 signed approvals**.

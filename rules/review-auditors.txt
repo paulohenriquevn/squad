@@ -1,0 +1,85 @@
+# Independent auditors — which plugin audits which domain at REVIEW
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# `cycle-review.md` spawns 5-7 Claude sub-agents with ad-hoc prompts. They are all
+# Claude, and nothing behind them refuses a finding that was never grounded: there is
+# no versioned catalog to cite, no tool measuring what the prose estimates, and no
+# store that rejects an invented id. The `loop-*` plugins audit the same domains with
+# instruments that refuse their own theatre — a finding whose catalog id is not
+# registered is rejected at the database boundary, complexity comes from radon /
+# lizard / gocyclo rather than from reading, and a run that found nothing is a hard
+# block instead of a success.
+#
+# So REVIEW consumes an independent audit instead of only producing opinions.
+# `cycle-judge-codex.md` already made this argument for cycle ARTIFACTS; this extends
+# it to the CODE.
+#
+# THE SELECTION IS DERIVED, NOT CHOSEN
+# ------------------------------------
+# The reviewing agent does not pick its own auditor. That is the same rule the review
+# panel enforces when it refuses to seat an author: the CHOICE is already a judgement,
+# and choosing `loop-doc-audit` for a concurrency change returns a clean report that
+# honestly looked at nothing that mattered. An independent report about the wrong
+# thing is worse than no report, because it reads as coverage.
+#
+# `skills/review/scripts/detect_domain.py` already derives the domain from the plan
+# and the changed paths. That derivation selects the auditors, and the agent may only
+# WIDEN it — the same fail-safe direction `touched_slices.py` takes when a path maps
+# to nothing it recognises.
+#
+# WHAT `diff_mode` MEANS, AND WHY IT IS RECORDED
+# ---------------------------------------------
+# Every plugin accepts `--diff-base` / `--pr` / `--commits`, and the scope changes what
+# is REPORTED in all of them. Whether it changes what is ANALYZED depends on the
+# domain, which the plugin declares:
+#
+#   analysis-scoped   detectors read only the changed files
+#   report-filtered   detectors read the whole tree; only what the change touched is
+#                     reported — because reachability, duplication and dependency
+#                     cycles are properties of the WHOLE graph, and analysing the diff
+#                     alone would make every new function look orphaned
+#
+# The mode is recorded here so a scoped REVIEW cannot be read as a full audit. That is
+# the seam where an integration lies: both sides already declare their coverage
+# honestly, and the join is where the caveat gets dropped.
+#
+# FORMAT
+# ------
+#   auditor = <domain> | <plugin> | <diff-mode> | <output dir> | [report glob]
+#
+# <domain>      one of `detect_domain.py`'s domains, or `always` for an auditor that
+#               runs whatever the change is about.
+# <plugin>      the plugin name; resolved against the plugins installed on this
+#               machine. A mapped plugin that is NOT installed is a coverage gap, not
+#               a silence — `check_auditor_coverage.py` reports it and blocks.
+# <output dir>  passed as `--output-dir`, so the report lands where the gate looks.
+#               Left as the plugin's own default, which keeps a hand-run and a
+#               kit-driven run writing to the same place.
+# [report glob] only where a plugin does not write `final_report.md`.
+
+auditor = always         | loop-code-review        | analysis-scoped | code-review-output
+auditor = security       | loop-security-audit     | analysis-scoped | security-output
+auditor = auth           | loop-security-audit     | analysis-scoped | security-output
+auditor = testing        | loop-test-audit         | analysis-scoped | test-audit-output
+auditor = infrastructure | loop-infra-audit        | analysis-scoped | infra-audit-output
+auditor = infrastructure | loop-delivery-audit     | analysis-scoped | delivery-audit-output
+auditor = data-pipeline  | loop-infra-audit        | analysis-scoped | infra-audit-output
+auditor = database       | loop-performance-audit  | analysis-scoped | performance-audit-output
+auditor = concurrency    | loop-performance-audit  | analysis-scoped | performance-audit-output
+auditor = observability  | loop-performance-audit  | analysis-scoped | performance-audit-output
+auditor = frontend       | loop-performance-audit  | analysis-scoped | performance-audit-output
+auditor = api-design     | loop-surface-closure    | report-filtered | surface-closure-output
+auditor = cli-tooling    | loop-surface-closure    | report-filtered | surface-closure-output
+
+# WHAT IS DELIBERATELY NOT MAPPED
+# -------------------------------
+# `loop-project-purge` deletes files and `loop-pentest-audit` needs an authorised live
+# host. Neither belongs on an automatic path, and a review that silently deleted code
+# or probed a host would be a far worse failure than the one this file fixes.
+#
+# `loop-architecture-review`, `loop-deadcode-audit`, `loop-duplication-audit`,
+# `loop-doc-audit`, `loop-refactor-plan`, `loop-license-audit` and
+# `loop-reference-compare` are absent because no domain here derives them from a
+# change. They are worth running, and the honest place for them is a deliberate sweep
+# rather than a per-item gate whose cost nobody chose.

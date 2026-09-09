@@ -137,6 +137,15 @@ document; scoring 100 with no panel is `AWAITING_REVIEW`, held rather than retur
 because nobody found fault with it. A panel that cannot convene AT ALL is
 `ITEM_IN_FLIGHT` — a different fact, and a different action.
 
+**REVIEW consumes an audit it did not produce.** The specialists it spawns are Claude
+with ad-hoc prompts; the `loop-*` plugins audit the same domains against versioned
+catalogs that reject an unregistered finding id at the database boundary.
+[`rules/review-auditors.txt`](review-auditors.txt) maps domain to auditor,
+[`select_auditors.py`](../mechanisms/cycle/select_auditors.py) DERIVES which ones this
+change must face — the agent may widen, never narrow — and
+[`check_auditor_coverage.py`](../mechanisms/gates/check_auditor_coverage.py) enters the
+gap as BLOCKER findings, so the verdict cannot be computed while ignoring it.
+
 ### BACKLOG — phase 0 · Kairos
 
 | | |

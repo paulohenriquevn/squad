@@ -85,16 +85,26 @@
 # The lens each reviewer applies belongs in its own agent file; this table answers
 # only WHO sits on the panel, on what, and whether they can be reached.
 #
-# A KNOWN LIMIT, STATED RATHER THAN PAPERED OVER
-# ----------------------------------------------
-# A seat reached through an executable is verified by finding that executable on PATH.
-# For the `judge-codex:*` seats that proves the `codex` CLI is installed — it does NOT
-# prove the judge-codex PLUGIN is, and `rules/cycle-judge-codex.md` says that plugin is
-# external to this repository. So `check_panel_capability` can report HOLDS on a machine
-# where the orthogonal reviewer will not answer, and the panel then fails per item as an
-# `access` impediment instead of at intake, which is exactly the cost intake checking
-# exists to avoid. Closing it means asking Claude Code which plugins are installed, which
-# nothing in this kit does yet.
+# A LIMIT THAT WAS STATED, AND THEN CLOSED
+# ----------------------------------------
+# This file recorded on 2026-09-09 that a `judge-codex:*` seat could only be verified by
+# finding the `codex` CLI on PATH — which proves the CLI is installed and NOT that the
+# judge-codex plugin is — and that closing it "means asking Claude Code which plugins are
+# installed, which nothing in this kit does yet".
+#
+# That was true of the kit and false of the machine. Claude Code keeps
+# `~/.claude/plugins/installed_plugins.json`, every entry carries an `installPath`, and
+# `mechanisms/conventions/installed_plugins.py` now reads it. A `plugin:agent` seat is
+# verified like every other one: the plugin must be installed AND supply that agent.
+#
+# The closure matters more than the hole did. A project's largest pool of specialists is
+# the one its plugins supply — measured here, 152 agents across 17 loop plugins against
+# 14 in the kit — and that was exactly the pool the panel had been accepting on the
+# strength of a name.
+#
+# What remains open: an executable seat is still only verified as a binary on PATH. That
+# is the right check for a seat that IS a binary; it is a weaker one for a seat that is a
+# plugin reached through a binary, so prefer naming the agent.
 
 reviewer = discover | nemesis-claim-auditor      | claude-opus-5   | builtin
 reviewer = discover | leonardo-researcher        | claude-sonnet-5 | builtin

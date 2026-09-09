@@ -94,6 +94,7 @@ def check_panel_capability(
     *,
     which: WhichFn | None = None,
     project: Path | None = None,
+    config_dir: Path | None = None,
 ) -> PanelCapability:
     """Can a panel be convened for EVERY phase a panel gates?
 
@@ -136,7 +137,8 @@ def check_panel_capability(
             # The panel is short a member here. When it is the orthogonal one, this
             # also removes the only thing the diversity rule was protecting — so it
             # still stops a real run, it just is not the repository's fault.
-            if resolve_seat(seat, agents=agents, which=resolve):
+            if resolve_seat(seat, agents=agents, which=resolve,
+                            config_dir=config_dir):
                 return PanelCapability.UNREACHABLE
 
     return PanelCapability.HOLDS

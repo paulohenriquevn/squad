@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Which Claude Code plugins this machine has, and where they live.
+
+    python3 mechanisms/conventions/installed_plugins.py --list
+    python3 mechanisms/conventions/installed_plugins.py --resolve loop-security-audit
+
+## Why this is a convention and not a gate
+
+It computes no verdict. It answers *where does this live* for a class of thing the kit
+does not ship — and that is the question `mechanisms/README.md` gives this family.
+
+## Why it can be answered at all
+
+`rules/review-panel.txt` recorded, on 2026-09-09, that closing the judge-codex seat's
+verification "means asking Claude Code which plugins are installed, which nothing in
+this kit does yet". That was true of the kit and false of the machine: Claude Code
+keeps `~/.claude/plugins/installed_plugins.json`, and every entry carries an
+`installPath`. Measured here — 31 plugins, of which 17 are the loop family, and 152
+agent files reachable underneath them.
+
+So a plugin-supplied reviewer or auditor is verifiable from disk, deterministically,
+with no new dependency and no process to interrogate.
+
+## What it deliberately does not do
+
+It does not decide whether a plugin SHOULD be used, and it does not run one. A caller
+that cannot find a plugin it needs has a coverage gap to report — never a silence to
+keep.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+#: Claude Code's own manifest. Overridable so a test never depends on what happens to
+#: be installed on the machine running it.
+_ENV_HOME = "CLAUDE_CONFIG_DIR"
+
+
+def manifest_path(config_dir: Path | None = None) -> Path:
+    base = config_dir or Path(os.environ.get(_ENV_HOME, Path.home() / ".claude"))
+    return base / "plugins" / "installed_plugins.json"
+
+
+@dataclass(frozen=True)
+class Plugin:
+    """One installed plugin, and the tree it was installed into."""
+
+    name: str          #: bare name, without the `@marketplace` suffix
+    qualified: str     #: `name@marketplace`, as the manifest keys it
+    version: str
+    install_path: Path
+
+    @property
+    def agents_dir(self) -> Path:
+        return self.install_path / "agents"
+
+    def agents(self) -> list[str]:
+        """Agent names this plugin supplies, addressable as `<plugin>:<agent>`."""
+        d = self.agents_dir
+        return sorted(f.stem for f in d.glob("*.md")) if d.is_dir() else []
+
+    def has_agent(self, agent: str) -> bool:
+        return (self.agents_dir / f"{agent}.md").is_file()
+
+
+def load(config_dir: Path | None = None) -> dict[str, Plugin]:
+    """Every installed plugin, keyed by bare name.
+
+    A manifest that cannot be read yields NOTHING rather than raising: a machine with
+    no plugins and a machine whose manifest moved are the same fact to a caller — it
+    cannot reach a plugin — and both must be reported by that caller rather than
+    turned into an exception it did not ask for.
+
+    When one name is installed from two marketplaces the first entry wins and the
+    other is reachable by its qualified name, because silently preferring one would
+    hide that the ambiguity exists.
+    """
+    path = manifest_path(config_dir)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+    out: dict[str, Plugin] = {}
+    for qualified, entries in (data.get("plugins") or {}).items():
+        if not entries:
+            continue
+        entry = entries[0]
+        install = entry.get("installPath")
+        if not install:
+            continue
+        bare = qualified.split("@", 1)[0]
+        plugin = Plugin(name=bare, qualified=qualified,
+                        version=entry.get("version", "unknown"),
+                        install_path=Path(install))
+        out.setdefault(bare, plugin)
+        out[qualified] = plugin
+    return out
+
+
+def resolve(name: str, config_dir: Path | None = None) -> Plugin | None:
+    """The plugin by bare or qualified name, or None when it is not installed."""
+    return load(config_dir).get(name)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--resolve", metavar="NAME")
+    ap.add_argument("--agents", metavar="NAME", help="agents this plugin supplies")
+    ap.add_argument("--config-dir", type=Path, default=None)
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    plugins = load(args.config_dir)
+    bare = {p.name: p for p in plugins.values()}
+
+    if args.resolve or args.agents:
+        want = args.resolve or args.agents
+        p = plugins.get(want)
+        if p is None:
+            print(f"not installed: {want}", file=sys.stderr)
+            return 1
+        body = {"name": p.name, "qualified": p.qualified, "version": p.version,
+                "install_path": str(p.install_path), "agents": p.agents()}
+        if args.json:
+            print(json.dumps(body, indent=2))
+        elif args.agents:
+            print("\n".join(body["agents"]) or "(no agents)")
+        else:
+            print(f"{p.qualified} {p.version}\n{p.install_path}")
+        return 0
+
+    if args.json:
+        print(json.dumps(
+            {n: {"version": p.version, "install_path": str(p.install_path),
+                 "agents": len(p.agents())}
+             for n, p in sorted(bare.items())}, indent=2))
+    else:
+        for n, p in sorted(bare.items()):
+            print(f"{n:34} {p.version:10} {len(p.agents()):3} agent(s)")
+        print(f"\n{len(bare)} plugin(s) installed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

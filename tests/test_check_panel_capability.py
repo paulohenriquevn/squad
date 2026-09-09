@@ -63,11 +63,32 @@ def _on_path(*names: str):
     return lambda cmd: f"/usr/bin/{cmd}" if cmd in names else None
 
 
-def _check(tmp_path: Path, body: str, *, on_path=(), agents=("nemesis", "leo", "vera")):
+def _plugins(tmp_path: Path, **supplied) -> Path:
+    """A fake Claude Code manifest holding exactly these plugins and their agents."""
+    import json
+    cfg = tmp_path / "claude"
+    (cfg / "plugins").mkdir(parents=True, exist_ok=True)
+    entries = {}
+    for name, agents in supplied.items():
+        name = name.replace("_", "-")
+        tree = tmp_path / "installed" / name
+        (tree / "agents").mkdir(parents=True, exist_ok=True)
+        for a in agents:
+            (tree / "agents" / f"{a}.md").write_text(f"---\nname: {a}\n---\n",
+                                                     encoding="utf-8")
+        entries[f"{name}@m"] = [{"installPath": str(tree), "version": "1.0.0"}]
+    (cfg / "plugins" / "installed_plugins.json").write_text(
+        json.dumps({"version": 2, "plugins": entries}), encoding="utf-8")
+    return cfg
+
+
+def _check(tmp_path: Path, body: str, *, on_path=(), agents=("nemesis", "leo", "vera"),
+           plugins=None):
     return check_panel_capability(
         _write(tmp_path, body),
         which=_on_path(*on_path),
         project=_project(tmp_path, *agents),
+        config_dir=_plugins(tmp_path, **(plugins or {})),
     )
 
 
@@ -153,15 +174,26 @@ def test_a_builtin_seat_naming_an_absent_agent_is_unreachable(tmp_path: Path) ->
     assert result.exit_code == 3
 
 
-def test_a_plugin_qualified_agent_needs_no_file_in_this_tree(tmp_path: Path) -> None:
-    """`plugin:agent` is supplied by a plugin, so demanding a file would refuse a
-    reviewer that works."""
-    body = _roster(
-        "reviewer = discover | nemesis            | claude-opus-5   | builtin",
-        "reviewer = discover | judge-codex:judge  | gpt-5-codex     | builtin",
-        "reviewer = discover | leo                | claude-sonnet-5 | builtin",
-    )
-    assert _check(tmp_path, body) is PanelCapability.HOLDS
+PLUGIN_BODY = _roster(
+    "reviewer = discover | nemesis            | claude-opus-5   | builtin",
+    "reviewer = discover | judge-codex:judge  | gpt-5-codex     | builtin",
+    "reviewer = discover | leo                | claude-sonnet-5 | builtin",
+)
+
+
+def test_an_installed_plugin_agent_holds(tmp_path: Path) -> None:
+    """`plugin:agent` is supplied by a plugin, so demanding a file in THIS tree would
+    refuse a reviewer that works — but the plugin's own tree is checked."""
+    assert _check(tmp_path, PLUGIN_BODY,
+                  plugins={"judge-codex": ("judge",)}) is PanelCapability.HOLDS
+
+
+def test_a_seat_naming_an_uninstalled_plugin_is_unreachable(tmp_path: Path) -> None:
+    """Intake is where this must be discovered. Finding it per item costs the run."""
+    result = _check(tmp_path, PLUGIN_BODY, plugins={})
+
+    assert result is PanelCapability.UNREACHABLE
+    assert result.exit_code == 3
 
 
 def test_a_single_family_declaration_stays_violated_even_when_reachable(tmp_path: Path) -> None:

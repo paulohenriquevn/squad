@@ -51,7 +51,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "conventions"))
 
+from installed_plugins import resolve as resolve_plugin
 from review_panel import (
     HOME_FAMILY,
     PANEL_SIZE,
@@ -81,12 +83,30 @@ def agents_dir(project: Path) -> Path:
     return nested if nested.is_dir() else project / "agents"
 
 
-def resolve_seat(seat: Seat, *, agents: Path, which=shutil.which) -> str:
-    """Empty string when the seat is fillable, else why it is not."""
+def resolve_seat(seat: Seat, *, agents: Path, which=shutil.which,
+                 config_dir: Path | None = None) -> str:
+    """Empty string when the seat is fillable, else why it is not.
+
+    A `plugin:agent` seat used to be accepted WITHOUT verification, and this file said
+    so: there is no file for it in this tree, so requiring one would have refused a
+    reviewer that works. `rules/review-panel.txt` recorded that closing the hole meant
+    asking Claude Code which plugins are installed, "which nothing in this kit does
+    yet" — true of the kit and false of the machine. `installed_plugins.py` reads the
+    manifest, so the seat is now verified like every other one.
+
+    That matters more than it looks: the largest pool of specialists a project has is
+    exactly the one the panel could not check, and accepting a seat on the strength of
+    its name is what the rest of this mechanism refuses everywhere else.
+    """
     if seat.is_builtin:
-        # `plugin:agent` names a sub-agent a plugin supplies; there is no file for
-        # it in this tree, so requiring one would refuse a reviewer that works.
         if ":" in seat.agent:
+            plugin_name, _, agent_name = seat.agent.partition(":")
+            plugin = resolve_plugin(plugin_name, config_dir)
+            if plugin is None:
+                return f"plugin `{plugin_name}` is not installed"
+            if not plugin.has_agent(agent_name):
+                return (f"plugin `{plugin_name}` is installed and supplies no agent "
+                        f"`{agent_name}`")
             return ""
         if not (agents / f"{seat.agent}.md").is_file():
             return f"no agent `{seat.agent}` in {agents}"
@@ -104,6 +124,7 @@ def convene(
     panel_path: Path | None = None,
     project: Path | None = None,
     which=shutil.which,
+    config_dir: Path | None = None,
 ) -> tuple[int, dict]:
     """(exit code, the assignment or the reason there is none)."""
     panel_path = panel_path or default_panel_path()
@@ -147,7 +168,9 @@ def convene(
         }
 
     agents = agents_dir(project)
-    unfilled = [(s, why) for s in seats if (why := resolve_seat(s, agents=agents, which=which))]
+    unfilled = [(s, why) for s in seats
+                if (why := resolve_seat(s, agents=agents, which=which,
+                                        config_dir=config_dir))]
     if unfilled:
         return UNFILLABLE, {
             "status": "unfillable",
@@ -199,13 +222,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--author", default="", help="who wrote the document under review")
     ap.add_argument("--project", type=Path, default=None)
     ap.add_argument("--panel", type=Path, default=None, help="override the roster path")
+    ap.add_argument("--config-dir", type=Path, default=None,
+                    help="where Claude Code keeps its plugin manifest")
     ap.add_argument("--write", action="store_true",
                     help="persist the assignment the record will be checked against")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
     code, result = convene(args.slug, args.phase, args.author,
-                           panel_path=args.panel, project=args.project)
+                           panel_path=args.panel, project=args.project,
+                           config_dir=args.config_dir)
 
     if code == OK and result["status"] == "assigned" and args.write:
         out = assignment_path(args.project or repo_root(), args.slug, args.phase)
