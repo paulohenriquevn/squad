@@ -8,6 +8,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 ### Fixed
+- **`sq check` discarded the reason too, after `sq test` was fixed (#57)**
+  The same defect, in the sibling — corrected in one place and left standing in the other,
+  which is how a lesson becomes a patch. `sq check` replays `run_slice_tests.sh` as one of
+  its steps, so a suite failure arrives here; the renderer showed the **last three lines**,
+  which for that command are the `FAILED SUITES (1):` banner and the path. Never the cause.
+  The human view now shows 30 lines and says how many it elided, and `--json` carries the
+  **whole** output under `failure_output`. Truncating for a person is a courtesy;
+  truncating for a consumer is the false-coverage report again — a FAIL nothing can act on.
+  Proved with a deliberately failing probe test: 33,140 characters captured, the probe's
+  marker inside, exit 1.
+
 - **`sq test` reported FAIL and threw away the reason (#57)**
   The runner already prints every suite's pytest output inside `::group::` blocks and the
   command captured all of it — then printed `FAIL` and nothing else, making the caller run

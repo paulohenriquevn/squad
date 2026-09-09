@@ -47,6 +47,10 @@ from squad.cli.provenance import describe
 from squad.cli.render import emit
 from squad.cli.report import FINDING, OK, UNMEASURED, Report
 
+#: How much of a failing command's output the human view shows. The whole of it always
+#: goes to `--json`.
+_TAIL_LINES = 30
+
 
 @dataclass(frozen=True)
 class Command:
@@ -204,9 +208,22 @@ def build_report(root: Path, *, results: list[Result], unreached: list[str]) -> 
 
     for result in results:
         verdict = "ok" if result.returncode == 0 else "FAIL"
-        report.lines.append(f"  {verdict:>4}  {_label(result.command)}")
-        if result.returncode != 0 and result.tail:
-            report.lines.extend(f"          {ln}" for ln in result.tail.splitlines()[-3:])
+        label = _label(result.command)
+        report.lines.append(f"  {verdict:>4}  {label}")
+        if result.returncode == 0 or not result.tail:
+            continue
+        # Three lines was the summary and none of the cause — for a suite failure
+        # replayed through `run_slice_tests.sh`, exactly the "FAILED SUITES (1)" banner
+        # and the path. That is the defect fixed in `sq test` surviving in its sibling.
+        lines = result.tail.splitlines()
+        shown = lines[-_TAIL_LINES:]
+        if len(lines) > _TAIL_LINES:
+            report.lines.append(f"          … {len(lines) - _TAIL_LINES} earlier line(s), "
+                                f"whole output in --json")
+        report.lines.extend(f"          {ln}" for ln in shown)
+        # WHOLE, in json. Truncating for a human is a courtesy; truncating for a
+        # consumer is the false-coverage report again — a FAIL nothing can act on.
+        report.detail.setdefault("failure_output", {})[label] = result.tail
 
     if unreached:
         report.not_checked.append(

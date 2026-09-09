@@ -142,3 +142,39 @@ def test_a_single_script_step_still_names_the_script() -> None:
         unreached=[],
     )
     assert "check_xrefs.py" in "\n".join(report.lines)
+
+
+def test_a_failing_command_carries_its_whole_output_in_json() -> None:
+    """The same lesson as `sq test`, which was fixed there and left broken here.
+
+    `sq test` used to print FAIL and discard the pytest output; that was fixed. This
+    command replays `run_slice_tests.sh` as one of its steps, so when a suite fails
+    inside it the reason arrives here — and the text renderer showed the last three
+    lines, which for a suite failure are the summary and nothing else.
+
+    Truncating for the human is fine. Truncating in `--json` is the false-coverage
+    report all over again: a consumer gets a FAIL it cannot act on.
+    """
+    tail = "\n".join([f"line {i}" for i in range(40)] + ["E   assert 1 == 2"])
+    report = run_checks.build_report(
+        ROOT,
+        results=[run_checks.Result(run_checks.Command("suites", ["bash", "x.sh"]), 1, tail)],
+        unreached=[],
+    )
+    assert "failure_output" in report.detail, "--json must carry the reason, whole"
+    # Keyed by the same label the human view shows, so the two halves line up.
+    captured = report.detail["failure_output"]["x.sh"]
+    assert "assert 1 == 2" in captured
+    assert "line 0" in captured, "the head was truncated away"
+
+
+def test_the_human_view_shows_more_than_three_lines() -> None:
+    """Three lines of a pytest failure is the summary and none of the cause."""
+    tail = "\n".join([f"line {i}" for i in range(40)])
+    report = run_checks.build_report(
+        ROOT,
+        results=[run_checks.Result(run_checks.Command("suites", ["bash", "x.sh"]), 1, tail)],
+        unreached=[],
+    )
+    shown = [ln for ln in report.lines if "line " in ln]
+    assert len(shown) > 3, f"only {len(shown)} lines shown"
