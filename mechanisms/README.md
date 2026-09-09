@@ -133,6 +133,7 @@ which is why the rule is now computed rather than requested.
 |---|---|
 | `ecosystem_utils.py` | Layout detection: standalone repo, `.claude/` install, or plugin root |
 | `sop_format.py` | The SOP format, parsed in exactly one place |
+| `touched_slices.py` | Which test suites a set of changed files can affect. Widens to everything when a path cannot be attributed, because narrowing runs fewer tests and still reports success |
 
 ## Adding one
 

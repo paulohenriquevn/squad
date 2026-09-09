@@ -35,6 +35,7 @@ from collections.abc import Callable
 #: index) and each still names its own entry point, so no callee has to re-parse the
 #: verb out of its own argv.
 VERBS: dict[str, str] = {
+    "test": "squad.cli.run_suites:main",
     "where": "squad.cli.locate:main_where",
     "run": "squad.cli.locate:main_run",
 }
@@ -44,6 +45,7 @@ USAGE = """sq — find, check and run the kit, without knowing where anything li
 usage: sq <verb> [options]
 
 verbs:
+  test [--touched]  run the suites, and name the ones that did not run
   where <name>      where a mechanism lives, what it does, how to invoke it
   run <name> [...]  run a mechanism by name, without knowing its path
 

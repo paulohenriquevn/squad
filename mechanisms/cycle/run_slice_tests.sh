@@ -130,19 +130,37 @@ done | xargs -P "$JOBS" -d '\n' -I{} bash -c '
 '
 
 failures=()
+# One machine-readable line per suite, collected while replaying the human output and
+# printed together afterwards. `sq test` reads these instead of regexing the `-q`
+# summaries, so the count it reports comes from the runner rather than from a guess
+# about how pytest phrases things this release.
+trailer=()
 for i in "${!SUITES[@]}"; do
     path="${SUITES[$i]}"
+    out="$LOG_DIR/$i.out"
+    rc="$(cat "$LOG_DIR/$i.rc" 2>/dev/null || echo "2")"
     echo "::group::pytest $path"
-    cat "$LOG_DIR/$i.out" 2>/dev/null
-    if [ "$(cat "$LOG_DIR/$i.rc" 2>/dev/null)" = "0" ]; then
+    cat "$out" 2>/dev/null
+    if [ "$rc" = "0" ]; then
         echo "PASS  $path"
     else
         echo "FAIL  $path"
         failures+=("$path")
     fi
     echo "::endgroup::"
+
+    # Absent rather than zero when pytest did not say: a 0 that means "not reported"
+    # and a 0 that means "none" are different facts, and summing them silently is how
+    # a total becomes fiction.
+    passed="$(grep -oE '[0-9]+ passed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    failed="$(grep -oE '[0-9]+ failed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    collected="$(grep -oE 'collected [0-9]+' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    trailer+=("$(printf 'SUITE\t%s\t%s\t%s\t%s\t%s' \
+        "$path" "$rc" "${passed:--}" "${failed:--}" "${collected:--}")")
 done
 
+echo
+printf '%s\n' "${trailer[@]}"
 echo
 if [ "${#failures[@]}" -eq 0 ]; then
     echo "ALL SUITES GREEN"

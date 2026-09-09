@@ -7,6 +7,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`sq test` — the verb the whole CLI was justified by (#57)**
+  It **wraps** `run_slice_tests.sh` rather than reimplementing discovery: that script is
+  the definition of "the suites" — `conftest.py` names it in its refusal, a test asserts
+  the name is present, and CI invokes it — so a `sq test` that globbed for itself would be
+  the second-list defect the ADR forbids wearing a different filename. The script gained a
+  machine-readable `SUITE\t<path>\t<rc>\t<passed>\t<failed>\t<collected>` trailer, so the
+  count reported comes from the runner instead of from a guess about how pytest phrases a
+  summary this release. **An unreported count stays `-`, never `0`** — a zero meaning "not
+  reported" summed with a zero meaning "none" is how a total becomes fiction.
+  `sq test --slice backlog-item` runs 14 tests and prints the 21 slice suites it did not
+  run, by name. That is the report the session of 2026-09-09 needed and did not have.
+  **`--touched` widens rather than narrows**, because the only failure that matters here is
+  under-running while reporting success: anything under `mechanisms/`, `rules/` or `.github/`
+  is shared by every slice and therefore unattributable, and any path no rule maps widens
+  too, carrying the path in the reason so it can be mapped later. Untracked files are unioned
+  in, because `git diff` does not list them and a brand-new test file would otherwise be
+  invisible.
+  **Two bugs that only running it revealed.** `lstrip("./")` strips leading `.` and `/`
+  CHARACTERS, so `.claude-plugin/plugin.json` arrived as `claude-plugin/plugin.json` — the
+  selection stayed safe, but the reason named a path nobody could look up. And the base
+  defaulted to the trunk, which on a branch 335 commits ahead of `develop` returned all 792
+  tracked files: `--touched` degenerated into "run everything, slowly". The default is now
+  the working tree; `--since REF` asks the branch question via merge-base.
+
 - **`sq` — the kit's task-oriented surface, first two verbs (#57)**
   The skeleton plus `sq where` / `sq run`, chosen first because they are pure projection:
   no subprocess, no YAML, no git state, so the shape is proved before anything else is.
