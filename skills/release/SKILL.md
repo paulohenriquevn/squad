@@ -166,10 +166,16 @@ git add CHANGELOG.md package.json src/index.ts
 git commit -m "chore(release): ${NEXT_VERSION}"
 git push origin workspace
 
-# Promotion (git-safety.md § 1): release prep reaches develop like any other change
-gh pr create --base develop --head workspace --title "chore(release): ${NEXT_VERSION}" --body "Release prep for ${NEXT_VERSION}."
-gh pr merge --merge   # or via the UI; branch protection decides who can
+# Promotion (git-safety.md § 1): release prep reaches develop like any other change,
+# through the SAME mechanism `/promote` uses. One definition, two callers — an inline
+# `gh pr create` here would be a second answer to "how does work reach develop".
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/promote_to_develop.py"
 ```
+
+Exit `3` means branch protection wants a reviewer: the PR is open and the promotion is
+waiting, which is the same state `PR_OPEN_AWAITING_APPROVAL` reports for the release PR.
+Exit `1` is a refusal about the branch or the tree; exit `2` is an inability to measure
+and is never a pass.
 
 NO `Co-Authored-By` trailer (per `hooks/validate-command.py`). NO `--amend`. The commit is plain and signed by user policy.
 

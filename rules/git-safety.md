@@ -13,7 +13,7 @@ workspace ──PR──> develop ──PR + semver tag──> main
 ```
 
 - **`workspace`** is where work is born. Single, permanent branch — never deleted, never recreated per task. Features, fixes, refactors, docs, chores: every change commits here first.
-- **`develop`** integrates work; it never originates it. It advances **only** by promoting `workspace` through a `workspace → develop` PR, plus the push that carries it. Never commit to, rebase, reset, or cherry-pick onto `develop` locally, and never merge anything other than `workspace` into it.
+- **`develop`** integrates work; it never originates it. It advances **only** by promoting `workspace` through a `workspace → develop` PR, plus the push that carries it. That PR is opened by [`mechanisms/cycle/promote_to_develop.py`](../mechanisms/cycle/promote_to_develop.py) (`/promote`), which cuts no version — integration is frequent and cheap, a version is cadenced (`cycle-release.md` § Two cuts). Never commit to, rebase, reset, or cherry-pick onto `develop` locally, and never merge anything other than `workspace` into it.
 - **`main`** is release-only. It receives a `develop → main` PR plus a semver tag on merge. Never commit to, merge into, rebase, reset, or cherry-pick onto `main` locally.
 
 **Which layer guarantees what** — the two are not interchangeable:

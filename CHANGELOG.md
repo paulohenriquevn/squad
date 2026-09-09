@@ -6,6 +6,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **Promotion is a command of its own: `/promote` (#64)**
+  `git-safety.md` § 1 says `develop` advances ONLY by promoting `workspace` through a PR, and
+  the single place in this kit that opened that PR sat in the middle of `cycle-release.md`'s
+  chain — between the version bump and the tag. **So integrating required versioning**, and a
+  project that did not want to publish a version simply did not integrate.
+  The cost was measured on this repository rather than imagined: **349 commits on `workspace`,
+  zero tags** — finished, reviewed and verified work unreachable behind a step nobody wanted to
+  take yet, and 45 issues closed against the kit's own lifecycle rule because there was no
+  version to name in the closing note.
+  `mechanisms/cycle/promote_to_develop.py` is that step alone. **It cuts no version**: no bump,
+  no CHANGELOG promotion, no tag — and a test asserts the file never reaches for
+  `bump_version`, `compute_next_version`, `promote_unreleased` or `git tag`, because a promotion
+  that bumps is a release wearing another name.
+  It refuses a branch that is not `workspace` (`develop` integrates, never originates) and a
+  dirty tree (which would promote a state nobody reviewed). **Nothing to promote exits 0** — it
+  is an answer, not a failure. Branch protection wanting a reviewer exits 3, matching the
+  `PR_OPEN_AWAITING_APPROVAL` convention the release PR already uses rather than inventing a
+  second one. `gh` absent exits 2, which is never a pass.
+  **`/release` now calls the same mechanism** instead of an inline `gh pr create`: one
+  definition, two callers. What changed is that the promotion no longer requires the release.
+  **What was deliberately NOT changed:** the two cuts stay as they are — `X.Y.Z-rc.N` when the
+  queue of ready items dries up, `X.Y.Z` when a milestone closes. Tying the final version to "the
+  backlog is empty" was considered and rejected: `cycle-maintenance.md` defines `BACKLOG_EMPTY`
+  as *a prompt to sweep*, so it means the queue dried up now, never that the scope finished. And
+  stopping `/release` at `develop` would leave `cycle-acceptance` with nothing to exercise — that
+  cycle exists to catch what only appears in the released artifact, "a mis-wired env var in the
+  deployed build, a proxy that buffers the stream, a login that 500s only against the real
+  identity provider".
+
+
 ### Fixed
 - **The plan-confidence flake was Hypothesis's deadline, not shared state (#60)**
   It had fired three times in one day and been captured none of them. Hunting it directly

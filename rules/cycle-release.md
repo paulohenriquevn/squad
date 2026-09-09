@@ -33,7 +33,7 @@ Do NOT trigger when:
      ↓ --pre:   leave [Unreleased] in place; notes are read from it
      ↓ --final: rewrite CHANGELOG, moving [Unreleased] under [{next-version}] - {date}
      ↓ commit "chore(release): {next-version}" on workspace
-     ↓ open PR workspace → develop; merge it (promotion — git-safety.md § 1)
+     ↓ promote_to_develop.py — PR workspace → develop; merge it (git-safety.md § 1)
      ↓ open PR develop → main with the rendered release notes as body
      ↓ verify the chain passed, then merge (envelope floor 2)
      ↓   branch protection demands a reviewer? → PR_OPEN_AWAITING_APPROVAL, take the next item
@@ -72,6 +72,28 @@ Consequences for this cycle:
 - `PR_OPEN_AWAITING_APPROVAL` — the PR is open and the system did not merge it because **a gate did not pass**. That is the system declining to merge its own work, and it is the only meaning this verdict still carries: a remote requiring a human reviewer is a violated premise caught at intake by `check_merge_autonomy.py`, not a state the chain reaches (envelope floor 2). Resume automatically once the PR merges.
 - `BLOCKED` — pre-condition failed OR a hard gate fired during the chain. The item returns to the registry carrying the cause; the queue takes the next one.
 - `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
+
+## Promotion is not a cut, and it is a separate command
+
+**`workspace → develop` is integration. `develop → main + tag` is a release.** They were
+one command until 2026-09-09, and the coupling had a measured cost: the only place in the
+kit that opened the promotion PR was the middle of this chain, so **integrating required
+versioning**. A project that did not want to publish a version did not integrate — and
+this repository sat at **349 commits on `workspace` with zero tags**, finished and
+verified work unreachable behind a step nobody wanted to take yet.
+
+Promotion now lives in [`mechanisms/cycle/promote_to_develop.py`](../mechanisms/cycle/promote_to_develop.py),
+invoked by `/promote`. It moves no version, writes no CHANGELOG section and cuts no tag —
+a promotion that bumps is a release wearing another name, and a test asserts the file
+never reaches for `bump_version`, `compute_next_version`, `promote_unreleased` or
+`git tag`.
+
+This cycle still promotes as part of its own chain, through that same mechanism: one
+definition, two callers. **What changed is that the promotion no longer requires this
+cycle.**
+
+> Do not run `/release` merely to get work onto `develop`. That is the coupling the split
+> exists to undo, and reaching for it that way rebuilds it.
 
 ## Two cuts: the rc series, and the final
 
