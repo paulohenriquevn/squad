@@ -7,6 +7,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`sq check` replays the workflow instead of globbing the gates (#57)**
+  The obvious design — glob `mechanisms/gates/check_*.py` and run each — is not
+  implementable, and finding that out changed the command. The root-path flag is not
+  uniform across the 23 gates: eight take `--root`, four `--repo-root`, three
+  `--project-root`, one `--repo`, one `--ecosystem-dir`, one a positional, one needs both
+  `--install` and `--kit`, three take none — and `check_xrefs` passes while printing WARN
+  unless given `--strict`. A glob-and-run would carry seven flag conventions plus a special
+  case: **a second list of what "verified" means**, which is what the ADR forbids.
+  So the invocations are REPLAYED from `ci.yml`, parsed as YAML rather than read line by
+  line — `run: |` is a multi-line scalar that a line reader cannot see, which is why
+  `test_ci_targets_exist.py` misses the code-quality step. `check_xrefs` arrives with
+  `--strict` because the flag lives in the workflow, and "the CLI reaches what CI reaches"
+  becomes true by construction instead of a property somebody maintains.
+  **The glob is used for the opposite question**: which gates the workflow never invokes.
+  Resolving that honestly took two corrections. Counting only direct invocations reported
+  13 unreached when 8 of them run inside `verify_ecosystem` — so reachability now resolves
+  one level in, at a stated depth rather than a partial call graph presented as complete.
+  And the lens had to keep short string literals: `verify_ecosystem` builds
+  `.../check_skill_map.py` as a string, so stripping strings — correct in
+  `test_every_gate_is_reachable.py`, which asks whether anything calls a gate — hid every
+  call site here, where the filename in a string IS the answer. Comments stay stripped:
+  `ci.yml` mentions `check_reference_leakage` in a comment and never runs it.
+  The remaining five are reported as *this command does not reach them*, explicitly not as
+  unreachable, and the line points at the test that answers that other question.
+
 - **`sq test` — the verb the whole CLI was justified by (#57)**
   It **wraps** `run_slice_tests.sh` rather than reimplementing discovery: that script is
   the definition of "the suites" — `conftest.py` names it in its refusal, a test asserts

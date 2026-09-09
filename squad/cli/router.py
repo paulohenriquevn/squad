@@ -36,6 +36,7 @@ from collections.abc import Callable
 #: verb out of its own argv.
 VERBS: dict[str, str] = {
     "test": "squad.cli.run_suites:main",
+    "check": "squad.cli.run_checks:main",
     "where": "squad.cli.locate:main_where",
     "run": "squad.cli.locate:main_run",
 }
@@ -46,6 +47,7 @@ usage: sq <verb> [options]
 
 verbs:
   test [--touched]  run the suites, and name the ones that did not run
+  check             replay what CI verifies, and name what it does not reach
   where <name>      where a mechanism lives, what it does, how to invoke it
   run <name> [...]  run a mechanism by name, without knowing its path
 
