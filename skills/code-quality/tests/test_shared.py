@@ -432,3 +432,48 @@ def test_a_hard_finding_still_reaches_the_hard_field() -> None:
     assert verdict == "FAIL_HARD"
     assert summary["hard_caps_triggered"] == ["dead_code_unallowlisted_python"]
     assert summary["soft_caps_triggered"] == ["soft_cap_orphan_export_python"]
+
+
+def test_the_summary_names_the_findings_it_counted() -> None:
+    """A blocking verdict that does not say what triggered it cannot be acted on.
+
+    `findings_by_detector` gave counts per detector per language and nothing else — no
+    file, no symbol, no allowlist key. Grepping the whole payload for anything resembling
+    a path returned zero hits, so a `FAIL_HARD` on three dead symbols came with no way to
+    find them (kit#61). The `Finding` dataclass has carried `file_path`,
+    `symbol_or_line` and `allowlist_key` the whole time; only the summary dropped them.
+
+    This is `tests/test_gates_say_what_they_examined.py` one step further: a gate must
+    say what it examined, AND what it found.
+    """
+    from _detector_contract import Finding, emit_json_summary
+
+    findings = [
+        Finding(
+            detector="d1_dead_code", language="python", severity="HARD",
+            file_path="mechanisms/x.py", symbol_or_line="unused_helper:42",
+            message="unused function 'unused_helper'",
+            allowlist_key="d1_dead_code|python|mechanisms/x.py|unused_helper",
+        )
+    ]
+    summary = emit_json_summary(findings, verdict="FAIL_HARD", hard_caps_triggered=[])
+
+    assert "findings" in summary, "the summary counts findings and never names one"
+    listed = summary["findings"]
+    assert len(listed) == 1
+    entry = listed[0]
+    assert entry["file_path"] == "mechanisms/x.py"
+    assert entry["symbol_or_line"] == "unused_helper:42"
+    assert entry["allowlist_key"].endswith("unused_helper"), (
+        "the allowlist key is what a reader needs to silence a false positive"
+    )
+    assert entry["detector"] == "d1_dead_code"
+    assert entry["severity"] == "HARD"
+
+
+def test_an_empty_run_lists_no_findings_rather_than_omitting_the_key() -> None:
+    """An absent key asks whether the run found nothing or reported nothing."""
+    from _detector_contract import emit_json_summary
+
+    summary = emit_json_summary([], verdict="PASS", hard_caps_triggered=[])
+    assert summary["findings"] == []

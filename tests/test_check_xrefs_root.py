@@ -216,8 +216,14 @@ def test_a_broken_reference_in_the_projects_own_file_warns_rather_than_fails(tmp
     (tmp_path / "rules" / "cycle-plan.md").write_text("# plan\n\n## Hard gates\n", encoding="utf-8")
     own = tmp_path / "skills" / "analysis"
     own.mkdir(parents=True)
-    own.write_text if False else (own / "SKILL.md").write_text(
-        "---\nname: analysis\ndescription: x\n---\n\nDriven by `cycle-roadmap`.\n", encoding="utf-8")
+    # Was `own.write_text if False else (own / "SKILL.md").write_text(...)` — a ternary
+    # whose condition is the literal False, so the first branch was never evaluated.
+    # It could not have been: `own` is a DIRECTORY, and `Path.write_text` on one raises.
+    # vulture reported it as an unsatisfiable condition (kit#61).
+    (own / "SKILL.md").write_text(
+        "---\nname: analysis\ndescription: x\n---\n\nDriven by `cycle-roadmap`.\n",
+        encoding="utf-8",
+    )
     (tmp_path / ".kit-manifest.txt").write_text("skills/plan-confidence\n", encoding="utf-8")
 
     report = validate_xrefs(tmp_path, strict=True)

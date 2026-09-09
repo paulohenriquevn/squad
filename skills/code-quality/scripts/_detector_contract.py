@@ -442,6 +442,29 @@ def emit_json_summary(
         "hard_caps_triggered": hard_only,
         "soft_caps_triggered": soft_caps,
         "findings_by_detector": by_detector,
+        # The findings THEMSELVES, not only how many there were. Until 2026-09-09 this
+        # summary published counts per detector per language and nothing else: a
+        # FAIL_HARD on three dead symbols arrived with no file, no symbol and no
+        # allowlist key, so the only way to act on it was to re-derive the tool
+        # invocation by hand (kit#61). `Finding` has carried all three the whole time.
+        #
+        # Sorted so two runs of the same tree produce the same report, and a diff
+        # between them is about the findings rather than about dict ordering.
+        "findings": sorted(
+            (
+                {
+                    "detector": f.detector,
+                    "language": f.language,
+                    "severity": f.severity,
+                    "file_path": f.file_path,
+                    "symbol_or_line": f.symbol_or_line,
+                    "message": f.message,
+                    "allowlist_key": f.allowlist_key,
+                }
+                for f in findings
+            ),
+            key=lambda d: (d["detector"], d["file_path"], d["symbol_or_line"]),
+        ),
         "severity_counts": severity_counts,
         "languages_audited": sorted(languages_set),
         "schema_version": _SCHEMA_VERSION,

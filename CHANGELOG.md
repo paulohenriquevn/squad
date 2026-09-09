@@ -7,6 +7,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The code-quality gate went from FAIL_HARD to a passing exit, and now says what it found (#61)**
+  Two defects, and the second is the one that mattered.
+  **The hard cap was one dead ternary.** `tests/test_check_xrefs_root.py` carried
+  `own.write_text if False else (own / "SKILL.md").write_text(...)` — a conditional whose
+  test is the literal `False`, so the first branch was never evaluated. It could not have
+  been: `own` is a directory and `Path.write_text` on one raises. Removing it drops
+  `dead_code_unallowlisted_python`, and the gate goes `FAIL_HARD` → `FAIL_SOFT`, which
+  **exits 0** — `code-quality-golden-rule.md` § 1 makes a soft cap dismissible with an ADR
+  rather than a blocker, on the argument that a CI treating soft caps as blockers teaches
+  people to route around them.
+  **The gate reported a blocking verdict and would not say what triggered it.** The JSON
+  carried counts per detector per language and nothing else — no file, no symbol, no
+  allowlist key. Grepping the whole payload for anything resembling a path returned zero
+  hits, so a `FAIL_HARD` on three dead symbols came with no way to find them; the only
+  route was re-deriving the tool invocation by hand. `Finding` has carried `file_path`,
+  `symbol_or_line` and `allowlist_key` the entire time — only the summary dropped them.
+  It now emits them, sorted, so two runs of the same tree produce the same report and a
+  diff between them is about findings rather than about dict ordering. This is
+  `test_gates_say_what_they_examined.py` one step on: a gate must say what it examined,
+  **and what it found**.
+
+### Fixed
 - **The CI lint step went from 52 findings to zero, and three of them were real defects (#59, #62)**
   `ci.yml` runs `ruff check mechanisms squad skills hooks tests conftest.py`, which exited
   non-zero on 52 pre-existing findings — so that step was red with or without the billing
