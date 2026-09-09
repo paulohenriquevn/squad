@@ -37,11 +37,11 @@ If `tui/` imports `agents/` thirty-three times and `agents/` imports `tui/` zero
 property the repo has. If both directions carry traffic there is nothing to freeze, and nothing
 is proposed.
 
-The same criterion, stated from the adoption side by `usetheo-labs/agent-builder`:
+The same criterion, stated from the adoption side by a TypeScript monorepo:
 
-> *"Nenhuma destas regras foi escrita contra violação existente: as cinco saíram de 0 violações no
-> commit que as introduziu, o que significa que elas CONGELAM um estado bom em vez de anunciar
-> dívida."*
+> *"None of these rules was written against an existing violation: all five came out at 0
+> violations in the commit that introduced them, which means they FREEZE a good state instead
+> of announcing debt."*
 
 A candidate that would fail on day one is therefore **not** proposed as a gate. Someone has to
 decide whether that crossing is a defect or the architecture, and that decision belongs in
@@ -68,7 +68,7 @@ reported as a finding instead.
 Run it directly:
 
 ```bash
-python3 skills/arch-check/scripts/propose_rules.py <repo> [--language go|typescript]
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/arch-check/scripts/propose_rules.py" <repo> [--language go|typescript]
 ```
 
 Go builds its graph from `go list -json ./...` — the toolchain resolves imports exactly, so it
@@ -78,7 +78,7 @@ Everything else bare is somebody else's code, and treating `react` as a unit wou
 architecture out of the dependency list.
 
 Skipping bare specifiers wholesale was the first version, and it inverted the answer. Measured on
-`TheoCode`: 4 packages exchanging 80 imports read as 0 edges, and the proposer then offered
+a TypeScript monorepo: 4 packages exchanging 80 imports read as 0 edges, and the proposer then offered
 `independence` — a rule forbidding all 80. `import('...')` is read too; 20 of those 80 exist only
 in that form, invisible to a reader of import *statements*.
 
@@ -94,7 +94,7 @@ So an empty scan is refused, and the refusal distinguishes two states that look 
 the edge count alone:
 
 - **units seen, zero edges between them** → real independence, and a stronger rule than any
-  direction (measured on `theo-contracts`: `jwt`, `plan` and `serviceauth` import none of each
+  direction (measured on `contracts`: `jwt`, `plan` and `serviceauth` import none of each
   other)
 - **fewer than two units seen** → the parser did not run; nothing is proposed until the graph
   is real
@@ -115,9 +115,9 @@ over running the linter yourself is the meta-gate:
 
 Measured in this ecosystem on 2026-08-06:
 
-- `theo-contracts` — a `.go-arch-lint.yml` naming a directory that does not exist answers
+- `contracts` — a `.go-arch-lint.yml` naming a directory that does not exist answers
   `ArchHasWarnings: false`. Green. The diagnosis goes to `ExecutionWarnings`, a field nothing read.
-- `usetheo-labs/agent-builder` — the global `depcruise` binary cruised **0 modules** against a
+- a TypeScript monorepo — the global `depcruise` binary cruised **0 modules** against a
   config the local one cruised 279 with. Zero violations over zero modules is not a pass.
 
 D5 reports four shapes of this: a rule whose `from` names a directory that moved, a cruise that

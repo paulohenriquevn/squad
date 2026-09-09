@@ -1,4 +1,4 @@
-# Plan-Confidence Golden Rule (INQUEBRÁVEL) 
+# Plan-Confidence Golden Rule (UNBREAKABLE) 
 
 > Promoted from skill template; per-project Source of Truth.
 
@@ -37,7 +37,7 @@ The rule closes this gap by forcing minimum structural state PRESENT before the 
 |---|---|
 | Coverage Matrix present and 100% | M2 — `run_structural.py` via `check_coverage_matrix.py` |
 | Fabricated citation → score ≤ 49 | M3 v0.1 — `check_evidence_citations.py` (regex + `Path.exists` + section grep); covers rule refs, Blueprint refs, intra-plan ADR refs, Unbreakable Rules 1..13. ADR `0001-m3-fabricated-citation-v01`. |
-| Applicable `*-patterns` skill ignored → score ≤ 49 (INVALID) | `check_patterns_consumption.py` (+ `patterns_match.py`) — a `*-patterns` skill whose `description:` shares a keyword with the plan title/Goal MUST be cited in the plan body OR overridden in `## ADRs`. Silently skipping applicable domain knowledge is as corrosive as a fabricated citation. Escape hatch: a one-line override ADR naming the skill. HEURISTIC matcher (keyword on the `description:` line only). Stable id: `patterns_skill_ignored`. Detection precedents reused: `auto-plan/assess_confidence.py`, `review/detect_domain.py`. Soft advisory companion at implement-time: `implement/run_validation.py` `patterns_consumption` (never FAIL). |
+| Applicable `*-patterns` skill ignored → score ≤ 49 (INVALID) | `check_patterns_consumption.py` (+ `patterns_match.py`) — a `*-patterns` skill whose `description:` shares a keyword with the plan title/Goal MUST be cited in the plan body OR overridden in `## ADRs`. Silently skipping applicable domain knowledge is as corrosive as a fabricated citation. Escape hatch: a one-line override ADR naming the skill. HEURISTIC matcher (keyword on the `description:` line only). Stable id: `patterns_skill_ignored`. Detection precedents reused: `idea-to-release/assess_confidence.py`, `review/detect_domain.py`. Soft advisory companion at implement-time: `implement/run_validation.py` `patterns_consumption` (never FAIL). |
 | ADR without alternatives in Rationale → score ≤ 70 | M2 — `check_adr_completeness.py` |
 | Bug-fix task without TDD RED-GREEN-REFACTOR → score ≤ 70 | M2 — `check_tdd_in_bugfix.py` |
 | Vague Acceptance Criteria → score ≤ 70 (heuristic) | `check_criterion_executability.py` — triggers when `vague_ratio > 0.10` OR `acceptable_ratio < 0.80` across DoD/Acceptance Criteria bullets. Each criterion scored on 3 axes (observable verb, measurable object, oracle). HONESTLY HEURISTIC: linguistic patterns can false-positive; the JSON sub_report lists every vague criterion for human override via `/plan-improve`. Closes the plan-vagueness propagation gap (companion gate in `skills/implement/scripts/check_tdd_shape.py`). |
@@ -46,6 +46,8 @@ The rule closes this gap by forcing minimum structural state PRESENT before the 
 | Unresolved Questions section missing AND no explicit "(none)" marker → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.0 — `check_drawbacks_section.py` (covers both Drawbacks & Unresolved). Stable id: `soft_floor_unresolved_questions_section_missing`. |
 | Concurrency signals present AND task missing `#### Concurrency tests` with acceptable race-aware signal OR explicit `(none — single-threaded)` → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.1 — `check_concurrency_tests.py`. CONDITIONAL — only triggers when the plan contains concurrency signals (mutex/lock/atomic/goroutine/async/channel/threading/concurrent). Single-thread TDD does NOT prove race-freedom. Stable id: `soft_floor_concurrency_tests_missing`. |
 | External-I/O signals present AND `## Failure scenarios` section missing OR empty → score ≤ 89 (sunset 2026-09-07; then ≤ 70) | M4 v1.1 — `check_failure_scenarios.py`. CONDITIONAL — only triggers when the plan contains external-I/O signals (HTTP client / DB driver / queue / gRPC / object store). Happy-path tests do NOT prove resilience under timeout / 5xx / connection reset. Explicit `(none — no external I/O touched)` escape is honored. Stable id: `soft_floor_failure_scenarios_missing`. |
+| CRITICAL/HIGH CVE in a declared dependency → score ≤ 49 (INVALID) | `check_deps_audit.py` — reads the VERDICT `/deps-audit` left in `records/audits/{slug}-deps-audit-*.md`. It does not look for CVEs: that skill's scanners do. Stable id: `deps_audit_insecure`. **Extension recorded 2026-08-26**, with the reason: `cycle-plan.md § Phase contracts` listed this gate among the phase's hard gates and declared, on the next line, that it was "the one gate in this cycle nothing mechanizes" — it held only when someone remembered to run the skill and to honour the result. The § "When this rule may change" below requires an ADR to extend the gate; the files under `records/adrs/` are gitignored and do not reach whoever clones, so the record lives here, in the file that travels. |
+| A declared dependency with no audit at all → score ≤ 89 | `check_deps_audit.py`. Stable id: `soft_floor_deps_audit_missing`. A soft floor, not a hard cap: asserting a CVE would be a claim about the dependency that nobody made. What is asserted is about the PROCESS — the verification did not happen. Absence of an audit never becomes "no CVE". |
 | `--skip-checks` flag does not exist and SHALL NOT be added | Constructor invariant in `run_structural.py` |
 | Score capped MUST appear marked in the report | Rendering rule |
 | `hard_caps_triggered` list MUST be non-empty when verdict==INVALID | JSON schema invariant |
@@ -58,7 +60,7 @@ Questions, Prior Art) and the per-task `#### Why this step` subsection — all c
 the rubric above — come from a SOTA template upgrade (RFC tradition + C4/ARC42 baseline
 view + ReAct planning). They ship as **soft** caps with sunset **2026-09-07** (then
 promotable to a hard cap at 70 via ADR) so plans in flight migrate gradually rather than
-being invalidated overnight; authors migrate by re-running `/to-plan` against the updated
+being invalidated overnight; authors migrate by re-running `/plan-write` against the updated
 template. Full migration rationale lives in the CHANGELOG + the upgrade ADR.
 
 The concurrency-tests and failure-scenarios caps are **conditional** — they fire only

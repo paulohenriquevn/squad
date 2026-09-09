@@ -14,7 +14,7 @@ Scores a measurement plan produced by `/discover-plan` against the M2 structural
 
 Sibling of `/discover-confidence` — same architecture (Python deterministic + soft caps + hard caps), different rubric. `/discover-confidence` scores **opportunities** (output of `/discover-execute`); this skill scores **measurement plans** (output of `/discover-plan`).
 
-**Hard caps:** see [`.claude/rules/discover-plan-golden-rule.md`](../../rules/discover-plan-golden-rule.md)
+**Hard caps:** see [`.claude/skills/_kit-rules/discover-plan-golden-rule.md`](../../skills/_kit-rules/discover-plan-golden-rule.md)
 **Thresholds (versioned):** [`.claude/rules/discover-plan-thresholds.txt`](../../rules/discover-plan-thresholds.txt)
 
 ## When NOT to invoke
@@ -34,7 +34,7 @@ Four deterministic checkers, four dimensions:
 | Dimension | Checker script | Hard cap | Default weight |
 |---|---|---|---|
 | **corner_coverage** | `scripts/check_corner_coverage.py` | ≤49 if any coverage corner is empty AND no `<!-- DEFER-CORNER: {corner} \| {reason} -->` marker present | 0.30 |
-| **measurement_targets** | `scripts/check_measurement_targets.py` | ≤49 if ANY cited path in `.claude/knowledge-base/references/` is fabricated (file does not exist) | 0.30 |
+| **measurement_targets** | `scripts/check_measurement_targets.py` | ≤49 if ANY cited path in `.claude/records/references/` is fabricated (file does not exist) | 0.30 |
 | **plan_completeness** | `scripts/check_plan_completeness.py` | ≤70 if any of: mandatory section missing, ADR count < 2, question budget violated, method missing | 0.25 |
 | **structural_risk** (smells) | `scripts/check_spec_smells.py` | penalty only (no hard cap) | 0.15 |
 
@@ -42,20 +42,19 @@ The four weights sum to 1.0. Composite formula: `final = 0.30·corner_coverage +
 
 When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_active_cap)`.
 
-## What this skill does NOT do (yet)
-
+## Does Not Own
 **Out of scope for M2** (mirrors `/discover-confidence`'s deferred dimensions):
 
 - **M3 (semantic citation faithfulness)** — verifies the cited path contains the claimed symbol/behavior. Future: SAFE adapted to `ripgrep + tree-sitter`.
-- **5th coverage corner `prior_art`** — `cycle-discover.md` v1.1 added a 5th corner. The current `check_corner_coverage.py` still recognizes the 4-corner v1.0 shape; v1.1 extension is tracked under `cycle-discover.md § Downstream changes required #8`. Until shipped, plans authored against the v1.1 template can still pass this scorer — the extra corner is recognized as an unmapped header but is NOT hard-capped. Human reviewers are expected to catch missing `prior_art` content until the script is extended.
+- **There is no 5th corner, and there is not going to be one.** This entry used to promise a `prior_art` corner, point at a `§ Downstream changes required #8` section that does not exist, and ask human reviewers to cover the gap meanwhile. `cycle-discover.md § The four corners` declares four, and the same rule now lists prior art as an **anti-pattern** — *"Project X does it this way is not a measurement of our system... it cannot fill the Evidence corner."* The scorer recognising four shapes is correct, not a limitation.
 
 ## Workflow
 
-1. **Resolve the plan path** — `.claude/knowledge-base/discoveries/plans/{slug}-plan.md`. Refuse if absent.
+1. **Resolve the plan path** — `.claude/records/discoveries/plans/{slug}-plan.md`. Refuse if absent.
 2. **Run the 4 checker scripts** in parallel via Bash subprocess. Each emits a JSON document on stdout.
 3. **Combine outputs** — apply hard caps per the rubric above. Compute weighted average.
-4. **Apply soft caps** — see `discover-plan-golden-rule.md § Soft gates`.
-5. **Emit a JSON score report** at `.claude/knowledge-base/reviews/{slug}-discover-plan-confidence-{date}.json` AND a human-readable rendering at `.claude/knowledge-base/reviews/{slug}-discover-plan-confidence-{date}.md`.
+4. **Apply soft caps** — see `discover-plan-golden-rule.md § 5 — Verdict tokens`, where the soft band is defined.
+5. **Emit a JSON score report** at `.claude/records/reviews/{slug}-discover-plan-confidence-{date}.json` AND a human-readable rendering at `.claude/records/reviews/{slug}-discover-plan-confidence-{date}.md`.
 6. **Print verdict** to stdout: one of `SHIPPABLE` (≥90), `SHIPPABLE_WITH_CAVEATS` (70-89), `NON_SHIPPABLE` (50-69), `INVALID` (≤49).
 
 ## Output schema
@@ -86,7 +85,7 @@ When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_acti
 
 ## Anti-patterns
 
-1. **NEVER add a `--skip-checks` / `--force` flag.** Per `discover-plan-golden-rule.md § What it requires`, no bypass mechanism exists.
+1. **NEVER add a `--skip-checks` / `--force` flag.** Per `discover-plan-golden-rule.md § 2 — What the rule requires`, no bypass mechanism exists.
 2. **NEVER silently lower hard caps.** Any change to the rubric requires an ADR signed by the project owner.
 3. **NEVER edit the plan during scoring.** This skill is read-only on the plan; mutations belong to `/discover-improve` (when it exists).
 4. **NEVER recommend skipping `/discover-execute` after this verdict ≥ SHIPPABLE_WITH_CAVEATS.** The verdict only proves the plan is STRUCTURALLY sound; the execute phase produces the actual opportunity.
@@ -97,6 +96,6 @@ When a hard cap fires, `final_score_after_caps = min(weighted_avg, smallest_acti
 - Sibling: [`/plan-confidence`](../plan-confidence/SKILL.md) — same shape for implementation plans.
 - Upstream: [`/discover-plan`](../discover-plan/SKILL.md), [`/discover-edge-cases`](../discover-edge-cases/SKILL.md).
 - Downstream: [`/discover-execute`](../discover-execute/SKILL.md) (runs when verdict ≥ SHIPPABLE_WITH_CAVEATS).
-- Golden rule: [`.claude/rules/discover-plan-golden-rule.md`](../../rules/discover-plan-golden-rule.md).
+- Golden rule: [`.claude/skills/_kit-rules/discover-plan-golden-rule.md`](../../skills/_kit-rules/discover-plan-golden-rule.md).
 - Thresholds: [`.claude/rules/discover-plan-thresholds.txt`](../../rules/discover-plan-thresholds.txt).
 - Cycle SoT: [`.claude/rules/cycle-discover.md`](../../rules/cycle-discover.md).

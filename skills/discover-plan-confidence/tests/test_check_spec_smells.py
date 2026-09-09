@@ -11,9 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from check_spec_smells import check_spec_smells  # noqa: E402
-
+from check_spec_smells import check_spec_smells
 
 MINIMAL_RUBRIC_YAML = """
 # Minimal rubric for check_spec_smells unit tests

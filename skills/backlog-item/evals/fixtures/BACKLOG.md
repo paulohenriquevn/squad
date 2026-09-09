@@ -17,28 +17,28 @@ lives in `rules/cycle-backlog.md`; this file is data.
 | Domain | Repos | Specialist |
 |---|---|---|
 | `engine-go` | `theo` | `agents/engine-go.md` |
-| `control-plane` | `theo-cloud`, `theo-traefik-mcp` | `agents/control-plane.md` |
-| `data-plane-ts` | `theo-memory`, `theo-rag`, `theo-lens`, `theo-trust`, `theo-skills`, `theo-promptly` | `agents/data-plane-ts.md` |
-| `theo-db` | `theo-db` | `agents/theo-db.md` |
-| `infra-terraform` | `theo-infra-modules`, `theo-infra-live` | `agents/infra-terraform.md` |
-| `contracts-auth` | `theo-contracts` | `agents/contracts-auth.md` |
-| `frontend-dashboard` | `theo-cloud/dashboard` | `agents/frontend-dashboard.md` |
-| `platform-cli` | `theo-cli`, `theo-storage` | `agents/platform-cli.md` |
+| `control-plane` | `control-plane`, `traefik-mcp` | `agents/control-plane.md` |
+| `data-plane-ts` | `memory-store`, `search-api`, `web-console`, `trust-svc`, `skills-pkg`, `promptly` | `agents/data-plane-ts.md` |
+| `db-engine` | `db-engine` | `agents/db-engine.md` |
+| `infra-terraform` | `infra-modules`, `infra-live` | `agents/infra-terraform.md` |
+| `contracts-auth` | `contracts` | `agents/contracts-auth.md` |
+| `frontend-dashboard` | `control-plane/dashboard` | `agents/frontend-dashboard.md` |
+| `platform-cli` | `cli-tool`, `storage` | `agents/platform-cli.md` |
 
 ## Items
 
-## B-007 — Suspected N+1 in theo-rag ingest   [ ]
+## B-007 — Suspected N+1 in search-api ingest   [ ]
 
-> Registered 2026-05-20 by `/backlog-item` (slug: `theo-rag-ingest-n-plus-one`).
+> Registered 2026-05-20 by `/backlog-item` (slug: `search-api-ingest-n-plus-one`).
 
 domain: data-plane-ts
-repo: theo-rag
+repo: search-api
 suggested_mode: evolve
 source: human
 evidence: none-yet
 why_now: large-batch ingest felt slow in May
 status: killed
-kill_reason: measured 2026-05-28 — ingest issues one batched query regardless of document count (`theo-rag/src/ingest/batch.ts:142`). The hypothesis did not hold.
+kill_reason: measured 2026-05-28 — ingest issues one batched query regardless of document count (`search-api/src/ingest/batch.ts:142`). The hypothesis did not hold.
 dod:
   - ingest issues a query count independent of document count
 ## B-009 — Session cache survives a tenant switch   [x]
@@ -46,7 +46,7 @@ dod:
 > Registered 2026-06-11 by `/backlog-item` (slug: `dashboard-tenant-cache-leak`).
 
 domain: frontend-dashboard
-repo: theo-cloud/dashboard
+repo: control-plane/dashboard
 suggested_mode: bug
 source: human
 evidence: `dashboard/src/state/session.ts:88`
@@ -58,10 +58,10 @@ dod:
 
 ## B-014 — Reduce round-trips in the trace listing endpoint   [ ]
 
-> Registered 2026-07-30 by `/backlog-item` (slug: `theo-lens-listing-round-trips`).
+> Registered 2026-07-30 by `/backlog-item` (slug: `web-console-listing-round-trips`).
 
 domain: data-plane-ts
-repo: theo-lens
+repo: web-console
 suggested_mode: review
 source: human
 evidence: none-yet
@@ -73,10 +73,10 @@ dod:
 
 ## B-018 — Trace listing returns 500 on the 30-day window   [ ]
 
-> Registered 2026-08-01 by `/backlog-item` (slug: `theo-lens-listing-500`).
+> Registered 2026-08-01 by `/backlog-item` (slug: `web-console-listing-500`).
 
 domain: frontend-dashboard
-repo: theo-cloud/dashboard
+repo: control-plane/dashboard
 suggested_mode: live-test
 source: human
 evidence: none-yet
@@ -86,12 +86,12 @@ dod:
   - the listing responds 200 with a 30d window
   - the cause is attributed to environment or product, with evidence
 
-## B-021 — Auth logic duplicated in three places in theo-cloud   [ ]
+## B-021 — Auth logic duplicated in three places in control-plane   [ ]
 
-> Registered 2026-08-02 by `/backlog-item` (slug: `theo-cloud-auth-duplication`).
+> Registered 2026-08-02 by `/backlog-item` (slug: `control-plane-auth-duplication`).
 
 domain: control-plane
-repo: theo-cloud
+repo: control-plane
 suggested_mode: review
 source: human
 evidence: none-yet
@@ -103,10 +103,10 @@ dod:
 
 ## B-022 — `theo deploy` returns exit 0 when a step fails   [ ]
 
-> Registered 2026-08-03 by `/backlog-item` (slug: `theo-cli-exit-code`).
+> Registered 2026-08-03 by `/backlog-item` (slug: `cli-tool-exit-code`).
 
 domain: platform-cli
-repo: theo-cli
+repo: cli-tool
 suggested_mode: bug
 source: human
 evidence: none-yet
@@ -118,11 +118,11 @@ dod:
 
 ## B-025 — Trace explorer navigation   [ ]
 
-> Registered 2026-08-04 by `/backlog-item` (slug: `theo-lens-explorer-navigation`).
+> Registered 2026-08-04 by `/backlog-item` (slug: `web-console-explorer-navigation`).
 > Deliberately vague — used to exercise unfalsifiable-hypothesis detection.
 
 domain: data-plane-ts
-repo: theo-lens
+repo: web-console
 suggested_mode: evolve
 source: human
 evidence: none-yet
@@ -136,7 +136,7 @@ dod:
 > Registered 2026-08-04 by `/backlog-item` (slug: `dashboard-latency-under-load`).
 
 domain: frontend-dashboard
-repo: theo-cloud/dashboard
+repo: control-plane/dashboard
 suggested_mode: live-test
 source: human
 evidence: none-yet
@@ -145,12 +145,12 @@ status: raw
 dod:
   - load p95 measured, with window and conditions declared
 
-## B-031 — Seemingly unused function in theo-contracts   [ ]
+## B-031 — Seemingly unused function in contracts   [ ]
 
-> Registered 2026-08-05 by `/backlog-item` (slug: `theo-contracts-unused-helper`).
+> Registered 2026-08-05 by `/backlog-item` (slug: `contracts-unused-helper`).
 
 domain: contracts-auth
-repo: theo-contracts
+repo: contracts
 suggested_mode: review
 source: human
 evidence: none-yet

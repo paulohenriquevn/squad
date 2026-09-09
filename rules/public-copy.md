@@ -1,6 +1,6 @@
 # Public Copy
 
-Source of Truth for voice/tone in README, marketing, and external-facing docs. Enforced by `hooks/public-copy-lint.sh` (advisory, warn-first).
+Source of Truth for voice/tone in README, marketing, and external-facing docs. Enforced by `hooks/public-copy-lint.py` (advisory, warn-first).
 
 ## § 1 — Scope
 
@@ -13,7 +13,7 @@ Applies to:
 Does NOT apply to:
 - `docs/exploration-reports/`, `docs/benchmarks/`, `docs/adr/` — technical-direct
 - `CLAUDE.md`, `PRD.md`, `CHANGELOG.md`, source code
-- `knowledge-base/references/**` — third-party study material
+- `records/references/**` — third-party study material
 
 ## § 2 — Anchor
 

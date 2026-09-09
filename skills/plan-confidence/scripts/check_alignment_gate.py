@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+"""The 90% alignment threshold, mechanised.
+
+WHY THIS EXISTS
+---------------
+`skills/_kit-rules/alignment-threshold.md` says an item below 90% shared understanding must
+not be built. `cycle-implement.md` repeats it as a pre-condition.
+`cycle-plan.md` lists it as a phase contract. Three documents, one rule — and a
+grep across the kit for anything that READ `records/alignment/` returned nothing.
+
+The rule held exactly as long as somebody remembered it. That is the same defect
+this kit has now measured under five names in one week: a mechanism with no
+contract, a contract with no mechanism, a hook declared in one of two files, a
+rule implemented on one of two branches, a capability nobody could find. A gate
+whose execution depends on memory is a note.
+
+WHAT IT ASSERTS
+---------------
+It does not judge the brief; `score_alignment.py` does that. This reads the
+verdict that scorer produces and turns it into a cap:
+
+| State                                             | Effect |
+|---|---|
+| Plan cites no `B-NNN` and no brief exists for it  | soft floor (<= 89) — see below |
+| Cites an item, no alignment brief on disk         | **hard cap (<= 49)** |
+| Reviewer marked the brief NEEDS_SPLIT             | **hard cap (<= 49)** — NEEDS_SPLIT |
+| Brief scores below the machine threshold          | **hard cap (<= 49)** — BLOCKED |
+| Brief clears it but no human signed off           | **hard cap (<= 49)** — AWAITING_REVIEW |
+| Brief unreadable                                  | **hard cap (<= 49)** |
+| ALIGNED                                           | does not apply |
+
+WHY A HARD CAP FOR THE MISSING BRIEF, WHEN check_deps_audit SOFT-FLOORS
+-----------------------------------------------------------------------
+That difference is deliberate and it is the interesting part.
+
+A missing dependency audit soft-floors because a hard cap there would assert "this
+plan has a critical CVE" — a claim about the dependency that nobody measured. The
+honest claim is about the PROCESS, and a soft floor records it.
+
+Here the process IS the subject. A missing alignment brief does not imply anything
+about the item; it states, exactly, that the alignment never happened. That is not
+an inference, and the rule about it is unconditional: below the threshold the item
+is not built. So the cap is hard, and there is no `--skip` and no dismissing ADR —
+an escape hatch on this gate would be an escape hatch on the whole reason the gate
+exists.
+
+WHERE THE SCRIPT STOPS, SAID OUT LOUD
+-------------------------------------
+A plan citing no `B-NNN` may be a legitimate hotfix, or it may be an item that
+skipped intake precisely to skip this gate. **No regex separates those**, and
+pretending otherwise would be the fabricated-precision this kit refuses elsewhere.
+Refusing outright would block every ad-hoc fix; passing silently would leave a
+one-line bypass. So it soft-floors at 89 and names the reason, which keeps the
+plan out of SHIPPABLE and puts the judgement in front of a human — the same place
+`cycle-backlog`'s G3/G4/G5 leave theirs.
+
+Usage:
+    python3 check_alignment_gate.py <plan.md> [--json]
+
+Exit codes:
+    0 — no cap
+    1 — capped or floored
+    2 — the plan could not be read
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+_SHARED_UNDERSTANDING = (
+    Path(__file__).resolve().parents[2] / "plan-alignment" / "scripts"
+)
+if str(_SHARED_UNDERSTANDING) not in sys.path:
+    sys.path.insert(0, str(_SHARED_UNDERSTANDING))
+
+#: How the two kits NAME committed work, which is not the same string.
+#:
+#: The Squad writes `B-NNN` in the plan's prose (`cycle-backlog.md § Item
+#: schema`). The Cycle writes `milestone_id: M<N>` in the plan's FRONTMATTER
+#: (`cycle-roadmap.md § Plan metadata contract`) and never writes a `B-NNN` at
+#: all. A detector matching only the first lands in the "not applicable" branch
+#: for every plan in the second — soft floor, never a hard cap, gate inert.
+#:
+#: Copying a script between kits and copying the gate it implements are not the
+#: same act, and this is the fourth time that distinction has cost a defect here.
+_ITEM_RE = re.compile(r"\bB-(\d{3,})\b")
+
+#: Read ONLY from the frontmatter. Matching `milestone_id` anywhere would fire on
+#: a plan explaining why it is NOT part of a milestone — the substring defect
+#: `detect_domain.py` shipped, where 13 of 13 `lock` matches were `lockfile`.
+_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+_MILESTONE_RE = re.compile(r"^milestone_id:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def _committed_work_id(content: str) -> str | None:
+    """The id this plan is answerable to, in whichever kit's vocabulary."""
+    items = sorted(set(_ITEM_RE.findall(content)))
+    if items:
+        return f"B-{items[0]}"
+    fm = _FRONTMATTER_RE.match(content)
+    if fm:
+        m = _MILESTONE_RE.search(fm.group(1))
+        if m and m.group(1).lower() not in ("null", "none", "~", '""', "''"):
+            return m.group(1)
+    return None
+
+#: The cap values the rest of plan-confidence already speaks in.
+HARD_CAP = 49       # INVALID — the plan cannot enter /implement
+SOFT_FLOOR = 89     # SHIPPABLE -> SHIPPABLE_WITH_CAVEATS
+
+
+@dataclass(frozen=True)
+class AlignmentGateReport:
+    applies: bool
+    verdict: str | None          # ALIGNED · AWAITING_REVIEW · BLOCKED · NEEDS_SPLIT · MISSING · UNREADABLE
+    reason: str
+    hard_cap: int | None = None
+    soft_floor: int | None = None
+    brief_path: str | None = None
+    machine_ratio: float | None = None
+
+    @property
+    def is_clean(self) -> bool:
+        return self.hard_cap is None and self.soft_floor is None
+
+
+def _brief_for(plan_path: Path) -> Path:
+    """`records/plans/{slug}-plan.md` -> `records/alignment/{slug}-alignment.md`."""
+    slug = plan_path.name[:-len("-plan.md")] if plan_path.name.endswith("-plan.md") \
+        else plan_path.stem
+    return plan_path.parent.parent / "alignment" / f"{slug}-alignment.md"
+
+
+def _is_kit_tooling(plan_path: Path) -> bool:
+    """Is this plan part of the INSTALLED KIT rather than the project's work?
+
+    The rule is already written down elsewhere in this kit, in
+    `DEFAULT_SKIP_DIRS`: *meta-tooling — /code-quality audits the PRODUCT, not its
+    own skills*. The alignment gate is the same kind of gate and had not learned
+    it, so in a consumer that has a `BACKLOG.md` it judged
+    `.claude/skills/plan-confidence/fixtures/good-plan.md` as if the project had
+    written it — eight tests red, none of them about the project's plans.
+
+    A project's plans live in `records/` or `knowledge-base/`. Anything under the
+    tooling directory belongs to the kit.
+    """
+    parts = plan_path.resolve().parts
+    return ".claude" in parts and "skills" in parts
+
+
+def _registry_exists(plan_path: Path) -> bool:
+    """Does this repository keep a backlog or roadmap the plan could have come from?
+
+    Walks up from the plan rather than trusting the process's cwd, which is
+    whatever invoked the scorer and says nothing about the project under test.
+    """
+    for parent in [plan_path.resolve(), *plan_path.resolve().parents]:
+        for name in ("BACKLOG.md", "ROADMAP.md"):
+            if (parent / name).is_file():
+                return True
+        if (parent / ".git").exists():
+            break  # repository root reached; do not escape into a sibling project
+    return False
+
+
+def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
+    """Read the alignment verdict for this plan's item and turn it into a cap."""
+    if _is_kit_tooling(Path(plan_path)):
+        return AlignmentGateReport(
+            applies=False, verdict=None,
+            reason=("this plan is part of the installed kit's tooling, not the "
+                    "project's work — the kit does not audit itself"))
+
+    content = Path(plan_path).read_text(encoding="utf-8-sig", errors="replace")
+    cited = _committed_work_id(content)
+    brief = _brief_for(Path(plan_path))
+
+    if cited is None and not brief.exists():
+        # The boundary the script cannot decide — but only where there is a
+        # boundary to cross. The floor closes a one-line bypass: omit the `B-NNN`
+        # and skip the gate. That bypass exists only where there is a registry to
+        # skip. In a repository with neither BACKLOG.md nor ROADMAP.md there is
+        # nowhere the item could have come from, so ad-hoc is not a suspicion, it
+        # is the only possibility.
+        #
+        # Measured on 2026-08-29, reported from a consumer: without this
+        # distinction the floor fired on the kit's own `fixtures/good-plan.md` and
+        # turned `test_fixture_good_plan_does_not_trigger_caps` red across seven
+        # parametrisations. A gate that taxes every hotfix in every repository
+        # that does not run this cycle is a gate somebody switches off.
+        if not _registry_exists(Path(plan_path)):
+            return AlignmentGateReport(
+                applies=False, verdict=None,
+                reason=("plan names no backlog item and this repository has no registry "
+                        "(no BACKLOG.md, no ROADMAP.md) — there is nowhere the item could "
+                        "have come from, so nothing is being skipped"))
+        return AlignmentGateReport(
+            applies=False, verdict=None,
+            reason=("plan names no backlog item and no milestone, and no alignment "
+                    "brief exists for its slug — this may be a legitimate ad-hoc "
+                    "fix, or committed work that skipped intake to skip this gate. "
+                    "No check separates those; a human decides. Run "
+                    "/plan-alignment if it came from the registry."),
+            soft_floor=SOFT_FLOOR)
+
+    if not brief.exists():
+        return AlignmentGateReport(
+            applies=True, verdict="MISSING",
+            reason=(f"plan implements {cited} and no alignment brief exists at "
+                    f"{brief}. The alignment never happened, so the item is not "
+                    f"built. Run /plan-alignment {cited}."
+                    if cited else
+                    f"an alignment brief was expected at {brief} and is absent."),
+            hard_cap=HARD_CAP, brief_path=str(brief))
+
+    try:
+        from score_alignment import score_alignment
+        report = score_alignment(brief)
+    except Exception as exc:  # noqa: BLE001 — any failure here is "not measured"
+        return AlignmentGateReport(
+            applies=True, verdict="UNREADABLE",
+            reason=(f"the alignment brief at {brief} is unreadable ({exc.__class__.__name__}). "
+                    f"Not measured is not approved — fix the brief and re-run "
+                    f"/plan-alignment."),
+            hard_cap=HARD_CAP, brief_path=str(brief))
+
+    ratio = round(report.machine_ratio, 4)
+
+    # Checked before the score, for the same reason the scorer checks it first: a
+    # split item scores low BECAUSE it is two items, and "close these gaps" is advice
+    # no rewrite can follow. The plan must not be built either way, so the cap is the
+    # same — what changes is what the reader is told to do about it.
+    if report.needs_split:
+        because = f" ({report.split_reason})" if report.split_reason else ""
+        return AlignmentGateReport(
+            applies=True, verdict="NEEDS_SPLIT",
+            reason=(f"the reviewer marked this brief NEEDS_SPLIT{because}. "
+                    f"Do not close gaps — split the item, and align each piece on its own."),
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+
+    if not report.meets_machine_threshold:
+        gaps = ", ".join(c.key for c in report.gaps[:4])
+        return AlignmentGateReport(
+            applies=True, verdict="BLOCKED",
+            reason=(f"alignment scores {ratio:.0%}, below the 90% threshold. "
+                    f"Close these first: {gaps}. "
+                    f"Return to /plan-alignment and re-score after each pass."),
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+
+    if not report.reviewer_signed_off:
+        pending = len(report.pending_review) or report.reviewer_items_total or "all"
+        return AlignmentGateReport(
+            applies=True, verdict="AWAITING_REVIEW",
+            reason=(f"machine score is {ratio:.0%} and no human has signed off "
+                    f"({pending} item(s) unticked in `## Reviewer sign-off`). "
+                    f"AWAITING_REVIEW is not a pass, and the agent may never tick a "
+                    f"box — ask the reviewer."),
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+
+    return AlignmentGateReport(
+        applies=True, verdict="ALIGNED",
+        reason=f"aligned at {ratio:.0%} with {report.reviewer_items_total} reviewer item(s) ticked",
+        brief_path=str(brief), machine_ratio=ratio)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("plan", type=Path)
+    ap.add_argument("--json", action="store_true")
+    args = ap.parse_args(argv)
+
+    try:
+        report = check_alignment_gate(args.plan)
+    except OSError as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        print(json.dumps({
+            "applies": report.applies, "verdict": report.verdict,
+            "reason": report.reason, "hard_cap": report.hard_cap,
+            "soft_floor": report.soft_floor, "brief_path": report.brief_path,
+            "machine_ratio": report.machine_ratio,
+        }, indent=2, ensure_ascii=False))
+        return 0 if report.is_clean else 1
+
+    tag = {"ALIGNED": "✓", None: "~"}.get(report.verdict, "✗")
+    print(f"{tag} alignment gate: {report.verdict or 'NOT APPLICABLE'}")
+    print(f"  {report.reason}")
+    if report.hard_cap:
+        print(f"\n  HARD CAP {report.hard_cap} — this plan cannot enter /implement.")
+        print("  There is no --skip and no dismissing ADR. An escape hatch on this")
+        print("  gate would be an escape hatch on the reason it exists.")
+    elif report.soft_floor:
+        print(f"\n  SOFT FLOOR {report.soft_floor} — capped below SHIPPABLE, not refused.")
+    return 0 if report.is_clean else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

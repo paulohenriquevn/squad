@@ -3,7 +3,7 @@
 WHY THIS EXISTS. The 31 slices are import-isolated on purpose: in production each skill runs alone
 with only its own `scripts/` on `sys.path`, and several ship modules with the same basename and
 different contents — `check_corner_coverage.py` exists in two skills and means two things.
-`scripts/run_slice_tests.sh` mirrors that by giving each slice its own process, and it exits 0.
+`mechanisms/cycle/run_slice_tests.sh` mirrors that by giving each slice its own process, and it exits 0.
 
 What was missing is what happens when somebody does the obvious thing instead:
 
@@ -70,7 +70,7 @@ def _slices_named_by(args: list[str]) -> set[str]:
     return slices
 
 
-def pytest_configure(config) -> None:  # noqa: ANN001
+def pytest_configure(config) -> None:
     """Fail fast when the invocation spans more than one slice.
 
     In `configure`, which is before collection — and therefore before a shadowed module can raise
@@ -88,7 +88,7 @@ def pytest_configure(config) -> None:  # noqa: ANN001
         f"configuration that never happens in real use, where each skill runs alone.\n"
         f"\n"
         f"Run every slice, each in its own process:\n"
-        f"    bash scripts/run_slice_tests.sh\n"
+        f"    bash mechanisms/cycle/run_slice_tests.sh\n"
         f"\n"
         f"Or one slice at a time:\n"
         f"    python3 -m pytest skills/<slice>/tests"

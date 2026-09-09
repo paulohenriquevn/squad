@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from run_structural import run_structural  # noqa: E402
 
 SKILL_ROOT = Path(__file__).parent.parent
@@ -44,7 +43,7 @@ def test_fixture_missing_coverage_triggers_coverage_cap() -> None:
 
 def test_fixture_weak_imperatives_reduces_risco() -> None:
     report = run_structural(FIXTURES / "weak-imperatives-plan.md", RUBRIC, THRESHOLDS)
-    assert report.risco_estrutural_score < 100
+    assert report.structural_risk_score < 100
 
 
 def test_fixture_no_tdd_triggers_tdd_cap() -> None:

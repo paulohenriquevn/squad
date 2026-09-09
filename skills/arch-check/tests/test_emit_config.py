@@ -1,6 +1,6 @@
 """Rendering a proposal into a linter config — where the criterion gets lost.
 
-Adopting a measured proposal against theo-cloud by hand took four attempts, and every failure was
+Adopting a measured proposal against control-plane by hand took four attempts, and every failure was
 a translation detail rather than a wrong rule. Each of those failures has a test here, because
 each of them made the config report success while enforcing less than it claimed.
 """
@@ -14,7 +14,6 @@ if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 import pytest  # noqa: E402
-
 from emit_config import _component, go_arch_lint, split_by_module  # noqa: E402
 
 _PROPOSAL = {
@@ -38,7 +37,7 @@ class TestComponentNames:
         assert _component(".") == "root"
 
     def test_a_hyphen_becomes_an_underscore(self) -> None:
-        assert _component("cmd/theo-ops") == "cmd_theo_ops"
+        assert _component("cmd/app-ops") == "cmd_app_ops"
 
 
 class TestRenderedConfig:
@@ -73,7 +72,7 @@ class TestRenderedConfig:
 
     def test_tests_are_excluded_so_the_enforced_set_matches_the_measured_one(self) -> None:
         """The allow-list comes from production imports; the linter scans tests too. 49 of
-        theo-cloud's violations came from `_test.go` files alone."""
+        control-plane's violations came from `_test.go` files alone."""
         assert "excludeFiles:" in _render()
         assert "_test" in _render()
 

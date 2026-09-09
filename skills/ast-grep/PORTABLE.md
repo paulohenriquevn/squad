@@ -37,7 +37,7 @@ For the OurProject project specifically: when `package.json` is created (post-v0
 | YAML rule files (`rules/*.yml`) | ✅ Fully | Generic — TS / Python patterns work in any codebase |
 | `setup.sh` | ✅ Fully | Auto-detects ast-grep, prints install command if missing |
 | `SKILL.md` two-phase workflow (zoom out → zoom in) | ✅ Fully | Investigation pattern is language-agnostic |
-| References to `.claude/knowledge-base/references/` in examples | ❌ Project-specific | The example commands cite OurProject's reference clones; adapt to your tree |
+| References to `.claude/records/references/` in examples | ❌ Project-specific | The example commands cite OurProject's reference clones; adapt to your tree |
 
 ## Customization
 

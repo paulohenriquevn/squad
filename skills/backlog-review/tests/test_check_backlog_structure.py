@@ -4,10 +4,9 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-import pytest
-
+import check_backlog_structure
+from backlog_fixtures import item_block, write_backlog
 from check_backlog_structure import check_backlog
-from helpers import item_block, write_backlog
 
 
 def _checks(report: dict) -> set[str]:
@@ -16,6 +15,118 @@ def _checks(report: dict) -> set[str]:
 
 def _find(report: dict, check: str) -> dict:
     return next(f for f in report["findings"] if f["check"] == check)
+
+
+def test_the_docstring_inventory_names_exactly_the_findings_emitted() -> None:
+    """A list of checks that nothing recomputes drifts from the code it describes.
+
+    Measured 2026-09-09: the inventory declared `malformed_block`, which no code
+    path emits, and omitted `duplicate_field` and `index_stale`, which two do. A
+    reader consulting it would look for a finding that cannot fire and would not
+    know to expect two that can — and the file's whole purpose is to be the list a
+    reader consults.
+
+    This is the same rule `check_mechanisms_inventory.py` enforces over
+    `mechanisms/README.md`, applied to the one other place in this repository that
+    keeps a hand-written list of what a script can say.
+    """
+    import re
+
+    src = Path(check_backlog_structure.__file__).read_text(encoding="utf-8")
+    emitted = set(re.findall(r'Finding\("([a-z_]+)"', src))
+    declared = set(re.findall(r"^\s{4}([a-z_]+)\s{2,}", src.split('"""')[1], re.M))
+
+    assert not emitted - declared, (
+        f"emitted and undeclared: {sorted(emitted - declared)} — a finding a reader "
+        f"cannot look up"
+    )
+    assert not declared - emitted, (
+        f"declared and unemitted: {sorted(declared - emitted)} — a check the docstring "
+        f"promises and no code path can produce"
+    )
+
+
+# --- lineage edges: supersedes / regression_of (kit#55) -----------------------
+#
+# The kit prescribes writing both (`check_intake_gates.ACTION_BY_STATUS`) and, until
+# this block existed, read neither. `blocked_by` has five deterministic findings
+# guarding it; these two had zero, so a lineage edge could name an id nothing defines
+# and the registry reported clean — the exact defect G6 exists to catch on the other
+# edge.
+
+
+def test_supersedes_pointing_at_an_undefined_id_is_a_blocker(tmp_path: Path) -> None:
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="raw", extra="supersedes: B-999\n"),
+    ))
+    assert "lineage_missing" in _checks(report)
+    assert report["verdict"] == "INVALID"
+
+
+def test_regression_of_pointing_at_an_undefined_id_is_a_blocker(tmp_path: Path) -> None:
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="raw", extra="regression_of: B-404\n"),
+    ))
+    assert "lineage_missing" in _checks(report)
+
+
+def test_an_item_naming_itself_in_a_lineage_edge_is_a_blocker(tmp_path: Path) -> None:
+    """A lineage edge points at the item this one replaces. Itself is not that."""
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="raw", extra="supersedes: B-001\n"),
+    ))
+    assert "lineage_missing" in _checks(report)
+
+
+def test_supersedes_must_name_a_killed_item(tmp_path: Path) -> None:
+    """`supersedes` means the measurement said no and something changed since.
+
+    Pointing it at an item that is still open says nothing happened yet, and hides
+    a duplicate that the dedup gate would have folded in with ITEM_MERGED.
+    """
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="triaged", evidence="src/a.py:10"),
+        item_block("B-002", status="raw", extra="supersedes: B-001\n"),
+    ))
+    assert "lineage_wrong_status" in _checks(report)
+    assert "B-001" in _find(report, "lineage_wrong_status")["message"]
+
+
+def test_regression_of_must_name_a_shipped_item(tmp_path: Path) -> None:
+    """A regression is work that was delivered and came back. Nothing else is one."""
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="killed", extra="kill_reason: measured, did not hold\n"),
+        item_block("B-002", status="raw", extra="regression_of: B-001\n"),
+    ))
+    assert "lineage_wrong_status" in _checks(report)
+
+
+def test_well_formed_lineage_edges_are_clean(tmp_path: Path) -> None:
+    """The positive case is pinned as hard as the negatives.
+
+    A checker that only ever fires is one nobody can distinguish from a broken one.
+    """
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="killed", extra="kill_reason: measured, did not hold\n"),
+        item_block("B-002", status="shipped"),
+        item_block("B-003", status="raw", extra="supersedes: B-001\n"),
+        item_block("B-004", status="raw", extra="regression_of: B-002\n"),
+    ))
+    assert "lineage_missing" not in _checks(report)
+    assert "lineage_wrong_status" not in _checks(report)
+
+
+def test_an_absent_lineage_field_is_not_a_finding(tmp_path: Path) -> None:
+    """Both fields are optional. Most items have no ancestor, and that is normal."""
+    report = check_backlog(write_backlog(tmp_path, item_block("B-001", status="raw")))
+    assert "lineage_missing" not in _checks(report)
+    assert "lineage_wrong_status" not in _checks(report)
 
 
 def test_clean_backlog_is_shippable(clean_backlog: Path) -> None:
@@ -63,7 +174,7 @@ def test_killed_without_reason_is_flagged(tmp_path: Path) -> None:
 
 def test_killed_with_reason_is_clean(tmp_path: Path) -> None:
     report = check_backlog(
-        write_backlog(tmp_path, item_block(status="killed", extra="kill_reason: medido, 1 query por request\n"))
+        write_backlog(tmp_path, item_block(status="killed", extra="kill_reason: measured, 1 query per request\n"))
     )
     assert "killed_without_reason" not in _checks(report)
 
@@ -80,7 +191,7 @@ def test_invalid_mode_is_flagged(tmp_path: Path) -> None:
 
 
 def test_missing_field_is_flagged(tmp_path: Path) -> None:
-    block = item_block().replace("why_now: o dashboard passou a carregar 30d por padrão\n", "")
+    block = item_block().replace("why_now: the dashboard started loading 30d by default\n", "")
     report = check_backlog(write_backlog(tmp_path, block))
     assert "missing_field" in _checks(report)
 
@@ -91,8 +202,8 @@ ROUTING_TABLE = """# Cycle: BACKLOG
 
 | Domain | Repos | Specialist |
 |---|---|---|
-| `data-plane-ts` | `theo-lens`, `theo-memory` | `agents/data-plane-ts.md` |
-| `platform-cli` | `theo-cli` | `agents/platform-cli.md` |
+| `data-plane-ts` | `web-console`, `memory-store` | `agents/data-plane-ts.md` |
+| `platform-cli` | `cli-tool` | `agents/platform-cli.md` |
 
 ## Next
 """
@@ -114,7 +225,7 @@ def test_unroutable_repo_is_a_blocker(tmp_path: Path) -> None:
     check never ran.
     """
     _with_routing_table(tmp_path)
-    report = check_backlog(write_backlog(tmp_path, item_block(repo="theo-gateway")))
+    report = check_backlog(write_backlog(tmp_path, item_block(repo="gateway")))
     assert report["routing_table_read"] is True
     assert "unroutable_repo" in _checks(report)
     assert report["verdict"] == "INVALID"
@@ -122,7 +233,7 @@ def test_unroutable_repo_is_a_blocker(tmp_path: Path) -> None:
 
 def test_routable_repo_produces_no_finding(tmp_path: Path) -> None:
     _with_routing_table(tmp_path)
-    report = check_backlog(write_backlog(tmp_path, item_block(repo="theo-lens")))
+    report = check_backlog(write_backlog(tmp_path, item_block(repo="web-console")))
     assert report["routing_table_read"] is True
     assert "unroutable_repo" not in _checks(report)
 
@@ -181,8 +292,8 @@ def test_possible_duplicate_between_open_items(tmp_path: Path) -> None:
     report = check_backlog(
         write_backlog(
             tmp_path,
-            item_block("B-001", "Reduzir round-trips do listing de traces"),
-            item_block("B-002", "Reduzir round-trips no listing de traces do explorer"),
+            item_block("B-001", "Reduce round-trips in the trace listing"),
+            item_block("B-002", "Reduce round-trips in the explorer trace listing"),
         )
     )
     assert "possible_duplicate" in _checks(report)
@@ -197,8 +308,8 @@ def test_closed_items_are_not_duplicate_candidates(tmp_path: Path) -> None:
     report = check_backlog(
         write_backlog(
             tmp_path,
-            item_block("B-001", "Reduzir round-trips do listing de traces", status="shipped"),
-            item_block("B-002", "Reduzir round-trips no listing de traces do explorer"),
+            item_block("B-001", "Reduce round-trips in the trace listing", status="shipped"),
+            item_block("B-002", "Reduce round-trips in the explorer trace listing"),
         )
     )
     assert "possible_duplicate" not in _checks(report)
@@ -229,7 +340,7 @@ def test_every_finding_declares_its_kind(tmp_path: Path) -> None:
 def test_a_duplicated_status_is_a_blocker(tmp_path: Path) -> None:
     """Two `status:` lines leave the block with two answers, and every reader takes the last.
 
-    Measured on theo-db: B-021 carries `raw` then `triaged`, B-022 `planned` then `raw`. The
+    Measured on db-engine: B-021 carries `raw` then `triaged`, B-022 `planned` then `raw`. The
     index buckets on status, so an ambiguous one makes the summary arbitrary rather than
     wrong-in-a-way-you-can-see.
     """
@@ -242,7 +353,7 @@ def test_a_duplicated_status_is_a_blocker(tmp_path: Path) -> None:
 
 
 def test_other_repeated_fields_are_not_reported(tmp_path: Path) -> None:
-    """`partial_progress` four times on theo-cloud's B-031 is an append-one-line-per-increment
+    """`partial_progress` four times on control-plane's B-031 is an append-one-line-per-increment
     log the team keeps on purpose, and `evidence: none-yet` followed by a pointer is an item that
     advanced. A gate that reports those is one people learn to override."""
     backlog = write_backlog(
@@ -251,3 +362,175 @@ def test_other_repeated_fields_are_not_reported(tmp_path: Path) -> None:
     )
     report = check_backlog(backlog)
     assert [f for f in report["findings"] if f["check"] == "duplicate_field"] == []
+
+
+# ── impediment edges ──────────────────────────────────────────────────────────
+#
+# Items stopped being independent when `blocked_by` gave them edges, which is why
+# cycle detection — dropped when this file was written — came back.
+
+
+def _blocked(tmp_path: Path, *blocks: str) -> dict:
+    return check_backlog(write_backlog(tmp_path, *blocks))
+
+
+def test_an_edge_to_an_unfiled_item_is_a_blocker(tmp_path: Path) -> None:
+    report = _blocked(tmp_path, item_block("B-001", status="triaged", extra="blocked_by: B-404\n"))
+    assert "blocker_missing" in _checks(report)
+    assert report["verdict"] == "INVALID"
+
+
+def test_an_item_blocking_itself_is_caught(tmp_path: Path) -> None:
+    report = _blocked(tmp_path, item_block("B-001", status="triaged", extra="blocked_by: B-001\n"))
+    assert "self_block" in _checks(report)
+
+
+def test_a_two_item_ring_is_reported_once(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw", extra="blocked_by: B-001\n"),
+    )
+    rings = [f for f in report["findings"] if f["check"] == "blocker_cycle"]
+    assert len(rings) == 1, rings
+    assert report["verdict"] == "INVALID"
+
+
+def test_a_three_item_ring_is_reported_once(tmp_path: Path) -> None:
+    """Keyed by membership, not entry point — otherwise one deadlock reads as three."""
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw", extra="blocked_by: B-003\n"),
+        item_block("B-003", status="raw", extra="blocked_by: B-001\n"),
+    )
+    assert len([f for f in report["findings"] if f["check"] == "blocker_cycle"]) == 1
+
+
+def test_a_chain_without_a_ring_is_clean(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw", extra="blocked_by: B-003\n"),
+        item_block("B-003", status="raw"),
+    )
+    assert "blocker_cycle" not in _checks(report)
+
+
+def test_an_edge_whose_blockers_all_closed_is_stale(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="shipped"),
+    )
+    assert "stale_block" in _checks(report)
+
+
+def test_a_live_edge_is_not_stale(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    assert "stale_block" not in _checks(report)
+
+
+def test_a_closed_item_with_an_open_blocker_is_incoherent(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="shipped", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    assert "closed_but_blocked" in _checks(report)
+
+
+# ── the field as it was already used, before it was specified ─────────────────
+
+
+def test_a_prose_impediment_is_not_malformed(tmp_path: Path) -> None:
+    """Seven of the eight real values named no item at all. None is a defect."""
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: decisão do patrocinador\n"),
+    )
+    assert not {"blocker_missing", "stale_block"} & _checks(report)
+
+
+def test_an_id_named_inside_prose_still_becomes_an_edge(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-404 — confirmado por medição\n"),
+    )
+    assert "blocker_missing" in _checks(report)
+
+
+def test_an_edge_carrying_prose_is_never_called_stale(tmp_path: Path) -> None:
+    """Nothing here can tell whether a sponsor ratified; saying so would be a lie."""
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002 — and the sponsor must ratify\n"),
+        item_block("B-002", status="shipped"),
+    )
+    assert "stale_block" not in _checks(report)
+
+
+def test_none_declares_no_impediment(tmp_path: Path) -> None:
+    report = _blocked(tmp_path, item_block("B-001", status="triaged", extra="blocked_by: none\n"))
+    assert not {"blocker_missing", "stale_block", "self_block"} & _checks(report)
+
+
+# ── the derived state ─────────────────────────────────────────────────────────
+
+
+def test_effective_state_replaces_the_stage_while_a_blocker_is_open(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    assert report["items_by_effective_state"]["blocked"] == 1
+    assert report["items_by_status"]["triaged"] == 1
+
+
+def test_effective_state_needs_no_second_edit_when_the_blocker_ships(tmp_path: Path) -> None:
+    report = _blocked(
+        tmp_path,
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="shipped"),
+    )
+    assert "blocked" not in report["items_by_effective_state"]
+
+
+def test_an_item_naming_itself_inside_prose_is_not_its_own_blocker() -> None:
+    """`blocked_by` is prose, and prose about an item mentions that item.
+
+    The parser lifts every id it sees, so *"Vide report /idea-to-release B-060 de
+    2026-08-31"* made B-060 its own blocker — then a ring of one, then a deadlock
+    no work can clear. Measured on a real registry on 2026-09-02: 14 items
+    reported `self_block` and 14 reported a `B-NNN -> B-NNN` cycle, 28 blockers,
+    every one false, and together they refused every push to the repository.
+
+    `select_backlog_item.py` had already fixed this for the queue. The fix did
+    not travel to the gate reading the same field.
+    """
+    raw = ("aguardando disposicao de status: costura entregue em 5b98a494f. "
+           "Vide report /idea-to-release B-060 de 2026-08-31 (4 opcoes A/B/C/D).")
+
+    assert "B-060" in check_backlog_structure.parse_blocked_by(raw), \
+        "the raw parser still sees it — this fix is at the edge, not in the regex"
+    assert check_backlog_structure.impediment_edges(raw, "B-060") == []
+
+
+def test_an_ids_only_value_naming_itself_is_still_a_self_block() -> None:
+    """The narrowing must not swallow the real defect. `blocked_by: B-060` on
+    B-060 describes nothing; it is a typo, and the gate should still say so."""
+    assert check_backlog_structure.impediment_edges("B-060", "B-060") == ["B-060"]
+    assert check_backlog_structure.impediment_edges("B-060, B-061", "B-060") == ["B-060", "B-061"]
+
+
+def test_a_real_impediment_on_another_item_survives_both_shapes() -> None:
+    """The filter removes one id, never the edge."""
+    prose = "aguardando B-075 aterrissar antes de medir de novo"
+
+    assert check_backlog_structure.impediment_edges(prose, "B-060") == ["B-075"]
+    assert check_backlog_structure.impediment_edges("B-075", "B-060") == ["B-075"]

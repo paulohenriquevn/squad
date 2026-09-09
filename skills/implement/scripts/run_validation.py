@@ -19,7 +19,7 @@ Runs (and gates on):
     Override with --no-code-quality (escape for pre-code / CI without the skill).
 
 Outputs JSON validation report. Saves a markdown summary at:
-  .claude/knowledge-base/reviews/{slug}-implement-validate-{date}.md
+  .claude/records/reviews/{slug}-implement-validate-{date}.md
 
 Exit codes:
   0 — All gates PASS or N/A
@@ -31,20 +31,18 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from diff_symbols import added_symbols_from_shas, shas_from_progress
 from coverage_gate import evaluate as coverage_evaluate
+from diff_symbols import added_symbols_from_shas, shas_from_progress
 from suite_runners import (
     check_go_tests,
     check_python_tests,
     check_rust_tests,
     check_test_execution,
-    detect_languages,
     run_command,
 )
 from wiring_recheck import recheck_pillar_a
@@ -368,22 +366,74 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
     }
 
 
-def _find_plan(project_root: Path, slug: str) -> Path | None:
-    """Locate the plan file in either the plugin (.claude/) or standalone layout."""
-    for base in (project_root / ".claude" / "knowledge-base" / "plans",
-                 project_root / "knowledge-base" / "plans"):
-        candidate = base / f"{slug}-plan.md"
+#: Every root a consumer may keep its audit trail under, most specific first.
+#:
+#: The kit ships `records/` in two layouts. A consumer measured on 2026-08-29 uses
+#: neither: `platform` declares `<project>/.claude/knowledge-base/` canonical
+#: in a rule of its own, written after an audit read the wrong directory and
+#: reported a repository as having "0 implementations, 0 reviews, 0 releases" when
+#: it had 6, 12 and 8. That repository holds **32 plans in `knowledge-base/plans/`
+#: and zero in `records/plans/`**, so all nine `_find_plan` call sites answered
+#: SKIP there — including an alignment gate installed minutes earlier, inert on
+#: arrival for the third time in this family of defects.
+#:
+#: Widening the search cannot produce a false finding. It can only stop a false
+#: SKIP, and a SKIP caused by looking in the wrong place is indistinguishable in
+#: the report from one that legitimately had nothing to check.
+_ARTEFACT_ROOTS = (
+    (".claude", "records"),
+    ("records",),
+    (".claude", "knowledge-base"),
+    ("knowledge-base",),
+)
+
+
+def _artefact_dirs(project_root: Path, kind: str):
+    """Every directory a `kind` of artefact could live in, in precedence order."""
+    for parts in _ARTEFACT_ROOTS:
+        yield project_root.joinpath(*parts, kind)
+
+
+def _find_artefact(project_root: Path, kind: str, filename: str) -> Path | None:
+    for base in _artefact_dirs(project_root, kind):
+        candidate = base / filename
         if candidate.exists():
             return candidate
     return None
 
 
+def _artefact_write_dir(project_root: Path, kind: str) -> Path:
+    """Where to WRITE a new artefact: the root this project already uses.
+
+    Reading from the wrong directory goes quiet; writing to it does damage. The
+    consumer that prompted this carries a rule of its own on the point —
+    *"an audit trail split across two directories is worse than none: a reader
+    who checks the wrong one reports absence where evidence exists"* — written
+    after exactly that happened across three repositories, all of which ended up
+    with both directories present.
+
+    So the choice is made by evidence, not by default: the first root that already
+    holds artefacts of ANY kind wins. Only a project with no audit trail at all
+    falls through to the kit's own layout, and then there is nothing to split.
+    """
+    for parts in _ARTEFACT_ROOTS:
+        root = project_root.joinpath(*parts)
+        if root.is_dir() and any(root.iterdir()):
+            return root / kind
+    return project_root / ".claude" / "records" / kind
+
+
+def _find_plan(project_root: Path, slug: str) -> Path | None:
+    """Locate the plan file in whichever layout this consumer keeps."""
+    return _find_artefact(project_root, "plans", f"{slug}-plan.md")
+
+
 def _find_progress(project_root: Path, slug: str) -> Path | None:
     """The checkpoint, in either layout — the companion `_find_plan` always had and this did not.
 
-    Three call sites hardcoded `.claude/knowledge-base/implementations/` while `_find_plan`,
-    written directly above them, already handled both. `rules/knowledge-base-location.md` makes
-    the standalone layout (`<repo>/knowledge-base/`) canonical for the kit's own repository —
+    Three call sites hardcoded `.claude/records/implementations/` while `_find_plan`,
+    written directly above them, already handled both. `rules/records-location.md` makes
+    the standalone layout (`<repo>/records/`) canonical for the kit's own repository —
     which is where the kit dogfoods itself. There, all three answered SKIP: `_read_progress`
     returned None, and the schema and checkpoint-consistency gates reported
     "no progress checkpoint — implement may not have run" for a checkpoint sitting on disk.
@@ -391,12 +441,104 @@ def _find_progress(project_root: Path, slug: str) -> Path | None:
     A gate that reports SKIP because it looked in the wrong directory is indistinguishable in
     the report from one that legitimately had nothing to check, which is why this survived.
     """
-    for base in (project_root / ".claude" / "knowledge-base" / "implementations",
-                 project_root / "knowledge-base" / "implementations"):
+    for base in _artefact_dirs(project_root, "implementations"):
         candidate = base / f".progress-{slug}.json"
         if candidate.exists():
             return candidate
     return None
+
+
+def check_implementation_log(project_root: Path, slug: str) -> dict[str, Any]:
+    """`records/implementations/{slug}-implementation.md` exists and carries something.
+
+    `rules/cycle-implement.md § Output` declares this file a deliverable of the cycle. Nothing
+    read it. Measured in a consumer on 2026-08-28: six logs for eight completed slugs, and the
+    log for one of them opens by recording that `/review` had to ask for it, that the same gap
+    had appeared one item earlier, and — in those words — that it would not recur. It recurred
+    twice more.
+
+    FAIL rather than SKIP when absent, and the distinction is the whole gate. SKIP is what a
+    check says when it had nothing to look at; here the cycle declares there is something, so
+    absence is the finding rather than the reason to stay quiet. This is the shape the
+    `deps-audit` gate took on 2026-08-26, for the same reason: a gate believed to be automatic
+    is one nobody runs, and a deliverable nobody checks is one that goes missing three times
+    while everyone believes the process covers it.
+
+    Emptiness counts as absence. A `touch` satisfies the letter and defeats the reason — the
+    log carries what a diff cannot: what was measured, what lied, and what was rejected.
+    """
+    # No plan for this slug means the cycle never ran, so there is no log to be missing. That is a
+    # genuine SKIP — the one shape of "nothing to check" this gate accepts, and it is why the
+    # pre-code-phase path stays quiet rather than being loosened for it.
+    if _find_plan(project_root, slug) is None:
+        return {"name": "implementation_log", "status": "SKIP",
+                "reason": f"no plan for {slug} — implement did not run"}
+
+    for base in _artefact_dirs(project_root, "implementations"):
+        candidate = base / f"{slug}-implementation.md"
+        if candidate.exists():
+            try:
+                body = candidate.read_text(encoding="utf-8")
+            except OSError as e:
+                return {"name": "implementation_log", "status": "FAIL",
+                        "reason": f"{candidate} exists but could not be read: {e}"}
+            if not body.strip():
+                return {"name": "implementation_log", "status": "FAIL",
+                        "reason": f"{candidate} is empty — a touched file is not a log"}
+            return {"name": "implementation_log", "status": "PASS",
+                    "detail": str(candidate.relative_to(project_root))}
+    return {
+        "name": "implementation_log",
+        "status": "FAIL",
+        "reason": (
+            f"no records/implementations/{slug}-implementation.md — "
+            "cycle-implement declares it a deliverable, and it has gone missing three times"
+        ),
+    }
+
+
+def check_alignment_gate(project_root: Path, slug: str) -> dict[str, Any]:
+    """The item this slug implements reached 90% shared understanding, and a human said so.
+
+    `skills/_kit-rules/alignment-threshold.md` says an item below the threshold is not built, and
+    `cycle-implement.md § Pre-conditions` repeats it. Both were prose: nothing in this
+    suite read `records/alignment/`, so the rule held exactly as long as somebody
+    remembered it — the same shape as the implementation log above, which went missing
+    three times while everyone believed the process covered it.
+
+    This is the LAST line, not the first. `plan-confidence` caps an unaligned plan at 49
+    and `cycle-plan` requires >= 70 to enter this cycle, so by the time this runs the code
+    already exists. It fires when somebody reached `/implement` without passing through
+    that gate — which is precisely the path a rule written only in prose leaves open.
+
+    FAIL rather than SKIP when the brief is absent, for the reason `check_implementation_log`
+    gives: SKIP is what a check says when it had nothing to look at, and here the cycle
+    declares there is. The one genuine SKIP is no plan for the slug — then the cycle never
+    ran and there is nothing to be missing.
+    """
+    plan = _find_plan(project_root, slug)
+    if plan is None:
+        return {"name": "alignment_gate", "status": "SKIP",
+                "reason": f"no plan for {slug} — implement did not run"}
+
+    scripts = Path(__file__).resolve().parents[2] / "plan-confidence" / "scripts"
+    if str(scripts) not in sys.path:
+        sys.path.insert(0, str(scripts))
+    try:
+        from check_alignment_gate import check_alignment_gate as _gate
+        report = _gate(plan)
+    except Exception as exc:  # noqa: BLE001 — a gate that cannot run is not a gate that passed
+        return {"name": "alignment_gate", "status": "FAIL",
+                "reason": f"the alignment gate could not run ({exc.__class__.__name__}: {exc})"}
+
+    if report.verdict == "ALIGNED":
+        return {"name": "alignment_gate", "status": "PASS", "detail": report.reason}
+    if not report.applies:
+        # No backlog item and no brief: the boundary no check can decide. WARN, so it is
+        # visible without failing every legitimate ad-hoc fix.
+        return {"name": "alignment_gate", "status": "WARN", "reason": report.reason}
+    return {"name": "alignment_gate", "status": "FAIL",
+            "reason": f"{report.verdict}: {report.reason}"}
 
 
 _PATTERNS_SKILL_RE = re.compile(r"\b([A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*-patterns)\b")
@@ -450,7 +592,7 @@ def check_progress_schema_gate(project_root: Path, slug: str) -> dict[str, Any]:
     # Falls back to the plugin path when neither layout holds a checkpoint, so the schema
     # check still reports "missing" against a concrete path rather than crashing on None.
     path = _find_progress(project_root, slug) or (
-        project_root / ".claude" / "knowledge-base" / "implementations" / f".progress-{slug}.json"
+        _artefact_write_dir(project_root, "implementations") / f".progress-{slug}.json"
     )
     from check_progress_schema import check_progress_schema
 
@@ -550,8 +692,7 @@ def check_phase_review_gate(project_root: Path, slug: str) -> dict[str, Any]:
     from check_phase_review import check_phase_review
 
     review_dirs = [
-        project_root / ".claude" / "knowledge-base" / "mini-reviews",
-        project_root / "knowledge-base" / "mini-reviews",
+        *_artefact_dirs(project_root, "mini-reviews"),
     ]
     report = check_phase_review(plan, progress, slug, review_dirs)
     return {
@@ -609,7 +750,7 @@ def check_test_obligations_gate(project_root: Path, slug: str) -> dict[str, Any]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Final validation gate for /implement.")
-    parser.add_argument("slug", help="Plan slug (matches .claude/knowledge-base/implementations/{slug}-implementation.md)")
+    parser.add_argument("slug", help="Plan slug (matches .claude/records/implementations/{slug}-implementation.md)")
     parser.add_argument("--project-root", type=Path, default=None)
     parser.add_argument("--no-write-report", action="store_true", help="don't save a markdown report")
     parser.add_argument(
@@ -645,6 +786,8 @@ def main() -> int:
         check_phase_review_gate(project_root, args.slug),
         check_acceptance_criteria_gate(project_root, args.slug),
         check_test_obligations_gate(project_root, args.slug),
+        check_alignment_gate(project_root, args.slug),
+        check_implementation_log(project_root, args.slug),
         check_patterns_advisory(project_root, args.slug),
         check_code_quality(project_root, args.slug, skip=args.no_code_quality),
     ]
@@ -674,7 +817,7 @@ def main() -> int:
     print(json.dumps(report, indent=2))
 
     if not args.no_write_report:
-        review_dir = project_root / ".claude" / "knowledge-base" / "reviews"
+        review_dir = _artefact_write_dir(project_root, "reviews")
         review_dir.mkdir(parents=True, exist_ok=True)
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         md_path = review_dir / f"{args.slug}-implement-validate-{today}.md"
@@ -719,7 +862,32 @@ def main() -> int:
         md_path.write_text(md, encoding="utf-8")
         print(f"\nReport saved: {md_path}", file=sys.stderr)
 
+    # `PARTIAL` is the interesting one to have in the stream: it exits 0, so a
+    # reader of exit codes alone cannot tell a full pass from a run where gates
+    # SKIPped for want of a manifest.
+    _emit_phase_end(project_root, cycle="implement", slug=args.slug, verdict=overall)
+
     return 0 if overall in ("PASS", "PARTIAL") else 1
+
+
+def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict) -> None:
+    """Record the phase transition; never let bookkeeping fail the gate.
+
+    `scripts/` resolves against THIS FILE, not the validated project: in a plugin
+    install the kit lives under `.claude/` while the project is elsewhere.
+    `ImportError` is caught alone — a bare `except Exception` would swallow a
+    real emitter bug into a silence indistinguishable from a phase that never
+    ran, which is the defect the stream exists to remove.
+    """
+    tooling = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_end
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_end(project_root, cycle=cycle, slug=slug, verdict=verdict)
 
 
 if __name__ == "__main__":

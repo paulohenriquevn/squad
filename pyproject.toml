@@ -1,7 +1,7 @@
 [project]
-name = "cycle-ecosystem"
-version = "1.0.0"
-description = "Planning ecosystem for Claude Code — test and validation infrastructure"
+name = "squad"
+version = "0.1.0"
+description = "Measurement-first maintenance ecosystem for Claude Code"
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
@@ -12,7 +12,12 @@ test = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# `hooks/tests` and `squad/tests` are here because they were NOT, and nothing
+# said so: fourteen tests for `stop-validation` and the whole hook library sat
+# outside the collected set. A test the suite does not collect is a test that
+# passed once — three of the four shell files beside them had already rotted
+# into failure before anyone ran them again.
+testpaths = ["tests", "hooks/tests", "squad/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -32,18 +37,28 @@ markers = [
     "rust: tests for the Rust code-quality detector",
     "typescript: tests for the TypeScript code-quality detector",
 ]
+filterwarnings = [
+    # Emitted by the optional tree-sitter compatibility package, not Squad code. Keep the filter
+    # narrow so new FutureWarnings elsewhere still surface.
+    "ignore:Language\\(path, name\\) is deprecated:FutureWarning",
+]
 
 # NOTE: the default `pytest` run uses testpaths=["tests"] (the root aggregate
-# suite). The per-slice test files run in CI via scripts/run_slice_tests.sh
+# suite). The per-slice test files run in CI via mechanisms/cycle/run_slice_tests.sh
 # (.github/workflows/ci.yml), one isolated process per slice — slices are
 # import-isolated and ship colliding module basenames, so a single wide process
 # is unsound. See that script's header. The count is deliberately not repeated
 # here: it said 64 while the tree held 80, and a number nothing recomputes is a
 # claim that rots.
 [tool.coverage.run]
-source = ["scripts", "skills"]
-omit = ["*/tests/*", "*/__pycache__/*"]
+source = ["mechanisms", "skills"]
+relative_files = true
+omit = ["/tmp/*", "*/tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]
 precision = 2
 show_missing = true
+
+[tool.ruff.lint]
+# Keep the repository's local gate deterministic; do not inherit a developer's global rule set.
+select = ["E4", "E7", "E9", "F", "I", "BLE", "PLW1510", "RUF100"]

@@ -1,19 +1,45 @@
-# Nenhuma linguagem habilitada até que ESTE projeto declare as suas.
+# No language enabled until THIS project declares its own.
 #
-# O kit distribuía aqui a própria configuração — `python | pyproject.toml | ENABLED`,
-# porque o repositório do kit é Python. Todo consumidor nascia com Python habilitado,
-# inclusive os que não têm `pyproject.toml`: o detector apontava para um manifesto
-# ausente e o cycle parava numa suposição de caminho. Descomente o que este projeto
-# realmente usa, com o MANIFEST-MARKER medido em disco.
+# The kit used to ship its own configuration here — `python | pyproject.toml |
+# ENABLED`, because the kit's repository is Python. Every consumer was born with
+# Python enabled, including those with no `pyproject.toml`: the detector pointed at a
+# missing manifest and the cycle stopped on a path assumption. Uncomment what this
+# project actually uses, with the MANIFEST-MARKER measured on disk.
+#
+# WHICH LANGUAGES THE DETECTORS ACTUALLY IMPLEMENT
+# ------------------------------------------------
+# Enabling one outside that set does not degrade gracefully — it produces
+# `languages_skipped` with `no detector implementation`, then the hard cap
+# `no_languages_audited`, then `verdict: INVALID`, on every run. There is no
+# configuration that recovers from it.
+#
+# This file used to list nine languages in its examples while four had a
+# detector. A consumer whose repository is JavaScript followed the commented
+# `javascript` line, got permanent INVALID, and worked around it by declaring
+# `typescript` on a tree with zero `.ts` files — a false declaration kept honest
+# by an eight-line comment, which is the worst kind of correction and was the
+# only one available.
+#
+# The examples below are therefore split. `tests/test_language_examples.py`
+# fails if this list and the detectors' disagree, because a comment nothing
+# recomputes is a claim that rots.
+#
+# IMPLEMENTED: go, python, rust, typescript
+#
+# NOT IMPLEMENTED (do NOT enable — INVALID, not a soft failure): csharp, java, javascript, kotlin, ruby
+#   `typescript` covers what a JS/TS project needs: the detectors run `knip` and
+#   `ts-morph`, which read `package.json` and plain `.js`/`.mjs` sources. The
+#   identifier names the DETECTOR, not the source language.
+#
 
-# Languages enabled for /code-quality and post-edit-check.sh.
+# Languages enabled for /code-quality and post-edit-check.py.
 #
 # Format:  LANGUAGE | MANIFEST-MARKER | STATUS | NOTES
 #
 #   LANGUAGE         one of the identifiers listed below
 #   MANIFEST-MARKER  path to the manifest, RELATIVE TO THE REPO ROOT. Not cosmetic: it is
 #                    what sends each detector to the right directory. The dead-code CLIs
-#                    resolve their project from the cwd, so a crate at `theodb_rs/Cargo.toml`
+#                    resolve their project from the cwd, so a crate at `engine_rs/Cargo.toml`
 #                    or a package under `web/` must declare it here or the auditor reports
 #                    itself unavailable and the cycle stalls on a path assumption.
 #   STATUS           ENABLED | DISABLED | DEFER
@@ -32,12 +58,12 @@
 # go         | go.mod              | ENABLED  | Where the module lives.
 # python     | pyproject.toml      | ENABLED  |
 # typescript | package.json        | ENABLED  | A monorepo declares the workspace it audits.
-# javascript | package.json        | ENABLED  |
+# [NO DETECTOR — do not enable] javascript | package.json        | ENABLED  |
 # rust       | Cargo.toml          | ENABLED  | Point at the crate, not the workspace root.
-# java       | pom.xml             | ENABLED  |
-# kotlin     | build.gradle.kts    | ENABLED  |
-# ruby       | Gemfile             | ENABLED  |
-# csharp     | *.csproj            | ENABLED  |
+# [NO DETECTOR — do not enable] java       | pom.xml             | ENABLED  |
+# [NO DETECTOR — do not enable] kotlin     | build.gradle.kts    | ENABLED  |
+# [NO DETECTOR — do not enable] ruby       | Gemfile             | ENABLED  |
+# [NO DETECTOR — do not enable] csharp     | *.csproj            | ENABLED  |
 
 # ---------------------------------------------------------------------------------------------
 # ENABLED FOR THIS REPOSITORY (B-060)

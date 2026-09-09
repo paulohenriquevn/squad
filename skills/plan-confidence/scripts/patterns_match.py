@@ -1,12 +1,12 @@
 """Slice-local matcher: find `*-patterns` skills applicable to a plan.
 
-Replicates the matching shape used by `auto-plan/scripts/assess_confidence.py`
+Replicates the matching shape used by `idea-to-release/scripts/assess_confidence.py`
 (`score_patterns_skills`) and `review/scripts/detect_domain.py`
 (`_patterns_skills_text`): glob `skills/*-patterns`, read the frontmatter
 `description:` line, and report a hit when any plan keyword appears in it.
 
 Deliberately duplicated per slice (ADR D2 of `patterns-consumption-gate-plan`):
-slices run isolated per-process (`scripts/run_slice_tests.sh`), so a shared
+slices run isolated per-process (`mechanisms/cycle/run_slice_tests.sh`), so a shared
 top-level import would break the isolation the harness depends on.
 """
 from __future__ import annotations

@@ -36,7 +36,7 @@ Do NOT trigger DISCOVER for:
 /discover-plan-confidence {slug}
      ↓ (gate on the measurement plan itself; INVALID returns to /discover-plan)
 /discover-execute {slug}
-     ↓ (runs the measurement → knowledge-base/discoveries/opportunities/{slug}-opportunity.md)
+     ↓ (runs the measurement → records/discoveries/opportunities/{slug}-opportunity.md)
      │                        └─ or → ITEM_KILLED, and the B-NNN block records kill_reason
 /discover-confidence {slug}
      ↓ (scores the opportunity; INVALID returns to /discover-plan)
@@ -68,7 +68,7 @@ Every mode measures **our** system. They differ in what counts as a measurement.
 
 **`live-test` refuses on a domain with no block in `rules/live-target.txt`.** Six of the eight domains have none, by design — a Go library, a Postgres extension and a Terraform module have no surface a browser can probe. Refusing is correct; improvising a probe to look thorough produces theatre.
 
-`live-test` carries one obligation the others do not: **name the uncertainty between environment and product.** `app-dev.usetheo.dev` is a dev environment, and dev environments break for reasons that have nothing to do with the code. An opportunity that cannot yet distinguish the two says so, in those words, rather than picking the more interesting explanation.
+`live-test` carries one obligation the others do not: **name the uncertainty between environment and product.** Whatever `rules/live-target.txt` declares is a dev environment, and dev environments break for reasons that have nothing to do with the code. An opportunity that cannot yet distinguish the two says so, in those words, rather than picking the more interesting explanation.
 
 ### Mode is reclassifiable
 
@@ -103,29 +103,77 @@ The **Blast radius** corner is the one whose shape depends most on the project. 
 
 | Verdict | Meaning | Downstream |
 |---|---|---|
-| `SHIPPABLE` | Opportunity is measured, complete, and its pointers resolve | `/to-plan` |
-| `SHIPPABLE_WITH_CAVEATS` | Complete, with stated open questions | `/to-plan`, caveats carried into the plan |
+| `SHIPPABLE` | Opportunity is measured, complete, and its pointers resolve | `/plan-write` |
+| `SHIPPABLE_WITH_CAVEATS` | Complete, with stated open questions | `/plan-write`, caveats carried into the plan |
 | `NEEDS_REVISION` | Recoverable via `/discover-improve` | loop |
 | `INVALID` | Structural — a fabricated pointer, or an empty corner | back to `/discover-plan` |
 | `ITEM_KILLED` | Measured honestly; the hypothesis did not hold | Item → `killed` + `kill_reason`. **Chain ends. This is success.** |
+| `AWAITING_HUMAN` | The phase ran and stopped at a gate only a person opens — a T3 boundary call, a sign-off, a dependency in another repository | **Emit it.** Without the event the work leaves no trace, and every reader sees an item nobody touched |
 
 `ITEM_KILLED` is orthogonal to the other four: they grade a document, it reports an outcome. A killed item produces no opportunity to score.
+
+## The review panel
+
+**Decided 2026-09-08.** The document this phase produces is judged by **three
+reviewers**, and **2 of 3 approvals** advance it. Below the majority it returns as
+`NEEDS_REVISION` — a verdict that already exists and already holds an item, so no new
+token was invented for a state the vocabulary already had.
+
+| | |
+|---|---|
+| Who sits | [`rules/review-panel.txt`](review-panel.txt) — **the project's**, because which models a project can reach is not the kit's business |
+| What the kit imposes | Three reviewers; at least one from a recognised family **outside** the one the kit runs on; the author never sits |
+| Computes | [`mechanisms/cycle/review_panel.py`](../mechanisms/cycle/review_panel.py) |
+| Premise | [`mechanisms/gates/check_panel_capability.py`](../mechanisms/gates/check_panel_capability.py), at intake |
+
+**Why a script cannot do this job.** ``/discover-confidence`` is deterministic and scores
+STRUCTURE — pointers resolve, the shape is complete, the contract is satisfied. What it
+cannot ask is whether evidence that *resolves* actually *supports* the conclusion drawn
+from it. That question is what the panel is for, and it is the one place in this phase
+where a second opinion buys something a rule cannot.
+
+**Why the panel must not be one family.** Three Claudes asked three times are three
+correlated opinions: a plausible fabrication that survives one tends to survive its
+siblings, which is the single thing an orthogonal reviewer catches. An **unrecognised**
+model supplies neither side — otherwise `--model anything` would prove orthogonality by
+typing.
+
+**An incomplete panel is not a rejection.** Two approvals out of two is not 2-of-3: the
+threshold is over a FULL panel, so a missing reviewer is an abstention, and an abstention
+approves nothing and rejects nothing. The panel did not convene, the item returns to the
+registry with an `access` impediment (`halt_disposition.py`), and the queue takes the next
+item. Collapsing the two would send an author to rewrite a document nobody found fault
+with — or, far worse, let a panel of one report a majority.
+
+**The dissent is kept.** A minority vote that loses is the most interesting thing in the
+record, and `review_panel.py` reports it beside the outcome. This kit already argues the
+point about Claude and Codex disagreeing in `cycle-judge-codex.md`: the disagreement is
+the highest-value signal in the pipeline, and discarding it because it lost a vote throws
+away what the panel was convened to produce.
 
 ## Hard gates
 
 | # | Gate | Blocks on |
 |---|---|---|
-| G-E | **Evidence pointers resolve** | A cited `file:line` that does not exist, a URL never actually fetched, a trace id never observed, a test asserted to fail but never run. Fabricated evidence is the one unrecoverable defect in this cycle: everything downstream trusts it. |
-| G-M | **Mode contract satisfied** | The mode's mandatory evidence is incomplete — most often `bug` without a failing test. |
-| G-L | **Live target declared** | `--mode live-test` on a domain with no block in `rules/live-target.txt`. |
-| G-C | **Corners populated** | Any of the four corners empty. `unknown` populates Constraint relation; it is an answer, not a blank. |
-| G-K | **Kill is reasoned** | `ITEM_KILLED` without a `kill_reason` naming what was measured and what it showed. An unexplained kill is indistinguishable from an abandoned run. |
+| G-E | **Evidence pointers resolve** (`check_evidence_pointers.py`) | A cited `file:line` that does not exist, a URL never actually fetched, a trace id never observed, a test asserted to fail but never run. Fabricated evidence is the one unrecoverable defect in this cycle: everything downstream trusts it. |
+| G-M | **Mode contract satisfied** (`check_opportunity_completeness.py`) | The mode's mandatory evidence is incomplete — most often `bug` without a failing test. |
+| G-L | **Live target declared** (`check_measurement_targets.py`, at plan time) | `--mode live-test` on a domain with no block in `rules/live-target.txt`. |
+| G-C | **Corners populated** (`check_corner_coverage.py`) | Any of the four corners empty. `unknown` populates Constraint relation; it is an answer, not a blank. |
+| G-K | **Kill is reasoned** — mechanised on two layers: `backlog_status.py` REFUSES a transition to `killed` without a `--kill-reason` (point of action), and `check_backlog_structure.py` reports `killed_without_reason` as MAJOR (after the fact). Both name this gate by id. _(not mechanized: debt since 2026-08-31 — the SUBSTANCE of the reason — nothing confronts what the reason claims against what was measured, and a `kill_reason` of "n/a" satisfies both layers)_ | `ITEM_KILLED` without a `kill_reason` naming what was measured and what it showed. An unexplained kill is indistinguishable from an abandoned run. |
 
 ## Stop conditions
 
 - Verdict `INVALID` → return to `/discover-plan` (the measurement plan was wrong, not necessarily the hypothesis).
-- 3 consecutive iterations with no confidence improvement → escalate to a human.
-- Measurement cannot be run at all (target unreachable, credential absent, tool missing) → **stop and ask the human.** Do not substitute a weaker measurement, do not reason about what the measurement would probably have shown, and do not record `ITEM_KILLED` — nothing was measured, so nothing was disproved.
+- 3 consecutive iterations with no confidence improvement → return the item to the registry
+  with the diagnosis on it and take the next one (`autonomy-envelope.md § A loop ran out of
+  attempts`). Nothing here waits for a person.
+- Measurement cannot be run at all (target unreachable, credential absent, tool missing) → **return the item to the registry with a retained impediment.** Do not substitute a weaker measurement, do not reason about what the measurement would probably have shown, and do not record `ITEM_KILLED` — nothing was measured, so nothing was disproved.
+
+  This is the one shape in the whole DISCOVER→ACCEPTANCE span that legitimately reaches a
+  person, and it reaches them **through the registry rather than by holding the session**: an
+  absent target, credential or tool is `access` or `liveness` in
+  [`decision-delegation.txt`](decision-delegation.txt), and authority does not conjure any of
+  them. `halt_disposition.py` classifies it; the queue moves on.
 - Either halt-loop emits BLOCKED → the cycle pauses; `/discover-confidence` must not honour the artifact.
 
 ## Halt-loop contracts
@@ -140,7 +188,7 @@ Two phases drive autonomous halt-loops via `ralph-loop:ralph-loop`, following th
 - **Discovery that turns into implementation.** The output is a document. An opportunity that already contains the patch has pre-empted the plan cycle and skipped its gates.
 - **Fabricated evidence.** A plausible `file:line` nobody opened; a status code nobody requested; a test asserted to fail but never executed. This is the cycle's cardinal sin — everything downstream treats it as measured fact.
 - **Prior art smuggled in as evidence.** "Project X does it this way" is not a measurement of our system. It may be true, useful, and the reason someone had the idea — it is still not evidence, and it cannot fill the Evidence corner.
-- **Reporting a dev-environment fault as a product defect.** `app-dev.usetheo.dev` breaks for its own reasons. Name the uncertainty instead of resolving it toward the more interesting answer.
+- **Reporting a dev-environment fault as a product defect.** The declared live target breaks for its own reasons. Name the uncertainty instead of resolving it toward the more interesting answer.
 - **Refusing to kill.** Sunk cost after a long measurement makes a weak finding look shippable. A run that kills an item did its job; a run that ships a hunch it failed to confirm did the opposite.
 - **Filling Constraint relation with a confident claim nobody measured.** `unknown` is the honest default while `current-constraint.md` is undeclared.
 - **Improvising a live probe on a domain with no declared target.** Produces the appearance of runtime evidence with none of the substance.
@@ -148,15 +196,15 @@ Two phases drive autonomous halt-loops via `ralph-loop:ralph-loop`, following th
 
 ## Output
 
-- `knowledge-base/discoveries/plans/{slug}-plan.md` — the measurement plan
-- `knowledge-base/discoveries/opportunities/{slug}-opportunity.md` — the terminal artifact
+- `records/discoveries/plans/{slug}-plan.md` — the measurement plan
+- `records/discoveries/opportunities/{slug}-opportunity.md` — the terminal artifact
 - `BACKLOG.md` — the `B-NNN` block updated: `status` → `triaged` with `evidence`, or `killed` with `kill_reason`. A `--sweep` appends new blocks with `source: discover-{mode}`.
 
-The study zone the ancestor cycle used (`knowledge-base/references/`, seeded at project inception and governed by a provenance rule) is **retired**: it existed to hold other people's code for imitation, which is the practice this cycle removed.
+The study zone the ancestor cycle used (`records/references/`, seeded at project inception and governed by a provenance rule) is **retired**: it existed to hold other people's code for imitation, which is the practice this cycle removed.
 
 ## Rollback
 
-An opportunity that turns out wrong is simply not consumed downstream — supersede or delete the file under `knowledge-base/discoveries/opportunities/`. The `B-NNN` item returns to `raw` so it can be re-measured, with a note recording that the first measurement was withdrawn and why. Do not silently reset it: an item that was measured, believed, and then withdrawn carries information a fresh-looking `raw` item does not.
+An opportunity that turns out wrong is simply not consumed downstream — supersede or delete the file under `records/discoveries/opportunities/`. The `B-NNN` item returns to `raw` so it can be re-measured, with a note recording that the first measurement was withdrawn and why. Do not silently reset it: an item that was measured, believed, and then withdrawn carries information a fresh-looking `raw` item does not.
 
 ## Cross-references
 

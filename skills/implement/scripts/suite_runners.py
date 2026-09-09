@@ -49,7 +49,7 @@ LANGUAGE_MANIFESTS: dict[str, tuple[str, ...]] = {
 def run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any]:
     """Run a command, never raise. Shared by every check in the gate."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             cmd,
             cwd=str(cwd),
             capture_output=True,
@@ -146,7 +146,7 @@ def go_workspace_modules(project_root: Path) -> list[str]:
 
     `go test ./...` at a workspace root fails with "directory prefix . does not
     contain modules listed in go.work" — the kit already hit this shape in
-    /arch-check. Paths that leave the repo (`../theo-contracts`) belong to a
+    /arch-check. Paths that leave the repo (`../contracts`) belong to a
     sibling repository with its own gates and are dropped, not audited from here.
     """
     work = project_root / "go.work"
@@ -163,7 +163,7 @@ def go_workspace_modules(project_root: Path) -> list[str]:
         entry = entry.strip().strip('"')
         if not entry or entry.startswith(".."):
             continue
-        rel = entry[2:] if entry.startswith("./") else entry
+        rel = entry.removeprefix("./")
         if rel and (project_root / rel).is_dir() and rel not in modules:
             modules.append(rel)
     return modules

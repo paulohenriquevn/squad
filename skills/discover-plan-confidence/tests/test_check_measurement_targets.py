@@ -3,9 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import check_measurement_targets as cmt
+import pytest
 from check_measurement_targets import check_measurement_targets
 
 
@@ -67,7 +66,7 @@ def test_undeclared_live_host_is_flagged(rooted: Path) -> None:
     rules = rooted / "rules"
     rules.mkdir()
     (rules / "live-target.txt").write_text(
-        "domain = frontend-dashboard\nkind = web\ntarget = https://app-dev.usetheo.dev\n",
+        "domain = frontend-dashboard\nkind = web\ntarget = https://app-dev.example.com\n",
         encoding="utf-8",
     )
     report = check_measurement_targets(_plan(rooted, "Probe https://staging.example.com/api"))
@@ -78,10 +77,10 @@ def test_declared_live_host_passes(rooted: Path) -> None:
     rules = rooted / "rules"
     rules.mkdir()
     (rules / "live-target.txt").write_text(
-        "domain = frontend-dashboard\nkind = web\ntarget = https://app-dev.usetheo.dev\n",
+        "domain = frontend-dashboard\nkind = web\ntarget = https://app-dev.example.com\n",
         encoding="utf-8",
     )
-    report = check_measurement_targets(_plan(rooted, "Probe https://app-dev.usetheo.dev/api/traces"))
+    report = check_measurement_targets(_plan(rooted, "Probe https://app-dev.example.com/api/traces"))
     assert report["undeclared_live_hosts"] == []
     assert len(report["live_targets"]) == 1
 
@@ -106,7 +105,7 @@ def test_backticked_prose_is_not_a_target(rooted: Path) -> None:
 # --- B-017: an npm module specifier is not a repo path ---------------------------------
 #
 # `PATH_TARGET_RE` matched any backticked token containing a slash and resolved it against the
-# repo root. `theokit/server/plugins` is a real npm subpath specifier — it has no extension and
+# repo root. `acme-pkg/server/plugins` is a real npm subpath specifier — it has no extension and
 # lives under node_modules — so it failed `Path.exists()` and fired `fabricated_target`, a HARD
 # CAP that drops the plan to 49 and INVALID.
 #
@@ -125,18 +124,18 @@ def _install(root: Path, *specifiers: str) -> None:
 
 
 def test_an_unscoped_module_specifier_is_not_fabricated(rooted: Path) -> None:
-    _install(rooted, "theokit")
+    _install(rooted, "acme-pkg")
 
-    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+    report = check_measurement_targets(_plan(rooted, "Read `acme-pkg/server/plugins` for the seam."))
 
     assert report["fabricated"] == 0, report["fabricated_targets"]
 
 
 def test_a_scoped_module_specifier_is_recognised_rather_than_skipped(rooted: Path) -> None:
     # It must now be SEEN and classified, not merely absent from the match set.
-    _install(rooted, "@theokit/sdk")
+    _install(rooted, "@acme/sdk")
 
-    report = check_measurement_targets(_plan(rooted, "Read `@theokit/sdk/server/auth` for the type."))
+    report = check_measurement_targets(_plan(rooted, "Read `@acme/sdk/server/auth` for the type."))
 
     assert report["fabricated"] == 0, report["fabricated_targets"]
 
@@ -144,11 +143,11 @@ def test_a_scoped_module_specifier_is_recognised_rather_than_skipped(rooted: Pat
 def test_a_package_that_exists_only_in_the_pnpm_store_resolves(rooted: Path) -> None:
     # pnpm nests the real package two levels down. A top-level-only check misses every one of them,
     # which in this workspace is all of them.
-    (rooted / "node_modules" / ".pnpm" / "theokit@0.48.8" / "node_modules" / "theokit").mkdir(
+    (rooted / "node_modules" / ".pnpm" / "acme-pkg@0.48.8" / "node_modules" / "acme-pkg").mkdir(
         parents=True
     )
 
-    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+    report = check_measurement_targets(_plan(rooted, "Read `acme-pkg/server/plugins` for the seam."))
 
     assert report["fabricated"] == 0, report["fabricated_targets"]
 
@@ -162,6 +161,69 @@ def test_a_specifier_for_a_package_that_is_not_installed_is_still_fabricated(roo
 
 
 def test_a_tree_without_node_modules_reports_a_miss_rather_than_raising(rooted: Path) -> None:
-    report = check_measurement_targets(_plan(rooted, "Read `theokit/server/plugins` for the seam."))
+    report = check_measurement_targets(_plan(rooted, "Read `acme-pkg/server/plugins` for the seam."))
 
     assert report["fabricated"] == 1, report["fabricated_targets"]
+
+
+# ── gate G-L: an undeclared live host, and the three states of the declaration ──
+#
+# The guard read `if declared_hosts and host not in declared_hosts`, so an EMPTY set
+# skipped the loop entirely, `undeclared_hosts` stayed empty, and that satisfied
+# `if live_targets and not undeclared_hosts` — awarding a CONTRIBUTOR reading
+# "N live target(s), all declared" when nothing was declared.
+#
+# The kit ships rules/live-target.txt empty ON PURPOSE, so in every freshly installed
+# consumer the gate was not merely inert: it paid points for the targets it exists to
+# refuse. An inability reported as approval.
+
+
+def _plan_with_url(root: Path) -> Path:
+    (root / "plans").mkdir(parents=True, exist_ok=True)
+    p = root / "plans" / "p.md"
+    p.write_text(
+        "# Measurement plan\n\n## Target\n\n"
+        "Probe `https://app.example.com/api/traces` and record the status.\n",
+        encoding="utf-8",
+    )
+    return p
+
+
+def test_an_empty_declaration_makes_every_live_host_undeclared(tmp_path: Path) -> None:
+    """Declaring nothing is not the same as declaring everything."""
+    (tmp_path / ".git").touch()
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "live-target.txt").write_text("# none yet\n", encoding="utf-8")
+
+    report = check_measurement_targets(_plan_with_url(tmp_path))
+
+    assert report["undeclared_live_hosts"] == ["app.example.com"]
+    assert any("not declared" in d for d in report["detractors"])
+    assert not any("all declared" in c for c in report["contributors"]), (
+        "a plan must never be credited for targets nobody declared"
+    )
+
+
+def test_a_missing_declaration_file_is_reported_as_uncheckable(tmp_path: Path) -> None:
+    """Absent file: the check could not run. Not a violation, and not a pass."""
+    (tmp_path / ".git").touch()
+    (tmp_path / "rules").mkdir()
+
+    report = check_measurement_targets(_plan_with_url(tmp_path))
+
+    assert report["undeclared_live_hosts"] == [], "nothing was judged, so nothing is undeclared"
+    assert any("could not be checked" in c for c in report["contributors"])
+    assert not any("all declared" in c for c in report["contributors"])
+
+
+def test_a_declared_host_passes(tmp_path: Path) -> None:
+    """The widening must not swallow the signal it exists to give."""
+    (tmp_path / ".git").touch()
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "live-target.txt").write_text(
+        "target = https://app.example.com\n", encoding="utf-8")
+
+    report = check_measurement_targets(_plan_with_url(tmp_path))
+
+    assert report["undeclared_live_hosts"] == []
+    assert any("all declared" in c for c in report["contributors"])

@@ -22,7 +22,7 @@ Single entry-point for [`cycle-review`](../../rules/cycle-review.md). The most r
 
 ## Cycle contract
 
-This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md). The cycle rule is the **source of truth** for: pre-conditions, hard gates (BLOCKER never merges; NEEDS_DEEPER returns to /to-plan for re-scoping), soft gates, stop conditions, anti-patterns (never approve unresolved BLOCKER, never fabricate findings, never auto-merge), rollback (review-report only — never code).
+This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md). The cycle rule is the **source of truth** for: pre-conditions, hard gates (BLOCKER never merges; NEEDS_DEEPER returns to /plan-write for re-scoping), soft gates, stop conditions, anti-patterns (never approve unresolved BLOCKER, never fabricate findings, never merge — that belongs to `/release`), rollback (review-report only — never code).
 
 **Read `cycle-review.md` before invoking this skill.** This SKILL.md retains phase-specific detail (domain detection, agent generation, consolidation rubric).
 
@@ -30,7 +30,7 @@ This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md
 
 User explicitly invokes `/review {plan-slug}` when:
 
-- Recent commits on `workspace` passed `/implement` validation. PASS is the canonical state; PARTIAL with documented SKIPs (e.g., pre-code phase skipping npm gates) is acceptable only when `cycle-review.md § Trigger conditions` explicitly permits it for the current project lifecycle stage
+- Recent commits on `workspace` passed `/implement` validation. PASS is the canonical state; PARTIAL with documented SKIPs (e.g., pre-code phase skipping npm gates) is acceptable only when `cycle-review.md § Pre-conditions` explicitly permits it for the current project lifecycle stage
 - All tests are green on the branch
 - The implementation plan at `plans/{slug}-plan.md` is the canonical contract (un-revised since /implement)
 - PR is drafted OR ready to be drafted
@@ -63,17 +63,19 @@ Total: 4 baseline + 1-3 domain-specific = 5-7 agents per `/review` invocation.
 
 ```bash
 # Plan exists and was not revised post-implementation
-test -f .claude/knowledge-base/plans/{slug}-plan.md
+test -f .claude/records/plans/{slug}-plan.md
 # Branch state clean (no uncommitted changes)
 [ -z "$(git status --porcelain)" ]
 # On workspace (NEVER on develop/main — review audits work before promotion)
 [ "$(git branch --show-current)" = "workspace" ]
 # /implement validation passed (or PARTIAL with acceptable SKIPs)
-test -f .claude/knowledge-base/reviews/{slug}-implement-validate-*.md
-# /code-quality audit exists AND verdict ∈ {PASS, PASS_WITH_CAVEATS}
-# (FAIL_SOFT / FAIL_HARD / INVALID block /review per cycle-code-quality.md)
-test -f .claude/knowledge-base/audits/{slug}-code-quality-*.md
-grep -qE '"verdict":[[:space:]]*"(PASS|PASS_WITH_CAVEATS)"' .claude/knowledge-base/audits/{slug}-code-quality-*.md \
+test -f .claude/records/reviews/{slug}-implement-validate-*.md
+# /code-quality audit exists AND admits /review. Do not trust `test -f`: it does
+# not read the verdict, and the per-soft-cap ADR requirement is not verifiable by
+# eye. The script below is the same one `consolidate_findings.py` injects into the
+# verdict — running it here only anticipates the answer, never replaces it.
+python3 .claude/skills/review/scripts/check_upstream_gate.py {slug} --project-root .
+grep -qE '"verdict":[[:space:]]*"(PASS|PASS_WITH_CAVEATS)"' .claude/records/audits/{slug}-code-quality-*.md \
   || (echo "Refuse: /code-quality verdict is not PASS/PASS_WITH_CAVEATS. Loop back to /implement." && exit 1)
 # Tests green on the branch
 npm test  # or skip if pre-code phase
@@ -85,7 +87,7 @@ If any check fails, refuse with the specific missing piece surfaced honestly. Th
 
 ```bash
 python3 .claude/skills/review/scripts/detect_domain.py \
-  --plan .claude/knowledge-base/plans/{slug}-plan.md \
+  --plan .claude/records/plans/{slug}-plan.md \
   --diff-base main
 ```
 
@@ -104,7 +106,7 @@ Output: JSON with detected domains + confidence per domain.
 
 ```bash
 python3 .claude/skills/review/scripts/spawn_reviewers.py \
-  --plan .claude/knowledge-base/plans/{slug}-plan.md \
+  --plan .claude/records/plans/{slug}-plan.md \
   --slug {slug} \
   --primary-domain memory-layer \
   --secondary-domains pgvector-schema,llm-extraction \
@@ -125,9 +127,24 @@ Read the agent file content. Invoke:
 Agent(
   subagent_type="general-purpose",
   description=f"Review-{role}",
+  isolation="worktree",
   prompt=<full agent .md content as system prompt + "Run your review now. Output structured findings.">
 )
 ```
+
+**`isolation="worktree"` is not optional.** Without it every reviewer reads and
+writes the same working tree, and each one's scratch files become the others'
+evidence. Measured on the B-025 run, and recorded in the comment above
+`capture_tree_state`: six agents against one tree, `usage-panel.tsx` found
+carrying a mutation marker mid-review, probe files at the repo root, and the
+architecture reviewer filing `reportGuardFailure has zero production call sites`
+against a symbol called at `usage-panel.tsx:115` and `:147`. **Three of six
+reviewers happened to notice the tree was dirty** and re-derived their citations —
+that correctness depended on noticing is the defect, not the dirt.
+
+The tree-state detector stays. It is not made redundant by the isolation: it is
+what proves the isolation is still in force, and isolation that silently stops
+working looks exactly like isolation that works.
 
 Each agent runs its review independently and returns findings in a structured format (see "Findings format" below). Skill collects all findings.
 
@@ -136,8 +153,8 @@ Each agent runs its review independently and returns findings in a structured fo
 ```bash
 python3 .claude/skills/review/scripts/consolidate_findings.py \
   --findings-dir .claude/agents/review-{slug}-{date}/findings/ \
-  --output .claude/knowledge-base/reviews/{slug}-review-{date}.md \
-  --plan .claude/knowledge-base/plans/{slug}-plan.md
+  --output .claude/records/reviews/{slug}-review-{date}.md \
+  --plan .claude/records/plans/{slug}-plan.md
 ```
 
 The script:
@@ -164,7 +181,7 @@ Plus, `/review` adds:
 
 ```bash
 python3 .claude/skills/review/scripts/edge_case_coverage.py \
-  --plan .claude/knowledge-base/plans/{slug}-plan.md \
+  --plan .claude/records/plans/{slug}-plan.md \
   --tests-dir tests/
 ```
 
@@ -187,7 +204,7 @@ After all findings consolidate, decide (per `rules/cycle-review.md § Verdicts`)
 Write consolidated review report at:
 
 ```
-.claude/knowledge-base/reviews/{slug}-review-{date}.md
+.claude/records/reviews/{slug}-review-{date}.md
 ```
 
 Report format (see `consolidate_findings.py`):
@@ -268,6 +285,71 @@ findings:
     ...
 ```
 
+### Closing a finding on a re-review
+
+A re-review that verified a fix marks the finding `status: CLOSED` and **leaves
+the severity alone**:
+
+```yaml
+  - id: F-dom-1
+    severity: BLOCKER          # stays BLOCKER — it was one
+    status: CLOSED             # what the re-review established
+    file: .github/workflows/ci.yml
+    summary: node -e trips SC2016 and fails workflow-lint
+    evidence: |
+      Re-verified against the same digest-pinned image: ACTIONLINT_EXIT=0,
+      0 bytes of output. Appending a genuine SC2016 still fires, so the
+      suppression is command-scoped rather than block-wide.
+    recommended_action: none — fixed in <sha>
+```
+
+`consolidate_findings.py` scores the verdict from **open** findings only, so a
+closed BLOCKER no longer forces `NEEDS_FIXES`. The finding stays in the report
+under its own section, with its original severity and the agent that closed it:
+the audit trail survives, and the verdict describes the code as it stands rather
+than as it stood at the first read.
+
+Only these three ways exist to move past a BLOCKER, and two of them are
+forbidden:
+
+| Action | Verdict | Allowed |
+|---|---|---|
+| Fix it, re-verify, mark `status: CLOSED` | passes | **yes** |
+| Lower its severity | passes | no — demoting a failure to let it through, the first anti-pattern `rules/cycle-review.md` names |
+| Delete the finding | passes | no — erases the audit trail of a real defect |
+
+**Absence of the field keeps the old behaviour.** Every findings file written
+before this omits `status`, and reinterpreting them would silently rescore every
+past review.
+
+**Why this section exists.** The mechanism shipped and the contract never
+mentioned it. A consumer session hit a re-verified BLOCKER, grepped the
+consolidator for `outcome` — the field name the harness's own `ReportFindings`
+tool uses — found nothing, and concluded the capability was missing. It was
+about to re-run four review agents at roughly 200k tokens each to work around
+something that already worked. A mechanism nobody can find is worth what an
+absent one is worth.
+
+## Do not edit the tree between the spawn and the consolidation
+
+The agents read the working tree while they run. Applying fixes during that
+window means each agent reviewed a different tree, and the findings no longer
+describe one state of the code.
+
+`consolidate_findings.py` detects it — it records HEAD plus a digest of
+`git status --porcelain` at spawn time, re-reads both at consolidation, and
+emits `tree_contaminated` in the JSON plus a `## ⚠ Working tree contaminated
+during this review` section in the report. So the run is not silently wrong.
+
+But detection is the remedy, not the cure: the agents have already spent their
+budget on a tree that moved. Measured on a real run — four reviewers, two of them
+noticed independently, reported *"TREE MOVED MID-REVIEW"* and re-measured against
+the new HEAD rather than inferring. That was their judgement, not the process's,
+and the next set of agents may simply report against a tree nobody has any more.
+
+Fix after the consolidation, then re-review. Marking the resulting findings
+`status: CLOSED` is what makes the second pass cheap.
+
 ## Inviolable rules
 
 - The skill NEVER modifies code on `workspace` — only writes review reports
@@ -275,13 +357,13 @@ findings:
 - The skill NEVER fabricates findings — if a file has no issues, the finding is "INFO: no issues found"
 - The skill SHOULD cover every file in the diff (each baseline agent is briefed to enumerate touched files via the diff base). When a file is genuinely trivial — pure rename, single-line typo — the finding is "INFO: no issues found". Coverage is enforced by agent prompts today; a future `consolidate_findings.py` check may mechanically assert "every changed file appears in ≥1 finding"
 - The skill NEVER reviews without the plan as ground truth — review without plan is vibes
-- The skill NEVER auto-merges — final merge is always human decision
+- The skill NEVER merges. The merge belongs to `/release`, which verifies this review's verdict before performing it — a reviewer that could merge on its own verdict would be grading its own decision to proceed
 - The skill NEVER reviews code modified between `/implement` validation and `/review` — if commits happened, re-run `/implement` validation
 - The skill NEVER deletes the spawned agent files post-review — they are audit trail (per user decision: persist as audit)
 
 ## When to give up honestly
 
-Per `cycle-review.md § Stop conditions`:
+Per `cycle-review.md § Verdicts` — `BLOCKED` is the honest outcome here:
 
 1. Review depth requires domain knowledge outside training (cryptography, hardware-specific, regulatory compliance) → mark BLOCKED with reason "requires human domain expert"
 2. PR scope ambiguous (changes touch files unrelated to plan) → halt; surface to human
@@ -296,9 +378,9 @@ Per `cycle-review.md § Stop conditions`:
 - Scripts: `scripts/detect_domain.py`, `scripts/spawn_reviewers.py`, `scripts/edge_case_coverage.py`, `scripts/consolidate_findings.py`
 - Reuses: `.claude/skills/implement/scripts/run_validation.py` (quality gates), `.claude/skills/implement/scripts/check_wiring.py` (wiring re-validation)
 - Generated audit trail: `.claude/agents/review-{slug}-{date}/`
-- Final reports: `.claude/knowledge-base/reviews/{slug}-review-{date}.md`
+- Final reports: `.claude/records/reviews/{slug}-review-{date}.md`
 - Project rules consumed: `architecture.md`, `testing.md`, `public-copy.md`, `discover-plan-golden-rule.md` and `discover-opportunity-golden-rule.md` (if the review touches discovery artifacts)
 
 ## Match to the work
 
-This skill spawns 5-7 agents in parallel — the gate is "MAIS RIGOROSO de TODAS". Don't run `/review` for trivial changes; for small PRs, the built-in `/review` (Anthropic) is sufficient and far lighter.
+This skill spawns 5-7 agents in parallel — it is the MOST RIGOROUS gate of all. Don't run `/review` for trivial changes; for small PRs, the built-in `/review` (Anthropic) is sufficient and far lighter.

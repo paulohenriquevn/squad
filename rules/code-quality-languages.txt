@@ -1,15 +1,19 @@
-# Languages enabled for /code-quality and post-edit-check.sh.
+# Languages enabled for /code-quality and post-edit-check.py.
 #
 # Format:  LANGUAGE | MANIFEST-MARKER | STATUS | NOTES
 #
 #   LANGUAGE         one of the identifiers listed below
 #   MANIFEST-MARKER  path to the manifest, RELATIVE TO THE REPO ROOT. Not cosmetic: it is
 #                    what sends each detector to the right directory. The dead-code CLIs
-#                    resolve their project from the cwd, so a crate at `theodb_rs/Cargo.toml`
+#                    resolve their project from the cwd, so a crate at `engine_rs/Cargo.toml`
 #                    or a package under `web/` must declare it here or the auditor reports
 #                    itself unavailable and the cycle stalls on a path assumption.
 #   STATUS           ENABLED | DISABLED | DEFER
-#   NOTES            free text; optional, but say WHY when a language is DISABLED or DEFER
+#   NOTES            free text. REQUIRED for DISABLED and DEFER, and it is what makes the
+#                    difference between a decision and an omission: a language left off with a
+#                    recorded reason is exempt from `unaudited_manifest_present`; one left off in
+#                    silence trips it and the verdict is INVALID. "Disable it and pass" therefore
+#                    still cannot happen — it costs a sentence somebody signs, in a versioned file.
 #
 # Lines starting with '#' are comments. Anything with fewer than three '|' fields is a
 # hard error, not a warning — a malformed line means a language you believe is audited is
@@ -24,12 +28,38 @@
 # go         | go.mod              | ENABLED  | Where the module lives.
 # python     | pyproject.toml      | ENABLED  |
 # typescript | package.json        | ENABLED  | A monorepo declares the workspace it audits.
-# javascript | package.json        | ENABLED  |
+# [NO DETECTOR — do not enable] javascript | package.json        | ENABLED  |
 # rust       | Cargo.toml          | ENABLED  | Point at the crate, not the workspace root.
-# java       | pom.xml             | ENABLED  |
-# kotlin     | build.gradle.kts    | ENABLED  |
-# ruby       | Gemfile             | ENABLED  |
-# csharp     | *.csproj            | ENABLED  |
+# [NO DETECTOR — do not enable] java       | pom.xml             | ENABLED  |
+# [NO DETECTOR — do not enable] kotlin     | build.gradle.kts    | ENABLED  |
+# [NO DETECTOR — do not enable] ruby       | Gemfile             | ENABLED  |
+# [NO DETECTOR — do not enable] csharp     | *.csproj            | ENABLED  |
+#
+# WHICH LANGUAGES THE DETECTORS ACTUALLY IMPLEMENT
+# ------------------------------------------------
+# Enabling one outside that set does not degrade gracefully — it produces
+# `languages_skipped` with `no detector implementation`, then the hard cap
+# `no_languages_audited`, then `verdict: INVALID`, on every run. There is no
+# configuration that recovers from it.
+#
+# This file used to list nine languages in its examples while four had a
+# detector. A consumer whose repository is JavaScript followed the commented
+# `javascript` line, got permanent INVALID, and worked around it by declaring
+# `typescript` on a tree with zero `.ts` files — a false declaration kept honest
+# by an eight-line comment, which is the worst kind of correction and was the
+# only one available.
+#
+# The examples below are therefore split. `tests/test_language_examples.py`
+# fails if this list and the detectors' disagree, because a comment nothing
+# recomputes is a claim that rots.
+#
+# IMPLEMENTED: go, python, rust, typescript
+#
+# NOT IMPLEMENTED (do NOT enable — INVALID, not a soft failure): csharp, java, javascript, kotlin, ruby
+#   `typescript` covers what a JS/TS project needs: the detectors run `knip` and
+#   `ts-morph`, which read `package.json` and plain `.js`/`.mjs` sources. The
+#   identifier names the DETECTOR, not the source language.
+#
 
 # ---------------------------------------------------------------------------------------------
 # ENABLED FOR THIS REPOSITORY (B-060)

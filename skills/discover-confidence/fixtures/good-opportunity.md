@@ -4,7 +4,7 @@
 **Repo:** squad
 **Mode:** review
 **Slug:** `sweep-registration-gap`
-**Source plan:** `knowledge-base/discoveries/plans/sweep-registration-gap-plan.md`
+**Source plan:** `records/discoveries/plans/sweep-registration-gap-plan.md`
 **Generated:** 2026-08-05 via `/discover-execute`
 **Confidence verdict:** PROVISIONAL (awaiting `/discover-confidence`)
 

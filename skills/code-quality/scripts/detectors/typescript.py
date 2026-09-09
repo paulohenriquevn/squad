@@ -2,7 +2,7 @@
 
 T1.2 implementation: detect_dead_code via knip subprocess.
 T2.3 implementation: detect_symbol_fabrication via tree-sitter + npm lookup.
-Other methods still stubs (T3.1 / T4.2).
+D3/D4 report explicit capability caps until their external runners are integrated.
 """
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ import subprocess
 from pathlib import Path
 
 from scripts import _registry
-from scripts._shared import Finding, safe_parse_json, sanitize_symbol, to_rel_path
+from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_imports_and_calls
 
-from . import BaseDetector, _arch
+from . import BaseDetector, _arch, _mutation, _wiring
 
 _TS_NODE_BUILTINS = frozenset(
     {
@@ -121,8 +121,8 @@ class TypescriptDetector(BaseDetector):
         """Every package name declared INSIDE this repo — not just the root's.
 
         Patch 2026-08-03. `_find_self_package_name` resolves the OUTERMOST package.json#name,
-        which in a monorepo is the private root (`theo-promptly`) that nobody imports. Every
-        sibling import (`@usetheo/promptly` from packages/api) therefore fell through to the
+        which in a monorepo is the private root (`promptly`) that nobody imports. Every
+        sibling import (`@scope/promptly` from packages/api) therefore fell through to the
         npm registry, took a 404 and was reported as `Fabricated npm package` — 60 HARD
         findings on a repo whose build and tests are green. A workspace dependency declared
         `workspace:*` resolves perfectly; it is simply not published, by design.
@@ -254,7 +254,7 @@ class TypescriptDetector(BaseDetector):
                 # Patch 2026-08-03 — Sibling workspace package (declared `workspace:*`, unpublished by design)
                 if self._is_workspace_reference(module, ws_names):
                     continue
-                # Patch 2026-08-03 — tsconfig path alias (`@/components/...`), nao pacote npm
+                # Patch 2026-08-03 — tsconfig path alias (`@/components/...`), not an npm package
                 if self._is_path_alias(module, aliases):
                     continue
                 # Package name for npm lookup. `top` already collapses a scoped module to
@@ -293,10 +293,19 @@ class TypescriptDetector(BaseDetector):
         return findings
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        raise NotImplementedError("T3.1: cross-package wiring detector not yet implemented")
+        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
 
-    def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
-        raise NotImplementedError("T4.2: stryker wrapper not yet implemented")
+    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
+        return _mutation.detect_mutation_score(
+            self.language,
+            manifest_dir,
+            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
+            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
+            timeout_minutes=self.threshold(
+                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
+            max_report_age_minutes=self.threshold(
+                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
+        )
 
     # ------------------------------------------------------------------
     # internal helpers
@@ -375,7 +384,7 @@ class TypescriptDetector(BaseDetector):
         D5 invokes the npm script the repo declares rather than guessing which directories to
         cruise. Two reasons, both measured. The paths a cruise covers ARE an architectural
         decision — choosing them here would be Squad deciding what counts as the codebase. And
-        `npm run` resolves the LOCAL binary: usetheo-labs/agent-builder measured the global
+        `npm run` resolves the LOCAL binary: a TypeScript monorepo measured the global
         `depcruise` cruising **0 modules** against a config the local one cruised 279 with. A
         global binary runs without the project's transpilers, so it silently sees nothing.
 

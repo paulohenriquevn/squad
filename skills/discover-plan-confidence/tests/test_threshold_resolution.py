@@ -19,10 +19,15 @@ import pytest
 SCRIPTS = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from run_measurement_plan_score import _resolve_thresholds  # noqa: E402
-
+from run_measurement_plan_score import _plan_version, _resolve_thresholds  # noqa: E402
 
 BANDS = "SHIPPABLE|95|2027-01-31|ADR\nINVALID|0|2027-01-31|ADR\n"
+
+
+def test_plan_version_is_parsed_or_explicitly_unversioned() -> None:
+    assert _plan_version("# Measurement Plan: X\n\n**Version:** 1.2.0\n") == "1.2.0"
+    assert _plan_version("---\nversion: 2.0.1\n---\n# Plan\n") == "2.0.1"
+    assert _plan_version("# Measurement Plan: X\n") == "unversioned"
 
 
 def _plan_in(root: Path) -> Path:

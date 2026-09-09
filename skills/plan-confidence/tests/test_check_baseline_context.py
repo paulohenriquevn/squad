@@ -4,9 +4,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
-
 from check_baseline_context import check_baseline_context  # noqa: E402
 
 
@@ -178,7 +175,7 @@ None.
 # ---------------------------------------------------------------------------
 # B-101 — a glossary written as a table is still a glossary.
 #
-# MEASURED BEFORE THESE WERE WRITTEN, over the 64 plans in theokit-tui's knowledge-base:
+# MEASURED BEFORE THESE WERE WRITTEN, over the 64 plans in an adopter's records:
 #
 #     bullets   47 plans   counted
 #     table     17 plans   counted as ZERO

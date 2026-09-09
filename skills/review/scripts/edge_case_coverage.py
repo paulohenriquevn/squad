@@ -24,38 +24,6 @@ import re
 import sys
 from pathlib import Path
 
-
-EDGE_CASE_KEYWORDS = (
-    "empty",
-    "null",
-    "undefined",
-    "boundary",
-    "max",
-    "maximum",
-    "min",
-    "minimum",
-    "limit",
-    "overflow",
-    "race",
-    "concurrent",
-    "concurrency",
-    "timeout",
-    "retry",
-    "idempotent",
-    "duplicate",
-    "malformed",
-    "invalid",
-    "missing",
-    "negative",
-    "zero",
-    "large",
-    "huge",
-    "edge case",
-    "edge cases",
-    "corner case",
-    "corner cases",
-)
-
 # B-018 — a declared case is a bullet under a task's `#### Deep Dives` beginning `Edge case:` or
 # `Negative case:`. Both lenses count: `rules/testing.md` § 4.1 keeps them distinct and requires
 # both, and filtering negative cases out would hide exactly the failures they exist to catch.

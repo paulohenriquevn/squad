@@ -2,11 +2,11 @@
 
 This skill works in **any project** that uses Claude Code and maintains a `BACKLOG.md` registry of maintenance items (see `rules/cycle-backlog.md`).
 
-It has no reference-clones requirement. The ancestor of this skill planned investigations into *other people's* code under `knowledge-base/references/`; this one plans measurements of **your own system**, so the only inputs it needs are your repo, your rules, and the item being measured.
+It has no reference-clones requirement. The ancestor of this skill planned investigations into *other people's* code under `records/references/`; this one plans measurements of **your own system**, so the only inputs it needs are your repo, your rules, and the item being measured.
 
 ## What you get
 
-- `/discover-plan B-NNN` — writes a measurement plan to `knowledge-base/discoveries/plans/{slug}-plan.md`
+- `/discover-plan B-NNN` — writes a measurement plan to `records/discoveries/plans/{slug}-plan.md`
 - A template (`templates/measurement-plan-template.md`) that bakes in the falsification criterion, Tool + Target per question, the four corners, and halt-loop checkpoints
 
 The skill produces no output until invoked. It is instructions plus a template.
@@ -37,7 +37,7 @@ The full chain:
 
 - **`rules/` (or `.claude/rules/`)** with at least `architecture.md` and `testing.md`, or your equivalents. Step 0 mandates reading them. Missing rules degrade the plan to a generic one.
 - **`BACKLOG.md`** at the workspace root. The skill takes a `B-NNN` item as its input — the hypothesis it plans to measure. Without a registry there is nothing to plan against; run `/backlog-init` first.
-- **`knowledge-base/discoveries/plans/`** — created on first use if absent.
+- **`records/discoveries/plans/`** — created on first use if absent.
 
 ### Required for `--mode live-test` only
 
@@ -46,7 +46,7 @@ The full chain:
 ### Optional but recommended
 
 - **`rules/current-constraint.md`** — the constraint lens. Absent or undeclared, the constraint corner is deferred, which is the expected path rather than a failure.
-- Prior opportunities under `knowledge-base/discoveries/opportunities/` — Step 1 reads them so a hypothesis killed three months ago is not silently re-measured.
+- Prior opportunities under `records/discoveries/opportunities/` — Step 1 reads them so a hypothesis killed three months ago is not silently re-measured.
 
 ## What happens out of the box
 
@@ -62,7 +62,7 @@ The full chain:
 
 ### Domains and repo routing
 
-The eight domains in `rules/cycle-backlog.md § Domain routing` are specific to the Theo ecosystem. For your own, edit that table — the skill reads `domain` and `repo` from the item and does not hardcode names.
+The domains in the routing table are specific to the ecosystem that derived them. For your own, edit that table — the skill reads `domain` and `repo` from the item and does not hardcode names.
 
 ### Question budget
 
@@ -87,7 +87,7 @@ Blast Radius is the corner most worth keeping. It earns its place wherever repos
 | Question budget (3-10, max 3/corner) | ✅ | Heuristic, adjustable in the checker |
 | Template structure | ✅ | Matches the deterministic checker |
 | The four corners | ⚠️ | Portable in shape; edit all three places if you change them |
-| Domain routing table | ❌ | The eight Theo domains. Replace with yours. |
+| Domain routing table | ❌ | The origin ecosystem's domains. Replace with yours. |
 | `rules/live-target.txt` contents | ❌ | Your environments, your credentials-by-name |
 
 ## Limitations (known)
@@ -116,4 +116,4 @@ grep -n 'MIN_QUESTIONS' .claude/skills/discover-plan-confidence/scripts/check_pl
 - Upstream: `rules/cycle-backlog.md` — supplies the `B-NNN` hypothesis
 - Next: `/discover-edge-cases` → `/discover-plan-confidence` → `/discover-execute`
 - Template: `templates/measurement-plan-template.md`
-- Sibling: `/to-plan` (same architecture, different output — implementation plans)
+- Sibling: `/plan-write` (same architecture, different output — implementation plans)

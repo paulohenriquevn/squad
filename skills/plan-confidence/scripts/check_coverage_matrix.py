@@ -1,4 +1,4 @@
-"""Coverage Matrix structural check for /to-plan plans (M2 deterministic).
+"""Coverage Matrix structural check for /plan-write plans (M2 deterministic).
 
 Parses a plan .md file, extracts the `## Coverage Matrix` section,
 counts mapped gaps and detects orphan task references in the body.
@@ -48,14 +48,12 @@ class CoverageReport:
     """Structural report for a plan's Coverage Matrix."""
 
     total_gaps: int
-    total_tasks_referenced: int
     mapped_gaps: int
     deferred_gaps: int = 0  # v1.1+ #2 fix: explicitly out-of-scope, not missed
     unmapped_gaps: tuple[str, ...] = field(default_factory=tuple)
     orphan_tasks: tuple[str, ...] = field(default_factory=tuple)
     coverage_ratio: float = 0.0
     is_complete: bool = False
-    parse_errors: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _read_plan(plan_path: Path) -> str:
@@ -151,7 +149,7 @@ def _find_orphan_references(content: str, matrix_task_ids: set[str]) -> list[str
     v1.1 EC-4 fix: headers like '### T1.1 — Title' are definitions, not references.
     v1.1 EC-9 follow-up: code blocks contain examples (test names), not real refs.
     v1.1+ relaxation: tasks defined as `### T-id` headers are LEGITIMATE plan tasks
-    even if not in the matrix (e.g., wrap-up/dogfood-phase tasks). Only "mentions
+    even if not in the matrix (e.g., wrap-up/honesty-gate-phase tasks). Only "mentions
     in prose with no definition" are true orphans (typos, refs to non-existent tasks).
     """
     prose_only = _strip_code(content)
@@ -219,12 +217,10 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
 
     return CoverageReport(
         total_gaps=total_gaps,
-        total_tasks_referenced=len(matrix_task_ids),
         mapped_gaps=mapped_gaps,
         deferred_gaps=deferred_gaps,
         unmapped_gaps=tuple(unmapped),
         orphan_tasks=tuple(orphans),
         coverage_ratio=coverage_ratio,
         is_complete=is_complete,
-        parse_errors=(),
     )

@@ -1,4 +1,4 @@
-"""Tests for scripts/check_reference_leakage.py.
+"""Tests for mechanisms/gates/check_reference_leakage.py.
 
 Behaviour under test: a literal copy of study material into the project is
 detected; independent code is not; and an absent zone degrades to SKIP instead of
@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = REPO_ROOT / "scripts" / "check_reference_leakage.py"
+SCRIPT = REPO_ROOT / "mechanisms" / "gates" / "check_reference_leakage.py"
 
 COPIED_BLOCK = """\
 def dict_expand_if_needed(d):
@@ -47,13 +47,13 @@ def _init_repo(tmp_path: Path) -> Path:
 
 
 def _add_zone_file(repo: Path, relative: str, content: str) -> None:
-    path = repo / "knowledge-base" / "references" / relative
+    path = repo / "study-material" / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
 
 def _run(repo: Path, *extra: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
+    return subprocess.run(  # noqa: PLW1510
         [sys.executable, str(SCRIPT), "--repo", str(repo), *extra],
         capture_output=True,
         text=True,
@@ -151,3 +151,83 @@ def test_invalid_shingle_size_is_an_invocation_error(tmp_path, bad):
     result = _run(repo, "--shingle", bad)
     assert result.returncode == 2
     assert "ERROR" in result.stderr
+
+
+def test_zone_is_not_enumerated_when_nothing_changed(tmp_path, monkeypatch):
+    """A session that wrote nothing does not pay for walking the zone.
+
+    O script roda em TODO Stop, antes do early-exit do hook. `scan` listava a
+    whole zone BEFORE building the index of changed files — and it is that index
+    that decides whether there is any work at all. In a zone with thousands of
+    third-party files, a read-only session paid the full walk just to reach
+    "nothing to compare".
+
+    It pins the SHAPE (the zone is not enumerated), not a duration.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
+    import check_reference_leakage as leak
+
+    repo = _init_repo(tmp_path)
+    _add_zone_file(repo, "peer/a.py", COPIED_BLOCK)
+
+    calls = []
+    real = leak.zone_files_from
+
+    def spy(roots):
+        calls.append(roots)
+        return real(roots)
+
+    monkeypatch.setattr(leak, "zone_files_from", spy)
+
+    # No changed files: nothing to index, therefore nothing to compare.
+    findings, stats = leak.scan(repo, 5, 5000, None)
+
+    assert findings == []
+    assert calls == [], "the zone was enumerated even with nothing to compare"
+    assert stats["zone_present"] is True
+
+
+def test_zone_is_enumerated_when_there_is_something_to_compare(tmp_path, monkeypatch):
+    """Regression of the test above: with a changed file, the zone IS walked."""
+    sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
+    import check_reference_leakage as leak
+
+    repo = _init_repo(tmp_path)
+    _add_zone_file(repo, "peer/a.py", COPIED_BLOCK)
+    (repo / "src" / "mine.py").write_text(COPIED_BLOCK, encoding="utf-8")
+
+    calls = []
+    real = leak.zone_files_from
+
+    def spy(roots):
+        calls.append(roots)
+        return real(roots)
+
+    monkeypatch.setattr(leak, "zone_files_from", spy)
+
+    findings, _ = leak.scan(repo, 5, 5000, ["src/mine.py"])
+
+    assert calls, "the zone was not walked when there was something to compare"
+    assert findings, "the literal copy stopped being detected"
+
+
+def test_zone_traversal_skips_vendored_trees(tmp_path):
+    """`node_modules` and `.git` inside the zone are not read.
+
+    The zone is a peer project's clone — it brings that project's dependency tree
+    and git repository along. Enumerating those is pure work: nothing there is the
+    code the peer wrote.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
+    import check_reference_leakage as leak
+
+    repo = _init_repo(tmp_path)
+    _add_zone_file(repo, "peer/real.py", COPIED_BLOCK)
+    _add_zone_file(repo, "peer/node_modules/dep/index.py", COPIED_BLOCK)
+    _add_zone_file(repo, "peer/.git/objects/thing.py", COPIED_BLOCK)
+
+    found = {p.name for p in leak.zone_files_from(leak.zone_roots(repo))}
+
+    assert "real.py" in found
+    assert "index.py" not in found, "the zone's node_modules was walked"
+    assert "thing.py" not in found, "the zone's .git was walked"

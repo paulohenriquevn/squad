@@ -42,11 +42,11 @@ Each stage is **idempotent** and **independent** — running `plan` later does n
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| `:discover` | opportunity at `knowledge-base/discoveries/opportunities/{slug}-opportunity.md` | `knowledge-base/judge-codex/{slug}-discover-judge-{date}.json` | ≥2-source evidence rule enforced; `fabricated_citation` caps to INVALID |
-| `:plan` | plan at `knowledge-base/plans/{slug}-plan.md` + optional plan-confidence output | `knowledge-base/judge-codex/{slug}-plan-judge-{date}.json` | semantic completeness above `plan-confidence` M3 structural check; Goal SMART; Risks; fabricated citations beyond Evidence-block scope |
-| `:implementation` | implementation log + `git log` of slice commits | `knowledge-base/judge-codex/{slug}-implementation-judge-{date}.json` | wiring triad pillar (a) caller present; TDD RED commit precedes GREEN; no symbol fabrication |
-| `:final` | consolidated review report + raw agent finding files | `knowledge-base/judge-codex/{slug}-final-judge-{date}.json` | review-of-review: aggregator did not silently drop agent files; verdict consistent with findings |
-| `:auto` | (orchestrates all 4 above) | `knowledge-base/judge-codex/{slug}-auto-judge-{date}.json` | smallest-cap-wins aggregation; halts at first disagreement when `--stop-on-disagreement` is set |
+| `:discover` | opportunity at `records/discoveries/opportunities/{slug}-opportunity.md` | `records/judge-codex/{slug}-discover-judge-{date}.json` | ≥2-source evidence rule enforced; `fabricated_citation` caps to INVALID |
+| `:plan` | plan at `records/plans/{slug}-plan.md` + optional plan-confidence output | `records/judge-codex/{slug}-plan-judge-{date}.json` | semantic completeness above `plan-confidence` M3 structural check; Goal SMART; Risks; fabricated citations beyond Evidence-block scope |
+| `:implementation` | implementation log + `git log` of slice commits | `records/judge-codex/{slug}-implementation-judge-{date}.json` | wiring triad pillar (a) caller present; TDD RED commit precedes GREEN; no symbol fabrication |
+| `:final` | consolidated review report + raw agent finding files | `records/judge-codex/{slug}-final-judge-{date}.json` | review-of-review: aggregator did not silently drop agent files; verdict consistent with findings |
+| `:auto` | (orchestrates all 4 above) | `records/judge-codex/{slug}-auto-judge-{date}.json` | smallest-cap-wins aggregation; halts at first disagreement when `--stop-on-disagreement` is set |
 
 ## Verdicts
 
@@ -62,13 +62,13 @@ The plugin uses **this** ecosystem's canonical vocabulary (NOT the binary `appro
 Plus meta-verdicts at the `:final` stage:
 
 - `META_DEFECT_FOUND` — at least one hard-cap meta-defect (silently dropped agent file, verdict inconsistent with findings, fabricated finding location, process drift unlogged).
-- `AGGREGATOR_BUG_SUSPECTED` — used when the inconsistency suggests `consolidate_findings.py` itself has a bug (the fix lives in this `plan` repo, not in the slice).
+- `AGGREGATOR_BUG_SUSPECTED` — used when the inconsistency suggests `consolidate_findings.py` itself has a bug (the fix lives in this `plan` repo, not in the slice). _(emitted externally: the judge-codex plugin ships from `usetheodev/judge-codex-plugin-cc` and writes this verdict; this repository only consumes it)_
 
 ## Disagreement protocol
 
 When `judge-codex:*` and the Claude-side equivalent gate (`/discover-confidence`, `/plan-confidence`, `/review`, etc.) reach **different verdicts** on the same artifact:
 
-1. The disagreement is persisted at `knowledge-base/judge-codex/{slug}-{stage}-disagreement-{date}.json`.
+1. The disagreement is persisted at `records/judge-codex/{slug}-{stage}-disagreement-{date}.json`.
 2. The downstream pipeline is **paused** at the disagreeing stage.
 3. **Human adjudication is required** — neither LLM is automatically trusted.
 
@@ -76,12 +76,14 @@ This is the entire point of having an orthogonal jury: agreement = high confiden
 
 ## Hard gates
 
-The plugin's per-stage hard caps mirror the canonical golden rules:
+The plugin's per-stage hard caps mirror the canonical golden rules. **None of the four rows below is enforced from this repository** — `judge-codex` is an installed plugin, not a slice of this kit, so what follows records which contract each of its stages is pointed at, and the caps live in the plugin's own agents. _(not mechanized: the enforcement belongs to a third-party plugin; this kit can state the wiring and cannot verify it)_ The rule files named here do exist — `check_xrefs.py` fails the build when one of them stops existing, which is the half this repository can actually guarantee.
 
-- `:discover` consults `rules/discover-plan-golden-rule.md` — the measurement-plan contract of this ecosystem. (The plugin's own docs name a `discover-blueprint-golden-rule.md`, which exists in other installs and never existed here.)
-- `:plan` consults `rules/plan-confidence-golden-rule.md` (and the **unbreakable** `feedback_never_single_source_evidence` rule that is currently encoded in memory; will be promoted to a hard-cap detector in a follow-up slice).
-- `:implementation` consults `rules/cycle-implement.md` + `rules/code-quality-golden-rule.md`.
-- `:final` consults `rules/cycle-review.md`.
+| Stage | Contract it is pointed at | Note |
+|---|---|---|
+| `:discover` | `skills/_kit-rules/discover-plan-golden-rule.md` | the measurement-plan contract of this ecosystem. The plugin's own docs name a `discover-blueprint-golden-rule.md`, which exists in other installs and never existed here. |
+| `:plan` | `rules/plan-confidence-golden-rule.md` | plus the **unbreakable** `feedback_never_single_source_evidence` rule, currently encoded in memory; to be promoted to a hard-cap detector in a follow-up slice. |
+| `:implementation` | `rules/cycle-implement.md` + `rules/code-quality-golden-rule.md` | |
+| `:final` | `rules/cycle-review.md` | |
 
 A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** until either the underlying issue is fixed OR an explicit ADR dismisses it with a sunset window.
 
@@ -94,9 +96,9 @@ A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** unt
 
 ## Output
 
-- `knowledge-base/judge-codex/{slug}-{stage}-judge-{date}.json` per stage.
-- `knowledge-base/judge-codex/{slug}-auto-judge-{date}.json` for `:auto` runs.
-- `knowledge-base/judge-codex/{slug}-{stage}-disagreement-{date}.json` when Claude vs Codex differ.
+- `records/judge-codex/{slug}-{stage}-judge-{date}.json` per stage.
+- `records/judge-codex/{slug}-auto-judge-{date}.json` for `:auto` runs.
+- `records/judge-codex/{slug}-{stage}-disagreement-{date}.json` when Claude vs Codex differ.
 
 Install/setup commands live in the plugin repo README (and the Pre-conditions
 above); a dated record of the proof-of-value integration run is in the project

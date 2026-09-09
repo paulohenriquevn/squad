@@ -3,10 +3,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 import check_evidence_pointers as cep
-from check_evidence_pointers import check_evidence_pointers  # noqa: E402
+import pytest
+from check_evidence_pointers import check_evidence_pointers
 
 
 @pytest.fixture
@@ -89,8 +88,8 @@ def test_runtime_observations_counted_separately(rooted: Path) -> None:
     report = check_evidence_pointers(
         _opportunity(
             rooted,
-            "Observed `GET https://app-dev.usetheo.dev/api/traces -> 500` twice in a row.\n"
-            "Then `POST https://app-dev.usetheo.dev/api/login -> 200`.",
+            "Observed `GET https://app-dev.example.com/api/traces -> 500` twice in a row.\n"
+            "Then `POST https://app-dev.example.com/api/login -> 200`.",
         )
     )
     assert report["runtime_observations"] == 2
@@ -129,11 +128,11 @@ def test_no_evidence_at_all(rooted: Path) -> None:
 
 
 def test_a_pointer_under_a_scoped_node_modules_path_is_captured_whole(rooted: Path) -> None:
-    target = rooted / "packages" / "auth-github" / "node_modules" / "@theokit" / "sdk" / "index.d.ts"
+    target = rooted / "packages" / "auth-github" / "node_modules" / "@acme" / "sdk" / "index.d.ts"
     target.parent.mkdir(parents=True)
     target.write_text("\n".join(f"line {i}" for i in range(1, 30)), encoding="utf-8")
 
-    body = "See `packages/auth-github/node_modules/@theokit/sdk/index.d.ts:14` for the type."
+    body = "See `packages/auth-github/node_modules/@acme/sdk/index.d.ts:14` for the type."
     report = check_evidence_pointers(_opportunity(rooted, body))
 
     assert report["fabricated"] == 0, report["fabricated_pointers"]

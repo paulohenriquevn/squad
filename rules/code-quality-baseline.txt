@@ -1,0 +1,22 @@
+# Code-quality baseline — findings that already existed.
+#
+# Authoritative source: rules/code-quality-golden-rule.md § 4.1 (Baseline mechanism).
+#
+# One `allowlist_key` per line, `#` comments. A key here is REMOVED FROM THE VERDICT
+# and still reported: the run names the finding, the summary carries `baselined: N`,
+# and the debt stays countable. It is not forgiven and not hidden — what it stops
+# doing is failing a change that did not cause it.
+#
+# SHIPS EMPTY, and must. A baseline is a record of one repository's history; there is
+# no such thing as a default one, and a kit that shipped entries would be silencing
+# findings in projects it has never seen.
+#
+# Write it with:
+#     python3 .claude/skills/code-quality/scripts/run_code_quality.py --write-baseline
+#
+# An explicit act, never a side effect of a normal run. It never grows by itself, so a
+# NEW finding in a baselined file still fails — the key is the finding, not the file.
+#
+# This is a FACT, not a decision. That is what separates it from
+# `code-quality-allowlist.txt`, where a person exempts one finding with a reason and a
+# sunset. Regenerating this file after paying debt down is how the number shrinks.

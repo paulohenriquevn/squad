@@ -14,6 +14,7 @@ import fnmatch
 import sys
 import zipfile
 from pathlib import Path
+
 from scripts.quick_validate import validate_skill
 
 # Patterns to exclude when packaging skills.
@@ -103,7 +104,7 @@ def package_skill(skill_path, output_dir=None):
         print(f"\n✅ Successfully packaged skill to: {skill_filename}")
         return skill_filename
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"❌ Error creating .skill file: {e}")
         return None
 

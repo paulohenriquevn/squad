@@ -1,8 +1,8 @@
-"""D2/TypeScript — dois defeitos medidos no theo-promptly em 2026-08-03.
+"""D2/TypeScript — dois defeitos medidos no promptly em 2026-08-03.
 
-Ambos fazem o detector chamar de FABRICADO aquilo que resolve perfeitamente, e juntos
-produziram 112 achados (60 HARD) num repositório cujo build e cujos testes estão verdes.
-Um detector que reprova um monorepo saudável ensina o time a ignorá-lo — é por isso que
+Both make the detector call FABRICATED what resolves perfectly, and together they
+produced 112 findings (60 HARD) in a repository whose build and tests are green. A
+detector that fails a healthy monorepo teaches the team to ignore it — which is why
 estes casos existem.
 """
 from __future__ import annotations
@@ -14,9 +14,9 @@ from scripts.detectors.typescript import TypescriptDetector
 
 
 def _workspace(tmp_path: Path) -> Path:
-    """Monorepo pnpm mínimo: raiz `theo-promptly`, dois membros, um importando o outro."""
+    """Minimal pnpm monorepo: root `promptly`, two members, one importing the other."""
     (tmp_path / "package.json").write_text(
-        json.dumps({"name": "theo-promptly", "private": True}), encoding="utf-8"
+        json.dumps({"name": "promptly", "private": True}), encoding="utf-8"
     )
     (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n- packages/*\n", encoding="utf-8")
     core = tmp_path / "packages" / "core"
@@ -24,43 +24,45 @@ def _workspace(tmp_path: Path) -> Path:
     for d in (core, api):
         (d / "src").mkdir(parents=True)
     (core / "package.json").write_text(
-        json.dumps({"name": "@usetheo/promptly"}), encoding="utf-8"
+        json.dumps({"name": "@scope/promptly"}), encoding="utf-8"
     )
     (api / "package.json").write_text(
-        json.dumps({"name": "@usetheo/promptly-api",
-                    "dependencies": {"@usetheo/promptly": "workspace:*"}}),
+        json.dumps({"name": "@scope/promptly-api",
+                    "dependencies": {"@scope/promptly": "workspace:*"}}),
         encoding="utf-8",
     )
     return api
 
 
 def test_sibling_workspace_import_is_not_reported_as_fabricated(tmp_path, monkeypatch):
-    """Importar um IRMÃO do workspace não é fabricação.
+    """Importing a workspace SIBLING is not fabrication.
 
-    O patch de auto-referência (2026-05-30) resolve só o nome do package.json RAIZ
-    (`theo-promptly`) — que ninguém importa. Todo import irmão ia ao registry, tomava 404 e
+    The self-reference patch (2026-05-30) resolves only the ROOT package.json's name
+    (`promptly`) — which nobody imports. Every sibling import went to the registry,
+    took a 404 and
     virava HARD `symbol_fabrication_typescript`.
     """
     api = _workspace(tmp_path)
     src = api / "src" / "app.ts"
-    src.write_text("import { createPromptVersion } from '@usetheo/promptly';\n", encoding="utf-8")
+    src.write_text("import { createPromptVersion } from '@scope/promptly';\n", encoding="utf-8")
 
-    # O registry NUNCA deve ser consultado para um pacote local — se for, é o bug.
+    # The registry must NEVER be queried for a local package — if it is, that is the bug.
     from scripts import _registry
     monkeypatch.setattr(_registry, "package_exists_on_npm",
                         lambda pkg: (_ for _ in ()).throw(
-                            AssertionError(f"consultou o registry para pacote local: {pkg}")))
+                            AssertionError(f"queried the registry for a local package: {pkg}")))
 
     findings = TypescriptDetector().detect_symbol_fabrication([src])
-    assert findings == [], f"irmão do workspace reportado como fabricado: {findings}"
+    assert findings == [], f"workspace sibling reported as fabricated: {findings}"
 
 
 def test_scoped_subpath_import_queries_the_package_not_the_subpath(tmp_path, monkeypatch):
-    """`@scope/pkg/sub/path.js` deve ser consultado como `@scope/pkg`.
+    """`@scope/pkg/sub/path.js` must be queried as `@scope/pkg`.
 
-    O detector calculava `top` corretamente e depois o ignorava para pacotes escopados,
-    mandando o módulo INTEIRO ao registry. `@modelcontextprotocol/sdk/server/mcp.js` não é
-    nome de pacote — daí 52 achados 'ambiguous response' sobre um SDK real e instalado.
+    The detector computed `top` correctly and then ignored it for scoped packages,
+    sending the WHOLE module to the registry. `@modelcontextprotocol/sdk/server/mcp.js`
+    is not a package name — hence 52 'ambiguous response' findings about a real,
+    installed SDK.
     """
     api = _workspace(tmp_path)
     src = api / "src" / "mcp.ts"
@@ -83,13 +85,14 @@ def test_scoped_subpath_import_queries_the_package_not_the_subpath(tmp_path, mon
 class TestPathAliasNotAPackage:
     """Terceira familia de falso positivo: `@/components/...` e alias de tsconfig.
 
-    986 achados HARD num dashboard, todos falsos, porque o detector tratava
-    qualquer especificador com `@` como escopo npm e ia ao registry. A raiz das
-    tres familias e a mesma: resolver nome de modulo contra o registry publico
-    sem consultar o que o projeto declara.
+    986 HARD findings in a dashboard, all false, because the detector treated
+    any specifier carrying `@` as an npm scope and went to the registry. The root
+    of all three families is the same: resolving a module name against the public
+    registry
+    without consulting what the project declares.
     """
 
-    def test_alias_declarado_no_tsconfig_nao_vai_ao_registry(self, tmp_path, monkeypatch):
+    def test_an_alias_declared_in_tsconfig_does_not_reach_the_registry(self, tmp_path, monkeypatch):
         from scripts.detectors.typescript import TypescriptDetector
 
         (tmp_path / ".git").mkdir()
@@ -108,7 +111,7 @@ class TestPathAliasNotAPackage:
         assert det._is_path_alias("@/components/Button", aliases) is True
         assert det._is_path_alias("~lib/util", aliases) is True
 
-    def test_pacote_escopado_de_verdade_nao_e_confundido_com_alias(self, tmp_path):
+    def test_a_genuinely_scoped_package_is_not_mistaken_for_an_alias(self, tmp_path):
         from scripts.detectors.typescript import TypescriptDetector
 
         (tmp_path / ".git").mkdir()
@@ -123,7 +126,7 @@ class TestPathAliasNotAPackage:
 
         assert det._is_path_alias("@scope/pkg", aliases) is False
 
-    def test_tsconfig_com_comentarios_e_virgula_final_e_lido(self, tmp_path):
+    def test_a_tsconfig_with_comments_and_a_trailing_comma_is_read(self, tmp_path):
         """tsconfig admite comentarios; JSON estrito falharia e o alias sumiria."""
         from scripts.detectors.typescript import TypescriptDetector
 

@@ -23,7 +23,7 @@ def _run_setup(target: Path, *flags: str) -> subprocess.CompletedProcess[str]:
 
 
 def _make_minimal_plan(target: Path, slug: str = "demo") -> Path:
-    plans_dir = target / ".claude" / "knowledge-base" / "plans"
+    plans_dir = target / ".claude" / "records" / "plans"
     plans_dir.mkdir(parents=True, exist_ok=True)
     plan_path = plans_dir / f"{slug}-plan.md"
     plan_path.write_text(
@@ -190,5 +190,5 @@ def test_example_templates_have_no_project_specific_entries() -> None:
     for ex_file in templates.glob("*.example.*"):
         content = ex_file.read_text(encoding="utf-8")
         # Should not reference specific plans from theo-code
-        assert "theo-cli-cohesion" not in content, f"{ex_file.name} has theo-cli reference"
+        assert "cli-tool-cohesion" not in content, f"{ex_file.name} has cli-tool reference"
         assert "sota-gaps" not in content, f"{ex_file.name} has sota-gaps reference"

@@ -175,11 +175,11 @@ class TestWorkspaceCrateNames:
         for name in ("a", "b"):
             member = tmp_path / name
             member.mkdir()
-            (member / "Cargo.toml").write_text(f'[package]\nname = "theo-{name}"\n')
+            (member / "Cargo.toml").write_text(f'[package]\nname = "crate-{name}"\n')
 
         names = _workspace_crate_names(tmp_path / "a")
 
-        assert {"theo-a", "theo_a", "theo-b", "theo_b"} <= names
+        assert {"crate-a", "crate_a", "crate-b", "crate_b"} <= names
 
     def test_skips_the_target_directory(self, tmp_path) -> None:
         (tmp_path / "Cargo.toml").write_text('[workspace]\n[package]\nname = "root"\n')

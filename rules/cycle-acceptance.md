@@ -28,7 +28,6 @@ from that retirement; treat it as a bug and fix it.
 
 | Script | Slice | Role |
 |---|---|---|
-| `compose_goal_condition.py` | `cycle-goal` | validates the requested milestones |
 | `extract_acceptance_criteria.py` | this cycle | reads the Definition-of-done bullets |
 | `flip_milestone_checkbox.py` | housed in `release`, invoked here | performs the flip |
 
@@ -80,7 +79,7 @@ Do NOT trigger when:
      ↓   record status ∈ passed | failed | blocked | not_exercised
      ↓
      ↓ record every defect observed on the way, with severity + filed issue
-     ↓ write knowledge-base/acceptance/{milestone}-{date}.md + evidence/
+     ↓ write records/acceptance/{milestone}-{date}.md + evidence/
      ↓ compute_acceptance_verdict.py --criteria criteria.json --evidence evidence.json
      ↓
      ↓ ACCEPTED | ACCEPTED_WITH_CAVEATS → flip_milestone_checkbox.py  [ ] → [x]
@@ -116,7 +115,7 @@ When a criterion cannot be exercised with any available instrument, its status i
 | extract | `ROADMAP.md` § M\<N\> | `criteria.json` with ≥ 1 criterion | milestone declares a non-empty `**Definition of done:**`; otherwise `NOT_VALIDATED` |
 | resolve-target | release artifact | target kind + reachable address | the address points at the RELEASED artifact, not a local or staging build |
 | exercise | criteria + target | one result per criterion, each with evidence | every criterion has a recorded status; `passed` requires at least one evidence artifact |
-| record | results + defects | `knowledge-base/acceptance/{milestone}-{date}.md` + `evidence/` | evidence files exist at the cited paths |
+| record | results + defects | `records/acceptance/{milestone}-{date}.md` + `evidence/` | evidence files exist at the cited paths |
 | verdict | `criteria.json` + `evidence.json` | verdict token | computed by `compute_acceptance_verdict.py`; never asserted by the agent |
 | flip | verdict ∈ {`ACCEPTED`, `ACCEPTED_WITH_CAVEATS`} | `ROADMAP.md` `[ ]` → `[x]` + roadmap-runs updated | single-flip invariant (§ Hard gates, below); no flip on `REJECTED` or `NOT_VALIDATED` |
 
@@ -126,22 +125,23 @@ When a criterion cannot be exercised with any available instrument, its status i
 - `ACCEPTED_WITH_CAVEATS` — every criterion passed with evidence, but non-blocking defects were observed. Each defect is filed as an issue before the flip. Checkbox flips.
 - `REJECTED` — at least one criterion failed in the live system, or a blocker-severity defect was observed. Checkbox stays `[ ]`. The delivery is already public: open the hotfix path immediately, then re-enter at `cycle-plan`.
 - `NOT_VALIDATED` — the run could not establish either outcome: a criterion was never exercised, the target was unreachable, evidence was missing, or the milestone declared no Definition of done. Checkbox stays `[ ]`.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
 `NOT_VALIDATED` is deliberately distinct from `REJECTED`. "We could not check" and "we checked and it is broken" are different facts, and a cycle that collapses them starts reporting untested work as tested.
 
 ## Hard gates
 
 - **A `passed` without evidence is not a pass.** `compute_acceptance_verdict.py` refuses it as `NOT_VALIDATED`. This is the gate the whole cycle rests on: with the human sign-off deliberately out of scope, recorded evidence is the only thing standing between a real validation and a confident sentence.
-- **The verdict is computed, never asserted.** The agent that ran the journeys does not get to name the outcome — it records results, and the script derives the verdict. Reporting a verdict the script did not emit is a review BLOCKER.
-- **No flip without a green verdict.** `[x]` claims a user-visible promise was met; only `ACCEPTED` / `ACCEPTED_WITH_CAVEATS` may flip it.
+- **The verdict is computed, never asserted.** The agent that ran the journeys does not get to name the outcome — it records results, and `compute_acceptance_verdict.py` derives the verdict. Reporting a verdict the script did not emit is a review BLOCKER — _(not mechanized: debt since 2026-08-27 — nothing compares the token the agent wrote in the report against the one the script emitted; the gate is the script's output existing, not the report agreeing with it)_
+- **No flip without a green verdict.** `[x]` claims a user-visible promise was met; only `ACCEPTED` / `ACCEPTED_WITH_CAVEATS` may flip it — _(not mechanized: regression since 2026-08-31 — a retired session-binding skill used to refuse a session release on any other token, which caught a wrong flip after the fact. It was cut on 2026-08-31, and the flip script has never read the verdict itself. The gate is now honoured by discipline at both ends. Stated rather than quietly dropped: the cut removed a check, and pretending otherwise is the exact failure this cycle exists to prevent)_
 
 - **Single-flip invariant (SoT).** At most ONE `ROADMAP.md` checkbox flips per accepted milestone. Implemented once, in `skills/release/scripts/flip_milestone_checkbox.py` — the script stayed in the release slice when the flip moved here, because one implementation of an invariant is the invariant.
 
   This clause used to point at the Hard gates section of the retired cycle-roadmap rule (unbackticked here on purpose: it is history, not a reference). That file was replaced by `cycle-maintenance` and the section stopped existing, while `cycle-release` and six scripts kept citing it — a normative anchor aimed at nothing. It lives here now because this is the cycle that performs the flip.
-- **The target is the released artifact.** Validating a local build, a staging clone, or a mock reproduces exactly the blind spot this cycle exists to remove.
-- **Criteria come from the milestone.** They are read from `ROADMAP.md` before the run. A criterion invented or edited after seeing the result is grading a moved target — and per Unbreakable Rule 4's spirit on evidence, is fabrication.
-- **Every caveat is filed.** `ACCEPTED_WITH_CAVEATS` without an issue per defect turns a known problem into an unowned one.
-- **This cycle is the terminator of a `/cycle-goal` session.** A milestone goal set by `/cycle-goal` is met if and only if this cycle emitted `ACCEPTED` or `ACCEPTED_WITH_CAVEATS` for it. That makes the verdict here the single thing standing between an open goal and a closed one — which is why it is computed from evidence and never named by the agent that ran the journeys.
+- **The target is the released artifact.** Validating a local build, a staging clone, or a mock reproduces exactly the blind spot this cycle exists to remove. The project declares how its published delivery is reached in `rules/acceptance-target.txt` — _(not mechanized: regression since 2026-08-31 — a retired skill refused to arm a goal until that file was filled, which forced the declaration to exist before a run. Nothing enforces it now, and whether what was exercised IS the released artifact was always read from the evidence by a human)_
+- **Criteria come from the milestone.** `extract_acceptance_criteria.py` reads them from `ROADMAP.md` before the run. A criterion invented or edited after seeing the result is grading a moved target — and per Unbreakable Rule 4's spirit on evidence, is fabrication.
+- **Every caveat is filed.** `ACCEPTED_WITH_CAVEATS` without an issue per defect turns a known problem into an unowned one — _(not mechanized: debt since 2026-08-27 — no script confronts the caveat list with a tracker; `cycle-review`'s followup gate does the equivalent for HIGH findings and is the shape this one would take)_
+- **The verdict is the milestone's only closing evidence.** `compute_acceptance_verdict.py` computes it from what was exercised; the agent that ran the journeys never names it. That separation is the mechanism, and it is unchanged — what a retired session-binding skill added was a second reader of the same line, not a second source of it.
 
 ## Anti-patterns
 
@@ -154,9 +154,9 @@ When a criterion cannot be exercised with any available instrument, its status i
 
 ## Output
 
-- `knowledge-base/acceptance/{milestone-id}-{YYYY-MM-DD}.md` — the acceptance record: target, criteria, per-criterion result, evidence paths, defects, computed verdict.
+- `records/acceptance/{milestone-id}-{YYYY-MM-DD}.md` — the acceptance record: target, criteria, per-criterion result, evidence paths, defects, computed verdict.
 
-  The record MUST carry the verdict in its frontmatter as `verdict: <TOKEN>`. This is not cosmetic: `cycle-goal`'s Stop-hook gate reads that line off disk to decide whether a session may end. A record whose verdict lives only in prose is invisible to the gate, and the milestone will read as never accepted.
+  The record MUST carry the verdict in its frontmatter as `verdict: <TOKEN>`. This is not cosmetic: it is the line any reader — human or script — resolves to decide whether the milestone closed. A record whose verdict lives only in prose is invisible to every one of them, and the milestone will read as never accepted.
 
   ```yaml
   ---
@@ -166,10 +166,10 @@ When a criterion cannot be exercised with any available instrument, its status i
   date: YYYY-MM-DD
   ---
   ```
-- `knowledge-base/acceptance/evidence/` — screenshots, console dumps, network logs, command transcripts cited by the record.
-- `knowledge-base/roadmap-runs/{milestone-id}-{date}.md` — updated with the acceptance verdict when the flip happens.
+- `records/acceptance/evidence/` — screenshots, console dumps, network logs, command transcripts cited by the record.
+- `records/roadmap-runs/{milestone-id}-{date}.md` — updated with the acceptance verdict when the flip happens.
 
-The record is the artifact an auditor reads to answer "was M3 ever actually used before we called it done?" — the same question `dogfood` asks about production claims, one milestone at a time.
+The record is the artifact an auditor reads to answer "was M3 ever actually used before we called it done?" — the same question `honesty-gate` asks about production claims, one milestone at a time.
 
 ## Cross-references
 
@@ -178,7 +178,6 @@ The record is the artifact an auditor reads to answer "was M3 ever actually used
 - Upstream cycle (must have emitted `RELEASED`): `rules/cycle-release.md`
 - Macro loop that consumes this verdict: `rules/cycle-maintenance.md`
 - Checkbox-flip script reused from the release slice: `skills/release/scripts/flip_milestone_checkbox.py`
-- Session-binding skill whose goal terminates on this cycle's verdict: `skills/cycle-goal/SKILL.md`
-- Sibling honesty gate over sustained use (consumes acceptance evidence): `rules/dogfood-golden-rule.md`
+- Sibling honesty gate over sustained use (consumes acceptance evidence): `rules/honesty-gate-golden-rule.md`
 - Re-entry point on `REJECTED`: `rules/cycle-plan.md`
 - Conventions: `rules/testing.md`, `rules/error-handling.md`, `rules/git-safety.md`

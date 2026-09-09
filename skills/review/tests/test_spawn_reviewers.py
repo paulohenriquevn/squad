@@ -47,7 +47,7 @@ def _run(
     ]
     if extra_args:
         args.extend(extra_args)
-    result = subprocess.run(args, capture_output=True, text=True)
+    result = subprocess.run(args, capture_output=True, text=True)  # noqa: PLW1510
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -95,7 +95,7 @@ def test_baseline_4_agents_generated(sample_plan: Path, tmp_path: Path) -> None:
 
 def test_agent_files_actually_written(sample_plan: Path, tmp_path: Path) -> None:
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(sample_plan, "test-slug", "pgvector-schema", output_dir)
+    _rc, data = _run(sample_plan, "test-slug", "pgvector-schema", output_dir)
     for agent in data["agents_generated"]:
         path = Path(agent["path"])
         assert path.exists()
@@ -121,7 +121,7 @@ def test_secondary_domains_spawn_extra_agents(sample_plan: Path, tmp_path: Path)
 
 def test_findings_dir_created(sample_plan: Path, tmp_path: Path) -> None:
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(sample_plan, "test-slug", "pgvector-schema", output_dir)
+    _rc, data = _run(sample_plan, "test-slug", "pgvector-schema", output_dir)
     findings_dir = Path(data["findings_dir"])
     assert findings_dir.exists()
     assert findings_dir.is_dir()
@@ -137,7 +137,7 @@ def test_findings_dir_created(sample_plan: Path, tmp_path: Path) -> None:
 def test_baseline_agents_get_student_model(
     sample_plan: Path, tmp_path: Path, routing_rule
 ) -> None:
-    """Plan T1.1 core: 4 baseline arquétipos → student model from routing rule."""
+    """Plan T1.1 core: 4 baseline archetypes → student model from routing rule."""
     rule = routing_rule(
         "architecture: haiku\n"
         "tests: haiku\n"
@@ -169,7 +169,7 @@ def test_cross_validation_gets_teacher_model(
     """Plan T1.1 core: cross-validation → teacher (opus) per routing rule."""
     rule = routing_rule("architecture: haiku\ncross-validation: opus\n")
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -185,7 +185,7 @@ def test_routing_rule_fallback_default(sample_plan: Path, tmp_path: Path) -> Non
     """Plan T1.1 core: missing rule file → all agents default to opus (backward-compat)."""
     nonexistent_rule = tmp_path / "no-such-rule.txt"
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -210,7 +210,7 @@ def test_cli_model_override(sample_plan: Path, tmp_path: Path, routing_rule) -> 
     """Plan T1.1 core: --model-override role=model takes precedence over rule entry."""
     rule = routing_rule("architecture: haiku\ncross-validation: opus\n")
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -261,7 +261,7 @@ def test_routing_rule_with_utf8_bom_parsed_correctly(
     rule = tmp_path / "review-model-routing.txt"
     rule.write_bytes(b"\xef\xbb\xbfarchitecture: haiku\ncross-validation: opus\n")
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -285,7 +285,7 @@ def test_domain_secondary_resolves_via_base_lookup(
         "cross-validation: opus\n"
     )
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -310,7 +310,7 @@ def test_domain_secondary_resolves_via_base_lookup(
 def test_cli_override_with_empty_value_rejected(
     sample_plan: Path, tmp_path: Path, routing_rule
 ) -> None:
-    """EC-5: --model-override role= deve retornar exit code != 0."""
+    """EC-5: --model-override role= must return a non-zero exit code."""
     rule = routing_rule("architecture: haiku\ncross-validation: opus\n")
     output_dir = tmp_path / "agents-out"
     rc, data = _run(
@@ -331,7 +331,7 @@ def test_cli_override_with_empty_value_rejected(
 def test_routing_rule_malformed_line_silently_skipped(
     sample_plan: Path, tmp_path: Path
 ) -> None:
-    """EC-6: linha sem ':' descartada silenciosamente; entries válidas funcionam."""
+    """EC-6: a line without ':' is dropped silently; valid entries still work."""
     rule = tmp_path / "review-model-routing.txt"
     rule.write_text(
         "architecture haiku\n"
@@ -340,7 +340,7 @@ def test_routing_rule_malformed_line_silently_skipped(
         encoding="utf-8",
     )
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -364,7 +364,7 @@ def test_routing_rule_unknown_model_passes_through(
         "architecture: nonexistent-model-xyz\ncross-validation: opus\n"
     )
     output_dir = tmp_path / "agents-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -392,7 +392,7 @@ def test_baseline_agents_get_paired_knowledge_skills(
     must produce a paired knowledge skill at .claude/skills/review-{slug}-{role}-knowledge/SKILL.md."""
     output_dir = tmp_path / "agents-out"
     skills_dir = tmp_path / "skills-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -414,7 +414,7 @@ def test_domain_agent_gets_paired_knowledge_skill(
     """Domain agent gets a paired knowledge skill named review-{slug}-domain-{X}-knowledge."""
     output_dir = tmp_path / "agents-out"
     skills_dir = tmp_path / "skills-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -434,7 +434,7 @@ def test_generated_skill_has_claude_code_frontmatter(
     """Paired skill MUST be Claude Code-conformant: YAML frontmatter with name + description + allowed-tools."""
     output_dir = tmp_path / "agents-out"
     skills_dir = tmp_path / "skills-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",
@@ -460,7 +460,7 @@ def test_no_skills_flag_suppresses_skill_generation(
     """The --no-skills flag (backward compat escape hatch) skips skill generation."""
     output_dir = tmp_path / "agents-out"
     skills_dir = tmp_path / "skills-out"
-    rc, data = _run(
+    rc, _data = _run(
         sample_plan,
         "test-slug",
         "pgvector-schema",

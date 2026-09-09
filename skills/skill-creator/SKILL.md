@@ -32,6 +32,39 @@ Then after the skill is done (but again, the order is flexible), you can also ru
 
 Cool? Cool.
 
+## Stated gap — the judgement evals nothing runs
+
+Measured 2026-09-01, reviewing every skill in the kit.
+
+Four skills carry a judgement eval suite: `backlog-item`, `discover-plan`,
+`discover-edge-cases` and `discover-execute` — **sixteen scenarios**, each with a
+prompt, an expected output, the files it needs and its assertions. They encode
+exactly what no script can decide: refusing a hunch justified by prior art,
+recognising an unfalsifiable hypothesis, killing an item when the falsification
+criterion is met, writing a criterion that could fail.
+
+**Nothing executes them.** The pieces exist and are not joined:
+
+| Piece | State |
+|---|---|
+| `skills/*/evals/evals.json` | 16 scenarios, read by nothing |
+| `setup_squad_eval_sandbox.py` | reachable from no SKILL.md and no sibling script |
+| `grade_squad_backlog_item.py` | grades ONE of the four batteries; same |
+| `run_eval.py` | works, and answers a different question — whether a description makes the model REACH for the skill, not whether the skill then does the right thing |
+
+So the kit measures that a skill is *found* and never that it *holds up*. This is
+the gap the Skills-Coach paper names as its third sub-question and answers by
+grading prose, which `skills/_kit-rules/prompt-text-is-not-behaviour.md` refuses. The oracle
+this kit would use instead already exists and has been used once —
+`wiki/references/judgement-gates-are-insurance.md` records running the scenario
+WITHOUT the rule, under pressure, and reading what the agent did.
+
+Written here rather than fixed here because a runner is a build, not an edit, and
+a gap named where the tooling lives is findable. Two constraints it must carry,
+both from measurements in that reference: **two model tiers**, because the same
+gates changed nothing on one and caught a fabrication on another, and **a judge
+that can refuse**, because one that never has is one nobody tested.
+
 ## Communicating with the user
 
 The skill creator is liable to be used by people across a wide range of familiarity with coding jargon. If you haven't heard (and how could you, it's only very recently that it started), there's a trend now where the power of Claude is inspiring plumbers to open up their terminals, parents and grandparents to google "how to install npm". On the other hand, the bulk of users are probably fairly computer-literate.
@@ -51,7 +84,7 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 In this repository a new skill MUST be created directly at `skills/{purpose}/`, where `{purpose}` is a short, friendly, kebab-case name derived from what the skill does — e.g. `pdf-table-extract`, `changelog-linter`, `terraform-drift-check`. Pick the most specific descriptive name (Unbreakable Rule 5: Nomenclature), not a vague one.
 
-Do NOT use any `skills/generated/` staging path or a `-patterns` suffix convention: this project promotes skills straight to first-class `skills/{purpose}/`. There is no separate validate/register step — run `scripts/validate_skill_frontmatter.py` and `scripts/check_xrefs.py` after writing the skill instead.
+Do NOT use any `skills/generated/` staging path or a `-patterns` suffix convention: this project promotes skills straight to first-class `skills/{purpose}/`. There is no separate validate/register step — run `mechanisms/gates/validate_skill_frontmatter.py` and `mechanisms/gates/check_xrefs.py` after writing the skill instead.
 
 Frontmatter MUST include `name`, `description`, and `user-invocable` (the project's `validate_skill_frontmatter.py` requires all three; `name` must equal the directory name). Add `allowed-tools` and `argument-hint` when the skill is user-invocable.
 
@@ -129,6 +162,31 @@ Prefer using the imperative form in instructions.
 
 **Defining output formats** - You can do it like this:
 ```markdown
+## Every skill declares what it does NOT own
+
+Give each new SKILL.md a `## Does Not Own` section, and put the boundary in the
+prompt of whoever could cross it.
+
+Taken from [`unclebob/swarm-forge`](https://github.com/unclebob/swarm-forge),
+where every role prompt carries one. Its `coder` is told, in the coder's own
+prompt, to ignore the specifier's QA suite and not to run mutation, CRAP or DRY
+checks — because those belong to the cleaner, architect and hardender. The
+boundary is not stated once in an architecture document where the person about to
+cross it will not read it; it is stated to that person.
+
+Measured here on 2026-08-29: 13 of 40 skills declared a boundary, under **six
+different section names** for one concept. The name is now `## Does Not Own`
+everywhere, which is the DRY rule this kit applies to knowledge and had not
+applied to its own headings.
+
+Write it only where a boundary genuinely exists — two skills that could each
+plausibly do the work, or a skill a reader would expect to do more than it does.
+An invented boundary is worse than none: it reads as a decision somebody made.
+
+The 27 skills without one are recorded as they are, not filled in. Fabricating 27
+boundaries to make a count look complete is the evidence theatre this kit refuses
+elsewhere.
+
 ## Report structure
 ALWAYS use this exact template:
 # [Title]

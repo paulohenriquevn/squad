@@ -7,7 +7,6 @@ threshold calibration logic, hook generation, settings.json merge.
 
 from __future__ import annotations
 
-import json
 import textwrap
 from pathlib import Path
 
@@ -15,13 +14,19 @@ import pytest
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
-from init_quality_gates import (
+from gate_authoring.detect import TEST_PATTERNS  # noqa: E402
+from gate_authoring.path_safety import confine, confine_or_none  # noqa: E402
+from gate_authoring.yaml_safe import (  # noqa: E402
+    merge_hook_into_settings,
+    read_json,
+    write_json,
+)
+from init_quality_gates import (  # noqa: E402
     FLOOR_COMPLEXITY,
     FLOOR_FILE_LINES,
     FLOOR_FUNCTION_LINES,
     FLOOR_NESTING_DEPTH,
     FLOOR_PARAMETERS,
-    ThresholdCalibration,
     _measure_python_metrics,
     _percentile,
     calibrate_thresholds,
@@ -31,9 +36,6 @@ from init_quality_gates import (
     detect_test_dirs,
     validate_target,
 )
-from lib.path_safety import confine, confine_or_none
-from lib.yaml_safe import merge_hook_into_settings, read_json, write_json
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -176,17 +178,17 @@ class TestValidateTarget:
 class TestDetectLanguages:
     def test_detects_python(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        names = [l.name for l in languages]
+        names = [l.name for l in languages]  # noqa: E741
         assert "python" in names
 
     def test_file_counts(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        python = [l for l in languages if l.name == "python"][0]
+        python = next(l for l in languages if l.name == "python")  # noqa: E741
         assert python.file_count >= 2  # main.py + processor.py (+ test_main.py)
 
     def test_loc_positive(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        python = [l for l in languages if l.name == "python"][0]
+        python = next(l for l in languages if l.name == "python")  # noqa: E741
         assert python.loc > 0
 
     def test_empty_project(self, tmp_empty: Path) -> None:
@@ -394,3 +396,54 @@ class TestJsonIO:
         write_json(path, data)
         loaded = read_json(path)
         assert loaded == data
+
+
+# ── TEST_PATTERNS, which named the file shapes and was read by nobody ─────────
+#
+# `SKILL.md` § stage 5 says this stage locates "test directories AND test file
+# patterns per language". `detect_test_dirs` matched directory NAMES only, so a
+# project that keeps `test_thing.py` beside its source — no `tests/` directory
+# anywhere — reported zero test directories, and every downstream gate was
+# calibrated as if the project had no tests at all.
+
+
+def test_a_directory_is_found_by_the_test_files_it_holds(tmp_path: Path) -> None:
+    (tmp_path / "billing").mkdir()
+    (tmp_path / "billing" / "transfer.py").write_text("def transfer():\n    ...\n",
+                                                      encoding="utf-8")
+    (tmp_path / "billing" / "test_transfer.py").write_text("def test_transfer():\n    ...\n",
+                                                           encoding="utf-8")
+
+    assert detect_test_dirs(str(tmp_path)) == ["billing"]
+
+
+def test_a_directory_named_tests_is_still_found_when_it_is_empty(tmp_path: Path) -> None:
+    """The name-based rule stays: an empty `tests/` is a declared intent."""
+    (tmp_path / "tests").mkdir()
+
+    assert detect_test_dirs(str(tmp_path)) == ["tests"]
+
+
+def test_a_directory_is_not_listed_twice(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_a.py").write_text("def test_a():\n    ...\n", encoding="utf-8")
+
+    assert detect_test_dirs(str(tmp_path)) == ["tests"]
+
+
+def test_a_directory_with_no_test_file_is_not_a_test_directory(tmp_path: Path) -> None:
+    (tmp_path / "billing").mkdir()
+    (tmp_path / "billing" / "transfer.py").write_text("x = 1\n", encoding="utf-8")
+
+    assert detect_test_dirs(str(tmp_path)) == []
+
+
+def test_every_declared_pattern_is_actually_matched(tmp_path: Path) -> None:
+    """One fact, one source: a pattern added to the list must start being detected
+    without any other edit."""
+    for i, pattern in enumerate(TEST_PATTERNS):
+        d = tmp_path / f"p{i}"
+        d.mkdir()
+        (d / pattern.replace("*", "x")).write_text("", encoding="utf-8")
+
+    assert len(detect_test_dirs(str(tmp_path))) == len(TEST_PATTERNS)

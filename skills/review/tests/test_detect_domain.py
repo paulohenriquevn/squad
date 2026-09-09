@@ -12,13 +12,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 SCRIPT = Path(__file__).parent.parent / "scripts" / "detect_domain.py"
+
+sys.path.insert(0, str(SCRIPT.parent))
+from detect_domain import count_domain_hits  # noqa: E402
 
 
 def _run(plan: Path) -> tuple[int, dict]:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(SCRIPT), "--plan", str(plan)],
         capture_output=True,
         text=True,
@@ -82,3 +83,53 @@ def test_multiple_domains_with_confidence(tmp_path: Path) -> None:
     assert data["primary_domain"] == "database"
     assert "auth" in data["secondary_domains"]
     assert data["confidence"]["database"] > data["confidence"]["auth"]
+
+
+# ---------------------------------------------------------------------------
+# B-015 — the matcher had no word boundary, and misrouted a review
+# ---------------------------------------------------------------------------
+#
+# Measured in a consumer on 2026-08-27: a diff of four files — a GitHub workflow,
+# a Node script, its test, and the CHANGELOG — returned `primary_domain:
+# concurrency` on `["lock", "actor"]`. Every occurrence of `lock` was the word
+# **lockfile** (13 of 13) and every `actor` was **extractor** (5 of 5). The two
+# words the change was ABOUT are what misrouted it.
+#
+# Routing decides which specialist reads the diff. A concurrency reviewer sent to
+# find races in a YAML file finds none and reports clean, while npm resolution
+# semantics and `steps.*.outcome` conditions go unexamined. A review that ran and
+# looked at the wrong thing is worse than one that did not run: it produces a
+# verdict.
+
+
+def test_lockfile_is_not_the_word_lock():
+    hits = count_domain_hits(
+        "Pin the lockfile. The lockfile is read by the extractor, and the extractor "
+        "writes the lockfile back.",
+        ["package.json", "scripts/taught-coverage.mjs"],
+    )
+    assert "concurrency" not in hits, (
+        f"'lockfile'/'extractor' must not register as 'lock'/'actor': {hits.get('concurrency')}"
+    )
+
+
+def test_a_real_concurrency_change_still_routes_to_concurrency():
+    # DoD bullet 3: the fix must not be "match less". A diff with real primitives
+    # has to keep routing where it did.
+    hits = count_domain_hits(
+        "Take the mutex before the read. The actor receives on a channel; the lock "
+        "is released in a defer.",
+        ["internal/scheduler/lock.go"],
+    )
+    assert "concurrency" in hits
+    matched = hits["concurrency"]["matched"]
+    assert "mutex" in matched and "lock" in matched and "actor" in matched, matched
+
+
+def test_a_keyword_ending_in_punctuation_still_matches():
+    # `aria-`, `POST /`, `CI/CD`, `command-line` end or start on non-word characters,
+    # where a naive `\b` behaves differently than it reads. The boundary is asserted
+    # only against alphanumerics, so these keep working.
+    assert "frontend" in count_domain_hits("use aria-label on the control", [])
+    assert "api-design" in count_domain_hits("POST /users returns 201", [])
+    assert "infrastructure" in count_domain_hits("the CI/CD pipeline deploys", [])

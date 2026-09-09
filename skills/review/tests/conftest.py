@@ -8,7 +8,6 @@ import pytest
 
 SKILL_ROOT = Path(__file__).parent.parent
 SCRIPTS_DIR = SKILL_ROOT / "scripts"
-TEMPLATES_DIR = SKILL_ROOT / "templates"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -28,11 +27,6 @@ PROJECT_ROOT = _find_project_root(SKILL_ROOT)
 @pytest.fixture(scope="session")
 def project_root() -> Path:
     return PROJECT_ROOT
-
-
-@pytest.fixture(scope="session")
-def templates_dir() -> Path:
-    return TEMPLATES_DIR
 
 
 @pytest.fixture

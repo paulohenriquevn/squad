@@ -4,9 +4,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
-
 from check_concurrency_tests import check_concurrency_tests  # noqa: E402
 
 

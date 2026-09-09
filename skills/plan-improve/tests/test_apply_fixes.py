@@ -3,8 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
-from apply_fixes import (  # noqa: E402
+from apply_fixes import (
     FixReport,
     apply_all_fixes,
     fix_loopholes,
@@ -197,3 +196,58 @@ def test_fix_report_dataclass_fields() -> None:
     assert r.category == "weak_imperatives"
     assert r.changes_proposed == 3
     assert r.changes_applied == 3
+
+
+# ── inline code spans, which the fenced-block guard never covered ─────────────
+#
+# `_strip_inline_code` and `_restore_inline_code` were written for exactly this and
+# never called, so a fenced block was protected and a backticked word on a prose line
+# was not. `_restore_inline_code` could not have been wired as written either: it
+# returned the masked line unchanged and never read its `spans` argument, so calling
+# it would have deleted every span it masked.
+
+
+def test_a_backticked_weak_word_is_not_rewritten(tmp_path: Path) -> None:
+    """`should` in backticks is a quoted token — a flag name, a field, a literal.
+    Rewriting it changes what the plan says the code contains."""
+    plan = _write(tmp_path, "The gate reads the `should` field and the system should fail.\n")
+
+    fix_weak_imperatives(plan, dry_run=False)
+
+    assert plan.read_text(encoding="utf-8") == (
+        "The gate reads the `should` field and the system must fail.\n")
+
+
+def test_a_backticked_loophole_phrase_is_not_removed(tmp_path: Path) -> None:
+    plan = _write(tmp_path, "Set `if possible` in the config, and retry if possible.\n")
+
+    fix_loopholes(plan, dry_run=False)
+
+    assert "`if possible`" in plan.read_text(encoding="utf-8")
+
+
+def test_only_the_prose_occurrence_is_counted(tmp_path: Path) -> None:
+    """A change that is not made must not be reported as made — the count is what
+    the caller prints."""
+    plan = _write(tmp_path, "`should` and should.\n")
+
+    report = fix_weak_imperatives(plan, dry_run=True)
+
+    assert report.changes_proposed == 1
+
+
+def test_a_line_of_only_inline_code_is_untouched(tmp_path: Path) -> None:
+    plan = _write(tmp_path, "`should` `could` `may`\n")
+
+    fix_weak_imperatives(plan, dry_run=False)
+
+    assert plan.read_text(encoding="utf-8") == "`should` `could` `may`\n"
+
+
+def test_prose_around_several_spans_is_still_rewritten(tmp_path: Path) -> None:
+    plan = _write(tmp_path, "It should call `should_run()`, then it may read `may_read`.\n")
+
+    fix_weak_imperatives(plan, dry_run=False)
+
+    assert plan.read_text(encoding="utf-8") == (
+        "It must call `should_run()`, then it must read `may_read`.\n")

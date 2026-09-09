@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from check_spec_smells import check_spec_smells  # noqa: E402
 
 SKILL_ROOT = Path(__file__).parent.parent
@@ -60,7 +59,8 @@ def test_smell_pt_non_verifiable_manutenivel(tmp_path: Path) -> None:
 
 
 def test_smell_pt_vague_pronoun_isso(tmp_path: Path) -> None:
-    plan = _write(tmp_path, "Algo aconteceu. Isso e ruim.\n")
+    plan = _write(  # english-only: the fixture must be Portuguese to trip the PT-BR smell
+        tmp_path, "Algo aconteceu. Isso e ruim.\n")  # english-only: fixture must be PT to trip the rule
     report = check_spec_smells(plan, RUBRIC)
     assert report.by_category.get("vague_pronouns", 0) >= 1
 

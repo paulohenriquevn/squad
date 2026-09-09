@@ -19,7 +19,6 @@ import re
 import sys
 from pathlib import Path
 
-
 CATEGORY_ORDER = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"]
 
 
@@ -96,14 +95,14 @@ def main() -> int:
 
     ordered_lines: list[str] = []
     for cat in CATEGORY_ORDER:
-        if cat in sections and any(l.strip().startswith("- ") for l in sections[cat]):
+        if cat in sections and any(l.strip().startswith("- ") for l in sections[cat]):  # noqa: E741
             ordered_lines.append(f"### {cat}")
             ordered_lines.extend(sections[cat])
             ordered_lines.append("")
             del sections[cat]
     # Preserve any unrecognized categories.
     for cat, lines in sections.items():
-        if any(l.strip().startswith("- ") for l in lines):
+        if any(l.strip().startswith("- ") for l in lines):  # noqa: E741
             ordered_lines.append(f"### {cat}")
             ordered_lines.extend(lines)
             ordered_lines.append("")

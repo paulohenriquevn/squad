@@ -21,12 +21,11 @@ import shutil
 import sys
 from pathlib import Path
 
-
 REPO = Path(__file__).resolve().parents[3]
 FIXTURE_BACKLOG = REPO / "skills" / "backlog-item" / "evals" / "fixtures" / "BACKLOG.md"
 # A governed repo with REAL code, so measurement evals have something to open, count and
 # cite. An eval whose target does not exist tests the agent's imagination, not the skill.
-FIXTURE_REPO = REPO / "skills" / "discover-execute" / "evals" / "fixtures" / "theo-lens"
+FIXTURE_REPO = REPO / "skills" / "discover-execute" / "evals" / "fixtures" / "web-console"
 
 # What a Squad skill reads at runtime. Copied wholesale rather than cherry-picked: a
 # missing rule makes a skill fail in a way that looks like a skill defect.
@@ -76,14 +75,14 @@ def build(dest: Path, with_plan: str | None = None, baseline: bool = False) -> N
     )
 
     for sub in ("discoveries/plans", "discoveries/opportunities", "backlog", "reviews"):
-        (dest / "knowledge-base" / sub).mkdir(parents=True, exist_ok=True)
+        (dest / "records" / sub).mkdir(parents=True, exist_ok=True)
 
     # Make it a git repo: skills walk up looking for .git or .claude to find the root, and
     # without a marker they resolve to somewhere outside the sandbox.
     (dest / ".git").mkdir()
 
     if FIXTURE_REPO.is_dir():
-        shutil.copytree(FIXTURE_REPO, dest / "theo-lens",
+        shutil.copytree(FIXTURE_REPO, dest / "web-console",
                         ignore=shutil.ignore_patterns("__pycache__", "node_modules"))
 
     if with_plan:
@@ -95,19 +94,19 @@ def build(dest: Path, with_plan: str | None = None, baseline: bool = False) -> N
         print("  baseline: no rules/, no skills/ — registry only")
     else:
         print(f"  rules: {len(list((dest / 'rules').glob('*')))} · agents: {len(list((dest / 'agents').glob('*.md')))}")
-    if (dest / "theo-lens").is_dir():
-        print("  governed repo: theo-lens (real N+1 in src/api/traces.ts)")
+    if (dest / "web-console").is_dir():
+        print("  governed repo: web-console (real N+1 in src/api/traces.ts)")
     if with_plan:
-        print(f"  plan: knowledge-base/discoveries/plans/{with_plan}-plan.md")
+        print(f"  plan: records/discoveries/plans/{with_plan}-plan.md")
 
 
 def _write_plan(dest: Path, slug: str) -> None:
     """A scored measurement plan, for evals that start at /discover-execute."""
-    plan = dest / "knowledge-base" / "discoveries" / "plans" / f"{slug}-plan.md"
+    plan = dest / "records" / "discoveries" / "plans" / f"{slug}-plan.md"
     plan.write_text(
         "# Measurement Plan: round-trips in the trace listing\n\n"
         "**Item:** B-014\n"
-        "**Repo:** theo-lens\n"
+        "**Repo:** web-console\n"
         "**Mode:** review\n"
         f"**Slug:** `{slug}`\n"
         "**Created:** 2026-08-05\n\n"
@@ -128,9 +127,9 @@ def _write_plan(dest: Path, slug: str) -> None:
         "## Measurement Questions\n\n"
         "| # | Question | Corner | Tool | Target | Expected answer shape |\n"
         "|---|---|---|---|---|---|\n"
-        "| Q1 | How many queries does `listTraces` issue per request? | evidence | Read | `theo-lens/src/api/traces.ts:31-57` | count + file:line |\n"
-        "| Q2 | What else consumes this handler? | blast_radius | Grep | `theo-lens/src/` | caller list |\n"
-        "| Q3 | How will we know the fix worked? | verification | Read | `theo-lens/src/api/traces.ts:65-89` | pass/fail criterion |\n""| Q4 | Does `listTraces` have a caller, or is it dead code? | evidence | Grep | `theo-lens/src/` | caller list, or a declared absence |\n\n"
+        "| Q1 | How many queries does `listTraces` issue per request? | evidence | Read | `web-console/src/api/traces.ts:31-57` | count + file:line |\n"
+        "| Q2 | What else consumes this handler? | blast_radius | Grep | `web-console/src/` | caller list |\n"
+        "| Q3 | How will we know the fix worked? | verification | Read | `web-console/src/api/traces.ts:65-89` | pass/fail criterion |\n""| Q4 | Does `listTraces` have a caller, or is it dead code? | evidence | Grep | `web-console/src/` | caller list, or a declared absence |\n\n"
         "<!-- DEFER-CORNER: constraint | current-constraint.md is undeclared -->\n\n"
         "## Halt-loop Checkpoints\n\n"
         "| Checkpoint | Assertion | Action if fails |\n"

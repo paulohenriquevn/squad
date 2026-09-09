@@ -17,9 +17,9 @@ and one requirement was made conditional:
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Any
-
 
 # Each entry: (display name, regex matching the header)
 MANDATORY_SECTIONS = [
@@ -38,10 +38,50 @@ MANDATORY_SECTIONS = [
 ADR_HEADER_RE = re.compile(r"^###\s+D\d+\s*(?:—|-)", re.MULTILINE)
 REPO_DECL_RE = re.compile(r"^\*\*Repo:\*\*\s*`?([A-Za-z0-9_.\-]+)`?", re.MULTILINE)
 
-# Repos of the governed ecosystem, as they appear in prose. Deliberately a NAME SHAPE
-# rather than a hardcoded inventory: the inventory lives in BACKLOG.md and drifts, and
-# a checker that carries a stale copy of it silently stops recognising new repos.
-ECOSYSTEM_REPO_RE = re.compile(r"\b(theo(?:kit)?(?:-[a-z0-9]+)*)\b", re.IGNORECASE)
+
+def _known_repos(project_root: Path | None = None) -> set[str] | None:
+    """The repos of THIS project, from the routing table it derived from disk.
+
+    WHY THIS REPLACED A REGEX
+    -------------------------
+    This was a name-shape pattern — `theo(kit)?(-[a-z0-9]+)*` — under a comment
+    claiming it was *"deliberately a NAME SHAPE rather than a hardcoded inventory"*
+    so that it would not go stale. The shape WAS an inventory: it matched exactly
+    one ecosystem's naming convention and nothing else.
+
+    So in every consumer, `cross_repo` was False for every opportunity ever written,
+    `no_adr_on_cross_repo_change` could not fire, and a change reaching three other
+    repos scored identically to a one-line fix in a leaf. The gate read as enforced
+    and measured nothing — the failure `rules/cycle-rule-schema.md` calls a contract
+    without a mechanism, arriving from the side where the mechanism exists and is
+    inert.
+
+    The routing table is the honest source: `detect_domains.py` derives it FROM DISK,
+    `route_domain.py` already parses it, and `rules/cycle-backlog.md § Routing
+    invariants` makes one repo belong to exactly one domain. It cannot go stale in
+    the way the comment feared without the routing gate going stale with it, and that
+    one is exercised on every item.
+
+    Returns `None` when no table can be read — which is NOT the same as "no foreign
+    repos". The caller reports it as undetermined rather than as absence.
+    """
+    root = project_root or Path.cwd()
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
+        from route_domain import _routing_table_path, parse_routing_table
+    except ImportError:
+        return None
+
+    table_path = _routing_table_path(root)
+    if table_path is None:
+        return None
+    try:
+        table = parse_routing_table(table_path)
+    except (ValueError, OSError):
+        return None
+
+    repos = {r.lower() for entry in table.values() for r in entry.get("repos", ())}
+    return repos or None
 
 
 def _section_body(content: str, header_pattern: str) -> str:
@@ -53,7 +93,12 @@ def _section_body(content: str, header_pattern: str) -> str:
     return content[start : start + next_h2.start()] if next_h2 else content[start:]
 
 
-def check_opportunity_completeness(opportunity_path: Path) -> dict[str, Any]:
+def check_opportunity_completeness(
+    opportunity_path: Path,
+    *,
+    known_repos: set[str] | None = None,
+    project_root: Path | None = None,
+) -> dict[str, Any]:
     content = opportunity_path.read_text(encoding="utf-8-sig")
 
     present: list[str] = []
@@ -74,10 +119,25 @@ def check_opportunity_completeness(opportunity_path: Path) -> dict[str, Any]:
     own_repo = repo_match.group(1).lower() if repo_match else None
 
     blast_body = _section_body(content, r"^##\s+Corner\s+3\s*(?:—|-)\s*Blast\s+Radius")
-    mentioned = {m.group(1).lower() for m in ECOSYSTEM_REPO_RE.finditer(blast_body)}
-    foreign_repos = sorted(r for r in mentioned if r != own_repo)
-    cross_repo = bool(foreign_repos)
-    adr_required = cross_repo
+
+    repos = known_repos if known_repos is not None else _known_repos(project_root)
+    if repos is None:
+        # No table, so no answer. Reporting `False` here would state that the change
+        # is repo-local — a claim nothing checked — and `adr_missing` would then be
+        # False for the same unchecked reason. Undetermined is the honest value, and
+        # it does not silently satisfy the ADR requirement.
+        foreign_repos: list[str] = []
+        cross_repo: bool | None = None
+        adr_required = False
+    else:
+        blast_lower = blast_body.lower()
+        mentioned = {
+            r for r in repos
+            if re.search(rf"(?<![A-Za-z0-9_./-]){re.escape(r)}(?![A-Za-z0-9_-])", blast_lower)
+        }
+        foreign_repos = sorted(r for r in mentioned if r != own_repo)
+        cross_repo = bool(foreign_repos)
+        adr_required = cross_repo
     adr_missing = adr_required and adr_count == 0
 
     total_required = len(MANDATORY_SECTIONS)
@@ -86,8 +146,16 @@ def check_opportunity_completeness(opportunity_path: Path) -> dict[str, Any]:
     contributors = [f"{found}/{total_required} mandatory sections present"]
     if adr_count > 0:
         contributors.append(f"{adr_count} ADR(s) found in ADRs section")
-    if not adr_required:
+    if cross_repo is False:
         contributors.append("Change is repo-local — no ADR required")
+    elif cross_repo is None:
+        # Never phrased as "no ADR required": nothing established that.
+        detractors_note = (
+            "Blast radius could not be checked — no routing table found, so whether "
+            "this change reaches another repo is undetermined "
+            "(derive one with detect_domains.py --write)"
+        )
+        contributors.append(detractors_note)
 
     detractors: list[str] = [f"Missing section: {m}" for m in missing[:3]]
     if adr_missing:
@@ -104,6 +172,7 @@ def check_opportunity_completeness(opportunity_path: Path) -> dict[str, Any]:
         "own_repo": own_repo,
         "foreign_repos": foreign_repos,
         "cross_repo": cross_repo,
+        "cross_repo_determinable": cross_repo is not None,
         "adr_required": adr_required,
         "adr_missing": adr_missing,
         "contributors": contributors,

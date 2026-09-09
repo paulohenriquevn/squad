@@ -17,14 +17,14 @@ if str(_SCRIPTS) not in sys.path:
 
 from propose_rules import (  # noqa: E402
     Graph,
-    allow_list,
     _dynamic_imports,
     _export_target,
-    _workspace_import,
-    _workspace_packages,
     _iter_json_objects,
     _unit_of_import,
     _unit_of_path,
+    _workspace_import,
+    _workspace_packages,
+    allow_list,
     find_cycles,
     independent_pairs,
     one_way_candidates,
@@ -75,7 +75,7 @@ class TestAllowList:
         assert allow_list(_graph(("a", "b", 1)))["b"] == []
 
     def test_it_scales_where_enumerating_pairs_does_not(self) -> None:
-        """theo-cloud has 27 units — 702 ordered pairs, 302 of which never touch. A proposal of
+        """control-plane has 27 units — 702 ordered pairs, 302 of which never touch. A proposal of
         302 rules is skimmed and dismissed; 27 allow-lists is read."""
         graph = Graph()
         for i in range(27):
@@ -129,7 +129,7 @@ class TestPropose:
         assert result["candidates"] == []
 
     def test_units_seen_but_no_imports_is_independence_not_refusal(self) -> None:
-        """theo-contracts, measured: jwt, plan and serviceauth import none of each other."""
+        """contracts, measured: jwt, plan and serviceauth import none of each other."""
         graph = Graph()
         for unit in ("jwt", "plan", "serviceauth"):
             graph.see(unit)
@@ -205,7 +205,7 @@ class TestUnitGranularity:
     MOD = "github.com/us/repo"
 
     def test_a_container_directory_is_descended_past(self) -> None:
-        """`internal/` holds 0 Go files and 28 subdirectories in theo-cloud. Collapsing them into
+        """`internal/` holds 0 Go files and 28 subdirectories in control-plane. Collapsing them into
         one unit hid every dependency between them and left 44 packages ungoverned."""
         assert _unit_of_import(f"{self.MOD}/internal/auth", self.MOD, self.PACKAGES) == "internal/auth"
 
@@ -225,7 +225,7 @@ class TestUnitGranularity:
 
     def test_node_modules_at_any_depth_is_not_a_unit(self) -> None:
         """A Go file vendored inside a TypeScript app's node_modules became an architectural unit
-        of theo-cloud, because only the first segment was checked."""
+        of control-plane, because only the first segment was checked."""
         assert (
             _unit_of_import(
                 f"{self.MOD}/dashboard/node_modules/flatted/golang", self.MOD, self.PACKAGES
@@ -267,7 +267,7 @@ class TestGoStrictFilter:
 class TestWorkspaceMonorepo:
     """A monorepo's cross-unit edges are BARE specifiers, and skipping them inverted the answer.
 
-    Measured on TheoCode: 4 packages exchanging 80 imports were reported as 0 edges, and the
+    Measured on a TypeScript monorepo: 4 packages exchanging 80 imports were reported as 0 edges, and the
     proposer then offered `independence` — a rule forbidding all 80. Every one of these tests
     pins a step of that failure.
     """
@@ -280,22 +280,22 @@ class TestWorkspaceMonorepo:
         for name, exports in (
             ("agent", {".": "./src/index.ts", "./config": "./src/config/index.ts"}),
             # `shared` declares NO `.` entry — a layout convention like "<pkg>/src/index.ts"
-            # would have resolved nothing for it. This is TheoCode's real shape.
+            # would have resolved nothing for it. This is a TypeScript monorepo's real shape.
             ("shared", {"./shutdown": "./src/shutdown.ts"}),
         ):
             pkg = tmp_path / "packages" / name
             (pkg / "src").mkdir(parents=True)
             (pkg / "package.json").write_text(
-                _json.dumps({"name": f"@theocode/{name}", "exports": exports})
+                _json.dumps({"name": f"@a-typescript-monorepo/{name}", "exports": exports})
             )
         return tmp_path
 
     def test_workspace_packages_are_read_from_the_root_manifest(self, tmp_path: Path) -> None:
         found = _workspace_packages(self._repo(tmp_path))
-        assert set(found) == {"@theocode/agent", "@theocode/shared"}
+        assert set(found) == {"@a-typescript-monorepo/agent", "@a-typescript-monorepo/shared"}
 
     def test_a_repo_declaring_no_workspaces_finds_none(self, tmp_path: Path) -> None:
-        """Without the declaration there is nothing separating `@theocode/agent` from `react`,
+        """Without the declaration there is nothing separating `@a-typescript-monorepo/agent` from `react`,
         and guessing from the `@scope/` prefix would invent architecture from a naming habit."""
         (tmp_path / "package.json").write_text('{"name": "solo"}')
         assert _workspace_packages(tmp_path) == {}
@@ -306,11 +306,11 @@ class TestWorkspaceMonorepo:
         assert target == (repo / "packages" / "shared" / "src" / "shutdown.ts").resolve()
 
     def test_a_scoped_name_is_not_split_on_its_first_slash(self, tmp_path: Path) -> None:
-        """`@theocode/agent/config` splits into `@theocode/agent` + `config`. Splitting on the
-        first `/` yields `@theocode`, which matches no declared package, and the edge vanishes."""
+        """`@a-typescript-monorepo/agent/config` splits into `@a-typescript-monorepo/agent` + `config`. Splitting on the
+        first `/` yields `@a-typescript-monorepo`, which matches no declared package, and the edge vanishes."""
         repo = self._repo(tmp_path)
         graph = Graph()
-        resolved = _workspace_import("@theocode/agent/config", _workspace_packages(repo), graph)
+        resolved = _workspace_import("@a-typescript-monorepo/agent/config", _workspace_packages(repo), graph)
         assert resolved == (repo / "packages" / "agent" / "src" / "config" / "index.ts").resolve()
         assert graph.unresolved_workspace == set()
 
@@ -323,8 +323,8 @@ class TestWorkspaceMonorepo:
         """It names a package of this repo, so the edge EXISTS. Dropping it silently is what let
         a zero-edge graph pass for independence."""
         graph = Graph()
-        _workspace_import("@theocode/shared/nope", _workspace_packages(self._repo(tmp_path)), graph)
-        assert graph.unresolved_workspace == {"@theocode/shared/nope"}
+        _workspace_import("@a-typescript-monorepo/shared/nope", _workspace_packages(self._repo(tmp_path)), graph)
+        assert graph.unresolved_workspace == {"@a-typescript-monorepo/shared/nope"}
 
     def test_zero_edges_with_an_unresolved_specifier_is_refused(self) -> None:
         """The fingerprint of `independence` and the fingerprint of a broken resolver are the
@@ -335,7 +335,7 @@ class TestWorkspaceMonorepo:
         assert result["unresolved_workspace_imports"] == ["@x/y"]
 
     def test_zero_edges_with_nothing_unresolved_is_still_independence(self) -> None:
-        """The refusal must not swallow the real finding. theo-contracts measured exactly this."""
+        """The refusal must not swallow the real finding. contracts measured exactly this."""
         assert propose(Graph(units_seen={"a", "b", "c"}))["status"] == "proposed"
 
 
@@ -343,11 +343,11 @@ class TestDynamicImports:
     """`await import('x')` is a call expression, so the statement-level extractor never sees it."""
 
     def test_a_dynamic_import_is_read(self, tmp_path: Path) -> None:
-        """17 of TheoCode's 23 `cli -> agent` crossings are dynamic. Reading only static imports
+        """17 of a TypeScript monorepo's 23 `cli -> agent` crossings are dynamic. Reading only static imports
         under-reported that edge by 74%."""
         f = tmp_path / "a.ts"
-        f.write_text("const { x } = await import('@theocode/agent/auth')\n")
-        assert _dynamic_imports(f) == ["@theocode/agent/auth"]
+        f.write_text("const { x } = await import('@a-typescript-monorepo/agent/auth')\n")
+        assert _dynamic_imports(f) == ["@a-typescript-monorepo/agent/auth"]
 
     def test_a_relative_dynamic_import_is_read(self, tmp_path: Path) -> None:
         f = tmp_path / "a.ts"
@@ -363,5 +363,5 @@ class TestDynamicImports:
 
     def test_the_word_import_in_a_statement_is_not_matched_as_a_call(self, tmp_path: Path) -> None:
         f = tmp_path / "a.ts"
-        f.write_text("import { x } from '@theocode/agent'\n")
+        f.write_text("import { x } from '@a-typescript-monorepo/agent'\n")
         assert _dynamic_imports(f) == []

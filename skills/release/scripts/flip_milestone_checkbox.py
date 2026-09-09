@@ -16,15 +16,15 @@ blocked on roadmap metadata.
 
 Side effects (when --commit is passed AND a flip happened):
     - `git add ROADMAP.md && git commit -m "chore(roadmap): mark M<N> done (v<version>)"` on the current branch
-    - Append/create `knowledge-base/roadmap-runs/M<N>-<date>.md` with completion metadata
+    - Append/create `records/roadmap-runs/M<N>-<date>.md` with completion metadata
 
 Usage:
     python3 flip_milestone_checkbox.py \
         --roadmap ROADMAP.md \
         --milestone-id M3 \
         --version 0.4.0 \
-        --plan knowledge-base/plans/foo-plan.md \
-        --release-log knowledge-base/releases/v0.4.0-release.md \
+        --plan records/plans/foo-plan.md \
+        --release-log records/releases/v0.4.0-release.md \
         --commit
 
 Exit codes:
@@ -137,18 +137,18 @@ def _append_roadmap_run(
 def _default_runs_dir(project_root: Path) -> Path:
     """Resolve the canonical roadmap-runs directory for this project's layout.
 
-    Defaulting to a CWD-relative `knowledge-base/roadmap-runs` is what split the
-    knowledge-base in every consumer: the flip wrote its run-file to the project
+    Defaulting to a CWD-relative `records/roadmap-runs` is what split the
+    records in every consumer: the flip wrote its run-file to the project
     ROOT while every other cycle wrote under `.claude/`, so half the audit trail
     landed beside the other half and nobody noticed — an auditor reading one side
     reports absence where the evidence is on the other.
 
-    See rules/knowledge-base-location.md: `.claude/knowledge-base/` is canonical,
+    See rules/records-location.md: `.claude/records/` is canonical,
     except in the standalone layout (the kit's own repo).
     """
     if (project_root / ".claude").exists():
-        return project_root / ".claude" / "knowledge-base" / "roadmap-runs"
-    return project_root / "knowledge-base" / "roadmap-runs"
+        return project_root / ".claude" / "records" / "roadmap-runs"
+    return project_root / "records" / "roadmap-runs"
 
 
 def main() -> int:
@@ -164,7 +164,7 @@ def main() -> int:
         default=None,
         help=(
             "Directory for the roadmap-runs audit file. Defaults to the canonical "
-            "knowledge-base for this layout (see rules/knowledge-base-location.md)."
+            "records for this layout (see rules/records-location.md)."
         ),
     )
     parser.add_argument("--commit", action="store_true", help="Stage & commit ROADMAP.md on the current branch.")

@@ -37,11 +37,6 @@ def fixtures_dir() -> Path:
 
 
 @pytest.fixture(scope="session")
-def templates_dir() -> Path:
-    return TEMPLATES_DIR
-
-
-@pytest.fixture(scope="session")
 def project_root() -> Path:
     return PROJECT_ROOT
 

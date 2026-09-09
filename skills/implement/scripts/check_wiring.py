@@ -26,7 +26,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 PRODUCTION_DIR_NAMES = ("src", "lib", "packages")
 TEST_DIR_NAMES = ("test", "tests", "__tests__", "spec")
 INTEGRATION_DIR_NAMES = ("integration", "e2e")
@@ -90,7 +89,7 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
 
     B-081 — a duplicate checkout is not a second caller. `git worktree add` puts a complete copy
     of the tree somewhere, and if that somewhere is inside the repository, every file in it
-    answers a `grep -r` twice. Measured on theokit-tui: pillar (a) reported 10 callers for
+    answers a `grep -r` twice. Measured on an adopter: pillar (a) reported 10 callers for
     `SlashMenuList` with two nested checkouts present against 5 without, and all three sampled
     "callers" were inside the copy.
 
@@ -138,11 +137,10 @@ def _nested_worktree_paths(project_root: Path) -> list[Path]:
     try:
         for dirpath, dirnames, filenames in os.walk(root, topdown=True):
             here = Path(dirpath)
-            if ".git" in dirnames or ".git" in filenames:
-                if here != root:
-                    nested.append(here)
-                    dirnames[:] = []          # a checkout's insides are not this project's
-                    continue
+            if (".git" in dirnames or ".git" in filenames) and here != root:
+                nested.append(here)
+                dirnames[:] = []          # a checkout's insides are not this project's
+                continue
             dirnames[:] = [d for d in dirnames if d not in skip]
     except OSError:
         return []
@@ -161,7 +159,7 @@ def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], excl
         cmd.extend(["--exclude-dir", exc])
     cmd.extend([pattern, str(project_root)])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)  # noqa: PLW1510
     except (subprocess.SubprocessError, FileNotFoundError):
         return []
     if result.returncode > 1:  # 0 = match, 1 = no match, >1 = real error
@@ -187,9 +185,20 @@ def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, A
     Files where `symbol` appears ONLY in definition position (function/class/interface
     declaration) are excluded — those are the origin, not callers. A symbol with only
     its own definition and no callers is dead code, which is what this pillar catches.
+
+    The scope is `PRODUCTION_DIR_NAMES` when at least one of those directories exists,
+    and the whole tree when none does. The constant held the three names and nothing
+    read them, so the grep ran from `project_root` and a caller anywhere — a scratch
+    script beside the repo root — passed a pillar whose first line says production
+    source. Narrowing unconditionally would be worse than the bug: a repo that keeps
+    its source at the root would report every symbol as unwired.
     """
-    matches = _grep_symbol(
-        project_root,
+    production_roots = [project_root / name for name in PRODUCTION_DIR_NAMES
+                        if (project_root / name).is_dir()]
+    matches: list[Path] = []
+    for search_root in (production_roots or [project_root]):
+        matches.extend(_grep_symbol(
+        search_root,
         symbol,
         include_globs=["*.ts", "*.tsx", "*.js", "*.mjs", "*.py"],
         # B-081 — `.claude/worktrees/agent-<id>/` holds FULL checkouts of this same repo
@@ -200,7 +209,7 @@ def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, A
         # twice. `.claude/` is an installed plugin, never project source, so excluding it whole is
         # correct and not merely a worktree workaround.
         exclude_dirs=["node_modules", ".git", ".claude", "dist", "build", "tests", "test", "__tests__", "spec"],
-    )
+        ))
     # Exclude files with "test" / "spec" / "fixture" / "mock" in basename
     production_files = [
         p for p in matches

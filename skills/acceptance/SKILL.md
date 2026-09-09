@@ -33,7 +33,7 @@ Do NOT trigger when `/release` returned `PR_OPEN_AWAITING_APPROVAL` or `BLOCKED`
 ### 1. Extract the criteria — before looking at the system
 
 ```bash
-python3 skills/acceptance/scripts/extract_acceptance_criteria.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/acceptance/scripts/extract_acceptance_criteria.py" \
     --roadmap ROADMAP.md --milestone M2 > criteria.json
 ```
 
@@ -59,14 +59,14 @@ Log every defect observed along the way with a severity (`blocker` | `major` | `
 
 ### 4. Write the record
 
-`knowledge-base/acceptance/{milestone}-{date}.md`, plus artifacts under `knowledge-base/acceptance/evidence/`. Cite evidence by path; the paths must resolve.
+`records/acceptance/{milestone}-{date}.md`, plus artifacts under `records/acceptance/evidence/`. Cite evidence by path; the paths must resolve.
 
-The frontmatter MUST carry `verdict: <TOKEN>` — `cycle-goal`'s Stop-hook gate reads that exact line to decide whether the session may end (`rules/cycle-acceptance.md § Output`). A verdict stated only in prose leaves the milestone looking never-accepted.
+The frontmatter MUST carry `verdict: <TOKEN>` — it is the line any reader resolves to decide whether the session may end (`rules/cycle-acceptance.md § Output`). A verdict stated only in prose leaves the milestone looking never-accepted.
 
 ### 5. Compute the verdict — do not name it
 
 ```bash
-python3 skills/acceptance/scripts/compute_acceptance_verdict.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/acceptance/scripts/compute_acceptance_verdict.py" \
     --criteria criteria.json --evidence evidence.json
 ```
 
@@ -77,12 +77,12 @@ Exit 0 → `ACCEPTED` / `ACCEPTED_WITH_CAVEATS`. Exit 1 → `REJECTED` / `NOT_VA
 On a green verdict only, reusing the release slice's script so the single-flip invariant has exactly one implementation:
 
 ```bash
-python3 skills/release/scripts/flip_milestone_checkbox.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/flip_milestone_checkbox.py" \
     --roadmap ROADMAP.md --milestone-id M2 --version {released-version} \
-    --plan knowledge-base/plans/{slug}-plan.md --commit
+    --plan records/plans/{slug}-plan.md --commit
 ```
 
-On `REJECTED`: the checkbox stays `[ ]`, the release is already public, so open the hotfix path immediately and re-enter at `/to-plan`. On `NOT_VALIDATED`: the checkbox stays `[ ]`; state precisely what could not be exercised and why.
+On `REJECTED`: the checkbox stays `[ ]`, the release is already public, so open the hotfix path immediately and re-enter at `/plan-write`. On `NOT_VALIDATED`: the checkbox stays `[ ]`; state precisely what could not be exercised and why.
 
 ### 7. Report
 
@@ -105,18 +105,16 @@ State the target address, the verdict token, per-criterion status, evidence path
 - **Retrying silently until it passes.** Flakiness in the live system is a finding.
 - **Treating `NOT_VALIDATED` as a soft pass.** It blocks the flip exactly as `REJECTED` does.
 
-## What this skill does NOT do
-
+## Does Not Own
 - Does not run unit, integration or e2e suites — `cycle-code-quality` and the plan's Integration Validation phase own those.
-- Does not deploy, roll back, or hotfix. It reports and blocks; the fix re-enters at `/to-plan`.
-- Does not decide production-readiness across releases — that is `/dogfood`, which can consume these records as evidence.
+- Does not deploy, roll back, or hotfix. It reports and blocks; the fix re-enters at `/plan-write`.
+- Does not decide production-readiness across releases — that is `/honesty-gate`, which can consume these records as evidence.
 - Does not invent acceptance criteria.
 - Does not ask a human to sign off. By design in this project: the gate rests on computed evidence instead. The trade-off is stated plainly in `cycle-acceptance § Hard gates`.
 
 ## Related
 
 - [`skills/release/SKILL.md`](../release/SKILL.md) — must have emitted `RELEASED`; no longer flips the checkbox
-- [`skills/dogfood/SKILL.md`](../dogfood/SKILL.md) — sustained-use honesty gate that consumes acceptance evidence
-- [`skills/cycle-goal/SKILL.md`](../cycle-goal/SKILL.md) — names this phase in the milestone goal condition
+- [`skills/honesty-gate/SKILL.md`](../honesty-gate/SKILL.md) — sustained-use honesty gate that consumes acceptance evidence
 - `rules/cycle-maintenance.md` — the macro loop that consumes this verdict
 - `rules/testing.md` — why exercised behaviour beats asserted coverage

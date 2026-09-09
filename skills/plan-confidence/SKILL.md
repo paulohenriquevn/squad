@@ -1,8 +1,8 @@
 ---
 name: plan-confidence
 version: 0.1.0
-requires: [edge-case-plan]
-description: Score a plan produced by /to-plan for structural quality (M2 deterministic check). Sibling of /discover-confidence with a plan-shape rubric. Use after /edge-case-plan, before /implement.
+requires: [deps-audit]
+description: Score a plan produced by /plan-write for structural quality (M2 deterministic check). Sibling of /discover-confidence with a plan-shape rubric. Use after /plan-edge-cases, before /implement.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "{plan-slug}"
@@ -10,7 +10,7 @@ argument-hint: "{plan-slug}"
 
 # Plan-Confidence — M2 Structural Scoring
 
-Scores a plan produced by `/to-plan` against the M2 structural rubric. Deterministic. Zero LLM calls. Latency < 5s. Cost $0.
+Scores a plan produced by `/plan-write` against the M2 structural rubric. Deterministic. Zero LLM calls. Latency < 5s. Cost $0.
 
 **Rubric:** `templates/rubric-v1.md` (this skill's templates dir)
 **Hard caps:** see `.claude/rules/plan-confidence-golden-rule.md`
@@ -18,12 +18,12 @@ Scores a plan produced by `/to-plan` against the M2 structural rubric. Determini
 
 ## When to Trigger
 
-- After running `/edge-case-plan {slug}` and incorporating MUST FIX items, BEFORE implementation.
+- After running `/plan-edge-cases {slug}` and incorporating MUST FIX items, BEFORE implementation.
 - User explicitly invokes `/plan-confidence {plan-slug}`.
 
 ## Cycle contract
 
-This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the source of truth for chain order, hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (the scoring rubric, hard caps, output schema, exit codes).
+This skill is **phase 4** of [`cycle-plan`](../../rules/cycle-plan.md), after `/deps-audit` (phase 3). The cycle rule is the source of truth for chain order, hard gates, soft gates, stop conditions, anti-patterns, and rollback. Read it before invoking this skill. This SKILL.md retains phase-specific detail (the scoring rubric, hard caps, output schema, exit codes).
 
 ## Architecture compliance check (always runs)
 
@@ -39,8 +39,7 @@ This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md). The cycl
 
 If `compliance_score < 0.4` AND the plan otherwise scores ≥ 90, a soft cap fires (`soft_floor_low_architecture_compliance`, score capped at 89). Plans that don't show awareness of project rules cannot be SHIPPABLE.
 
-## What This Skill Does NOT Do (Yet)
-
+## Does Not Own
 **Out of scope for M2:**
 
 - **M3 (Evidence verification via SAFE adapted to `ripgrep + tree-sitter`)** — detects citation fabrication.
@@ -52,8 +51,8 @@ These dimensions return empty `reasons` in M2 output. The composite formula reno
 
 ## Workflow
 
-1. **Resolve plan path.** If argument is a slug like `plan-confidence-setup`, resolve to `.claude/knowledge-base/plans/{slug}-plan.md`. If argument is a path (`.md` suffix), use directly.
-2. **Invoke the structural runner.** Call `python3 scripts/run_structural.py <plan-path>` from the skill directory. Pass rubric path and thresholds path as arguments.
+1. **Resolve plan path.** If argument is a slug like `plan-confidence-setup`, resolve to `.claude/records/plans/{slug}-plan.md`. If argument is a path (`.md` suffix), use directly.
+2. **Invoke the structural runner.** Call `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/run_structural.py" <plan-path>` from the skill directory. Pass rubric path and thresholds path as arguments.
 3. **Parse the JSON output.** The runner emits a JSON object matching `templates/score-report-template.md`.
 4. **Render the report.** Render the JSON to the user, highlighting the top 3 contributors and detractors per dimension, with the verdict band clearly marked. If `verdict == INVALID`, display in red. If `verdict == SHIPPABLE`, display in green.
 
@@ -69,7 +68,7 @@ A plan caps at 70 (SHIPPABLE_WITH_CAVEATS at most) when:
 - **ADR without alternatives** listed in Rationale. Stable identifier: `adr_without_alternatives`.
 - **Bug-fix task without explicit TDD** (RED-GREEN-REFACTOR block). Stable identifier: `tdd_in_bugfix`.
 
-These caps are INQUEBRÁVEIS. See `.claude/rules/plan-confidence-golden-rule.md` for full enforcement contract. The stable identifiers above are what appears in the JSON output's `hard_caps_triggered` list.
+These caps are UNBREAKABLE. See `.claude/rules/plan-confidence-golden-rule.md` for full enforcement contract. The stable identifiers above are what appears in the JSON output's `hard_caps_triggered` list.
 
 ## Conservative Bias (fail-closed)
 
@@ -95,7 +94,7 @@ trigger `verdict == INVALID`.
 |---|---|---|
 | 90-100 | SHIPPABLE | Implement with confidence |
 | 70-89 | SHIPPABLE_WITH_CAVEATS | List caveats, review manually |
-| 50-69 | NON_SHIPPABLE | Re-run `/to-plan` + `/edge-case-plan` |
+| 50-69 | NON_SHIPPABLE | Re-run `/plan-write` + `/plan-edge-cases` |
 | 0-49 | INVALID | Structural defect — re-plan |
 
 ## Output Format
@@ -103,7 +102,7 @@ trigger `verdict == INVALID`.
 The skill produces a JSON object with these top-level keys (see `templates/score-report-template.md` for full schema):
 
 - `plan_slug`, `plan_path`, `plan_version`
-- `completude_score`, `risco_estrutural_score` (0-100 each)
+- `completeness_score`, `structural_risk_score` (0-100 each)
 - `active_dimensions` — list of dimensions scored in this milestone (M2: `["completeness", "structural_risk"]`)
 - `weight_normalization_factor` — ADR D8 normalization factor applied
 - `hard_caps_triggered` — list of triggered caps (e.g., `["coverage_lt_100"]`)
@@ -121,7 +120,7 @@ The skill produces a JSON object with these top-level keys (see `templates/score
 
 ## How to Read Edge Case Outputs
 
-If a previous `/edge-case-plan {slug}` produced MUST FIX items, the current plan should have incorporated them BEFORE invoking `/plan-confidence`. The skill does NOT cross-reference edge-case reports automatically in M2 — that's an M4 feature (jury layer).
+If a previous `/plan-edge-cases {slug}` produced MUST FIX items, the current plan should have incorporated them BEFORE invoking `/plan-confidence`. The skill does NOT cross-reference edge-case reports automatically in M2 — that's an M4 feature (jury layer).
 
 ## Related
 

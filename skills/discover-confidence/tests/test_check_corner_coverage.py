@@ -3,10 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from check_corner_coverage import check_corner_coverage  # noqa: E402
-
+from check_corner_coverage import check_corner_coverage
 
 CORNER_BLOCK = (
     "## Corner 1 — Evidence\n\n{evidence}\n\n"

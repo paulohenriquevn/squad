@@ -1,14 +1,16 @@
 # Cycle: RELEASE
 
-Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READY_TO_MERGE`; produces a merge of `develop` into `main` and a semver tag. Human stays in the loop ONLY at PR-approval — every other step is automated.
+Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READY_TO_MERGE`; produces a merge of `develop` into `main` and a semver tag. Fully automated: the system merges a PR whose whole chain passed, and stops only where branch protection requires a reviewer it cannot be.
 
 ## Purpose
 
-Take an approved implementation from `READY_TO_MERGE` to a released, tagged version on `main`. Eliminates the manual release ritual (merge, version bump, tag, push, GitHub release notes) while keeping the human-controlled merge approval — Unbreakable Rule 4 (never commit directly to `main`).
+Take an approved implementation from `READY_TO_MERGE` to a released, tagged version on `main`. Eliminates the manual release ritual: merge, version bump, tag, push, GitHub release notes.
+
+**The merge is the system's, and it is gated rather than supervised.** `rules/autonomy-envelope.md` floor 2 permits merging a pull request whose full chain passed, and forbids merging anything else — the reasoning is [`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md). The branching topology is untouched: nothing commits to the trunk directly, everything arrives by PR with a semver tag, and `hooks/validate-command.py` still enforces both.
 
 ## Pre-conditions
 
-- `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `knowledge-base/reviews/{slug}-review-{date}.md`).
+- `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `records/reviews/{slug}-review-{date}.md`).
 - Working branch is `workspace` (never `develop` or `main` directly — see `git-safety.md` § 1). The release commits are authored on `workspace` and reach `develop` through the promotion PR, like every other change.
 - No uncommitted changes (`git status --porcelain` empty).
 - CHANGELOG `[Unreleased]` section has ≥ 1 entry — otherwise the release has nothing to announce.
@@ -24,14 +26,17 @@ Do NOT trigger when:
 ## Chain
 
 ```
-/release {bump-level?}
-     ↓ detect last semver tag (git describe --tags --abbrev=0; fall back to v0.0.0)
-     ↓ determine next version (bump-level OR auto-derive from CHANGELOG sections)
-     ↓ rewrite CHANGELOG: move [Unreleased] body under [{next-version}] - {date}
+/release {bump-level?} [--pre | --final]
+     ↓ detect highest semver tag + stack manifest versions; refuse when no source exists
+     ↓ determine the cut: --final only when a milestone closed; otherwise --pre (default)
+     ↓ determine next version — compute_next_version.py --mode {pre|final}
+     ↓ --pre:   leave [Unreleased] in place; notes are read from it
+     ↓ --final: rewrite CHANGELOG, moving [Unreleased] under [{next-version}] - {date}
      ↓ commit "chore(release): {next-version}" on workspace
-     ↓ open PR workspace → develop; merge it (promotion — git-safety.md § 1)
+     ↓ promote_to_develop.py — PR workspace → develop; merge it (git-safety.md § 1)
      ↓ open PR develop → main with the rendered release notes as body
-     ↓ wait for human approval (hard gate — Unbreakable Rule 4 mandate)
+     ↓ verify the chain passed, then merge (envelope floor 2)
+     ↓   branch protection demands a reviewer? → PR_OPEN_AWAITING_APPROVAL, take the next item
      ↓ on merge: create annotated tag {next-version} pointing at the merge commit
      ↓ push tag; gh release create
      ↓ RELEASED — hand off to /acceptance M<N> for the checkbox flip
@@ -41,7 +46,7 @@ Do NOT trigger when:
 
 | Phase | Input | Output | Hard gate |
 |---|---|---|---|
-| detect-version | last semver tag | parsed semver tuple | tag matches `v?\d+\.\d+\.\d+` OR fall back to v0.0.0 |
+| detect-version | semver tags + supported stack manifests | parsed semver tuple | at least one trustworthy source exists; cross-major disagreement refuses |
 | bump | parsed version + bump-level | next version string | bump-level ∈ {patch, minor, major} OR derivable from CHANGELOG |
 | changelog-rewrite | CHANGELOG.md | CHANGELOG with [Unreleased] empty and a new versioned section | [Unreleased] had ≥ 1 entry before the rewrite |
 | pr-open | release branch state | PR URL | `gh pr create` exit 0; PR body = release notes |
@@ -62,9 +67,94 @@ Consequences for this cycle:
 
 ## Verdicts
 
-- `RELEASED` — PR merged, tag created, GitHub release published. Cycle complete.
-- `PR_OPEN_AWAITING_APPROVAL` — chain paused at the human-approval gate. Resume automatically once the PR merges.
-- `BLOCKED` — pre-condition failed OR a hard gate fired during the chain. Surface to human.
+- `RELEASED` — PR merged, tag created, GitHub release published. Cycle complete. **Only a final cut emits this**; it is what `cycle-maintenance`'s ADVANCE consumes to write `shipped`.
+- `PRE_RELEASED` — an `X.Y.Z-rc.N` tag and a GitHub pre-release exist. The batch is installable and the scope is not finished. Items stay at their stage; nothing is marked `shipped`, because nothing was finally released.
+- `PR_OPEN_AWAITING_APPROVAL` — the PR is open and the system did not merge it because **a gate did not pass**. That is the system declining to merge its own work, and it is the only meaning this verdict still carries: a remote requiring a human reviewer is a violated premise caught at intake by `check_merge_autonomy.py`, not a state the chain reaches (envelope floor 2). Resume automatically once the PR merges.
+- `BLOCKED` — pre-condition failed OR a hard gate fired during the chain. The item returns to the registry carrying the cause; the queue takes the next one.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
+
+## Promotion is not a cut, and it is a separate command
+
+**`workspace → develop` is integration. `develop → main + tag` is a release.** They were
+one command until 2026-09-09, and the coupling had a measured cost: the only place in the
+kit that opened the promotion PR was the middle of this chain, so **integrating required
+versioning**. A project that did not want to publish a version did not integrate — and
+this repository sat at **349 commits on `workspace` with zero tags**, finished and
+verified work unreachable behind a step nobody wanted to take yet.
+
+Promotion now lives in [`mechanisms/cycle/promote_to_develop.py`](../mechanisms/cycle/promote_to_develop.py),
+invoked by `/promote`. It moves no version, writes no CHANGELOG section and cuts no tag —
+a promotion that bumps is a release wearing another name, and a test asserts the file
+never reaches for `bump_version`, `compute_next_version`, `promote_unreleased` or
+`git tag`.
+
+This cycle still promotes as part of its own chain, through that same mechanism: one
+definition, two callers. **What changed is that the promotion no longer requires this
+cycle.**
+
+> Do not run `/release` merely to get work onto `develop`. That is the coupling the split
+> exists to undo, and reaching for it that way rebuilds it.
+
+## Two cuts: the rc series, and the final
+
+**A release is cut twice, and they answer different questions.**
+
+| Cut | When | Version | What it says |
+|---|---|---|---|
+| **pre-release** | the queue of ready items dries up | `X.Y.Z-rc.N` | "this batch is done and installable; the scope is not finished" |
+| **final** | a milestone closes | `X.Y.Z` | "everything `M<N>` promised is shipped and was accepted" |
+
+### What "the batch is done" means, mechanically
+
+A batch is not a judgement call and must not become one — a cut decided by feel is a
+cut nobody can predict or audit. **The batch closes when the queue of ready items
+dries up**: `select_backlog_item.py` returns `BACKLOG_EMPTY` or `BACKLOG_BLOCKED`,
+meaning nothing eligible remains to hand out. Everything in flight has landed, and
+what shipped since the last tag IS the batch.
+
+That moment already exists and already stops the loop — `cycle-maintenance.md` calls
+`BACKLOG_EMPTY` *a prompt to sweep*. It still is; it now also cuts an rc. Nothing new
+has to be observed, and no counter or timer decides anything.
+
+**The limit, stated rather than discovered.** A queue that never dries up never cuts
+an rc on its own. That is honest — with work continuously arriving, any cut point
+would be arbitrary — but it means a busy project can accumulate shipped items behind
+no tag. `/release --pre` cuts on demand for exactly that case. It is an escape hatch
+and not a schedule: reaching for it every time turns the mechanical rule back into a
+judgement call.
+
+### Why the final does not bump again
+
+The first rc bumps the core version; every rc after it only advances the counter; the
+final **promotes**. `0.2.0 → 0.3.0-rc.1 → 0.3.0-rc.2 → 0.3.0`.
+
+Bumping at the final would publish `0.4.0` — a version none of the pre-releases
+pointed at, so nobody testing `0.3.0-rc.2` would recognise what shipped. The rc series
+reserves the number; the final claims it.
+
+`compute_next_version.py --mode {pre|final}` implements exactly this, and **`pre` is
+the default** because most cuts are pre-releases.
+
+### The CHANGELOG moves once, at the final
+
+`promote_unreleased.py` empties `[Unreleased]` into a versioned section. **An rc must
+NOT run it.** Emptying at `-rc.1` would leave `-rc.2` and the final with nothing to
+publish, and the entries would be filed under a version that was still a candidate.
+
+So an rc reads `[Unreleased]` for its release notes and leaves it in place; the final
+promotes it. The `[Unreleased]` body therefore grows across a whole milestone, and
+that is correct: it is the milestone's changelog, accumulating.
+
+### What a milestone closing means
+
+Every `B-NNN` citing `M<N>` is `shipped` **and** `/acceptance M<N>` returned
+`ACCEPTED`. The acceptance gate is what separates "we shipped it" from "we shipped it
+and watched it work" (§ Post-merge ROADMAP.md checkbox flip), and only the second
+earns a final version.
+
+A `B-NNN` with no milestone never triggers a final. It rides the rc series and is
+published when some milestone closes — or stays in a pre-release indefinitely, which
+is the honest state for work nobody promised anyone.
 
 ## Bump-level derivation
 
@@ -74,49 +164,70 @@ When the user does not pass `{bump-level}` explicitly:
 - `minor` — `[Unreleased] § Added` is non-empty AND no major triggers.
 - `patch` — only `[Unreleased] § Fixed` / `Security` entries.
 
-If the rule cannot pick deterministically, the chain pauses and the human chooses.
+- `minor` — only `### Changed` / `### Fixed` / `### Security`, with at least one `Changed` entry.
 
-### Why a `Changed`-only release pauses, and stays pausing
+The rule always picks. There is no ambiguous outcome and no pause.
 
-A `[Unreleased]` carrying only `### Changed` — *"mudamos como algo já publicado se comporta, sem
-acrescentar nem remover"* — não casa com nenhuma das três regras acima. É uma forma **ordinária**
-de release, não exótica, e bate na pausa toda vez. Medido no `theokit-tui` em 2026-08-18:
+### Why a `Changed`-only release resolves to `minor`
+
+A `[Unreleased]` carrying only `### Changed` — *"we changed how something already published
+behaves, without adding or removing"* — matches none of the first three rules. It is an
+**ordinary** release shape, not an exotic one, and until 2026-09-08 it paused the chain every
+time. Measured on an adopter on 2026-08-18:
 `compute_next_version.py --current 0.61.0 --bump auto` → `AMBIGUOUS`.
 
-**Não é derivado, e isso é uma decisão em vez de uma lacuna.** Sob 0.x — onde `public-copy.md § 3`
-mantém o pacote até haver evidência de produção sustentada — uma quebra é **minor** e uma mudança
-compatível é **patch**. Então `Changed` mapeia para qualquer um dos dois, dependendo de um fato que
-a seção não contém:
+**The fact it depends on is genuinely absent from the section.** Under 0.x — where
+`public-copy.md § 3` holds the package until there is evidence of sustained production use — a
+break is **minor** and a compatible change is **patch**. So `Changed` maps to either, depending
+on a question the CHANGELOG does not answer:
 
-> **A pergunta: isto muda um comportamento de que alguém que chama depende?**
+> **Does this change a behaviour a caller depends on?**
 
-Chutar `minor` transforma toda entrada reescrita em sinal de incompatibilidade. Chutar `patch`
-subestima uma quebra real — exatamente a falha que o semver existe para impedir, entregue em
-silêncio a quem está num range com caret. Inferir da prosa da entrada é o mesmo chute com um regex
-mais longo, e a mesma origem mediu como uma variação de formatação (`**BREAKING:`) derrota esse
-tipo de casamento neste mesmo script.
+That was the argument for pausing, and it was a good argument for **as long as somebody was
+coming to answer it**. Nobody is: `autonomy-envelope.md § The autonomous span` places the whole
+of RELEASE inside the system's own authority, and a pause addressed to an absent person is a
+stopped release, not a careful one.
 
-A pausa fica, e **carrega a pergunta** em vez de um chute. Colhido do `theokit-tui`, onde o
-raciocínio foi escrito e medido.
+**So the question is answered once, in writing, in the safe direction: `minor`.** The two
+candidate errors are not symmetric, and that asymmetry is the whole justification:
+
+| Guess | When it is wrong | What it costs |
+|---|---|---|
+| `patch` | the change broke a caller | the break ships **silently** to everyone on a caret range — precisely the failure semver exists to prevent |
+| `minor` | the change was compatible | a version number is larger than it needed to be, and callers on a caret range do not pick it up automatically |
+
+One error is a wrong number. The other is a broken consumer who was told nothing. A rule that
+must decide without the fact decides toward the recoverable error — which is the same fail-safe
+that makes `decision-delegation.txt` retain an unmatched wall.
+
+**The cost, stated.** Under this rule a release that only reworded a log line takes a minor
+bump, and the version series will overstate how much changed. That is accepted. What is not
+accepted is inferring the answer from the entry's prose: it is the same guess with a longer
+regex, and this very script has already measured how a formatting variation (`**BREAKING:`)
+defeats that kind of match.
+
+**`major` is untouched.** An entry that opens with `BREAKING:`, or any `### Removed`, still
+derives `major` before this rule is reached. The rule below decides only what a bare `Changed`
+means, never whether something is breaking at all.
 
 ## Hard gates
 
-- **PR approval gate (LOCKED)** — the merge step ALWAYS waits for a human-approved PR. Auto-merging into `main` violates Unbreakable Rule 4.
-- **No direct commits to `main`** — even from this skill. Every change reaches `main` via the PR opened above.
-- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`.
-- **CHANGELOG must have content** — refuse if `[Unreleased]` is empty after stripping headers.
+- **Gates-passed gate (LOCKED)** — _(not mechanized as one check: composed — it reads the verdicts the chain already emitted — `/review` `READY_TO_MERGE`, `/code-quality` not `FAIL_HARD`, no BLOCKED report standing)_ The merge step merges ONLY a PR whose full chain passed. Merging anything else, or moving a threshold so that it passes, violates envelope floor 2 and floor 3. **This replaced a human-approval gate on 2026-09-01**; what it does not replace is the topology — the PR itself is still mandatory. Branch protection is what makes it mandatory on the remote, and since 2026-09-08 it may enforce the PR **without requiring a human reviewer**: a remote that requires one makes the chain unrunnable and is reported by `check_merge_autonomy.py` at intake.
+- **No direct commits to `main`** — `validate-command.py`, which resolves the real trunk rather than matching the literal name. Even from this skill: every change reaches `main` via the PR opened above. **Unchanged by the amendment** — merging a PR and committing to the trunk are different acts, and only the first moved.
+- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. _(not mechanized: debt since 2026-09-01 — nothing inspects the tag object's type or the branch it was cut from; `validate-command.py` blocks the commit paths, not the tag)_
+- **CHANGELOG must have content** — `changelog_section_nonempty.py` refuses if `[Unreleased]` is empty after stripping headers.
 - **Single-flip invariant** — owned by [`cycle-acceptance § Hard gates`](cycle-acceptance.md), which is where the flip moved (see § Post-merge ROADMAP.md checkbox flip). This cycle no longer flips anything; the clause stays as a pointer so nobody re-adds a flip here.
-- **No silent flip** — the roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.
+- **No silent flip** — `flip_milestone_checkbox.py --commit`, which writes the run-file and aborts the whole operation (restoring the checkbox) when the commit fails. The roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.
 
 ## Stop conditions
 
 - `gh pr create` fails → halt; surface stderr.
-- PR is closed without merge → halt; record the rationale in `knowledge-base/releases/{version}-release.md`.
-- Tag already exists for the computed version → halt; ask the human to pick the next version explicitly.
+- PR is closed without merge → halt; record the rationale in `records/releases/{version}-release.md`.
+- Tag already exists for the computed version → the computed version is already cut, so the chain advances to the next free patch level and records that it did. It halts only if that level is taken too, which means the tag series disagrees with the CHANGELOG — a broken record rather than a version choice, registered as its own item.
 
 ## Anti-patterns
 
-- Auto-merging the release PR. Always human-gated.
+- **Merging a PR whose chain did not pass.** Auto-merging one that did is the design since 2026-09-01 (envelope floor 2); what is forbidden is merging past a gate or moving a threshold so that it passes. `gh pr merge --admin` is banned by name.
 - Editing `[Unreleased]` directly during the release chain — entries should be in place beforehand (CHANGELOG discipline is Unbreakable Rule 6).
 - Producing a release without a corresponding `cycle-review` audit. Released artifacts must be traceable to a `READY_TO_MERGE` verdict.
 - Skipping the GitHub release creation step. Downstream consumers (changelogs, dependency updates) read GitHub releases, not local tags.
@@ -126,7 +237,7 @@ raciocínio foi escrito e medido.
 
 ## Output
 
-- `knowledge-base/releases/{version}-release.md` — record of the release run: input verdict, computed version, PR URL, merge commit, tag, GitHub release URL.
+- `records/releases/{version}-release.md` — record of the release run: input verdict, computed version, PR URL, merge commit, tag, GitHub release URL.
 - `[Unreleased]` empty (until the next change lands).
 - `git tag v{version}` annotated, pushed.
 - GitHub release published.
@@ -139,5 +250,5 @@ raciocínio foi escrito e medido.
 - Skill: `skills/release/SKILL.md`
 - Upstream: `cycle-review.md` (consumes its `READY_TO_MERGE` verdict)
 - Macro super-loop: `rules/cycle-maintenance.md` — defines the single-flip invariant + the roadmap-runs file contract
-- Conventions: `architecture.md`, `public-copy.md` (release notes lint), `audit-trail-rotation.md`, `git-safety.md`
+- Conventions: `architecture.md`, `public-copy.md` (release notes lint), `skills/_kit-rules/audit-trail-rotation.md`, `git-safety.md`
 - Unbreakable rules consumed: Rule 4 (no commit to `main`; release is the only path — see `git-safety.md`), Rule 6 (CHANGELOG discipline)

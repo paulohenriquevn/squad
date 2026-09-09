@@ -49,13 +49,13 @@ The mode comes from the plan's `**Mode:**` header (or `--sweep`'s flag). It deci
 
 ### Step 1 — Resolve inputs
 
-1. Plan path: `knowledge-base/discoveries/plans/{slug}-plan.md`. Read it fully — extract `**Item:**`, `**Repo:**`, `**Mode:**`, the Measurement Questions table, and `## Falsification`.
+1. Plan path: `records/discoveries/plans/{slug}-plan.md`. Read it fully — extract `**Item:**`, `**Repo:**`, `**Mode:**`, the Measurement Questions table, and `## Falsification`.
 2. Confirm the `B-NNN` item exists in `BACKLOG.md` and is `raw`. An item already `triaged`, `planned` or `shipped` is not re-measured — that is how duplicate work enters.
 3. For `live-test`, confirm the domain has a block in `rules/live-target.txt`. **No block, no probe.**
 
 ### Step 2 — Initialize the opportunity
 
-Create `knowledge-base/discoveries/opportunities/{slug}-opportunity.md` from `templates/opportunity-template.md`. Every section present, each corner holding a `<!-- TBD -->` placeholder mapped to its question.
+Create `records/discoveries/opportunities/{slug}-opportunity.md` from `templates/opportunity-template.md`. Every section present, each corner holding a `<!-- TBD -->` placeholder mapped to its question.
 
 Fill the header lines immediately — `**Item:**`, `**Repo:**`, `**Mode:**` are checked by `check_opportunity_completeness.py`, and a mode token outside the four reads as a missing section.
 
@@ -124,6 +124,19 @@ On `<promise>OPPORTUNITY_BLOCKED</promise>` the check still runs, plus the block
 
 On `<promise>ITEM_KILLED</promise>`, verify instead that the `B-NNN` block carries a `kill_reason` naming what was measured and what it showed (gate G-K). An unexplained kill is indistinguishable from an abandoned run.
 
+
+Emit the START of this phase before doing the work:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+    --cycle discover --slug {B-NNN}
+```
+
+Without it the board can only draw what FINISHED. Measured on 2026-08-31: seventeen
+`phase:end` events and one `phase:start`, so an item under active work showed the
+verdict of a phase already over and nothing on the page said anything was running.
+A `start` with no matching `end` is exactly the fact "this is happening now".
+
 ### Step 8 — Update `BACKLOG.md` and report
 
 | Outcome | `B-NNN` becomes |
@@ -131,6 +144,28 @@ On `<promise>ITEM_KILLED</promise>`, verify instead that the `B-NNN` block carri
 | `OPPORTUNITY_COMPLETE` | `status: triaged`, `evidence: <pointer>` |
 | `ITEM_KILLED` | `status: killed`, `kill_reason: <what was measured>` |
 | `OPPORTUNITY_BLOCKED` | unchanged — `raw`, with the blocker surfaced to the human |
+
+The status change is written by the writer that owns it, which refuses the
+transitions the contract forbids:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/backlog_status.py" \
+    BACKLOG.md B-NNN --to triaged            # or --to killed --kill-reason "<what was measured>"
+```
+
+Then record the transition in the stream, carrying the outcome above as the verdict:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+    --cycle discover --slug B-NNN --verdict OPPORTUNITY_COMPLETE
+```
+
+Emit on `ITEM_KILLED` too. A killed item is a **successful** discover — the phase ran
+and reached a conclusion — and a stream that records only the outcomes someone likes
+cannot answer the question it exists for: did this phase run, or was it skipped?
+
+`OPPORTUNITY_BLOCKED` emits as well, with the status left unchanged. The phase still
+ran; what it produced was a blocker.
 
 Report: the opportunity path, iterations used, questions answered / blocked with reasons, pointers verified, runtime observations recorded, and any mode reclassification. Next step: `/discover-confidence {slug}` — except on `ITEM_KILLED`, where the chain ends and there is nothing to score.
 
@@ -147,13 +182,20 @@ Registration is not optional. A finding that stays in this run's output and neve
 - **Prior art as evidence.** Not a measurement of our system, and it cannot fill the Evidence corner.
 - **Improvising a live probe** on a domain with no declared target.
 - **Refusing to kill.** After a long measurement, sunk cost makes a weak finding look shippable.
-- **`ITEM_KILLED` when nothing was measured.** Target unreachable is not disproof — stop and ask the human.
+- **`ITEM_KILLED` when nothing was measured.** Target unreachable, credential
+  absent, tool missing — nothing was measured, so nothing was refuted, and the
+  kill would be a fabricated result. Emit **`OPPORTUNITY_BLOCKED`** naming what
+  could not be reached and why, and let the queue take the next item. *Stopping
+  to ask a person* was the instruction here until 2026-09-01, and in an unattended
+  run that is a halt with no end: the item waits for somebody who is not coming,
+  and the whole queue waits with it. `rules/autonomy-envelope.md § Nothing here
+  fits` says the move instead — record the impediment where the next reader finds
+  it, and move on. One item waiting is not the backlog waiting.
 - **Emitting a promise without the Step 7 check.**
 - **Spawning concurrent ralph-loops** on overlapping state.
 - **Sweeping without registering.**
 
-## What this skill does NOT do
-
+## Does Not Own
 - Write the measurement plan — `/discover-plan`.
 - Review edge cases — `/discover-edge-cases`.
 - Score the opportunity — `/discover-confidence`.

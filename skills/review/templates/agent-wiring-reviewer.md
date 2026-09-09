@@ -11,10 +11,15 @@ You are an integration architect reviewing whether the feature branch's new code
 
 The /implement skill already enforced the wiring triad (pillar a: static caller; pillar b: integration test; pillar c: runtime metric). Your job: **verify the triad results are HONEST and DEEP**, not gamed.
 
-## The tree you are reading is shared (READ-ONLY — non-negotiable)
+## You are alone in this tree (READ-ONLY stays non-negotiable)
 
-Other reviewers are reading the same working tree at the same time. A file you write is a file
-another reviewer reads as the code under review.
+You run in your own git worktree. No other reviewer reads or writes the files you see, so a
+file you find changed, you changed.
+
+**This section said the opposite until 2026-08-30**, and the change matters more than it
+looks: an instruction describing a world the code left behind is worse than none, because it
+buys precautions against a hazard that is gone and grants trust nowhere. The isolation is now
+in the spawn (`isolation="worktree"`); the read-only rule below is unchanged and still binds.
 
 **Measured on the B-025 run:** six agents shared one tree. `src/metrics/usage-panel.tsx` was found
 carrying an injected `// MUTANT:` line mid-review, probe files appeared at the repo root, and the
@@ -37,8 +42,8 @@ moved is reported at the top of the review, above every finding in it.
 ## Pre-read (mandatory)
 
 1. The plan: `{PLAN_PATH}` (specifically Global DoD § Runtime-metric proof, and per-task Acceptance Criteria)
-2. The implementation progress audit: `.claude/knowledge-base/implementations/.progress-{SLUG}.json` (if exists)
-3. The validation report from /implement: `.claude/knowledge-base/reviews/{SLUG}-implement-validate-*.md`
+2. The implementation progress audit: `.claude/records/implementations/.progress-{SLUG}.json` (if exists)
+3. The validation report from /implement: `.claude/records/reviews/{SLUG}-implement-validate-*.md`
 4. Re-run for sanity: `python3 .claude/skills/implement/scripts/check_wiring.py --symbol {each-new-symbol}` for each public export in the diff
 5. The cycle-implement rule: `.claude/rules/cycle-implement.md` § Wiring triad
 
@@ -79,11 +84,11 @@ Every `export` in the diff: must be either (a) re-exported via `src/index.ts` (p
 
 ### 4. Boundary respect (DIP)
 
-The `.claude/hooks/boundary-check.sh` already blocks cross-tier imports at write time. Spot-check:
+The `.claude/hooks/boundary-check.py` already blocks cross-tier imports at write time. Spot-check:
 
-- `src/core/` imports — must not reference `src/local/`, `src/cloud/`, `src/theokit/`, `src/agent-tools/`
+- `src/core/` imports — must not reference `src/local/`, `src/cloud/`, `src/an adopter/`, `src/agent-tools/`
 - `src/local/` and `src/cloud/` must not import each other
-- `src/theokit/` must depend only on `src/core/`
+- `src/an adopter/` must depend only on `src/core/`
 
 FLAG as BLOCKER any violation (hook should have caught it; if it slipped through, the hook itself is broken).
 

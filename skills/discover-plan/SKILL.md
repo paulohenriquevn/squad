@@ -12,7 +12,7 @@ argument-hint: "B-NNN [--mode {review|live-test|bug|evolve}]"
 
 Turns a `raw` backlog item — a hypothesis nobody has measured — into a **measurement plan**: what will be measured, where, with which tool, and what result would kill the hypothesis. The output is the input for `/discover-execute`.
 
-Sibling of `/to-plan` — same backbone, different output. `to-plan` produces implementation plans; this produces measurement plans whose deliverable is an **opportunity** (or a killed item).
+Sibling of `/plan-write` — same backbone, different output. `plan-write` produces implementation plans; this produces measurement plans whose deliverable is an **opportunity** (or a killed item).
 
 The ancestor of this skill planned an investigation into *other people's* code. This one plans an investigation into ours. That is the whole difference, and it changes every step below.
 
@@ -47,7 +47,7 @@ Also read `rules/current-constraint.md`. If it is `status = declared` and inside
 ### Step 1 — Read the item and inventory what is known
 
 1. The `B-NNN` block in `BACKLOG.md` — `domain`, `repo`, `suggested_mode`, `why_now`, `dod`.
-2. Prior opportunities under `knowledge-base/discoveries/opportunities/` touching the same repo. A hypothesis measured and killed three months ago deserves to know that before being measured again.
+2. Prior opportunities under `records/discoveries/opportunities/` touching the same repo. A hypothesis measured and killed three months ago deserves to know that before being measured again.
 3. The repo's own `README.md` / `CLAUDE.md` and its build manifest — the plan must name tools that repo actually has.
 
 ### Step 2 — Confirm or reclassify the mode
@@ -85,7 +85,7 @@ Pause here and decide the corner coverage BEFORE drafting questions.
 
 Inventing a constraint question to fill the slot is padding. The corner is a lens, not a gate.
 
-**Blast Radius is the corner that earns its place in this ecosystem.** The repos form a dependency graph with `theo-contracts` at the stable base; a maintenance change is dangerous in proportion to how far up that graph it sits. A question here is rarely wasted.
+**Blast Radius is the corner that earns its place in this ecosystem.** The repos form a dependency graph with a shared contracts package at the stable base; a maintenance change is dangerous in proportion to how far up that graph it sits. A question here is rarely wasted.
 
 #### Question budget
 
@@ -116,10 +116,10 @@ A plan whose falsification criterion is empty or placeholder caps at 70.
 Use `templates/measurement-plan-template.md`. Save to:
 
 ```
-knowledge-base/discoveries/plans/{slug}-plan.md
+records/discoveries/plans/{slug}-plan.md
 ```
 
-`{slug}` is kebab-case and prefixed by the repo when the problem shape recurs across repos (`theo-lens-trace-latency`, not `latency`). The registry spans 21 repos.
+`{slug}` is kebab-case and prefixed by the repo when the problem shape recurs across repos (`web-console-trace-latency`, not `latency`).
 
 ## Quality Rules
 
@@ -133,8 +133,7 @@ Non-negotiable for every measurement plan:
 6. **No premature conclusions.** A measurement plan ASKS. Answers come from `/discover-execute`. A plan that already states the finding has decided the outcome before measuring it.
 7. **No prior art as justification.** "Project X does it this way" is not a reason to measure ours. The reason is in the item's `why_now`, and gate G5 already refused it at intake if it was not.
 
-## What this skill does NOT do
-
+## Does Not Own
 - Run the measurement — `/discover-execute`.
 - Review edge cases in the plan — `/discover-edge-cases`.
 - Score the plan — `/discover-plan-confidence`.

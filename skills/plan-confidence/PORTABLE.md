@@ -4,7 +4,7 @@ This skill works in **any project** that uses Claude Code. Copy-paste-able with 
 
 ## What you get
 
-- `/to-plan` — generates implementation plans (requires plan-confidence integration)
+- `/plan-write` — generates implementation plans (requires plan-confidence integration)
 - `/plan-confidence {slug}` — scores a plan structurally (M2, $0, deterministic)
 - `/plan-improve {slug}` — iteratively improves a plan's score (ralph-loop style)
 - Optional: `make check-plan-confidence` — CI gate
@@ -39,19 +39,26 @@ If you DON'T copy these, the skill falls back to **hard-coded defaults** (90/70/
 
 ### 3. (Optional) Install the CI gate
 
-```bash
-mkdir -p scripts
-cp /path/to/source/scripts/check-plan-confidence.sh scripts/
-chmod +x scripts/check-plan-confidence.sh
+The scorer is the gate — its exit codes were designed for one, so no wrapper
+script is needed:
+
+```
+0  SHIPPABLE or SHIPPABLE_WITH_CAVEATS      2  error (plan or rubric not found)
+1  INVALID (a hard cap fired)                3  NON_SHIPPABLE (score < 50, no hard cap)
 ```
 
-Add to Makefile if you have one:
+Add to your Makefile if you have one:
 
 ```makefile
 .PHONY: check-plan-confidence
 check-plan-confidence:
-	@bash scripts/check-plan-confidence.sh
+	@python3 .claude/skills/plan-confidence/scripts/run_structural.py $(PLAN)
 ```
+
+Earlier versions of this document told you to copy a `check-plan-confidence.sh`
+into `scripts/`. **That file has never existed in this repository** — the step
+failed for anyone who ran it, and the compatibility table below asserted a
+behaviour of it that nobody could have observed.
 
 ## Or use the automated installer
 
@@ -67,7 +74,7 @@ The skills walk UP from their location to find:
 
 1. **`.claude/` directory** (or `.git/`) → that's the project root
 2. **`.claude/rules/`** → that's the source of project rules (if exists)
-3. **`.claude/knowledge-base/plans/`** OR **`.claude/plans/`** OR **`plans/`** OR **`docs/plans/`** → plans directory
+3. **`.claude/records/plans/`** OR **`.claude/plans/`** OR **`plans/`** OR **`docs/plans/`** → plans directory
 4. **`.claude/skills/plan-confidence/defaults/`** → fallback rules when (2) is empty
 
 If your project has NONE of `.claude/`, `.git/`, or the conventional structure, the skill falls back to legacy paths. Add a `.claude/` directory at your project root to fix.
@@ -152,15 +159,15 @@ If `.claude/rules/` exists in your project, defaults are ignored. Project rules 
 | Templates in `templates/` | ✅ Fully | `.example.*` files |
 | Score schema (JSON) | ✅ Fully | Generic `$id` |
 | `/plan-improve` prompt template | ✅ Fully | Generic slugs |
-| `check-plan-confidence.sh` | ✅ Fully | Auto-finds `.claude/` from script location |
+| CI gate | ✅ Fully | `run_structural.py` exits 0/1/2/3; call it directly, there is no wrapper |
 
 ## Troubleshooting
 
 ### "Plan not found" when invoking by slug
-The auto-detector looks in `.claude/knowledge-base/plans/`, then `.claude/plans/`, then `plans/`, then `docs/plans/`. If your project uses a different directory, pass the full path to the `.md` file instead of just the slug.
+The auto-detector looks in `.claude/records/plans/`, then `.claude/plans/`, then `plans/`, then `docs/plans/`. If your project uses a different directory, pass the full path to the `.md` file instead of just the slug.
 
 ### "Calibration WARN: PROVISIONAL_v1"
-This is expected on a new project. The skill is signaling that the score band cutoffs are SOTA defaults and not yet calibrated against your project's holdout. Build the holdout in `.claude/knowledge-base/concepts/plan-confidence/holdout/` over time.
+This is expected on a new project. The skill is signaling that the score band cutoffs are SOTA defaults and not yet calibrated against your project's holdout. Build the holdout in `.claude/records/concepts/plan-confidence/holdout/` over time.
 
 ### Tests fail with "real plan not found"
 These tests reference specific plans from the source project. They SKIP gracefully in your project — that's expected behavior.

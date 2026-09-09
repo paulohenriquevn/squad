@@ -33,18 +33,23 @@ from pathlib import Path
 # Allow importing sibling lib modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from lib.calibrate import (
+from gate_authoring.calibrate import (
     FLOOR_COMPLEXITY,
     FLOOR_FILE_LINES,
     FLOOR_FUNCTION_LINES,
     FLOOR_NESTING_DEPTH,
     FLOOR_PARAMETERS,
     ThresholdCalibration,
-    _measure_python_metrics,
-    _percentile,
+    # Deliberate re-exports: `tests/test_init_quality_gates.py` imports both
+    # from here. They stayed OUT of `__all__` — a private name in a public surface
+    # is the contradiction D3 flagged in this file — but remain importable, which is
+    # what the test needs. Without the noqa, `ruff --fix` deletes them as unused.
+    _measure_python_metrics,  # noqa: F401
+    _percentile,  # noqa: F401
     calibrate_thresholds,
+    measure_blocking_rate,
 )
-from lib.detect import (
+from gate_authoring.detect import (
     LanguageInfo,
     _log,
     detect_existing_linters,
@@ -53,22 +58,26 @@ from lib.detect import (
     detect_test_dirs,
     validate_target,
 )
-from lib.emit import generate_hook_scripts, patch_settings_json
+from gate_authoring.emit import generate_hook_scripts, patch_settings_json
 
 # Re-exports above keep the public import surface stable for tests, which
 # import these symbols directly from init_quality_gates.
 
+# This module is a CLI, and `__all__` listed everything it defines — including two
+# private names (`_measure_python_metrics`, `_percentile`), which already said the
+# list was an inventory and not a surface. D3 flagged three exports with no consumer
+# (`InitResult`, `smoke_test_tools`, `validate_round_trip`); all three are used right
+# here, by `main`. What remains is what another module would import: the reusable
+# detection and calibration stages. The tests keep importing by name, which `__all__`
+# does not restrict.
 __all__ = [
     "FLOOR_COMPLEXITY",
     "FLOOR_FILE_LINES",
     "FLOOR_FUNCTION_LINES",
     "FLOOR_NESTING_DEPTH",
     "FLOOR_PARAMETERS",
-    "InitResult",
     "LanguageInfo",
     "ThresholdCalibration",
-    "_measure_python_metrics",
-    "_percentile",
     "calibrate_thresholds",
     "detect_existing_linters",
     "detect_frameworks",
@@ -77,8 +86,6 @@ __all__ = [
     "generate_hook_scripts",
     "main",
     "patch_settings_json",
-    "smoke_test_tools",
-    "validate_round_trip",
     "validate_target",
 ]
 
@@ -98,6 +105,9 @@ class InitResult:
     settings_patched: bool = False
     lizard_available: bool = False
     generated_date: str = ""
+    #: How much of the existing code the calibrated gate would reject. `None` when
+    #: the measurement did not run — which is not the same as zero.
+    blocking_rate: object = None
 
 
 # ── Stage 7: smoke_test_tools ────────────────────────────────────────
@@ -117,7 +127,7 @@ def smoke_test_tools(
     # Lizard is optional (multi-language support)
     lizard_available = False
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             ["python3", "-c", "import lizard; print(lizard.version)"],
             capture_output=True, text=True, timeout=10,
         )
@@ -130,8 +140,8 @@ def smoke_test_tools(
         if not allow_missing:
             _log(msg, verbose)
             print(
-                f"lizard not installed. Install with: python3 -m pip install lizard\n"
-                f"Or re-run with --allow-missing-tools to continue without multi-language analysis.",
+                "lizard not installed. Install with: python3 -m pip install lizard\n"
+                "Or re-run with --allow-missing-tools to continue without multi-language analysis.",
                 file=sys.stderr,
             )
             raise SystemExit(2)
@@ -155,7 +165,7 @@ def validate_round_trip(hooks_dir: str, verbose: bool = False) -> bool:
     })
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             ["python3", str(hook_script)],
             input=synthetic_event,
             capture_output=True,
@@ -193,6 +203,20 @@ def _format_report(result: InitResult) -> str:
     lines.append(f"Target: {result.target}")
     lines.append(f"Generated: {result.generated_date}")
     lines.append("")
+
+    # What the calibration could NOT see. `--allow-missing-tools` lets the run
+    # continue without `lizard`, and until 2026-09-01 the only trace of that was a
+    # log line printed under `--verbose` — so a gate calibrated from file-level
+    # checks alone was installed looking fully calibrated. Same distinction the
+    # `blocking_rate` comment below already makes: a measurement that did not run
+    # is not a measurement that came back empty.
+    if not result.lizard_available:
+        lines.append("LIMITATION — `lizard` was not available.")
+        lines.append("  Multi-language calibration fell back to file-level checks,")
+        lines.append("  so every threshold below is derived from partial data.")
+        lines.append("  Install lizard and re-run before trusting them as this")
+        lines.append("  project's p90.")
+        lines.append("")
 
     # Languages
     lines.append("Languages detected:")
@@ -242,6 +266,26 @@ def _format_report(result: InitResult) -> str:
     if cal.sample_count > 0:
         lines.append(f"  (calibrated from {cal.sample_count} source files)")
     lines.append("")
+
+    # How much of the EXISTING code these thresholds would reject. The p90 is computed
+    # PER METRIC and the gate rejects per FILE — a file with thirty functions has
+    # thirty chances of holding one of the worst 10%, and five metrics multiply that.
+    # Measured on this repository 2026-08-26: legitimate p90 thresholds, 61% of files
+    # blocked. Without this number, "calibrated" was a word with no verification.
+    rate = result.blocking_rate
+    if rate is not None:
+        lines.append("Blocking rate against the current code:")
+        if rate.percent is None:
+            lines.append(f"  {rate.verdict} — {rate.advice}")
+        else:
+            lines.append(
+                f"  {rate.files_blocked}/{rate.files_measured} file(s) ({rate.percent}%) "
+                f"-> {rate.verdict}"
+            )
+            lines.append(f"  {rate.advice}")
+            for offender in rate.worst_offenders[:5]:
+                lines.append(f"    - {offender}")
+        lines.append("")
 
     # Tools
     lines.append(f"Lizard (multi-language): {'available' if result.lizard_available else 'NOT available'}")
@@ -321,6 +365,12 @@ def main() -> None:
         strict=args.strict,
         skip_tests=args.skip_tests,
         verbose=args.verbose,
+    )
+
+    # Stage 6.5 — the calibration stops being an assertion and gets a number.
+    _log("Stage 6.5/10: measure_blocking_rate", args.verbose)
+    result.blocking_rate = measure_blocking_rate(
+        result.target, result.thresholds, skip_tests=args.skip_tests
     )
 
     # Stage 7

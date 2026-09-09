@@ -1,16 +1,16 @@
-"""Skills do projeto declaradas numa REGRA, não editadas dentro do validador.
+"""Project skills declared in a RULE, not edited inside the validator.
 
-`AUXILIARY_SKILLS` é uma constante no corpo do `check_xrefs.py`. Um consumidor
-com skills próprias só tinha uma saída: editar o Python do kit. O `theo` fez
-exatamente isso (`cnpg-audit`, `cnpg-design`, `multi-cluster-fleet-specialist`),
-e essa edição é o que uma sincronização futura sobrescreve — nesta sessão ela só
-sobreviveu porque a comparação foi feita arquivo a arquivo.
+`AUXILIARY_SKILLS` is a constant in `check_xrefs.py`'s body. A consumer with
+skills of its own had exactly one way out: editing the kit's Python. One adopter
+did exactly that (`cnpg-audit`, `cnpg-design`,
+`multi-cluster-fleet-specialist`), and that edit is what a future sync overwrites
+— it only survived because the comparison was done file by file.
 
-Medido no `speculative` (2026-08-20): 9 skills de domínio próprias, 18 WARN, que
-eram **100% dos avisos do checker** — e com `--strict`, que é como o instalador
-o invoca, isso reprova a instalação inteira. Um validador que sempre avisa
-ensina a ser ignorado; um que reprova por design do consumidor ensina a rodar
-sem `--strict`.
+Measured on `speculative` (2026-08-20): 9 domain skills of its own, 18 WARN,
+which were **100% of the checker's warnings** — and with `--strict`, which is how
+the installer invokes it, that fails the entire installation. A validator that
+always warns teaches people to ignore it; one that fails over the consumer's
+design teaches them to run without `--strict`.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-_SCRIPT = _REPO / "scripts" / "check_xrefs.py"
+_SCRIPT = _REPO / "mechanisms" / "gates" / "check_xrefs.py"
 
 
 def _eco(root: Path, *, skills: list[str], declared: list[str] | None) -> Path:
@@ -43,8 +43,8 @@ def _eco(root: Path, *, skills: list[str], declared: list[str] | None) -> Path:
 
 
 def _warns_about(eco: Path, skill: str) -> bool:
-    """Há algum aviso sobre ESTA skill? (o fixture mínimo gera outros, irrelevantes aqui)"""
-    result = subprocess.run(
+    """Is there any warning about THIS skill? (the minimal fixture generates others, irrelevant here)"""
+    result = subprocess.run(  # noqa: PLW1510
         [sys.executable, str(_SCRIPT), "--ecosystem-dir", str(eco), "--json"],
         capture_output=True, text=True,
     )
@@ -55,20 +55,20 @@ def _warns_about(eco: Path, skill: str) -> bool:
 
 def test_undeclared_project_skill_is_warned_about(tmp_path: Path) -> None:
     eco = _eco(tmp_path, skills=["collapse-detection-specialist"], declared=None)
-    assert _warns_about(eco, "collapse-detection-specialist"), "é o estado de hoje: 2 WARN por skill"
+    assert _warns_about(eco, "collapse-detection-specialist"), "this is today's state: 2 WARN per skill"
 
 
 def test_declaring_it_in_the_rule_clears_both_warnings(tmp_path: Path) -> None:
-    """Os DOIS checks — `no_orphan_skills` e `skill_has_cycle_contract`. Isentar só
-    um é a meia isenção que o próprio código documenta como falso conserto."""
+    """BOTH checks — `no_orphan_skills` and `skill_has_cycle_contract`. Exempting only
+    one is the half exemption the code itself documents as a false fix."""
     eco = _eco(tmp_path, skills=["collapse-detection-specialist"],
                declared=["collapse-detection-specialist"])
     assert not _warns_about(eco, "collapse-detection-specialist")
 
 
 def test_a_declared_skill_that_does_not_exist_is_not_an_error(tmp_path: Path) -> None:
-    """A lista é declaração de intenção, não inventário: uma skill removida do
-    projeto não deve quebrar o validador."""
+    """The list is a declaration of intent, not an inventory: a skill removed from the
+    project must not break the validator."""
     eco = _eco(tmp_path, skills=["collapse-detection-specialist"],
                declared=["collapse-detection-specialist", "ja-removida"])
     assert not _warns_about(eco, "ja-removida")
@@ -76,9 +76,9 @@ def test_a_declared_skill_that_does_not_exist_is_not_an_error(tmp_path: Path) ->
 
 
 # ---------------------------------------------------------------------------
-# Grill kit-domain-agents-install, decisão 2: o esqueleto derivado é WARN
-# enquanto ninguém o revisou. Sem isso ele vira "especialista que ninguém
-# completou" com aparência de cobertura — o defeito que o D5 persegue.
+# Grill kit-domain-agents-install, decision 2: the derived skeleton is a WARN
+# while nobody has reviewed it. Without that it becomes "a specialist nobody
+# finished" wearing the appearance of coverage — the defect D5 pursues.
 # ---------------------------------------------------------------------------
 
 def _eco_with_agent(root: Path, body: str) -> Path:
@@ -99,7 +99,7 @@ reviewed_by_human: false
 
 ## Invariantes
 
-<!-- POR PREENCHER: só um humano sabe isto -->
+<!-- TO BE FILLED IN: only a human knows this -->
 """)
     assert _warns_about(eco, "meu-dominio"), "um esqueleto silencioso parece um especialista pronto"
 
@@ -113,6 +113,6 @@ name: meu-dominio
 
 ## Invariantes
 
-O índice e o disco não divergem.
+The index and the disk do not diverge.
 """)
     assert not _warns_about(eco, "meu-dominio")

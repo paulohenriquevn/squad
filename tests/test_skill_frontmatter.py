@@ -5,14 +5,12 @@ import re
 import sys
 from pathlib import Path
 
-import pytest
-
 # Ensure scripts/ is importable
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from ecosystem_utils import find_ecosystem_dir
+from ecosystem_utils import find_ecosystem_dir  # noqa: E402
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
@@ -59,20 +57,20 @@ def _skill_data() -> list[tuple[Path, dict[str, str]]]:
 def test_all_skills_have_name() -> None:
     """Every SKILL.md must have a name: field in its frontmatter."""
     missing = [str(p) for p, fm in _skill_data() if "name" not in fm]
-    assert not missing, f"SKILL.md files missing 'name:' frontmatter:\n" + "\n".join(missing)
+    assert not missing, "SKILL.md files missing 'name:' frontmatter:\n" + "\n".join(missing)
 
 
 def test_all_skills_have_description() -> None:
     """Every SKILL.md must have a description: field in its frontmatter."""
     missing = [str(p) for p, fm in _skill_data() if "description" not in fm]
-    assert not missing, f"SKILL.md files missing 'description:' frontmatter:\n" + "\n".join(missing)
+    assert not missing, "SKILL.md files missing 'description:' frontmatter:\n" + "\n".join(missing)
 
 
 def test_all_skills_have_user_invocable() -> None:
     """Every SKILL.md must have a user-invocable: field in its frontmatter."""
     missing = [str(p) for p, fm in _skill_data() if "user-invocable" not in fm]
     assert not missing, (
-        f"SKILL.md files missing 'user-invocable:' frontmatter:\n" + "\n".join(missing)
+        "SKILL.md files missing 'user-invocable:' frontmatter:\n" + "\n".join(missing)
     )
 
 
@@ -103,11 +101,11 @@ def test_skill_names_match_directory() -> None:
 
 
 def test_skill_count() -> None:
-    """Sanity check: we expect exactly 34 SKILL.md files.
+    """Sanity check: we expect exactly 27 SKILL.md files.
 
     Retired the in-cycle skill-distillation tail (skill-writer + skill-validator
     + skill-register, -3), adopted the standalone official skill-creator (+1),
-    added the frontend-design utility skill (+1), the cycle-goal session-binding
+    added the frontend-design utility skill (+1), the session-goal session-binding
     skill (+1), the acceptance cycle skill (+1), and the roadmap-review skill (+1):
     30 -> 28 -> 29 -> 30 -> 31 -> 32.
 
@@ -117,9 +115,23 @@ def test_skill_count() -> None:
     34 -> 32. Added the cap-theorem-specialist, backpressure-specialist and
     resilience-specialist auxiliary skills (+3): 32 -> 35. Added arch-check,
     the boundary proposer/verifier that pairs with the D5 detector (+1): 35 -> 36.
+    Added the SOP family — sop-author (the static script), sop-run (the judgement
+    that ran it) and sop-review (whether either is still true) (+3): 36 -> 39.
+    shared-understanding, the alignment gate between DISCOVER and PLAN (+1): 39 -> 40.
+    pipeline, which schedules many items through the cycle at once (+1): 40 -> 41.
+    Deleted the seven skills no cycle phase referenced — the presentation trio
+    (slide-deck, marp-slide, excalidraw), the vendored frontend-design, and the
+    three domain specialists (cap-theorem, backpressure, resilience), which the
+    scaffolded per-project specialists replace (-7): 41 -> 34. Cut seven more on
+    utility grounds (-7): 34 -> 27. trajectory-review shipped six hard caps its own
+    rule said were never computed; session-goal bound sessions to hand-authored
+    milestones the kit has no producer for; commands-help was superseded by
+    skills/map.md; grill-me produced one grill in a consumer's history and
+    plan-alignment interrogates as its first act; and the three sop-* skills wrapped
+    a schema two scripts already enforce, with zero run records ever written.
     """
     files = _get_skill_files()
-    assert len(files) == 36, (
-        f"Expected 36 SKILL.md files, found {len(files)}. "
+    assert len(files) == 31, (
+        f"Expected 31 SKILL.md files, found {len(files)}. "
         f"Update this test if skills were added or removed."
     )

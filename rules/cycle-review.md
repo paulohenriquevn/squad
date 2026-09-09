@@ -8,8 +8,10 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 
 ## Pre-conditions
 
-- Implementation output exists at `knowledge-base/implementations/{slug}-implementation.md`.
-- Code-quality audit exists at `knowledge-base/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} — or `FAIL_SOFT` accompanied by an ADR dismissing each soft cap (per `code-quality-golden-rule.md` § 1). `FAIL_HARD` and `INVALID` block this cycle.
+- Implementation output exists at `records/implementations/{slug}-implementation.md`.
+- Code-quality audit exists at `records/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} — or `FAIL_SOFT` accompanied by an ADR dismissing each soft cap (per `code-quality-golden-rule.md` § 1). `FAIL_HARD` and `INVALID` block this cycle.
+
+  **Enforced, not remembered.** `skills/review/scripts/check_upstream_gate.py` reads the newest audit for the slug and emits a BLOCKER when it is missing, unreadable, `FAIL_HARD`/`INVALID`, or `FAIL_SOFT` with any soft cap that no ADR names. `consolidate_findings.py` folds those findings into the same verdict computation as every other finding, so a `/review` verdict cannot be produced without the check having run. Until 2026-08-26 this was prose plus a `test -f` in `SKILL.md`, and the ADR — the artefact that makes a soft cap dismissible — was never looked for: asserting it existed was enough. "Each soft cap" is the strict reading: with two caps and one ADR, the loose reading approves the cap nobody examined as a passenger of the one that was.
 - Working branch has commits ahead of the base branch.
 - No uncommitted changes (review reads a stable state).
 
@@ -37,24 +39,42 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 
 - `READY_TO_MERGE` — no BLOCKER, ≤ 2 HIGH findings with documented mitigation.
 - `READY_TO_MERGE_WITH_FOLLOWUPS` — no BLOCKER, but MORE than 2 HIGH. The blocking work is closed and provable; the debt is real and named. **Hard gate:** every HIGH is a *registered* followup — an entry in the plan's `## Followups` (matched by finding id) or a filed issue reference (`#NNN`) on the finding — never a mention in prose. A caveat nobody owns is a defect with better manners. Enforced by `consolidate_findings.py --plan`, which fails closed to `NEEDS_FIXES` when the plan is absent.
+- `AWAITING_HUMAN` — the phase ran and stopped at a gate only a person opens (a T3 boundary call, an alignment sign-off, an approval, a dependency in another repository). **Emit it.** The work happened; without the event it leaves no trace, and every reader — the board, the drift checker, the selector, the watchdog — sees an item that was never touched.
 
   The wording used to read *every HIGH **above the cap***. With 5 HIGH findings that names 3 of them and nothing says which 3 — any subset satisfies it, which is not a gate. `every HIGH` is the strict reading and the one implemented.
 
   Use it instead of stretching `READY_TO_MERGE` (which would call acknowledged debt a clean green) and instead of `NEEDS_FIXES` (which would claim the blocking work is unfinished when it is demonstrably closed). The milestone is still gated by `cycle-acceptance`, so this verdict never softens what a `[x]` claims — it only stops forcing a false binary at the review boundary.
 - `NEEDS_FIXES` — BLOCKER or > 2 HIGH findings. Return to `/implement` (or open targeted fix tasks).
-- `NEEDS_DEEPER` — review surfaced systemic issues that exceed targeted fixes. Return to `/to-plan` for a re-scoping pass.
+
+  **A BLOCKER that was fixed and re-verified is CLOSED, not deleted.** The re-review marks the finding `status: CLOSED` and leaves the severity as it was; `skills/review/scripts/consolidate_findings.py` scores the verdict from OPEN findings only, so the halt lifts while the finding stays in the report under its original severity, naming the agent that closed it. Lowering the severity or deleting the entry reaches the same verdict by destroying the record — both are anti-patterns below. Shape in `skills/review/SKILL.md` § *Closing a finding on a re-review*.
+
+  The mechanism shipped and this contract never mentioned it, which cost a consumer a re-run of four review agents to work around a capability that already worked: it grepped the consolidator for `outcome` — the field name the harness's `ReportFindings` tool uses — found nothing, and concluded the field did not exist. A mechanism nobody can find is worth what an absent one is worth.
+- `NEEDS_DEEPER` — review surfaced systemic issues that exceed targeted fixes. Return to `/plan-write` for a re-scoping pass.
 
 ## Hard gates (BLOCKER-level)
 
-- Failing tests on the working branch.
-- New secrets committed (any pattern matching `.env`, `credentials*`, `*.pem`, `*.key`).
-- Direct commit to `main` (Unbreakable Rule 4).
-- Co-Authored-By trailer in any commit on this branch (user policy).
-- `CHANGELOG.md` not updated despite production source changes (Unbreakable Rule 6).
+Four of the five run in hooks that fire whether or not `/review` is invoked, and
+for a long time this list said so about none of them. A mechanized gate whose
+rule names no mechanism reads exactly like a gate nobody enforces — so it gets
+re-run by hand, or quietly ignored. The mechanism is now part of the line.
+
+- Failing tests on the working branch — `suite_runners.py`, invoked upstream by
+  `run_validation.py` at the end of `/implement`, and again by `ci.yml` on every
+  push. **No hook executes the suite**, so a branch that never ran `/implement`
+  reaches `/review` with this gate resting on CI alone.
+- New secrets committed (any pattern matching `.env`, `credentials*`, `*.pem`,
+  `*.key`) — `stop-validation.py`.
+- Direct commit to `main` (Unbreakable Rule 4) — `validate-command.py`, which
+  resolves the real trunk instead of matching the literal `main`.
+- Co-Authored-By trailer in any commit on this branch (user policy) —
+  `validate-command.py`.
+- `CHANGELOG.md` not updated despite production source changes (Unbreakable
+  Rule 6) — `stop-validation.py`, which accepts a package `CHANGELOG.md` or a
+  `.changeset/` entry as the record.
 
 ## Output
 
-- `knowledge-base/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix.
+- `records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix.
 - `agents/review-{slug}-{YYYY-MM-DD}/` — per-agent audit trail.
 
 ## Anti-patterns

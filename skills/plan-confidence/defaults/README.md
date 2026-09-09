@@ -8,7 +8,7 @@ purpose: Fallback engineering principles when project has no `.claude/rules/`
 
 **This directory is FALLBACK.** If `.claude/rules/` exists in the project, these defaults are IGNORED. Project rules are the source of truth.
 
-The skills (`/to-plan`, `/plan-confidence`, `/plan-improve`) check `.claude/rules/` FIRST. Only when that directory is missing or empty do they fall back to:
+The skills (`/plan-write`, `/plan-confidence`, `/plan-improve`) check `.claude/rules/` FIRST. Only when that directory is missing or empty do they fall back to:
 
 - `solid.md` — SOLID principles (SRP, OCP, LSP, ISP, DIP)
 - `dry.md` — Don't Repeat Yourself

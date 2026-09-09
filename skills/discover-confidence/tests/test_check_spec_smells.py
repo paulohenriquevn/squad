@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
-from check_spec_smells import SmellReport, check_spec_smells  # noqa: E402
+from check_spec_smells import SmellReport, check_spec_smells
 
 
 def test_clean_opportunity_zero_smells(good_opportunity: Path, rubric_path: Path) -> None:

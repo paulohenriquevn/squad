@@ -6,10 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from scripts._shared import Finding, compute_verdict
+from scripts._detector_contract import Finding, compute_verdict
 from scripts.run_code_quality import (
     _enumerate_source_files,
     _resolve_plan_path,
+    _safe_call,
     main,
 )
 
@@ -25,7 +26,7 @@ def _write_rules(tmp_path: Path, *, with_allowlist: str = "") -> Path:
     )
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text(with_allowlist)
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
     return tmp_path
 
@@ -36,7 +37,7 @@ def _write_rules(tmp_path: Path, *, with_allowlist: str = "") -> Path:
 
 
 def test_enumerate_source_files_skips_references_zone(tmp_path: Path) -> None:
-    """Regression (issue #37): the audit must NOT walk knowledge-base/references/.
+    """Regression (issue #37): the audit must NOT walk records/references/.
 
     Reference repos cloned there are third-party study material (read-only per
     cycle-discover.md). Walking them parses tens of thousands of foreign files,
@@ -46,7 +47,7 @@ def test_enumerate_source_files_skips_references_zone(tmp_path: Path) -> None:
     module_file.parent.mkdir(parents=True)
     module_file.write_text("def foo():\n    return 1\n")
 
-    foreign = tmp_path / "knowledge-base" / "references" / "langfuse" / "lib.py"
+    foreign = tmp_path / "records" / "references" / "langfuse" / "lib.py"
     foreign.parent.mkdir(parents=True)
     foreign.write_text("def bar():\n    return 2\n")
 
@@ -102,6 +103,22 @@ def test_verdict_smallest_cap_wins() -> None:
     assert verdict == "FAIL_HARD"
 
 
+def test_unimplemented_detector_is_visible_and_caps_the_verdict() -> None:
+    """An unavailable audit must never be converted into an empty successful result."""
+
+    def unavailable() -> list[Finding]:
+        raise NotImplementedError("runner is not installed")
+
+    findings, crash = _safe_call("d4", unavailable, language="python")
+
+    assert crash is None
+    assert len(findings) == 1
+    assert findings[0].severity == "SOFT_CAP"
+    assert findings[0].detector == "d4_unavailable"
+    assert "runner is not installed" in findings[0].message
+    assert compute_verdict(findings)[0] == "FAIL_SOFT"
+
+
 # --------------------------------------------------------------------------
 # T5.1 — slug resolution (EC-6)
 # --------------------------------------------------------------------------
@@ -109,7 +126,7 @@ def test_verdict_smallest_cap_wins() -> None:
 
 def test_slug_resolution_finds_plan_in_plans_dir(tmp_path: Path) -> None:
     _write_rules(tmp_path)
-    plan = tmp_path / ".claude" / "knowledge-base" / "plans" / "demo-plan.md"
+    plan = tmp_path / ".claude" / "records" / "plans" / "demo-plan.md"
     plan.write_text("# demo\n")
     resolved = _resolve_plan_path("demo", tmp_path)
     assert resolved == plan
@@ -117,7 +134,7 @@ def test_slug_resolution_finds_plan_in_plans_dir(tmp_path: Path) -> None:
 
 def test_slug_resolution_finds_plan_in_completed(tmp_path: Path) -> None:
     _write_rules(tmp_path)
-    completed = tmp_path / ".claude" / "knowledge-base" / "plans" / "completed"
+    completed = tmp_path / ".claude" / "records" / "plans" / "completed"
     completed.mkdir()
     plan = completed / "old-plan.md"
     plan.write_text("# old\n")
@@ -128,7 +145,7 @@ def test_slug_resolution_finds_plan_in_completed(tmp_path: Path) -> None:
 def test_slug_resolution_refuses_discovery_plan(tmp_path: Path) -> None:
     """EC-6 — discovery plan slug must produce a helpful error mentioning /discover-confidence."""
     _write_rules(tmp_path)
-    disc = tmp_path / ".claude" / "knowledge-base" / "discoveries" / "plans"
+    disc = tmp_path / ".claude" / "records" / "discoveries" / "plans"
     disc.mkdir(parents=True)
     (disc / "investigation-plan.md").write_text("# discovery\n")
     with pytest.raises(FileNotFoundError, match="discover-confidence"):
@@ -173,11 +190,18 @@ def test_cli_standalone_mode_is_invalid_when_nothing_was_audited(
     assert data["mode"] == "standalone"
 
 
-def test_cli_a_real_audit_still_passes(tmp_path: Path, capsys) -> None:
+def test_cli_a_real_audit_names_what_it_could_not_measure(tmp_path: Path, capsys) -> None:
     """The other half of the guard's contract: it must not turn a real clean audit INVALID.
 
     Without this, the guard could be tightened into "always INVALID" and nothing would notice —
     the same negative-space omission `does_not_refuse_ordinary_text` covers for B-086's predicate.
+
+    Until 2026-08-26 this test demanded `d3_unavailable` and `d4_unavailable`, because
+    both detectors returned "not configured" in every language — it pinned the absence
+    of implementation as if it were the contract. Now D3 and D4 run, and what is
+    demanded is that each says what it did: D3 has no declared public surface in this
+    fixture project (`package.json` without `main`/`exports`), and D4 has no mutation
+    runner configured. Both are results, not silences.
     """
     _write_rules(tmp_path)
     (tmp_path / "package.json").write_text('{"name": "demo", "version": "0.0.0"}')
@@ -191,6 +215,14 @@ def test_cli_a_real_audit_still_passes(tmp_path: Path, capsys) -> None:
     assert data["languages_audited"] != []
     assert "no_languages_audited" not in data["hard_caps_triggered"]
     assert exit_code == 0
+    assert data["verdict"] == "FAIL_SOFT"
+    assert set(data["findings_by_detector"]) >= {
+        "d3_orphan_export_skipped",
+        "d4_mutation",
+    }
+    assert data["soft_caps_triggered"] == ["soft_cap_mutation_unconfigured_typescript"], (
+        "the soft cap must name the action for whoever reads the report — configure the runner"
+    )
 
 
 def test_cli_no_network_emits_info_finding(tmp_path: Path, capsys) -> None:
@@ -200,9 +232,9 @@ def test_cli_no_network_emits_info_finding(tmp_path: Path, capsys) -> None:
     exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    # Verdict should still be PASS (vulture finds no Python files in tmp_path)
+    # The explicit no-network INFO is retained, while unavailable D3/D4 cap the verdict.
     data = json.loads(captured.out)
-    assert data["verdict"] in ("PASS", "PASS_WITH_CAVEATS")  # Vulture may emit auditor_unavailable
+    assert data["verdict"] == "FAIL_SOFT"
 
 
 def test_cli_malformed_allowlist_emits_hard(tmp_path: Path, capsys) -> None:
@@ -217,14 +249,14 @@ def test_cli_malformed_allowlist_emits_hard(tmp_path: Path, capsys) -> None:
 
 def test_cli_plan_bound_mode_writes_markdown_report(tmp_path: Path, capsys) -> None:
     _write_rules(tmp_path)
-    plan = tmp_path / ".claude" / "knowledge-base" / "plans" / "demo-plan.md"
+    plan = tmp_path / ".claude" / "records" / "plans" / "demo-plan.md"
     plan.write_text("# demo\n")
     exit_code = main(["demo", "--repo-root", str(tmp_path), "--no-network"])
     # B-092 — these fixtures enable four languages and provide no manifests, so the audit
     # runs zero detectors and the verdict is now INVALID. This test is about the MARKDOWN
     # report, not the verdict, so it asserts the report rather than the exit code.
     assert exit_code != 0
-    audit_dir = tmp_path / ".claude" / "knowledge-base" / "audits"
+    audit_dir = tmp_path / ".claude" / "records" / "audits"
     audit_files = list(audit_dir.glob("demo-code-quality-*.md"))
     assert len(audit_files) == 1, f"Expected audit Markdown file; got {audit_files}"
 
@@ -232,7 +264,7 @@ def test_cli_plan_bound_mode_writes_markdown_report(tmp_path: Path, capsys) -> N
 def test_cli_no_audit_write_skips_markdown(tmp_path: Path, capsys) -> None:
     """T6.5 contract — --no-audit-write produces JSON only."""
     _write_rules(tmp_path)
-    plan = tmp_path / ".claude" / "knowledge-base" / "plans" / "demo-plan.md"
+    plan = tmp_path / ".claude" / "records" / "plans" / "demo-plan.md"
     plan.write_text("# demo\n")
     exit_code = main(
         ["demo", "--repo-root", str(tmp_path), "--no-network", "--no-audit-write"]
@@ -241,7 +273,7 @@ def test_cli_no_audit_write_skips_markdown(tmp_path: Path, capsys) -> None:
     # runs zero detectors and the verdict is now INVALID. This test is about the MARKDOWN
     # report, not the verdict, so it asserts the report rather than the exit code.
     assert exit_code != 0
-    audit_dir = tmp_path / ".claude" / "knowledge-base" / "audits"
+    audit_dir = tmp_path / ".claude" / "records" / "audits"
     assert not audit_dir.exists() or not list(audit_dir.glob("*.md"))
 
 
@@ -260,7 +292,7 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
     `auditor_unavailable_cargo-udeps` — a soft cap that blocks the cycle because
     of a path assumption rather than because of the code.
 
-    Measured on theo-db (usetheoai/theo-db#175): `theodb_rs/Cargo.toml`.
+    Measured on db-engine (an adopter's issue tracker): `theodb_rs/Cargo.toml`.
     """
     rules = tmp_path / ".claude" / "rules"
     rules.mkdir(parents=True)
@@ -269,7 +301,7 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
     )
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text("")
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
 
     manifest = tmp_path / "crate" / "Cargo.toml"
@@ -286,6 +318,9 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
         def detect_orphan_exports(self, target: Path) -> list:
             return []
 
+        def detect_mutation_score(self, target: Path) -> list:
+            return []
+
         def detect_architecture_violations(self, target: Path) -> list:
             # Present because the orchestrator resolves the attribute BEFORE `_safe_call` can
             # guard it: a double that skips a contract method takes the whole run down with an
@@ -293,7 +328,8 @@ def test_detector_receives_manifest_dir_not_repo_root(tmp_path: Path, monkeypatc
             return []
 
     monkeypatch.setattr(
-        "scripts.run_code_quality._build_detector", lambda _lang: _SpyDetector()
+        "scripts.run_code_quality._build_detector",
+        lambda _lang, _thresholds=None: _SpyDetector(),
     )
 
     main(["--repo-root", str(tmp_path), "--no-network"])
@@ -312,7 +348,7 @@ def _write_python_only_rules(tmp_path: Path) -> Path:
     (rules / "code-quality-languages.txt").write_text("python | pyproject.toml | ENABLED |\n")
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text("")
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
     return tmp_path
 
@@ -387,7 +423,7 @@ def test_python_disabled_makes_the_same_tree_report_nothing_audited(
     (rules / "code-quality-languages.txt").write_text("# nothing enabled\n")
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text("")
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\nversion = "0.0.0"\n')
     pkg = tmp_path / "demo"
@@ -414,12 +450,12 @@ def test_a_repo_with_no_manifests_at_all_is_still_INVALID_by_deliberate_policy(
 ) -> None:
     """Pinned as a DECISION — see ADR-0013.
 
-    A consumer's backlog (theokit-plugins B-020) asked that "a genuinely pre-code repo with no
+    A consumer's backlog (an adopter-plugins B-020) asked that "a genuinely pre-code repo with no
     manifest still passes". This kit holds the opposite: `cycle-review` admits on PASS, so a run
     that looked at nothing must not report a clean audit — even when there was nothing to look at.
 
     Both positions were defensible, so the disagreement was pinned here rather than settled by one
-    consumer's item, and filed as theokit-plugins B-035. The kit owner decided on 2026-08-24:
+    consumer's item, and filed as an adopter-plugins B-035. The kit owner decided on 2026-08-24:
     INVALID stays.
 
     The deciding evidence was not about pre-code repositories. One maintenance run in that same
@@ -448,16 +484,20 @@ def test_a_manifest_nobody_audited_fails_even_when_another_language_was(
     guard only fired when `languages_audited` was EMPTY, so "looked at something, just not at that"
     was indistinguishable from a clean run. The gate reported on the set it managed to see, and
     nothing verified that set was the right one.
+
+    The fixture drops the NOTES field on purpose. Since 2026-08-31 a recorded reason marks a
+    decision and exempts the language; silence is the omission this guard is for, and silence is
+    what it must keep catching.
     """
     rules = tmp_path / ".claude" / "rules"
     rules.mkdir(parents=True)
     (rules / "code-quality-languages.txt").write_text(
-        "python | pyproject.toml | DISABLED | deliberately off\n"
+        "python | pyproject.toml | DISABLED |\n"
         "typescript | package.json | ENABLED |\n"
     )
     (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
     (rules / "code-quality-allowlist.txt").write_text("")
-    (tmp_path / ".claude" / "knowledge-base" / "plans").mkdir(parents=True)
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
     (tmp_path / ".git").mkdir()
     # Both manifests exist; only one language is enabled.
     (tmp_path / "package.json").write_text('{"name":"fx","version":"0.0.0"}')
@@ -469,3 +509,33 @@ def test_a_manifest_nobody_audited_fails_even_when_another_language_was(
 
     assert exit_code != 0, data
     assert "unaudited_manifest_present" in data["hard_caps_triggered"], data
+
+
+def test_a_language_left_off_with_a_recorded_reason_is_a_decision(tmp_path: Path, capsys) -> None:
+    """The complement of the guard above, and the reason the gate became usable.
+
+    Treating a recorded decision like a silent omission made the gate unsatisfiable in
+    the ordinary case. Measured on 2026-08-31: a project with `typescript | DEFER` and
+    `python | DISABLED`, each carrying a measured justification, returned INVALID on
+    every plan — including after the one language it did audit was fixed and enabled.
+    No amount of work could clear it.
+
+    "Disable it and pass" is still impossible: it costs a sentence somebody signs, in a
+    versioned and reviewed file.
+    """
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "code-quality-languages.txt").write_text(
+        "python | pyproject.toml | DISABLED | kit tooling synced from upstream, not product code\n"
+        "typescript | package.json | ENABLED |\n"
+    )
+    (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
+    (rules / "code-quality-allowlist.txt").write_text("")
+    (tmp_path / ".claude" / "records" / "plans").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "package.json").write_text('{"name":"fx","version":"0.0.0"}')
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "fx"\n')
+
+    main(["--repo-root", str(tmp_path), "--no-network"])
+    data = json.loads(capsys.readouterr().out)
+    assert "unaudited_manifest_present" not in data["hard_caps_triggered"], data

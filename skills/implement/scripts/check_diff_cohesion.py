@@ -23,8 +23,8 @@ Honest defaults:
 
 Usage:
     python3 check_diff_cohesion.py \\
-        --plan knowledge-base/plans/foo-plan.md \\
-        --progress knowledge-base/implementations/.progress-foo.json \\
+        --plan records/plans/foo-plan.md \\
+        --progress records/implementations/.progress-foo.json \\
         --phase 1 \\
         --json
 

@@ -20,7 +20,6 @@ from scripts.detectors.typescript import (
     _rule_selfcheck,
 )
 
-
 # ---------------------------------------------------------------------------
 # The shared vocabulary
 # ---------------------------------------------------------------------------
@@ -98,8 +97,8 @@ class TestRuleSelfcheck:
 
     def _rule(self, **over: object) -> dict:
         rule = {
-            "name": "regra",
-            "comment": "Uma razao com substancia suficiente para passar o limiar.",
+            "name": "rule",
+            "comment": "A reason with enough substance to pass the threshold.",
             "from": {"path": "^agents/goal/"},
             "to": {"path": "^tui/consent/"},
         }
@@ -127,7 +126,7 @@ class TestRuleSelfcheck:
     def test_an_external_target_is_never_flagged(self) -> None:
         """`no-sdk-direto` forbids an import nobody makes. Demanding a match would invert it."""
         findings = _rule_selfcheck(
-            {"forbidden": [self._rule(to={"path": "^node_modules/@theokit/sdk"})]}, self.SOURCES
+            {"forbidden": [self._rule(to={"path": "^node_modules/@acme/sdk"})]}, self.SOURCES
         )
         assert findings == []
 
@@ -159,7 +158,7 @@ class TestDepcruiseScript:
 
 class TestTypescriptDetector:
     def test_a_zero_module_cruise_is_vacuous_not_clean(self) -> None:
-        """Measured in usetheo-labs/agent-builder: the global binary cruised 0 modules against a
+        """Measured in a TypeScript monorepo: the global binary cruised 0 modules against a
         config the local one cruised 279 with. Zero violations over zero modules is not a pass."""
         findings = TypescriptDetector()._parse_depcruise_json(
             {"summary": {"totalCruised": 0, "violations": [], "ruleSetUsed": {}}, "modules": []},
@@ -223,7 +222,7 @@ class TestGoArchParsing:
         assert _component_of("something else entirely") == "?"
 
     def test_a_ghost_component_is_hard_even_though_the_tool_says_no_warnings(self) -> None:
-        """Measured on theo-contracts 2026-08-06. `ArchHasWarnings: false` — green — while the
+        """Measured on contracts 2026-08-06. `ArchHasWarnings: false` — green — while the
         component's directory does not exist and the rule can no longer fire."""
         payload = {
             "Payload": {
@@ -292,7 +291,7 @@ class TestGoArchParsing:
 
 
 class TestRustSetupBlockers:
-    """Each string below was observed against theo-db on 2026-08-06."""
+    """Each string below was observed against db-engine on 2026-08-06."""
 
     def test_missing_lib_path_is_a_setup_blocker(self) -> None:
         assert _setup_blocker("fatal: failed to read lib.path from Cargo.toml") is not None
@@ -301,6 +300,8 @@ class TestRustSetupBlockers:
         assert _setup_blocker("error: two packages named `theodb_rs` in this workspace") is not None
 
     def test_missing_pgrx_is_a_setup_blocker(self) -> None:
+        # workstation-path: pgrx prints the user's home in this error; the fixture
+        # reproduces the message verbatim, which is what the detector matches on.
         assert _setup_blocker("Error: /home/x/.pgrx/config.toml not found.") is not None
 
     def test_an_ordinary_compile_error_is_not_a_setup_blocker(self) -> None:

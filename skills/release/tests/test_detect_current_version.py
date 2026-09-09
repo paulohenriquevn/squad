@@ -6,7 +6,7 @@ the merge commit that lands on `main`, so it is NEVER an ancestor of `workspace`
 
     git describe --tags --abbrev=0             ->  v0.52.1
     git tag --sort=-v:refname | head -1        ->  v0.64.0
-    npm view @theokit/tui version              ->  0.64.0
+    npm view @acme/tui version              ->  0.64.0
     git merge-base --is-ancestor v0.64.0 HEAD  ->  NO
 
 Twelve versions stale, structurally — fetching does not help. A release cut from `workspace` would
@@ -27,7 +27,7 @@ from tempfile import mkdtemp
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from detect_current_version import detect_current_version  # noqa: E402
+from detect_current_version import detect_current_version
 
 
 def _repo(tags: list[str], manifest_version: str | None) -> Path:
@@ -65,7 +65,7 @@ def _repo(tags: list[str], manifest_version: str | None) -> Path:
 def test_the_base_ignores_ancestry() -> None:
     # The defect itself: tags exist, none is reachable from HEAD.
     root = _repo(["v0.60.0", "v0.64.0"], "0.64.0")
-    described = subprocess.run(
+    described = subprocess.run(  # noqa: PLW1510
         ["git", "describe", "--tags", "--abbrev=0"],
         cwd=root, capture_output=True, text=True,
     )
@@ -99,13 +99,30 @@ def test_a_repository_with_no_tags_falls_back_to_the_manifest() -> None:
     assert detect_current_version(root) == "0.64.0"
 
 
+def test_python_manifest_is_a_version_source() -> None:
+    root = _repo([], None)
+    (root / "pyproject.toml").write_text(
+        '[build-system]\nrequires = []\n\n[project]\nname = "demo"\nversion = "2.3.4"\n',
+        encoding="utf-8",
+    )
+    assert detect_current_version(root) == "2.3.4"
+
+
+def test_rust_manifest_is_a_version_source() -> None:
+    root = _repo([], None)
+    (root / "Cargo.toml").write_text(
+        '[package]\nname = "demo"\nversion = "3.4.5"\n', encoding="utf-8"
+    )
+    assert detect_current_version(root) == "3.4.5"
+
+
 def test_a_major_disagreement_is_refused_rather_than_maximised() -> None:
     """F-1 — the review finding that overturned my own reasoning.
 
     I wrote that "a base that is too high is safe". It is not, and the cost is not recoverable: npm
     versions are IMMUTABLE, so a burned range is burned permanently; a major bump leaves every
     consumer's `^0.64.0` behind, so they silently stop receiving updates; and shipping 1.x is a v1.0
-    claim that `rules/dogfood-golden-rule.md` gates and the release chain never checks.
+    claim that `rules/honesty-gate-golden-rule.md` gates and the release chain never checks.
 
     `git tag` has no upper bound — it lists whatever any `git fetch --tags` ever brought in.
     Measured before the guard: [v0.64.0, v1.0.0] derived 1.0.0, [v0.64.0, v9.9.9] derived 9.9.9, and

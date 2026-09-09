@@ -9,6 +9,14 @@ build/
 # Test / lint / type / benchmark caches (generated at runtime)
 .pytest_cache/
 .ruff_cache/
+.coverage
+# The PARALLEL-mode fragments, which the bare `.coverage` pattern does not match:
+# coverage.py writes `.coverage.<host>.<pid>.<random>` per worker and combines
+# them afterwards. Measured 2026-09-05: 1893 of them were committed by three
+# `git add -A` calls made while a coverage run was in flight, and they would have
+# ridden into the promotion PR as 1893 junk files.
+.coverage.*
+coverage.xml
 .mypy_cache/
 .hypothesis/
 .benchmarks/
@@ -39,6 +47,7 @@ settings.local.json
 .compaction-snapshots/
 .attestations/
 cross-validation-output/
+deadcode-output/
 # Claude Code runtime dir of THIS repo acting as its own consumer
 # (the shipped config lives in settings.json / settings.plugin.json at the root)
 .claude/
@@ -49,25 +58,71 @@ specs/
 # Nested repository with its own remote — never a submodule of the cycle
 codex-plugin-cc/
 
-# Generated knowledge-base content (scaffold dirs are tracked via .gitkeep)
-knowledge-base/grills/*.md
-knowledge-base/plans/*.md
-knowledge-base/implementations/**
-knowledge-base/reviews/*.md
-knowledge-base/releases/*.md
-knowledge-base/roadmap-runs/**
-knowledge-base/audits/*.md
-knowledge-base/adrs/*.md
-knowledge-base/dogfood/evidence/*.md
-knowledge-base/discoveries/plans/*.md
-knowledge-base/discoveries/blueprints/*.md
-knowledge-base/discoveries/snapshots/**
-knowledge-base/references/**
-knowledge-base/tools/**
-knowledge-base/judge-codex/**
-!knowledge-base/**/.gitkeep
-!knowledge-base/backlog.md
+# Run records. Every artifact under here is the output of one execution on one
+# machine — plans, implementation logs, reviews, alignment briefs, event streams,
+# experiment runs. None of it says anything to whoever clones this repository,
+# and committing it puts one machine's history in everyone's diff. The directory
+# is scaffolded in each consumer by install.sh; it is never carried in the index.
+records/
+
+study-material/**
+# The phase-transition stream. Per-session and per-machine by nature: what this
+# repository's cycles did here says nothing to whoever clones it, and committing
+# it would put one machine's run history in everyone's diff.
+# SOP run records: per-run and per-machine, like the phase-event stream. The
+# PROCEDURE travels with the kit (records/sops/ stays versioned); what
+# one machine did while following it does not.
+# Per-agent pipeline output. `/pipeline` writes one directory per item under
+# `--output-dir`, holding whatever the agents produced on that run. It is run
+# output like every entry above it, and it was the one kind that was not listed:
+# nine files from three items reached the index before this line existed.
 
 # Agent run logs (consumer-specific)
-agents/**
 !agents/.gitkeep
+# EXCEPTION: the README describes the routing MECHANISM, not a domain, and
+# install.sh copies it unconditionally. Keeping it ignored made every install
+# performed outside this machine start with an empty `.claude/agents/` and a
+# broken reference in rules/cycle-maintenance.md. The specialists stay out: each
+# describes the repos of ONE ecosystem, and it is the project that derives its
+# own. The eight the kit carried were removed on 2026-08-26 — they lived here for
+# ages without ever being tracked, which is how a flag (--with-domain-agents)
+# could deliver files that existed on one machine only.
+!agents/README.md
+
+# A domain specialist describes the repositories of ONE ecosystem. Shipping a
+# stranger's makes the routing gate refuse every item a consumer files — measured on
+# an adopter 2026-08-18: 88 items with real `file:line` evidence, all
+# `BLOCKER/unroutable_repo`. So `agents/` is ignored by default and the kit's own are
+# excepted by name.
+#
+# This paragraph existed for days with NO RULE UNDER IT. The comment explained why the
+# four were an exception to an ignore that was never written, so any specialist
+# scaffolded into `agents/` was tracked, stageable, and one `git add -A` away from
+# shipping to every consumer — the precise failure the paragraph describes as
+# prevented. A contract whose mechanism is missing reads as enforced, which is worse
+# than an absent rule: nobody goes looking.
+agents/*.md
+!agents/README.md
+
+# The kit's own five — the squad. They are mechanism, not domain specialists: each
+# describes a DECISION, not a repository, and makes no claim about any consumer's
+# topology. That is the whole reason they may be versioned here when a specialist may
+# not. `squad_lead.py` invokes the facilitator through `claude -p` when the mechanical
+# selector has no answer, and an agent that is not versioned reaches nobody.
+#
+# This list is checked against `mechanisms/distribution/install.sh` by `tests/test_squad_agents.py` —
+# three files naming the same five is three chances to drift.
+!agents/kairos-product-owner.md
+!agents/iris-product-designer.md
+!agents/daedalus-tech-lead.md
+!agents/hermes-scrum-master.md
+!agents/vera-technical-arbiter.md
+!agents/nemesis-claim-auditor.md
+!agents/argus-pattern-analyst.md
+!agents/aesculapius-healer.md
+!agents/vigil-sentinel.md
+!agents/hecate-intake-triager.md
+!agents/eureka-defect-hunter.md
+!agents/leonardo-researcher.md
+!agents/metis-oracle.md
+!agents/clio-historian.md

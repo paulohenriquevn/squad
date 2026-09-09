@@ -5,14 +5,14 @@
 **Maintain a running ecosystem on measurements, not hunches.**
 
 [![Status](https://img.shields.io/badge/status-alpha-orange)](CHANGELOG.md)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](plugin.json)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](.claude-plugin/plugin.json)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)](pyproject.toml)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](https://code.claude.com/docs/en/)
 
-A development squad that keeps the **Theo ecosystem** healthy: eight domain specialists and a pipeline that carries a maintenance item from **hunch → measurement → plan → code → merge**. Every item starts as a hypothesis. Nothing reaches a plan until somebody measured it — and finding nothing is a successful outcome.
+A development squad that keeps a running ecosystem healthy: domain specialists you derive from your own repositories, and a pipeline that carries a maintenance item from **hunch → measurement → plan → code → merge**. Every item starts as a hypothesis. Nothing reaches a plan until somebody measured it — and finding nothing is a successful outcome.
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [The specialists](#the-eight-specialists) · [Contributing](CONTRIBUTING.md)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [The specialists](#the-specialists) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -21,9 +21,10 @@ A development squad that keeps the **Theo ecosystem** healthy: eight domain spec
 ## Table of contents
 
 - [Why this exists](#why-this-exists)
+- [The one phase with a human in it](#the-one-phase-with-a-human-in-it)
 - [What you get](#what-you-get)
 - [How it works](#how-it-works)
-- [The eight specialists](#the-eight-specialists)
+- [The specialists](#the-specialists)
 - [Quick start](#quick-start)
 - [The four discover modes](#the-four-discover-modes)
 - [Project structure](#project-structure)
@@ -42,9 +43,38 @@ Maintaining a live multi-repo ecosystem fails in ways that building a new one do
 2. **Fabricated evidence.** A `file:line` nobody opened, a status code nobody requested, a test asserted to fail but never run. Everything downstream treats it as fact.
 3. **Findings that die orphaned.** A review notices six real problems; they live in a report, get read once, and never become work.
 4. **Local optimisation.** Ten well-evidenced improvements shipped into a stage that was never the limit, mistaken for throughput.
-5. **Generic agents.** A reviewer that does not know a root `go build ./...` covers almost nothing in `theo` reports "builds clean" and has measured nothing.
+5. **Generic agents.** A reviewer that does not know a root `go build ./...` covers almost nothing in a multi-module repo reports "builds clean" and has measured nothing.
 
 Squad addresses each with a phase, a gate, or a specialist who knows the difference.
+
+## The one phase with a human in it
+
+Everything from `/backlog-init` down runs unattended. That is only defensible if
+somebody agreed, once, on what is being built — otherwise the chain executes hunches
+at speed and the throughput reads as progress.
+
+`cycle-brainstorm` is where that agreement is made, and it is the **only** cycle in
+the kit that requires a person:
+
+```bash
+/brainstorm-vision       # what it is, who for, and what it is NOT
+/brainstorm-objectives   # OBJ-N, each with a metric containing a number
+/brainstorm-trd          # REQ-N, each citing the objective it serves
+/brainstorm-pieces       # PIECE-N + the gate: 90% and a PERSON's signature
+```
+
+Four documents land in `wiki/product/`, and every backlog item afterwards traces to
+an `OBJ-N`. That traceability makes two questions computable that were impressions
+before: **an objective nothing serves**, and **shipped work serving no objective**.
+Both become the agenda of the next session, which `build_agenda.py` assembles before
+the first question is asked — along with every item that halted, routed nowhere, or
+stalled on a decision only a person can make.
+
+**A judge may not sign this one.** `alignment_judge.py` signs an item's alignment
+brief when nobody is coming, because it reads the item's evidence. A product vision
+has no independent evidence — it is what everything else is measured against — so a
+judge scoring it would grade the document against itself. The scorer enforces that:
+a `signed-by: judge/…` returns `AWAITING_REVIEW`.
 
 ## What you get
 
@@ -54,12 +84,20 @@ Squad addresses each with a phase, a gate, or a specialist who knows the differe
 - **Pointers are verified, line included.** A cited `file:line` that does not resolve — missing file, or a line past the end of one — caps the artifact at INVALID.
 - **One registry, two producers.** `BACKLOG.md` is the single answer to "what is pending?". Humans file items; sweeps register findings with evidence attached. Orphaned findings have nowhere to hide.
 - **Eight specialists who know the terrain.** Each carries build commands verified on disk, the domain's invariants, and the false positives that domain generates.
-- **A boundary that stopped working does not pass silently.** Every architecture linter goes green when a rule names a directory that moved — measured in this ecosystem on `theo-contracts` and `agent-builder`. `/arch-check` and the D5 detector report it; nothing else does.
+- **A boundary that stopped working does not pass silently.** Every architecture linter goes green when a rule names a directory that moved — measured on two adopters, one Go and one TypeScript. `/arch-check` and the D5 detector report it; nothing else does.
 - **Guardrails at runtime.** Claude Code hooks enforce git safety (no `--force`, no direct-to-`main`), TDD discipline, CHANGELOG hygiene and honest public copy while you work.
 
 ## How it works
 
 ```
+        ┌──────────────────────────────────────────────┐
+        │  BRAINSTORM · /brainstorm-vision  (phase −1) │
+        │  → objectives → trd → pieces                 │
+        │  THE ONLY PHASE A HUMAN ATTENDS              │
+        │  gate: 90% + a person's signature            │
+        └────────────────────┬─────────────────────────┘
+                             │ PRODUCT_ALIGNED
+                             ▼
         ┌──────────────────────────────────────────────┐
         │  BACKLOG · /backlog-item          (phase 0)  │
         │  a hypothesis. evidence: none-yet            │
@@ -93,20 +131,33 @@ Squad addresses each with a phase, a gate, or a specialist who knows the differe
 
 The macro loop (`cycle-maintenance`) selects the next item — measured before unmeasured, then oldest first — routes it to a specialist, and delegates. **It never reports "complete".** A backlog is not a scope; an empty one means nobody has looked recently, so the empty state is a prompt to sweep.
 
-## The eight specialists
+## The specialists
 
-| Specialist | Repos | Knows |
-|---|---|---|
-| `engine-go` | `theo` | A root `go build ./...` covers almost nothing — it is multi-module |
-| `control-plane` | `theo-cloud`, `theo-traefik-mcp` | Cross-tenant leakage; metering that mis-counts money |
-| `data-plane-ts` | `theo-memory`, `theo-rag`, `theo-lens`, `theo-trust`, `theo-skills`, `theo-promptly` | Tenant isolation; drift between SDK, REST and MCP |
-| `theo-db` | `theo-db` | A defect crashes the database; the AGPL licence gate |
-| `infra-terraform` | `theo-infra-modules`, `theo-infra-live` | Terraform (not OpenTofu); RDS is a protected unit; Pulumi is legacy |
-| `contracts-auth` | `theo-contracts` | Everything imports it — assume cross-repo by default |
-| `frontend-dashboard` | `theo-cloud/dashboard` | Environment vs product — the only domain with a live target |
-| `platform-cli` | `theo-cli`, `theo-storage` | `npm`, not `pnpm`; consumers are scripts, not importers |
+**You derive yours; the kit ships none.** A specialist file describes
+repositories that exist in *one* ecosystem, so what travels is the routing
+MECHANISM (`agents/README.md`) with the map left empty — a consumer that
+inherits someone else's table has gate G1 refuse every item it files, which was
+measured on an adopter in 2026-08-18: 88 items with real `file:line` evidence,
+all `unroutable_repo`.
 
-Routing is deterministic (`scripts/route_domain.py`) and reads its table from `rules/cycle-backlog.md` — one table, one truth. See [`agents/README.md`](agents/README.md).
+```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)   # plugin vs standalone
+python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
+  --write "$ECO/rules/domain-routing.txt"
+```
+
+The script reads the topology from disk and writes the table; then write one
+file per domain it names, under `agents/`. Each specialist carries the repos it
+covers, the build commands **verified on disk** rather than copied from a table,
+the invariants of its domain, and the shape a real finding takes there. Cut the
+domains at the granularity where those invariants differ — one agent per repo
+rots once per copy, one agent per role is too coarse to hold "this RDS instance
+is a protected unit".
+
+Routing is deterministic (`mechanisms/cycle/route_domain.py`) and reads its table from
+`rules/cycle-backlog.md` — one table, one truth. A domain naming a specialist
+that is not on disk exits 3 (`BROKEN ROUTE`) rather than reporting a route to
+nobody. See [`agents/README.md`](agents/README.md).
 
 ## Quick start
 
@@ -116,15 +167,16 @@ Routing is deterministic (`scripts/route_domain.py`) and reads its table from `r
 
 | Assumption | Why it matters |
 |---|---|
-| Branching `workspace → develop → trunk` | `hooks/validate-command.sh` blocks commits on the trunk and on `develop`. The trunk is detected — `main`, `master`, or whatever `origin/HEAD` points at — so a repo on `master` is protected too |
+| Branching `workspace → develop → trunk` | `hooks/validate-command.py` blocks commits on the trunk and on `develop`. The trunk is detected — `main`, `master`, or whatever `origin/HEAD` points at — so a repo on `master` is protected too |
 | `gh` CLI, authenticated | `/release` opens the develop→trunk PR through it |
+| Branch protection that does **not** require a human approving review | The system merges its own passing PRs to the trunk — envelope floor 2. A required reviewer makes the chain unrunnable: every item completes and parks at an open PR. `mechanisms/gates/check_merge_autonomy.py` reports it at intake rather than per-item |
 | `CHANGELOG.md`, Keep a Changelog format | The Rule 6 gate activates when the file exists; without it the Stop hook says so rather than passing silently |
 | Go, Python, TypeScript or Rust | Only these have `code-quality` detectors. Other stacks run the rest of the pipeline fine |
 
 **Adopting it in another project is a bootstrap, not just an install.** The kit ships *this*
 ecosystem's domain routing table, and gate G1 refuses every item until you replace it — measured on
-`theokit-sdk`: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
-`scripts/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
+an adopter: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
+`mechanisms/distribution/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
 names. The installer prints the sequence.
 
 ```bash
@@ -132,7 +184,7 @@ names. The installer prints the sequence.
 /backlog-init
 
 # 2. Register something worth looking at — a hunch is enough
-/backlog-item theo-lens-trace-latency
+/backlog-item trace-explorer-feels-slow
 
 # 3. Measure it. This may kill the item, and that is a good day
 /discover-plan B-014 --mode live-test   # what will be measured, and what would kill it
@@ -142,7 +194,7 @@ names. The installer prints the sequence.
 /discover-confidence B-014              # is the finding solid enough to act on?
 
 # 4. If it survived, run the chain
-/auto-plan B-014
+/idea-to-release B-014
 ```
 
 Sweep a whole domain instead of filing by hand:
@@ -165,37 +217,86 @@ Each mode defines what counts as a measurement. Evidence from one does not satis
 
 `bug` has a hard floor: **no failing test, no bug.** A defect nobody can express as a failing test is not understood well enough to fix. `live-test` refuses on a domain with no declared target — six of eight have none, by design, because a Go library and a Terraform module have no surface a browser can probe.
 
+## Finding your way — `sq`
+
+The tree is organised by **who owns a file**, which is what lets an installer preserve your
+configuration and overwrite the kit's contracts. It is also what makes it unsearchable by
+task. `sq` is the projection of one onto the other:
+
+```bash
+./sq test               # every suite — and it NAMES the ones that did not run
+./sq test --touched     # only the suites your changes can affect
+./sq check              # replay what CI verifies, and name what it does not reach
+./sq ci                 # why the pipeline is red, annotations included
+./sq where check_xrefs  # where a mechanism lives, and how to invoke it
+```
+
+**Every command states what it did not check**, and that is the point rather than a
+courtesy. This kit's most-found defect is an inability to measure published as a
+measurement, and the tooling used to measure did not have that property: a session once
+reported `1894 passed` as full coverage while 152 tests collected nowhere and 22 slice
+suites had not run.
+
+`sq` computes no verdict — it runs the mechanisms and reports what they said. A consumer
+gets it as `python3 .claude/squad/cli`, since the installer copies directories and the root
+`sq` is a convenience for this repository. The reasoning is in
+[`wiki/decisions/the-cli-navigates-mechanisms-compute.md`](wiki/decisions/the-cli-navigates-mechanisms-compute.md).
+
 ## Project structure
+
+Every directory is named for what it holds, and the name is checked:
+`mechanisms/gates/check_semantic_names.py` runs in CI and refuses a name that says
+nothing — a `lib/`, a `utils/`, a test filed outside a test tree.
 
 ```
 squad/
-├── agents/          ← the 8 domain specialists + README
-├── rules/           ← contracts. cycle-*.md are the source of truth
-│   ├── cycle-backlog.md      ← the registry, intake, domain routing
-│   ├── cycle-discover.md     ← the four modes, evidence contracts, gates
-│   ├── cycle-maintenance.md  ← the macro loop
-│   ├── current-constraint.md ← the constraint lens (advisory, never a gate)
+├── wiki/product/    ← what the product IS. Four documents, agreed with a person
+├── rules/           ← the contracts. What each cycle promises and which gates block it
+│   └── squad-map.md          ← the 360º view: every phase, who owns it, what it reads
+│   ├── cycle-*.md            ← one per phase; the source of truth for that phase
+│   ├── cycle-phases.txt      ← the chain itself, declared once and machine-readable
+│   ├── records-location.md   ← where output goes, and why the split below exists
 │   └── live-target.txt       ← declared live environments
-├── skills/          ← one directory per phase, each with its SKILL.md
-├── scripts/         ← route_domain.py, check_xrefs.py, validators
-├── hooks/           ← runtime guardrails
-└── tests/           ← root suite; per-slice suites live in skills/*/tests
+├── skills/          ← what the agent can DO. One directory per capability
+├── mechanisms/      ← what COMPUTES the verdicts. No verdict is asserted in prose
+│   ├── gates/                ← everything that measures the kit against its contracts
+│   ├── cycle/                ← the cycle at runtime: routing, events, status, attestation
+│   ├── fleet/                ← many sessions at once, and the line a person watches
+│   ├── dist/                 ← into a consumer, and kept in step
+│   └── conventions/          ← where things live and what shape they have
+├── hooks/           ← what runs in the runtime, outside the agent's turn
+│   └── environment/          ← what a hook loads before it runs
+├── agents/          ← domain specialists, derived per project (README explains routing)
+├── wiki/            ← durable KNOWLEDGE, as an OKF v0.2 bundle
+│   ├── sops/                 ← procedures performed on the kit
+│   └── decisions/            ← decisions that outlive the discussion
+├── records/         ← the TRAIL. What each run left behind, dated and immutable
+│   ├── audits/ reviews/ releases/ acceptance/ implementations/
+│   └── cycle-events.jsonl    ← one line per phase transition
+├── study-material/  ← third-party docs the project depends on. Read-only, not ours
+├── session-state/   ← per-session checkpoints. Ephemeral, never evidence
+└── tests/           ← the proof the above works; per-slice suites live in skills/*/tests
 ```
+
+**`wiki/` and `records/` are the same split, twice.** Knowledge evolves, has an
+owner and goes stale; a record of one execution on one day does none of those,
+and re-verifying it would falsify what it is. That is why they are two
+directories and not one — and why `records/` is no longer called
+`knowledge-base/`, a name that came to mean *everything left after the knowledge
+moved out*. The reasoning is a concept in the bundle:
+[`wiki/decisions/where-knowledge-lives.md`](wiki/decisions/where-knowledge-lives.md).
 
 Rules are the contract; a SKILL.md carries only phase-specific detail and points back at its rule.
 
 ## Advisory skills
 
-Beyond the pipeline phases, the bundle ships skills that answer architecture questions rather than driving a cycle. They are auxiliary — bound to no `cycle-*.md`, invoked on demand:
+Beyond the pipeline phases, the bundle ships one skill that answers architecture questions rather than driving a cycle. It is auxiliary — bound to no `cycle-*.md`, invoked on demand:
 
 | Skill | Answers |
 |---|---|
-| `cap-theorem-specialist` | Consistency vs availability during a network partition; CP/AP classification of an operation |
-| `backpressure-specialist` | A producer outrunning a consumer: buffers, drop policies, flow control |
-| `resilience-specialist` | Timeouts, retries, circuit breakers, bulkheads, load shedding, degradation, recovery |
 | `arch-check` | Whether a repo has architecture boundaries, whether they can still fire, and which ones it already obeys |
 
-Each refuses the shortcut its field is prone to — classifying a product as CP or AP without its configuration, recommending an unbounded buffer, or retrying a non-idempotent operation without protection.
+It refuses the shortcut its field is prone to: calling a boundary enforced because a linter names it, without checking the rule can still fire.
 
 ## Unbreakable principles
 
@@ -205,6 +306,7 @@ Each refuses the shortcut its field is prone to — classifying a product as CP 
 - **`unknown` is a complete answer** — for the constraint corner, and only there. We do not instrument flow, so demanding a constraint claim would be answered by assertion.
 - **Ids are never reused or renumbered.** A killed `B-007` stays `B-007` forever; the number is the audit trail.
 - **Measuring is reading.** Discover produces a document, never a patch.
+- **Nothing between DISCOVER and ACCEPTANCE waits for a person.** A phase may stop; it may not hold the session. The item returns to the registry — behind a wall only when its impediment is material (a machine, a credential, elapsed time), which nobody's authority supplies.
 - **Verdicts are derived from findings**, never asserted.
 
 ## Relationship to Cycle
@@ -219,7 +321,7 @@ Squad is derived from Cycle (MIT) and inverts its centre. Cycle is greenfield an
 | Agents | generic, stack-agnostic | 8 specialists with verified build commands |
 | Ends when | every milestone is `[x]` | never — maintenance is continuous |
 
-What Squad keeps: TDD halt-loops, the wiring triad, hard gates with derived verdicts, the orthogonal Codex jury, git-safety hooks, and an auditable `knowledge-base/`.
+What Squad keeps: TDD halt-loops, the wiring triad, hard gates with derived verdicts, the orthogonal Codex jury, git-safety hooks, and an auditable `records/`.
 
 ## Status
 

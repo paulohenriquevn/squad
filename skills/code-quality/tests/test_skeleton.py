@@ -31,7 +31,9 @@ def test_skill_md_frontmatter_parseable(skill_root: Path) -> None:
     assert isinstance(frontmatter["description"], str) and len(frontmatter["description"]) > 50
     assert frontmatter["user-invocable"] is True
     assert "Read" in frontmatter["allowed-tools"]
-    assert "argument-hint" in frontmatter
+    # prose-test: the KEY is the subject, not any wording under it — this asserts
+    # the frontmatter schema, which is structure and survives every rewrite.
+    assert "argument-hint" in frontmatter  # prose-test: schema, not wording
 
 
 def test_portable_md_exists(skill_root: Path) -> None:
@@ -128,11 +130,25 @@ def test_templates_report_skeleton_exists(skill_root: Path) -> None:
     assert (skill_root / "templates" / "code-quality-report.md").is_file()
 
 
-def test_defaults_present(skill_root: Path) -> None:
-    """defaults/ MUST contain fallback copies of thresholds + languages."""
+def test_no_dead_fallback_copies_of_the_project_config(skill_root: Path) -> None:
+    """`defaults/` must NOT carry copies of the project's languages or thresholds.
+
+    It did until 2026-09-01, and this test asserted their presence calling them
+    "fallback copies". **Nothing fell back.** `run_code_quality.py` reads
+    `rules/code-quality-*.txt` and, when one is missing, prints an error and exits
+    2 — which is the honest behaviour, because falling back to a stale list would
+    audit a subset silently, the exact "it looked at something, just not at that"
+    defect this skill's own gate exists to catch.
+
+    So the copies served nothing and drifted anyway: 80 lines in `rules/`, 83 in
+    `rules/templates/` (the installer's input), 37 here. One fact, three sources,
+    and the third read by no code path.
+
+    `rules/templates/` already guarantees a fresh consumer has the file — the
+    installer copies it in and then removes the templates directory."""
     defaults = skill_root / "defaults"
-    assert (defaults / "thresholds.txt").is_file()
-    assert (defaults / "languages.txt").is_file()
+    assert not (defaults / "thresholds.txt").exists()
+    assert not (defaults / "languages.txt").exists()
 
 
 def test_entrypoint_run_code_quality_exists(skill_root: Path) -> None:

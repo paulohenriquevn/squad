@@ -39,7 +39,7 @@ Do NOT trigger when:
 |---|---|---|---|
 | detect | repo tree | list of enabled languages | at least one manifest present (else NOOP) |
 | analyze | per-language detector run | structured findings (file:line, severity, kind) | detector toolchain available for enabled language |
-| consolidate | per-language findings | unified report at `knowledge-base/audits/{slug-or-date}-code-quality.md` | report references real file:line — no fabricated citations |
+| consolidate | per-language findings | unified report at `records/audits/{slug-or-date}-code-quality.md` | report references real file:line — no fabricated citations |
 | verdict | report | PASS / PASS_WITH_CAVEATS / FAIL_SOFT / FAIL_HARD / INVALID | severity rubric (`code-quality-golden-rule.md` § 1–2) |
 
 ## Severity rubric
@@ -58,10 +58,51 @@ redefine them. The verdict is the smallest cap among the findings:
 
 ## Hard gates (`FAIL_HARD`)
 
-- `symbol_fabrication_{language}` — at least one production reference points to a name that does not exist in the source tree or in any imported dependency.
-- `dead_code_unallowlisted_{language}` — a symbol exported from a public package surface has no caller and no test, and is not allowlisted.
+- `symbol_fabrication_{language}` (`run_code_quality.py`, detector D2) — at least one production reference points to a name that does not exist in the source tree or in any imported dependency.
+- `dead_code_unallowlisted_{language}` (`run_code_quality.py`, detector D1) — a symbol exported from a public package surface has no caller and no test, and is not allowlisted.
 
-A `FAIL_HARD` verdict blocks `/review`; `INVALID` halts the cycle (surface to human). The fix path for `FAIL_HARD` is back to `/implement` (or a targeted fix branch). A `FAIL_SOFT` MAY proceed to `/review` only with an ADR dismissing each soft cap (per golden rule § 1).
+A `FAIL_HARD` verdict blocks `/review`; `INVALID` halts the cycle — the contract that computes the verdict is broken, so it is registered as its own item and this one returns to the registry blocked on it (`autonomy-envelope.md § A loop ran out of attempts`). The fix path for `FAIL_HARD` is back to `/implement` (or a targeted fix branch). A `FAIL_SOFT` MAY proceed to `/review` only with an ADR dismissing each soft cap (per golden rule § 1) — writing that ADR is the system's, and the ADR is the decision and its record at once (`autonomy-envelope.md § A structural decision the contract wants recorded`).
+
+### How a plan dismisses a soft cap
+
+The ADR carries a marker naming the cap it dismisses, read by
+`skills/plan-confidence/scripts/run_structural.py`:
+
+```markdown
+## ADRs
+
+### ADR-3 — Proceed without a mutation runner
+
+<!-- ADR-DISMISS-SOFT-CAP: soft_cap_mutation_unconfigured_typescript: Stryker lands in v0.3; followup registered as B-007 -->
+
+Rejected alternatives: ...
+```
+
+The marker, rather than prose naming the id, because a plan can name a cap in
+order to say it will NOT be dismissed and no keyword search tells the two apart.
+The shape copies `check_wiring.py`'s `ADR-DEFER-WIRING-B` — one convention for
+"an ADR waives this", not a new one per gate.
+
+**EACH** cap needs its own marker. A partially dismissed `FAIL_SOFT` still
+demotes, and the verdict then lists `undismissed_soft_caps` so the gap is named
+rather than discovered by reading the kit's source.
+
+The score cap applies either way: quality was measured, and an ADR justifies
+proceeding — not a better number. A dismissed `FAIL_SOFT` reaches
+`SHIPPABLE_WITH_CAVEATS`, never `SHIPPABLE`.
+
+**Why this exists.** For a long time the paragraph above promised the escape and
+no code implemented it: the demotion ran unconditionally and no ADR was ever
+looked for. That was not cosmetic. Golden rule § 2 maps an unconfigured mutation
+runner to `FAIL_SOFT`, so a repository that had not set up Stryker got
+`FAIL_SOFT` on every run forever, every plan capped at 70 and demoted to
+`NON_SHIPPABLE`, and `rules/cycle-plan.md` requires `≥ SHIPPABLE_WITH_CAVEATS`
+to enter `/implement`. **A project in that state could not start `/implement` by
+any path, while this rule said it could.** Found by a consumer, blocked on a plan
+with zero hard caps, zero soft caps of its own and 91.6 weighted.
+
+A soft cap that cannot be dismissed is a hard cap under another name;
+dismissibility is the whole difference between the tiers.
 
 ## Stop conditions
 
@@ -77,14 +118,14 @@ A `FAIL_HARD` verdict blocks `/review`; `INVALID` halts the cycle (surface to hu
 
 ## Output
 
-- `knowledge-base/audits/{slug-or-date}-code-quality.md` — consolidated report with severity matrix, file:line evidence, and remediation suggestions.
+- `records/audits/{slug-or-date}-code-quality.md` — consolidated report with severity matrix, file:line evidence, and remediation suggestions.
 - The verdict is emitted in the report and in the structured JSON (`verdict` field). The process exits non-zero on blocking verdicts (`FAIL_HARD` / `INVALID`).
 
 ## Cross-references
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`
 - Skill: `skills/code-quality/SKILL.md` (phase-specific protocol)
-- Defaults: `skills/code-quality/defaults/languages.txt`
+- Enabled languages: `rules/code-quality-languages.txt` — the project's, and the only copy. A second copy shipped inside the skill's defaults directory until 2026-09-01, described as a fallback; nothing fell back to it, and a missing rule correctly exits 2 rather than auditing a stale subset silently.
 - Languages enabled per project: `rules/code-quality-languages.txt`
 - Downstream: `rules/cycle-review.md` (consumes the audit verdict)
 - Upstream: `rules/cycle-implement.md` (must emit `IMPLEMENTATION_COMPLETE` before this runs)

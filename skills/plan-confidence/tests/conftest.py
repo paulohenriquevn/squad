@@ -3,11 +3,11 @@
 PORTABLE: paths are auto-detected via walk-up from the skill location, with
 layout fallback so the test suite runs in BOTH layouts:
 
-  - **standalone**: Cycle source repo itself — `rules/`, `skills/`, `knowledge-base/`
+  - **standalone**: Cycle source repo itself — `rules/`, `skills/`, `records/`
     live at the top level (no `.claude/` wrapper).
   - **consumer install**: Cycle ecosystem copied into a consumer project under
-    `<consumer>/.claude/` (this is what `scripts/install.sh` and
-    `scripts/patch_install.sh` produce).
+    `<consumer>/.claude/` (this is what `mechanisms/distribution/install.sh` and
+    `mechanisms/distribution/patch_install.sh` produce).
 
 Without the fallback every test asserting `<root>/.claude/rules/foo.md` exists
 fails when the suite runs against the Cycle source itself — because the plan
@@ -76,22 +76,8 @@ def _resolve_rules_dir(project_root: Path) -> Path:
     return consumer
 
 
-def _resolve_concepts_dir(project_root: Path) -> Path:
-    """Return whichever of `<root>/.claude/knowledge-base/concepts/plan-confidence/`
-    or `<root>/knowledge-base/concepts/plan-confidence/` actually exists.
-    """
-    consumer = project_root / ".claude" / "knowledge-base" / "concepts" / "plan-confidence"
-    standalone = project_root / "knowledge-base" / "concepts" / "plan-confidence"
-    if consumer.exists():
-        return consumer
-    if standalone.exists():
-        return standalone
-    return consumer
-
-
 PROJECT_ROOT = _find_project_root(SKILL_ROOT)
 RULES_DIR = _resolve_rules_dir(PROJECT_ROOT)
-CONCEPTS_DIR = _resolve_concepts_dir(PROJECT_ROOT)
 
 
 @pytest.fixture(scope="session")
@@ -116,7 +102,3 @@ def rules_dir() -> Path:
     return RULES_DIR
 
 
-@pytest.fixture(scope="session")
-def concepts_dir() -> Path:
-    """Path to the plan-confidence concepts directory (layout-aware)."""
-    return CONCEPTS_DIR

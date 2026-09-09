@@ -1,15 +1,16 @@
-"""O drift não deve puxar o que é do projeto, nem comparar o incomparável.
+"""Drift must not pull what belongs to the project, nor compare the incomparable.
 
-Dois falsos positivos medidos em 2026-08-20 contra a instalação do `speculative`:
+Two false positives measured 2026-08-20 against `speculative`'s installation:
 
 1. `agents/speculative.md` e os 4 validadores do projeto apareceram como
-   `INSTALL_AHEAD` — "trabalho que o kit não tem". São especialistas de domínio:
-   nunca devem viajar para dentro do kit (grill, decisão 5).
-2. `settings.json` apareceu como `DIVERGED`. Os dois arquivos são idênticos como
-   JSON — o que diverge é o PAR comparado: o kit tem `settings.json` (dev, hooks em
-   `$CLAUDE_PROJECT_DIR/hooks/`) e `settings.plugin.json` (instalação, hooks em
-   `.claude/hooks/`). O instalado é cópia correta do segundo, e o drift o comparava
-   com o primeiro. Ia acusar isso nos 41 consumidores, para sempre.
+   `INSTALL_AHEAD` — "work the kit does not have". They are domain specialists:
+   they must never travel into the kit (grill, decision 5).
+2. `settings.json` showed up as `DIVERGED`. The two files are identical as JSON —
+   what diverges is the PAIR being compared: the kit has `settings.json` (dev, hooks
+   in `$CLAUDE_PROJECT_DIR/hooks/`) and `settings.plugin.json` (install, hooks in
+   `.claude/hooks/`). The installed one is a correct copy of the second, and drift
+   compared it against the first. It would have reported that on all 41 consumers,
+   forever.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parent.parent
-_SCRIPT = _REPO / "scripts" / "check_install_drift.py"
+_SCRIPT = _REPO / "mechanisms" / "gates" / "check_install_drift.py"
 
 
 def _trees(tmp_path: Path) -> tuple[Path, Path]:
@@ -35,7 +36,7 @@ def _trees(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def _run(install: Path, kit: Path) -> str:
-    return subprocess.run(
+    return subprocess.run(  # noqa: PLW1510
         [sys.executable, str(_SCRIPT), "--install", str(install), "--kit", str(kit)],
         capture_output=True, text=True,
     ).stdout
@@ -48,7 +49,7 @@ def test_a_project_specialist_is_not_reported_as_unharvested(tmp_path: Path) -> 
 
 
 def test_the_agents_readme_stays_in_scope(tmp_path: Path) -> None:
-    """O README descreve o mecanismo de roteamento: é do kit."""
+    """The README describes the routing mechanism: it belongs to the kit."""
     kit, install = _trees(tmp_path)
     (install / "agents" / "README.md").write_text("mecanismo + correcao local\n", encoding="utf-8")
     assert "agents/README.md" in _run(install, kit)
@@ -64,12 +65,12 @@ def test_settings_json_is_compared_against_the_plugin_variant(tmp_path: Path) ->
 
 
 # ---------------------------------------------------------------------------
-# Defasagem não é alteração — a lição que ficou no sync_consumers e não aqui.
-# Medido no `theokit-tui`: o detector reportou 11 arquivos "que precisam de um
-# humano"; 5 eram trabalho real e 4 eram versões ANTIGAS do próprio kit
-# (`install.sh`, `check_xrefs.py`, `code-quality-golden-rule.md`,
-# `code-quality-allowlist.txt`). Um detector que acusa 11 quando são 5 ensina a
-# ser ignorado, que é a razão declarada de ele existir.
+# Lag is not modification — the lesson that stayed in sync_consumers and not here.
+# Measured on an adopter: the detector reported 11 files "needing a human"; 5
+# were real work and 4 were OLDER versions of the kit itself (`install.sh`,
+# `check_xrefs.py`, `code-quality-golden-rule.md`, `code-quality-allowlist.txt`). A
+# detector that reports 11 when there are 5 teaches people to ignore it, which is
+# the declared reason it exists.
 # ---------------------------------------------------------------------------
 
 _ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
@@ -77,39 +78,112 @@ _ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME":
 
 
 def _kit_repo_with_history(tmp_path: Path) -> tuple[Path, str, str]:
-    """Um kit git com duas versões do mesmo arquivo."""
+    """A git kit with two versions of the same file."""
     kit = tmp_path / "kit"
     (kit / "rules").mkdir(parents=True)
     env = {**_ENV, "HOME": str(kit)}
-    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
-                                    capture_output=True, text=True, env=env)
+    def run(*a):
+        return subprocess.run(["git", "-C", str(kit), *a], check=True,
+                                        capture_output=True, text=True, env=env)
     run("init", "-q")
-    velho = "linha A\nlinha ANTIGA\n"
-    (kit / "rules" / "x.md").write_text(velho, encoding="utf-8")
-    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")
-    novo = "linha A\nlinha NOVA\n"
-    (kit / "rules" / "x.md").write_text(novo, encoding="utf-8")
-    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")
-    return kit, velho, novo
+    older = "line A\nline OLD\n"
+    (kit / "rules" / "x.md").write_text(older, encoding="utf-8")
+    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v1")  # noqa: E702
+    newer = "line A\nline NEW\n"
+    (kit / "rules" / "x.md").write_text(newer, encoding="utf-8")
+    run("add", "-A"); run("-c", "commit.gpgsign=false", "commit", "-q", "-m", "v2")  # noqa: E702
+    return kit, older, newer
 
 
 def test_an_old_kit_version_is_reported_as_stale_not_as_local_work(tmp_path: Path) -> None:
-    kit, velho, _novo = _kit_repo_with_history(tmp_path)
+    kit, older, _newer = _kit_repo_with_history(tmp_path)
     install = tmp_path / "install"
     (install / "rules").mkdir(parents=True)
-    (install / "rules" / "x.md").write_text(velho, encoding="utf-8")
+    (install / "rules" / "x.md").write_text(older, encoding="utf-8")
 
     out = _run(install, kit)
     assert "stale" in out.lower(), out
-    assert "diverged: 1" not in out, "defasagem não é divergência que precisa de humano"
+    assert "diverged: 1" not in out, "lag is not divergence that needs a human"
 
 
 def test_genuinely_local_work_is_still_flagged(tmp_path: Path) -> None:
-    """O que nunca foi do kit continua exigindo um humano — é o ponto do detector."""
-    kit, _velho, novo = _kit_repo_with_history(tmp_path)
+    """What was never the kit's still requires a human — that is the detector's point."""
+    kit, _older, newer = _kit_repo_with_history(tmp_path)
     install = tmp_path / "install"
     (install / "rules").mkdir(parents=True)
-    (install / "rules" / "x.md").write_text(novo + "correcao que so existe aqui\n", encoding="utf-8")
+    (install / "rules" / "x.md").write_text(newer + "a fix that exists only here\n", encoding="utf-8")
 
     out = _run(install, kit)
     assert "install_ahead: 1" in out or "diverged: 1" in out, out
+
+
+def test_the_comparison_covers_every_tree_the_installer_carries(tmp_path: Path) -> None:
+    """Four of the six trees were invisible, and the default is why.
+
+    `--kit` defaulted to the kit's `skills/`, which is where the noise is lowest
+    and also where two thirds of what an install carries stops being looked at.
+    Measured on 2026-09-02: `mechanisms/kit_issues.py` and
+    `mechanisms/session_ready.py` existed in the kit and not in a consumer, and
+    nothing reported it — the same afternoon a syncer was found to have dropped
+    that whole tree from distribution after a rename.
+
+    Widening to the entire root is the opposite failure: 5994 files only-in-kit,
+    because the kit also holds tests, wiki, images and study material that no
+    consumer ever receives. The scope is what `install.sh` carries, no more.
+    """
+    kit, install = _trees(tmp_path)
+    for tree in ("skills", "hooks", "commands", "mechanisms", "squad"):
+        (kit / tree).mkdir(exist_ok=True)
+        (kit / tree / "m.py").write_text("kit only\n", encoding="utf-8")
+    (kit / "tests").mkdir()
+    (kit / "tests" / "t.py").write_text("never installed\n", encoding="utf-8")
+
+    out = _run(install, kit)
+
+    # One `m.py` per installed tree is seen; `tests/t.py` is not. The count is the
+    # assertion because the summary does not name files when there are few, and a
+    # test that reads a rendering rather than a result breaks on formatting.
+    assert "only_in_kit: 5" in out, (
+        f"expected the five installed trees to be compared and tests/ to be "
+        f"excluded; got: {out}")
+    assert "tests/t.py" not in out, "tests/ is not carried into a consumer"
+
+
+def test_a_single_tree_can_still_be_compared_on_its_own(tmp_path: Path) -> None:
+    """`--kit ./rules` against a consumer's `rules/`. Restricting the scope there
+    would match nothing and report a clean sweep over an empty comparison — the
+    exact shape of defect this file exists to catch, arriving through its fix."""
+    kit, install = _trees(tmp_path)
+
+    out = _run(install / "rules", kit / "rules")
+
+    assert "identical: 1" in out, out
+
+
+def test_the_cache_list_agrees_with_what_the_installer_refuses_to_copy() -> None:
+    """Two lists of tool caches, in two languages, kept by hand.
+
+    A file the installer excludes cannot be missing from an install in any
+    meaningful sense, so reporting it is pure noise. Measured on 2026-09-02, the
+    same hour the scope was widened to all six trees: 43 of 64 only-in-kit
+    entries were `.ruff_cache/`, `.hypothesis/` and `.mypy_cache/` files — two
+    thirds of a report whose own docstring warns that a report nobody is required
+    to read goes unread.
+
+    Fourth time in one day that a rule lived in one file and was missing from
+    another, so it gets an assertion.
+    """
+    import re
+
+    installer = (_REPO / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+    block = re.search(r"KIT_EXCLUDES=\(([^)]*)\)", installer, re.S)
+    assert block, "install.sh no longer declares KIT_EXCLUDES"
+    excluded = {m for m in re.findall(r"--exclude=([^\s]+)", block.group(1))
+                if not m.startswith("*") and not m.startswith(".DS")}
+
+    sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
+    import check_install_drift
+
+    assert set(check_install_drift._CACHE_DIRS) == excluded, (
+        "the drift report and the installer disagree about what is a cache; a "
+        "file the installer refuses to copy is not missing from an install")

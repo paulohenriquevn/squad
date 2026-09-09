@@ -1,4 +1,4 @@
-"""T0.4 — _shared.py utilities tests.
+"""T0.4 — _detector_contract.py utilities tests.
 
 Tests for the cross-detector helpers: config loaders, allowlist parser with
 sunset validation, Finding dataclass invariants, atomic writes, safe JSON
@@ -9,18 +9,19 @@ Per plan v1.3 § T0.4 TDD section (19 RED tests).
 from __future__ import annotations
 
 import json
+import re
 import threading
 from datetime import date
-import re
 from pathlib import Path
 
 import pytest
 
-from scripts._shared import (
+from scripts._detector_contract import (
     DEFAULT_SKIP_DIRS,
     AllowlistEntry,
     AllowlistMatch,
     Finding,
+    compute_verdict,
     emit_json_summary,
     is_allowlisted,
     load_allowlist,
@@ -363,3 +364,154 @@ def test_the_shipped_template_parses_when_you_follow_its_own_instructions(tmp_pa
     for language, entry in cfg.items():
         assert entry["manifest"], f"{language} example declares no manifest marker"
         assert entry["status"] == "ENABLED"
+
+
+# ---------------------------------------------------------------------------
+# The JSON's two cap fields say what their names promise
+#
+# Measured 2026-08-26 running the gate on the kit itself, after D3 and D4 started
+# emitting real findings:
+#
+#   "hard_caps_triggered": ["soft_cap_orphan_export_python", "soft_cap_..."]
+#   "soft_caps_triggered": ["flush_caches", "DEFAULT_SKIP_DIRS", ...]
+#
+# Two things wrong at once. `compute_verdict` returns ALL the identifiers
+# when the verdict is FAIL_SOFT, and the orchestrator publishes them under the name
+# `hard`; and the `soft` field carried the `allowlist_key`'s tail, which in D3 is the
+# SYMBOL'S NAME, not the stable identifier. Golden rule § 1.4 requires stable
+# identifiers in both — they are what an allowlist is written by and what two reports
+# are compared by. A symbol in place of an id tells the reader to allowlist the wrong
+# thing.
+# ---------------------------------------------------------------------------
+
+def _orphan_finding(symbol: str = "solitaria") -> Finding:
+    return Finding(
+        detector="d3_orphan_export",
+        language="python",
+        severity="SOFT_CAP",
+        file_path="pkg/api.py",
+        symbol_or_line=symbol,
+        message="...",
+        allowlist_key=f"python|pkg/api.py|orphan_export|{symbol}",
+    )
+
+
+def test_soft_caps_are_reported_as_stable_identifiers() -> None:
+    summary = emit_json_summary(
+        [_orphan_finding("flush_caches"), _orphan_finding("DEFAULT_SKIP_DIRS")],
+        "FAIL_SOFT",
+        [],
+    )
+    assert summary["soft_caps_triggered"] == ["soft_cap_orphan_export_python"], (
+        "the field lists stable identifiers, not the symbols found"
+    )
+
+
+def test_hard_field_stays_empty_when_no_hard_finding_fired() -> None:
+    findings = [_orphan_finding()]
+    verdict, ids = compute_verdict(findings)
+    summary = emit_json_summary(findings, verdict, ids)
+    assert verdict == "FAIL_SOFT"
+    assert summary["hard_caps_triggered"] == [], (
+        "a field named `hard` that lists soft caps makes the reader treat a "
+        "dismissible cap as a blocker — and the inverse, when a real HARD appears among them"
+    )
+
+
+def test_a_hard_finding_still_reaches_the_hard_field() -> None:
+    findings = [
+        _orphan_finding(),
+        Finding(
+            detector="d1_dead_code", language="python", severity="HARD",
+            file_path="src/x.py", symbol_or_line="morta", message="...",
+            allowlist_key="python|src/x.py|dead_code|morta",
+        ),
+    ]
+    verdict, ids = compute_verdict(findings)
+    summary = emit_json_summary(findings, verdict, ids)
+    assert verdict == "FAIL_HARD"
+    assert summary["hard_caps_triggered"] == ["dead_code_unallowlisted_python"]
+    assert summary["soft_caps_triggered"] == ["soft_cap_orphan_export_python"]
+
+
+def test_the_summary_names_the_findings_it_counted() -> None:
+    """A blocking verdict that does not say what triggered it cannot be acted on.
+
+    `findings_by_detector` gave counts per detector per language and nothing else — no
+    file, no symbol, no allowlist key. Grepping the whole payload for anything resembling
+    a path returned zero hits, so a `FAIL_HARD` on three dead symbols came with no way to
+    find them (kit#61). The `Finding` dataclass has carried `file_path`,
+    `symbol_or_line` and `allowlist_key` the whole time; only the summary dropped them.
+
+    This is `tests/test_gates_say_what_they_examined.py` one step further: a gate must
+    say what it examined, AND what it found.
+    """
+    from _detector_contract import Finding, emit_json_summary
+
+    findings = [
+        Finding(
+            detector="d1_dead_code", language="python", severity="HARD",
+            file_path="mechanisms/x.py", symbol_or_line="unused_helper:42",
+            message="unused function 'unused_helper'",
+            allowlist_key="d1_dead_code|python|mechanisms/x.py|unused_helper",
+        )
+    ]
+    summary = emit_json_summary(findings, verdict="FAIL_HARD", hard_caps_triggered=[])
+
+    assert "findings" in summary, "the summary counts findings and never names one"
+    listed = summary["findings"]
+    assert len(listed) == 1
+    entry = listed[0]
+    assert entry["file_path"] == "mechanisms/x.py"
+    assert entry["symbol_or_line"] == "unused_helper:42"
+    assert entry["allowlist_key"].endswith("unused_helper"), (
+        "the allowlist key is what a reader needs to silence a false positive"
+    )
+    assert entry["detector"] == "d1_dead_code"
+    assert entry["severity"] == "HARD"
+
+
+def test_an_empty_run_lists_no_findings_rather_than_omitting_the_key() -> None:
+    """An absent key asks whether the run found nothing or reported nothing."""
+    from _detector_contract import emit_json_summary
+
+    summary = emit_json_summary([], verdict="PASS", hard_caps_triggered=[])
+    assert summary["findings"] == []
+
+
+def test_a_stdlib_import_in_init_is_not_a_re_export(tmp_path) -> None:
+    """`from typing import TypeVar` in an `__init__.py` is a DEPENDENCY, not a surface.
+
+    `_PY_INIT_IMPORT_RE` matched `^from <anything> import ...` and treated every name as
+    re-exported, so `squad/__init__.py`'s `from typing import Any, NoReturn, TypeVar` put
+    three typing primitives on the kit's public surface. `TypeVar` was then reported as an
+    orphan export of the squad package, which is not a claim anyone can act on: the fix
+    would be to stop importing `typing` (kit#63).
+
+    A re-export is a name the package chose to republish from ITS OWN modules — a relative
+    import, or a submodule of the same package. An absolute import of an unrelated
+    distribution is not one.
+    """
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-quality"))
+    from scripts.detectors import _wiring
+
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(
+        "from typing import TypeVar\n"
+        "from .engine import run_engine\n"
+        "from mypkg.helpers import assist\n",
+        encoding="utf-8",
+    )
+    (pkg / "engine.py").write_text("def run_engine():\n    return 1\n", encoding="utf-8")
+    (pkg / "helpers.py").write_text("def assist():\n    return 2\n", encoding="utf-8")
+
+    names = {n for n, _ in _wiring._python_surface(tmp_path)}
+    assert "run_engine" in names, "a relative import in __init__ IS a re-export"
+    assert "assist" in names, "a same-package absolute import IS a re-export"
+    assert "TypeVar" not in names, (
+        "`from typing import TypeVar` is a dependency; calling it a public export of this "
+        "package makes the only available fix 'stop using typing'"
+    )

@@ -1,4 +1,4 @@
-"""Conditional concurrency-tests check for /to-plan plans (SOTA upgrade Phase 2).
+"""Conditional concurrency-tests check for /plan-write plans (SOTA upgrade Phase 2).
 
 Bugs in concurrent code escape TDD-first because single-threaded test execution
 interleaves cleanly — the race manifests only under specific schedules. A plan
@@ -131,7 +131,6 @@ CONCURRENCY_SIGNALS_RE = re.compile("|".join(CONCURRENCY_SIGNALS), re.IGNORECASE
 RACE_TEST_SIGNALS_RE = re.compile("|".join(RACE_TEST_SIGNALS), re.IGNORECASE)
 ESCAPE_RE = re.compile("|".join(ESCAPE_MARKERS), re.IGNORECASE)
 
-H2_RE = re.compile(r"^##\s+(.*?)\s*$", re.MULTILINE)
 H4_TASK_RE = re.compile(r"^###\s+(T\d+\.\d+)\b[^\n]*$", re.MULTILINE)
 H4_CONCURRENCY_RE = re.compile(
     r"^####\s+Concurrency tests\b[^\n]*$", re.MULTILINE

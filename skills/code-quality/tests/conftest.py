@@ -25,7 +25,7 @@ def skill_root() -> Path:
 
 @pytest.fixture
 def repo_root() -> Path:
-    """Root of the TheoMemory project (4 levels up from this conftest)."""
+    """Root of the a monorepo project (4 levels up from this conftest)."""
     return _SKILL_ROOT.parent.parent.parent
 
 

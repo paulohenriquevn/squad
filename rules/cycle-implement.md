@@ -8,7 +8,8 @@ Execute a confidence-approved plan into code, tests, and commits. TDD-discipline
 
 ## Pre-conditions
 
-- A plan exists at `knowledge-base/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
+- A plan exists at `records/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
+- The item the plan implements scored `ALIGNED` — `records/alignment/{slug}-alignment.md` exists and `score_alignment.py` exits 0 on it, which needs BOTH a machine score >= 90% and a tick in every `## Reviewer sign-off` box by a reviewer **who is not the author** — a person, or `alignment_judge.py` when none is coming. `AWAITING_REVIEW` is not a pass, and the agent that wrote the brief may never tick a box. This line said *a human's tick* until 2026-09-01, contradicting the very file it cites: [`alignment-threshold.md § Amended 2026-09-01`](../skills/_kit-rules/alignment-threshold.md) requires a reviewer who is not the author, which a judge can be, and `score_alignment.py` had already implemented it — the verdict turns on `reviewer_signed_off`, with `signed_by_is_human` reported beside it so a judge's `ALIGNED` reads as the weaker claim it is. Honoured literally, the stale wording re-froze every unattended run at `AWAITING_REVIEW`, which is the halt that amendment exists to end.
 - The repository is on `workspace` (per Unbreakable Rule 4 — work is born on `workspace` and promoted to `develop` via PR; see `git-safety.md` § 1).
 - The project bootstrapped its language toolchain (e.g., `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`).
 
@@ -19,12 +20,46 @@ If any pre-condition fails, refuse and surface the missing item.
 Each task runs as a halt-loop iteration:
 
 ```
+(once, before the loop)
+ROUTE    — mechanisms/cycle/route_domain.py resolves the project's domain specialist
+
+(per task)
 RED      — write the failing test that captures the task's acceptance criterion
 GREEN    — walk the parsimony ladder, then write the minimal code to pass the test
 REFACTOR — improve structure; tests stay green
 WIRING   — caller + integration test + runtime metric (the "wiring triad")
 COMMIT   — atomic commit referencing the plan slug and task ID
 ```
+
+## The domain specialist — consulted, never generated
+
+**This cycle generates no agents.** It routes to the specialist the project derived
+from its own disk (`agents/README.md`), and consults it three times per iteration:
+before RED, after GREEN, before COMMIT.
+
+| `route_domain.py` exit | Meaning | Action |
+|---|---|---|
+| `0` | resolves to a specialist on disk | consult it |
+| `1` | the repo is in no domain | HALT — gate G1 should have refused this upstream |
+| `2` | the routing table is unreadable | HALT — guessing is what the table prevents |
+| `3` | `BROKEN ROUTE` — a specialist nobody wrote | **HALT, and do not stand in for them** |
+
+A plan citing no `B-NNN` has no `repo:` to route on: the consultation is **skipped and
+the skip recorded** under "Pre-condition audit". With no declared domain, any
+specialist chosen would be chosen by resemblance.
+
+**Authority.** Read-only; never writes code, never commits, never modifies the plan. A
+`[CRITICAL]` finding recommends HALT and does not block on its own — Unbreakable Rule 1
+puts the confidence burden on the actor. **Inside its domain the specialist is not
+overruled**; believing it is wrong is a finding to record, not a verdict to substitute.
+
+This section was written on 2026-09-01 and it closes a gap rather than adding a step.
+The skill had a MANDATORY Step 2.5 that **generated** a per-plan agent, justified in
+its own text as being "per `cycle-implement.md`" — and this file contained no mention
+of it. A mandatory step resting on a contract that does not contain it is the defect
+this kit exists to catch, pointed inward. What the step does is now prescribed here,
+and what it used to do is recorded in
+`skills/implement/reference/domain-specialist.md`.
 
 ## Parsimony gate (GREEN-phase deliberation — pre-write)
 
@@ -53,11 +88,11 @@ A task is **not** complete until all three are present:
 
 ## Hard gates (per iteration)
 
-- Parsimony ladder walked before GREEN-phase code is written (`rules/parsimony-ladder.md`) — guardrail items (tests/validation/error-handling/security/accessibility) never sacrificed.
-- Test suite green before commit.
-- Linter clean (project-specific — see `rules/code-quality-languages.txt`).
-- No new symbols left dangling (every new function/class has a caller or a test exercising it).
-- CHANGELOG `[Unreleased]` updated (Unbreakable Rule 6).
+- Parsimony ladder walked before GREEN-phase code is written (`rules/parsimony-ladder.md`) — guardrail items (tests/validation/error-handling/security/accessibility) never sacrificed. `userpromptsubmit-inject.py` re-injects the ladder every turn — _(not mechanized: debt since 2026-09-01 — injecting a deliberation prompt is not checking that the deliberation happened; nothing reads the resulting code and decides which rung it stopped at)_
+- Test suite green before commit — `suite_runners.py`, via `run_validation.py` after the halt-loop, and `ci.yml` on every push. _(not mechanized at the point of action: debt since 2026-08-27 — no hook runs the suite before a commit lands, so "before commit" is honoured by discipline and caught afterwards)_
+- Linter clean (project-specific — see `rules/code-quality-languages.txt`) — `post-edit-check.py` on every edit, scoped to the edited file, and `run_code_quality.py` over the tree at Step 5.
+- No new symbols left dangling (every new function/class has a caller or a test exercising it) — `check_wiring.py`, whose pillar (a) is the non-negotiable one.
+- CHANGELOG `[Unreleased]` updated (Unbreakable Rule 6) — `stop-validation.py`.
 
 ## Hard gates (per phase boundary — Step 4.7 mini review)
 
@@ -66,7 +101,7 @@ When a commit closes a `## Phase N` of the plan, `skills/implement/scripts/mini_
 | Verdict | Trigger | Action |
 |---|---|---|
 | `PHASE_REVIEW_PASS` | No HIGH or BLOCKER findings | Proceed to next phase |
-| `PHASE_REVIEW_NEEDS_FIX` | ≥ 1 HIGH/BLOCKER finding | Halt-loop emits BLOCKED with report path; surface to human; resume via § Step 4 "Resume after recovered blocker" only after fix |
+| `PHASE_REVIEW_NEEDS_FIX` | ≥ 1 HIGH/BLOCKER finding | Halt-loop emits BLOCKED with report path; the item returns to the registry carrying it; resume via § Step 4 "Resume after recovered blocker" only after fix |
 
 Aggregated checks: phase completeness, diff cohesion (declared scope vs modified files), wiring summary (pillar a non-negotiable across all phase symbols), delta audit coverage — whether Step 5's audit will look at the phase's files at all (a language not `ENABLED` in `rules/code-quality-languages.txt` is audited by nobody). It replaced an unconditional SKIP: `cq_invoke` scores a whole plan, not a file subset, so no delta-scoped audit was ever running behind that line.
 
@@ -86,11 +121,11 @@ Skipping mini review on phase boundary is a documented anti-pattern: design prob
 
 - **Phase-review gate — Step 4.7 actually ran.** `check_phase_review.py` requires the mini-review report (`{slug}-phase{N}-review-*.md`) for every `## Phase N` whose tasks are all `committed`. This section already called skipping the mini review a documented anti-pattern; until this gate existed, nothing could tell a skipped boundary from a reviewed one, which is the same self-report problem the wiring recheck solves by re-deriving the evidence.
 
-- **Acceptance-criteria gate** — enforces the plan's mechanizable AC/DoD that the command gates miss (file-size budget per changed file, CHANGELOG-updated) and surfaces non-mechanizable criteria (backward-compat) for human evidence instead of accepting a self-ticked box.
-- **Test-obligation gate** — declared concurrency tests / failure scenarios must have at least one matching test in the tree; total absence when the plan promised them is a FAIL (a generic green suite never exercised them).
-- **`/code-quality` verdict ∉ {FAIL_HARD, INVALID}** — invoked internally by the script. FAIL_SOFT and PASS_WITH_CAVEATS surface as WARN in the report but do not block. Override only with `--no-code-quality` (pre-code phase or CQ not installed).
+- **Acceptance-criteria gate** — `check_acceptance_criteria.py` enforces the plan's mechanizable AC/DoD that the command gates miss (file-size budget per changed file, CHANGELOG-updated) and surfaces non-mechanizable criteria (backward-compat) for human evidence instead of accepting a self-ticked box.
+- **Test-obligation gate** — `check_test_obligations.py`. Declared concurrency tests / failure scenarios must have at least one matching test in the tree; total absence when the plan promised them is a FAIL (a generic green suite never exercised them).
+- **`/code-quality` verdict ∉ {FAIL_HARD, INVALID}** — `cq_invoke.py`, called internally by `run_validation.py`. FAIL_SOFT and PASS_WITH_CAVEATS surface as WARN in the report but do not block. Override only with `--no-code-quality` (pre-code phase or CQ not installed).
 
-Exit codes: `0` = `PASS` or `PARTIAL` (proceed); `1` = `FAIL` (trigger validation halt-loop — see below); `2` = invocation error (escalate to human).
+Exit codes: `0` = `PASS` or `PARTIAL` (proceed); `1` = `FAIL` (trigger validation halt-loop — see below); `2` = invocation error — the check itself could not run, which is a broken contract rather than a failing slice: register it as its own item and return this one to the registry.
 
 ## Validation halt-loop (mandatory when `run_validation.py` exits 1)
 
@@ -105,20 +140,28 @@ Contract:
 
 ## Stop conditions
 
+**Emitting the milestone:** the event that records Step 4 finishing is emitted with
+`cycle_events.py end --cycle implement --verdict IMPLEMENTATION_COMPLETE --once`. The
+`--once` is not optional here: a phase that CONCLUDES may be recorded once, and
+without the flag this milestone has been written twice for one item, seconds apart. A
+gate that ITERATES is the opposite case — the same verdict several times in as many
+seconds, each one a real run — which is why the emitter cannot tell the two apart and
+the caller declares which it is.
+
 **Step 4 — TDD halt-loop:**
 
-- Hard gate fails twice on the same task → halt-loop pauses, escalate to human.
+- Hard gate fails twice on the same task → halt-loop pauses; the item returns to the registry with the gate named as its cause.
 - Plan task list exhausted → emit completion promise (`IMPLEMENTATION_COMPLETE`).
 
 **Step 5.5 — Validation halt-loop:**
 
-- Same check FAIL × 3 consecutive iterations with **no observable progress** (identical diagnostic, identical failure shape, no new diff direction) → HALT; surface BLOCKED report to the human. **Do NOT emit `VALIDATION_GATE_PASSED`** — the gate did not pass.
-- `code_quality INVALID` (contract itself broken) → HALT immediately; surface to human.
+- Same check FAIL × 3 consecutive iterations with **no observable progress** (identical diagnostic, identical failure shape, no new diff direction) → HALT; write the BLOCKED report and return the item to the registry with it. **Do NOT emit `VALIDATION_GATE_PASSED`** — the gate did not pass.
+- `code_quality INVALID` (contract itself broken) → HALT immediately; register the broken contract as its own item and return this one blocked on it. Do not file work against a measurement nothing can trust (`autonomy-envelope.md § A loop ran out of attempts`).
 - Unremediatable `FAIL_HARD` (`symbol_fabrication_*` / `dead_code_unallowlisted_*` cannot be fixed without scope-creeping the plan) → HALT; surface BLOCKED report; recommend loop back to `cycle-plan`. **Do NOT emit the completion promise** — the validation gate has NOT passed.
 
 The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation.py` exits `0`. There is no graceful-exit path that emits the promise on a partial pass. Honest BLOCKED > false PASS (Unbreakable Rule 3).
 
-**Either loop emitting a BLOCKED report blocks downstream:** `/review` and `/release` MUST NOT run until the human resolves the blocker.
+**Either loop emitting a BLOCKED report blocks downstream:** `/review` and `/release` MUST NOT run while the blocker stands. **That is a bar on this item, not a wait for a person** — the report returns to the registry as the item's evidence, and the queue takes the next one.
 
 ## Anti-patterns
 
@@ -126,14 +169,14 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
 - Skipping REFACTOR because "tests are green" — the cycle is RED → GREEN → REFACTOR, not RED → GREEN → ship.
 - WIRING done in a separate PR ("I'll wire it later"). Later never comes.
 - Commits that mix multiple tasks. Each commit references one task ID.
-- Editing the plan during implementation. If the plan was wrong, return to `/to-plan`.
+- Editing the plan during implementation. If the plan was wrong, return to `/plan-write`.
 
 ## Output
 
 - Commits on the working branch.
-- `knowledge-base/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
-- `knowledge-base/implementations/{slug}/` — per-iteration logs.
-- `knowledge-base/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
+- `records/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
+- `records/implementations/{slug}/` — per-iteration logs.
+- `records/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
 
 ## Cross-references
 
@@ -150,5 +193,5 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
   - Orchestrator: `skills/implement/scripts/mini_review.py`
   - Phase completeness: `skills/implement/scripts/check_phase_completeness.py`
   - Diff cohesion: `skills/implement/scripts/check_diff_cohesion.py`
-  - Reports persisted at: `knowledge-base/mini-reviews/{slug}-phase{N}-review-{date}.md`
+  - Reports persisted at: `records/mini-reviews/{slug}-phase{N}-review-{date}.md`
   - Companion to `cycle-review.md` (final review): mini review runs per-phase; cycle-review runs once at the end. Both must pass for handoff.

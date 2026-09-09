@@ -2,7 +2,7 @@
 name: implement
 version: 0.1.0
 requires: [plan-confidence]
-description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + quality gates (SOLID, Clean Code, DRY, Design Patterns). Single entry-point for cycle-implement. Use after /to-plan chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `workspace`.
+description: Executes an implementation plan from cycle-plan via halt-loop (ralph-loop) with TDD discipline + wiring triad (caller + integration test + runtime metric) + mechanized gates (test suite, coverage floor, TDD shape, /code-quality verdict) + a REFACTOR-phase design review against SOLID, Clean Code and DRY — judgement, not a detector. Single entry-point for cycle-implement. Use after /plan-write chain returned verdict ≥ SHIPPABLE_WITH_CAVEATS while working on `workspace`.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill Agent
 argument-hint: "{plan-slug}"
@@ -28,7 +28,7 @@ This skill is **the only phase** of [`cycle-implement`](../../rules/cycle-implem
 
 User explicitly invokes `/implement {plan-slug}` when:
 
-- A plan at `knowledge-base/plans/{slug}-plan.md` has `/plan-confidence` verdict ≥ SHIPPABLE_WITH_CAVEATS
+- A plan at `records/plans/{slug}-plan.md` has `/plan-confidence` verdict ≥ SHIPPABLE_WITH_CAVEATS
 - Current branch is `workspace` (verify: `git branch --show-current` == `workspace`)
 - The development environment is operational (language toolchain installed; external services up if integration tests require them)
 
@@ -63,7 +63,7 @@ Each new module/class/function checked against SOLID at REFACTOR phase of TDD:
 
 ### Clean Code
 
-- Naming: per `rules/architecture.md § Naming conventions` (each project declares its own)
+- Naming: per `rules/architecture.md § 4 — Boundary enforcement` (each project declares its own layer names there)
 - Function size: < 20 lines as guideline; if larger, justify or split
 - No comments explaining WHAT (well-named code already does that); only WHY when non-obvious
 - No dead code: every export reachable from a public entry-point OR a test
@@ -88,7 +88,7 @@ Common patterns to recognize and use deliberately:
 - **Pipeline** — sequential stages with explicit fallbacks
 - **State machine / Reconciler** — declarative desired-state convergence
 
-When a `*-patterns` skill (authored on demand via the standalone `/skill-creator`) is present in `skills/` AND its trigger phrases match the current task, the halt-loop SHOULD consult it as documented in `to-plan/SKILL.md § Step 0`. Override of a pattern requires an ADR.
+When a `*-patterns` skill (authored on demand via the standalone `/skill-creator`) is present in `skills/` AND its trigger phrases match the current task, the halt-loop SHOULD consult it as documented in `plan-write/SKILL.md § Step 0`. Override of a pattern requires an ADR.
 
 ### WIRING (HARD GATE — the main rule)
 
@@ -114,7 +114,7 @@ Failure of any pillar = HALT before commit. The halt-loop iterates until all thr
 
 ```bash
 # Check 1: plan exists and verdict is acceptable
-test -f knowledge-base/plans/{slug}-plan.md
+test -f records/plans/{slug}-plan.md
 # Check 2: on workspace (NEVER on develop/main — develop integrates, main is release-only)
 [ "$(git branch --show-current)" = "workspace" ]
 # Check 3: no uncommitted changes
@@ -132,7 +132,7 @@ If any HARD check fails, refuse to start. Surface the missing piece.
 
 ### Step 2 — Parse plan into ordered task list
 
-Read `knowledge-base/plans/{slug}-plan.md`. Extract:
+Read `records/plans/{slug}-plan.md`. Extract:
 
 - Phase list with dependencies (declared in plan's Dependency Graph section)
 - Per-task: Files to edit, TDD section (RED tests), Acceptance Criteria, DoD entries
@@ -143,7 +143,7 @@ Read `knowledge-base/plans/{slug}-plan.md`. Extract:
 Before writing the implementation contract, run:
 
 ```bash
-python3 skills/implement/scripts/check_tdd_shape.py --plan knowledge-base/plans/{slug}-plan.md --json
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/check_tdd_shape.py" --plan records/plans/{slug}-plan.md --json
 ```
 
 This validates that every task has an executable RED-test shape (assertion API, Given/When/Then, OR `test_<behavior>` literal). Tasks whose `#### TDD` section is missing OR contains only prose cannot drive a TDD RED phase.
@@ -160,18 +160,42 @@ This is the **companion gate to `plan-confidence`'s `check_criterion_executabili
 
 #### 2.2  Write the implementation contract
 
-Write the ordered task list to `knowledge-base/implementations/{slug}-implementation.md` using `templates/implementation-task-template.md`. This file is the halt-loop's working contract.
+Write the ordered task list to `records/implementations/{slug}-implementation.md` using `templates/implementation-task-template.md`. This file is the halt-loop's working contract.
 
-### Step 2.5 — Spawn the SEPA (agent + paired knowledge skill)
+### Step 2.5 — Resolve the domain specialist
 
-**Mandatory step. SEPA = Specialist Engineer Per-plan Agent** — a read-only second opinion consulted 3× per iteration (before RED, after GREEN, before COMMIT). Each `/implement` invocation generates a NEW SEPA agent + paired knowledge skill, both composed from the FULL plan + ADRs + edge-case review + deps audit + plan-confidence report + project rules.
+**This skill generates no agents.** It routes to the specialist the project derived
+from its own disk, which is the same call `daedalus-tech-lead` makes and carries the
+same refusal.
 
-The full SEPA protocol — composition, initial brief, per-iteration invocation, log persistence, boundaries, skip conditions — lives in [`reference/sepa.md`](./reference/sepa.md). Read it before invoking. Summary of the steps SEPA generation requires:
+```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)
+python3 "$ECO/mechanisms/cycle/route_domain.py" <repo-or-item-file> --json
+```
 
-1. Read `templates/sepa-staff-engineer-template.md` and write the agent file to `agents/implement-{slug}-{date}/sepa.md`.
-2. Read `templates/sepa-knowledge-skill-template.md` and write the paired skill to `skills/implement-{slug}-sepa-knowledge/SKILL.md`.
-3. Invoke `Agent` ONCE for the initial brief; persist the response under `knowledge-base/implementations/{slug}/sepa-iterations/initial-brief-response.md`.
-4. Each halt-loop iteration consults SEPA 3× via the same `Agent` subagent type.
+| Exit | Meaning | Action |
+|---|---|---|
+| `0` | resolves to a specialist on disk | consult it 3× per iteration — before RED, after GREEN, before COMMIT |
+| `1` | the repo is in no domain | **HALT.** G1 should have refused this upstream; arriving here unrouted means registry and plan disagree |
+| `2` | the routing table is unreadable | **HALT.** Guessing is what the table exists to prevent |
+| `3` | `BROKEN ROUTE` — specialist named, nobody wrote it | **HALT. Do NOT stand in for them** |
+
+A plan with no `B-NNN` has no `repo:` to route on. **Skip the consultation and record
+the skip** in the implementation contract under "Pre-condition audit", with the
+reason — with no declared domain, any specialist chosen is chosen by resemblance.
+
+The full protocol — invocation paths, the three consultations, log persistence,
+authority and boundaries, and why the generated per-plan agent that used to sit here
+was removed — is [`reference/domain-specialist.md`](./reference/domain-specialist.md).
+**Read it before invoking.**
+
+> **This step used to generate a `SEPA` agent** into `agents/` and a paired knowledge
+> skill into `skills/`. It wrote into the two directories it least should have — one
+> the project owns, one the installer deletes — and it was specialist about the *plan*
+> rather than about the *code*, since every byte of its context came from documents
+> this cycle had just produced. The project's specialists already carry what it was
+> imitating: repos verified on disk, build commands that were checked, and the false
+> positives their domain generates.
 
 ### Step 3 — Build the halt-loop prompt (file-referenced pattern)
 
@@ -181,6 +205,9 @@ Build the per-invocation driver file:
 
 1. Read `prompts/implementation-prompt.md` and substitute static placeholders:
    - `{PLAN_SLUG}`, `{PLAN_PATH}`, `{IMPLEMENTATION_PATH}`
+   - `{SPECIALIST_DOMAIN}` and `{SPECIALIST_PATH}` — from the Step 2.5 route. When Step 2.5
+     recorded a SKIP, substitute the literal `(none — no B-NNN to route on)` for both, so the
+     driver reads as a recorded skip rather than as an unresolved placeholder.
    - Leave `{ITERATION}` for ralph-loop to substitute per iteration.
 2. Write the substituted text to `halt-loop-prompts/implement-{plan-slug}.md` (gitignored).
 
@@ -208,7 +235,7 @@ Each iteration executes ONE task's complete TDD cycle:
 1. **RED phase:** write the failing test from the plan's TDD section, run it, confirm FAIL
 2. **GREEN phase:** walk the parsimony ladder (`rules/parsimony-ladder.md`), then write minimal production code, run test, confirm PASS
 3. **REFACTOR phase:** review code against SOLID/Clean Code/DRY rules; clean up; tests stay green
-4. **WIRING phase:** run `python3 skills/implement/scripts/check_wiring.py --symbol {symbol-name}` — HALT if any pillar fails
+4. **WIRING phase:** run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/check_wiring.py" --symbol {symbol-name}` — HALT if any pillar fails
 5. **COMMIT phase:** atomic commit with conventional-commit format (`feat(scope): description`, `fix(scope): description`, etc.) referencing plan task ID
 6. **PROGRESS:** update `.progress-{slug}.json` audit trail
 7. **PHASE BOUNDARY CHECK** (Step 4.7 — see below): if this commit closed a phase, run mini review BEFORE accepting the next task
@@ -220,13 +247,13 @@ If a task fails at any phase, the iteration HALTS (no commit), surfaces the fail
 After step 6 (PROGRESS), check whether THIS commit closed a `## Phase N` of the plan (last task of the phase is now `committed`). If yes:
 
 ```bash
-python3 skills/implement/scripts/mini_review.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/mini_review.py" \
   --slug {PLAN_SLUG} \
-  --plan knowledge-base/plans/{PLAN_SLUG}-plan.md \
-  --progress knowledge-base/implementations/.progress-{PLAN_SLUG}.json \
+  --plan records/plans/{PLAN_SLUG}-plan.md \
+  --progress records/implementations/.progress-{PLAN_SLUG}.json \
   --phase N \
   --project-root . \
-  --output-dir knowledge-base/mini-reviews \
+  --output-dir records/mini-reviews \
   --json
 ```
 
@@ -249,7 +276,7 @@ The orchestrator aggregates four checks:
 
 Plans that do NOT structure tasks with `## Phase N` headers cause Step 4.7 to SKIP gracefully — no phase boundary means no mini review. The Step 5 final validation gate still runs.
 
-The report is persisted at `knowledge-base/mini-reviews/{slug}-phase{N}-review-{date}.md`. Even on PASS, MEDIUM/LOW findings are logged for human awareness (carried forward as TODO context for the next phase).
+The report is persisted at `records/mini-reviews/{slug}-phase{N}-review-{date}.md`. Even on PASS, MEDIUM/LOW findings are logged for human awareness (carried forward as TODO context for the next phase).
 
 **Why this exists:** without phase-boundary mini reviews, design problems compound across phases — a wrong abstraction in Phase 1 contaminates Phase 2, Phase 3, etc. By the time `/review` (final) runs at the end, fixing it means re-implementing 3 phases. Mini review catches design drift the moment it crosses a story boundary, before it propagates further.
 
@@ -264,7 +291,7 @@ Key invariant: the skill never asks the user for permission between tasks while 
 After the halt-loop emits `<promise>IMPLEMENTATION_COMPLETE</promise>` (or exhausts), run ONCE:
 
 ```bash
-python3 skills/implement/scripts/run_validation.py {slug}
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/run_validation.py" {slug}
 ```
 
 This script consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-implementation gate into one report:
@@ -284,7 +311,7 @@ This script consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-imp
 **Outputs:**
 
 - JSON report on stdout (overall_status, per-check status, summary)
-- Markdown summary at `knowledge-base/reviews/{slug}-implement-validate-{date}.md`
+- Markdown summary at `records/reviews/{slug}-implement-validate-{date}.md`
 - Exit code: `0` for `PASS` or `PARTIAL` (passes with documented SKIPs); `1` for `FAIL`; `2` for invocation error
 
 **Branching:**
@@ -305,6 +332,9 @@ When Step 5 exits with code `1`, the skill re-invokes `ralph-loop:ralph-loop` wi
 
 1. Read `prompts/validation-fix-prompt.md` and substitute placeholders:
    - `{PLAN_SLUG}`, `{PLAN_PATH}`, `{IMPLEMENTATION_PATH}`
+   - `{SPECIALIST_DOMAIN}` and `{SPECIALIST_PATH}` — from the Step 2.5 route. When Step 2.5
+     recorded a SKIP, substitute the literal `(none — no B-NNN to route on)` for both, so the
+     driver reads as a recorded skip rather than as an unresolved placeholder.
    - `{VALIDATION_REPORT_PATH}` — markdown report from Step 5
    - `{VALIDATION_REPORT_JSON_PATH}` — write the JSON output of Step 5 to `halt-loop-prompts/validate-{slug}-report.json` and reference this path (Step 5 captures stdout to this file before Step 5.5 runs)
    - Leave `{ITERATION}` for ralph-loop to substitute per iteration.
@@ -320,7 +350,7 @@ When Step 5 exits with code `1`, the skill re-invokes `ralph-loop:ralph-loop` wi
 | Failing check class | Iteration objective |
 |---|---|
 | `npm test` | Identify failing test(s); fix production code OR (new edge case) write failing test FIRST then fix. Forbidden: skip/weaken the test. |
-| `npm run typecheck` / `tsc --noEmit` | Resolve types narrowly. Forbidden: `any`, `@ts-ignore`. Multi-file drift → consult SEPA. |
+| `npm run typecheck` / `tsc --noEmit` | Resolve types narrowly. Forbidden: `any`, `@ts-ignore`. Multi-file drift → consult the domain specialist. |
 | `npm run lint` | Fix violation; no `// eslint-disable` without inline rule-naming justification. |
 | `coverage` | Add tests for uncovered branches (AAA, behavior-not-implementation). Forbidden: lowering threshold. |
 | `wiring_triad` (pillar a/b/c with `fail > 0`) | Add functional caller / integration test / fix metric emission. Forbidden: no-op caller, hand-edited `.wiring-evidence.json`. |
@@ -376,7 +406,7 @@ If EITHER halt-loop emitted a BLOCKED report, Step 6 surfaces BLOCKED at the top
 - The skill NEVER skips `--no-verify` on pre-commit hooks (Unbreakable: fix the root cause, not bypass)
 - The skill NEVER writes production code without a failing test first (TDD-first, Unbreakable Rule 5)
 - The skill NEVER fabricates runtime-metric evidence — if `.wiring-evidence.json` is missing, the metric is unproven
-- The skill NEVER edits `knowledge-base/plans/{slug}-plan.md` during execution — the plan is the contract; revisions go through `cycle-plan` again
+- The skill NEVER edits `records/plans/{slug}-plan.md` during execution — the plan is the contract; revisions go through `cycle-plan` again
 - The skill NEVER scope-creeps mid-task — opportunistic improvements logged to `{slug}-followups.md`, NOT included in current commit
 - **The skill NEVER drives implementation tasks manually outside of ralph-loop.** The halt-loop is the ONLY execution mode. If ralph-loop is cancelled mid-flight by a recoverable blocker, the skill re-invokes ralph-loop per § Step 4 "Resume after recovered blocker"; it does NOT continue task-by-task in the foreground session.
 - **The skill NEVER asks the user for permission between phases while pending tasks remain.** Once `/implement` is invoked with a SHIPPABLE plan, the only valid stops are the terminal conditions in `cycle-implement.md § Stop conditions`. Pausing to ask "continue?" after every committed task violates the autonomy contract and defeats the halt-loop's purpose. The promise-markers `<promise>IMPLEMENTATION_COMPLETE</promise>` (Step 4) and `<promise>VALIDATION_GATE_PASSED</promise>` (Step 5.5) — OR an honest BLOCKED report — are the only legitimate ways to exit each loop.
@@ -417,13 +447,13 @@ In all BLOCKED cases, `/review` and `/release` MUST NOT run until the human reso
 - Scripts: `scripts/check_wiring.py`, `scripts/run_validation.py`, `scripts/check_progress_schema.py` (checkpoint shape) + `scripts/check_checkpoint_consistency.py` (checkpoint vs git), `scripts/diff_symbols.py` + `scripts/wiring_recheck.py` (independent wiring re-verification), `scripts/check_acceptance_criteria.py`, `scripts/check_test_obligations.py`, `scripts/check_phase_review.py` (Step 4.7 actually ran), `scripts/suite_runners.py` (multi-language test execution), `scripts/coverage_gate.py` (coverage actually read)
 - Loop engine: `ralph-loop` plugin (must be enabled in `~/.claude/settings.json`)
 - Project rules consumed: `architecture.md` (DIP, naming, hygiene), `testing.md` (TDD pyramid)
-- Hooks enforced: `hooks/validate-command.sh` (git safety), `hooks/boundary-check.sh` (read-only `knowledge-base/references/` and `knowledge-base/tools/`). DIP is a convention enforced by code review per `rules/architecture.md § 4`, not by a hook.
+- Hooks enforced: `hooks/validate-command.py` (git safety), `hooks/boundary-check.py` (read-only `records/references/` and `study-material/`). DIP is a convention enforced by code review per `rules/architecture.md § 4`, not by a hook.
 
 ## Anti-patterns specific to /implement
 
 These are anti-patterns INSIDE the halt-loop that go beyond the cycle-level anti-patterns documented in `cycle-implement.md`:
 
-1. **Marking a task `done` because "tests pass" without running wiring triad** — the triad is the difference between code-that-compiles and code-that-runs-in-the-system.
+1. **Marking a task `committed` because "tests pass" without running wiring triad** — the triad is the difference between code-that-compiles and code-that-runs-in-the-system.
 2. **Skipping REFACTOR phase to "save time"** — refactor is where SOLID/Clean Code violations are caught. Skipping it accumulates debt by the iteration.
 3. **Writing tests AFTER code "just to verify"** — that's not TDD; that's regression testing. RED must precede GREEN.
 4. **Inventing a Design Pattern not declared in the plan** — if the plan didn't specify Strategy here, don't introduce it mid-task. If a pattern is clearly missing, halt and revise plan.

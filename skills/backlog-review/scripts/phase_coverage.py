@@ -11,13 +11,13 @@ refuse.
 
 So this counts. For each `B-NNN` it asks which cycle artifacts exist on disk:
 
-    DISCOVER      knowledge-base/discoveries/opportunities/
-    PLAN          knowledge-base/plans/
-    CODE_QUALITY  knowledge-base/audits/
-    REVIEW        knowledge-base/reviews/
-    RELEASE       knowledge-base/releases/
+    DISCOVER      records/discoveries/opportunities/
+    PLAN          records/plans/
+    CODE_QUALITY  records/audits/
+    REVIEW        records/reviews/
+    RELEASE       records/releases/
 
-IMPLEMENT is deliberately absent. Its evidence is the commit history, not a knowledge-base file,
+IMPLEMENT is deliberately absent. Its evidence is the commit history, not a records file,
 and a directory scan that pretended otherwise would report absence for every item whose work
 landed as commits — which is all of them.
 
@@ -32,7 +32,7 @@ change needs no plan, and a killed item ends at DISCOVER by design. So a missing
 QUESTION, never a verdict — which is why this reports and never fails.
 
 Usage:
-    python3 phase_coverage.py --registry BACKLOG.md --knowledge-base .claude/knowledge-base
+    python3 phase_coverage.py --registry BACKLOG.md --records .claude/records
 """
 from __future__ import annotations
 
@@ -173,9 +173,16 @@ class GradedItem:
 
     @property
     def gaps(self) -> list[Phase]:
+        """The MANDATORY phases this item has no record for.
+
+        Only `MANDATORY_PER_ITEM` counts. Walking every member of `Phase` here was
+        the exact error the ADR above describes — code-quality is graded per slice
+        and release per release, so asking them per item "named as gaps two things
+        that are not".
+        """
         if not self.coverage.expects_full_loop:
             return []
-        return [p for p in Phase if p not in self.satisfied]
+        return [p for p in MANDATORY_PER_ITEM if p not in self.satisfied]
 
 
 def _blocks(registry: Path) -> dict[str, str]:
@@ -212,18 +219,18 @@ def grade(report: list[ItemCoverage], registry: Path) -> list[GradedItem]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--registry", type=Path, required=True)
-    parser.add_argument("--knowledge-base", type=Path, required=True)
+    parser.add_argument("--records", type=Path, required=True)
     parser.add_argument("--show", choices=["gaps", "all"], default="gaps")
     args = parser.parse_args(argv)
 
     if not args.registry.is_file():
         print(f"phase-coverage: no registry at {args.registry}", file=sys.stderr)
         return 2
-    if not args.knowledge_base.is_dir():
-        print(f"phase-coverage: no knowledge-base at {args.knowledge_base}", file=sys.stderr)
+    if not args.records.is_dir():
+        print(f"phase-coverage: no records at {args.records}", file=sys.stderr)
         return 2
 
-    report = scan_registry(args.registry, args.knowledge_base)
+    report = scan_registry(args.registry, args.records)
     live = [r for r in report if r.expects_full_loop]
     total = len(live)
     graded = [g for g in grade(report, args.registry) if g.coverage.expects_full_loop]

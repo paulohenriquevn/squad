@@ -7,7 +7,7 @@ status: draft
 
 # Plan: No TDD Fixture (bug-fix without TDD block -> cap 70)
 
-> Version 1.0 — Coverage OK, ADRs com alternativas, mas tarefa de bug-fix sem TDD block.
+> Version 1.0 — Coverage OK, ADRs with alternatives, but a bug-fix task without a TDD block.
 
 ## Context
 

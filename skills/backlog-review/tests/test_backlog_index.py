@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from backlog_fixtures import item_block, write_backlog
 from backlog_index import (
     BUCKETS,
     END,
@@ -18,7 +19,6 @@ from backlog_index import (
     render_index,
 )
 from check_backlog_structure import LEGAL_STATUS, _parse_items
-from helpers import item_block, write_backlog
 
 
 def _indexed(tmp_path: Path, *blocks: str) -> tuple[Path, str]:
@@ -90,7 +90,7 @@ class TestLinks:
 
         _, written = _indexed(
             tmp_path,
-            item_block("B-001", "Reduzir round-trips do listing"),
+            item_block("B-001", "Reduce round-trips in the listing"),
             item_block("B-002", "Corrigir exit code do deploy parcial", status="shipped"),
         )
         index = written[written.index(START) : written.index(END)]
@@ -159,3 +159,161 @@ class TestUnknownStatus:
         index = render_index(body, _parse_items(body))
         assert "B-001" in index
         assert "status this index does not know" in index
+
+
+# ── impediment links, both directions ─────────────────────────────────────────
+#
+# Only one direction is stored. `blocks` is derived, so the two halves cannot drift.
+
+from backlog_index import impediment_graph, lineage_chains  # noqa: E402
+
+
+def _items(*blocks: str) -> list:
+    from check_backlog_structure import _parse_items
+    return _parse_items("".join(blocks))
+
+
+def test_the_reverse_edge_is_derived(tmp_path: Path) -> None:
+    items = _items(
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    blocked_by, blocks = impediment_graph(items)
+    assert blocked_by["B-001"] == ["B-002"]
+    assert blocks["B-002"] == ["B-001"]
+
+
+def test_one_blocker_holding_two_items_lists_both() -> None:
+    items = _items(
+        item_block("B-001", status="triaged", extra="blocked_by: B-100\n"),
+        item_block("B-002", status="triaged", extra="blocked_by: B-100\n"),
+        item_block("B-100", status="raw"),
+    )
+    _, blocks = impediment_graph(items)
+    assert blocks["B-100"] == ["B-001", "B-002"]
+
+
+def test_a_shipped_blocker_produces_no_edge() -> None:
+    """Resolution needs no second edit — the edge disappears when the blocker closes."""
+    items = _items(
+        item_block("B-001", status="triaged", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="shipped"),
+    )
+    blocked_by, blocks = impediment_graph(items)
+    assert blocked_by == {} and blocks == {}
+
+
+def test_a_prose_impediment_blocks_with_no_edge() -> None:
+    items = _items(item_block("B-001", status="triaged", extra="blocked_by: the sponsor must decide\n"))
+    blocked_by, blocks = impediment_graph(items)
+    assert blocked_by["B-001"] == []
+    assert blocks == {}
+
+
+def test_a_shipped_item_is_never_listed_as_blocked() -> None:
+    items = _items(
+        item_block("B-001", status="shipped", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    )
+    blocked_by, _ = impediment_graph(items)
+    assert "B-001" not in blocked_by
+
+
+def test_the_rendered_index_shows_the_derived_state_and_the_stage(tmp_path: Path) -> None:
+    """A reader needs both: the state to know it is stuck, the stage to know where it resumes."""
+    from backlog_index import render_index
+
+    content = "".join([
+        item_block("B-001", status="planned", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    ])
+    rendered = render_index(content, _parse_items(content))
+    row = next(line for line in rendered.splitlines() if line.startswith("| [`B-001`]"))
+    assert "blocked" in row and "planned" in row and "B-002" in row
+
+
+def test_the_rendered_index_counts_blocked_items(tmp_path: Path) -> None:
+    from backlog_index import render_index
+
+    content = "".join([
+        item_block("B-001", status="planned", extra="blocked_by: B-002\n"),
+        item_block("B-002", status="raw"),
+    ])
+    rendered = render_index(content, _parse_items(content))
+    assert "**Blocked** 1" in rendered
+
+
+def test_an_unblocked_backlog_shows_no_blocked_count(tmp_path: Path) -> None:
+    from backlog_index import render_index
+
+    content = item_block("B-001", status="planned")
+    rendered = render_index(content, _parse_items(content))
+    assert "Blocked" not in rendered
+
+
+# --- lineage: how many times has this been tried? (kit#55, step 3) ------------
+
+
+def test_a_two_link_chain_reports_both_ancestors_newest_first() -> None:
+    """B-200 regressed from B-050, which superseded B-012. That is a third attempt.
+
+    The registry held every piece of this and could not answer the question,
+    because nothing walked the edges (kit#55).
+    """
+    items = _items(
+        item_block("B-012", status="killed", extra="kill_reason: measured, did not hold\n"),
+        item_block("B-050", status="shipped", extra="supersedes: B-012\n"),
+        item_block("B-200", status="raw", extra="regression_of: B-050\n"),
+    )
+    chains = lineage_chains(items)
+    assert chains["B-200"] == ["B-050", "B-012"]
+
+
+def test_an_item_with_no_ancestor_has_no_chain() -> None:
+    """Most items are the first attempt, and that is not a fact worth printing."""
+    items = _items(item_block("B-001", status="raw"))
+    assert lineage_chains(items) == {}
+
+
+def test_an_edge_naming_an_undefined_id_stops_the_walk_without_raising() -> None:
+    """The index renders a registry the checker may not have passed yet.
+
+    `check_backlog_structure` reports `lineage_missing` for this; the index must
+    still render, and must not silently drop the part of the chain it CAN see.
+    """
+    items = _items(
+        item_block("B-050", status="shipped", extra="supersedes: B-999\n"),
+        item_block("B-200", status="raw", extra="regression_of: B-050\n"),
+    )
+    chains = lineage_chains(items)
+    assert chains["B-200"] == ["B-050", "B-999"]
+    assert chains["B-050"] == ["B-999"]
+
+
+def test_a_corrupt_ring_terminates_instead_of_hanging() -> None:
+    """A lineage ring is unreachable by the contract and cheap to survive anyway.
+
+    The checker has no cycle gate here BECAUSE the edge points only at terminal
+    items. That argument is about a well-formed registry; this function reads one
+    that may be mid-edit, and a walker that trusts the argument hangs the index.
+    """
+    items = _items(
+        item_block("B-001", status="killed", extra="kill_reason: x\nsupersedes: B-002\n"),
+        item_block("B-002", status="killed", extra="kill_reason: y\nsupersedes: B-001\n"),
+    )
+    chains = lineage_chains(items)
+    assert chains["B-001"] == ["B-002"]
+    assert chains["B-002"] == ["B-001"]
+
+
+def test_the_index_names_the_attempt_number(tmp_path: Path) -> None:
+    """The row says it out loud, because the chain is why the item looks familiar."""
+    from backlog_index import render_index
+    items = _items(
+        item_block("B-012", status="killed", extra="kill_reason: measured, did not hold\n"),
+        item_block("B-050", status="shipped", extra="supersedes: B-012\n"),
+        item_block("B-200", status="raw", extra="regression_of: B-050\n"),
+    )
+    rendered = render_index("", items)
+    assert "3rd attempt" in rendered
+    assert "B-050" in rendered

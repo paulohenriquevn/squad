@@ -14,7 +14,7 @@ Run:
 
 ```bash
 python3 .claude/skills/review/scripts/detect_domain.py \
-  --plan .claude/knowledge-base/plans/{SLUG}-plan.md \
+  --plan .claude/records/plans/{SLUG}-plan.md \
   --diff-base main
 ```
 
@@ -26,7 +26,7 @@ Run:
 
 ```bash
 python3 .claude/skills/review/scripts/spawn_reviewers.py \
-  --plan .claude/knowledge-base/plans/{SLUG}-plan.md \
+  --plan .claude/records/plans/{SLUG}-plan.md \
   --slug {SLUG} \
   --date $(date -u +%Y-%m-%d) \
   --primary-domain {PRIMARY_DOMAIN} \
@@ -53,7 +53,7 @@ Wait for ALL agents to complete. Each agent should have written a YAML findings 
 ```bash
 python3 .claude/skills/review/scripts/consolidate_findings.py \
   --findings-dir .claude/agents/review-{SLUG}-{date}/findings/ \
-  --output .claude/knowledge-base/reviews/{SLUG}-review-{date}.md
+  --output .claude/records/reviews/{SLUG}-review-{date}.md
 ```
 
 The script reads each YAML, deduplicates, classifies, writes the consolidated markdown report.
@@ -70,7 +70,7 @@ Capture the verdict. If FAIL, the review final verdict is automatically NEEDS_FI
 
 ```bash
 python3 .claude/skills/review/scripts/edge_case_coverage.py \
-  --plan .claude/knowledge-base/plans/{SLUG}-plan.md \
+  --plan .claude/records/plans/{SLUG}-plan.md \
   --tests-dir tests/
 ```
 
@@ -100,7 +100,7 @@ Findings: N total (BLOCKER: N, HIGH: N, MEDIUM: N, LOW: N, INFO: N)
 Edge-case coverage: N/M covered
 Verdict: READY_TO_MERGE / NEEDS_FIXES / NEEDS_DEEPER
 
-Report: .claude/knowledge-base/reviews/{SLUG}-review-{date}.md
+Report: .claude/records/reviews/{SLUG}-review-{date}.md
 Audit trail: .claude/agents/review-{SLUG}-{date}/
 
 Next: 
@@ -115,4 +115,4 @@ Next:
 - NEVER skip Step 3 (parallel agents) to move faster — the rigor IS the agents
 - NEVER approve with unresolved BLOCKER findings
 - NEVER fabricate findings or fill in default findings to "look thorough"
-- NEVER auto-merge — final merge is human decision after consuming the report
+- NEVER merge. `/release` owns the merge and reads this report's verdict as one of its preconditions

@@ -1,6 +1,6 @@
 # Discover-Plan Score Thresholds — per-project tuning.
 #
-# Authoritative source: rules/discover-plan-golden-rule.md
+# Authoritative source: skills/_kit-rules/discover-plan-golden-rule.md
 #
 # Format: <band-name>|<min-score>|<sunset-date>|<adr-ref>
 #

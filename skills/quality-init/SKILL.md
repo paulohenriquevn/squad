@@ -10,20 +10,20 @@ argument-hint: "TARGET [--force] [--allow-missing-tools] [--strict] [--out PATH]
 
 # quality-init — calibrate quality-gate hooks for a real project
 
-> **INQUEBRAVEL — 95% Confidence Gate**
+> **UNBREAKABLE — 95% Confidence Gate**
 >
-> NAO FACA NADA SE NAO TIVER 95% DE CONFIANCA.
-> SEMPRE QUE PRECISAR DE UMA DECISAO DO USUARIO, APRESENTE
-> OPCOES PARA ELE ESCOLHER.
+> DO NOTHING WITHOUT 95% CONFIDENCE.
+> WHENEVER A USER DECISION IS NEEDED, PRESENT
+> OPTIONS FOR THEM TO CHOOSE FROM.
 >
-> Ver `~/.claude/CLAUDE.md` § 1 (95% Confidence).
+> See `~/.claude/CLAUDE.md` § 1 (95% Confidence).
 
 This skill is a **one-shot rigorous initializer**. It walks a target codebase, measures actual code metrics, and emits calibrated Claude Code hooks that block code smells on every `Write` and `Edit` operation. Because it is a skill (not a plugin), it leaves no state behind and is safe to invoke in any project.
 
 **Project rules consumed:**
 - `~/.claude/CLAUDE.md` § 7 (Testes) — hook scripts follow AAA pattern in tests
 - `~/.claude/CLAUDE.md` § 8 (Error Handling) — fail-fast, fail-clear
-- `~/.claude/CLAUDE.md` § 9 (Nao Reinvente) — uses `ast` stdlib for Python, `lizard` for multi-lang
+- `~/.claude/CLAUDE.md` § 9 (Do Not Reinvent) — uses `ast` stdlib for Python, `lizard` for multi-lang
 - `~/.claude/CLAUDE.md` § 10 (KISS) — four focused modules, each under 300 lines
 
 ---
@@ -67,7 +67,7 @@ The argument is a single line: `TARGET [FLAGS...]`. The first positional token i
 2. **Invoke the initializer.** The Python script does all 10 mandatory stages:
 
    ```bash
-   python3 scripts/init_quality_gates.py \
+   python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/init_quality_gates.py" \
        --target "$TARGET" \
        ${OUT:+--out "$OUT"} \
        ${FORCE:+--force} \
@@ -167,6 +167,33 @@ If PostToolUse already has entries, the new hook is **appended** (not replacing)
 ## Threshold calibration logic
 
 The calibration is **adaptive**: it measures actual code metrics from the project and uses the higher of (measured p90, minimum floor).
+
+### The blocking rate — what "adaptive" was never checked against
+
+Stage 6.5 now measures how much of the EXISTING code the calibrated gate would
+reject, and reports it with a verdict:
+
+| Rate | Verdict | Meaning |
+|---|---|---|
+| ≤ 5% | `READY` | the gate starts green and reacts to what gets WORSE |
+| ≤ 10% | `REVIEW` | a handful of files to fix or a threshold to loosen first |
+| > 10% | `TOO_STRICT` | do not turn it on as calibrated |
+
+It exists because the promise below was never verified. Measured on the Squad
+repository 2026-08-26, with thresholds this skill itself produced (complexity=10,
+function_lines=29, nesting=3, params=4, file_lines=367): **49% of files would be
+blocked** — and passing every file through the generated hook, which also checks
+duplication, gives 61%.
+
+The arithmetic p90 does not cover: it is computed PER METRIC, over the project's
+functions, while the gate rejects a FILE when ANY function exceeds ANY threshold. A
+file with thirty functions gets thirty independent chances of holding one of the
+worst 10%, and five metrics multiply that. **p90 per function is not p90 per file.**
+
+A gate that starts red is switched off within the hour, and what remains is worse
+than no gate: the hook in `settings.json`, the belief that it protects something,
+and a bypass flag in the hand of whoever works there. The rate does not fix the
+calibration — it ends the silence about it.
 
 ### Why p90 and not p50 or max?
 

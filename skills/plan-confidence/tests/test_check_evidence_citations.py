@@ -4,8 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-
 from check_evidence_citations import (  # noqa: E402
     Citation,
     EvidenceReport,
@@ -26,24 +24,24 @@ def _make_project_root(
     blueprints: dict[str, str] | None = None,
     opportunities: dict[str, str] | None = None,
 ) -> Path:
-    """Create a fake project root with rules/ and knowledge-base/discoveries/.
+    """Create a fake project root with rules/ and records/discoveries/.
 
     `opportunities` is the path `/discover-execute` actually writes to; `blueprints`
     is the ancestor's directory, kept because plans predating the rename still cite it.
     """
     root = tmp_path / "project"
     (root / "rules").mkdir(parents=True)
-    (root / "knowledge-base" / "discoveries" / "blueprints").mkdir(parents=True)
-    (root / "knowledge-base" / "discoveries" / "opportunities").mkdir(parents=True)
+    (root / "records" / "discoveries" / "blueprints").mkdir(parents=True)
+    (root / "records" / "discoveries" / "opportunities").mkdir(parents=True)
     if rules:
         for name, content in rules.items():
             (root / "rules" / name).write_text(content, encoding="utf-8")
     if blueprints:
         for name, content in blueprints.items():
-            (root / "knowledge-base" / "discoveries" / "blueprints" / name).write_text(content, encoding="utf-8")
+            (root / "records" / "discoveries" / "blueprints" / name).write_text(content, encoding="utf-8")
     if opportunities:
         for name, content in opportunities.items():
-            (root / "knowledge-base" / "discoveries" / "opportunities" / name).write_text(content, encoding="utf-8")
+            (root / "records" / "discoveries" / "opportunities" / name).write_text(content, encoding="utf-8")
     return root
 
 
@@ -75,7 +73,7 @@ def test_flags_missing_section(tmp_path: Path) -> None:
     project_root = _make_project_root(tmp_path, rules={"architecture.md": "# Architecture\n\n## §1\nBody.\n"})
     plan = _write_plan(
         tmp_path,
-        "# Plan\n\n### T1.1 — Task\n#### Evidence\nReferência a `architecture.md §99`.\n",
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nReference to `architecture.md §99`.\n",
     )
     report = check_evidence_citations(plan, project_root)
     flagged = [c for c in report.unresolved_citations if "architecture.md" in c.raw_text and "99" in c.raw_text]
@@ -197,7 +195,7 @@ def test_citation_has_required_fields() -> None:
 
 def test_resolves_blueprint_ref_when_section_exists_in_blueprints_set(tmp_path: Path) -> None:
     """Positive case: `Blueprint §Q1` resolves when ANY blueprint file in
-    knowledge-base/discoveries/blueprints/ has a heading matching Q1.
+    records/discoveries/blueprints/ has a heading matching Q1.
 
     v0.1 contract documented in plan: detector binds by section anchor presence
     across the set of blueprint files (NOT by blueprint name). M3 v0.2 will
@@ -231,7 +229,7 @@ def test_flags_blueprint_ref_when_section_absent(tmp_path: Path) -> None:
     )
     plan = _write_plan(
         tmp_path,
-        "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Blueprint §Q99 que não existe.\n",
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nSee Blueprint §Q99, which does not exist.\n",
     )
     report = check_evidence_citations(plan, project_root)
     blueprint_unresolved = [c for c in report.unresolved_citations if c.kind == "blueprint"]
@@ -245,7 +243,7 @@ def test_flags_blueprint_ref_when_no_blueprints_dir(tmp_path: Path) -> None:
     """Defense-in-depth: when there are no blueprints at all, any Blueprint § is flagged."""
     project_root = tmp_path / "project"
     (project_root / "rules").mkdir(parents=True)
-    # NOT creating knowledge-base/discoveries/blueprints/
+    # NOT creating records/discoveries/blueprints/
     plan = _write_plan(
         tmp_path,
         "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Blueprint §Q1.\n",
@@ -264,7 +262,7 @@ def test_flags_blueprint_ref_when_no_blueprints_dir(tmp_path: Path) -> None:
 def test_resolves_opportunity_ref_against_opportunities_dir(tmp_path: Path) -> None:
     """The regression this suite missed for a whole rename.
 
-    `/discover-execute` writes `knowledge-base/discoveries/opportunities/`. The scanner
+    `/discover-execute` writes `records/discoveries/opportunities/`. The scanner
     read `blueprints/` — the ancestor's directory, which nothing writes to any more — so
     a plan citing a real, resolvable section was reported as a fabricated citation, and
     `fabricated_citation` hard-caps the plan at 49. The suite passed throughout, because
@@ -311,7 +309,7 @@ def test_opportunity_ref_with_absent_section_is_still_flagged(tmp_path: Path) ->
     )
     plan = _write_plan(
         tmp_path,
-        "# Plan\n\n### T1.1 — Task\n#### Evidence\nVer Opportunity §Q99 que nao existe.\n",
+        "# Plan\n\n### T1.1 — Task\n#### Evidence\nSee Opportunity §Q99, which does not exist.\n",
     )
     report = check_evidence_citations(plan, project_root)
     unresolved = [c for c in report.unresolved_citations if c.kind == "blueprint"]
@@ -374,3 +372,32 @@ def test_detector_does_not_flag_when_token_is_only_in_fenced_block(tmp_path: Pat
     assert all(
         "missing-doc.md" not in c.raw_text for c in report.unresolved_citations
     ), "fenced citation should NOT be flagged"
+
+
+
+def test_a_detector_name_is_not_read_as_a_fabricated_adr(tmp_path) -> None:
+    """`D4` in prose is the kit's detector, not a citation of ADR D4.
+
+    `_ADR_REF_RE` captures a bare `D\\d+`, and `D1`..`D5` are the detector names
+    `rules/code-quality-golden-rule.md` § 5 uses throughout. A consumer's plan
+    listed, among rejected alternatives, "Disable D4 in the thresholds file" —
+    and the gate reported `ADR D4 is referenced but not defined`, raising
+    `fabricated_citation` and INVALID at score 49.
+
+    The finding was false and the plan was correct. A fabrication gate that
+    fires on the kit's own vocabulary teaches people to ignore fabrication
+    gates, which costs more than the gate ever returns.
+
+    An explicit `ADR D4` still counts as a citation, and so does a bare `D4`
+    when the plan actually defines that ADR: the exemption applies only where
+    the reference does not resolve AND the token names a detector.
+    """
+    project_root = _make_project_root(tmp_path)
+    plan = _write_plan(
+        tmp_path,
+        "# Plan\n\n## ADRs\n\n### ADR-1 — something\n\n"
+        "Rejected: *Disable D4 in the thresholds file.* The runner is absent.\n",
+    )
+    report = check_evidence_citations(plan, project_root)
+    adr_refs = [c for c in report.unresolved_citations if "D4" in c.raw_text]
+    assert adr_refs == [], f"D4 read as a fabricated ADR citation: {adr_refs}"

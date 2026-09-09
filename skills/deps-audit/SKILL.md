@@ -1,8 +1,8 @@
 ---
 name: deps-audit
 version: 0.1.0
-requires: [edge-case-plan]
-description: Audit project dependencies for known vulnerabilities (CVEs) and outdated versions across npm, Python, Rust, Go. Auto-detects manifests; runs osv-scanner + npm audit + npm outdated + pip-audit + cargo audit + govulncheck; cross-references a plan's ## Dependencies section; produces diff-style bump suggestions. NEVER edits manifests. Use after /edge-case-plan, before /plan-confidence — or standalone for periodic audits.
+requires: [plan-edge-cases]
+description: Audit project dependencies for known vulnerabilities (CVEs) and outdated versions across npm, Python, Rust, Go. Auto-detects manifests; runs osv-scanner + npm audit + npm outdated + pip-audit + cargo audit + govulncheck; cross-references a plan's ## Dependencies section; produces diff-style bump suggestions. NEVER edits manifests. Use after /plan-edge-cases, before /plan-confidence — or standalone for periodic audits.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit
 argument-hint: "[plan-slug] (optional — bind audit to a plan's Dependencies section)"
@@ -10,11 +10,11 @@ argument-hint: "[plan-slug] (optional — bind audit to a plan's Dependencies se
 
 # Deps Audit
 
-> **INQUEBRÁVEL — 95% Confidence Gate**
+> **UNBREAKABLE — 95% Confidence Gate**
 >
-> NÃO FAÇA NADA SE NÃO TIVER 95% DE CONFIANÇA.
-> SEMPRE QUE PRECISAR DE UMA DECISÃO DO USUÁRIO, APRESENTE
-> OPÇÕES PARA ELE ESCOLHER.
+> DO NOTHING WITHOUT 95% CONFIDENCE.
+> WHENEVER A USER DECISION IS NEEDED, PRESENT
+> OPTIONS FOR THEM TO CHOOSE FROM.
 >
 > See `~/.claude/CLAUDE.md` § 1 (95% Confidence).
 
@@ -24,22 +24,22 @@ Audit project dependencies for known vulnerabilities AND outdated versions. Mult
 - `rules/deps-audit-golden-rule.md` — locked contract; unbreakable hard caps (CRITICAL/HIGH CVE in declared dep = BLOCKER).
 - `rules/deps-audit-allowlist.txt` — CVE/version allowlist with mandatory rationale + sunset date ≤ 90 days.
 - Unbreakable Rule 9 (`~/.claude/CLAUDE.md § 9`) — drives the philosophy: use existing scanners (`osv-scanner`, `npm audit`, `pip-audit`, `cargo audit`, `govulncheck`); never reimplement CVE detection.
-- `rules/cycle-plan.md` — wired between `/edge-case-plan` and `/plan-confidence`.
+- `rules/cycle-plan.md` — wired between `/plan-edge-cases` and `/plan-confidence`.
 
 ---
 
 ## Cycle contract
 
-This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md), between `/edge-case-plan` (phase 2) and `/plan-confidence` (phase 4). The cycle rule is the **source of truth** for chain order, gates, verdicts and anti-patterns. **Read `cycle-plan.md` before invoking.** This SKILL.md retains phase-specific detail (scanner routing, severity rubric, report shape).
+This skill is **phase 3** of [`cycle-plan`](../../rules/cycle-plan.md), between `/plan-edge-cases` (phase 2) and `/plan-confidence` (phase 4). The cycle rule is the **source of truth** for chain order, gates, verdicts and anti-patterns. **Read `cycle-plan.md` before invoking.** This SKILL.md retains phase-specific detail (scanner routing, severity rubric, report shape).
 
-**Its gate is human-enforced, not mechanized.** `/plan-confidence` does not read this audit's verdict — wiring it in would EXTEND the gate, which `plan-confidence-golden-rule.md` § When this rule may change puts behind an ADR. So the CVE gate holds only if a human invokes this skill and honors its verdict. See § Downstream wiring required.
+**Its verdict is now read downstream.** `/plan-confidence` runs `check_deps_audit.py`, which binds a plan's `## Dependencies` section to the newest `{slug}-deps-audit-*.md` on disk: `FAIL_INSECURE` / `INVALID_PLAN_DEPS` cap the plan at 49 (`INVALID`), `FAIL_MEDIUM` and a MISSING report cap it at 89. Until 2026-08-26 nothing read it, and the gate held only if a human remembered to honour the verdict. What still requires a human is RUNNING this skill — but forgetting now costs the plan its band instead of passing silently.
 
 ## Trigger conditions
 
 Invoke this skill when:
 
-- `/edge-case-plan` has just returned PLAN OK and you're about to run `/plan-confidence` (recommended cycle-plan position — see `cycle-plan.md`).
-- Standalone audit before merge / release / dogfood evidence collection.
+- `/plan-edge-cases` has just returned PLAN OK and you're about to run `/plan-confidence` (recommended cycle-plan position — see `cycle-plan.md`).
+- Standalone audit before merge / release / honesty-gate evidence collection.
 - After adding or upgrading a dependency manually.
 - Periodic schedule (suggested weekly via `/loop 7d /deps-audit`).
 - A new CVE has been disclosed for a dep you use.
@@ -60,7 +60,7 @@ Do NOT invoke when:
 /deps-audit
 ```
 
-Detects all manifests in repo root (excluding `node_modules/`, `.venv/`, `__pycache__/`, `knowledge-base/references/`, `dist/`, `build/`, `target/`), runs the matching auditors, prints a report to stdout. No plan binding; advisory only.
+Detects all manifests in repo root (excluding `node_modules/`, `.venv/`, `__pycache__/`, `records/references/`, `dist/`, `build/`, `target/`), runs the matching auditors, prints a report to stdout. No plan binding; advisory only.
 
 ### Mode 2 — Plan-bound audit (RECOMMENDED for cycle-plan)
 
@@ -68,7 +68,7 @@ Detects all manifests in repo root (excluding `node_modules/`, `.venv/`, `__pyca
 /deps-audit {plan-slug}
 ```
 
-Reads `knowledge-base/plans/{slug}-plan.md` (or `knowledge-base/discoveries/plans/{slug}-plan.md`), parses its `## Dependencies` section, cross-references every declared dep against:
+Reads `records/plans/{slug}-plan.md` (or `records/discoveries/plans/{slug}-plan.md`), parses its `## Dependencies` section, cross-references every declared dep against:
 
 1. The actual manifest state (or marker `(NEW)` if dep is to be added by the plan).
 2. The auditor results (CVE database + outdated versions).
@@ -204,7 +204,7 @@ See [`deps-audit-golden-rule.md § Severity rubric`](../../rules/deps-audit-gold
 
 In **Mode 1**: print full report to stdout.
 
-In **Mode 2**: write to `knowledge-base/audits/{slug}-deps-audit-{date}.md` AND print summary to stdout. The persistent file is the audit trail consumed by `/plan-confidence`.
+In **Mode 2**: write to `records/audits/{slug}-deps-audit-{date}.md` AND print summary to stdout. The persistent file is the audit trail consumed by `/plan-confidence`.
 
 ---
 
@@ -292,7 +292,7 @@ Allowlisted findings (within sunset) downgrade by ONE severity level: CRITICAL �
 9. **NEVER skip Rule 9 column on NEW deps** — see golden rule; this is a hard cap. "Picked X because it's popular" is NOT Rule 9 evaluation. Need rejected alternatives + reasons.
 10. **NEVER allowlist a CRITICAL CVE without sunset ≤ 30 days** — golden rule requires aggressive sunset for high severity; rejecting it via allowlist is a stopgap, not a destination.
 11. **NEVER bypass via `--force` / `--skip-audit` / `--accept-cves` flags** — they do not exist by design (golden rule constructor invariant).
-12. **NEVER use `knowledge-base/references/` clones as part of the audit surface** — read-only zone; their deps are not OUR responsibility.
+12. **NEVER use `records/references/` clones as part of the audit surface** — read-only zone; their deps are not OUR responsibility.
 
 ---
 
@@ -300,7 +300,7 @@ Allowlisted findings (within sunset) downgrade by ONE severity level: CRITICAL �
 
 | Artifact | Rollback procedure |
 |---|---|
-| Report at `knowledge-base/audits/{slug}-deps-audit-{date}.md` | Delete file; no further state to revert. |
+| Report at `records/audits/{slug}-deps-audit-{date}.md` | Delete file; no further state to revert. |
 | Allowlist entry at `rules/deps-audit-allowlist.txt` | Standard git revert of the line addition. |
 | (No manifest changes ever — skill is read-only.) | n/a |
 
@@ -310,13 +310,13 @@ Allowlisted findings (within sunset) downgrade by ONE severity level: CRITICAL �
 
 - Golden rule: [`rules/deps-audit-golden-rule.md`](../../rules/deps-audit-golden-rule.md)
 - Allowlist: [`rules/deps-audit-allowlist.txt`](../../rules/deps-audit-allowlist.txt)
-- Wired into: [`rules/cycle-plan.md`](../../rules/cycle-plan.md) (new phase between `/edge-case-plan` and `/plan-confidence` — v1.1)
+- Wired into: [`rules/cycle-plan.md`](../../rules/cycle-plan.md) (new phase between `/plan-edge-cases` and `/plan-confidence` — v1.1)
 - Renovate/Dependabot complementary setup: `.github/dependabot.yml` or `renovate.json` — passive GitHub-side infra, out of scope for this skill
 - Unbreakable Rule 9: [`~/.claude/CLAUDE.md § 9`](file://~/.claude/CLAUDE.md) (Do Not Reinvent the Wheel)
-- Sibling skills: `/plan-confidence` (consumes this skill's verdict), `/dogfood` (also a hard-cap gate on plans)
+- Sibling skills: `/plan-confidence` (consumes this skill's verdict), `/honesty-gate` (also a hard-cap gate on plans)
 
 ## Downstream wiring required (NOT yet shipped — follow-up)
 
-Per the locked policy in `plan-confidence-golden-rule.md` § When this rule may change, EXTENDING the gate (adding `/deps-audit` as a new hard cap to plan-confidence) requires an ADR. The skill works **standalone** today; the integration with `/plan-confidence` will be tracked in a follow-up `/to-plan deps-audit-plan-confidence-wiring`.
+Per the locked policy in `plan-confidence-golden-rule.md` § When this rule may change, EXTENDING the gate (adding `/deps-audit` as a new hard cap to plan-confidence) requires an ADR. The skill works **standalone** today; the integration with `/plan-confidence` will be tracked in a follow-up `/plan-write deps-audit-plan-confidence-wiring`.
 
-Until that integration ships, the user MUST invoke `/deps-audit {slug}` manually after `/edge-case-plan` and BEFORE `/plan-confidence`, and respect its verdict by hand.
+Until that integration ships, the user MUST invoke `/deps-audit {slug}` manually after `/plan-edge-cases` and BEFORE `/plan-confidence`, and respect its verdict by hand.

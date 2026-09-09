@@ -1,0 +1,33 @@
+# Permission rules this kit once shipped and has deliberately withdrawn.
+# `install.sh` removes every line here from a consumer's `settings.json`, on
+# every run, whether or not that consumer has a recorded base.
+#
+# WHY THIS EXISTS ALONGSIDE `.kit-permissions.json`
+# --------------------------------------------------
+# The base file records what the kit shipped last time, so the installer can
+# retire a rule automatically. It cannot help the FIRST install under that
+# scheme: there is no base, every existing entry is indistinguishable from a
+# project's own, and removing on a guess would delete project rules across every
+# consumer at once. So that path is deliberately conservative and removes nothing.
+#
+# Measured on 2026-09-02: the credential globs were rewritten, the base landed in
+# the same hour, and the retired `Read(**/*secret*)` stayed denied in the
+# consumer anyway — the conservative branch doing exactly what it was written to
+# do, and the fix arriving inert.
+#
+# This file is the other half. The base is automatic and covers what nobody
+# remembers to declare; this is explicit and covers what the base cannot know.
+# A line here is a claim the kit makes about its own history, so it is auditable
+# in a way a guess never is.
+#
+# FORMAT: one rule per line, exactly as it appeared in `permissions`.
+# Blank lines and `#` comments ignored.
+
+# Retired 2026-09-02 (kit#15). These bound `Read` only, so `cat` returned the
+# same bytes and `Edit` rewrote them; and they matched source code — 79 .go/.sh
+# files in one consumer — while the credentials themselves sat gitignored and
+# unmatched. Replaced by credential-bearing FORMS across Read, Edit and Write.
+Read(**/*secret*)
+Read(**/credentials*)
+Read(.env.*)
+Read(**/.env.*)

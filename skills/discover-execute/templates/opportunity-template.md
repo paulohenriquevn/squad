@@ -4,7 +4,7 @@
 **Repo:** {repo}
 **Mode:** {review|live-test|bug|evolve}
 **Slug:** `{kebab-case-slug}`
-**Source plan:** `knowledge-base/discoveries/plans/{slug}-plan.md`
+**Source plan:** `records/discoveries/plans/{slug}-plan.md`
 **Generated:** {YYYY-MM-DD} via `/discover-execute`
 **Confidence verdict:** PROVISIONAL (awaiting `/discover-confidence`)
 
@@ -75,7 +75,7 @@
      requires an `## ADRs` section below.
 
      Danger is proportional to position in the dependency graph: a change in
-     `theo-contracts` reaches everything downstream; one in a leaf repo reaches nothing.
+     `contracts` reaches everything downstream; one in a leaf repo reaches nothing.
      "Repo-local" is a legitimate and common answer — say it plainly rather than padding. -->
 
 ## Corner 4 — Verification

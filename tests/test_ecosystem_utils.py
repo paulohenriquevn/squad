@@ -1,4 +1,4 @@
-"""Tests for scripts/ecosystem_utils.py — layout detection and directory resolution."""
+"""Tests for mechanisms/conventions/ecosystem_utils.py — layout detection and directory resolution."""
 from __future__ import annotations
 
 import sys
@@ -7,12 +7,15 @@ from pathlib import Path
 import pytest
 
 # Ensure scripts/ is importable
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "mechanisms" / "conventions"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from ecosystem_utils import find_ecosystem_dir, is_ecosystem_layout, resolve_ecosystem_dir
-
+from ecosystem_utils import (  # noqa: E402
+    find_ecosystem_dir,
+    is_ecosystem_layout,
+    resolve_ecosystem_dir,
+)
 
 # ---------------------------------------------------------------------------
 # is_ecosystem_layout
@@ -102,19 +105,19 @@ def test_find_ecosystem_dir_not_found_optional(tmp_path: Path) -> None:
 
 
 def test_resolve_ecosystem_dir_with_knowledge_base(tmp_path: Path) -> None:
-    """Prefers candidate that has knowledge-base/ even over standalone layout."""
-    # Standalone layout at root (no knowledge-base)
+    """Prefers candidate that has records/ even over standalone layout."""
+    # Standalone layout at root (no records)
     (tmp_path / "skills").mkdir()
     (tmp_path / "rules").mkdir()
     (tmp_path / "hooks").mkdir()
 
-    # .claude/ layout WITH knowledge-base
+    # .claude/ layout WITH records
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     (claude_dir / "skills").mkdir()
     (claude_dir / "rules").mkdir()
     (claude_dir / "hooks").mkdir()
-    (claude_dir / "knowledge-base").mkdir()
+    (claude_dir / "records").mkdir()
 
     result = resolve_ecosystem_dir(tmp_path)
 
@@ -122,7 +125,7 @@ def test_resolve_ecosystem_dir_with_knowledge_base(tmp_path: Path) -> None:
 
 
 def test_resolve_ecosystem_dir_fallback(tmp_path: Path) -> None:
-    """Falls back to skills/rules/hooks layout when no knowledge-base/ exists."""
+    """Falls back to skills/rules/hooks layout when no records/ exists."""
     (tmp_path / "skills").mkdir()
     (tmp_path / "rules").mkdir()
     (tmp_path / "hooks").mkdir()

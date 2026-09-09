@@ -35,7 +35,7 @@
     {
       "id": 2,
       "name": "bug-mode-runs-the-failing-test",
-      "prompt": "run the measurement for B-022 (bug mode): theo-cli returns exit 0 when a deploy step fails. the repro is in the plan",
+      "prompt": "run the measurement for B-022 (bug mode): cli-tool returns exit 0 when a deploy step fails. the repro is in the plan",
       "expected_output": "The skill writes the numbered repro AND a test that fails on the current state, then RUNS it and records the actual failure output. A test asserted to fail but never executed is fabricated evidence and caps the opportunity at 49.",
       "files": [],
       "assertions": [

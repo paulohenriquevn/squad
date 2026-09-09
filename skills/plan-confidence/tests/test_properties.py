@@ -7,15 +7,15 @@ that breaks the invariant.
 from __future__ import annotations
 
 import json
+import tempfile
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
-
-
 from check_coverage_matrix import check_coverage_matrix  # noqa: E402
 from check_spec_smells import check_spec_smells  # noqa: E402
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 from run_structural import (  # noqa: E402
     SOTA_WEIGHTS,
     renormalize_weights,
@@ -76,15 +76,17 @@ markdown_text = st.text(
 @given(content=markdown_text)
 @settings(
     max_examples=50,
-    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+    deadline=None,  # see the note above: the deadline measured machine load, not the code
+    suppress_health_check=[HealthCheck.too_slow],
 )
-def test_smell_total_penalty_always_non_positive(content: str, tmp_path: Path) -> None:
-    plan = tmp_path / "fuzz.md"
-    plan.write_text(content, encoding="utf-8")
-    report = check_spec_smells(plan, RUBRIC)
-    assert report.total_penalty <= 0, f"penalty {report.total_penalty} positive"
-    assert report.total_hits >= 0
-    assert sum(report.by_category.values()) == report.total_hits
+def test_smell_total_penalty_always_non_positive(content: str) -> None:
+    with example_dir() as workdir:
+        plan = workdir / "fuzz.md"
+        plan.write_text(content, encoding="utf-8")
+        report = check_spec_smells(plan, RUBRIC)
+        assert report.total_penalty <= 0, f"penalty {report.total_penalty} positive"
+        assert report.total_hits >= 0
+        assert sum(report.by_category.values()) == report.total_hits
 
 
 # ---------------------------------------------------------------------------
@@ -97,9 +99,9 @@ def test_smell_total_penalty_always_non_positive(content: str, tmp_path: Path) -
 )
 @settings(
     max_examples=50,
-    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    deadline=None,  # see the note above: the deadline measured machine load, not the code
 )
-def test_coverage_ratio_always_in_range(n_gaps: int, n_mapped: int, tmp_path: Path) -> None:
+def test_coverage_ratio_always_in_range(n_gaps: int, n_mapped: int) -> None:
     # Build a synthetic plan with n_gaps rows, n_mapped of which have task refs
     n_mapped = min(n_mapped, n_gaps)
     rows = []
@@ -115,15 +117,73 @@ def test_coverage_ratio_always_in_range(n_gaps: int, n_mapped: int, tmp_path: Pa
         + "\n".join(rows)
         + "\n"
     )
-    plan = tmp_path / "synth.md"
-    plan.write_text(plan_text, encoding="utf-8")
-    report = check_coverage_matrix(plan)
-    assert 0.0 <= report.coverage_ratio <= 1.0, f"ratio {report.coverage_ratio} OOR"
+    with example_dir() as workdir:
+        plan = workdir / "synth.md"
+        plan.write_text(plan_text, encoding="utf-8")
+        report = check_coverage_matrix(plan)
+        assert 0.0 <= report.coverage_ratio <= 1.0, f"ratio {report.coverage_ratio} OOR"
 
 
 # ---------------------------------------------------------------------------
 # Invariant 4: end-to-end score always in [0, 100], verdict in allowed set, JSON valid
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Why these tests do not take pytest's `tmp_path`
+#
+# A function-scoped fixture runs ONCE for a `@given` test and is shared by every
+# example Hypothesis generates — pytest's own health check says so, and the four
+# tests below used to suppress that warning rather than heed it. The examples were
+# therefore not independent of each other, which is the property the whole file
+# exists to assert about the code under test.
+#
+# `example_dir()` gives each example its own directory, so an example cannot see what
+# an earlier one wrote.
+#
+# WHAT WAS MEASURED, INCLUDING WHAT IS STILL OPEN
+#
+#   before   2 failures in 15 runs   (~13%)
+#   after    1 failure in 85 runs    (~1.2%)
+#
+# THE RESIDUAL WAS FOUND ON 2026-09-09, AND IT WAS NOT SHARED STATE
+#
+# 104 runs, eight at a time, produced 21 failures — and every single one of them was
+# Hypothesis's DEADLINE, not an assertion:
+#
+#   "Unreliable test timings! On an initial run, this test took 257.20ms, which
+#    exceeded the deadline of 200.00ms, but on a subsequent run it took 180.23ms"
+#
+# Under load an example crosses the 200 ms default; on the confirming re-run it does
+# not, and Hypothesis reports `FlakyFailure`. That explains every symptom recorded
+# above — it failed in a parallel suite run, passed in isolation, and the reported
+# counter-example did not reproduce alone, because the input was never the problem.
+#
+# `suppress_health_check=[HealthCheck.too_slow]` does NOT cover this. The health check
+# and the deadline are different mechanisms, and only the first was suppressed.
+#
+# These tests assert PROPERTIES, never latency. A wall-clock budget on them measures
+# how busy the machine is, which is not a property of the code under test — so the
+# deadline is off, deliberately, rather than raised to a number that would fail again
+# on a busier host.
+#
+# Both original failures were in `test_end_to_end_score_invariants` and
+# `test_smell_idempotent`, and NEITHER reproduced when its reported counter-example
+# was replayed alone — the inputs pass in isolation, which is what pointed at shared
+# state rather than at a bug in the code under test.
+#
+# The remaining 1-in-85 was not captured: 60 consecutive runs after it produced
+# nothing to read. So this is an eleven-fold reduction that was measured, and NOT a
+# fix that was proven — if it fires again, the thing to do is capture the failing
+# output rather than re-run until it passes. A test that fails one run in eight is a
+# bug with top priority by the unbreakable rules; one in eighty-five is a smaller bug
+# with the same name.
+# ---------------------------------------------------------------------------
+
+@contextmanager
+def example_dir():
+    with tempfile.TemporaryDirectory() as d:
+        yield Path(d)
+
 
 VALID_VERDICTS = {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVALID"}
 
@@ -135,10 +195,11 @@ VALID_VERDICTS = {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVAL
 )
 @settings(
     max_examples=30,
-    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+    deadline=None,  # see the note above: the deadline measured machine load, not the code
+    suppress_health_check=[HealthCheck.too_slow],
 )
 def test_end_to_end_score_invariants(
-    n_gaps: int, n_mapped: int, n_adrs: int, tmp_path: Path
+    n_gaps: int, n_mapped: int, n_adrs: int
 ) -> None:
     n_mapped = min(n_mapped, n_gaps)
 
@@ -167,25 +228,26 @@ def test_end_to_end_score_invariants(
         + "\n".join(rows)
         + "\n"
     )
-    plan = tmp_path / "synth.md"
-    plan.write_text(plan_text, encoding="utf-8")
+    with example_dir() as workdir:
+        plan = workdir / "synth.md"
+        plan.write_text(plan_text, encoding="utf-8")
 
-    report = run_structural(plan, RUBRIC, THRESHOLDS)
-    # Score range
-    assert 0.0 <= report.final_score_after_caps <= 100.0
-    assert 0.0 <= report.completude_score <= 100.0
-    assert 0.0 <= report.risco_estrutural_score <= 100.0
-    # Verdict in allowed set
-    assert report.verdict in VALID_VERDICTS
-    # JSON serialization works
-    d = asdict(report)
-    d["reasons"] = {k: [asdict(m) for m in v] for k, v in report.reasons.items()}
-    json.dumps(d)  # raises if not serializable
-    # If verdict is INVALID, must have hard cap OR composite < 50
-    if report.verdict == "INVALID" and not report.hard_caps_triggered:
-        assert report.final_score_after_caps < 50, (
-            f"INVALID without hard cap requires score<50, got {report.final_score_after_caps}"
-        )
+        report = run_structural(plan, RUBRIC, THRESHOLDS)
+        # Score range
+        assert 0.0 <= report.final_score_after_caps <= 100.0
+        assert 0.0 <= report.completeness_score <= 100.0
+        assert 0.0 <= report.structural_risk_score <= 100.0
+        # Verdict in allowed set
+        assert report.verdict in VALID_VERDICTS
+        # JSON serialization works
+        d = asdict(report)
+        d["reasons"] = {k: [asdict(m) for m in v] for k, v in report.reasons.items()}
+        json.dumps(d)  # raises if not serializable
+        # If verdict is INVALID, must have hard cap OR composite < 50
+        if report.verdict == "INVALID" and not report.hard_caps_triggered:
+            assert report.final_score_after_caps < 50, (
+                f"INVALID without hard cap requires score<50, got {report.final_score_after_caps}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -231,11 +293,13 @@ def test_hard_cap_monotonicity(tmp_path: Path) -> None:
 @given(content=markdown_text)
 @settings(
     max_examples=30,
-    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+    deadline=None,  # see the note above: the deadline measured machine load, not the code
+    suppress_health_check=[HealthCheck.too_slow],
 )
-def test_smell_idempotent(content: str, tmp_path: Path) -> None:
-    plan = tmp_path / "i.md"
-    plan.write_text(content, encoding="utf-8")
-    r1 = check_spec_smells(plan, RUBRIC)
-    r2 = check_spec_smells(plan, RUBRIC)
-    assert r1 == r2
+def test_smell_idempotent(content: str) -> None:
+    with example_dir() as workdir:
+        plan = workdir / "i.md"
+        plan.write_text(content, encoding="utf-8")
+        r1 = check_spec_smells(plan, RUBRIC)
+        r2 = check_spec_smells(plan, RUBRIC)
+        assert r1 == r2

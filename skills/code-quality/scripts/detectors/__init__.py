@@ -4,12 +4,14 @@ The `BaseDetector` abstract class defines the per-language detection surface.
 Each language adapter (python.py, typescript.py, rust.py, go.py) subclasses
 this base and implements the four detection methods.
 
-Stubs in v0.1 raise `NotImplementedError`; tasks T1.1-T1.4, T2.2-T2.5, T3.1,
-T4.1-T4.3 progressively fill the implementations.
+Concrete adapters whose external auditor is unavailable return an explicit verdict-capping
+Finding; missing work is never represented as an empty successful result.
 """
 from __future__ import annotations
 
 from pathlib import Path
+
+from scripts._detector_contract import Finding
 
 
 class BaseDetector:
@@ -28,6 +30,36 @@ class BaseDetector:
 
     language: str = ""
     manifest_marker: str = ""
+
+    #: Per-project knobs from `code-quality-thresholds.txt`, injected by the
+    #: orchestrator. Empty means "use the shipped defaults" — never "no gate".
+    thresholds: dict = {}
+
+    def threshold(self, key: str, default):
+        """Read one knob, falling back to the shipped default.
+
+        `load_thresholds()` was called for its parse side-effect and its result
+        discarded, with the orchestrator noting that "detectors use hardcoded
+        defaults in v0.1" — so every documented key in the rules file was inert.
+        A configuration file that cannot change behaviour is worse than none: it
+        reads as a control that exists.
+        """
+        value = self.thresholds.get(key, default)
+        return type(default)(value) if default is not None and value is not None else value
+
+    def unavailable(self, detector: str, finding_type: str, message: str) -> list[Finding]:
+        """Represent a detector capability that could not run without failing open."""
+        return [
+            Finding(
+                detector=f"{detector}_unavailable",
+                language=self.language,
+                severity="SOFT_CAP",
+                file_path=".",
+                symbol_or_line=detector,
+                message=f"auditor unavailable: {message}",
+                allowlist_key=f"{self.language}|.|{finding_type}|auditor_unavailable_{detector}",
+            )
+        ]
 
     def detect_dead_code(self, manifest_dir: Path) -> list:
         """Run D1 — language-specific dead code detector.
@@ -54,11 +86,18 @@ class BaseDetector:
         """
         raise NotImplementedError
 
-    def detect_mutation_score(self, critical_paths: list[Path]) -> list:
-        """Run D4 — mutation testing scoped to plan's `## Critical paths`.
+    def detect_mutation_score(self, manifest_dir: Path) -> list:
+        """Run D4 — mutation testing, scoped by the project's own mutation config.
 
-        Wraps mutmut (Python) / stryker (TypeScript). Rust + Go DEFERRED
-        to v0.2 (graceful skip via INFO Finding per T4.3 ADR).
+        Wraps mutmut (Python) / Stryker (TypeScript); Rust and Go are declared
+        deferrals per golden rule § 5.
+
+        The parameter used to be `critical_paths: list[Path]` and the orchestrator
+        passed every source file in the language. Neither runner accepts an
+        arbitrary file list as scope — both read what the project declared
+        (`[mutmut] source_paths`, `stryker.config.json`) — so the list was built,
+        passed, and dropped. Handing the runner the directory it actually resolves
+        from removes a parameter that documented a scoping that never happened.
         """
         raise NotImplementedError
 
@@ -73,10 +112,10 @@ class BaseDetector:
         skipped — the honest state, not a failure.
 
         Beyond forwarding the tool's verdict, D5 asserts the rules are not
-        VACUOUS. Measured on 2026-08-06 against `theo-contracts`: a
+        VACUOUS. Measured on 2026-08-06 against `contracts`: a
         `.go-arch-lint.yml` naming a directory that does not exist reports
         `ArchHasWarnings: false` — green — while the invariant it encoded can
-        no longer fire. The same class was measured in usetheo-labs/agent-builder,
+        no longer fire. The same class was measured in a TypeScript monorepo,
         where dissolving `tui/lib` would have left rules written against the old
         name matching nothing, and `npm run boundaries` reporting success.
 

@@ -2,7 +2,7 @@
 name: release
 version: 0.1.0
 requires: [review]
-description: Cuts a semver-tagged release from develop → main after /review returns READY_TO_MERGE. Auto-derives version from CHANGELOG sections (major/minor/patch), rewrites [Unreleased] under the new version header, commits chore(release), opens a PR develop→main with rendered release notes, and waits for human approval (the only manual gate — Unbreakable Rule 4). On merge, creates an annotated tag and a GitHub release. Single entry-point for cycle-release. Use after /review {slug} returned READY_TO_MERGE.
+description: Cuts a semver-tagged release from develop → main after /review returns READY_TO_MERGE. Auto-derives version from CHANGELOG sections (major/minor/patch), rewrites [Unreleased] under the new version header, commits chore(release), opens a PR develop→main with rendered release notes, verifies the whole chain passed, and merges it. On merge, creates an annotated tag and a GitHub release. Stops at PR_OPEN_AWAITING_APPROVAL only when a gate did not pass or branch protection requires a reviewer it cannot be. Single entry-point for cycle-release. Use after /review {slug} returned READY_TO_MERGE.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
 argument-hint: "[bump-level: patch|minor|major] (optional — auto-derived from CHANGELOG when omitted)"
@@ -10,17 +10,17 @@ argument-hint: "[bump-level: patch|minor|major] (optional — auto-derived from 
 
 # Release — develop → main with semver tag
 
-Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automates the release ritual end-to-end while keeping the human approval at PR merge — the only manual step Unbreakable Rule 4 mandates.
+Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automates the release ritual end-to-end, merge included — see [`rules/autonomy-envelope.md`](../../rules/autonomy-envelope.md) floor 2 and the decision behind it, [`wiki/decisions/merge-is-inside-the-envelope.md`](../../wiki/decisions/merge-is-inside-the-envelope.md).
 
 ## Cycle contract
 
-This skill is **the only phase** of [`cycle-release`](../../rules/cycle-release.md). The cycle rule is the **source of truth** for pre-conditions, verdicts (`RELEASED` / `PR_OPEN_AWAITING_APPROVAL` / `BLOCKED`), hard gates (PR approval mandatory; no direct main commits; annotated-tag-only), stop conditions, and anti-patterns. **Read `cycle-release.md` before invoking.**
+This skill is **the only phase** of [`cycle-release`](../../rules/cycle-release.md). The cycle rule is the **source of truth** for pre-conditions, verdicts (`RELEASED` / `PRE_RELEASED` / `PR_OPEN_AWAITING_APPROVAL` / `BLOCKED`), the two cuts and when each fires, hard gates (PR approval mandatory; no direct main commits; annotated-tag-only), stop conditions, and anti-patterns. **Read `cycle-release.md` before invoking.**
 
 ## When to trigger
 
 User invokes `/release [bump-level]` when:
 
-- A `/review {slug}` run emitted `READY_TO_MERGE` recently (audit at `knowledge-base/reviews/{slug}-review-{date}.md`).
+- A `/review {slug}` run emitted `READY_TO_MERGE` recently (audit at `records/reviews/{slug}-review-{date}.md`).
 - The working branch is `workspace`; `develop` carries the commits ahead of `main` (promoted from `workspace` via PR).
 - `CHANGELOG.md` has content in `[Unreleased]`.
 - `gh` CLI is authenticated.
@@ -37,7 +37,7 @@ Refuse to start when any pre-condition declared in `cycle-release.md § Pre-cond
 | `### Added` non-empty AND no major trigger | `minor` |
 | Only `### Fixed` / `### Security` entries | `patch` |
 
-If derivation is ambiguous, the skill pauses and asks the human ONCE.
+Derivation always picks. An `[Unreleased]` with no entries at all is refused as a release with nothing in it.
 
 ## Workflow
 
@@ -49,10 +49,10 @@ If derivation is ambiguous, the skill pauses and asks the human ONCE.
 # Clean tree
 [ -z "$(git status --porcelain)" ]
 # Latest /review verdict is READY_TO_MERGE
-LATEST_REVIEW=$(ls -t knowledge-base/reviews/*-review-*.md 2>/dev/null | head -1)
+LATEST_REVIEW=$(ls -t records/reviews/*-review-*.md 2>/dev/null | head -1)
 grep -q '^\*\*Verdict:\*\* READY_TO_MERGE' "$LATEST_REVIEW"
 # CHANGELOG [Unreleased] has content
-python3 skills/release/scripts/changelog_section_nonempty.py --section Unreleased
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/changelog_section_nonempty.py" --section Unreleased
 # gh CLI authenticated
 gh auth status >/dev/null 2>&1
 # No release PR already open
@@ -64,8 +64,8 @@ If any HARD check fails, refuse with the missing piece surfaced honestly.
 ### Step 2 — Detect current version and compute next
 
 ```bash
-CURRENT=$(python3 skills/release/scripts/detect_current_version.py)
-NEXT_VERSION=$(python3 skills/release/scripts/compute_next_version.py \
+CURRENT=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/detect_current_version.py")
+NEXT_VERSION=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/compute_next_version.py" \
   --current "$CURRENT" \
   --bump "${ARGUMENTS:-auto}" \
   --changelog CHANGELOG.md)
@@ -79,18 +79,46 @@ a fetch was forgotten. A release cut from that base computes a version BELOW the
 the stop condition in § Stop conditions ("tag already exists for the computed version") cannot fire,
 because that version was never tagged.
 
-`detect_current_version.py` takes the maximum of the highest semver tag and the manifest version:
-each alone has a measured failure mode — 13 of 43 published versions have no tag at all (B-050), and
-the manifest lags a tag between the release commit and the merge.
+`detect_current_version.py` takes the maximum of the highest semver tag and every version-bearing
+manifest it recognizes: `package.json`, `[project].version` in `pyproject.toml`, and
+`[package].version` in `Cargo.toml`. Go modules are tag-only because `go.mod` has no project version.
+Each source alone has a measured failure mode — published versions may have no tag, while a manifest
+can lag a tag between the release commit and the merge.
 
-If `compute_next_version.py` returns `AMBIGUOUS`, AskUserQuestion ONCE (major / minor / patch) and re-run with the chosen value.
+`compute_next_version.py` always derives a level from a non-empty `[Unreleased]`; a `Changed`-only body resolves to `minor` and prints the rule that resolved it on stderr (`cycle-release.md § Why a `Changed`-only release resolves to `minor`). `AMBIGUOUS` now means only one thing — the section has no entries at all, so there is nothing to release — and it is a refusal, not a question.
 
 If a tag for `$NEXT_VERSION` already exists, halt — never overwrite a published tag.
+
+### Step 2.5 — The maturity gate, when the version crosses 1.0.0
+
+**Only when the computed next version is `1.0.0` or higher and the current one is
+below it.** Every other release skips this step; a patch release makes no claim
+about maturity and a gate that fires on ordinary work is one somebody disables.
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/honesty-gate/scripts/check_honesty_gate.py" --json
+```
+
+| Exit | Verdict | What follows |
+|---|---|---|
+| 0 | `EVIDENCE_SUFFICIENT` | cut the release |
+| 3 | `EVIDENCE_WITH_CAVEATS` | cut it, and the caveats go **into the release notes** — thin evidence, no failure story or a single operator are facts a reader of a 1.0 announcement is owed |
+| 1 | `EVIDENCE_INSUFFICIENT` | **refuse.** Cut `0.x` instead, or gather the evidence. Never lower the version claim by rewording the notes while cutting the tag anyway |
+| 2 | — | the gate could not be read; fix that before deciding |
+
+The gate reads `records/honesty-gate/manifest.md` and the evidence beside it. It
+refuses to infer: a missing manifest is `EVIDENCE_INSUFFICIENT`, never *not
+applicable*. A project that has not declared what would prove the claim has not
+proved it.
+
+This step exists because `1.0.0` is the one number in a release that is a claim
+about the product rather than about the diff, and the loop that produces it has
+no person in it to feel embarrassed.
 
 ### Step 3 — Rewrite CHANGELOG
 
 ```bash
-python3 skills/release/scripts/promote_unreleased.py \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/promote_unreleased.py" \
   --changelog CHANGELOG.md \
   --version "$NEXT_VERSION" \
   --date "$(date -u +%Y-%m-%d)"
@@ -104,16 +132,17 @@ This script:
 ### Step 3.5 — Write the version into every site that carries it
 
 ```bash
-CURRENT_VERSION=$(python3 skills/release/scripts/detect_current_version.py --quiet)
-python3 skills/release/scripts/bump_version.py \
+CURRENT_VERSION=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/detect_current_version.py" --quiet)
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/bump_version.py" \
   --root . \
   --from "$CURRENT_VERSION" \
   --to "$NEXT_VERSION"
 ```
 
 **A non-zero exit BLOCKS the release. It is not a warning.** The script writes the declared sites
-(`package.json`, `src/index.ts`) and refuses in three cases, each of which means the tree is not in
-the state this release assumes:
+(`package.json`, `pyproject.toml`, `Cargo.toml`, plus an optional `src/index.ts` runtime mirror) and
+refuses in three cases. A Go module with no version-bearing manifest is explicitly reported as
+tag-only rather than treated as an empty successful rewrite:
 
 | Exit | Meaning |
 |---|---|
@@ -137,17 +166,23 @@ git add CHANGELOG.md package.json src/index.ts
 git commit -m "chore(release): ${NEXT_VERSION}"
 git push origin workspace
 
-# Promotion (git-safety.md § 1): release prep reaches develop like any other change
-gh pr create --base develop --head workspace --title "chore(release): ${NEXT_VERSION}" --body "Release prep for ${NEXT_VERSION}."
-gh pr merge --merge   # or via the UI; branch protection decides who can
+# Promotion (git-safety.md § 1): release prep reaches develop like any other change,
+# through the SAME mechanism `/promote` uses. One definition, two callers — an inline
+# `gh pr create` here would be a second answer to "how does work reach develop".
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/promote_to_develop.py"
 ```
 
-NO `Co-Authored-By` trailer (per `hooks/validate-command.sh`). NO `--amend`. The commit is plain and signed by user policy.
+Exit `3` means branch protection wants a reviewer: the PR is open and the promotion is
+waiting, which is the same state `PR_OPEN_AWAITING_APPROVAL` reports for the release PR.
+Exit `1` is a refusal about the branch or the tree; exit `2` is an inability to measure
+and is never a pass.
+
+NO `Co-Authored-By` trailer (per `hooks/validate-command.py`). NO `--amend`. The commit is plain and signed by user policy.
 
 ### Step 5 — Open the release PR
 
 ```bash
-RELEASE_NOTES=$(python3 skills/release/scripts/render_release_notes.py \
+RELEASE_NOTES=$(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/render_release_notes.py" \
   --changelog CHANGELOG.md \
   --version "$NEXT_VERSION")
 
@@ -158,11 +193,37 @@ gh pr create \
   --body "$RELEASE_NOTES"
 ```
 
-PR URL is captured; reported back to the user. The chain now pauses at the human-approval gate (verdict `PR_OPEN_AWAITING_APPROVAL`).
+PR URL is captured and reported.
 
-### Step 6 — Wait for human approval (the only manual gate)
+### Step 6 — Verify the chain, then merge
 
-The skill does NOT auto-merge. The user reviews + approves + merges the PR through GitHub UI / `gh pr merge` of their choice.
+**Check the gates before touching the PR.** The permission to merge comes from the
+verdicts the chain already emitted, and nowhere else:
+
+```bash
+# /review returned READY_TO_MERGE, /code-quality is not FAIL_HARD,
+# and no BLOCKED report stands against this item.
+python3 "$ECO/mechanisms/cycle/cycle_events.py" verdicts --slug "$SLUG"
+ls "$ECO"/records/**/"$SLUG"-BLOCKED.md 2>/dev/null && { echo "BLOCKED report stands — refuse"; exit 1; }
+```
+
+If any of the three fails, **stop and emit `PR_OPEN_AWAITING_APPROVAL`.** Do not
+re-run the gate hoping for a different answer, and never move a threshold: that is
+envelope floor 3, which now carries the whole weight it used to share with the
+human-approval stop.
+
+If all three pass, merge:
+
+```bash
+gh pr merge "$PR_NUMBER" --merge   # never --admin: that bypasses branch protection
+```
+
+**A refusal from branch protection is an answer, not an obstacle.** If the remote
+requires a reviewer the system cannot be, `gh` fails — emit
+`PR_OPEN_AWAITING_APPROVAL`, report the PR URL, and take the next item. Never reach
+for `--admin`, and never disable the protection: a project that configured it decided
+this, and floor 3 makes that decision the system's to honour rather than to route
+around.
 
 When the user resumes by re-invoking `/release --resume {pr-number}` (or by running `/release` again with the same `develop`/`main` state), the skill:
 
@@ -205,7 +266,7 @@ Flipping after `cycle-acceptance` makes it mean *"we shipped it and watched it w
 So this step does exactly one thing: read `milestone_id` from the plan and name the handoff.
 
 ```bash
-PLAN_FILE="knowledge-base/plans/${SLUG}-plan.md"
+PLAN_FILE="records/plans/${SLUG}-plan.md"
 
 MILESTONE_ID=$(python3 -c "
 import sys, yaml
@@ -228,15 +289,48 @@ fi
 single implementation of the single-flip invariant, and `cycle-acceptance` invokes it from here
 rather than duplicating it. Staying is not the same as being called: **nothing in `/release` runs it.**
 
+
+Emit the START of this phase before doing the work:
+
+```bash
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+    --cycle release --slug {B-NNN}
+```
+
+Without it the board can only draw what FINISHED. Measured on 2026-08-31: seventeen
+`phase:end` events and one `phase:start`, so an item under active work showed the
+verdict of a phase already over and nothing on the page said anything was running.
+A `start` with no matching `end` is exactly the fact "this is happening now".
+
 ### Step 8 — Record the release
 
-Write `knowledge-base/releases/v${NEXT_VERSION}-release.md`:
+### Which cut is this?
+
+**`--final` only when a milestone closed**: every `B-NNN` citing `M<N>` is `shipped`
+AND `/acceptance M<N>` returned `ACCEPTED`. Otherwise this is a pre-release — the
+default — and `cycle-release.md § Two cuts` is the source of truth for both.
+
+```bash
+# The version. `--mode pre` is the default; pass --mode final only for a closed milestone.
+NEXT_VERSION=$(python3 "$ECO/skills/release/scripts/compute_next_version.py" \
+                 --current "$CURRENT" --bump "${BUMP:-auto}" --mode "${CUT:-pre}")
+```
+
+**A pre-release does NOT run `promote_unreleased.py`.** Emptying `[Unreleased]` at
+`-rc.1` would leave `-rc.2` and the final with nothing to publish, and would file the
+entries under a version that is still a candidate. The rc reads `[Unreleased]` for its
+notes and leaves it in place; the final promotes it.
+
+Tag and publish accordingly — `gh release create "v$NEXT_VERSION" --prerelease` for a
+pre-release, without the flag for a final.
+
+Write `records/releases/v${NEXT_VERSION}-release.md`:
 
 ```markdown
 # Release v{NEXT_VERSION}
 
 **Date:** {YYYY-MM-DD}
-**Verdict:** RELEASED
+**Verdict:** {RELEASED | PRE_RELEASED}
 **Source review:** {path to /review report}
 **PR:** {pr-url}
 **Merge commit:** {merge-sha}
@@ -248,6 +342,29 @@ Write `knowledge-base/releases/v${NEXT_VERSION}-release.md`:
 {rendered notes}
 ```
 
+Then record the transition in the stream, which is what a later phase reads:
+
+```bash
+# PRE_RELEASED for an -rc.N cut; RELEASED only for a final one.
+python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+    --cycle release --slug {item-or-milestone} --verdict "${VERDICT:-PRE_RELEASED}"
+```
+
+**Emitting `RELEASED` for a pre-release would close work that did not finish.**
+`advance_items.py` reads that token and writes `shipped` into the registry — the one
+artefact that outlives the session. An rc says installable, never finished.
+
+**After the tag and the GitHub release exist, never before.** The record file above
+and this event assert the same fact, and asserting it early makes the stream claim a
+release that a failing publish step would leave unmade.
+
+This event is the one `cycle-maintenance.md`'s ADVANCE consumes to move an item to
+`shipped`. Until 2026-08-30 nothing emitted it, so the only way to learn that a
+release happened was to reconstruct it from files on disk — which is precisely what
+`cycle_events.py` exists to replace: *a missing file is evidence of nothing in
+particular*. An ADVANCE built on that inference would write `shipped` on a guess,
+into the one artefact that outlives the session.
+
 ### Step 9 — Recommend next step
 
 ```
@@ -258,13 +375,13 @@ Merge commit: {sha}
 Tag: v{NEXT_VERSION}
 GitHub release: {url}
 
-Next: nothing — release is published. Start a new cycle with /to-plan or /grill-me.
+Next: nothing — release is published. Start a new cycle with /plan-write or /plan-grill.
 ```
 
 ## Hard gates (cannot proceed)
 
 1. **`/review` verdict is not `READY_TO_MERGE`** → refuse. Re-run `/review` first.
-2. **PR approval mandatory** — the skill NEVER auto-merges the release PR. Auto-merge violates Unbreakable Rule 4.
+2. **The chain must have passed** — merge ONLY a PR whose `/review` returned `READY_TO_MERGE`, whose `/code-quality` is not `FAIL_HARD`, and against whose item no BLOCKED report stands. Merging anything else violates envelope floor 2; moving a threshold to get there violates floor 3. **Never `gh pr merge --admin`** — bypassing branch protection is the same act under a different name.
 3. **Tag must be annotated** (`git tag -a`) — never lightweight tags.
 4. **CHANGELOG [Unreleased] non-empty** — empty releases are forbidden.
 5. **No duplicate version tags** — if `v{X}` already exists, halt.
@@ -272,17 +389,17 @@ Next: nothing — release is published. Start a new cycle with /to-plan or /gril
 
 ## Soft gates (proceed with note)
 
-1. **CI not green on develop** — warn but proceed; the human catches it at PR approval.
+1. **CI not green on develop** — this is no longer soft. Nobody catches it downstream now, so refuse and emit `PR_OPEN_AWAITING_APPROVAL` with the failing run named.
 2. **Bump-level ambiguous from CHANGELOG** — AskUserQuestion ONCE per release run.
 
 ## Anti-patterns
 
-1. **Auto-merging the release PR** — never. Unbreakable Rule 4.
+1. **Merging a PR whose chain did not pass** — the act floor 2 permits is narrow, and this is the way it gets widened by accident. Re-running a gate until it goes green is the same anti-pattern wearing patience.
 2. **Skipping `cycle-review`** — every release traces to a `READY_TO_MERGE` audit.
 3. **Editing CHANGELOG entries during the release** — discipline lives in the cycles that produce the entries.
 4. **Cutting a release with unaddressed FAIL_HARD from `/code-quality`** — the review gate enforces this; never bypass.
 5. **`git push --force` on a release tag** — tags are immutable once published; if wrong, deprecate and cut a new version.
-6. **Co-Authored-By trailer on the `chore(release)` commit** — blocked by `hooks/validate-command.sh`.
+6. **Co-Authored-By trailer on the `chore(release)` commit** — blocked by `hooks/validate-command.py`.
 7. **Flipping the ROADMAP checkbox from this cycle.** It moved to `cycle-acceptance`. A release proves a tag was cut, not that a user-visible promise was met.
 8. **Blocking the release if `milestone_id` is missing.** Ad-hoc / hotfix work is by design — emit INFO, continue as `RELEASED`, and skip the acceptance handoff.
 9. **Announcing the milestone as done in the release notes.** Until `/acceptance` returns green, the milestone is released, not accepted.
@@ -292,7 +409,7 @@ Next: nothing — release is published. Start a new cycle with /to-plan or /gril
 - Cycle rule (SoT): [`rules/cycle-release.md`](../../rules/cycle-release.md)
 - Upstream cycle: [`rules/cycle-review.md`](../../rules/cycle-review.md) — consumes `READY_TO_MERGE` verdict
 - Conventions: [`rules/public-copy.md`](../../rules/public-copy.md) — release notes lint
-- Hooks enforced: `hooks/validate-command.sh` (git safety + Co-Authored-By block), `hooks/stop-validation.sh` (CHANGELOG hard gate)
+- Hooks enforced: `hooks/validate-command.py` (git safety + Co-Authored-By block), `hooks/stop-validation.py` (CHANGELOG hard gate)
 - Scripts: `scripts/compute_next_version.py`, `scripts/bump_version.py`, `scripts/detect_current_version.py`, `scripts/promote_unreleased.py`, `scripts/render_release_notes.py`, `scripts/changelog_section_nonempty.py`, `scripts/flip_milestone_checkbox.py` (housed here, invoked only by `cycle-acceptance` — see Step 7.5)
 - Downstream cycle: [`rules/cycle-acceptance.md`](../../rules/cycle-acceptance.md) — consumes `RELEASED`, owns the single-flip invariant and the roadmap-runs file contract
-- Macro super-loop: [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md) — selects the next `B-NNN` and delegates one `cycle-auto-plan` run per item
+- Macro super-loop: [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md) — selects the next `B-NNN` and delegates one `cycle-idea-to-release` run per item

@@ -19,6 +19,11 @@ minimalism" and "minimalism is enforced at the keystroke".
 
 ## The ladder (walk top-down; stop at the first rung that resolves the need)
 
+> **These six rungs are also inlined in `hooks/userpromptsubmit-inject.py`**, which
+> injects them on every turn. A hook that supplies context cannot ask the model to
+> read a file first, so the copy is necessary — and this file is the source. Change
+> it here, then bring the hook in line. Verified in agreement 2026-09-01.
+
 | # | Rung | Resolution | Rule |
 |---|---|---|---|
 | 1 | **Does this need to exist?** | No → skip it. Delete the task, do not write the code. | YAGNI (Rule 11) |
@@ -54,8 +59,8 @@ rather than restating it (DRY):
 
 | Rung | Where it bites | Mechanism |
 |---|---|---|
-| 1 (need to exist) | `cycle-plan` (`skills/edge-case-plan/SKILL.md` over-engineering anti-pattern) + `cycle-review` scope-creep flag + GREEN-phase deliberation | reactive + proactive |
-| 2, 3, 5 (stdlib / native / one line) | GREEN-phase deliberation in `skills/implement/prompts/implementation-prompt.md`; re-injected each turn by `hooks/userpromptsubmit-inject.sh` | proactive deliberation (not auto-detectable; instruction-grade) |
+| 1 (need to exist) | `cycle-plan` (`skills/plan-edge-cases/SKILL.md` over-engineering anti-pattern) + `cycle-review` scope-creep flag + GREEN-phase deliberation | reactive + proactive |
+| 2, 3, 5 (stdlib / native / one line) | GREEN-phase deliberation in `skills/implement/prompts/implementation-prompt.md`; re-injected each turn by `hooks/userpromptsubmit-inject.py` | proactive deliberation (not auto-detectable; instruction-grade) |
 | 4 (already-installed dependency) | `skills/deps-audit/SKILL.md` evaluates new dependencies; the ladder adds "reuse before you add" upstream of the CVE check | proactive + reactive |
 | 6 (minimum that works) | `rules/cycle-implement.md` Chain (`GREEN — minimal code to pass the test`) | proactive, TDD-embedded |
 
@@ -74,6 +79,6 @@ rather than restating it (DRY):
 - Halt-loop deliberation: `skills/implement/prompts/implementation-prompt.md`
 - Skill contract: `skills/implement/SKILL.md`
 - Rung 4 dependency reuse vs. CVE audit: `skills/deps-audit/SKILL.md`
-- Rung 1 over-engineering catch in planning: `skills/edge-case-plan/SKILL.md`
+- Rung 1 over-engineering catch in planning: `skills/plan-edge-cases/SKILL.md`
 - Guardrail sources: `rules/testing.md`, `rules/architecture.md`
-- Re-injection per turn: `hooks/userpromptsubmit-inject.sh`
+- Re-injection per turn: `hooks/userpromptsubmit-inject.py`

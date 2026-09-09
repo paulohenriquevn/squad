@@ -1,18 +1,18 @@
 {
   "skill_name": "backlog-item",
-  "notes": "Intake is where two gates live that nothing downstream can recover from: G5 (a hunch justified by prior art must be refused) and the absence of an evidence gate (a hunch with no evidence must be ACCEPTED). Both are judgement calls the scripts cannot make, which is why they are evaluated here rather than in pytest. Iteration 1 exposed a defect in eval-0 itself: its prompt collided with B-014, the fixture item that exists so eval-3 can test dedup. Both arms correctly merged, and the assertions — written for a NEW item — scored 0/7 on correct behaviour. Rewritten against theo-promptly, which no fixture item mentions.",
+  "notes": "Intake is where two gates live that nothing downstream can recover from: G5 (a hunch justified by prior art must be refused) and the absence of an evidence gate (a hunch with no evidence must be ACCEPTED). Both are judgement calls the scripts cannot make, which is why they are evaluated here rather than in pytest. Iteration 1 exposed a defect in eval-0 itself: its prompt collided with B-014, the fixture item that exists so eval-3 can test dedup. Both arms correctly merged, and the assertions — written for a NEW item — scored 0/7 on correct behaviour. Rewritten against promptly, which no fixture item mentions. G3, G4 and G5 are the judgement gates `check_intake_gates.py` deliberately leaves conversational, and its docstring says this battery covers exactly them. G4 had no case of its own until 2026-09-01: it appeared only as a secondary assertion inside the happy path, so the gate was never tested FIRING while G3 and G5 both were.",
   "evals": [
     {
       "id": 0,
       "name": "accepts-an-unmeasured-hunch",
-      "prompt": "hey so every time i edit a prompt in theo-promptly and hit save, it takes like 3 or 4 seconds before the new revision shows up resolved in the API. haven't measured anything, it's just a feeling, but it's annoying. log that for us to look at later",
-      "expected_output": "A B-NNN block appended to BACKLOG.md with domain: data-plane-ts, repo: theo-promptly, evidence: none-yet, status: raw, and a verifiable dod. The skill must NOT ask the user for evidence, a file:line or a measurement. theo-promptly appears in no existing item, so dedup must NOT fire — this eval measures intake, not merge.",
+      "prompt": "hey so every time i edit a prompt in promptly and hit save, it takes like 3 or 4 seconds before the new revision shows up resolved in the API. haven't measured anything, it's just a feeling, but it's annoying. log that for us to look at later",
+      "expected_output": "A B-NNN block appended to BACKLOG.md with domain: data-plane-ts, repo: promptly, evidence: none-yet, status: raw, and a verifiable dod. The skill must NOT ask the user for evidence, a file:line or a measurement. promptly appears in no existing item, so dedup must NOT fire — this eval measures intake, not merge.",
       "files": [],
       "assertions": [
         "A new B-NNN block was appended to BACKLOG.md",
         "The block carries evidence: none-yet",
         "The block carries status: raw",
-        "domain is data-plane-ts and repo is theo-promptly",
+        "domain is data-plane-ts and repo is promptly",
         "why_now records the observation without inventing a trigger the user never gave",
         "The skill did NOT ask the user to provide evidence or a measurement before registering",
         "dod has at least one bullet that could fail (not a restatement of the title)"
@@ -21,7 +21,7 @@
     {
       "id": 1,
       "name": "refuses-prior-art-justification-gate-G5",
-      "prompt": "saw that LangSmith has a nice trace waterfall with span hierarchy and all. we should have that in theo-lens too, looks way better. open an item for it",
+      "prompt": "saw that LangSmith has a nice trace waterfall with span hierarchy and all. we should have that in web-console too, looks way better. open an item for it",
       "expected_output": "Gate G5 fires. The skill surfaces that the justification rests on what another project does, and asks the user to reformulate with a local reason (or to confirm a false positive / cancel) via AskUserQuestion. It must NOT silently register the item with the prior-art justification as why_now.",
       "files": [],
       "assertions": [
@@ -35,21 +35,21 @@
     {
       "id": 2,
       "name": "splits-a-two-domain-item-gate-G3",
-      "prompt": "need to fix the auth flow: the dashboard shows no error at all when the token expires (just a blank screen) and the theo-cloud API returns 500 instead of 401 in that case. open an item for it",
+      "prompt": "need to fix the auth flow: the dashboard shows no error at all when the token expires (just a blank screen) and the control-plane API returns 500 instead of 401 in that case. open an item for it",
       "expected_output": "The skill recognises this spans two domains — frontend-dashboard (the blank screen) and control-plane (the wrong status code) — and splits it into two items rather than registering one that routes to nobody. Gate G3.",
       "files": [],
       "assertions": [
         "The skill identified that the request spans two domains",
         "The split was proposed as two items, not registered as one",
-        "The UI half routes to frontend-dashboard with repo theo-cloud/dashboard",
-        "The API half routes to control-plane with repo theo-cloud",
+        "The UI half routes to frontend-dashboard with repo control-plane/dashboard",
+        "The API half routes to control-plane with repo control-plane",
         "The reason given is that one item maps to one specialist, not an arbitrary policy"
       ]
     },
     {
       "id": 3,
       "name": "dedup-finds-the-existing-open-item",
-      "prompt": "open an item to reduce the round-trips in the trace listing endpoint in theo-lens, it's doing one query per span",
+      "prompt": "open an item to reduce the round-trips in the trace listing endpoint in web-console, it's doing one query per span",
       "expected_output": "The skill greps BACKLOG.md before writing. If an open item covering the same problem exists, verdict is ITEM_MERGED — no new id is allocated, the context is folded into the existing block, and the absorbing id is reported.",
       "files": [
         "BACKLOG.md"
@@ -60,6 +60,20 @@
         "No new B-NNN id was allocated",
         "The report names which existing id absorbed the request",
         "The existing block was not renumbered or reordered"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "refuses-an-unfalsifiable-dod-gate-G4",
+      "prompt": "the ingest pipeline in web-console feels sluggish since the retention change last week. open an item — done when it's faster and the code is cleaner",
+      "expected_output": "The item IS registered — the hunch is legitimate and `why_now` names a local change (the retention change), so G5 does not fire. Gate G4 does: neither 'faster' nor 'cleaner' can fail, so neither ever closes the item. The skill asks for a criterion that could come back false — a number, a threshold, a test that fails on the current state — before writing the block. It must NOT register the item carrying the vague dod, and must NOT invent a number the user never gave.",
+      "files": [],
+      "assertions": [
+        "The skill accepted the hunch itself and did not ask for evidence (intake has no evidence gate)",
+        "The skill identified that 'faster' and 'cleaner' are not verifiable criteria",
+        "The reason given is that a dod which cannot fail never closes the item",
+        "The user was asked for a criterion that could come back false, rather than one being invented for them",
+        "No B-NNN block was written to BACKLOG.md while the dod was still unfalsifiable"
       ]
     }
   ]

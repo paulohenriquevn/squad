@@ -10,7 +10,7 @@ SKILL_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from helpers import item_block, write_backlog  # noqa: E402
+from backlog_fixtures import item_block, write_backlog  # noqa: E402
 
 
 @pytest.fixture
@@ -23,10 +23,10 @@ def clean_backlog(tmp_path: Path) -> Path:
             "B-002",
             "Corrigir exit code do deploy parcial",
             domain="platform-cli",
-            repo="theo-cli",
+            repo="cli-tool",
             suggested_mode="bug",
             status="triaged",
             evidence="src/deploy.ts:88",
-            dod=["`theo deploy` retorna exit != 0 quando um passo falha"],
+            dod=["`theo deploy` returns exit != 0 when a step fails"],
         ),
     )

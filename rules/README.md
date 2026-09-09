@@ -4,6 +4,51 @@ Source of truth for cycle contracts, golden rules, thresholds, and allowlists.
 Every cycle reads its contract from here; every quality gate references a golden
 rule file.
 
+## Why a rule lives here and not inside the skill that reads it
+
+The obvious rearrangement is to push a rule only one skill uses into that skill's
+directory. **It would destroy the consumer's configuration on the next update**,
+and the reason is in `install.sh`:
+
+```
+install.sh  →  rm -rf <target>/.claude/skills/ ; cp -r source   (full overwrite)
+               rules/ and agents/ are snapshotted and preserved
+```
+
+`skills/` is deleted and replaced every install. `rules/` is where a project's own
+configuration lives — the routing table, the enabled languages, the live target,
+the thresholds, the allow-lists — and it survives precisely because it is here.
+Measured before the installer gained its backup: a `typescript | ENABLED` line and
+a live-target block added to a fresh install were both gone after one re-run, with
+no message.
+
+So the question that places a file is **not who reads it. It is who owns it.**
+
+| Owner | Home | Why |
+|---|---|---|
+| The **project** — anything a consumer tunes | `rules/` | `skills/` does not survive an install |
+| The **kit** — a cycle contract | `rules/cycle-*.md` | four root checkers glob exactly that pattern: `check_xrefs`, `check_phase_numbering`, `check_gate_mechanisms`, `check_orphan_verdicts`. Splitting them across skills would end the sweeps that prove the chain coherent |
+| The **kit** — a rule two or more skills read | `skills/_kit-rules/` | kit content SHOULD be replaced on update; that is how a fix reaches the projects that installed it |
+| The **kit** — a skill's own procedure | inside the skill | it ships and is replaced with that skill |
+| The **installer** | `rules/templates/` | copied into a fresh consumer's `rules/`, then deleted from it |
+
+A golden rule usually belongs to both: `§ 1` is marked PER-PROJECT and the verdict
+vocabulary below it is LOCKED. That is deliberate, and it is why those files carry
+the marks — the marks are what say which half a consumer may touch.
+
+## What Claude Code actually loads from here
+
+**Nothing, automatically.** No hook reads a rule file; `settings.json` names none.
+The only automatic contact is a pointer injected by
+`hooks/userpromptsubmit-inject.py` on every turn, and the parsimony ladder, whose
+six rungs are **inlined in that hook** rather than read from
+`parsimony-ladder.md`.
+
+That makes the pointer the whole interface, and a pointer at fifty-four files is
+not one — a model told to read fifty-four files before an architectural decision
+reads none of them. See the doctrine list the hook names.
+`tests/test_rules_readme_claims_recompute.py` recomputes that count.
+
 ## Cycle Contracts
 
 Each `cycle-{name}.md` defines:
@@ -15,6 +60,7 @@ Each `cycle-{name}.md` defines:
 
 | Contract | Cycle | Key Verdicts |
 |---|---|---|
+| `cycle-brainstorm.md` | Product alignment (phase −1) — the only phase a person attends | PRODUCT_ALIGNED / NEEDS_REVISION / AWAITING_REVIEW / INVALID |
 | `cycle-backlog.md` | Intake (phase 0) | ITEM_REGISTERED / ITEM_REJECTED |
 | `cycle-maintenance.md` | Macro super-loop | ITEM_SHIPPED / ITEM_KILLED / BACKLOG_EMPTY |
 | `cycle-discover.md` | Measurement of our own system | SHIPPABLE_WITH_CAVEATS / ITEM_KILLED |
@@ -24,9 +70,8 @@ Each `cycle-{name}.md` defines:
 | `cycle-review.md` | Multi-agent review | READY_TO_MERGE, NEEDS_FIXES, NEEDS_DEEPER |
 | `cycle-release.md` | Release cut | RELEASED, PR_OPEN_AWAITING_APPROVAL |
 | `cycle-acceptance.md` | End-user validation of the released delivery; owns the milestone flip | ACCEPTED, ACCEPTED_WITH_CAVEATS, REJECTED, NOT_VALIDATED |
-| `cycle-analysis.md` | Trajectory analysis (opt-in, post-release) | ON_TRACK, COURSE_CORRECTION_NEEDED |
 | `cycle-judge-codex.md` | External Codex jury (optional plugin) | SHIPPABLE, READY_TO_MERGE |
-| `cycle-auto-plan.md` | Auto-orchestrator | Delegates to sub-cycles |
+| `cycle-idea-to-release.md` | Auto-orchestrator | Delegates to sub-cycles |
 
 ## Golden Rules (locked severity rubrics)
 
@@ -35,10 +80,9 @@ Each `cycle-{name}.md` defines:
 | `code-quality-golden-rule.md` | Code quality severity levels |
 | `discover-opportunity-golden-rule.md` | Opportunity confidence hard caps |
 | `plan-confidence-golden-rule.md` | Plan confidence scoring rubric |
-| `discover-plan-golden-rule.md` | Discovery plan scoring rubric |
 | `deps-audit-golden-rule.md` | Dependency audit severity |
-| `dogfood-golden-rule.md` | Anchor scenario + status vocab |
-| `analysis-golden-rule.md` | Trajectory analysis modules + verdict caps |
+| `honesty-gate-golden-rule.md` | Anchor scenario + status vocab |
+| `skills/_kit-rules/discover-plan-golden-rule.md` | Discovery plan scoring rubric — **not here**: two skills read it, so it lives where the kit replaces it on update |
 
 ## Thresholds and Allowlists
 
@@ -55,14 +99,29 @@ Each `cycle-{name}.md` defines:
 | `live-target.txt` | Declared live environments per domain (live-test refuses without one) |
 | `current-constraint.md` | The constraint lens — advisory, never a gate |
 | `discover-plan-thresholds.txt` | Discovery plan scoring thresholds |
-| `analysis-config.txt` | Trajectory analysis profile + enablement |
-| `review-model-routing.txt` | Agent model routing for review |
+| `code-quality-baseline.txt` | Findings accepted as the starting state, so a new one stands out |
+| `acceptance-target.txt` | Where `/acceptance` exercises the released delivery |
+| `domain-routing.txt` | Which repositories exist here and who owns each — **the project's**, derived from disk |
+| `auxiliary-skills.txt` | Skills bound to no cycle, so the orphan sweep does not report them |
+| `retired-permissions.txt` | Permissions withdrawn, kept so a reinstall does not reintroduce them |
+| `notifications.txt` | Where the kit sends what a person must see |
+| `skills/_kit-rules/review-model-routing.txt` | Agent model routing for review — **not here**: kit-owned, replaced on update |
 
 ## Other Rules
 
 | File | Purpose |
 |---|---|
 | `cycle-rule-schema.md` | Canonical schema + verdict matrix for all `cycle-*.md` |
+| `squad-map.md` | The 360º view: every phase, who owns it, and what it reads |
+| `cycle-phases.txt` | The chain itself, declared once and machine-readable |
+| `blocking-verdicts.txt` | Verdicts that stop an item where it is — one definition, two readers |
+| `autonomy-envelope.md` | What runs unattended, and the floors that make it defensible |
+| `decision-delegation.txt` | What a consumer may delegate, and what delegation can never authorize |
+| `verdict-bands.txt` | Which band each verdict is in — clean, caveats, redo, structural, orthogonal. **The kit's**, like the phase chain and the blocking list: the consumer never edits it, and a frozen copy means an unclassified verdict that silently disables the drift check. Where a band is COMPUTED; `cycle-rule-schema.md` is where it is argued |
+| `review-panel.txt` | Who judges a DISCOVER opportunity and a PLAN plan — **the project's**, because which models it can reach is not the kit's business. The kit imposes only the rule: three reviewers, 2 of 3 to advance, and never all from one model family |
+| `records-location.md` | Where run output goes, and why `wiki/` and `records/` are two directories |
+| `sop-schema.md` | The shape of a procedure performed on the kit |
+| `english-only.md` | Everything the repository versions is written in English |
 | `architecture.md` | Layering and DIP boundaries |
 | `testing.md` | TDD discipline and pyramid |
 | `error-handling.md` | Fail-fast discipline, typed errors (Unbreakable Rule 8) |
@@ -70,11 +129,11 @@ Each `cycle-{name}.md` defines:
 | `reference-provenance.md` | Keeping third-party study material out of the project (4 layers) |
 | `parsimony-ladder.md` | Pre-write minimalism ladder (YAGNI/KISS/Don't-Reinvent) enforced in GREEN phase |
 | `public-copy.md` | Banned framings in README/marketing |
-| `audit-trail-rotation.md` | When to archive/delete artifacts |
 | `loop-engine-convention.md` | Skill vs Agent vs ralph-loop |
+| `skills/_kit-rules/audit-trail-rotation.md` | When to archive/delete artifacts — **not here**: kit-owned, replaced on update |
 
 ## Modifying Rules
 
 - Cycle contracts and golden rules are **locked** — changes require team discussion
 - Thresholds and allowlists are per-project and can be adjusted freely
-- Run `python3 scripts/check_xrefs.py` after any change to validate references
+- Run `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/check_xrefs.py"` after any change to validate references

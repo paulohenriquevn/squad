@@ -1,6 +1,6 @@
 # Portable installation — `/code-quality` skill
 
-Standalone setup for the multi-language code-quality gate. Works inside the TheoMemory monorepo (default) OR in any other project that adopts the skill via copy.
+Standalone setup for the multi-language code-quality gate. Works inside a monorepo (default) OR in any other project that adopts the skill via copy.
 
 ## Python deps (managed via pyproject.toml)
 
@@ -24,6 +24,8 @@ Each detector wraps an external tool. Without the tool installed, the detector e
 | `@stryker-mutator/core` | TS mutation testing | `npm install -g @stryker-mutator/core` (binary stays `stryker`) | `^9.6` |
 | `mutmut` | Python mutation testing | `pip install 'mutmut>=3.5'` | `^3.5` |
 | `osv-scanner` | Cross-eco CVE (recommended dev prereq) | `go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest` | latest |
+
+`vulture` is the one row that does not have to be reachable as a command. D1 invokes it as `sys.executable -m vulture`, through the interpreter already running the detector, so an install that lands the module without a console script on PATH is enough. An interpreter that cannot import it gets an `auditor_unavailable_vulture` cap naming the install command, rather than a silent pass.
 
 **Pinned versions** were established via `/deps-audit` on 2026-05-22. Update via a new audit run before bumping.
 
@@ -59,6 +61,6 @@ The skill assumes the host project has:
 - `.claude/rules/code-quality-thresholds.txt` with per-detector knobs
 - `.claude/rules/code-quality-allowlist.txt` (seed-empty acceptable)
 - `.claude/rules/code-quality-golden-rule.md` defining the unbreakable contract
-- `.claude/knowledge-base/audits/` directory (will be created if absent)
+- `.claude/records/audits/` directory (will be created if absent)
 
 Copy `defaults/thresholds.txt` and `defaults/languages.txt` to `.claude/rules/` and customize per host project. The golden rule + allowlist must be authored explicitly (no defaults — these are policy decisions).

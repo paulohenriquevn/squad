@@ -56,7 +56,7 @@ def test_cli_runs_against_real_file(roadmap_pre_flip: Path, tmp_path: Path) -> N
     """End-to-end via CLI; --commit OFF (no git side effect)."""
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
     runs_dir = tmp_path / "roadmap-runs"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         [
             "python3", str(script),
             "--roadmap", str(roadmap_pre_flip),
@@ -87,7 +87,7 @@ def test_cli_returncode_1_on_multi_flip(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         ["python3", str(script), "--roadmap", str(bad_roadmap), "--milestone-id", "M2", "--version", "0.1.0"],
         capture_output=True,
         text=True,
@@ -98,7 +98,7 @@ def test_cli_returncode_1_on_multi_flip(tmp_path: Path) -> None:
 
 def test_cli_returncode_2_on_invalid_milestone_id(roadmap_pre_flip: Path) -> None:
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         ["python3", str(script), "--roadmap", str(roadmap_pre_flip), "--milestone-id", "not-valid", "--version", "0.1.0"],
         capture_output=True,
         text=True,
@@ -108,16 +108,16 @@ def test_cli_returncode_2_on_invalid_milestone_id(roadmap_pre_flip: Path) -> Non
 
 
 class TestCanonicalRunsDir:
-    """O default CWD-relativo era o que dividia o knowledge-base em todo consumidor."""
+    """The CWD-relative default was what split the records in every consumer."""
 
-    def test_plugin_layout_usa_knowledge_base_dentro_de_claude(self, tmp_path) -> None:
+    def test_the_plugin_layout_uses_the_knowledge_base_inside_dot_claude(self, tmp_path) -> None:
         from flip_milestone_checkbox import _default_runs_dir
 
         (tmp_path / ".claude").mkdir()
 
-        assert _default_runs_dir(tmp_path) == tmp_path / ".claude" / "knowledge-base" / "roadmap-runs"
+        assert _default_runs_dir(tmp_path) == tmp_path / ".claude" / "records" / "roadmap-runs"
 
-    def test_standalone_usa_a_raiz(self, tmp_path) -> None:
+    def test_the_standalone_layout_uses_the_root(self, tmp_path) -> None:
         from flip_milestone_checkbox import _default_runs_dir
 
-        assert _default_runs_dir(tmp_path) == tmp_path / "knowledge-base" / "roadmap-runs"
+        assert _default_runs_dir(tmp_path) == tmp_path / "records" / "roadmap-runs"

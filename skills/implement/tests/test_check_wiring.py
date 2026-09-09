@@ -6,7 +6,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 SCRIPT = Path(__file__).parent.parent / "scripts" / "check_wiring.py"
 
 
@@ -14,7 +13,7 @@ def _run_wiring(symbol: str, project_root: Path, metric: str | None = None) -> t
     args = [sys.executable, str(SCRIPT), "--symbol", symbol, "--project-root", str(project_root)]
     if metric:
         args.extend(["--metric", metric])
-    result = subprocess.run(args, capture_output=True, text=True)
+    result = subprocess.run(args, capture_output=True, text=True)  # noqa: PLW1510
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -37,7 +36,7 @@ def test_pillar_a_pass_with_real_caller(fake_project: Path) -> None:
         "export function myCaller() { rememberFact('hello'); }\n",
         encoding="utf-8",
     )
-    rc, data = _run_wiring("rememberFact", fake_project)
+    _rc, data = _run_wiring("rememberFact", fake_project)
     pillar_a = next(p for p in data["pillars"] if p["pillar"] == "a_static_caller")
     # rc=1 because pillar b will fail (no integration test), but pillar a should PASS
     assert pillar_a["status"] == "PASS"
@@ -48,7 +47,7 @@ def test_pillar_b_fail_when_no_integration_test(fake_project: Path) -> None:
     (fake_project / "src" / "uses-it.ts").write_text(
         "export function caller() { mySymbol(); }\n", encoding="utf-8"
     )
-    rc, data = _run_wiring("mySymbol", fake_project)
+    _rc, data = _run_wiring("mySymbol", fake_project)
     pillar_b = next(p for p in data["pillars"] if p["pillar"] == "b_integration_test")
     assert pillar_b["status"] == "FAIL"
 
@@ -61,21 +60,21 @@ def test_pillar_b_pass_when_integration_test_exists(fake_project: Path) -> None:
     (fake_project / "tests" / "integration" / "test.ts").write_text(
         "test('uses mySymbol', () => { mySymbol(); });\n", encoding="utf-8"
     )
-    rc, data = _run_wiring("mySymbol", fake_project)
+    _rc, data = _run_wiring("mySymbol", fake_project)
     pillar_b = next(p for p in data["pillars"] if p["pillar"] == "b_integration_test")
     assert pillar_b["status"] == "PASS"
 
 
 def test_pillar_c_na_when_no_metric(fake_project: Path) -> None:
     """No metric declared → pillar (c) is N/A."""
-    rc, data = _run_wiring("anySymbol", fake_project)
+    _rc, data = _run_wiring("anySymbol", fake_project)
     pillar_c = next(p for p in data["pillars"] if p["pillar"] == "c_runtime_metric")
     assert pillar_c["status"] == "N/A"
 
 
 def test_pillar_c_fail_when_metric_declared_but_evidence_missing(fake_project: Path) -> None:
     """Metric declared but no .wiring-evidence.json → pillar (c) FAIL."""
-    rc, data = _run_wiring("anySymbol", fake_project, metric="memory.add.count")
+    _rc, data = _run_wiring("anySymbol", fake_project, metric="memory.add.count")
     pillar_c = next(p for p in data["pillars"] if p["pillar"] == "c_runtime_metric")
     assert pillar_c["status"] == "FAIL"
 
@@ -84,7 +83,7 @@ def test_pillar_c_pass_with_evidence(fake_project: Path) -> None:
     """Metric declared and observed > 0 in .wiring-evidence.json → pillar (c) PASS."""
     evidence = fake_project / ".wiring-evidence.json"
     evidence.write_text(json.dumps({"memory.add.count": 12}), encoding="utf-8")
-    rc, data = _run_wiring("anySymbol", fake_project, metric="memory.add.count")
+    _rc, data = _run_wiring("anySymbol", fake_project, metric="memory.add.count")
     pillar_c = next(p for p in data["pillars"] if p["pillar"] == "c_runtime_metric")
     assert pillar_c["status"] == "PASS"
     assert pillar_c["count_observed"] == 12
@@ -93,7 +92,7 @@ def test_pillar_c_pass_with_evidence(fake_project: Path) -> None:
 # ---------------------------------------------------------------------------
 # B-081 — a duplicate checkout inside the repository is not a second caller.
 #
-# MEASURED BEFORE THESE WERE WRITTEN, against theokit-tui@adf4cbf:
+# MEASURED BEFORE THESE WERE WRITTEN, against an adopter at adf4cbf:
 #
 #     clean tree                                    SlashMenuList -> 5 callers
 #     `.claude/worktrees/probe` present (ignored)                 -> 5
@@ -168,7 +167,7 @@ def test_a_caller_inside_a_nested_CLONE_is_not_counted(git_project: Path) -> Non
 
     `git worktree list` is authoritative for worktrees and knows nothing about a CLONE: a clone is
     a separate repository, so it is absent from the register B-081's fix consults. Measured on
-    theokit-tui with `git clone --local . ./nested-clone`: pillar (a) went 5 -> 10 and all three
+    an adopter with `git clone --local . ./nested-clone`: pillar (a) went 5 -> 10 and all three
     sampled callers were inside the clone — the exact symptom B-081 exists to prevent, through a
     door its fix does not close.
 
@@ -197,7 +196,7 @@ def test_the_walk_does_not_descend_into_node_modules_or_into_a_checkout(git_proj
     """
     import sys as _sys
     _sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-    from check_wiring import _nested_worktree_paths  # noqa: PLC0415
+    from check_wiring import _nested_worktree_paths
 
     # A dependency that vendors its own repository, and a checkout below another checkout.
     (git_project / "node_modules" / "dep").mkdir(parents=True)
@@ -214,3 +213,51 @@ def test_the_walk_does_not_descend_into_node_modules_or_into_a_checkout(git_proj
     assert "outer-copy" in found, "the nested checkout itself must be found"
     assert "dep" not in found, "node_modules is never descended into"
     assert "inner" not in found, "a checkout inside a checkout adds nothing — the outer one covers it"
+
+
+# ── pillar (a)'s docstring said "under src/, lib/, or packages/" ──────────────
+#
+# `PRODUCTION_DIR_NAMES` held those three names and nothing read it: the grep ran
+# from `project_root`, so a caller anywhere in the tree passed a pillar that claims
+# to look only at production source. The scope is narrowed when at least one of the
+# three exists, and left whole when none does — a flat layout keeps its callers.
+
+
+def test_a_caller_outside_the_production_dirs_does_not_pass_pillar_a(
+    fake_project: Path,
+) -> None:
+    """A script beside the repo root is not production source. `src/` exists here,
+    so the pillar has somewhere to look and must look only there."""
+    (fake_project / "scratch.ts").write_text(
+        "export function nearby() { rememberFact('hello'); }\n", encoding="utf-8")
+
+    _rc, data = _run_wiring("rememberFact", fake_project)
+
+    pillar_a = next(p for p in data["pillars"] if p["pillar"] == "a_static_caller")
+    assert pillar_a["status"] == "FAIL"
+
+
+def test_a_caller_inside_a_production_dir_still_passes(fake_project: Path) -> None:
+    (fake_project / "src" / "uses-it.ts").write_text(
+        "export function myCaller() { rememberFact('hello'); }\n", encoding="utf-8")
+
+    _rc, data = _run_wiring("rememberFact", fake_project)
+
+    pillar_a = next(p for p in data["pillars"] if p["pillar"] == "a_static_caller")
+    assert pillar_a["status"] == "PASS"
+
+
+def test_a_flat_project_with_no_production_dir_still_finds_its_caller(
+    tmp_path: Path,
+) -> None:
+    """Narrowing must not turn the pillar off for a repo that keeps source at the
+    root — that would report every symbol in such a project as unwired."""
+    (tmp_path / "definition.py").write_text("def rememberFact(x):\n    return x\n",
+                                            encoding="utf-8")
+    (tmp_path / "caller.py").write_text("from definition import rememberFact\n"
+                                        "rememberFact('hello')\n", encoding="utf-8")
+
+    _rc, data = _run_wiring("rememberFact", tmp_path)
+
+    pillar_a = next(p for p in data["pillars"] if p["pillar"] == "a_static_caller")
+    assert pillar_a["status"] == "PASS"

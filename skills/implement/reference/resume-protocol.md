@@ -24,7 +24,7 @@ Driving Phase N+1, N+2, ... outside the halt-loop loses:
 
 1. **Verify the blocker is resolved.** Plan is at the correct version; the project's dependency manifest reflects bumped deps; env vars are set; whatever caused the original cancel is fixed.
 
-2. **Refresh the SEPA brief** at `agents/implement-{slug}-{date}/sepa.md` — re-concatenate the now-corrected plan + ADRs + audits. The SEPA's per-iteration value depends on having current context.
+2. **Re-read the corrected plan before resuming.** Nothing needs regenerating: the domain specialist is the project's own file and holds no copy of the plan, so a corrected plan is picked up by the next consultation without any refresh step. (This used to say "refresh the SEPA brief" — the per-plan agent this skill generated embedded the plan verbatim, so a plan fix left a stale copy behind until somebody rebuilt it. Routing to the project's specialist removes that class of staleness entirely.)
 
 3. **Reset the progress JSON.** Top-level `previous_halt` field records the original halt reason + resolution date; the BLOCKED task that was the trigger gets status=`pending` again with `retries` incremented and `previous_blocked_reason` preserved.
 
@@ -32,7 +32,7 @@ Driving Phase N+1, N+2, ... outside the halt-loop loses:
 
 5. **Re-invoke ralph-loop with the SAME flags** as the original invocation (same `--completion-promise`; no iteration cap — the iteration counter resumes from where progress JSON left off, NOT from 1).
 
-6. The fresh iteration reads `.progress-{slug}.json`, picks the formerly-BLOCKED task (now `pending`), and proceeds. SEPA's per-iteration brief includes the recovered state.
+6. The fresh iteration reads `.progress-{slug}.json`, picks the formerly-BLOCKED task (now `pending`), and proceeds. The specialist consultation sees the recovered state because it reads the files at invocation time.
 
 ## What NOT to do
 

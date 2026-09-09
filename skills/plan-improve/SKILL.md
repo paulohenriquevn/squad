@@ -2,7 +2,7 @@
 name: plan-improve
 version: 0.1.0
 requires: [plan-confidence]
-description: Iteratively improve a /to-plan plan's M2 score by applying deterministic fixes + LLM-driven semantic fixes via a ralph-loop-style autonomous iteration. Use after /plan-confidence returns a verdict below SHIPPABLE_WITH_CAVEATS (NON_SHIPPABLE or INVALID) and you want the system to attempt auto-improvement before human intervention.
+description: Iteratively improve a /plan-write plan's M2 score by applying deterministic fixes + LLM-driven semantic fixes via a ralph-loop-style autonomous iteration. Use after /plan-confidence returns a verdict below SHIPPABLE_WITH_CAVEATS (NON_SHIPPABLE or INVALID) and you want the system to attempt auto-improvement before human intervention.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit Skill
 argument-hint: "{plan-slug} [--target SHIPPABLE_WITH_CAVEATS]"
@@ -18,7 +18,7 @@ Reads a plan, scores it with `/plan-confidence`, applies deterministic + semanti
 
 ## Cycle contract
 
-This skill is **phase 4** of [`cycle-plan`](../../rules/cycle-plan.md). The cycle rule is the source of truth for chain order (invoked when `/plan-confidence` verdict < SHIPPABLE_WITH_CAVEATS; followed by `/plan-confidence` re-score), stop conditions (no-improvement detection, hard-cap blockers), anti-patterns (never fabricate ADR alternatives), and rollback. **Read `cycle-plan.md` before invoking this skill.** This SKILL.md retains phase-specific detail (Phase A deterministic fixes, Phase B LLM fixes, fix categories, limitations).
+This skill is **phase 5** of [`cycle-plan`](../../rules/cycle-plan.md), and conditional rather than part of the straight line. The cycle rule is the source of truth for chain order (invoked when `/plan-confidence` verdict < SHIPPABLE_WITH_CAVEATS; followed by `/plan-confidence` re-score), stop conditions (no-improvement detection, hard-cap blockers), anti-patterns (never fabricate ADR alternatives), and rollback. **Read `cycle-plan.md` before invoking this skill.** This SKILL.md retains phase-specific detail (Phase A deterministic fixes, Phase B LLM fixes, fix categories, limitations).
 
 ## When to Trigger
 
@@ -32,7 +32,7 @@ Accept these forms:
 - `/plan-improve {slug}`
 - `/plan-improve {slug} --target SHIPPABLE`
 
-Where `{slug}` is the basename of a plan file in `.claude/knowledge-base/plans/` (or auto-detected plans directory).
+Where `{slug}` is the basename of a plan file in `.claude/records/plans/` (or auto-detected plans directory).
 
 Defaults:
 - `--target`: `SHIPPABLE_WITH_CAVEATS` (the realistic ceiling per ADR D8 + EC-5)
@@ -41,7 +41,7 @@ The loop runs until EITHER the target verdict is reached on disk OR a genuine st
 
 ### Step 2 — Resolve plan path
 
-If the argument is a slug, resolve to `.claude/knowledge-base/plans/{slug}-plan.md`. Fall back to `.claude/knowledge-base/plans/completed/{slug}-plan.md` if the active dir doesn't have it.
+If the argument is a slug, resolve to `.claude/records/plans/{slug}-plan.md`. Fall back to `.claude/records/plans/completed/{slug}-plan.md` if the active dir doesn't have it.
 
 ### Step 3 — Build the improvement prompt
 
@@ -92,7 +92,7 @@ After the loop terminates AND sanity check passes:
 HALT and surface BLOCKED report to the human (do NOT emit `<promise>PLAN_IMPROVED</promise>`) when ANY of the following structural blockers fires:
 
 1. No-improvement detected for 2 consecutive iterations (same score, same `reasons`).
-2. Hard cap fires that cannot be auto-resolved (INVALID at 49 — `/plan-improve` does NOT fix hard caps per `cycle-plan.md § Verdicts`). Recommend `/to-plan` rewrite.
+2. Hard cap fires that cannot be auto-resolved (INVALID at 49 — `/plan-improve` does NOT fix hard caps per `cycle-plan.md § Verdicts`). Recommend `/plan-write` rewrite.
 3. ADR alternative cannot be credibly proposed by Phase B → leave TODO comment, surface for human.
 4. Coverage Matrix gap cannot be deferred via existing ADR justification → leave TODO comment.
 5. Post-promise sanity check (Step 6) detects score-disk drift → re-invoke OR HALT after 2 retries.

@@ -2,8 +2,8 @@
 #
 # cycle-acceptance exercises the delivery as its user meets it. It cannot invent
 # how to reach it, and a goal armed without a reachable target is a trap: the gate
-# blocks forever on a condition nobody can satisfy. So /cycle-goal REFUSES to arm
-# until this file declares the path.
+# blocks forever on a condition nobody can satisfy. So this file declares the path,
+# and /acceptance refuses to run against a target it cannot reach.
 #
 # Format: `key = value`, one per line. `#` starts a comment.
 #
@@ -21,10 +21,10 @@
 # target = https://app.example.com
 #
 # kind = internal
-# target = @usetheo/skills-monorepo
+# target = @your-scope/your-monorepo
 # build = git worktree add /tmp/rel <tag> && cd /tmp/rel && pnpm install && pnpm build
 # verify = node -e "console.log(require('./package.json').version)"
 # credentials = NPM_TOKEN
 #
 # --- this project ---------------------------------------------------------
-# (uncomment and fill; /cycle-goal refuses to arm while this section is empty)
+# (uncomment and fill; /acceptance cannot exercise a delivery it cannot reach)

@@ -17,7 +17,7 @@ Evidence record (JSON):
      "target": {"kind": "web", "url": "https://app.example.com"},
      "results": [
        {"id": "AC1", "status": "passed",
-        "evidence": ["knowledge-base/acceptance/evidence/M2-AC1-checkout.png"],
+        "evidence": ["records/acceptance/evidence/M2-AC1-checkout.png"],
         "note": "checkout completed, 200 on POST /orders"}
      ],
      "defects": [{"severity": "minor", "summary": "...", "issue": "#412"}]}
@@ -49,6 +49,8 @@ REJECTED = "REJECTED"
 NOT_VALIDATED = "NOT_VALIDATED"
 
 #: Verdicts that allow cycle-roadmap to flip the milestone checkbox to [x].
+#: Every exit derives `flip_allowed` from this set rather than restating it, so
+#: adding a verdict here cannot leave a stale literal answering the old way.
 FLIP_ALLOWED = {ACCEPTED, ACCEPTED_WITH_CAVEATS}
 
 
@@ -110,7 +112,8 @@ def compute(criteria: list[dict], results: list[dict], defects: list[dict]) -> d
         )
 
     if missing or unexercised or unevidenced:
-        return {"verdict": NOT_VALIDATED, "reasons": reasons, "flip_allowed": False}
+        return {"verdict": NOT_VALIDATED, "reasons": reasons,
+                "flip_allowed": NOT_VALIDATED in FLIP_ALLOWED}
 
     failed = [c["id"] for c in criteria if by_id[c["id"]]["status"] == "failed"]
     blocker_defects = [d for d in defects if d.get("severity") == "blocker"]
@@ -123,7 +126,8 @@ def compute(criteria: list[dict], results: list[dict], defects: list[dict]) -> d
         reasons.append(f"blocker defect: {defect.get('summary', '(no summary)')}")
 
     if failed or blocker_defects:
-        return {"verdict": REJECTED, "reasons": reasons, "flip_allowed": False}
+        return {"verdict": REJECTED, "reasons": reasons,
+                "flip_allowed": REJECTED in FLIP_ALLOWED}
 
     if defects:
         for defect in defects:
@@ -131,12 +135,13 @@ def compute(criteria: list[dict], results: list[dict], defects: list[dict]) -> d
                 f"{defect.get('severity')} defect: {defect.get('summary', '(no summary)')} "
                 f"[{defect.get('issue', 'NO ISSUE FILED')}]"
             )
-        return {"verdict": ACCEPTED_WITH_CAVEATS, "reasons": reasons, "flip_allowed": True}
+        return {"verdict": ACCEPTED_WITH_CAVEATS, "reasons": reasons,
+                "flip_allowed": ACCEPTED_WITH_CAVEATS in FLIP_ALLOWED}
 
     return {
         "verdict": ACCEPTED,
         "reasons": [f"all {len(criteria)} criteria exercised and evidenced in the live system."],
-        "flip_allowed": True,
+        "flip_allowed": ACCEPTED in FLIP_ALLOWED,
     }
 
 
@@ -144,6 +149,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--criteria", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument(
+        "--milestone", default="",
+        help="milestone id (M<N>) recorded on the phase event; optional, and "
+             "deliberately not derived from the criteria filename — guessing an "
+             "identifier is how a record ends up pointing at the wrong milestone",
+    )
     args = parser.parse_args()
 
     for path in (args.criteria, args.evidence):
@@ -173,7 +184,36 @@ def main() -> int:
     for reason in outcome["reasons"]:
         print(f"  - {reason}", file=sys.stderr)
 
+    # Rooted at the criteria file, not cwd: the phase belongs to the project
+    # whose milestone was graded, whatever directory the caller ran from.
+    _emit_phase_end(
+        args.criteria, cycle="acceptance", slug=args.milestone or "",
+        verdict=outcome["verdict"], flip_allowed=outcome["flip_allowed"],
+    )
+
     return 0 if outcome["flip_allowed"] else 1
+
+
+def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:
+    """Record the phase transition; never let bookkeeping fail the phase.
+
+    `scripts/` resolves against THIS FILE, not the audited project: in a plugin
+    install the kit lives under `.claude/` while the project is elsewhere.
+    `ImportError` is caught alone — a bare `except Exception` would swallow a
+    real emitter bug into a silence indistinguishable from a phase that never
+    ran, which is the defect the stream exists to remove.
+    """
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_end, project_root_for
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_end(project_root_for(project_root), cycle=cycle, slug=slug,
+                   verdict=verdict, **extra)
 
 
 if __name__ == "__main__":

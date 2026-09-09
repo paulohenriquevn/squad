@@ -1,4 +1,4 @@
-"""Baseline Context structural check for /to-plan plans (SOTA upgrade).
+"""Baseline Context structural check for /plan-write plans (SOTA upgrade).
 
 Verifies the plan's `## Baseline Context` section is present and populated
 from real evidence (not placeholders). The section is the "deep review of
@@ -10,7 +10,7 @@ contains all four required subsections AND each subsection has real data
 (not the template's example rows). Missing or placeholder section caps
 the plan at score 70 (SHIPPABLE_WITH_CAVEATS at best).
 
-Required structure (per `skills/to-plan/templates/plan-template.md`):
+Required structure (per `skills/plan-write/templates/plan-template.md`):
 
     ## Baseline Context
     ### Files that will be touched
@@ -35,8 +35,6 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-H2_RE = re.compile(r"^##\s+(.*?)\s*$", re.MULTILINE)
-H3_RE = re.compile(r"^###\s+(.*?)\s*$", re.MULTILINE)
 TABLE_ROW_RE = re.compile(r"^\|[^|\n]+(?:\|[^|\n]*)+\|\s*$", re.MULTILINE)
 FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
 

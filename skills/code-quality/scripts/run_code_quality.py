@@ -6,7 +6,7 @@ T5.1 implementation: CLI + auto-detect + per-language detector dispatch.
 Modes:
   Mode 1 (no plan slug): repo-wide audit; JSON to stdout, no Markdown file.
   Mode 2 (plan slug):    bind audit to the plan's `## Critical paths` (if any);
-                         write Markdown audit to .claude/knowledge-base/audits/
+                         write Markdown audit to .claude/records/audits/
                          {slug}-code-quality-{date}.md unless --no-audit-write.
 
 CLI flags:
@@ -39,11 +39,12 @@ _SKILL_ROOT = Path(__file__).resolve().parent.parent
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
-from scripts._shared import (  # noqa: E402
+from scripts._detector_contract import (  # noqa: E402
     Finding,
     compute_verdict,
     emit_json_summary,
     load_allowlist,
+    load_baseline,
     load_languages_config,
     load_thresholds,
 )
@@ -74,14 +75,14 @@ def _find_repo_root(start: Path) -> Path:
 def _resolve_plan_path(slug: str, repo_root: Path) -> Path:
     """EC-6 — strict slug resolution. Refuse discovery plans."""
     candidates = [
-        repo_root / ".claude" / "knowledge-base" / "plans" / f"{slug}-plan.md",
-        repo_root / ".claude" / "knowledge-base" / "plans" / "completed" / f"{slug}-plan.md",
+        repo_root / ".claude" / "records" / "plans" / f"{slug}-plan.md",
+        repo_root / ".claude" / "records" / "plans" / "completed" / f"{slug}-plan.md",
     ]
     for p in candidates:
         if p.is_file():
             return p
     discovery_alt = (
-        repo_root / ".claude" / "knowledge-base" / "discoveries" / "plans" / f"{slug}-plan.md"
+        repo_root / ".claude" / "records" / "discoveries" / "plans" / f"{slug}-plan.md"
     )
     if discovery_alt.is_file():
         raise FileNotFoundError(
@@ -94,20 +95,45 @@ def _resolve_plan_path(slug: str, repo_root: Path) -> Path:
     )
 
 
-def _build_detector(language: str):
+def _build_detector(language: str, thresholds: dict | None = None):
     cls = _DETECTOR_CLASSES.get(language)
     if cls is None:
         return None
-    return cls()
+    detector = cls()
+    # The project's knobs reach the detector. Before, `load_thresholds()` was called
+    # for the side effect of validating the file and the result was discarded — every
+    # `vulture.min_confidence` or `mutation.score_floor_low` declared in
+    # `code-quality-thresholds.txt` was inert.
+    detector.thresholds = thresholds or {}
+    if language == "python" and "vulture.min_confidence" in detector.thresholds:
+        detector.min_confidence = int(detector.thresholds["vulture.min_confidence"])
+    return detector
 
 
 def _safe_call(label: str, func, *args, language: str = "") -> tuple[list[Finding], Finding | None]:
     """Wrap a detector call; on any exception emit a detector_crash Finding."""
     try:
         return list(func(*args)), None
-    except NotImplementedError:
-        # Methods explicitly DEFERRED (T3.1, T4.1-T4.3) — return empty.
-        return [], None
+    except NotImplementedError as error:
+        # A detector that did not run is not a clean detector.  Returning an empty list here used
+        # to turn missing D3/D4 implementations into evidence of absence.  Keep the orchestrator
+        # isolated, but make the unavailable audit visible and verdict-capping.
+        finding_type = {
+            "d3": "orphan_export",
+            "d4": "mutation_low",
+        }.get(label, "dead_code")
+        unavailable = Finding(
+            detector=f"{label}_unavailable",
+            language=language or "unknown",
+            severity="SOFT_CAP",
+            file_path=".",
+            symbol_or_line=label,
+            message=f"auditor unavailable: {error}",
+            allowlist_key=(
+                f"{language or 'unknown'}|.|{finding_type}|auditor_unavailable_{label}"
+            ),
+        )
+        return [unavailable], None
     except Exception as e:  # noqa: BLE001 — orchestrator isolation
         tb = traceback.format_exc(limit=3).strip().replace("\n", " | ")
         crash = Finding(
@@ -123,23 +149,16 @@ def _safe_call(label: str, func, *args, language: str = "") -> tuple[list[Findin
 
 
 def _enumerate_source_files(repo_root: Path, language: str) -> list[Path]:
-    from scripts._shared import DEFAULT_SKIP_DIRS
+    """Delega a `_detector_contract.enumerate_source_files`.
 
-    exts = {
-        "python": (".py",),
-        "typescript": (".ts", ".tsx"),
-        "rust": (".rs",),
-        "go": (".go",),
-    }.get(language, ())
-    if not exts:
-        return []
-    out: list[Path] = []
-    for path in repo_root.rglob("*"):
-        if any(part in DEFAULT_SKIP_DIRS for part in path.parts):
-            continue
-        if path.is_file() and path.suffix in exts:
-            out.append(path)
-    return out
+    The implementation lived here and the detectors came to need it (D3 looks for
+    consumers across the whole repository). Two copies of the same walk diverge the
+    first time someone fixes the pruning in only one — which is exactly the defect
+    the CHANGELOG records between `check_wiring.py` and this file.
+    """
+    from scripts._detector_contract import enumerate_source_files
+
+    return enumerate_source_files(repo_root, language)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -151,9 +170,29 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--languages-rule", default=None)
     parser.add_argument("--thresholds-rule", default=None)
     parser.add_argument("--allowlist", default=None)
+    parser.add_argument("--baseline", default=None,
+                        help="findings recorded as pre-existing; removed from the verdict, "
+                             "kept in the report (default: .claude/rules/code-quality-baseline.txt)")
+    parser.add_argument("--write-baseline", action="store_true",
+                        help="record every finding of this run as pre-existing and exit. "
+                             "An explicit act: the baseline never grows by itself.")
     parser.add_argument("--no-network", action="store_true")
     parser.add_argument("--repo-root", default=None)
     args = parser.parse_args(argv)
+
+    # A baseline recorded with the network on is worthless, so it cannot be recorded
+    # that way. Measured on a real repository on 2026-08-31: the Go symbol detector
+    # resolves imports against the module proxy, and with the network reachable it
+    # reported 4777 fabrications; with `--no-network`, ONE. Two consecutive runs even
+    # disagreed with each other — 4818 then 4777 — because the result depends on what
+    # the proxy answered that second.
+    #
+    # Baselining that would have frozen ~4800 network failures into the repository as
+    # if they were debt, hidden a real defect behind them, and still failed the gate,
+    # because the next run produces a slightly different set that the baseline does
+    # not cover. The honest baseline is the deterministic one.
+    if getattr(args, "write_baseline", False):
+        args.no_network = True
 
     repo_root = Path(args.repo_root) if args.repo_root else _find_repo_root(Path.cwd())
 
@@ -168,10 +207,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: cannot load languages config: {e}", file=sys.stderr)
         return 2
 
+    thresholds: dict = {}
     try:
         if thresholds_rule.exists():
-            # Side-effect: validates the rule file; detectors use hardcoded defaults in v0.1.
-            load_thresholds(thresholds_rule)
+            thresholds = load_thresholds(thresholds_rule)
     except ValueError as e:
         print(f"ERROR: thresholds malformed: {e}", file=sys.stderr)
         return 2
@@ -212,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     for language in enabled_languages:
         manifest_marker = cfg[language]["manifest"]
         manifest_present = (repo_root / manifest_marker).exists()
-        detector = _build_detector(language)
+        detector = _build_detector(language, thresholds)
         if detector is None:
             languages_skipped[language] = "no detector implementation"
             continue
@@ -227,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         # send the detector to the manifest's directory. Passing repo_root made cargo-udeps exit
         # with "could not find `Cargo.toml`", which the detector honestly reported as
         # `auditor_unavailable_cargo-udeps` — a soft cap blocking the cycle over a path assumption
-        # rather than over the code (measured on theo-db 2026-07-23, usetheoai/theo-db#175).
+        # rather than over the code (measured on db-engine 2026-07-23, an adopter's issue tracker).
         # Collapses to repo_root when the manifest sits at the root, which is the common case.
         manifest_dir = (repo_root / manifest_marker).parent
         d1_findings, d1_crash = _safe_call(
@@ -236,6 +275,25 @@ def main(argv: list[str] | None = None) -> int:
         if d1_crash:
             findings.append(d1_crash)
         findings.extend(d1_findings)
+
+        # D3 — exported symbols/packages that are not wired into a consumer.  An unavailable
+        # implementation must remain a SOFT_CAP rather than disappearing from the report.
+        d3_findings, d3_crash = _safe_call(
+            "d3", detector.detect_orphan_exports, manifest_dir, language=language
+        )
+        if d3_crash:
+            findings.append(d3_crash)
+        findings.extend(d3_findings)
+
+        # D4 — mutation score. The scope is what the PROJECT declared in the runner's
+        # config (`[mutmut] source_paths`, `stryker.config.json`); neither accepts a file
+        # list as scope, and the list built here never reached anywhere.
+        d4_findings, d4_crash = _safe_call(
+            "d4", detector.detect_mutation_score, manifest_dir, language=language
+        )
+        if d4_crash:
+            findings.append(d4_crash)
+        findings.extend(d4_findings)
 
         # D2 — symbol fabrication (skip when --no-network per EC-25)
         if args.no_network:
@@ -272,16 +330,21 @@ def main(argv: list[str] | None = None) -> int:
     # Apply allowlist (downgrade severities by 1 level when ACTIVE entry matches)
     findings = _apply_allowlist(findings, allowlist, repo_root)
 
+    baseline_path = Path(args.baseline) if args.baseline else _default_baseline(repo_root)
+    if args.write_baseline:
+        return _write_baseline(findings, baseline_path)
+
     return _emit_and_exit(findings, args, repo_root, plan_path,
                           languages_audited=languages_audited,
                           languages_skipped=languages_skipped,
-                          cfg=cfg)
+                          cfg=cfg,
+                          baseline=load_baseline(baseline_path))
 
 
 def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path) -> list[Finding]:
     from datetime import date as _date
 
-    from scripts._shared import AllowlistMatch, is_allowlisted
+    from scripts._detector_contract import AllowlistMatch, is_allowlisted
 
     today = _date.today()
     downgrade = {"HARD": "SOFT_CAP", "SOFT_CAP": "SOFT_FLOOR", "SOFT_FLOOR": "INFO", "INFO": "INFO"}
@@ -305,6 +368,58 @@ def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path) 
     return out
 
 
+def _default_baseline(repo_root: Path) -> Path:
+    """Where the baseline lives, in either layout."""
+    for rel in (".claude/rules/code-quality-baseline.txt", "rules/code-quality-baseline.txt"):
+        candidate = repo_root / rel
+        if candidate.is_file():
+            return candidate
+    return repo_root / ".claude/rules/code-quality-baseline.txt"
+
+
+def _write_baseline(findings: list[Finding], path: Path) -> int:
+    """Record this run's findings as pre-existing, and say what was recorded.
+
+    An explicit act, never a side effect of a normal run. A baseline that grew by
+    itself would absorb every new defect the moment it appeared, which is the failure
+    mode that turns a gate into decoration.
+    """
+    # Only real code debt. A baseline is a record of findings ABOUT THE CODE, and a run
+    # also emits findings about the GATE — a detector disabled for want of a network, a
+    # linter with no config, a mutation pass deferred, a crash. Measured on a real
+    # repository on 2026-08-31: the first honest baseline held five entries and every
+    # one of them was of that second kind, including `d2_disabled_no_network`.
+    #
+    # Recording those would silence the warnings that say the gate is not working —
+    # the one outcome worse than a gate that fails, because it looks like a gate that
+    # passed. They are identified by what they cannot have: a real file. A finding
+    # about the code names one; a finding about the tooling says `.` or `<unknown>`.
+    skipped = [f for f in findings if f.file_path in (".", "<unknown>", "")]
+    keys = sorted({f.allowlist_key for f in findings if f not in skipped})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = [
+        "# Code-quality baseline — findings that already existed.",
+        "#",
+        "# Written by `run_code_quality.py --write-baseline`. One `allowlist_key` per line.",
+        "# A key here is REMOVED FROM THE VERDICT and still reported: the debt stays",
+        "# countable, and a change is not failed for debt it did not cause.",
+        "#",
+        "# This is a FACT, not a decision — that is what separates it from",
+        "# `code-quality-allowlist.txt`, where a person exempts one finding with a reason",
+        "# and a sunset. Regenerating this file is an explicit act; it never grows by",
+        "# itself, so a NEW finding in a baselined file still fails.",
+        "",
+    ]
+    path.write_text("\n".join(header + keys) + "\n", encoding="utf-8")
+    print(f"baseline written: {len(keys)} finding(s) recorded as pre-existing at {path}",
+          file=sys.stderr)
+    if skipped:
+        names = ", ".join(sorted({f.allowlist_key.split("|")[-1] for f in skipped}))
+        print(f"  {len(skipped)} finding(s) about the GATE were NOT baselined and still "
+              f"apply: {names}", file=sys.stderr)
+    return 0
+
+
 def _emit_and_exit(
     findings: list[Finding],
     args,
@@ -316,8 +431,11 @@ def _emit_and_exit(
     # happened to look at. Optional so existing callers keep working; absent means the tree cannot
     # be consulted, and the guard falls back to the narrower "audited nothing at all" question.
     cfg: dict | None = None,
+    #: Finding keys recorded as pre-existing. Removed from the verdict, kept in the report.
+    baseline: frozenset[str] = frozenset(),
 ) -> int:
-    verdict, stable_ids = compute_verdict(findings)
+    verdict, stable_ids = compute_verdict(findings, baseline)
+    baselined = [f for f in findings if f.allowlist_key in baseline] if baseline else []
 
     # B-084 / B-092 — an audit that ran zero detectors is not a clean audit.
     #
@@ -340,7 +458,7 @@ def _emit_and_exit(
     # "Did I audit anything?" — a run with an empty `languages_audited` cannot distinguish "looked
     # at nothing" from "looked and found nothing", and `cycle-review` admits on PASS. That guard is
     # unchanged.
-    if verdict == "PASS" and not languages_audited:
+    if verdict not in ("FAIL_HARD", "INVALID") and not languages_audited:
         verdict = "INVALID"
         stable_ids = list(stable_ids)
         if "no_languages_audited" not in stable_ids:
@@ -355,11 +473,26 @@ def _emit_and_exit(
     # Answered by looking at the TREE rather than at the gate's own list: every language the config
     # knows carries its manifest marker, so a marker present for a language nobody audited is a file
     # the gate skipped while the report says PASS.
-    if verdict == "PASS" and cfg:
+    if verdict not in ("FAIL_HARD", "INVALID") and cfg:
+        # A language left off WITH A RECORDED REASON is a decision; one left off in
+        # silence is an omission. This check exists for the second — the repository
+        # that audits TypeScript while holding an unaudited `pyproject.toml` nobody
+        # ever thought about. Treating both the same made the gate unusable in the
+        # normal case: measured on 2026-08-31, a project with `typescript | DEFER`
+        # and `python | DISABLED`, each carrying a measured justification, returned
+        # INVALID on every plan — including after its remaining language was fixed
+        # and turned on. The gate could not be satisfied by any amount of work.
+        #
+        # The reason is what makes it a decision, so the reason is what exempts, and
+        # it must be non-empty: `NOTES` was documented as optional and is now required
+        # for DEFER and DISABLED. "Disable it and pass" stays impossible — it now costs
+        # a sentence somebody signs, in a file that is versioned and reviewed.
         unaudited = sorted(
             lang
             for lang, meta in cfg.items()
-            if lang not in (languages_audited or []) and (repo_root / meta["manifest"]).exists()
+            if lang not in (languages_audited or [])
+            and (repo_root / meta["manifest"]).exists()
+            and not (meta.get("status") in ("DEFER", "DISABLED") and meta.get("notes", "").strip())
         )
         if unaudited:
             verdict = "INVALID"
@@ -375,9 +508,10 @@ def _emit_and_exit(
                     symbol_or_line="-",
                     message=(
                         f"{cfg[lang]['manifest']} is present but {lang} was not audited "
-                        f"({(languages_skipped or {}).get(lang, 'not enabled')}). A PASS here would "
-                        "report on the set the gate managed to see, with nothing verifying that set "
-                        "was the right one."
+                        f"({(languages_skipped or {}).get(lang, 'not enabled')}), and no reason is "
+                        f"recorded. A PASS here would report on the set the gate managed to see, "
+                        f"with nothing verifying that set was the right one. Either audit it, or "
+                        f"write in code-quality-languages.txt why it is DEFER or DISABLED."
                     ),
                     allowlist_key=f"unaudited_manifest_present|{cfg[lang]['manifest']}|-|{lang}",
                 )
@@ -386,6 +520,9 @@ def _emit_and_exit(
 
     summary = emit_json_summary(findings, verdict, stable_ids)
     summary["languages_audited"] = languages_audited or []
+    # Reported, always. A baseline that silences findings without saying how many it is
+    # holding is indistinguishable from a gate that found nothing.
+    summary["baselined"] = len(baselined)
     summary["languages_skipped"] = list((languages_skipped or {}).keys())
     summary["skip_reasons"] = languages_skipped or {}
     summary["mode"] = "plan-bound" if plan_path else "standalone"
@@ -407,17 +544,50 @@ def _emit_and_exit(
             if args.audit_out
             else repo_root
             / ".claude"
-            / "knowledge-base"
+            / "records"
             / "audits"
             / f"{args.slug}-code-quality-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.md"
         )
         _write_markdown_report(findings, summary, audit_path, args.slug)
         summary["report_path"] = str(audit_path.relative_to(repo_root))
 
+    # The phase leaves an event, not only a file. A missing audit cannot say
+    # whether the gate was skipped or ran and wrote nothing; an absent event can.
+    _emit_phase_end(
+        repo_root,
+        cycle="code-quality",
+        slug=args.slug or "",
+        verdict=verdict,
+        languages=languages_audited or [],
+        findings=len(findings),
+    )
+
     # Exit code
     if verdict in ("FAIL_HARD", "INVALID"):
         return 1
     return 0
+
+
+def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:
+    """Record the phase transition; never let bookkeeping fail the phase.
+
+    `scripts/` resolves against THIS FILE, not the audited project: in a plugin
+    install the kit lives under `.claude/` while the project is elsewhere.
+    `ImportError` is caught alone — a bare `except Exception` would swallow a
+    real emitter bug into a silence indistinguishable from a phase that never
+    ran, which is the defect the stream exists to remove.
+    """
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_end, project_root_for
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_end(project_root_for(project_root), cycle=cycle, slug=slug,
+                   verdict=verdict, **extra)
 
 
 def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: Path, slug: str) -> None:
@@ -447,6 +617,7 @@ def _write_markdown_report(findings: list[Finding], summary: dict, audit_path: P
 **Verdict:** {summary['verdict']}
 **Score cap:** {summary['score_cap']}
 **Hard caps triggered:** {', '.join(summary['hard_caps_triggered']) or '_none_'}
+**Soft caps triggered:** {', '.join(summary['soft_caps_triggered']) or '_none_'}
 
 ## Summary
 

@@ -18,11 +18,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-
 
 TEMPLATES = {
     "architecture": "agent-architecture-reviewer.md",
@@ -115,7 +113,7 @@ class _ModelOverrideAction(argparse.Action):
 
     def __call__(  # type: ignore[override]
         self, parser: argparse.ArgumentParser, namespace: argparse.Namespace,
-        values: object, option_string: str | None = None,
+        values: object, _option_string: str | None = None,
     ) -> None:
         current: dict[str, str] = getattr(namespace, self.dest, None) or {}
         if not isinstance(values, str) or "=" not in values:
@@ -134,7 +132,7 @@ class _ModelOverrideAction(argparse.Action):
 def _default_routing_rule_path(skill_dir: Path) -> Path:
     """Resolve the canonical routing rule path relative to the skill dir.
 
-    Convention: .claude/rules/review-model-routing.txt at project root.
+    Convention: .claude/skills/_kit-rules/review-model-routing.txt at project root.
     """
     return skill_dir.parent.parent / "rules" / "review-model-routing.txt"
 
@@ -232,7 +230,7 @@ def main() -> int:
         "--routing-rule",
         type=Path,
         default=None,
-        help="Path to review-model-routing.txt (default: .claude/rules/review-model-routing.txt)",
+        help="Path to review-model-routing.txt (default: .claude/skills/_kit-rules/review-model-routing.txt)",
     )
     parser.add_argument(
         "--model-override",
@@ -341,7 +339,7 @@ def main() -> int:
     # tell whether it moved while they read it. Recorded, never enforced: this is the detector
     # beside the isolation, because isolation that silently stops working looks like isolation.
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from consolidate_findings import record_tree_state  # noqa: PLC0415
+    from consolidate_findings import record_tree_state
 
     tree_state = record_tree_state(Path.cwd(), findings_dir)
 

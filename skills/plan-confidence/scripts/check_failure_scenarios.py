@@ -1,4 +1,4 @@
-"""Conditional failure-scenarios check for /to-plan plans (SOTA upgrade Phase 2).
+"""Conditional failure-scenarios check for /plan-write plans (SOTA upgrade Phase 2).
 
 Happy-path tests do NOT prove resilience: production outages mostly happen at
 the I/O boundary (timeouts, 5xx bursts, connection reset, rate-limit, partial

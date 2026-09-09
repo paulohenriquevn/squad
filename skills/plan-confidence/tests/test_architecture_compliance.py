@@ -4,15 +4,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-
 from check_architecture_compliance import (  # noqa: E402
     ComplianceReport,
     check_architecture_compliance,
 )
 
 SKILL_ROOT = Path(__file__).parent.parent
-PLANS_DIR = SKILL_ROOT.parent.parent / "knowledge-base" / "plans"
+PLANS_DIR = SKILL_ROOT.parent.parent / "records" / "plans"
 COMPLETED_DIR = PLANS_DIR / "completed"
 
 
@@ -26,7 +24,7 @@ def _write(tmp_path: Path, content: str, name: str = "plan.md") -> Path:
 
 def test_reads_project_rules_when_present() -> None:
     """When invoked on a real project plan, finds .claude/rules/*.md."""
-    real_plan = COMPLETED_DIR / "theo-cli-cohesion-remediation-plan.md"
+    real_plan = COMPLETED_DIR / "cli-tool-cohesion-remediation-plan.md"
     if not real_plan.exists():
         pytest.skip("real plan not found")
     report = check_architecture_compliance(real_plan)
@@ -73,7 +71,7 @@ def test_plan_in_project_gets_credit_for_principles_even_without_rule_names() ->
     Both forms count as 'compliance signal'. This test documents that the
     checker correctly recognizes the principle-citation path.
     """
-    real_plan = COMPLETED_DIR / "theo-cli-cohesion-remediation-plan.md"
+    real_plan = COMPLETED_DIR / "cli-tool-cohesion-remediation-plan.md"
     if not real_plan.exists():
         pytest.skip("real plan not found")
     report = check_architecture_compliance(real_plan)
@@ -171,14 +169,14 @@ def test_compliance_score_is_one_for_fully_compliant_plan(tmp_path: Path) -> Non
     assert report.compliance_score == 1.0
 
 
-def test_compliance_motivos_are_informative(tmp_path: Path) -> None:
+def test_compliance_reasons_are_informative(tmp_path: Path) -> None:
     plan = _write(
         tmp_path,
         "# Plan\n\n## Coverage Matrix\n\n| # | Gap | Task(s) | Resolution |\n|---|---|---|---|\n| 1 | x | T1.1 | y |\n",
     )
     report = check_architecture_compliance(plan)
     assert len(report.reasons) >= 4
-    # At least one motivo should say "does NOT" since this plan has nothing
+    # At least one reason should say "does NOT" since this plan has nothing
     assert any("does NOT" in m or "does not" in m.lower() for m in report.reasons)
 
 

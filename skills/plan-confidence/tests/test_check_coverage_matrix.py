@@ -4,8 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-
 from check_coverage_matrix import (  # noqa: E402
     CoverageReport,
     check_coverage_matrix,
@@ -201,7 +199,7 @@ def test_coverage_matrix_real_plan_example() -> None:
 
     Gracefully skips when no real plan file is available in the host project."""
     project_root = Path(__file__).parent.parent.parent.parent.parent  # repo root
-    plans_dir = project_root / "knowledge-base" / "plans"
+    plans_dir = project_root / "records" / "plans"
     if not plans_dir.is_dir():
         pytest.skip(f"plans dir not found: {plans_dir}")
     candidates = list(plans_dir.glob("*-plan.md"))
@@ -212,7 +210,7 @@ def test_coverage_matrix_real_plan_example() -> None:
     # F-CODE-01 is explicitly out-of-scope via D9 — should be deferred, not unmapped.
     assert report.deferred_gaps >= 1
     assert report.is_complete is True, (
-        f"theo-cli plan should be complete after out-of-scope fix; "
+        f"cli-tool plan should be complete after out-of-scope fix; "
         f"got mapped={report.mapped_gaps}, deferred={report.deferred_gaps}, total={report.total_gaps}"
     )
 

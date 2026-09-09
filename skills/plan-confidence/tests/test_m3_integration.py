@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 from run_structural import run_structural  # noqa: E402
 
 SKILL_ROOT = Path(__file__).parent.parent
@@ -59,7 +58,7 @@ Do thing.
 
 def test_run_structural_triggers_fabricated_citation_hard_cap(tmp_path: Path) -> None:
     """A plan with a citation to a non-existent rule file MUST cap at INVALID."""
-    plan_body = _plan_with_evidence("- Cita `definitely-nonexistent-rule.md` para isso.\n")
+    plan_body = _plan_with_evidence("- Cites `definitely-nonexistent-rule.md` for this.\n")
     plan_path = tmp_path / "fab-fixture-plan.md"
     plan_path.write_text(plan_body, encoding="utf-8")
 
@@ -169,3 +168,111 @@ def test_merge_verdict_pass_does_not_modify(tmp_path: Path) -> None:
     assert out["verdict"] == "SHIPPABLE"
     assert out["final_score_after_caps"] == 98.0
     assert out["hard_caps_triggered"] == []
+
+
+
+def test_main_runs_end_to_end_with_code_quality_active(tmp_path, monkeypatch, capsys) -> None:
+    """`main()` must survive the branch where the CQ summary is truthy.
+
+    This is the test that was missing, and its absence shipped a NameError that
+    killed the scorer for every plan in every consumer. The fix that broke it
+    added an argument at the call site — `_merge_code_quality_verdict(out,
+    cq_summary, content)` — inside `main()`, where `content` does not exist: the
+    only other read of the plan lives in a different function.
+
+    A unit test over `_merge_code_quality_verdict` could not have caught it. The
+    function was correct; the CALLER was wrong, and the caller only runs when
+    `--no-code-quality` is absent and the invocation returns something. That
+    branch had no end-to-end coverage at all, so CI stayed green while the
+    default path — the one `cycle-plan` uses as its gate — was dead.
+
+    Diagnosed by the consumer session that hit it, which also named the shape of
+    the missing test.
+    """
+    import run_structural
+
+    # The shared helper, so the fixture stays a VALID plan. A hand-rolled one
+    # missing `## Coverage Matrix` makes main() exit before the branch under
+    # test, and the test then passes for the wrong reason.
+    plan = tmp_path / "plan.md"
+    plan.write_text(_plan_with_evidence("- Cites `D1` from this plan.\n"), encoding="utf-8")
+
+    monkeypatch.setattr(run_structural, "_find_repo_root_from_plan", lambda _p: tmp_path)
+    monkeypatch.setattr(
+        run_structural,
+        "_invoke_code_quality",
+        lambda *_a, **_k: {
+            "verdict": "FAIL_SOFT",
+            "score_cap": 70,
+            "hard_caps_triggered": [],
+            "soft_caps_triggered": ["soft_cap_mutation_unconfigured_typescript"],
+            "languages_audited": ["typescript"],
+        },
+    )
+
+    # The assertion is that this returns at all: a NameError here propagates.
+    code = run_structural.main([str(plan), "--no-warn"])
+
+    out = capsys.readouterr().out
+    assert code in (0, 1, 2, 3), f"unexpected exit {code}"
+    assert '"code_quality"' in out, "the CQ block must reach stdout on the active path"
+
+
+# ---------- kit#56: the merge must not destroy the value it replaces ----------
+
+
+def test_the_structural_verdict_survives_the_merge_that_replaces_it() -> None:
+    """The CLI composes; the library does not. Both numbers must stay readable.
+
+    `run_structural`'s library path returns the plan's own verdict. `main()` then
+    merges the code-quality verdict over it and prints THAT. Anyone reading a band
+    off the CLI — the obvious thing to do — was reading a value the snapshot suite
+    can never reproduce, with nothing in the payload to say why (kit#56).
+
+    The merge is deliberate: `rules/cycle-code-quality.md` § 1 requires it. What
+    was not deliberate is that the composed value overwrote the composed-from one,
+    so the difference could not be attributed to anything.
+    """
+    from run_structural import _merge_code_quality_verdict
+
+    out = {"verdict": "SHIPPABLE", "final_score_after_caps": 98.4, "hard_caps_triggered": []}
+    _merge_code_quality_verdict(out, {
+        "verdict": "FAIL_SOFT",
+        "score_cap": 70,
+        "soft_caps_triggered": ["soft_cap_mutation_deferred_go"],
+    })
+
+    assert out["verdict"] == "NON_SHIPPABLE"
+    assert out["verdict_before_code_quality"] == "SHIPPABLE"
+    assert out["final_score_after_caps"] == 70
+    assert out["score_before_code_quality"] == 98.4
+
+
+def test_a_merge_that_changes_nothing_adds_no_before_keys() -> None:
+    """A PASS composes to the same value, and a key saying so would be noise.
+
+    The keys exist to explain a DIFFERENCE. Emitting them when there is none
+    trains a reader to skip them, which is how the one that matters gets missed.
+    """
+    from run_structural import _merge_code_quality_verdict
+
+    out = {"verdict": "SHIPPABLE", "final_score_after_caps": 98.4, "hard_caps_triggered": []}
+    _merge_code_quality_verdict(out, {"verdict": "PASS", "score_cap": 100})
+
+    assert out["verdict"] == "SHIPPABLE"
+    assert "verdict_before_code_quality" not in out
+    assert "score_before_code_quality" not in out
+
+
+def test_a_cap_that_only_lowers_the_score_still_records_the_score_it_lowered() -> None:
+    """Score and verdict move independently; each records its own before-value."""
+    from run_structural import _merge_code_quality_verdict
+
+    out = {"verdict": "NON_SHIPPABLE", "final_score_after_caps": 95.0, "hard_caps_triggered": []}
+    _merge_code_quality_verdict(out, {
+        "verdict": "FAIL_SOFT", "score_cap": 70, "soft_caps_triggered": ["x"],
+    })
+
+    assert out["score_before_code_quality"] == 95.0
+    # The verdict did not move — it was already NON_SHIPPABLE — so nothing to explain.
+    assert "verdict_before_code_quality" not in out

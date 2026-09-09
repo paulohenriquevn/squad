@@ -4,7 +4,7 @@
 
 **500 lines per file.**
 
-This is a soft default. Project-specific limits documented in `.claude/rules/architecture.md § Module hygiene` (or an equivalent rules file) override.
+This is a soft default. Project-specific limits documented in `.claude/rules/architecture.md § 3 — Module cohesion` (or an equivalent rules file) override.
 
 ## Why 500?
 

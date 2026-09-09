@@ -28,8 +28,14 @@ BUGFIX_KEYWORDS = (
     # Aligned with apply_fixes (Fix #4) for consistency
     "fix bug",
     "parser bug",
-    "fix.+bug",  # not used as substring; left for grep-of-the-mind
 )
+# `"fix.+bug"` used to sit here, with a comment saying it was "not used as
+# substring; left for grep-of-the-mind". It matched nothing — no title contains
+# that literal — and it was the ONLY difference between this list and the one in
+# `apply_fixes.py`, which answers the same question about the same plan. An inert
+# regex inside a list matched by substring is a trap for whoever converts the
+# matching to regex later: on that day it starts firing, and nothing in the
+# comment says what it was meant to catch.
 
 
 @dataclass(frozen=True)

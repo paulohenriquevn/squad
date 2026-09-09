@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "squad",
+  "version": "0.1.0",
+  "description": "A maintenance squad for any product: a measurement-first pipeline (BRAINSTORM → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ACCEPTANCE) where every item is a hypothesis, evidence comes from your own code and runtime, and killing an item is a successful outcome. Domain specialists are derived from your repositories, never shipped.",
+  "author": "Paulo Henrique",
+  "license": "MIT",
+  "keywords": [
+    "maintenance",
+    "backlog",
+    "measurement",
+    "tdd",
+    "code-review",
+    "halt-loop",
+    "multi-repo",
+    "squad"
+  ],
+  "requires": {
+    "claudeCode": ">=1.0.0",
+    "plugins": [
+      "ralph-loop"
+    ]
+  },
+  "_comment_": "NATIVE PLUGIN manifest. Claude Code looks for the manifest here, at .claude-plugin/plugin.json — while it existed only at the root, the native mechanism did not recognise the kit and the only possible installation was the copy made by mechanisms/distribution/install.sh. In this mode the kit's CODE lives outside the project, under $CLAUDE_PLUGIN_ROOT, and the project keeps only the cycle's DATA (records/, rules/*.txt, agents/*.md). That separation is what prevents the consumer's agent from editing the kit. The hooks are declared in hooks/hooks.json. For the copy install, which remains supported, see settings.plugin.json."
+}

@@ -42,7 +42,29 @@ findings: []
 """
 
 
-def _run(findings_dir: Path, output: Path) -> tuple[int, dict[str, object]]:
+def _upstream_ok(findings_dir: Path, slug: str = "fixture") -> None:
+    """Declares the upstream context the consolidator now requires.
+
+    `consolidate_findings.py` injects `/review`'s pre-condition as a BLOCKER
+    (`check_upstream_gate`): with no admissible `/code-quality` audit there is no
+    merge verdict. These tests measure the CONSOLIDATOR, so they declare the
+    upstream green and go on measuring what they came to measure — the gate itself
+    has its own suite in `test_check_upstream_gate.py`.
+    """
+    audits = findings_dir.parent / "records" / "audits"
+    audits.mkdir(parents=True, exist_ok=True)
+    audit = audits / f"{slug}-code-quality-2026-08-26.md"
+    if not audit.exists():
+        audit.write_text(
+            "**Verdict:** PASS\n**Hard caps triggered:** _none_\n"
+            "**Soft caps triggered:** _none_\n",
+            encoding="utf-8",
+        )
+
+
+def _run(findings_dir: Path, output: Path, *, upstream: bool = True) -> tuple[int, dict[str, object]]:
+    if upstream:
+        _upstream_ok(findings_dir)
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--findings-dir", str(findings_dir),
          "--output", str(output), "--slug", "fixture"],
@@ -376,6 +398,7 @@ PLAN_REGISTERING_TWO = """# Plan: fixture
 
 
 def _run_with_plan(findings_dir: Path, output: Path, plan: Path) -> tuple[int, dict[str, object]]:
+    _upstream_ok(findings_dir)
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--findings-dir", str(findings_dir),
          "--output", str(output), "--slug", "fixture", "--plan", str(plan)],
@@ -416,7 +439,7 @@ def test_followups_registered_with_the_mandated_id_format_are_recognised(tmp_pat
     plan = tmp_path / "plan.md"
     plan.write_text(PLAN_REGISTERING_ALL, encoding="utf-8")
 
-    code, payload = _run_with_plan(findings, tmp_path / "report.md", plan)
+    _code, payload = _run_with_plan(findings, tmp_path / "report.md", plan)
 
     assert payload.get("verdict") == "READY_TO_MERGE_WITH_FOLLOWUPS", payload
     assert not payload.get("unregistered_high")
@@ -433,7 +456,7 @@ def test_registration_is_case_insensitive(tmp_path: Path) -> None:
         PLAN_REGISTERING_ALL.replace("F-arch-1", "f-ARCH-1"), encoding="utf-8"
     )
 
-    code, payload = _run_with_plan(findings, tmp_path / "report.md", plan)
+    _code, payload = _run_with_plan(findings, tmp_path / "report.md", plan)
 
     assert payload.get("verdict") == "READY_TO_MERGE_WITH_FOLLOWUPS", payload
 
@@ -464,7 +487,7 @@ def _repo_with_state(tmp_path: Path, dirty_after: bool) -> tuple[Path, Path]:
     (findings / "architecture.yml").write_text(VALID, encoding="utf-8")
 
     sys.path.insert(0, str(SCRIPT.parent))
-    from consolidate_findings import record_tree_state  # noqa: PLC0415
+    from consolidate_findings import record_tree_state
     record_tree_state(repo, findings)
 
     if dirty_after:
@@ -474,6 +497,7 @@ def _repo_with_state(tmp_path: Path, dirty_after: bool) -> tuple[Path, Path]:
 
 
 def _run_in_repo(findings: Path, output: Path, repo: Path) -> tuple[int, dict[str, object]]:
+    _upstream_ok(findings)
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--findings-dir", str(findings),
          "--output", str(output), "--slug", "fixture", "--repo-root", str(repo)],
@@ -502,7 +526,7 @@ def test_a_tree_that_moved_during_the_run_is_reported(tmp_path: Path) -> None:
     # The B-025 shape: the tree the agents were reading changed while they read it.
     repo, findings = _repo_with_state(tmp_path, dirty_after=True)
 
-    code, payload = _run_in_repo(findings, tmp_path / "report.md", repo)
+    _code, payload = _run_in_repo(findings, tmp_path / "report.md", repo)
 
     assert payload.get("tree_contaminated") is True
     report = (tmp_path / "report.md").read_text(encoding="utf-8")
@@ -542,7 +566,10 @@ def test_the_agents_own_findings_do_not_count_as_contamination(tmp_path: Path) -
                    cwd=repo, check=True, capture_output=True, env=env)
 
     sys.path.insert(0, str(SCRIPT.parent))
-    from consolidate_findings import check_tree_contamination, record_tree_state  # noqa: PLC0415
+    from consolidate_findings import (
+        check_tree_contamination,
+        record_tree_state,
+    )
 
     findings = repo / "review" / "findings"   # INSIDE the repo, and not ignored
     record_tree_state(repo, findings)
@@ -574,7 +601,10 @@ def test_a_sibling_sharing_the_findings_prefix_is_still_reported(tmp_path: Path)
     # behaviour (probe files at the repo root).
     repo, _env = _seeded_repo(tmp_path)
     sys.path.insert(0, str(SCRIPT.parent))
-    from consolidate_findings import check_tree_contamination, record_tree_state  # noqa: PLC0415
+    from consolidate_findings import (
+        check_tree_contamination,
+        record_tree_state,
+    )
 
     findings = repo / "review" / "findings"
     record_tree_state(repo, findings)
@@ -591,7 +621,10 @@ def test_a_rename_with_one_end_outside_the_findings_dir_is_reported(tmp_path: Pa
     # let an agent hide a real mutation by moving the file it touched.
     repo, env = _seeded_repo(tmp_path)
     sys.path.insert(0, str(SCRIPT.parent))
-    from consolidate_findings import check_tree_contamination, record_tree_state  # noqa: PLC0415
+    from consolidate_findings import (
+        check_tree_contamination,
+        record_tree_state,
+    )
 
     findings = repo / "review" / "findings"
     record_tree_state(repo, findings)
@@ -600,3 +633,36 @@ def test_a_rename_with_one_end_outside_the_findings_dir_is_reported(tmp_path: Pa
                    cwd=repo, check=True, capture_output=True, env=env)
 
     assert check_tree_contamination(repo, findings) is not None
+
+
+# ---------------------------------------------------------------------------
+# The upstream pre-condition, measured through the consolidator — not only the gate
+# ---------------------------------------------------------------------------
+
+def test_without_an_upstream_audit_there_is_no_merge_verdict(tmp_path: Path) -> None:
+    """`cycle-review.md § Pre-conditions` exige o audit; nada o cobrava.
+
+    `/review` running without `/code-quality` inherits everything the audit would
+    have caught — dead code, fabricated symbol, orphan export — and returns
+    `READY_TO_MERGE` over a sweep that never happened.
+    """
+    findings = tmp_path / "findings"
+    findings.mkdir()
+    (findings / "architecture.yml").write_text(CLEAN, encoding="utf-8")
+
+    code, payload = _run(findings, tmp_path / "report.md", upstream=False)
+
+    assert code != 0
+    assert payload.get("verdict") == "NEEDS_FIXES"
+
+
+def test_an_admissible_upstream_audit_lets_the_review_grade(tmp_path: Path) -> None:
+    """The other side: the gate must not turn every review into NEEDS_FIXES."""
+    findings = tmp_path / "findings"
+    findings.mkdir()
+    (findings / "architecture.yml").write_text(CLEAN, encoding="utf-8")
+
+    code, payload = _run(findings, tmp_path / "report.md")
+
+    assert payload.get("verdict") == "READY_TO_MERGE", payload
+    assert code == 0

@@ -19,8 +19,8 @@ Severity:
 
 Usage:
     python3 check_phase_completeness.py \\
-        --plan knowledge-base/plans/foo-plan.md \\
-        --progress knowledge-base/implementations/.progress-foo.json \\
+        --plan records/plans/foo-plan.md \\
+        --progress records/implementations/.progress-foo.json \\
         --phase 1 \\
         --json
 

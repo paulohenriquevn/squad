@@ -26,7 +26,27 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_VALID_STATUSES = {"pending", "red", "green", "refactor", "wired", "committed", "blocked", "done"}
+#: Five in-flight states and TWO terminal ones. `done` was in this set until
+#: 2026-09-08 and no consumer recognised it: the loop's exit condition is `committed`
+#: OR `blocked`, and `check_phase_completeness.py` computes pendency the same way, so
+#: a task marked `done` counted as PENDING forever and the completion promise was never
+#: emitted. Of the six consumers, the only occurrence of the word in any of them was
+#: inside a comment.
+#:
+#: Accepted-then-ignored is the defect this validator exists to end — it already does
+#: it for the `tasks` envelope, for `task_id`, and for a missing `phase`. `done` was the
+#: fourth, and the most inviting: it is the word an agent reaches for to say "finished".
+_VALID_STATUSES = {"pending", "red", "green", "refactor", "wired", "committed", "blocked"}
+
+#: Refused with its own message rather than the generic one. "not one of [...]" sends
+#: the reader to a list, and the list is not where the answer is — the answer is that
+#: `committed` is what "finished" is called here.
+_RETIRED_STATUSES = {
+    "done": "use 'committed' when the task has a commit, or 'blocked' with a reason "
+            "when it cannot be finished. Nothing in the loop treats 'done' as terminal, "
+            "so a task carrying it stays PENDING and the completion promise is never "
+            "emitted",
+}
 _VALID_WIRING = {
     "a": {"pass", "fail", "defer", None},
     "b": {"pass", "fail", "defer", "n/a", None},
@@ -127,6 +147,12 @@ def _validate_task(index: int, task: object, seen_ids: set[str]) -> list[Finding
     status = task.get("status")
     if status is None:
         findings.append(Finding("HIGH", "task_missing_status", f"{where} has no 'status'."))
+    elif status in _RETIRED_STATUSES:
+        # HIGH, not MEDIUM: this one does not merely fail a shape check, it stalls the
+        # loop in a way whose diagnostic points nowhere near the cause.
+        findings.append(Finding(
+            "HIGH", "task_status_done",
+            f"{where} status '{status}' was retired — {_RETIRED_STATUSES[status]}."))
     elif status not in _VALID_STATUSES:
         findings.append(Finding(
             "MEDIUM", "task_invalid_status",

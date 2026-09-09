@@ -79,7 +79,7 @@ def test_golden_rule_documents_m3_status(rules_dir: Path) -> None:
         "active",
         "enforced",
         "citation fabricada",
-        "citação fabricada",
+        "fabricated citation",
         "fabricated_citation",
         "fabricated citation",
     )

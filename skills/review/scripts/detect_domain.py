@@ -24,8 +24,8 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
-
 
 # Domain dictionary — agnostic keyword sets per domain
 DOMAINS: dict[str, list[str]] = {
@@ -110,7 +110,7 @@ def _read_plan(plan_path: Path) -> str:
 
 def _git_diff_filenames(project_root: Path, diff_base: str) -> list[str]:
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             ["git", "-C", str(project_root), "diff", "--name-only", f"{diff_base}..HEAD"],
             capture_output=True,
             text=True,
@@ -139,6 +139,36 @@ def _patterns_skills_text(project_root: Path) -> str:
     return "\n".join(blocks)
 
 
+@lru_cache(maxsize=None)
+def _keyword_pattern(keyword: str) -> re.Pattern[str]:
+    """A keyword matcher that will not fire inside a longer word.
+
+    THE BOUNDARY RULE, stated here rather than left to be inferred from behaviour:
+    a keyword matches only when the character beside it is not alphanumeric. So
+    `lock` matches `lock` and `the lock is` and `lock.go`, and does NOT match
+    `lockfile` or `deadlock`; `actor` does not match `extractor`.
+
+    Measured in a consumer on 2026-08-27: a diff of a workflow, a script, its test
+    and a CHANGELOG routed to `concurrency` on `["lock", "actor"]` — 13 of 13 `lock`
+    were the word `lockfile`, 5 of 5 `actor` were `extractor`. Routing decides which
+    specialist reads the diff, so the two words the change was ABOUT sent it to a
+    reviewer with nothing to find, who reported clean.
+
+    Boundaries are asserted with lookarounds against `[a-z0-9]` rather than with
+    `\b`, and only on the sides where the keyword itself starts or ends
+    alphanumeric. Several keywords do not — `aria-`, `POST /`, `CI/CD`,
+    `command-line` — and `\b` beside a non-word character asserts the opposite of
+    what it reads, which would silently stop them matching.
+
+    KNOWN LIMIT, deliberately not fixed here: a path like `package-lock.json`
+    contains `lock` as a whole token, so it still counts. That is a keyword-quality
+    problem, not a boundary one, and no boundary rule addresses it.
+    """
+    prefix = "(?<![a-z0-9])" if keyword[:1].isalnum() else ""
+    suffix = "(?![a-z0-9])" if keyword[-1:].isalnum() else ""
+    return re.compile(prefix + re.escape(keyword.lower()) + suffix)
+
+
 def count_domain_hits(text: str, file_paths: list[str]) -> dict[str, dict[str, int | list[str]]]:
     """Count keyword hits per domain. Returns domain → {hits: N, matched: [keywords]}."""
     results: dict[str, dict[str, int | list[str]]] = defaultdict(lambda: {"hits": 0, "matched": []})
@@ -146,8 +176,7 @@ def count_domain_hits(text: str, file_paths: list[str]) -> dict[str, dict[str, i
     combined_lower = combined.lower()
     for domain, keywords in DOMAINS.items():
         for kw in keywords:
-            kw_lower = kw.lower()
-            count = combined_lower.count(kw_lower)
+            count = len(_keyword_pattern(kw).findall(combined_lower))
             if count > 0:
                 results[domain]["hits"] = int(results[domain]["hits"]) + count
                 matched_list = results[domain]["matched"]

@@ -3,22 +3,37 @@
 
 Sibling of the retired `check_roadmap_structure.py`. Written fresh rather than ported:
 a roadmap is a finite, ordered, dependency-linked scope, and a backlog is none of those.
-Cycle detection, the M0-M8 cap and ordering checks have no meaning over independent
-items, so carrying them across would have produced checks that always pass.
+The M0-M8 cap and ordering checks have no meaning over independent items, so carrying
+them across would have produced checks that always pass.
+
+Cycle detection was dropped for the same reason and came back on 2026-08-30, when
+`blocked_by` gave items edges. Backlog items are no longer independent: B-014 may wait
+on B-100, and a ring of those is a deadlock in which nothing can ever ship. The check
+returned because the premise that retired it stopped being true — not because the
+original reasoning was wrong.
 
 What it checks instead — the ways a maintenance registry actually rots:
 
   DETERMINISTIC (a machine can be sure)
     duplicate_id            two blocks share a B-NNN — the audit trail is broken
-    malformed_block         a header the loop cannot parse
+    duplicate_field         one field written twice in a block, with two values
     missing_field           a required field absent
     illegal_status          a status outside the declared set
     killed_without_reason   killed with no kill_reason (gate G-K, after the fact)
     triaged_without_evidence  triaged but evidence is still none-yet
     raw_with_evidence       raw but carrying evidence — status never advanced
     unroutable_repo         repo in no domain (gate G1)
+    broken_route            domain exists but its specialist file does not
     invalid_mode            suggested_mode outside the four
     renumbered              ids not monotonic — a reused id destroys traceability
+    blocker_missing         blocked_by points at an id no block defines
+    blocker_cycle           a ring of impediments — every item waits, none can ship
+    self_block              an item declaring itself its own blocker
+    stale_block             every blocker closed, the edge still written
+    closed_but_blocked      shipped while an open blocker is still declared
+    lineage_missing         supersedes/regression_of names an undefined id, or the item itself
+    lineage_wrong_status    the named ancestor exists but is not in the terminal state the field implies
+    index_stale             the rendered index no longer matches the blocks it summarises
 
   HEURISTIC (a reader decides; labelled as such in every finding)
     vague_dod               a DoD bullet nothing could falsify
@@ -42,16 +57,15 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-
 BLOCK_RE = re.compile(r"^##\s+(B-\d+)\s+—\s+(.+?)\s*(?:\[( |x)\])?\s*$", re.MULTILINE)
 FIELD_RE = re.compile(r"^([a-z_]+):\s*(.*)$", re.MULTILINE)
 DOD_BULLET_RE = re.compile(r"^\s*-\s+(.+)$", re.MULTILINE)
-REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4}-\d{2}-\d{2})", re.I)
+REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 
 REQUIRED_FIELDS = ("domain", "repo", "suggested_mode", "source", "evidence", "why_now", "status")
-LEGAL_STATUS = {"raw", "triaged", "planned", "shipped", "killed"}
+LEGAL_STATUS = {"raw", "triaged", "approved", "planned", "shipped", "killed"}
 LEGAL_MODES = {"review", "live-test", "bug", "evolve"}
-OPEN_STATUS = {"raw", "triaged", "planned"}
+OPEN_STATUS = {"raw", "triaged", "approved", "planned"}
 
 # A DoD bullet built only from these cannot fail, so it cannot close an item.
 VAGUE_TERMS = {
@@ -141,7 +155,7 @@ def _title_overlap(a: str, b: str) -> float:
     return len(wa & wb) / min(len(wa), len(wb))
 
 
-def _known_repos(backlog_dir: Path) -> set[str] | None:
+def _routing(backlog_dir: Path) -> dict[str, dict] | None:
     """Repos the routing table knows. None when the table cannot be read.
 
     None is not an empty set: an unreadable table means we cannot judge routing, and
@@ -154,11 +168,14 @@ def _known_repos(backlog_dir: Path) -> set[str] | None:
     `except Exception` around the import would swallow that into a silent None. The check
     would then never run while the report looked healthy.
     """
-    tooling = Path(__file__).resolve().parents[3] / "scripts"
+    tooling = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
     if str(tooling) not in sys.path:
         sys.path.insert(0, str(tooling))
     try:
-        from route_domain import _routing_table_path, parse_routing_table  # noqa: PLC0415
+        from route_domain import (
+            _routing_table_path,
+            parse_routing_table,
+        )
     except ImportError:
         # The routing tool is genuinely unavailable — report inability, never a violation.
         return None
@@ -167,11 +184,126 @@ def _known_repos(backlog_dir: Path) -> set[str] | None:
     if rule is None:
         return None
     try:
-        return {r for entry in parse_routing_table(rule).values() for r in entry["repos"]}
+        table = parse_routing_table(rule)
     except ValueError:
         # A malformed table is a real problem, but it is `backlog-review`'s job to review
         # items, not the rule. Decline to judge routing rather than blame every item.
         return None
+    return table
+
+
+_ID_IN_TEXT_RE = re.compile(r"\bB-\d{3,}\b")
+_NO_IMPEDIMENT = {"none", "-", "none-yet", "nothing"}
+
+#: The two lineage edges, and the terminal status each one asserts about its target.
+#:
+#: `check_intake_gates.ACTION_BY_STATUS` produces them: a dedup hit on a `killed` item
+#: prescribes `supersedes`, on a `shipped` item `regression_of`. So each field is a
+#: CLAIM about the state its target is in, and a claim is checkable. Until kit#55 both
+#: were written and never read — the kit's own `mentioned-not-used` pattern, applied to
+#: a schema field.
+#:
+#: Deliberately no cycle check: a lineage edge points only at a terminal item, and a
+#: terminal item is not re-opened, so a ring is unreachable. G7 has no analogue here.
+LINEAGE_EDGES = {
+    "supersedes": "killed",
+    "regression_of": "shipped",
+}
+
+
+def declares_impediment(raw: str) -> bool:
+    cleaned = raw.strip()
+    return bool(cleaned) and cleaned.lower() not in _NO_IMPEDIMENT
+
+
+def parse_blocked_by(raw: str) -> list[str]:
+    """The item ids named anywhere in a `blocked_by` value. Mirrors the writer.
+
+    Duplicated on purpose: this gate must review a registry written by anything —
+    a human, an older kit, a hand edit — so it cannot import the writer and inherit
+    its assumptions about what produced the file.
+
+    Ids are extracted from prose rather than parsed from a fixed shape, because the
+    field was in use before it was specified: of the eight items carrying it when it
+    was measured, seven named a sponsor decision or an external action and only one
+    named an item. Demanding `B-NNN` would have reported seven honest impediments as
+    malformed.
+    """
+    if not declares_impediment(raw):
+        return []
+    return _ID_IN_TEXT_RE.findall(raw)
+
+
+def carries_prose(raw: str) -> bool:
+    """Does the value say anything beyond a list of ids?
+
+    `blocked_by` is prose by design — of the eight items carrying it when the
+    field was measured, seven named a sponsor decision or an external action and
+    only one named an item. A value stating a reason is the normal case, and an
+    ids-only value is the exception this distinction exists to find.
+    """
+    return bool(_ID_IN_TEXT_RE.sub("", raw).strip(" ,\u2014-"))
+
+
+def impediment_edges(raw: str, own_id: str) -> list[str]:
+    """The ids `raw` names as impediments, which never includes the item itself.
+
+    An item's own id appears in its `blocked_by` prose constantly and innocently,
+    because the prose describes the item: *"Vide report /idea-to-release B-060 de
+    2026-08-31"*. The parser lifts every id it sees, so that sentence made B-060
+    its own blocker — then a ring of one, then a deadlock no work can clear.
+    Measured on a real registry on 2026-09-02: **14 items reported `self_block`
+    and 14 more reported a `B-NNN -> B-NNN` cycle, 28 blockers in total, every
+    one of them false**, and together they refused every push to the repository.
+
+    `select_backlog_item.py:141` had already fixed this for the queue — same
+    field, same reasoning, same one-line filter — and the fix did not travel to
+    the gate. The duplication between the two is deliberate (this gate must read
+    a registry written by anything, so it cannot import the writer), but a rule
+    duplicated is a rule that can be fixed in one copy and stay broken in the
+    other, and that is what happened.
+
+    An ids-only value is left alone: `blocked_by: B-060` written on B-060 is a
+    genuine self-block, it describes nothing, and the gate should still say so.
+    """
+    ids = parse_blocked_by(raw)
+    return [b for b in ids if b != own_id] if carries_prose(raw) else ids
+
+
+def _find_cycles(edges: dict[str, list[str]]) -> list[list[str]]:
+    """Every distinct ring in the impediment graph, each reported once.
+
+    Rings are keyed by their sorted membership so a three-item cycle is not reported
+    three times — once per entry point — which would read as three deadlocks.
+    """
+    rings: dict[frozenset[str], list[str]] = {}
+    for start in edges:
+        stack: list[tuple[str, list[str]]] = [(start, [start])]
+        while stack:
+            node, path = stack.pop()
+            for nxt in edges.get(node, []):
+                if nxt == start:
+                    rings.setdefault(frozenset(path), path + [nxt])
+                elif nxt not in path and nxt in edges:
+                    stack.append((nxt, path + [nxt]))
+    return list(rings.values())
+
+
+
+def _effective_counts(items: list[Item]) -> dict[str, int]:
+    statuses = {i.item_id: i.fields.get("status", "") for i in items}
+    counts: dict[str, int] = {}
+    for item in items:
+        status = item.fields.get("status", "")
+        raw = item.fields.get("blocked_by", "")
+        state = status
+        if status in OPEN_STATUS and declares_impediment(raw):
+            ids = parse_blocked_by(raw)
+            if not ids or any(statuses.get(b, "") in OPEN_STATUS for b in ids):
+                state = "blocked"
+        counts[state] = counts.get(state, 0) + 1
+    return dict(sorted(counts.items()))
+
 
 
 def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, Any]:
@@ -181,7 +313,38 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     findings: list[Finding] = []
 
     project_root = backlog_path.resolve().parent
-    known_repos = _known_repos(project_root)
+    routing = _routing(project_root)
+    known_repos = (
+        None if routing is None else {r for e in routing.values() for r in e["repos"]}
+    )
+
+    # A domain whose specialist file is absent routes every one of its items to nobody.
+    #
+    # `route_domain.py` calls that a BROKEN ROUTE and exits 3 — "a defect in the table itself" — but
+    # this report never asked. Gate G1 checks whether a repo is IN the table, not whether the table's
+    # answer exists, so a registry could read SHIPPABLE while all of its items resolved to a file
+    # nobody had written. Measured on an adopter 2026-09-03: its table named a specialist file that
+    # did not exist, every repo in it exited 3 from `route_domain.py`, and 106 items routed to nobody
+    # while this report came back clean.
+    #
+    # The measurement is deliberately anonymous. `test_no_origin_ecosystem_leak` refuses a versioned
+    # kit file that names a specific ecosystem's repositories, and its reason applies here: the kit
+    # describes ANY product that adopts it, and a named one makes every consumer inherit a map of
+    # repos they do not have. The first version of this comment named the adopter and the detector
+    # caught it.
+    #
+    # This is the same failure the routing gate exists to prevent, one level up, and it failed in the
+    # reassuring direction.
+    if routing is not None:
+        for domain, entry in sorted(routing.items()):
+            agent = entry.get("agent")
+            if agent is None:
+                findings.append(Finding("broken_route", "deterministic", "blocker", domain,
+                    f"domain `{domain}` names no specialist — every item it routes reaches nobody"))
+                continue
+            if not (project_root / agent).exists() and not (project_root / ".claude" / agent).exists():
+                findings.append(Finding("broken_route", "deterministic", "blocker", domain,
+                    f"domain `{domain}` routes to `{agent}`, which is not on disk"))
 
     seen_ids: dict[str, Item] = {}
     numeric_ids: list[int] = []
@@ -202,13 +365,13 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
                     f"`{required}` is absent"))
 
         # `status` twice leaves the block with two answers, and every reader — this gate, the
-        # index generator, a human skimming — silently takes the last one. Measured on theo-db:
+        # index generator, a human skimming — silently takes the last one. Measured on db-engine:
         # `B-021` carries `raw` then `triaged`, `B-022` carries `planned` then `raw`. The index
         # buckets on `status`, so an ambiguous one makes the summary arbitrary rather than
         # wrong-in-a-way-you-can-see.
         #
         # ONLY `status`, deliberately. The first draft flagged every repeated field and lit up
-        # theo-cloud: `partial_progress` four times on B-031 is an append-one-line-per-increment
+        # control-plane: `partial_progress` four times on B-031 is an append-one-line-per-increment
         # log the team keeps on purpose, and `evidence: none-yet` followed by a pointer is an item
         # that advanced. Neither is a defect, and a gate that reports them is a gate people learn
         # to override — which is how the real one gets waved through.
@@ -281,13 +444,97 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     # wrong. That is strictly worse than having no index, because a reader stops at the summary.
     # Imported here rather than at module scope: `backlog_index` imports this module for the item
     # parser, and a top-level import in both directions is a cycle.
-    from backlog_index import index_is_current  # noqa: PLC0415
+    from backlog_index import index_is_current
 
     index_current, _ = index_is_current(content)
     if not index_current:
         findings.append(Finding("index_stale", "deterministic", "major", "—",
             "the index at the top does not match the items below it (or is absent). "
             "Regenerate with `python3 backlog_index.py BACKLOG.md --write`."))
+
+    # ── impediment edges ──────────────────────────────────────────────────────
+    #
+    # `blocked_by` is written on the blocked side only; the reverse edge is derived by
+    # the index and never typed, so the two halves cannot drift apart. What CAN rot is
+    # the edge itself, in four ways, and all four are deterministic.
+    raw_values = {i.item_id: i.fields.get("blocked_by", "") for i in items}
+    edges = {iid: impediment_edges(raw, iid) for iid, raw in raw_values.items()}
+    statuses = {i.item_id: i.fields.get("status", "") for i in items}
+
+    for item in items:
+        iid = item.item_id
+        blockers = edges.get(iid, [])
+        if not declares_impediment(raw_values.get(iid, "")):
+            continue
+
+        if iid in blockers:
+            findings.append(Finding("self_block", "deterministic", "blocker", iid,
+                f"`{iid}` names itself in `blocked_by`. It can never be resolved."))
+
+        unknown = [b for b in blockers if b not in statuses]
+        if unknown:
+            findings.append(Finding("blocker_missing", "deterministic", "blocker", iid,
+                f"`blocked_by` names {', '.join(unknown)}, which no block in this file defines. "
+                "An edge pointing at nothing never resolves; file the item or drop the edge."))
+
+        known = [b for b in blockers if b in statuses]
+        # Only an all-ids impediment can be called stale. A value that also states a
+        # reason ("B-075, and the sponsor must ratify") outlives its item edge, and
+        # nothing in this repository can tell whether the sponsor has ratified.
+        prose_only = raw_values.get(iid, "")
+        carries_prose = bool(_ID_IN_TEXT_RE.sub("", prose_only).strip(" ,—-"))
+        if known and not carries_prose and all(statuses[b] not in OPEN_STATUS for b in known) and not unknown:
+            findings.append(Finding("stale_block", "deterministic", "minor", iid,
+                f"every blocker ({', '.join(known)}) is closed, but the edge is still written. "
+                "The derived state already reads unblocked; the line is now noise."))
+
+        if statuses.get(iid) not in OPEN_STATUS:
+            open_blockers = [b for b in known if statuses[b] in OPEN_STATUS]
+            if open_blockers:
+                findings.append(Finding("closed_but_blocked", "deterministic", "major", iid,
+                    f"`{iid}` is {statuses[iid]} while {', '.join(open_blockers)} is still open. "
+                    "Either the item did not really close, or the edge was never cleared."))
+            elif not known:
+                findings.append(Finding("closed_but_blocked", "deterministic", "minor", iid,
+                    f"`{iid}` is {statuses[iid]} but still states an impediment. "
+                    "A closed item declaring a live block reads as unfinished to everyone after you."))
+
+    for ring in _find_cycles(edges):
+        findings.append(Finding("blocker_cycle", "deterministic", "blocker", ring[0],
+            f"impediment cycle: {' -> '.join(ring)}. Every item in the ring waits for another "
+            "in it, so none can ever ship. Break it by splitting one item or dropping one edge."))
+
+    # ── lineage edges ─────────────────────────────────────────────────────────
+    #
+    # Same shape as the impediment edge above, one question shorter: a lineage edge
+    # cannot go stale (its target is terminal and stays terminal) and cannot ring.
+    # What it CAN do is name nothing, or name something that is not what the field
+    # says it is.
+    for item in items:
+        iid = item.item_id
+        for field_name, required_status in LINEAGE_EDGES.items():
+            raw = item.fields.get(field_name, "").strip()
+            if not raw or raw.lower() in _NO_IMPEDIMENT:
+                continue
+            targets = _ID_IN_TEXT_RE.findall(raw)
+            if not targets:
+                findings.append(Finding("lineage_missing", "deterministic", "blocker", iid,
+                    f"`{field_name}: {raw}` names no item id. This edge exists to point at the "
+                    f"item this one replaces; prose alone cannot be resolved."))
+                continue
+            for target in targets:
+                if target == iid:
+                    findings.append(Finding("lineage_missing", "deterministic", "blocker", iid,
+                        f"`{field_name}` names `{iid}` itself. An item cannot be its own ancestor."))
+                elif target not in statuses:
+                    findings.append(Finding("lineage_missing", "deterministic", "blocker", iid,
+                        f"`{field_name}` names {target}, which no block in this file defines. "
+                        f"An edge pointing at nothing never resolves; the id is the audit trail."))
+                elif statuses[target] != required_status:
+                    findings.append(Finding("lineage_wrong_status", "deterministic", "major", iid,
+                        f"`{field_name}` names {target}, which is `{statuses[target]}` and not "
+                        f"`{required_status}`. The field asserts a state its target is not in — "
+                        f"a duplicate of an OPEN item folds in as ITEM_MERGED instead."))
 
     counts = {"blocker": 0, "major": 0, "minor": 0}
     for f in findings:
@@ -308,6 +555,10 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
         "items_by_status": {
             s: sum(1 for i in items if i.fields.get("status") == s) for s in sorted(LEGAL_STATUS)
         },
+        # The state a reader should act on. `blocked` is DERIVED here and stored
+        # nowhere, which is what stops it from going stale: an item whose blockers
+        # all shipped stops being blocked without anyone remembering to edit it.
+        "items_by_effective_state": _effective_counts(items),
         "routing_table_read": known_repos is not None,
         "findings": [f.__dict__ for f in findings],
         "severity_counts": counts,

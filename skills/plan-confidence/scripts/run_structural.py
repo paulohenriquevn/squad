@@ -27,16 +27,19 @@ from typing import Any
 
 from _rubric_loader import load_rubric
 from check_adr_completeness import ADRReport, check_adr_completeness
+from check_alignment_gate import check_alignment_gate
 from check_architecture_compliance import check_architecture_compliance
 from check_baseline_context import check_baseline_context
 from check_concurrency_tests import check_concurrency_tests
 from check_coverage_matrix import CoverageReport, check_coverage_matrix
 from check_criterion_executability import ExecutabilityReport, check_criterion_executability
+from check_deps_audit import check_deps_audit
 from check_drawbacks_section import check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
 from check_failure_scenarios import check_failure_scenarios
 from check_patterns_consumption import PatternsConsumptionReport, check_patterns_consumption
 from check_spec_smells import SmellReport, check_spec_smells
+from check_task_interfaces import check_task_interfaces
 from check_tdd_in_bugfix import TDDReport, check_tdd_in_bugfix
 
 SKILL_ROOT = Path(__file__).parent.parent
@@ -68,7 +71,7 @@ def _find_project_root(start: Path) -> Path:
 def _find_plans_dir(project_root: Path) -> Path:
     """Auto-detect the plans directory across common project conventions."""
     candidates = [
-        project_root / ".claude" / "knowledge-base" / "plans",
+        project_root / ".claude" / "records" / "plans",
         project_root / ".claude" / "plans",
         project_root / "plans",
         project_root / "docs" / "plans",
@@ -83,7 +86,7 @@ def _find_plans_dir(project_root: Path) -> Path:
 def _find_holdout_dir(project_root: Path) -> Path:
     """Auto-detect holdout dir; fall back to canonical path."""
     candidates = [
-        project_root / ".claude" / "knowledge-base" / "concepts" / "plan-confidence" / "holdout",
+        project_root / ".claude" / "records" / "concepts" / "plan-confidence" / "holdout",
         project_root / ".claude" / "plan-confidence" / "holdout",
     ]
     for candidate in candidates:
@@ -109,7 +112,7 @@ M2_ACTIVE_DIMENSIONS = ["completeness", "structural_risk"]
 
 
 @dataclass
-class Motivo:
+class Reason:
     sign: str  # 'positive' | 'negative' | 'neutral'
     label: str
     weight: float
@@ -121,15 +124,15 @@ class StructuralScoreReport:
     plan_path: str
     plan_version: str
     scored_at: str
-    completude_score: float
-    risco_estrutural_score: float
+    completeness_score: float
+    structural_risk_score: float
     active_dimensions: list[str]
     weight_normalization_factor: float
     weighted_avg: float
     hard_caps_triggered: list[str]
     final_score_after_caps: float
     verdict: str
-    reasons: dict[str, list[Motivo]]
+    reasons: dict[str, list[Reason]]
     sub_reports: dict[str, Any] = field(default_factory=dict)
 
 
@@ -186,7 +189,7 @@ def _lookup_verdict(score: float, bands: list[tuple[str, int]]) -> str:
     return "INVALID"
 
 
-def _compute_completude(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> tuple[float, list[Motivo]]:
+def _compute_completeness(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> tuple[float, list[Reason]]:
     """v1.1 EC-1 fix: single formula (rubric weights 0.6/0.2/0.2 per Phase 4.3 algorithm)."""
     coverage_int = 1.0 if cov.is_complete else 0.0
     coverage_score = 60.0 * coverage_int  # weight 0.6 * 100
@@ -194,25 +197,25 @@ def _compute_completude(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -> 
     tdd_score = 20.0 * tdd.coverage_ratio
     completeness = coverage_score + adr_score + tdd_score
 
-    reasons: list[Motivo] = []
+    reasons: list[Reason] = []
     sign_cov = "positive" if cov.is_complete else "negative"
-    reasons.append(Motivo(sign=sign_cov, label=f"Coverage Matrix {'100%' if cov.is_complete else f'{cov.coverage_ratio:.0%}'}", weight=coverage_score))
+    reasons.append(Reason(sign=sign_cov, label=f"Coverage Matrix {'100%' if cov.is_complete else f'{cov.coverage_ratio:.0%}'}", weight=coverage_score))
     sign_adr = "positive" if adr.completeness_ratio >= 1.0 else "negative"
-    reasons.append(Motivo(sign=sign_adr, label=f"ADR alternatives ({adr.with_alternatives}/{adr.total_adrs})", weight=adr_score))
+    reasons.append(Reason(sign=sign_adr, label=f"ADR alternatives ({adr.with_alternatives}/{adr.total_adrs})", weight=adr_score))
     sign_tdd = "positive" if tdd.coverage_ratio >= 1.0 else "negative"
-    reasons.append(Motivo(sign=sign_tdd, label=f"TDD in bug-fix ({tdd.with_tdd}/{tdd.total_bugfix_tasks})", weight=tdd_score))
+    reasons.append(Reason(sign=sign_tdd, label=f"TDD in bug-fix ({tdd.with_tdd}/{tdd.total_bugfix_tasks})", weight=tdd_score))
 
     return completeness, reasons
 
 
-def _compute_risco(smells: SmellReport) -> tuple[float, list[Motivo]]:
-    risco = max(0.0, 100.0 + smells.total_penalty)
+def _compute_structural_risk(smells: SmellReport) -> tuple[float, list[Reason]]:
+    structural_risk = max(0.0, 100.0 + smells.total_penalty)
     # Top 3 categories by hit count
     sorted_cats = sorted(smells.by_category.items(), key=lambda x: x[1], reverse=True)
-    reasons: list[Motivo] = []
+    reasons: list[Reason] = []
     for cat, count in sorted_cats[:3]:
-        reasons.append(Motivo(sign="negative" if count > 0 else "neutral", label=f"{count} {cat} hits", weight=-float(count)))
-    return risco, reasons
+        reasons.append(Reason(sign="negative" if count > 0 else "neutral", label=f"{count} {cat} hits", weight=-float(count)))
+    return structural_risk, reasons
 
 
 def _detect_hard_caps(
@@ -307,11 +310,17 @@ def run_structural(
     drawbacks = check_drawbacks_section(plan_path)
     concurrency = check_concurrency_tests(plan_path)
     failure_scenarios = check_failure_scenarios(plan_path)
+    deps_audit = check_deps_audit(plan_path)
+    alignment = check_alignment_gate(plan_path)
+    # Pre-flight: producer/consumer coherence across tasks, while both are
+    # still prose. `check_wiring.py` asks this after /implement, when the
+    # mismatched calls are already written.
+    interfaces = check_task_interfaces(plan_path)
     patterns_consumption = check_patterns_consumption(plan_path, _find_repo_root_from_plan(plan_path))
 
     # Compute per-dimension scores
-    completeness, completude_motivos = _compute_completude(cov, adr, tdd)
-    risco, risco_motivos = _compute_risco(smells)
+    completeness, completeness_reasons = _compute_completeness(cov, adr, tdd)
+    structural_risk, structural_risk_reasons = _compute_structural_risk(smells)
 
     # ADR D8 — renormalize for active dimensions
     active = M2_ACTIVE_DIMENSIONS[:]
@@ -320,7 +329,7 @@ def run_structural(
 
     weighted_avg = (
         normalized_weights["completeness"] * completeness
-        + normalized_weights["structural_risk"] * risco
+        + normalized_weights["structural_risk"] * structural_risk
     )
 
     # Hard caps (strict, fail-closed)
@@ -378,36 +387,66 @@ def run_structural(
         hard_cap_ids.append("soft_floor_failure_scenarios_missing")
         final_score = min(final_score, 89.0)
 
+    # `cycle-plan`'s CVE gate stopped depending on someone honouring it. This check
+    # does not look for CVEs — `/deps-audit` does that, with the scanners — it READS
+    # the verdict that run left on disk. A plan declaring a new dependency with no
+    # audit gets a soft floor (nobody checked); one whose report points at a
+    # CRITICAL/HIGH CVE gets a hard cap, which is the gate `cycle-plan.md § Phase
+    # contracts` declared and nothing enforced.
+    if deps_audit.applies and deps_audit.hard_cap:
+        hard_cap_ids.append(deps_audit.stable_id)
+        final_score = min(final_score, 49.0)
+    elif deps_audit.applies and deps_audit.soft_floor:
+        hard_cap_ids.append(deps_audit.stable_id)
+        final_score = min(final_score, 89.0)
+
+    # The 90% alignment threshold, mechanised. Until this line existed the rule
+    # was PROSE in three documents — `alignment-threshold.md`, a pre-condition in
+    # `cycle-implement.md`, a phase contract in `cycle-plan.md` — and a grep for
+    # anything READING `records/alignment/` returned nothing. Three documents said
+    # the item must not be built; no code could stop it.
+    #
+    # Unlike every other cap here there is no dismissing ADR and no `--skip`.
+    # An escape hatch on this one is an escape hatch on the reason it exists.
+    if alignment.hard_cap:
+        hard_cap_ids.append("alignment_not_reached")
+        final_score = min(final_score, float(alignment.hard_cap))
+    elif alignment.soft_floor:
+        hard_cap_ids.append("alignment_not_applicable")
+        final_score = min(final_score, float(alignment.soft_floor))
+
     verdict = _lookup_verdict(final_score, bands)
     # Hard caps "coverage_lt_100" and "fabricated_citation" force INVALID regardless of bands.
     if (
         "coverage_lt_100" in hard_cap_ids
         or "fabricated_citation" in hard_cap_ids
         or "patterns_skill_ignored" in hard_cap_ids
+        or "deps_audit_insecure" in hard_cap_ids
+        or "alignment_not_reached" in hard_cap_ids
     ):
         verdict = "INVALID"
 
-    evidence_motivos: list[Motivo] = []
+    evidence_reasons: list[Reason] = []
     if evidence.total_citations > 0:
         resolved_count = evidence.total_citations - len(evidence.unresolved_citations)
         if resolved_count > 0:
-            evidence_motivos.append(
-                Motivo(sign="positive", label=f"{resolved_count} citations resolved", weight=float(resolved_count))
+            evidence_reasons.append(
+                Reason(sign="positive", label=f"{resolved_count} citations resolved", weight=float(resolved_count))
             )
         if evidence.unresolved_citations:
-            evidence_motivos.append(
-                Motivo(
+            evidence_reasons.append(
+                Reason(
                     sign="negative",
                     label=f"{len(evidence.unresolved_citations)} fabricated citation(s)",
                     weight=-float(len(evidence.unresolved_citations)),
                 )
             )
 
-    motivos_map: dict[str, list[Motivo]] = {
-        "completeness": completude_motivos,
-        "evidence": evidence_motivos,
+    reasons_by_dimension: dict[str, list[Reason]] = {
+        "completeness": completeness_reasons,
+        "evidence": evidence_reasons,
         "calibration": [],  # M5 future
-        "structural_risk": risco_motivos,
+        "structural_risk": structural_risk_reasons,
     }
 
     return StructuralScoreReport(
@@ -415,15 +454,15 @@ def run_structural(
         plan_path=str(plan_path),
         plan_version=plan_version,
         scored_at=datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
-        completude_score=round(completeness, 2),
-        risco_estrutural_score=round(risco, 2),
+        completeness_score=round(completeness, 2),
+        structural_risk_score=round(structural_risk, 2),
         active_dimensions=active,
         weight_normalization_factor=round(1.0 / norm_factor, 4),
         weighted_avg=round(weighted_avg, 2),
         hard_caps_triggered=hard_cap_ids,
         final_score_after_caps=round(final_score, 2),
         verdict=verdict,
-        reasons=motivos_map,
+        reasons=reasons_by_dimension,
         sub_reports={
             "coverage_matrix": {
                 "total_gaps": cov.total_gaps,
@@ -438,6 +477,7 @@ def run_structural(
                 "with_alternatives": adr.with_alternatives,
                 "completeness_ratio": adr.completeness_ratio,
                 "missing_alternatives": list(adr.missing_alternatives),
+                "missing_cost_if_wrong": list(adr.missing_cost_if_wrong),
             },
             "tdd_in_bugfix": {
                 "total_bugfix_tasks": tdd.total_bugfix_tasks,
@@ -525,7 +565,35 @@ def run_structural(
                 "is_clean": patterns_consumption.is_clean,
                 "reasons": list(patterns_consumption.reasons),
             },
+            # Pre-flight, reported alongside the other structural checks. It is
+            # advisory by design: the signature block the plan template calls
+            # optional is what it reads, so a finding is a question for the
+            # author rather than a verdict about the plan.
+            "task_interfaces": {
+                "tasks_total": interfaces.tasks_total,
+                "tasks_with_signatures": interfaces.tasks_with_signatures,
+                "tasks_unchecked": interfaces.tasks_total - interfaces.tasks_with_signatures,
+                "produced_never_consumed": list(interfaces.produced_never_consumed),
+                "consumed_never_produced": list(interfaces.consumed_never_produced),
+                "consumed_before_produced": list(interfaces.consumed_before_produced),
+            },
             "failure_scenarios": {
+                "alignment_gate": {
+                    "applies": alignment.applies,
+                    "verdict": alignment.verdict,
+                    "reason": alignment.reason,
+                    "machine_ratio": alignment.machine_ratio,
+                    "brief_path": alignment.brief_path,
+                },
+                "deps_audit": {
+                    "applies": deps_audit.applies,
+                    "verdict": deps_audit.verdict,
+                    "hard_cap": deps_audit.hard_cap,
+                    "soft_floor": deps_audit.soft_floor,
+                    "declared": list(deps_audit.declared),
+                    "audit_path": deps_audit.audit_path,
+                    "reasons": list(deps_audit.reasons),
+                },
                 "external_io_detected": failure_scenarios.external_io_detected,
                 "signals_sample": list(failure_scenarios.signals_sample),
                 "section_present": failure_scenarios.section_present,
@@ -628,14 +696,42 @@ except ImportError:
     cq_invoke = None  # type: ignore[assignment]
 
 
-def _merge_code_quality_verdict(out: dict, cq_summary: dict) -> None:
+#: A plan dismissing one soft cap, with the reason inline.
+#:
+#: The shape copies `check_wiring.py`'s `<!-- ADR-DEFER-WIRING-B: <symbol>:
+#: <reason> -->` rather than inventing a third marker convention — advice this
+#: repository received from a consumer and had already followed once.
+#:
+#: An explicit marker, not prose mentioning the id: a plan can name a cap in
+#: order to say it will NOT be dismissed, and a grep cannot tell the two apart.
+#: The gate has to read a decision, not a keyword.
+_DISMISS_SOFT_CAP_RE = re.compile(
+    r"<!--\s*ADR-DISMISS-SOFT-CAP:\s*([a-z0-9_]+)\s*:\s*[^>]+?-->"
+)
+
+
+def _dismissed_soft_caps(plan_text: str) -> set[str]:
+    """Soft-cap ids this plan dismisses with an ADR.
+
+    `rules/cycle-code-quality.md` § 1 promised the escape and nothing read it.
+    This is the reading half.
+    """
+    return set(_DISMISS_SOFT_CAP_RE.findall(plan_text))
+
+
+def _merge_code_quality_verdict(out: dict, cq_summary: dict, plan_text: str = "") -> None:
     """Thin wrapper around `cq_invoke.merge_verdict_into_plan_confidence` for
     backward compatibility with existing call sites + the test suite that
     imports this symbol via `from run_structural import _merge_code_quality_verdict`.
+
+    `plan_text` is optional so the older two-argument call sites keep working;
+    without it no cap is dismissed, which is the pre-existing behaviour.
     """
     if cq_invoke is None:
         return
-    cq_invoke.merge_verdict_into_plan_confidence(out, cq_summary)
+    cq_invoke.merge_verdict_into_plan_confidence(
+        out, cq_summary, dismissed_soft_caps=_dismissed_soft_caps(plan_text)
+    )
 
 
 def _invoke_code_quality(plan_slug: str, repo_root: Path, timeout_s: int = 600) -> dict | None:
@@ -704,7 +800,13 @@ def main(argv: list[str] | None = None) -> int:
             }
             # Severity-tier-aware merge (bug fix 2026-05-23: previous logic blindly
             # forced INVALID on any cq cap entry, neutralizing allowlist downgrades).
-            _merge_code_quality_verdict(out, cq_summary)
+            # Read here rather than reusing a `content` from elsewhere: this is
+            # `main()`, and the only other read lives inside a different function.
+            # Passing a name that is not in scope is exactly what shipped once and
+            # killed the scorer for every plan.
+            _merge_code_quality_verdict(
+                out, cq_summary, plan_path.read_text(encoding="utf-8-sig")
+            )
         else:
             out["code_quality"] = {"verdict": "UNAVAILABLE", "reason": "invocation failed or skipped"}
 

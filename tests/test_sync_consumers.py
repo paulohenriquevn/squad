@@ -1,23 +1,26 @@
-"""Atualizar 42 consumidores à mão é como o `theo` quase foi regredido.
+"""Updating 42 consumers by hand is how one adopter was nearly regressed.
 
-Ao atualizar o `theo` nesta sessão, cinco arquivos tinham divergido do kit — e a
-divergência era melhoria LOCAL (a convenção `ECO=` em 9 skills, o `_is_test_file`
-do check_xrefs, a lista de especialistas do projeto). Copiar por cima teria
-apagado as três. Só não apagou porque eu comparei arquivo a arquivo antes.
+While updating that adopter, five files had diverged from the kit — and the
+divergence was LOCAL improvement (the `ECO=` convention in 9 skills,
+check_xrefs's `_is_test_file`, the project's specialist list). Copying over them
+would have erased all three. It only did not because the comparison was done file
+by file first.
 
-Com 42 consumidores esse cuidado não escala como disciplina manual. Este é o
-classificador que o torna mecânico: `identical` / `new` / `update` (o alvo está
-na versão base, copiar é seguro) / `local-change` (o alvo divergiu — NÃO tocar,
-nomear para decisão humana).
+With 42 consumers that care does not scale as manual discipline. This is the
+classifier that makes it mechanical: `identical` / `new` / `update` (the target is
+on the base version, copying is safe) / `local-change` (the target diverged — do
+NOT touch, name it for a human decision).
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "mechanisms" / "distribution"))
 
-from sync_consumers import Action, classify  # noqa: E402
+import sync_consumers
+from sync_consumers import Action, classify
 
 
 def test_absent_target_is_new() -> None:
@@ -29,37 +32,37 @@ def test_target_equal_to_source_is_identical() -> None:
 
 
 def test_target_on_the_base_version_is_a_safe_update() -> None:
-    """O caso comum: o consumidor está na versão anterior do kit."""
+    """The common case: the consumer is on the kit's previous version."""
     assert classify(source="novo\n", base="antigo\n", target="antigo\n") is Action.UPDATE
 
 
 def test_target_that_diverged_from_base_is_a_local_change() -> None:
-    """A lição do theo: divergência é melhoria local até prova em contrário."""
+    """The adopter's lesson: divergence is local improvement until proven otherwise."""
     assert classify(
         source="novo do kit\n", base="antigo\n", target="antigo + correcao local\n"
     ) is Action.LOCAL_CHANGE
 
 
 def test_file_absent_from_the_base_but_present_in_both_is_compared_by_content() -> None:
-    """Arquivo novo no kit que o alvo já tem (escrito lá primeiro) não é update
-    cego: se o conteúdo difere, é mudança local."""
+    """A file new in the kit that the target already has (written there first) is not
+    a blind update: if the content differs, it is a local change."""
     assert classify(source="do kit\n", base=None, target="do kit\n") is Action.IDENTICAL
     assert classify(source="do kit\n", base=None, target="do projeto\n") is Action.LOCAL_CHANGE
 
 
 # ---------------------------------------------------------------------------
-# Defasagem não é modificação local. O primeiro dry-run sobre 40 consumidores
-# marcou 231 arquivos como LOCAL_CHANGE, `scripts/install.sh` em quase todos —
-# e não era melhoria local, era instalação feita de uma versão antiga. Comparar
-# com UMA base só responde bem para quem está exatamente nela.
+# Lag is not local modification. The first dry-run across 40 consumers marked 231
+# files as LOCAL_CHANGE, `mechanisms/distribution/install.sh` in almost all of them — and it was
+# not local improvement, it was an install made from an older version. Comparing
+# against ONE base only answers well for whoever sits exactly on it.
 # ---------------------------------------------------------------------------
 
 from sync_consumers import classify_with_history  # noqa: E402
 
 
 def test_content_that_matches_any_historical_kit_version_is_stale(tmp_path: Path) -> None:
-    """Se o conteúdo do alvo é uma versão que o kit já teve, ele está atrasado —
-    não modificado. Atualizar é seguro."""
+    """If the target's content is a version the kit once had, it is behind — not
+    modified. Updating is safe."""
     action = classify_with_history(
         source="v3\n", base="v2\n", target="v1\n", historical={"v1\n", "v2\n", "v3\n"}
     )
@@ -82,11 +85,11 @@ def test_the_base_version_is_still_a_plain_update() -> None:
 
 
 # ---------------------------------------------------------------------------
-# A delta tem de ser FECHADA. Os arquivos sincronizados citam outras regras do
-# kit; num consumidor defasado essas regras podem não existir, e o check_xrefs
-# do alvo passa a reprovar por referência quebrada — medido: 13 dos 40
-# consumidores ficaram vermelhos após a primeira aplicação, citando
-# `rules/knowledge-base-location.md` e `rules/live-target.txt`.
+# The delta must be CLOSED. Synced files cite other rules from the
+# kit; in a lagging consumer those rules may not exist, and the target's
+# check_xrefs starts failing on a broken reference — measured: 13 of the 40
+# consumers went red after the first application, citing
+# `rules/records-location.md` and `rules/live-target.txt`.
 # ---------------------------------------------------------------------------
 
 from sync_consumers import missing_rule_dependencies  # noqa: E402
@@ -111,7 +114,7 @@ def test_rules_cited_by_the_delta_but_absent_in_the_target_are_listed(tmp_path: 
 
 def test_a_rule_the_target_already_has_is_never_reported(tmp_path: Path) -> None:
     """Config do projeto vive em rules/*.txt — sobrescrever seria destruir ajuste local.
-    Só o que FALTA entra."""
+    Only what is MISSING enters."""
     kit = tmp_path / "kit"
     (kit / "rules").mkdir(parents=True)
     (kit / "skills" / "x").mkdir(parents=True)
@@ -126,13 +129,50 @@ def test_a_rule_the_target_already_has_is_never_reported(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------------
-# Grill kit-domain-agents-install, decisão 5: agente de domínio é do PROJETO.
-# Nenhuma das duas direções faz sentido — nem o kit empurrar, nem colher.
+# Grill kit-domain-agents-install, decision 5: a domain agent belongs to the
+# PROJECT. Neither direction makes sense — neither the kit pushing, nor harvesting.
 # ---------------------------------------------------------------------------
 
 def test_agents_are_not_in_the_sync_scope() -> None:
-    """Sem isto, o kit empurra os oito especialistas do `theo` de volta a cada sync,
-    desfazendo a limpeza que o consumidor fez."""
+    """Without this, the kit pushes the origin ecosystem's eight specialists back on
+    every sync, undoing the cleanup the consumer did."""
     from sync_consumers import delta_prefixes
     assert "agents/" not in delta_prefixes()
     assert "skills/" in delta_prefixes()
+
+
+def test_the_syncer_pushes_exactly_the_trees_the_installer_copies() -> None:
+    """Two lists of the kit's own trees, in two languages, kept by hand.
+
+    They drifted on 2026-09-02: `scripts/` was renamed to `mechanisms/` and only
+    the installer was updated. From that commit the syncer propagated nothing
+    from that tree — the fleet lead, the pipeline scheduler, the protocol client
+    — while printing a delta as though the delta were whole. Five fixes of that
+    day, one of them closing a gate that let unsigned items into PLAN, would have
+    reached no consumer by the supported path.
+
+    Deriving one from the other at runtime would couple a Python module to a
+    shell script's parse. Failing loudly when they disagree costs nothing and
+    catches the rename, which is the only way they ever diverge.
+    """
+    install = (Path(__file__).resolve().parents[1]
+               / "mechanisms" / "distribution" / "install.sh").read_text(encoding="utf-8")
+
+    copied = re.search(r"^for item in ((?:[a-z_]+ )+[a-z_]+); do$", install, re.M)
+    assert copied, "install.sh no longer has the loop that copies the kit's trees"
+    installed = {f"{name}/" for name in copied.group(1).split()}
+
+    assert set(sync_consumers.delta_prefixes()) == installed, (
+        "the syncer and the installer disagree about which trees the kit owns; "
+        "a tree the installer copies but the syncer skips receives no update, "
+        "and the dry-run reports its absence as a complete delta")
+
+
+def test_no_prefix_names_a_directory_that_is_not_there() -> None:
+    """A dead prefix is how the drift stays invisible: it keeps the tuple looking
+    populated while matching nothing."""
+    kit = Path(__file__).resolve().parents[1]
+
+    missing = [p for p in sync_consumers.delta_prefixes() if not (kit / p).is_dir()]
+
+    assert not missing, f"prefix(es) matching no directory in the kit: {missing}"

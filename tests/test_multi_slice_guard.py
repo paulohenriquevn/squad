@@ -2,7 +2,7 @@
 
 The slices are import-isolated on purpose: in production each skill runs alone with only its own
 `scripts/` on `sys.path`, and several ship modules with the same basename and different contents.
-`scripts/run_slice_tests.sh` mirrors that by giving each slice its own process, and it exits 0.
+`mechanisms/cycle/run_slice_tests.sh` mirrors that by giving each slice its own process, and it exits 0.
 
 What was missing is what happens when somebody does the obvious thing instead. Measured 2026-08-24:
 
@@ -30,7 +30,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def _run(*paths: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return subprocess.run(  # noqa: PLW1510
         [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "--collect-only", "-q", *paths],
         cwd=REPO_ROOT,
         capture_output=True,

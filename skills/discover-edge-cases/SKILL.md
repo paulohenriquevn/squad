@@ -14,7 +14,7 @@ Analyze a measurement plan and ask one question: **what could make this measurem
 
 That is the shift from the ancestor. It asked what the *research* might miss — a corner unstudied, a reference project unread. Missing information is a gap you notice. A measurement that runs cleanly and produces a confident wrong answer is not: it looks exactly like a measurement that worked, and everything downstream treats it as measured fact.
 
-Sibling of `/edge-case-plan` — same philosophy, same output format, different scope: risks of the **measurement**, not of the implementation.
+Sibling of `/plan-edge-cases` — same philosophy, same output format, different scope: risks of the **measurement**, not of the implementation.
 
 ## Cycle contract
 
@@ -24,9 +24,9 @@ This skill is **phase 2** of [`cycle-discover`](../../rules/cycle-discover.md). 
 
 Slug or path, via free text:
 
-- Slug (`theo-lens-trace-latency`): `Glob` under `knowledge-base/discoveries/plans/*{slug}*.md`
+- Slug (`web-console-trace-latency`): `Glob` under `records/discoveries/plans/*{slug}*.md`
 - A `.md` path: use directly
-- No hint: most recent file under `knowledge-base/discoveries/plans/` by mtime
+- No hint: most recent file under `records/discoveries/plans/` by mtime
 
 ## Philosophy
 
@@ -45,7 +45,7 @@ Golden rules:
 ### Step 1 — Read the measurement plan
 
 ```bash
-ls knowledge-base/discoveries/plans/*${ARGUMENTS}* 2>/dev/null || ls -t knowledge-base/discoveries/plans/*.md | head -5
+ls records/discoveries/plans/*${ARGUMENTS}* 2>/dev/null || ls -t records/discoveries/plans/*.md | head -5
 ```
 
 Read it fully. Note the `**Mode:**`, the hypothesis, the falsification criterion, every question with its Tool and Target, and the halt-loop checkpoints.
@@ -125,7 +125,7 @@ SCOPE
 ### Step 5 — Save the report
 
 ```
-knowledge-base/reviews/{plan-slug}-edge-cases-{YYYY-MM-DD}.md
+records/reviews/{plan-slug}-edge-cases-{YYYY-MM-DD}.md
 ```
 
 Create `reviews/` if absent. The report is the audit trail before `/discover-execute` runs.
@@ -141,7 +141,7 @@ creates its own report and touches nothing else.
 # Discover Edge Case Review — {plan}
 
 Date: YYYY-MM-DD
-Plan analyzed: knowledge-base/discoveries/plans/{slug}-plan.md
+Plan analyzed: records/discoveries/plans/{slug}-plan.md
 Mode: {review|live-test|bug|evolve}
 Questions analyzed: N
 Edge cases found: N (MUST FIX: N, SHOULD TEST: N, DOCUMENT: N)

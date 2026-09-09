@@ -1,7 +1,7 @@
 """Measurement-target checker for /discover-plan measurement plans (M2 deterministic).
 
 Replaces the ancestor `check_reference_citations.py`, which verified citations into
-`knowledge-base/references/` -- the prior-art study zone this cycle retired.
+`records/references/` -- the prior-art study zone this cycle retired.
 
 A measurement plan names WHAT IT WILL MEASURE, and that is the thing to verify before
 anyone spends time measuring. Two target classes:
@@ -23,13 +23,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-
-TARGETS_HEADER_RE = re.compile(r"^##\s+Measurement\s+Questions\s*$", re.MULTILINE | re.IGNORECASE)
-# Backticked path: `theo-lens/src/` or `theo-lens/src/trace.ts`. Requires a slash so
+# Backticked path: `web-console/src/` or `web-console/src/trace.ts`. Requires a slash so
 # that prose words in backticks are not mistaken for targets.
 # `@` belongs inside a target, not outside it. The previous class excluded it, so a scoped npm
-# specifier like `@theokit/sdk/server/auth` never matched at all — and passed the gate by ACCIDENT
-# while its unscoped sibling `theokit/server/plugins` was scored `fabricated_target`. Two shapes of
+# specifier like `@acme/sdk/server/auth` never matched at all — and passed the gate by ACCIDENT
+# while its unscoped sibling `acme-pkg/server/plugins` was scored `fabricated_target`. Two shapes of
 # the same thing, treated oppositely, for no reason anyone chose.
 PATH_TARGET_RE = re.compile(r"`((?:@?\.?[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_.\-]*)`")
 URL_TARGET_RE = re.compile(r"https?://[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-/]*)?")
@@ -46,10 +44,25 @@ def _find_project_root(start: Path) -> Path:
     return start.resolve().parent if start.is_file() else start.resolve()
 
 
+def _target_exists(project_root: Path, target: str) -> bool:
+    """Does this path exist, in whichever layout the consumer installed?
+
+    Tried at the project root first, then under `.claude/`. This file already
+    resolved `live-target.txt` that way twenty lines above; the measurement-target
+    check did not, so a plan citing a kit path was called unresolvable in every
+    plugin install — a rule stated once and implemented on one of two paths, which
+    is the shape this kit keeps measuring.
+
+    Widening WHERE a target may resolve does not weaken WHETHER it resolves: a
+    path nobody wrote is still `path_not_found`.
+    """
+    return (project_root / target).exists() or (project_root / ".claude" / target).exists()
+
+
 def _resolves_as_module(project_root: Path, target: str) -> bool:
     """Does `target` name an installed npm module rather than a repo path?
 
-    `theokit/server/plugins` and `@theokit/sdk/server/auth` are module SPECIFIERS: they resolve
+    `acme-pkg/server/plugins` and `@acme/sdk/server/auth` are module SPECIFIERS: they resolve
     through `node_modules`, not through the repo tree, and they have no extension. Resolving them
     against the project root fails, which used to fire `fabricated_target` — a hard cap — on a
     citation that was correct.
@@ -87,8 +100,14 @@ def _resolves_as_module(project_root: Path, target: str) -> bool:
         current = current.parent
 
 
-def _declared_live_targets(project_root: Path) -> set[str]:
-    """Hosts declared in rules/live-target.txt.
+def _declared_live_targets(project_root: Path) -> set[str] | None:
+    """Hosts declared in rules/live-target.txt. `None` when the file is not there.
+
+    `None` is not an empty set, and conflating them is what broke gate G-L. An
+    ABSENT file means the check could not run; a PRESENT but empty one means the
+    project declared no live target, and then every live URL in a plan is undeclared
+    by definition. Returning `set()` for both made the caller skip the check
+    entirely — see the guard it feeds.
 
     A plan naming a live URL that no domain declares is planning a probe the cycle
     refuses to run (`cycle-discover.md`, gate G-L). Catching it here means the refusal
@@ -107,7 +126,7 @@ def _declared_live_targets(project_root: Path) -> set[str]:
                     re.MULTILINE,
                 )
             }
-    return set()
+    return None
 
 
 def _is_explicitly_blocked(raw: str, match_end: int) -> bool:
@@ -128,18 +147,33 @@ def check_measurement_targets(plan_path: Path) -> dict[str, Any]:
         if _is_explicitly_blocked(raw, match.end()):
             blocked.add(target)
             continue
-        if (project_root / target).exists() or _resolves_as_module(project_root, target):
+        if _target_exists(project_root, target) or _resolves_as_module(project_root, target):
             verified.add(target)
         else:
             fabricated[target] = "path_not_found"
 
     undeclared_hosts: list[str] = []
     live_targets: set[str] = set()
+    # `declared_hosts is None` means rules/live-target.txt was not found: the check
+    # could not run, and nothing about these targets was judged. An EMPTY set means
+    # the project declared none, and then every live URL is undeclared — which is
+    # precisely what gate G-L exists to catch.
+    #
+    # THE DEFECT THIS REPLACES. The guard read `if declared_hosts and host not in
+    # declared_hosts`, so an empty set skipped the loop body entirely and
+    # `undeclared_hosts` stayed empty — which then satisfied
+    # `if live_targets and not undeclared_hosts` and awarded the plan a CONTRIBUTOR
+    # reading "N live target(s), all declared". Nothing was declared.
+    #
+    # The kit ships `live-target.txt` empty on purpose, so in every freshly installed
+    # consumer this gate was not merely inert: it paid points for the targets it
+    # exists to refuse. An inability reported as approval, which is worse than an
+    # inability reported as zero.
     for match in URL_TARGET_RE.finditer(raw):
         url = match.group(0)
         host = re.sub(r"^https?://", "", url).split("/")[0]
         live_targets.add(url)
-        if declared_hosts and host not in declared_hosts:
+        if declared_hosts is not None and host not in declared_hosts:
             undeclared_hosts.append(host)
 
     total = len(verified) + len(fabricated)
@@ -149,7 +183,13 @@ def check_measurement_targets(plan_path: Path) -> dict[str, Any]:
     contributors: list[str] = []
     if verified:
         contributors.append(f"{len(verified)} resolvable path target(s)")
-    if live_targets and not undeclared_hosts:
+    if live_targets and declared_hosts is None:
+        # Say what happened instead of crediting it. A missing declaration file is
+        # not a plan that got something right.
+        detractors_note = (f"{len(live_targets)} live target(s) could not be checked — "
+                           "rules/live-target.txt not found")
+        contributors.append(detractors_note)
+    elif live_targets and not undeclared_hosts:
         contributors.append(f"{len(live_targets)} live target(s), all declared")
     if blocked:
         contributors.append(f"{len(blocked)} explicitly BLOCKED target(s) (honest gaps)")

@@ -2,7 +2,7 @@
 name: discover-confidence
 version: 0.2.0
 requires: [discover-execute]
-description: Score an opportunity for structural quality (deterministic, zero LLM calls, under 5s). Use this after /discover-execute and before feeding anything to /to-plan, and whenever someone asks whether a finding is solid enough to act on. Verifies that every code pointer resolves AND that the cited line exists, counts runtime observations separately since they are not re-verifiable, and requires an ADR only when the change reaches beyond its own repo.
+description: Score an opportunity for structural quality (deterministic, zero LLM calls, under 5s). Use this after /discover-execute and before feeding anything to /plan-write, and whenever someone asks whether a finding is solid enough to act on. Verifies that every code pointer resolves AND that the cited line exists, counts runtime observations separately since they are not re-verifiable, and requires an ADR only when the change reaches beyond its own repo.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "{opportunity-slug}"
@@ -21,7 +21,7 @@ Sibling of `/plan-confidence` — same architecture (Python deterministic + soft
 ## When NOT to invoke
 
 - After `/discover-execute {slug}` emitted `OPPORTUNITY_COMPLETE` (or exhausted its loop).
-- After incorporating fixes from `/discover-improve`, BEFORE the opportunity feeds `/to-plan`.
+- After incorporating fixes from `/discover-improve`, BEFORE the opportunity feeds `/plan-write`.
 - User explicitly invokes `/discover-confidence {opportunity-slug}`.
 
 Do NOT invoke on a run that ended in `ITEM_KILLED`. A killed item produces no opportunity, and there is nothing to score — the outcome is recorded on the `B-NNN` block with its `kill_reason`.
@@ -75,7 +75,7 @@ Capped at 70 (SHIPPABLE_WITH_CAVEATS at most):
 - **Mandatory section missing** — Header, Item, Repo, Mode, Context, Corner 1–4, Recommendation.
 - **No ADR on a cross-repo change** — fires **only** when the Blast Radius corner names an ecosystem repo other than the opportunity's own. A repo-local fix carries no ADR requirement; the ancestor demanded one from every blueprint, which for maintenance work is ceremony. A change that reaches other repos decides something for their maintainers, and shipping it unrecorded is how a breaking change arrives unannounced.
 
-These caps are INQUEBRÁVEIS. See `rules/discover-opportunity-golden-rule.md`.
+These caps are UNBREAKABLE. See `rules/discover-opportunity-golden-rule.md`.
 
 ## Conservative Bias (fail-closed)
 
@@ -90,15 +90,15 @@ Soft caps appear in `hard_caps_triggered` with the `soft_floor_` prefix for audi
 
 | Score | Verdict | Action |
 |---|---|---|
-| 90-100 | SHIPPABLE | Feed `/to-plan` |
+| 90-100 | SHIPPABLE | Feed `/plan-write` |
 | 70-89 | SHIPPABLE_WITH_CAVEATS | Caveats carried into the plan |
 | 50-69 | NON_SHIPPABLE | Re-run `/discover-execute` with a revised measurement plan |
 | 0-49 | INVALID | Structural defect — back to `/discover-plan` |
 
 ## Workflow
 
-1. **Resolve the path.** A slug resolves to `.claude/knowledge-base/discoveries/opportunities/{slug}-opportunity.md`; a `.md` path is used directly.
-2. **Run the scorer.** `python3 scripts/run_opportunity_score.py <opportunity-path>`.
+1. **Resolve the path.** A slug resolves to `.claude/records/discoveries/opportunities/{slug}-opportunity.md`; a `.md` path is used directly.
+2. **Run the scorer.** `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/run_opportunity_score.py" <opportunity-path>`.
 3. **Parse the JSON**, matching `templates/score-report.schema.json`.
 4. **Render the report.** Top 3 contributors and detractors per dimension, verdict band marked.
 

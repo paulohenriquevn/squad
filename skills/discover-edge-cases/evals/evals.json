@@ -19,7 +19,7 @@
     {
       "id": 1,
       "name": "flags-a-target-that-resolves-but-is-stale",
-      "prompt": "review this plan: it cites theo-lens/src/api/traces.ts:142 as a target, but that file went through a big refactor in July",
+      "prompt": "review this plan: it cites web-console/src/api/traces.ts:142 as a target, but that file went through a big refactor in July",
       "expected_output": "The skill flags that a target can resolve and still be stale — the line now means something else. This is a Target-family finding, and the suggested fix is to re-anchor by symbol or re-open the file rather than trusting the line number.",
       "files": [],
       "assertions": [
@@ -32,7 +32,7 @@
     {
       "id": 2,
       "name": "does-not-widen-scope",
-      "prompt": "give this theo-rag measurement plan a look before we run it",
+      "prompt": "give this search-api measurement plan a look before we run it",
       "expected_output": "Every finding is a checkpoint or a different tool — a fix of at most one line of plan change. The skill does not propose new questions, a wider investigation, or additional repos to look at. Scope creep is the anti-pattern this phase is most prone to.",
       "files": [],
       "assertions": [
@@ -45,12 +45,12 @@
     {
       "id": 3,
       "name": "mode-specific-checks-are-applied",
-      "prompt": "review the plan for B-031 — it's review mode, about a theo-contracts function that seems never to be called",
-      "expected_output": "For review mode the skill checks whether the plan will rule out that the code is dead, that the caller never existed, and that the shape is deliberate. For theo-contracts specifically, it flags that a local grep proves nothing — consumers live in other repos.",
+      "prompt": "review the plan for B-031 — it's review mode, about a contracts function that seems never to be called",
+      "expected_output": "For review mode the skill checks whether the plan will rule out that the code is dead, that the caller never existed, and that the shape is deliberate. For contracts specifically, it flags that a local grep proves nothing — consumers live in other repos.",
       "files": [],
       "assertions": [
         "The three review-mode false positives (dead / never existed / deliberate) were checked",
-        "It flagged that in theo-contracts a local grep cannot prove a symbol is unused",
+        "It flagged that in contracts a local grep cannot prove a symbol is unused",
         "It did not apply live-test or bug checks that are irrelevant to review mode",
         "The blast-radius question (consumers outside the repo) was raised"
       ]

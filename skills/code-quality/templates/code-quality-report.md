@@ -42,6 +42,6 @@
 ## Related
 
 - Plan (Mode 2 only): {plan_link}
-- Golden rule: [`.claude/rules/code-quality-golden-rule.md`](../../rules/code-quality-golden-rule.md)
-- Allowlist: [`.claude/rules/code-quality-allowlist.txt`](../../rules/code-quality-allowlist.txt)
-- Thresholds: [`.claude/rules/code-quality-thresholds.txt`](../../rules/code-quality-thresholds.txt)
+- Golden rule: [`.claude/rules/code-quality-golden-rule.md`](../../../rules/code-quality-golden-rule.md)
+- Allowlist: [`.claude/rules/code-quality-allowlist.txt`](../../../rules/code-quality-allowlist.txt)
+- Thresholds: [`.claude/rules/code-quality-thresholds.txt`](../../../rules/code-quality-thresholds.txt)

@@ -5,34 +5,154 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/scripts/statusline.sh\""
+    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/mechanisms/fleet/statusline.sh\""
   },
   "permissions": {
-    "defaultMode": "default",
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Read",
       "Glob",
       "Grep",
+      "Edit(*)",
       "Bash(*)",
-      "Edit",
-      "Write"
+      "Bash(ls *)",
+      "Bash(tree *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(find *)",
+      "Bash(cat *)",
+      "Bash(mkdir *)",
+      "Bash(mv *)",
+      "Bash(cp *)",
+      "Bash(rm *)",
+      "Bash(jq *)",
+      "Bash(yq *)",
+      "Bash(ast-grep *)",
+      "Bash(sg *)",
+      "Bash(python3 *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git stash *)",
+      "Bash(git add *)",
+      "Bash(git restore --staged *)",
+      "Bash(git show *)",
+      "Bash(git remote -v)",
+      "Bash(git ls-files *)",
+      "Bash(git switch *)"
     ],
     "ask": [],
     "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf $HOME)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
       "Bash(git checkout *)",
       "Bash(git revert *)",
       "Bash(git push --force *)",
       "Bash(git push -f *)",
       "Bash(git reset --hard *)",
       "Bash(git rebase -i *)",
+      "Edit(study-material/**)",
       "Read(.env)",
-      "Read(.env.*)",
+      "Edit(.env)",
       "Read(**/.env)",
-      "Read(**/.env.*)",
-      "Read(**/credentials*)",
-      "Read(**/*secret*)",
+      "Edit(**/.env)",
       "Read(**/*.pem)",
-      "Read(**/*.key)"
+      "Edit(**/*.pem)",
+      "Read(**/*.key)",
+      "Edit(**/*.key)",
+      "Read(**/*.p12)",
+      "Edit(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Edit(**/*.pfx)",
+      "Read(**/*.jks)",
+      "Edit(**/*.jks)",
+      "Read(**/*.keystore)",
+      "Edit(**/*.keystore)",
+      "Read(**/id_rsa)",
+      "Edit(**/id_rsa)",
+      "Read(**/id_dsa)",
+      "Edit(**/id_dsa)",
+      "Read(**/id_ecdsa)",
+      "Edit(**/id_ecdsa)",
+      "Read(**/id_ed25519)",
+      "Edit(**/id_ed25519)",
+      "Read(**/.netrc)",
+      "Edit(**/.netrc)",
+      "Read(**/.pgpass)",
+      "Edit(**/.pgpass)",
+      "Read(**/.npmrc)",
+      "Edit(**/.npmrc)",
+      "Read(**/.pypirc)",
+      "Edit(**/.pypirc)",
+      "Read(**/credentials)",
+      "Edit(**/credentials)",
+      "Read(**/credentials.json)",
+      "Edit(**/credentials.json)",
+      "Read(**/service-account*.json)",
+      "Edit(**/service-account*.json)",
+      "Read(**/kubeconfig)",
+      "Edit(**/kubeconfig)",
+      "Read(**/*.kubeconfig)",
+      "Edit(**/*.kubeconfig)",
+      "Read(**/secret.yaml)",
+      "Edit(**/secret.yaml)",
+      "Read(**/secret.yml)",
+      "Edit(**/secret.yml)",
+      "Read(**/secrets.yaml)",
+      "Edit(**/secrets.yaml)",
+      "Read(**/secrets.yml)",
+      "Edit(**/secrets.yml)",
+      "Read(**/*-secret.yaml)",
+      "Edit(**/*-secret.yaml)",
+      "Read(**/*-secret.yml)",
+      "Edit(**/*-secret.yml)",
+      "Read(**/*-secrets.yaml)",
+      "Edit(**/*-secrets.yaml)",
+      "Read(**/*-secrets.yml)",
+      "Edit(**/*-secrets.yml)",
+      "Read(**/*.secrets.env)",
+      "Edit(**/*.secrets.env)",
+      "Read(.env.local)",
+      "Edit(.env.local)",
+      "Read(.env.dev)",
+      "Edit(.env.dev)",
+      "Read(.env.development)",
+      "Edit(.env.development)",
+      "Read(.env.test)",
+      "Edit(.env.test)",
+      "Read(.env.staging)",
+      "Edit(.env.staging)",
+      "Read(.env.prod)",
+      "Edit(.env.prod)",
+      "Read(.env.production)",
+      "Edit(.env.production)",
+      "Read(.env.secret)",
+      "Edit(.env.secret)",
+      "Read(.env.secrets)",
+      "Edit(.env.secrets)",
+      "Read(**/.env.local)",
+      "Edit(**/.env.local)",
+      "Read(**/.env.dev)",
+      "Edit(**/.env.dev)",
+      "Read(**/.env.development)",
+      "Edit(**/.env.development)",
+      "Read(**/.env.test)",
+      "Edit(**/.env.test)",
+      "Read(**/.env.staging)",
+      "Edit(**/.env.staging)",
+      "Read(**/.env.prod)",
+      "Edit(**/.env.prod)",
+      "Read(**/.env.production)",
+      "Edit(**/.env.production)",
+      "Read(**/.env.secret)",
+      "Edit(**/.env.secret)",
+      "Read(**/.env.secrets)",
+      "Edit(**/.env.secrets)"
     ]
   },
   "hooks": {
@@ -41,7 +161,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/sessionstart-context.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/sessionstart-context.py\"",
             "timeout": 30
           }
         ]
@@ -52,7 +172,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/userpromptsubmit-inject.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/userpromptsubmit-inject.py\"",
             "timeout": 30
           }
         ]
@@ -64,7 +184,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.py\"",
             "timeout": 10
           }
         ]
@@ -74,7 +194,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/boundary-check.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/boundary-check.py\"",
             "timeout": 10
           }
         ]
@@ -86,13 +206,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.py\"",
             "timeout": 60
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/public-copy-lint.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/public-copy-lint.py\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/english-only-check.py\"",
+            "timeout": 30
           }
         ]
       }
@@ -102,7 +227,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-validation.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-validation.py\"",
             "timeout": 120
           }
         ]
@@ -114,12 +239,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/precompact-preserve.sh\"",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/precompact-preserve.py\"",
             "timeout": 30
           }
         ]
       }
     ]
   },
-  "_comment_": "Template for PLUGIN INSTALL layout (the consumer project's .claude/ holds the ecosystem). Written by scripts/install.sh. permissions.allow is deliberately broad, with an empty `ask`, because a prompt on every listing trains people to approve without reading. The deny list carries the weight instead, and `deny` takes precedence over `allow`, so the breadth costs nothing: the git-safety rules and the secret-READ rules still fire. The secret ones matter most because NO hook intercepts Read — validate-command.sh is PreToolUse:Bash and boundary-check.sh is Edit|Write, while stop-validation.sh only catches a secret already committed, after the fact. Recursive-delete and privilege-escalation commands are left to validate-command.sh, which blocks that class with 17 rules. For standalone use (the kit's own repository) see settings.json."
+  "skipDangerousModePermissionPrompt": true,
+  "_comment_": "Template for PLUGIN INSTALL layout (consumer project's .claude/ contains the Squad kit). Used by mechanisms/distribution/install.sh. For standalone use (the Squad repo itself), see settings.json."
 }

@@ -1,11 +1,11 @@
-"""Where this install keeps its knowledge-base.
+"""Where this install keeps its records.
 
-B-032 — `mini_review.py` and `check_phase_review.py` both defaulted to `knowledge-base/…`, the
+B-032 — `mini_review.py` and `check_phase_review.py` both defaulted to `records/…`, the
 STANDALONE layout, in an ecosystem where every consumer is a plugin install. Running the mini review
-with defaults therefore created a second knowledge-base at the project root, beside the one every
+with defaults therefore created a second records at the project root, beside the one every
 other cycle writes to.
 
-`rules/knowledge-base-location.md` states the rule and its measured cost: three consumers in 2026-08
+`rules/records-location.md` states the rule and its measured cost: three consumers in 2026-08
 where an audit read `.claude/` and reported "0 implementations, 0 reviews, 0 releases" for a
 repository that had 6, 12 and 8. Its own words: *"an audit trail split across two directories is
 worse than none: a reader who checks the wrong one reports absence where evidence exists."*
@@ -27,7 +27,7 @@ from pathlib import Path
 
 
 def knowledge_base_root(project_root: Path) -> Path:
-    """`.claude/knowledge-base` in a plugin install, `knowledge-base` in the standalone kit.
+    """`.claude/records` in a plugin install, `records` in the standalone kit.
 
     Detected from the tree, never taken as a flag. The item's decisive evidence is a recurrence:
     the defect was known for eight mini-review runs because the operator passed the flag every
@@ -35,8 +35,8 @@ def knowledge_base_root(project_root: Path) -> Path:
     remembering IS the defect.
     """
     if (project_root / ".claude").exists():
-        return project_root / ".claude" / "knowledge-base"
-    return project_root / "knowledge-base"
+        return project_root / ".claude" / "records"
+    return project_root / "records"
 
 
 def default_mini_reviews_dir(project_root: Path) -> Path:

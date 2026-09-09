@@ -39,9 +39,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import subprocess
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,6 +49,14 @@ from typing import Any
 
 import yaml
 
+# The upstream gate lives beside this script. It runs as `__main__` (the directory
+# enters sys.path on its own) and is also imported by tests that insert the directory
+# by hand — the fallback covers the case where neither happened.
+try:
+    from check_upstream_gate import check_upstream_gate
+except ImportError:  # pragma: no cover - alternative import path
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_upstream_gate import check_upstream_gate
 
 SEVERITY_ORDER = ["BLOCKER", "HIGH", "MEDIUM", "LOW", "INFO"]
 # Back-compat alias map for findings emitted by agents using legacy tokens.
@@ -117,7 +125,12 @@ def _normalize_finding(f: dict[str, Any], agent_role: str) -> dict[str, Any]:
         "file": str(f.get("file", "")),
         "line": f.get("line"),
         "plan_ref": str(f.get("plan_ref", "")),
-        "summary": str(f.get("summary", "")),
+        # `title` is what the GATE findings carry — `check_upstream_gate` writes
+        # title/evidence/remediation and no summary. Dropping it here is where a
+        # BLOCKER lost its name: counted, decisive, and rendered as `### : `.
+        # Normalising at the entry point fixes every consumer of the field at
+        # once, which the renderer alone could not.
+        "summary": str(f.get("summary") or f.get("title") or ""),
         "evidence": str(f.get("evidence", "")),
         "recommended_action": str(f.get("recommended_action", "")),
         "domain_anchor": str(f.get("domain_anchor", "")),
@@ -240,6 +253,41 @@ def _unregistered_high(findings: list[dict[str, Any]], registered: set[str]) -> 
     return unowned
 
 
+
+def _project_root_for(findings_dir: Path) -> Path:
+    """Walk up from the findings directory to the root carrying the records.
+
+    `/review` writes findings under `agents/review-{slug}-{date}/`, so the root is
+    the ancestor holding `records/` or `.claude/records/` — the two
+    installation layouts.
+    """
+    current = findings_dir.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / "records").is_dir() or (candidate / ".claude" / "records").is_dir():
+            return candidate
+    return current
+
+
+def _heading(f: dict[str, Any]) -> str:
+    """`### <id>: <summary>` — for findings that HAVE an id and a summary.
+
+    Gate findings do not. `check_upstream_gate` writes `title` / `evidence` /
+    `remediation` and no id, so the heading rendered as `### : ` — a BLOCKER that
+    is counted, is decisive, and does not say what it is. Measured on 2026-08-29:
+    a consumer's smoke validator failed on it and could report only
+    "consolidate_findings exit 1:" with nothing after the colon.
+
+    A gate whose reason cannot be read is a gate people route around, so the
+    heading falls back through what the finding actually carries and, failing
+    everything, names its source rather than rendering empty.
+    """
+    ident = str(f.get("id") or "").strip()
+    label = str(f.get("summary") or f.get("title") or "").strip()
+    if not label:
+        label = str(f.get("category") or f.get("source") or "unnamed finding").strip()
+    return f"### {ident}: {label}" if ident else f"### {label}"
+
+
 def _classify_verdict(
     findings: list[dict[str, Any]],
     coverage_ratio: float | None,
@@ -291,9 +339,9 @@ def _render_markdown(
         md += [
             "## ⚠ Working tree contaminated during this review",
             "",
-            f"The tree moved while the agents were reading it ({changed} differ from the state "
+            (f"The tree moved while the agents were reading it ({changed} differ from the state "
             "recorded when they were spawned). Findings below may cite code no reviewer saw, or "
-            "miss code that was there. Re-derive any citation before acting on it.",
+            "miss code that was there. Re-derive any citation before acting on it."),
             "",
         ]
 
@@ -313,7 +361,7 @@ def _render_markdown(
         md.append(f"## {sev} findings ({len(items)})")
         md.append("")
         for f in items:
-            md.append(f"### {f['id']}: {f['summary']}")
+            md.append(_heading(f))
             md.append("")
             md.append(f"- **Found by:** {', '.join(f.get('found_by_list', [f['found_by']]))}")
             # B-049 — name what this row absorbed. A merged finding used to vanish entirely, so a
@@ -376,7 +424,7 @@ def _render_markdown(
         )
         md.append("")
         for f in closed:
-            md.append(f"### {f['id']}: {f['summary']}")
+            md.append(_heading(f))
             md.append("")
             md.append(f"- **Was:** {f['severity']}")
             if f["file"]:
@@ -589,6 +637,18 @@ def main() -> int:
             if isinstance(f, dict):
                 all_findings.append(_normalize_finding(f, str(agent_role)))
 
+    # The upstream pre-condition enters as a finding, not as a separate step.
+    #
+    # `code-quality-golden-rule.md § 1` conditions entry into `/review` on
+    # `/code-quality`'s verdict — and, on FAIL_SOFT, on an ADR dismissing EACH soft cap.
+    # That was prose in `SKILL.md` (a `test -f` someone had to remember to run) and the
+    # ADR was looked for by nobody: asserting it existed was enough. Injected here, the
+    # review verdict can no longer be computed while ignoring the previous gate.
+    all_findings.extend(
+        _normalize_finding(f, "check_upstream_gate")
+        for f in check_upstream_gate(_project_root_for(args.findings_dir), slug)
+    )
+
     # Deduplicate
     deduped = _dedupe_findings(all_findings)
 
@@ -669,11 +729,55 @@ def main() -> int:
     }
     print(json.dumps(summary, indent=2))
 
+    # The root comes from the findings directory, not from cwd: the install
+    # smoke exercises this script against a tmpdir plan while cwd is the
+    # adopter's repository, and cwd would file a review event there for a review
+    # that never happened.
+    _emit_phase_end(
+        args.findings_dir, cycle="review", slug=args.slug or "", verdict=verdict,
+        findings=len(deduped),
+    )
+
+    # The verdict JSON goes to STDOUT, and a caller that redirects stdout is left
+    # with an exit code and silence — which is how this arrived from a consumer on
+    # 2026-08-29, described as "exit 1 with empty stderr", indistinguishable from
+    # a crash. A non-zero exit now states its reason on stderr as well, naming the
+    # findings that decided it.
+    if verdict in ("NEEDS_FIXES", "NEEDS_DEEPER"):
+        blockers = [f for f in open_findings if f["severity"] == "BLOCKER"]
+        detail = "; ".join(
+            _heading(f).lstrip("# ").strip() for f in blockers[:3]
+        ) or f"edge-case coverage {args.edge_case_coverage_ratio}"
+        print(f"{verdict}: {len(blockers)} BLOCKER(s), "
+              f"{sum(1 for f in open_findings if f['severity'] == 'HIGH')} HIGH — {detail}",
+              file=sys.stderr)
     if verdict == "NEEDS_FIXES":
         return 1
     if verdict == "NEEDS_DEEPER":
         return 3
     return 0
+
+
+def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:
+    """Record the phase transition; never let bookkeeping fail the phase.
+
+    `scripts/` resolves against THIS FILE, not the audited project: in a plugin
+    install the kit lives under `.claude/` while the project is elsewhere.
+    `ImportError` is caught alone — a bare `except Exception` would swallow a
+    real emitter bug into a silence indistinguishable from a phase that never
+    ran, which is the defect the stream exists to remove.
+    """
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_end, project_root_for
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_end(project_root_for(project_root), cycle=cycle, slug=slug,
+                   verdict=verdict, **extra)
 
 
 if __name__ == "__main__":

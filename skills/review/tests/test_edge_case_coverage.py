@@ -165,7 +165,7 @@ def test_the_fallback_does_not_demand_every_keyword(tmp_path: Path) -> None:
 # --- The two that read this repository's own plans, deliberately: they ARE the item's evidence. ---
 
 def test_b025_reports_seven() -> None:
-    plan = REPO / ".claude/knowledge-base/plans/b025-silent-guards-plan.md"
+    plan = REPO / ".claude/records/plans/b025-silent-guards-plan.md"
     if not plan.exists():
         return
     report = run(plan, REPO / "src")
@@ -173,7 +173,7 @@ def test_b025_reports_seven() -> None:
 
 
 def test_b001_reports_four() -> None:
-    plan = REPO / ".claude/knowledge-base/plans/b001-usage-panel-plan.md"
+    plan = REPO / ".claude/records/plans/b001-usage-panel-plan.md"
     if not plan.exists():
         return
     report = run(plan, REPO / "src")
@@ -181,7 +181,7 @@ def test_b001_reports_four() -> None:
 
 
 def test_the_three_b025_cases_with_named_tests_are_covered() -> None:
-    plan = REPO / ".claude/knowledge-base/plans/b025-silent-guards-plan.md"
+    plan = REPO / ".claude/records/plans/b025-silent-guards-plan.md"
     if not plan.exists():
         return
     report = run(plan, REPO / "src")

@@ -2,7 +2,7 @@
 
 T1.3 implementation: detect_dead_code via cargo-udeps subprocess.
 T2.4 implementation: detect_symbol_fabrication via tree-sitter + crates.io.
-Other methods still stubs (T3.1) — T4.3 ADR DEFER for mutation.
+D3 and deferred mutation testing report explicit capability caps.
 """
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ import subprocess
 from pathlib import Path
 
 from scripts import _registry
-from scripts._shared import Finding, safe_parse_json, sanitize_symbol, to_rel_path
+from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_imports_and_calls
 
-from . import BaseDetector, _arch
+from . import BaseDetector, _arch, _mutation, _wiring
 
 _ARCH_TIMEOUT_SEC = 600
 _LAYERFILE = "Layerfile.toml"
@@ -23,7 +23,7 @@ _RUST_MODULE_LOCAL_PREFIXES = ("crate::", "self::", "super::", "crate", "self", 
 
 # Crates that ship WITH the toolchain and are therefore never published on crates.io. Looking them up
 # there answers "not found", which the D2 rubric would read as symbol fabrication — so a file containing
-# `use std::collections::HashMap` scored FAIL_HARD. Measured on theo-db 2026-07-23: 117/117 D2 findings
+# `use std::collections::HashMap` scored FAIL_HARD. Measured on db-engine 2026-07-23: 117/117 D2 findings
 # were false positives of exactly this shape (mostly `std`, plus `core` and same-crate modules).
 _RUST_BUILTIN_CRATES = frozenset(
     {"std", "core", "alloc", "proc_macro", "test", "Self", "_"}
@@ -267,11 +267,19 @@ class RustDetector(BaseDetector):
         return findings
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        raise NotImplementedError("T3.1: cross-package wiring detector not yet implemented")
+        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
 
-    def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
-        # T4.3 — DEFERRED to v0.2 (evaluate cargo-mutants vs gremlins first)
-        raise NotImplementedError("T4.3: Rust mutation testing DEFERRED to v0.2 (graceful skip)")
+    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
+        return _mutation.detect_mutation_score(
+            self.language,
+            manifest_dir,
+            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
+            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
+            timeout_minutes=self.threshold(
+                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
+            max_report_age_minutes=self.threshold(
+                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
+        )
 
     # ------------------------------------------------------------------
 
@@ -321,7 +329,7 @@ class RustDetector(BaseDetector):
         layer and running `cargo check` on each. That makes it strictly stronger than an import
         scan and strictly more fragile.
 
-        Measured against `theo-db`, the only Rust repo in the routing table, it did not run. Three
+        Measured against `db-engine`, the only Rust repo in the routing table, it did not run. Three
         blockers, in the order they appeared:
 
         1. `[lib]` declares `crate-type` but no `path` -> `failed to read lib.path from Cargo.toml`
@@ -397,7 +405,7 @@ class RustDetector(BaseDetector):
 
 
 #: Failures that mean layered-crate could not START, not that a layer boundary was crossed. Each
-#: string was observed against theo-db on 2026-08-06.
+#: string was observed against db-engine on 2026-08-06.
 _SETUP_MARKERS = {
     "failed to read lib.path": (
         "the crate's `[lib]` declares no `path`. layered-crate requires it; adding "
@@ -405,7 +413,7 @@ _SETUP_MARKERS = {
     ),
     "two packages named": (
         "the temporary package layered-crate generates collides with the crate inside its own "
-        "cargo workspace. Observed on theo-db even with the default temp dir under `target/`"
+        "cargo workspace. Observed on db-engine even with the default temp dir under `target/`"
     ),
     "not found archfile": "no Layerfile.toml where layered-crate looked",
     ".pgrx/config.toml": (

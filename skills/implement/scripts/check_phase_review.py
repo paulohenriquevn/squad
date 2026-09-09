@@ -8,7 +8,7 @@ documented anti-pattern, and `skills/implement/SKILL.md` says the skill NEVER
 skips it and NEVER emits `PHASE_REVIEW_PASS` without `mini_review.py` having
 written the report. Both sentences addressed the agent; neither was checked by
 anything. `mini_review.py` is invoked from prose, writes a report into
-`knowledge-base/mini-reviews/`, and nobody downstream ever looked for it — so a
+`records/mini-reviews/`, and nobody downstream ever looked for it — so a
 run that skipped every boundary was indistinguishable from one that reviewed
 them all.
 
@@ -39,9 +39,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from check_phase_completeness import PHASE_HEADER_RE, _plan_task_ids_in_phase
-
 from _layout import default_mini_reviews_dir
+from check_phase_completeness import PHASE_HEADER_RE, _plan_task_ids_in_phase
 
 
 @dataclass(frozen=True)
@@ -84,10 +83,6 @@ def _find_report(review_dirs: list[Path], slug: str, phase: str) -> Path | None:
         for match in sorted(directory.glob(pattern)):
             return match
     return None
-
-
-def _has_report(review_dirs: list[Path], slug: str, phase: str) -> bool:
-    return _find_report(review_dirs, slug, phase) is not None
 
 
 _HEAD_RE = re.compile(r"Reviewed at head:\*{0,2}\s*`?([0-9a-f]{7,40})`?", re.IGNORECASE)
@@ -255,7 +250,7 @@ def main() -> int:
         root = root.parent
     review_dirs = args.review_dir or [
         default_mini_reviews_dir(root),
-        root / "knowledge-base" / "mini-reviews",
+        root / "records" / "mini-reviews",
     ]
     report = check_phase_review(args.plan, progress, args.slug, review_dirs)
 

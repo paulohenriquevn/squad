@@ -2,20 +2,26 @@
 
 T1.1 implementation: detect_dead_code via vulture subprocess.
 T2.2 implementation: detect_symbol_fabrication via tree-sitter + PyPI lookup.
-Other methods still stubs (T3.1 / T4.1).
+D3/D4 report explicit capability caps until their external runners are integrated.
 """
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 from scripts import _registry
-from scripts._shared import Finding, sanitize_symbol, to_rel_path
+from scripts._detector_contract import (
+    DEFAULT_SKIP_DIRS,
+    Finding,
+    sanitize_symbol,
+    to_rel_path,
+)
 from scripts.check_symbol_fab import extract_imports_and_calls
 
-from . import BaseDetector, _arch
+from . import BaseDetector, _arch, _mutation, _wiring
 
 _ARCH_TIMEOUT_SEC = 240
 #: import-linter reads the first of these it finds.
@@ -43,10 +49,40 @@ class PythonDetector(BaseDetector):
             If vulture is unavailable, returns a single SOFT_CAP Finding with
             allowlist_key containing `auditor_unavailable_vulture`.
         """
+        # vulture is resolved through the interpreter running this detector, not
+        # through PATH. It ships as a library plus a console script, and only the
+        # console script lands on PATH — where it lands depends on how the install
+        # happened, so a host can carry a perfectly importable vulture and no
+        # `vulture` executable the gate can reach. Measured on such a host: the
+        # bare-name lookup raised FileNotFoundError, D1 degraded to SOFT_CAP, and
+        # dead code went unreported.
+        #
+        # `-m` moves the failure from PATH to the import system, and an import
+        # failure is quieter than an exec failure: `python -m vulture` without the
+        # module exits 1 with an empty stdout, which parses as zero findings. So
+        # the module is checked here rather than inferred from the output.
+        if importlib.util.find_spec("vulture") is None:
+            return [
+                self._auditor_unavailable(
+                    f"vulture module not importable by {sys.executable} "
+                    "(install it with: python3 -m pip install 'vulture>=2.14')"
+                )
+            ]
+        # `--exclude` rather than the bare directory: vulture walks everything
+        # below what it is handed, and `_detector_contract.DEFAULT_SKIP_DIRS` — which
+        # `enumerate_source_files` already honours — exists to keep this gate on
+        # the PRODUCT. Measured in a fresh install at min_confidence 60: 44
+        # findings, 42 of them inside `.claude/` (the kit itself) and 2 in the
+        # adopter's code, with the verdict FAIL_HARD on their strength. Same
+        # defect the stop-hook had and fixed; never propagated here.
         cmd = [
+            sys.executable,
+            "-m",
             "vulture",
             "--min-confidence",
             str(self.min_confidence),
+            "--exclude",
+            ",".join(f"*/{name}/*" for name in sorted(DEFAULT_SKIP_DIRS)),
             str(manifest_dir),
         ]
         try:
@@ -58,7 +94,7 @@ class PythonDetector(BaseDetector):
                 check=False,
             )
         except FileNotFoundError:
-            return [self._auditor_unavailable("vulture not found in PATH")]
+            return [self._auditor_unavailable(f"interpreter {sys.executable} not executable")]
         except subprocess.TimeoutExpired:
             return [self._auditor_unavailable(f"vulture timed out after {_VULTURE_TIMEOUT_SEC}s")]
         except (subprocess.SubprocessError, OSError) as e:
@@ -116,12 +152,19 @@ class PythonDetector(BaseDetector):
         return findings
 
     def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        # T3.1 — shared cross-package wiring (delegates to check_wiring_cross_package.py)
-        raise NotImplementedError("T3.1: cross-package wiring detector not yet implemented")
+        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
 
-    def detect_mutation_score(self, critical_paths: list[Path]) -> list[Finding]:
-        # T4.1 — mutmut wrapper (mutmut 3.x — CLI revalidation note in plan)
-        raise NotImplementedError("T4.1: mutmut wrapper not yet implemented")
+    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
+        return _mutation.detect_mutation_score(
+            self.language,
+            manifest_dir,
+            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
+            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
+            timeout_minutes=self.threshold(
+                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
+            max_report_age_minutes=self.threshold(
+                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
+        )
 
     # ------------------------------------------------------------------
     # internal helpers

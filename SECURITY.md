@@ -2,17 +2,17 @@
 
 ## Scope
 
-The Cycle ecosystem includes **runtime hooks** (`hooks/*.sh`) that execute shell
+The Squad ecosystem includes **runtime hooks** (`hooks/*.sh`) that execute shell
 commands in the user's environment. A vulnerability in hook logic (e.g., command
-injection via crafted branch names, regex bypass in `validate-command.sh`) could
+injection via crafted branch names, regex bypass in `validate-command.py`) could
 affect any project using this plugin.
 
 ## Supported Versions
 
 | Version | Supported |
 |---------|-----------|
-| 1.x     | Yes       |
-| < 1.0   | Best-effort |
+| 0.1.x (current alpha) | Yes |
+| Older than 0.1 | No |
 
 ## Reporting a Vulnerability
 
@@ -31,15 +31,20 @@ affect any project using this plugin.
 ## Security Design
 
 - **Hooks use `set -euo pipefail`** — fail-fast on any unexpected state.
-- **`validate-command.sh`** blocks destructive git operations at the regex level.
-- **`stop-validation.sh`** blocks secret file commits (`.env`, `*.pem`, `*.key`).
-- **`boundary-check.sh`** enforces read-only access on `knowledge-base/references/` and `knowledge-base/tools/`.
+- **`validate-command.py`** blocks destructive git operations at the regex level.
+- **`stop-validation.py`** blocks secret file commits (`.env`, `*.pem`, `*.key`).
+- **`boundary-check.py`** enforces read-only access on `study-material/`.
 - **`check_xrefs.py`** validates all internal references exist (anti-hallucination).
-- **`attest-plan.sh`** uses SHA256 for plan tamper detection.
+- **`attest_plan.sh`** uses SHA256 for plan tamper detection.
+
+Retired 2026-09-01: the prior-art study zone under `records/references/` is no
+longer guarded, because Squad's DISCOVER stopped studying peer projects and the
+directory left the zone with the practice that filled it. A consumer still
+holding material there must move it (`rules/reference-provenance.md`).
 
 ## Known Limitations
 
 - Hook regex patterns are heuristic-based — edge cases in command parsing may
   exist. If you find a bypass, report it as a vulnerability.
-- Hooks rely on `jq` for JSON parsing of tool input. A malformed JSON payload
-  could cause silent failures (mitigated by `set -e`).
+- Hooks rely on `jq` for JSON parsing of tool input. Malformed input is rejected or produces an
+  explicit no-op according to each hook's contract; regression tests cover both outcomes.

@@ -25,7 +25,7 @@ from pathlib import Path
 UNBREAKABLE_RULE_MAX = 13
 
 # Rule refs: `architecture.md` or `architecture.md §1` or `architecture.md §"Some Title"`.
-# Excludes paths containing slashes (e.g. `knowledge-base/foo.md`) because the resolver below
+# Excludes paths containing slashes (e.g. `records/foo.md`) because the resolver below
 # walks the project root; v0.1 keeps the regex conservative. Backtick is explicitly excluded
 # from the section token so that ``architecture.md §1`` strips properly when inline code
 # normalizes to whitespace mid-match.
@@ -45,6 +45,19 @@ _BLUEPRINT_REF_RE = re.compile(
 # ADR refs: `ADR D8` OR standalone `D8` followed by word boundary (skip dates like 2026-06-04).
 # Backtick is a valid boundary because plans idiomatically wrap citations as ``D8``.
 _ADR_REF_RE = re.compile(r"\bADR\s+(D\d+)\b|(?<![A-Za-z0-9_])(D\d+)(?=[\s,.;)`]|$)")
+
+#: `D1`..`D5` are the kit's own DETECTOR names — `rules/code-quality-golden-rule.md`
+#: § 5 uses them throughout, and so does every plan that reasons about which
+#: detector produced a finding.
+#:
+#: The bare `D\d+` half of `_ADR_REF_RE` cannot tell the two apart, so a plan
+#: that wrote "Disable D4 in the thresholds file" as a REJECTED ALTERNATIVE was
+#: read as citing an undefined ADR: `fabricated_citation`, INVALID, score 49.
+#: Measured on a consumer, and it cost a cycle plus a rewrite to avoid a token.
+#:
+#: A fabrication gate that fires on the kit's own vocabulary is what teaches
+#: people to ignore fabrication gates.
+_KIT_DETECTOR_IDS = frozenset({"D1", "D2", "D3", "D4", "D5"})
 
 _UNBREAKABLE_RULE_RE = re.compile(r"Unbreakable\s+Rule\s+(\d+)")
 
@@ -160,7 +173,7 @@ def _scan_rule_refs(
                         kind="rule",
                         raw_text=filename,
                         location_line=line_no,
-                        reason=f"file {filename!r} not found in rules/, knowledge-base/, or project root",
+                        reason=f"file {filename!r} not found in rules/, records/, or project root",
                     ),
                     False,
                 )
@@ -192,14 +205,14 @@ def _resolve_rule_file(filename: str, project_root: Path) -> Path | None:
     candidates = [
         project_root / "rules" / filename,
         project_root / ".claude" / "rules" / filename,
-        project_root / "knowledge-base" / filename,
+        project_root / "records" / filename,
         project_root / filename,  # e.g. CHANGELOG.md, CLAUDE.md
     ]
     for c in candidates:
         if c.exists() and c.is_file():
             return c
-    # Last-resort: shallow search inside knowledge-base/ (handles ADRs etc.).
-    kb = project_root / "knowledge-base"
+    # Last-resort: shallow search inside records/ (handles ADRs etc.).
+    kb = project_root / "records"
     if kb.exists():
         try:
             for p in kb.rglob(filename):
@@ -249,7 +262,7 @@ def _scan_blueprint_refs(
     # every `Opportunity §X` citation in a real plan resolved against an empty set and
     # was reported fabricated. Both are searched: the current path first, the legacy
     # one after, so plans predating the rename keep resolving.
-    discoveries = project_root / "knowledge-base" / "discoveries"
+    discoveries = project_root / "records" / "discoveries"
     available = []
     for sub in ("opportunities", "blueprints"):
         d = discoveries / sub
@@ -270,7 +283,7 @@ def _scan_blueprint_refs(
                         kind="blueprint",
                         raw_text=raw,
                         location_line=line_no,
-                        reason="no opportunities exist in knowledge-base/discoveries/opportunities/",
+                        reason="no opportunities exist in records/discoveries/opportunities/",
                     ),
                     False,
                 )
@@ -324,6 +337,12 @@ def _scan_adr_refs(
         if key in seen:
             continue
         seen.add(key)
+        # A bare `D4` that resolves to a defined ADR IS a citation — the plan
+        # said so by defining it. One that does not, and names a kit detector,
+        # is the kit's vocabulary rather than a fabricated reference. Deciding
+        # only on the unresolved case keeps every real citation working.
+        if adr_id not in defined_adrs and adr_id in _KIT_DETECTOR_IDS and not m.group(1):
+            continue
         resolved = adr_id in defined_adrs
         if resolved:
             out.append((Citation(kind="adr", raw_text=adr_id, location_line=line_no, reason=""), True))

@@ -1,7 +1,7 @@
 # The suite the repository already had, on a trigger.
 #
 # `pyproject.toml` documented that "the per-slice test files run in CI via
-# scripts/run_slice_tests.sh" — and there was no workflow in this repository,
+# mechanisms/cycle/run_slice_tests.sh" — and there was no workflow in this repository,
 # only inside the vendored codex-plugin-cc/. Every gate this kit ships was
 # green because someone remembered to run it locally.
 name: CI
@@ -26,15 +26,160 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          # Four jobs reinstalled the same dependencies on every run.
+          cache: 'pip'
 
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest pyyaml
+        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff vulture
 
-      - name: Cross-reference validator
-        run: python3 scripts/check_xrefs.py
+      # `--strict` is NOT cosmetic: without it a WARN finding is printed and the
+      # process exits 0 — the output carries the WARN line and, right below it,
+      # `Overall: PASS`. `mechanisms/distribution/install.sh` always called it with `--strict`, the
+      # workflow called it without, and the same commit produced
+      # `check_xrefs.py: FAIL` at install time and green in CI. A gate that looks,
+      # sees and approves is worse than an absent gate: it produces confidence where
+      # there was no verification.
+      - name: Cross-reference validator (strict)
+        run: python3 mechanisms/gates/check_xrefs.py --strict
 
       - name: Skill frontmatter validator
-        run: python3 scripts/validate_skill_frontmatter.py
+        run: python3 mechanisms/gates/validate_skill_frontmatter.py
 
-      - name: Root suite + every skill slice (isolated processes)
-        run: bash scripts/run_slice_tests.sh
+      # Every declared hard gate names what computes it. Measured before this
+      # gate existed: 59 gates, 11 naming a script. The other 48 were mostly
+      # enforced and said so nowhere, which reads to a reader exactly like a
+      # gate nobody runs. Without this step the annotation decays the moment a
+      # rule gains a line.
+      - name: Every hard gate names its mechanism
+        run: python3 mechanisms/gates/check_gate_mechanisms.py
+
+      # A name is the first documentation anyone reads. This catches the
+      # structurally empty ones — the bin directory, the mixed convention, the
+      # misfiled test, the script that states no purpose. Whether a name is
+      # merely vague stays a human judgement, and the checker says so.
+      - name: Folder and file names state their purpose
+        run: python3 mechanisms/gates/check_semantic_names.py
+
+      # The kit and every repository that installs it are English by policy, and
+      # nothing enforced it until 2026-08-27: 334 Portuguese markers across 21
+      # versioned files here, 93 across 17 in the sibling. Two checkers had gone
+      # further and ACCEPTED Portuguese input, which is a kit deciding its own
+      # policy is advisory. A line may keep Portuguese by saying why on the line
+      # — a verbatim quote, a fixture that must be Portuguese to trip the rule
+      # it tests — and an exemption with no reason does not count.
+      - name: English only
+        run: python3 mechanisms/gates/check_english_only.py
+      # swarm-forge's AGENTS.md is four lines saying this, and this kit paid for
+      # the same lesson: a test that greps shipped prose fails when the sentence
+      # improves and passes when the thing it describes breaks.
+      - name: No test pins the wording of shipped prose
+        run: python3 mechanisms/gates/check_prose_tests.py
+
+      # `mechanisms/README.md` declares what every file in that directory is. The
+      # README this replaced made the same promise in prose and covered 5 of 36:
+      # a rule nobody computed, decaying to a sample while reading as a list.
+      - name: Mechanisms inventory matches the directory
+        run: python3 mechanisms/gates/check_mechanisms_inventory.py
+
+      # A SOP that stops describing the work keeps being followed. These two
+      # check the shape of the procedures and whether each run record accounts
+      # for the procedure it claims to have followed — the split
+      # rules/sop-schema.md exists to keep.
+      # NOT here: the OKF conformance gate. `okf-validate.mjs` ships inside a
+      # personal skill under ~/.claude, which is neither versioned in this
+      # repository nor present on the runner — wiring it here would name a
+      # mechanism CI cannot reach. Vendoring it (MIT, with attribution) is a
+      # decision of its own; until then the bundle is validated locally and
+      # `check_sop_structure.py` below is what CI actually enforces.
+
+      - name: SOP structure
+        run: python3 mechanisms/gates/check_sop_structure.py
+
+      - name: SOP run records account for their procedure
+        run: python3 mechanisms/gates/check_sop_run.py
+
+      - name: Generated settings are synchronized
+        run: python3 mechanisms/distribution/generate_plugin_settings.py --check
+
+      - name: End-to-end smoke
+        run: python3 mechanisms/gates/verify_ecosystem.py
+
+      - name: Python static trajectory-review
+        # `scripts/` was renamed to `mechanisms/` on 2026-09-02 and this line was
+        # not. ruff exits 2 on a path that does not exist, so this step failed on
+        # every run from that commit — and `squad/`, the hook library added the
+        # same week, was never linted at all.
+        run: ruff check mechanisms squad skills hooks tests conftest.py
+
+      # The kit demanded this gate of every consumer and never ran it on itself.
+      # Measured 2026-08-26, on the first run: FAIL_HARD from an `unused variable`
+      # in an argparse-mandated signature, with an empty allowlist — the false
+      # positive had been there all along and nobody had seen it, because nobody had
+      # run it. A gate without calibration is not a gate: it is a promise.
+      #
+      # The script exits 1 on FAIL_HARD / INVALID, which is
+      # `code-quality-golden-rule.md` § 1's contract. FAIL_SOFT does not break the
+      # build here — the golden rule resolves it with an ADR, and a CI that treats a
+      # soft cap as a blocker teaches people to route around it.
+      - name: Code-quality gate (the kit audits itself)
+        run: |
+          python3 skills/code-quality/scripts/run_code_quality.py \
+            --languages-rule rules/code-quality-languages.txt \
+            --thresholds-rule rules/code-quality-thresholds.txt \
+            --allowlist rules/code-quality-allowlist.txt \
+            --no-network --no-audit-write
+
+      # The root suite ran TWICE: once inside run_slice_tests.sh and again here,
+      # only to compute coverage — 45s duplicated per run, measured 2026-08-26.
+      # ROOT_SUITE_COV=1 measures in the run that already happens, and the threshold
+      # is still enforced (--cov-fail-under inside the script).
+      - name: Root suite + every skill slice (isolated processes, with coverage)
+        env:
+          ROOT_SUITE_COV: '1'
+        run: bash mechanisms/cycle/run_slice_tests.sh
+
+  compatibility:
+    name: Python ${{ matrix.python-version }} compatibility
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      - run: python -m pip install --upgrade pip pytest pyyaml
+      - name: Full compatibility suite
+        run: bash mechanisms/cycle/run_slice_tests.sh
+
+  shell:
+    name: Shell contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Shell static trajectory-review
+        # Every one of the four globs here matched ZERO files: `hooks/*.sh` and
+        # `hooks/environment/*.sh` because the hooks became Python on 2026-09-02,
+        # `scripts/*.sh` because that tree was renamed the same day, and
+        # `tests/hooks/*.sh` because no shell test remains. shellcheck exits 0 on
+        # an empty argument list, so this job reported a clean shell contract
+        # while checking nothing. `-x` follows sourced files; `-P` seeds the
+        # search path for them.
+        run: shellcheck -x -P mechanisms --severity=warning $(git ls-files '*.sh')
+      - name: Hook behavior suites
+        # There are no shell test files left; the suites became pytest. The loop
+        # body simply never ran, and a step that runs nothing reports success.
+        # Kept as an explicit statement rather than deleted, so the day one
+        # returns it is wired instead of silently unrun.
+        run: |
+          shell_tests=$(git ls-files "tests/**/test_*.sh")
+          if [ -z "$shell_tests" ]; then
+            echo "no shell test files in this repository — the hook suites are pytest"
+          else
+            for test_file in $shell_tests; do bash "$test_file"; done
+          fi

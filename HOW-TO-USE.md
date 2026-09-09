@@ -3,13 +3,14 @@
 A pipeline for taking a maintenance item from **hunch → measurement → plan → code → merge**, with Claude Code as the active agent at every phase. Each phase has hard gates, anti-patterns, rollback and an audit trail documented in `rules/cycle-*.md`.
 
 ```
-BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ACCEPTANCE
-   ↓          ↓         ↓        ↓            ↓           ↓        ↓
- B-NNN     measures   plans/   commits +   dead-code/   gate    develop→main
- (hunch)   OUR code            tests       fabrication/ tighter  PR + semver
-            ↓                              wiring
-       ITEM_KILLED ✔
-       (chain ends — a successful outcome)
+BRAINSTORM → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE
+    ↓           ↓          ↓         ↓        ↓            ↓           ↓        ↓
+ 4 docs +     B-NNN     measures   plans/  commits +   dead-code/    gate    develop→main
+ a person's  (hunch)    OUR code           tests       fabrication/  tighter  PR + semver
+ signature                  ↓                          wiring
+    ↑                  ITEM_KILLED ✔
+ the ONLY phase        (chain ends — a successful outcome)
+ a human attends
 ```
 
 Each arrow is an **unbreakable chain** — you do not skip a phase, and you do not advance past an INVALID verdict. Unlike a roadmap pipeline, this one has no end state: `cycle-maintenance` loops for as long as the ecosystem is maintained.
@@ -20,30 +21,29 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 
 | Question | Cycle | Entry point |
 |---|---|---|
+| "Where am I, and who decides this?" | (orientation) | [`rules/squad-map.md`](rules/squad-map.md) — injected at SessionStart |
+| "What are we even building?" | `cycle-brainstorm` | `/brainstorm-vision`, then the four-phase cascade |
 | "First time — there is no registry yet" | (one-shot bootstrap) | `/backlog-init` |
 | "I noticed something worth looking at" | `cycle-backlog` | `/backlog-item {slug}` |
 | "Is this hunch real?" | `cycle-discover` | `/discover-plan B-NNN --mode {review\|live-test\|bug\|evolve}`, then the chain |
 | "Sweep a domain for things nobody filed" | `cycle-discover` | `/discover-execute --sweep {domain}` |
-| "Advance the next item end-to-end autonomously" | `cycle-maintenance` → `cycle-auto-plan` | `/auto-plan` (no arg) or `/auto-plan B-NNN` |
-| "The measurement holds — design the fix" | `cycle-plan` | `/to-plan B-NNN` |
-| "Requirements are still vague" | `cycle-plan` phase 0 | `/grill-me {slug}` |
+| "Advance the next item end-to-end autonomously" | `cycle-maintenance` → `cycle-idea-to-release` | `/idea-to-release` (no arg) or `/idea-to-release B-NNN` |
+| "The measurement holds — design the fix" | `cycle-plan` | `/plan-write B-NNN` |
+| "Requirements are still vague" | `cycle-plan` phase 0 | `/plan-grill {slug}` |
 | "Build it per the plan" | `cycle-implement` | `/implement {plan-slug}` |
 | "Audit dead code + fabricated APIs post-implement" | `cycle-code-quality` | `/code-quality` |
 | "Review before merge" | `cycle-review` | `/review {plan-slug}` |
 | "Cut a release (develop → main + tag)" | `cycle-release` | `/release [bump-level]` |
 | "Check the released thing works for its user" | `cycle-acceptance` | `/acceptance M<N>` (milestones only — see below) |
-| "Hold the session to the process until acceptance is green" | `cycle-acceptance` | `/cycle-goal M<N> [M<N> ...]` |
+| "Hold the session to the process until acceptance is green" | `cycle-acceptance` | `/session-goal M<N> [M<N> ...]` |
 | "What has rotted in the registry?" | auxiliary | `/backlog-review` |
-| "Which specialist owns this repo?" | auxiliary | `python3 scripts/route_domain.py {repo}` |
+| "Which specialist owns this repo?" | auxiliary | `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/route_domain.py" {repo}` |
 | "Just locate something in the code" | (no cycle) | Glob/Grep, or `/ast-grep` for structural queries |
-| "Is this operation CP or AP?" | auxiliary | `/cap-theorem-specialist` |
-| "The queue never drains / we OOM under load" | auxiliary | `/backpressure-specialist` |
-| "One slow service took the whole site down" | auxiliary | `/resilience-specialist` |
 | "Boundaries: does this repo have any, and do they still fire?" | auxiliary | `/arch-check` |
-| "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-analysis` | `/analysis [plan-slug]` |
+| "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-trajectory-review` | `/trajectory-review [plan-slug]` |
 | "Block code smells automatically on every Write/Edit" | (setup, once) | `/quality-init TARGET` |
-| "Can we call this production-ready?" | auxiliary | `/dogfood audit` |
-| "What commands exist?" | auxiliary | `/plan-help` |
+| "Can we call this production-ready?" | auxiliary | `/honesty-gate audit` |
+| "What commands exist?" | auxiliary | `/commands-help` |
 
 ## Quick start
 
@@ -58,7 +58,7 @@ Inventories the repos **from disk** (`find` + `git rev-list`), never from a docu
 ### 2. Register a hunch
 
 ```bash
-/backlog-item theo-lens-trace-latency
+/backlog-item trace-explorer-feels-slow
 ```
 
 Four questions, one per turn: what changed in **our** system; which repo and therefore which domain; which discover mode looks right (a guess, not a decision); and the verifiable Definition of Done.
@@ -77,7 +77,7 @@ Four questions, one per turn: what changed in **our** system; which repo and the
 
 There is no single `/discover` command — the chain is the five skills above, plus
 `/discover-improve` when a score comes back `NEEDS_REVISION`. Each has its own gate. Referred to as
-a whole, it is the cycle: `cycle-discover`. `/auto-plan` runs them for you; invoke them by hand when
+a whole, it is the cycle: `cycle-discover`. `/idea-to-release` runs them for you; invoke them by hand when
 you want to stop between gates.
 Measuring against our code or runtime. Two legitimate endings:
 
@@ -89,7 +89,7 @@ Measuring against our code or runtime. Two legitimate endings:
 ### 4. Ship it
 
 ```bash
-/auto-plan B-014
+/idea-to-release B-014
 ```
 
 Chains plan → implement → code-quality → review → release, pausing at each gate.
@@ -114,25 +114,25 @@ Chains plan → implement → code-quality → review → release, pausing at ea
 | Path | What |
 |---|---|
 | `BACKLOG.md` | The single registry, at the umbrella root |
-| `knowledge-base/discoveries/plans/` | Measurement plans |
-| `knowledge-base/discoveries/opportunities/` | Opportunities (the terminal artifact) |
-| `knowledge-base/maintenance-runs/` | One record per macro-loop run |
-| `knowledge-base/reviews/` | Edge-case reports |
+| `records/discoveries/plans/` | Measurement plans |
+| `records/discoveries/opportunities/` | Opportunities (the terminal artifact) |
+| `records/maintenance-runs/` | One record per macro-loop run |
+| `records/reviews/` | Edge-case reports |
 | `rules/cycle-*.md` | The contracts. Source of truth for every phase |
-| `agents/*.md` | The eight domain specialists |
+| `agents/*.md` | The domain specialists you derive (the kit ships only the README) |
 
 ## The specialists
 
 Routing is deterministic: the item declares `repo`, and a repo belongs to exactly one domain.
 
 ```bash
-python3 scripts/route_domain.py theo-lens
-# repo   : theo-lens
-# domain : data-plane-ts
-# agent  : agents/data-plane-ts.md
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/route_domain.py" my-service
+# repo   : my-service
+# domain : backend
+# agent  : agents/backend.md
 ```
 
-A repo the routing table does not know **does not route** — gate G1 refuses the item rather than sending it to a specialist who cannot open the code. Read `agents/README.md` before assuming a build command: each specialist carries commands verified on disk, and documentation drifts.
+The table is derived from your project — `detect_domains.py --write` reads the topology from disk and fills it in; the kit ships it empty. A repo the routing table does not know **does not route**, and gate G1 refuses the item rather than sending it to a specialist who cannot open the code. Read `agents/README.md` before writing one: a specialist carries commands verified on disk, because documentation drifts.
 
 ## Unbreakable principles
 
@@ -167,11 +167,11 @@ No. `BACKLOG_EMPTY` means nobody has looked recently. Run `/discover-execute --s
 
 ### "How do I adapt this to another ecosystem?"
 
-Replace the domain routing table in `rules/cycle-backlog.md`, write one specialist per domain in `agents/`, and declare your live environments in `rules/live-target.txt`. The phases, gates and evidence contracts are ecosystem-agnostic; the routing table and the specialists are not.
+Derive the domain routing table into `rules/cycle-backlog.md` (`detect_domains.py --write`), write one specialist per domain in `agents/`, and declare your live environments in `rules/live-target.txt`. All three ship empty on purpose: the phases, gates and evidence contracts are ecosystem-agnostic; a routing table, a specialist and a live target never are.
 
 ## Maintenance notes
 
-- `python3 scripts/check_xrefs.py` validates that every cross-reference resolves.
-- `python3 scripts/test_e2e_smoke.py` validates cycle-rule structure and skill frontmatter.
-- `bash scripts/run_slice_tests.sh` runs each slice in its own process — slices ship colliding module basenames, so a single wide pytest process is unsound.
+- `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/check_xrefs.py"` validates that every cross-reference resolves.
+- `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/gates/verify_ecosystem.py"` validates cycle-rule structure and skill frontmatter.
+- `bash "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/run_slice_tests.sh"` runs each slice in its own process — slices ship colliding module basenames, so a single wide pytest process is unsound.
 - Adding a domain? The routing table, the specialist file and `tests/test_route_domain.py` must agree; two guards fail loudly if they do not.

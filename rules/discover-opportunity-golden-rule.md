@@ -62,8 +62,8 @@ Two clauses are worth their own justification, because both loosen the ancestor:
 
 | Verdict | Score cap | Meaning | Downstream action |
 |---|---|---|---|
-| `SHIPPABLE` | 100 | Passes all gates with high confidence | Feed `/to-plan` |
-| `SHIPPABLE_WITH_CAVEATS` | 89 | Passes hard caps; soft caps flagged | `/to-plan`, caveats carried into the plan |
+| `SHIPPABLE` | 100 | Passes all gates with high confidence | Feed `/plan-write` |
+| `SHIPPABLE_WITH_CAVEATS` | 89 | Passes hard caps; soft caps flagged | `/plan-write`, caveats carried into the plan |
 | `NEEDS_REVISION` | 70 | Structurally OK; soft caps fire | Loop to `/discover-improve` |
 | `INVALID` | 49 (capped) | Hard cap triggered | Back to `/discover-plan` — rewrite, not improve |
 

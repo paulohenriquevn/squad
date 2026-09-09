@@ -26,6 +26,7 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -58,7 +59,6 @@ BUGFIX_KEYWORDS = (
     "bug-fix", "bug fix", "bugfix", "regression", "fix a bug", "fix the bug",
     "resolve a bug", "fix bug", "parser bug",
 )
-H4_RE = re.compile(r"^####\s+")
 
 TDD_TEMPLATE = """#### TDD
 
@@ -128,41 +128,39 @@ def _is_fence_line(line: str) -> bool:
     return line.lstrip().startswith("```")
 
 
-def _strip_inline_code(line: str) -> tuple[str, list[tuple[int, int, str]]]:
-    """Replace inline `code` spans with placeholders; return (line, spans).
+_INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 
-    Allows regex to run on prose-only portions of a line without touching
-    `inline code` content. Spans contain (start, end, original_text).
+
+def _sub_outside_inline_code(
+    line: str, apply: Callable[[str], tuple[str, int]]
+) -> tuple[str, int]:
+    """Run `apply` on the prose parts of a line, never on inline `code` spans.
+
+    The fenced-block guard above protects ``` blocks; this protects the backticked
+    token in the middle of a sentence. Rewriting `should` inside backticks changes
+    what the plan claims the code contains — a flag name, a field, a literal.
+
+    This replaced a mask/restore pair that was written for the job and never called.
+    Masking cannot work here: the substitutions change the line's length ("should" is
+    six characters, "must" is four), so the absolute span positions the restore step
+    would need are stale by the time it runs. Splitting on the spans and rejoining
+    needs no positions at all.
+
+    Returns the rebuilt line and the number of substitutions made in prose only, so a
+    change that was not made is never reported as made.
     """
-    placeholder_pattern = re.compile(r"`[^`\n]+`")
-    spans: list[tuple[int, int, str]] = []
-    out_parts: list[str] = []
+    parts: list[str] = []
+    total = 0
     last = 0
-    for m in placeholder_pattern.finditer(line):
-        out_parts.append(line[last : m.start()])
-        out_parts.append(" " * (m.end() - m.start()))  # blank space same length
-        spans.append((m.start(), m.end(), m.group(0)))
-        last = m.end()
-    out_parts.append(line[last:])
-    return "".join(out_parts), spans
-
-
-def _restore_inline_code(masked_line: str, spans: list[tuple[int, int, str]]) -> str:
-    """Restore inline code spans after replacements on the masked version.
-
-    Since replacements ONLY happen outside spans, we can rebuild by walking
-    char-by-char and substituting back at original span positions.
-    """
-    if not spans:
-        return masked_line
-    chars = list(masked_line)
-    # If lengths differ (because outside replacements changed lengths), restoration
-    # cannot trust absolute positions. Simpler: do a fresh pass on the masked line
-    # but only outside spans. For safety, if length changed, we restore by
-    # interleaving non-span text with original spans.
-    # Simplest reliable approach: rebuild by walking through the ORIGINAL line and
-    # taking modifications from the masked one ONLY in non-span ranges.
-    return "".join(chars)
+    for match in _INLINE_CODE_RE.finditer(line):
+        text, count = apply(line[last:match.start()])
+        parts.append(text)
+        total += count
+        parts.append(match.group(0))
+        last = match.end()
+    text, count = apply(line[last:])
+    parts.append(text)
+    return "".join(parts), total + count
 
 
 def fix_weak_imperatives(plan_path: Path, dry_run: bool = False) -> FixReport:
@@ -178,7 +176,8 @@ def fix_weak_imperatives(plan_path: Path, dry_run: bool = False) -> FixReport:
         modified = line
         line_changes = 0
         for pattern, replacement in WEAK_IMPERATIVE_PATTERNS:
-            new_modified, count = re.subn(pattern, replacement, modified)
+            new_modified, count = _sub_outside_inline_code(
+                modified, lambda seg, p=pattern, r=replacement: re.subn(p, r, seg))
             if count > 0:
                 report.changes_proposed += count
                 line_changes += count
@@ -191,7 +190,8 @@ def fix_weak_imperatives(plan_path: Path, dry_run: bool = False) -> FixReport:
             leading_match = re.match(r"^(\s*)", modified)
             leading = leading_match.group(1) if leading_match else ""
             rest = modified[len(leading):]
-            rest = re.sub(r"  +", " ", rest)
+            rest, _ = _sub_outside_inline_code(
+                rest, lambda seg: re.subn(r"  +", " ", seg))
             modified = leading + rest
         new_lines.append(modified)
 
@@ -222,7 +222,8 @@ def fix_loopholes(plan_path: Path, dry_run: bool = False) -> FixReport:
         line_changes = 0
         for phrase in LOOPHOLE_PHRASES:
             pattern = re.compile(rf"\s*\b{re.escape(phrase)}\b", flags=re.IGNORECASE)
-            new_modified, count = pattern.subn("", modified)
+            new_modified, count = _sub_outside_inline_code(
+                modified, lambda seg, p=pattern: p.subn("", seg))
             if count > 0:
                 report.changes_proposed += count
                 line_changes += count
@@ -299,7 +300,7 @@ def fix_tdd_template(plan_path: Path, dry_run: bool = False) -> FixReport:
         insert_at = end
         for j in range(start + 1, end):
             stripped = lines[j].lstrip()
-            if stripped.startswith("#### Acceptance Criteria") or stripped.startswith("#### DoD"):
+            if stripped.startswith(("#### Acceptance Criteria", "#### DoD")):
                 insert_at = j
                 break
         report.changes_proposed += 1

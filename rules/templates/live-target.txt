@@ -1,9 +1,10 @@
-# Nenhum alvo vivo declarado.
+# No live target declared.
 #
-# O kit distribuía aqui o alvo do ecossistema de origem (`https://app-dev.usetheo.dev`,
-# domínios `frontend-dashboard` e `control-plane`). Num outro projeto isso é pior que
-# vazio: `/discover-execute (live-test mode)` e `/acceptance` sondariam o produto de outra pessoa e
-# chamariam o resultado de evidência deste projeto. Declare o alvo DESTE sistema.
+# The kit used to ship the live target of the ecosystem it was written in — a dev
+# environment URL and two concrete domains. In another project that is worse than
+# empty: `/discover-execute (live-test mode)` and `/acceptance` would probe someone
+# else's product and call the result this project's evidence. Declare THIS system's
+# target.
 
 # Where /discover-execute (live-test mode) exercises the ecosystem — PER-PROJECT, edit this.
 #
@@ -22,7 +23,7 @@
 # a domain with no block has no live surface, and /discover-execute (live-test mode)
 # REFUSES on it rather than inventing one.
 #
-# domain      (required) one of the 8 registered domains (rules/cycle-backlog.md)
+# domain      (required) a domain registered in the routing table (rules/cycle-backlog.md)
 # kind        (required) one of: web | api | cli | cluster
 # target      (required) how to reach it — URL, endpoint, or command
 # auth        (optional) NAME of the credential needed. NEVER the value. If a run
@@ -31,18 +32,24 @@
 #             surface had been exercised.
 # notes       (optional) anything a prober must know before touching it
 #
+# Example of one block, to be replaced by yours:
+#
+#   domain = frontend
+#   kind = web
+#   target = https://app-dev.example.internal
+#   notes = Verified reachable YYYY-MM-DD: HTTP 200, no redirect. Probe with the
+#           real browser via chrome-devtools MCP. Non-destructive discipline
+#           applies — do not disturb personal tabs or sessions.
+#
 # --- this ecosystem -------------------------------------------------------
 
 
 
-# Domains with NO live surface declared — /discover-execute (live-test mode) refuses on
-# these, by design. Use --mode review, bug, or evolve instead:
+# A domain with NO block here is refused by /discover-execute in live-test mode, by
+# design. Use --mode review, bug, or evolve on it instead.
 #
-#   engine-go · theo-db · infra-terraform · contracts-auth · data-plane-ts ·
-#   platform-cli
-#
-# Their absence is a statement, not an omission: a Go library, a Postgres
-# extension and a Terraform module have no running surface a browser can probe.
-# Declaring a block for one of them because "live-test sounds thorough" produces
-# theatre, not evidence. If a data-plane service later gets a deployed endpoint
-# worth probing, add its block here — and only then.
+# That absence is a statement, not an omission: a library, a database extension and
+# an infrastructure module have no running surface a browser can probe. Declaring a
+# block for one of them because "live-test sounds thorough" produces theatre, not
+# evidence. If such a component later gets a deployed endpoint worth probing, add
+# its block then — and only then.

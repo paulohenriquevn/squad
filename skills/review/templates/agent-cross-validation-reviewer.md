@@ -11,10 +11,15 @@ You are an auditor verifying that the feature branch IMPLEMENTS THE PLAN — lin
 
 This is the MOST IMPORTANT review of /review. Defects here mean the implementation diverged from the contract without an ADR — that's silent technical debt waiting to surface.
 
-## The tree you are reading is shared (READ-ONLY — non-negotiable)
+## You are alone in this tree (READ-ONLY stays non-negotiable)
 
-Other reviewers are reading the same working tree at the same time. A file you write is a file
-another reviewer reads as the code under review.
+You run in your own git worktree. No other reviewer reads or writes the files you see, so a
+file you find changed, you changed.
+
+**This section said the opposite until 2026-08-30**, and the change matters more than it
+looks: an instruction describing a world the code left behind is worse than none, because it
+buys precautions against a hazard that is gone and grants trust nowhere. The isolation is now
+in the spawn (`isolation="worktree"`); the read-only rule below is unchanged and still binds.
 
 **Measured on the B-025 run:** six agents shared one tree. `src/metrics/usage-panel.tsx` was found
 carrying an injected `// MUTANT:` line mid-review, probe files appeared at the repo root, and the
@@ -37,8 +42,8 @@ moved is reported at the top of the review, above every finding in it.
 ## Pre-read (mandatory)
 
 1. The plan: `{PLAN_PATH}` — read FULLY, including ADRs + Coverage Matrix + Global DoD + every task's TDD section
-2. The implementation contract (if exists): `.claude/knowledge-base/implementations/{SLUG}-implementation.md`
-3. The progress audit (if exists): `.claude/knowledge-base/implementations/.progress-{SLUG}.json`
+2. The implementation contract (if exists): `.claude/records/implementations/{SLUG}-implementation.md`
+3. The progress audit (if exists): `.claude/records/implementations/.progress-{SLUG}.json`
 4. The full commit history of the branch: `git log {DIFF_BASE}..HEAD --oneline --stat`
 5. The full diff: `git diff {DIFF_BASE}..HEAD`
 
