@@ -1,5 +1,25 @@
 # Change log
 
+## 2026-09-09
+
+**`decisions/the-cli-navigates-mechanisms-compute` added**, status `proposed`. A single
+entry point `sq` is recorded as a FAÇADE: it resolves names, scopes a run to what
+changed, and states what it did not examine — and it computes no verdict, which is why
+it is not a sixth family under `mechanisms/`.
+
+The decision is the owner's; the argument is the agent's and is marked as unreviewed,
+following the precedent `merge-is-inside-the-envelope` set. What is not opinion is the
+evidence: seven frictions measured in one session, of which three produced false
+statements rather than wasted time. Those three are the justification — a tool that
+saves minutes is a convenience, and one that cannot report a passing measurement over
+an unrun half is a correctness measure.
+
+Two things the ADR deliberately does not decide: whether a two-letter root entry point
+satisfies `check_semantic_names`, and whether `explain`, `status` and `issues` are worth
+building — each is defensible and none was the source of a measured failure, so each
+waits for its own evidence.
+
+
 ## 2026-08-31 — later the same day
 
 **The three procedures this bundle listed as missing were written.** `sops/index.md`

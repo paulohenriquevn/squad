@@ -7,6 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **ADR: the CLI navigates, the mechanisms compute (#57)**
+  Recorded in `wiki/decisions/the-cli-navigates-mechanisms-compute.md`, status `proposed`.
+  The first framing of the request — "one place for every check" — was dropped after
+  measurement: `verify_ecosystem.py` already aggregates and `test_every_gate_is_reachable.py`
+  already proves no gate is orphaned, so a CLI holding its own gate list would be a second
+  source of truth diverging from the first. What the kit lacks is not execution but
+  **navigation**, and the cause is structural: `rules/README.md` places a file by who OWNS it,
+  which is right for the disk and unsearchable by task. The CLI is that projection, and nothing
+  else in the kit does it. Its load-bearing property is stated first rather than last — every
+  command names what it did NOT check, because the session that produced the ADR reported
+  `1894 passed` while 3402 tests in 23 slices had not run, and nothing on screen said the other
+  half existed. Scope cut to four verbs measured against real friction rather than twelve chosen
+  for symmetry; `explain`, `status` and `issues` wait for their own evidence.
+
+
+### Added
 - **`check_install_drift --consumer-local` lists what an install owns, by path (#33)**
   The classification was already correct and the paths were already computed — then discarded at
   the print site, which reported `consumer-local: N` and nothing else. A number tells a person
