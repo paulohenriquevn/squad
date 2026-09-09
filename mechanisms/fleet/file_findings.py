@@ -198,6 +198,7 @@ def already_commented(repo: str, issue_number: int, anchor: str = "FINDING_DUPLI
         done = subprocess.run(
             ["gh", "issue", "view", str(issue_number), "--repo", repo,
              "--json", "comments", "-q", ".comments[].body"],
+                check=False,
             capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
     except (FileNotFoundError, subprocess.SubprocessError):
         # If we can't check, assume we haven't (don't spam on error)
@@ -245,6 +246,7 @@ def comment_duplicate(repo: str, issue_number: int, anchor: str,
         done = subprocess.run(
             ["gh", "issue", "comment", str(issue_number), "--repo", repo,
              "--body", comment_text],
+                check=False,
             capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
     except (FileNotFoundError, subprocess.SubprocessError) as exc:
         return False, f"could not comment on #{issue_number}: {exc}"

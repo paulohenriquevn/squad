@@ -8,8 +8,6 @@ exist, and skills exist that README doesn't know about.
 import json
 from pathlib import Path
 
-import pytest
-
 _REPO = Path(__file__).resolve().parents[1]
 
 

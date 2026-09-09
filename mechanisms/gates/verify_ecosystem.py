@@ -187,18 +187,23 @@ def check_readme_advisory_skills(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     checker = ecosystem_dir / "mechanisms" / "gates" / "check_readme_advisory_skills.py"
     if not checker.exists():
         return NOT_RUN, ["  check_readme_advisory_skills.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--root", str(ecosystem_dir)],
-        capture_output=True, text=True,
-    )
-    # The gate returns a list of finding dicts; empty list means OK
+    # The `try` used to sit BELOW this call and wrap only the two lines that read
+    # `result.returncode` and `result.stdout` — neither of which can raise. It was a
+    # guard that could not fire, and its handler referenced `result.returncode`, which
+    # is what gives away that the invocation was meant to be inside it (kit#59).
     try:
-        # This script returns findings via print, let's just check exit code
-        if result.returncode == 0:
-            return True, []
-        return False, [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
-    except Exception:
-        return False, [f"  check_readme_advisory_skills.py failed (exit {result.returncode})"]
+        result = subprocess.run(
+            [sys.executable, str(checker), "--root", str(ecosystem_dir)],
+            capture_output=True, text=True, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        # Narrow on purpose: this is "the checker could not be run", which is an
+        # inability to measure and must not be reported as a passing measurement.
+        return False, [f"  check_readme_advisory_skills.py could not be run: {exc}"]
+
+    if result.returncode == 0:
+        return True, []
+    return False, [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
 
 
 def check_squad_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:

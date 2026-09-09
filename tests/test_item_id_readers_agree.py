@@ -30,12 +30,11 @@ for _rel in ("skills/review/scripts", "skills/backlog-review/scripts"):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from check_record_scope import _ITEM_RE as REVIEW_ITEM_RE  # noqa: E402
-from check_backlog_structure import _ID_IN_TEXT_RE as STRUCTURE_ITEM_RE  # noqa: E402
 from backlog_status import _ID_IN_TEXT_RE as STATUS_ITEM_RE  # noqa: E402
-from squad_lead import _ITEM_RE as LEAD_ITEM_RE  # noqa: E402
 from board_server import __file__ as _BOARD_SERVER_FILE  # noqa: E402
-
+from check_backlog_structure import _ID_IN_TEXT_RE as STRUCTURE_ITEM_RE  # noqa: E402
+from check_record_scope import _ITEM_RE as REVIEW_ITEM_RE  # noqa: E402
+from squad_lead import _ITEM_RE as LEAD_ITEM_RE  # noqa: E402
 
 #: Every reader that extracts an item id from prose, named by the module that
 #: owns it. The names are the private constants each script already defines; the
@@ -150,6 +149,7 @@ def test_no_unenumerated_place_pins_the_id_to_three_digits() -> None:
     found = subprocess.run(
         ["git", "grep", "-lE", r"B-\\d\{3\}"],
         cwd=REPO_ROOT, capture_output=True, text=True,
+        check=False,
     )
     if found.returncode not in (0, 1):
         raise AssertionError(f"git grep failed: {found.stderr}")

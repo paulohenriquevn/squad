@@ -31,8 +31,6 @@ import os
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from squad.layout import resolve
 from squad.plan import attestation
 from squad.plan import resolve as resolve_plan

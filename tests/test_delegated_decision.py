@@ -15,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "cycle"))
 
 from delegated_decision import DecisionClass, classify_wall, rewrite_wall
 
-
 # ── The prose that must stay walled ────────────────────────────────────────────
 
 B139_HOST = (

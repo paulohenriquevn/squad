@@ -7,7 +7,6 @@ Tests that:
 4. Auto-comment works on both open and closed issues
 """
 from pathlib import Path
-from unittest.mock import patch, MagicMock, call
 
 import pytest
 

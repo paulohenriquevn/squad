@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from delegated_decision import classify_wall, rewrite_wall  # noqa: E402
+from delegated_decision import classify_wall, rewrite_wall
 
 _ITEM_RE = re.compile(r"(?m)^#{2,3}\s+(B-\d+)\s")
 _WALL_RE = re.compile(r"(?m)^blocked_by:(?P<wall>.*)$")
@@ -110,6 +110,7 @@ def _tree_is_clean(repo: Path) -> bool:
         ["git", "-C", str(repo), "status", "--porcelain"],
         capture_output=True,
         text=True,
+        check=False,
     )
     return result.returncode == 0 and not result.stdout.strip()
 

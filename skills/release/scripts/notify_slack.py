@@ -46,7 +46,9 @@ def read_config(repo: Path) -> dict:
 
     try:
         content = config_path.read_text(encoding="utf-8")
-    except Exception:
+    except (OSError, UnicodeDecodeError):
+        # Narrow: an unreadable config is "no notifications", and anything else here
+        # would be a bug this handler should not be swallowing.
         return {"enabled": False, "webhook_env": None}
 
     enabled = False
@@ -107,8 +109,8 @@ def post_to_slack(webhook_url: str, message: str, version: str) -> tuple[bool, s
     Returns:
         Tuple (success, message)
     """
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     payload = json.dumps({"text": message})
     try:
@@ -137,12 +139,15 @@ def post_to_slack(webhook_url: str, message: str, version: str) -> tuple[bool, s
                     if response.status == 200:
                         return True, f"Posted to Slack (retry, version {version})"
                     return False, f"Slack retry returned status {response.status}"
-            except Exception as ex:
+            except (urllib.error.URLError, OSError, TimeoutError) as ex:
                 return False, f"Slack retry failed: {type(ex).__name__}"
         else:
             # Client error: don't retry
             return False, f"Slack returned status {e.code} (no retry for 4xx)"
-    except Exception as e:
+    except (urllib.error.URLError, OSError, TimeoutError) as e:
+        # `HTTPError` is a subclass of `URLError` and is handled above; these are the
+        # transport failures. A blind `Exception` here also swallowed programming errors
+        # in the lines above it and reported them as "Slack is down".
         return False, f"Failed to post to Slack: {type(e).__name__}"
 
 

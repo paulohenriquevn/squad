@@ -22,15 +22,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "mechanisms" / "fleet"))
 sys.path.insert(0, str(ROOT / "mechanisms" / "cycle"))
 
-import backlog_status
-from pipeline_orchestrator import (
-    STAGES,
+import backlog_status  # noqa: E402
+from pipeline_orchestrator import (  # noqa: E402
     STATUS_ON_ENTERING,
     STATUS_ON_SEND_BACK,
     Item,

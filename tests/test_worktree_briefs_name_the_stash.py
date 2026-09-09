@@ -147,6 +147,7 @@ def test_no_unenumerated_site_hands_out_a_worktree() -> None:
     found = subprocess.run(
         ["git", "grep", "-l", "worktree add", "--", ":!CHANGELOG.md", ":!*.lock"],
         cwd=REPO, capture_output=True, text=True,
+        check=False,
     )
     if found.returncode not in (0, 1):
         raise AssertionError(f"git grep failed: {found.stderr}")

@@ -9,7 +9,6 @@ Tests that:
 6. Always exits 0 (never blocks release)
 """
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -24,13 +23,11 @@ def test_notify_slack_script_exists() -> None:
 
 def test_notify_slack_is_executable() -> None:
     """notify_slack.py should be executable."""
-    import os
-    import stat
     script_path = _REPO / "skills" / "release" / "scripts" / "notify_slack.py"
-    mode = os.stat(script_path).st_mode
-    # Check if any execute bit is set
-    is_executable = mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    # For now, just document the expectation
+    # The execute bit is deliberately NOT asserted: `skills/release/SKILL.md` invokes
+    # this as `python3 notify_slack.py`, so the mode is irrelevant and pinning it would
+    # be a test of something nothing depends on. It used to be computed and thrown away,
+    # which read as an assertion that was never made (kit#62).
     assert script_path.is_file()
 
 
@@ -113,11 +110,19 @@ def test_rules_notifications_txt_exists_and_is_project_owned() -> None:
         slack_webhook_env = ENV_VAR_NAME (never the literal URL)
     """
     notifications_path = _REPO / "rules" / "notifications.txt"
-    # After implementation, this file should exist
-    # For now, we just document that it should be project-owned
-    pass
+    assert notifications_path.is_file(), (
+        f"{notifications_path.relative_to(_REPO)} is the project-owned config this "
+        f"script reads; without it the notification settings have no home"
+    )
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="the integration does not exist: skills/release/SKILL.md never mentions "
+           "notify_slack (kit#62). Expected-to-fail rather than green-and-silent; "
+           "strict=True means this fails loudly the day someone wires it up and leaves "
+           "the marker behind.",
+)
 def test_skill_release_calls_notify_slack_at_step_8_5() -> None:
     """skills/release/SKILL.md must call notify_slack.py at Step 8.5.
 
@@ -128,9 +133,11 @@ def test_skill_release_calls_notify_slack_at_step_8_5() -> None:
     assert skill_path.is_file(), "skills/release/SKILL.md must exist"
 
     content = skill_path.read_text(encoding="utf-8")
-    # After implementation, should reference notify_slack
-    # For now, document the expectation
-    pass
+    assert "notify_slack" in content, (
+        "skills/release/SKILL.md never mentions notify_slack, so the release cycle does "
+        "not invoke it. This test read the file and asserted nothing, so it stayed green "
+        "while the integration it is named after did not exist (kit#62)."
+    )
 
 
 if __name__ == "__main__":

@@ -69,15 +69,16 @@ def test_plugin_json_is_readable_from_declared_source() -> None:
     squad = next((p for p in plugins if p.get("name") == "squad"), None)
     assert squad is not None
 
-    # Resolve source relative to marketplace.json location
-    marketplace_dir = _REPO / ".claude-plugin"
-    source_path = marketplace_dir / squad["source"] / ".claude-plugin" / "plugin.json"
-
-    # For the in-repo case, source is '.', so path should be
-    # {repo}/.claude-plugin/. / .claude-plugin/plugin.json = {repo}/.claude-plugin/plugin.json
-    # Simplify: the real check is that plugin.json exists and is valid
-    plugin_path = _REPO / ".claude-plugin" / "plugin.json"
-    assert plugin_path.is_file(), f"plugin.json not found at {plugin_path}"
+    # `source` is relative to the REPOSITORY, not to the directory marketplace.json sits
+    # in. Resolving it from `.claude-plugin/` produced
+    # `.claude-plugin/.claude-plugin/plugin.json`, which does not exist — so the test
+    # computed a path, noticed it was wrong, and hard-coded the answer instead, leaving
+    # the declared `source` unchecked (kit#62).
+    plugin_path = (_REPO / squad["source"] / ".claude-plugin" / "plugin.json").resolve()
+    assert plugin_path.is_file(), (
+        f"marketplace.json declares source {squad['source']!r}, which resolves to "
+        f"{plugin_path} — and no plugin.json is there"
+    )
     assert plugin_path.read_text(encoding="utf-8"), "plugin.json is empty"
     json.loads(plugin_path.read_text(encoding="utf-8"))  # Validate JSON
 

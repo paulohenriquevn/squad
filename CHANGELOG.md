@@ -6,6 +6,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **The CI lint step went from 52 findings to zero, and three of them were real defects (#59, #62)**
+  `ci.yml` runs `ruff check mechanisms squad skills hooks tests conftest.py`, which exited
+  non-zero on 52 pre-existing findings — so that step was red with or without the billing
+  block. The count is not the interesting part; **what the lint was pointing at is**.
+  **A latent `NameError` (`F821`).** `tests/test_check_install_drift.py` annotated a fixture
+  as `pytest.MonkeyPatch` and never imported `pytest`. It passed only because
+  `from __future__ import annotations` makes the annotation a string that is never
+  evaluated; remove that line — or evaluate the annotation, as `typing.get_type_hints` does
+  — and it raises.
+  **A guard that could not fire.** In `verify_ecosystem.check_readme_advisory_skills` the
+  `try` sat BELOW the `subprocess.run` and wrapped only two lines that read
+  `result.returncode` and `result.stdout`, neither of which can raise. Its handler
+  referenced `result.returncode`, which is what gives away that the invocation was meant to
+  be inside it. The call is now in the `try`, catching `OSError`/`SubprocessError` — an
+  inability to run the checker is reported as one, never as a pass.
+  **Five tests that asserted nothing (#62).** Every `F841` in `tests/` was a value computed
+  and discarded, and each turned out to be an assertion that was never written — including
+  one that read `skills/release/SKILL.md` and checked nothing while the integration it is
+  named after does not exist (`grep -c notify_slack` → 0). Deleting the unused variables
+  would have silenced ruff and left five tests verifying nothing, trading a visible symptom
+  for an invisible one.
+  The rest were narrowed rather than suppressed: four blind `except Exception` became the
+  transport errors they meant (`URLError`, `OSError`, `TimeoutError`, `SubprocessError`), so
+  a bug in the lines above stops being reported as "Slack is down"; `subprocess.run` calls
+  state `check=False`; `l` became `ln`; and the three `E402` got the `# noqa` this
+  repository already uses for imports after a `sys.path.insert`.
+  **The auto-fix was verified, not trusted.** `--fix` was almost run with `--select`, which
+  would have let `RUF100` delete `# noqa: E402` comments as "unused" because E402 was
+  outside that selection — while `E4` IS in the project's `select`. Reverted before
+  committing. Every import the fix removed was then checked by comparing AST-level import
+  bindings before and after, and the 10 affected test files were run both ways: **89 passed,
+  identically**.
+
+
 ### Added
 ### Fixed
 - **`sq check` discarded the reason too, after `sq test` was fixed (#57)**

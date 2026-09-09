@@ -44,10 +44,10 @@ if str(_HERE) not in sys.path:
 # from it in silence, and the two would disagree about what the registry contains — which is the
 # precise defect this index exists to make visible.
 from check_backlog_structure import (  # noqa: E402
-    BLOCK_RE,
-    Item,
-    LINEAGE_EDGES,
     _ID_IN_TEXT_RE,
+    BLOCK_RE,
+    LINEAGE_EDGES,
+    Item,
     _parse_items,
     declares_impediment,
     parse_blocked_by,

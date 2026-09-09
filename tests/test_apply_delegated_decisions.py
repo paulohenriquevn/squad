@@ -1,5 +1,4 @@
 """The applier edits a project's maintenance record. These pin what it may not do."""
-import json
 import sys
 from pathlib import Path
 

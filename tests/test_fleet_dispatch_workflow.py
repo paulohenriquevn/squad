@@ -3,7 +3,6 @@
 The workflow is the new transport layer for unit dispatch. It receives a JSON
 payload describing the unit and its metadata, and produces a verification result.
 """
-import json
 from pathlib import Path
 
 import pytest
@@ -79,8 +78,8 @@ def test_workflow_verify_is_independent() -> None:
     assert "=> {" in content or ".then(" in content, "Workflow should pipe repair result to verify"
     # Rough heuristic: verify is a second stage reading the branch
     lines = content.split("\n")
-    repair_idx = next((i for i, l in enumerate(lines) if "Repair" in l or "REPAIR" in l), -1)
-    verify_idx = next((i for i, l in enumerate(lines) if "Verify" in l or "VERIFIED" in l), -1)
+    repair_idx = next((i for i, ln in enumerate(lines) if "Repair" in ln or "REPAIR" in ln), -1)
+    verify_idx = next((i for i, ln in enumerate(lines) if "Verify" in ln or "VERIFIED" in ln), -1)
     if repair_idx >= 0 and verify_idx >= 0:
         assert verify_idx > repair_idx, "Verify phase should come after Repair"
 

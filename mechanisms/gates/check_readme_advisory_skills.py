@@ -26,7 +26,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 #: Regex to extract skill names from backtick-quoted names in markdown table cells.
 #: Example: "| `cap-theorem-specialist` | Consistency vs availability | "
 #: Captures: "cap-theorem-specialist"

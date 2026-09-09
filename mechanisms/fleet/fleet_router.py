@@ -639,8 +639,12 @@ def resolve_unit_payload(unit: Unit, *, repo: str, tracker: str) -> dict:
             )
             if result.returncode == 0:
                 body = result.stdout.strip()
-        except Exception:
-            body = unit.title  # Fallback to title if fetch fails
+        except (OSError, subprocess.SubprocessError):
+            # `gh` absent, or the process could not be spawned. Narrow on purpose: a
+            # blind `Exception` here also caught bugs in the lines above and reported
+            # them as "the fetch failed", so a broken call site looked like a missing
+            # tool. The title is a fair fallback for a body nobody could read.
+            body = unit.title
 
     return {
         "repo": repo,

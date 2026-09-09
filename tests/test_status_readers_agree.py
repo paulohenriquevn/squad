@@ -308,6 +308,7 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         ["git", "grep", "--untracked", "-lE",
          r'"(raw|triaged|approved|planned|shipped|killed)"'],
         cwd=REPO_ROOT, capture_output=True, text=True,
+        check=False,
     )
     if found.returncode not in (0, 1):
         raise AssertionError(f"git grep failed: {found.stderr}")

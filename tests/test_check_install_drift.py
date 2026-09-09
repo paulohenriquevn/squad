@@ -16,6 +16,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+# Annotated as `pytest.MonkeyPatch` below and never imported. It passed only because
+# `from __future__ import annotations` makes the annotation a string that is never
+# evaluated — remove that line, or evaluate the annotation the way `typing.get_type_hints`
+# and several runtime validators do, and it raises NameError (ruff F821, kit#59).
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from check_install_drift import Drift, classify_file, main, scan

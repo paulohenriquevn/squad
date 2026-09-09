@@ -6,11 +6,8 @@ Tests that:
 3. Payload JSON branch name matches fleet_lander regex
 4. Default mode remains tmux (backward compatible)
 """
-import json
 import re
-import subprocess
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -25,16 +22,21 @@ def test_fleet_router_imports_cleanly() -> None:
 
 def test_dispatch_has_mode_parameter() -> None:
     """dispatch() function must accept mode parameter (default 'tmux')."""
-    from mechanisms.fleet import fleet_router
     import inspect
 
-    # Check that dispatch function signature includes mode parameter
-    sig = inspect.signature(fleet_router.dispatch)
-    params = sig.parameters
-    # Mode should be part of either positional or keyword args
-    # The actual signature check is that calling it works with mode kwarg
-    # We'll test this indirectly by checking the function exists
-    assert "dispatch" in dir(fleet_router), "dispatch function must exist"
+    from mechanisms.fleet import fleet_router
+
+    # The signature IS the subject here. This used to compute `sig.parameters`, throw it
+    # away, and assert only that the function existed — a test whose name promised a
+    # parameter check and delivered an existence check (kit#62).
+    params = inspect.signature(fleet_router.dispatch).parameters
+    assert "mode" in params, (
+        f"dispatch() must accept `mode`; its parameters are {sorted(params)}"
+    )
+    assert params["mode"].default == "tmux", (
+        f"`mode` must default to 'tmux', not {params['mode'].default!r} — a caller that "
+        f"omits it is choosing the default, and this test is what pins which one"
+    )
 
 
 def test_resolve_unit_payload_fetches_issue_metadata() -> None:
@@ -86,8 +88,9 @@ def test_payload_json_respects_branch_naming_contract() -> None:
     This is the cross-module invariant that prevents dispatch-as-workflow from
     choosing a branch name that fleet_lander.py would reject.
     """
-    from mechanisms.fleet import fleet_lander
     import re
+
+    from mechanisms.fleet import fleet_lander
 
     # Simulate a unit being routed to a lane
     # The payload should contain a branch like "fix/kit1", "fix/kit2-foo", etc.
@@ -109,7 +112,6 @@ def test_dispatch_backward_compatibility_default_mode_is_tmux() -> None:
 
     Existing calls without --dispatch-mode should still work as before.
     """
-    from mechanisms.fleet import fleet_router
 
     # The default should be documented or enforced in the function
     # After implementation, calling dispatch() without mode should use tmux

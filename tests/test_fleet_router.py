@@ -510,7 +510,9 @@ def test_three_lanes_do_not_dirty_each_others_trees(tmp_path) -> None:
     import subprocess
 
     def git(cwd, *args):
-        r = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+        r = subprocess.run(  # noqa: PLW1510 — the assert below IS the check
+            ["git", *args], cwd=cwd, capture_output=True, text=True
+        )
         assert r.returncode == 0, f"git {' '.join(args)}: {r.stderr.strip()}"
         return r.stdout
 
