@@ -6,6 +6,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **`sq` — the kit's task-oriented surface, first two verbs (#57)**
+  The skeleton plus `sq where` / `sq run`, chosen first because they are pure projection:
+  no subprocess, no YAML, no git state, so the shape is proved before anything else is.
+  `sq where check_xref` now answers with `did you mean: check_xrefs` — the wrong-directory
+  and wrong-argument guesses that cost four calls in one session become one call.
+  **Every report states what it did not check**, and it is a FIELD on `Report`, not a printed
+  line: making it prose would have left `--json` emitting `{"passed": …}` and handed every
+  programmatic consumer exactly the false-coverage report the field exists to prevent. A test
+  asserts the field is populated end to end, through the shim.
+  **A bare `sq` exits 2, not 0.** That is why the router is a dict rather than
+  `argparse.add_subparsers`, which would have printed help and succeeded — a command that did
+  nothing and reported success is the doctrine this CLI was built to uphold. It also lets the
+  unknown-verb message name the verbs it does have.
+  **The shim is deliberately tiny because no gate can see it**: `verify_ecosystem` compiles
+  `*.py` and `bash -n`s three `*.sh` globs, `ruff` is given directories, and `shellcheck`
+  reads `git ls-files '*.sh'`. An extensionless root file matches none of them, so
+  `tests/test_sq_entry_point.py` executes it — that test is the other half of the trade
+  between the short name and the syntax gate.
+  **`squad/cli/` and not `mechanisms/cli/`**: `mechanisms/README.md` says *"Nothing here is
+  user-invocable"*, and `check_mechanisms_inventory.py` hard-codes the five families, so a
+  sixth would be reported as an undeclared family. `squad/` also already travels to consumers,
+  which the root `sq` does not — `install.sh` copies directories.
+
+
 ### Fixed
 - **152 tests ran in no CI job, because an optimisation reopened the hole a testpath had closed (#58)**
   `pyproject.toml` declares `testpaths = ["tests", "hooks/tests", "squad/tests"]`, and its own

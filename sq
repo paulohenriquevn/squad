@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""`sq` — the kit's task-oriented surface. See `squad/cli/` for everything real.
+
+Deliberately tiny, because no gate can see this file: `verify_ecosystem` compiles
+`*.py` and `bash -n`s three `*.sh` globs, `ruff` is pointed at directories, and
+`shellcheck` reads `git ls-files '*.sh'`. An extensionless root file matches none of
+them, so the only thing that proves it parses is a test that executes it —
+`tests/test_sq_entry_point.py`.
+
+It does not travel to consumers either: `install.sh` copies DIRECTORIES, so a loose
+root file reaches nobody. There, the entry point is `python3 .claude/squad/cli`.
+"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from squad.cli.router import main  # noqa: E402
+
+raise SystemExit(main())
