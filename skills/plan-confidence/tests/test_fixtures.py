@@ -31,22 +31,22 @@ def test_fixtures_under_size_limit() -> None:
 
 
 def test_fixture_good_plan_does_not_trigger_caps() -> None:
-    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "good-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert report.hard_caps_triggered == [], f"good fixture triggered caps: {report.hard_caps_triggered}"
 
 
 def test_fixture_missing_coverage_triggers_coverage_cap() -> None:
-    report = run_structural(FIXTURES / "missing-coverage-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "missing-coverage-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert "coverage_lt_100" in report.hard_caps_triggered
     assert report.verdict == "INVALID"
 
 
 def test_fixture_weak_imperatives_reduces_risco() -> None:
-    report = run_structural(FIXTURES / "weak-imperatives-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "weak-imperatives-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert report.structural_risk_score < 100
 
 
 def test_fixture_no_tdd_triggers_tdd_cap() -> None:
-    report = run_structural(FIXTURES / "no-tdd-plan.md", RUBRIC, THRESHOLDS)
+    report = run_structural(FIXTURES / "no-tdd-plan.md", RUBRIC, THRESHOLDS, structural_only=True)
     assert "bugfix_without_tdd" in report.hard_caps_triggered
     assert report.final_score_after_caps <= 70

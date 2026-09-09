@@ -232,7 +232,7 @@ def test_end_to_end_score_invariants(
         plan = workdir / "synth.md"
         plan.write_text(plan_text, encoding="utf-8")
 
-        report = run_structural(plan, RUBRIC, THRESHOLDS)
+        report = run_structural(plan, RUBRIC, THRESHOLDS, structural_only=True)
         # Score range
         assert 0.0 <= report.final_score_after_caps <= 100.0
         assert 0.0 <= report.completeness_score <= 100.0
@@ -277,8 +277,8 @@ def test_hard_cap_monotonicity(tmp_path: Path) -> None:
         "| 2 | bad |  | unmapped |\n",
         encoding="utf-8",
     )
-    report_a = run_structural(plan_a, RUBRIC, THRESHOLDS)
-    report_b = run_structural(plan_b, RUBRIC, THRESHOLDS)
+    report_a = run_structural(plan_a, RUBRIC, THRESHOLDS, structural_only=True)
+    report_b = run_structural(plan_b, RUBRIC, THRESHOLDS, structural_only=True)
     assert report_b.final_score_after_caps <= report_a.final_score_after_caps, (
         f"adding cap raised score: a={report_a.final_score_after_caps} b={report_b.final_score_after_caps}"
     )

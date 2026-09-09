@@ -102,6 +102,53 @@ Soft caps appear in `hard_caps_triggered` with the `soft_floor_` prefix for audi
 3. **Parse the JSON**, matching `templates/score-report.schema.json`.
 4. **Render the report.** Top 3 contributors and detractors per dimension, verdict band marked.
 
+## Convene the panel — the phase does not advance without it
+
+`rules/review-panel.txt` gates DISCOVER on **2 of 3 signed approvals**, and the
+reviewers are **this project's own specialist agents**, not model strings. The scorer
+applies that gate by default: a document scoring 100 with no panel record is
+`AWAITING_REVIEW`, never `SHIPPABLE`.
+
+The deterministic half is a mechanism; the judgement is yours to gather, because the
+question a panel answers — does the evidence that resolves actually SUPPORT the
+conclusion — is exactly the one no script can ask.
+
+1. **Assign the seats.** From the project root:
+
+   ```bash
+   python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/convene_panel.py" \
+       --slug <slug> --phase discover --author <who wrote it> --write
+   ```
+
+   Exit 3 means the panel cannot convene here — a missing agent or an absent binary.
+   That is an `access` impediment, **not** a rejection: return the item to the
+   registry and take the next one.
+
+2. **Invoke every assigned agent as a sub-agent**, one per seat, each judging the
+   document against its own speciality. Here: `nemesis-claim-auditor` on whether the claim is supported, `leonardo-researcher` on what the decision needed to know, and `judge-codex:discover-judge` from outside the family.
+
+3. **Write the votes** to `records/panels/<slug>-discover.json`:
+
+   ```json
+   {"slug": "...", "phase": "discover", "artifact": "...", "author": "...",
+    "votes": [{"reviewer": "<the assigned agent>", "model": "<what it ran on>",
+                "verdict": "approve | return | abstain",
+                "reason": "what was checked, against which evidence"}]}
+   ```
+
+   A reason under 15 words is refused: a verdict with no reasoning is a tick, and a
+   tick is what a panel exists to be more than.
+
+4. **Re-run the scorer.** It now reports the panel beside the score.
+
+**What is refused, and why each one matters.** The author on their own panel; three
+votes from one model family; one reviewer voting twice; an abstention read as
+agreement; a voter the assignment never named. Each is a way a panel can look
+convened and be a rubber stamp — counting to two is trivial and is not the point.
+
+`--structural-only` measures structure without the gate. It records that it did, in
+the report, so the choice cannot quietly become the norm.
+
 ## Output Format
 
 - `opportunity_slug`, `opportunity_path`

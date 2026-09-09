@@ -45,16 +45,19 @@ from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cycle"))
-from review_panel import HOME_FAMILY, PANEL_SIZE, family_of
+from convene_panel import agents_dir, repo_root, resolve_seat
+from review_panel import (
+    HOME_FAMILY,
+    PANEL_SIZE,
+    Seat,
+    parse_panel_phases,
+    parse_roster,
+    seats_for,
+)
 
 #: Resolve an executable name to a path, or None. Injected so the gate is testable
 #: without depending on what happens to be installed on the machine running it.
 WhichFn = Callable[[str], "str | None"]
-
-#: A reviewer that runs as a sub-agent in this session needs no binary. Requiring
-#: one would fail every panel on a machine that has everything it needs.
-BUILTIN = "builtin"
-
 
 class PanelCapability(Enum):
     """Four facts with different audiences, deliberately not collapsed.
@@ -63,17 +66,18 @@ class PanelCapability(Enum):
     had a measured cost: with a PATH holding no `codex`, the gate reported VIOLATED,
     so `verify_ecosystem` — which the CI runs — would have gone red on a GitHub runner
     for a repository with nothing wrong with it. A declaration that cannot form a panel
-    on ANY machine is the repository's defect; a binary missing on THIS machine is not.
+    on ANY machine is the repository's defect; a reviewer missing on THIS machine is not.
     """
 
     HOLDS = "holds"
-    #: The declaration itself cannot form a panel — fewer than three reviewers, or
-    #: every one of them from the same family. Fails everywhere, CI included.
+    #: The declaration itself cannot form a panel — a gated phase without exactly
+    #: three seats, or three seats from one family. Fails everywhere, CI included.
     VIOLATED = "violated"
     #: The registry does not parse. Nothing was tested, and that is not a pass.
     UNCHECKED = "unchecked"
-    #: The declaration is valid and a declared binary is absent HERE. The operator
-    #: about to run the chain needs this; the CI checking the repository does not.
+    #: The declaration is valid and a declared reviewer cannot be reached HERE — no
+    #: such agent in this project, or no such binary on PATH. The operator about to
+    #: run the chain needs this; the CI checking the repository does not.
     UNREACHABLE = "unreachable"
 
     @property
@@ -85,33 +89,22 @@ def default_panel_path() -> Path:
     return Path(__file__).resolve().parents[2] / "rules" / "review-panel.txt"
 
 
-def parse_reviewers(text: str) -> list[tuple[str, str, str]]:
-    """(id, model, invocation) for every declared reviewer.
-
-    Raises ValueError on a line that announces a reviewer and does not describe
-    one — a half-written row must not silently shrink the panel.
-    """
-    rows: list[tuple[str, str, str]] = []
-    for raw in text.splitlines():
-        line = raw.split("#", 1)[0].strip()
-        if not line or not line.startswith("reviewer"):
-            continue
-        _, _, value = line.partition("=")
-        parts = [p.strip() for p in value.split("|")]
-        if len(parts) != 3 or not all(parts):
-            raise ValueError(f"malformed reviewer row: {raw.strip()!r}")
-        rows.append((parts[0], parts[1], parts[2]))
-    return rows
-
-
 def check_panel_capability(
     panel_path: Path | None = None,
     *,
     which: WhichFn | None = None,
+    project: Path | None = None,
 ) -> PanelCapability:
-    """Can the declared panel be convened?"""
+    """Can a panel be convened for EVERY phase a panel gates?
+
+    Per phase, not over the whole file. A roster holding six valid seats can still
+    leave one gated phase with two, and a global count would call that formable —
+    then every item in that phase would halt on an `access` impediment for a cause
+    knowable before the first was selected, which is the entire point of asking here.
+    """
     path = panel_path or default_panel_path()
     resolve = which or shutil.which
+    agents = agents_dir(project or repo_root())
 
     try:
         text = path.read_text(encoding="utf-8")
@@ -121,42 +114,45 @@ def check_panel_capability(
         return PanelCapability.VIOLATED
 
     try:
-        reviewers = parse_reviewers(text)
+        gated = parse_panel_phases(text)
+        by_phase = {ph: seats_for(text, ph) for ph in gated}
     except ValueError:
         return PanelCapability.UNCHECKED
 
-    if len(reviewers) < PANEL_SIZE:
+    if not gated:
         return PanelCapability.VIOLATED
 
-    families = {family_of(model) for _, model, _ in reviewers}
-    if not (families - {HOME_FAMILY, "unknown"}):
-        return PanelCapability.VIOLATED
+    for seats in by_phase.values():
+        if len(seats) != PANEL_SIZE:
+            return PanelCapability.VIOLATED
+        families = {s.family for s in seats}
+        if not (families - {HOME_FAMILY, "unknown"}):
+            return PanelCapability.VIOLATED
 
     # Reachability is checked LAST and reported separately, because it is the only
     # question here whose answer depends on the machine rather than on the repository.
-    for _, model, invocation in reviewers:
-        if invocation == BUILTIN:
-            continue
-        if resolve(invocation) is None:
+    for seats in by_phase.values():
+        for seat in seats:
             # The panel is short a member here. When it is the orthogonal one, this
             # also removes the only thing the diversity rule was protecting — so it
             # still stops a real run, it just is not the repository's fault.
-            return PanelCapability.UNREACHABLE
+            if resolve_seat(seat, agents=agents, which=resolve):
+                return PanelCapability.UNREACHABLE
 
     return PanelCapability.HOLDS
 
 
 _MESSAGES = {
     PanelCapability.HOLDS: (
-        "A panel can be formed: {n} reviewers across {fams}, all reachable."
+        "A panel can be formed for {phases}: {n} seats across {fams}, all reachable."
     ),
     PanelCapability.VIOLATED: (
         "PREMISE VIOLATED — no valid review panel can be formed from "
         "rules/review-panel.txt.\n"
         "\n"
-        "DISCOVER and PLAN each need {size} reviewers with at least one from a "
-        "recognised family outside `{home}`, and every non-builtin reviewer must be on "
-        "PATH.\n"
+        "Each gated phase needs exactly {size} seats with at least one from a "
+        "recognised family outside `{home}`. A `builtin` seat must name an agent "
+        "this project has; any other must be on PATH.\n"
         "\n"
         "  Without it every item would be measured, planned, and returned to the\n"
         "  registry at a panel that was never formable — one `access` impediment per\n"
@@ -166,7 +162,7 @@ _MESSAGES = {
     ),
     PanelCapability.UNREACHABLE: (
         "NOT FORMABLE HERE — the declaration is valid and a declared reviewer is not on "
-        "PATH of this machine.\n"
+        "reachable from this project — no such agent, or no such binary on PATH.\n"
         "\n"
         "  The panel would be short a member, and if the missing one is the orthogonal\n"
         "  reviewer, the diversity rule has nothing left to protect. A run started now\n"
@@ -194,15 +190,19 @@ def main(argv: list[str] | None = None) -> int:
     path = args.panel or default_panel_path()
     result = check_panel_capability(path)
 
-    reviewers: list[tuple[str, str, str]] = []
+    seats: list[Seat] = []
+    gated: list[str] = []
     try:
-        reviewers = parse_reviewers(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        seats = parse_roster(text)
+        gated = parse_panel_phases(text)
     except (OSError, ValueError):
         pass
 
     message = _MESSAGES[result].format(
-        n=len(reviewers),
-        fams=", ".join(sorted({family_of(m) for _, m, _ in reviewers})) or "nothing",
+        n=len(seats),
+        phases=", ".join(gated) or "no phase",
+        fams=", ".join(sorted({s.family for s in seats})) or "nothing",
         size=PANEL_SIZE,
         home=HOME_FAMILY,
     )
@@ -210,8 +210,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps({
             "result": result.value,
-            "reviewers": [{"id": i, "model": m, "via": v} for i, m, v in reviewers],
-            "families": sorted({family_of(m) for _, m, _ in reviewers}),
+            "panel_phases": gated,
+            "seats": [{"phase": s.phase, "agent": s.agent, "model": s.model,
+                       "family": s.family, "via": s.invocation} for s in seats],
+            "families": sorted({s.family for s in seats}),
             "message": message,
         }, indent=2))
     else:

@@ -6,6 +6,54 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **The DISCOVER and PLAN review panel is now convened, and blocks (#65)**
+  `rules/review-panel.txt`, `review_panel.py`, an intake premise gate and 377 lines of tests
+  shipped on 2026-09-08 declaring that both phases advance on **2 of 3 signed approvals**.
+  Nothing convened a panel. `review_panel.py` tallies a RECORD, and no code produced one —
+  measured by tracing callers: `review_panel` appeared in `skills/` exactly once, in a
+  docstring, while the other gates of the same phase appeared in 6 and 14 files. So the rule
+  read as enforced and every DISCOVER and PLAN advanced on its structural score alone.
+  That is this kit's own governing failure — *an inability to measure must never become a
+  passing measurement* — reached through the governance layer rather than a gate.
+  **The reviewers are now the project's own specialist agents.** A seat used to name a model
+  and a lens (`evidence-lens | claude-opus-5`), which said how a reviewer would be reached and
+  never who was reviewing. It now names an agent that must exist in the running project, and
+  both gated phases fall inside a speciality `agents/README.md` already defines: DISCOVER asks
+  whether evidence supports a conclusion, which is verbatim what `nemesis-claim-auditor`
+  decides; PLAN asks whether a shape is right and grounded on disk, which is
+  `vera-technical-arbiter`. `daedalus-tech-lead` sits on neither — on a gated item it is the
+  author. The orthogonal seat is `judge-codex:*`, so the family-diversity rule is satisfied by
+  a real project agent rather than a model string.
+  `convene_panel.py` resolves each seat against the agents actually present and writes the
+  assignment. `check_panel_approval.py` refuses to advance a document without a majority, and
+  **a missing record is not an approval**: a phase that skipped its panel must not be
+  indistinguishable from one whose reviewers all approved. `review_panel.py` gained one
+  refusal — a voter the assignment never named — because convening buys nothing if the panel
+  that voted may differ from the panel convened, and the assignment is read from disk rather
+  than from the record, which would let a document supply the list it is checked against.
+
+### Changed
+- **A structural score no longer advances a DISCOVER or PLAN document on its own (#65)**
+  `run_opportunity_score.py` and `run_structural.py` apply the panel gate by default. An
+  opportunity or plan scoring 100 with no panel record is now `AWAITING_REVIEW`, not
+  `SHIPPABLE`. **The gate moves the verdict and never the score**: folding it into the number
+  would conflate "this document is weak" with "nobody has reviewed it yet", two facts that
+  take opposite actions — which is the distinction the panel mechanism is built around.
+  No verdict token was invented, and the three outcomes stay three. `NEEDS_REVISION` — the
+  panel returned it, editing can lift it. `AWAITING_REVIEW` — "the structure is complete and
+  the judgement has not been made", which is the shape PLAN phase 0 already used for a brief
+  nobody signed. `ITEM_IN_FLIGHT` — the panel could not convene at all. All three were already
+  in `rules/verdict-bands.txt`, and collapsing the last two would confuse "nobody has reviewed
+  this yet" with "nobody can review it here", which take different actions.
+  A structural INVALID still wins outright — caught by the scorer's own tests, which went from
+  exit 1 to exit 0 on a fabricated pointer while this was being wired. Letting "nobody has
+  reviewed this" overwrite `fabricated_evidence`, the one unrecoverable defect in the cycle,
+  would have turned the new gate into a way of hiding the oldest one.
+  `--structural-only` measures structure without the gate and RECORDS that it did, in the
+  report: a bypass nobody can see in the artifact is a bypass that quietly becomes the norm.
+  `score-report.schema.json` accepts the two verdicts the gate can produce.
+
 ### Added
 - **Promotion is a command of its own: `/promote` (#64)**
   `git-safety.md` § 1 says `develop` advances ONLY by promoting `workspace` through a PR, and
