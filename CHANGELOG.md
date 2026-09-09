@@ -7,6 +7,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`d3_orphan_export` called every import in an `__init__.py` a re-export (#63)**
+  `_PY_INIT_IMPORT_RE` matched `^from <anything> import ...`, so
+  `from typing import Any, NoReturn, TypeVar` put three typing primitives on the kit's
+  public surface and `TypeVar` was reported as an orphan export of the `squad` package.
+  The only fix that finding admitted was *stop importing `typing`*. A re-export is a name
+  the package republishes from ITS OWN modules — a relative import, or one from the same
+  package; an absolute import of another distribution is a dependency.
+  **And a correction to the issue that reported it.** It claimed all three findings were
+  false because the symbols are in `__all__`. Investigating to fix it inverted the
+  premise: being in `__all__` is what PUTS a symbol on the surface, and the detector then
+  asks whether anything consumes it — which is the right question. Only `TypeVar` was a
+  false positive. `handle_context_error` and `safe_create_context` are genuine: both are
+  declared public and nothing outside the module imports either. They are left in place —
+  removing public API on the strength of a soft cap would be deciding the package's
+  contract from a count, and `FAIL_SOFT` exits 0 so nothing is blocked behind them.
+
+### Fixed
 - **The code-quality gate went from FAIL_HARD to a passing exit, and now says what it found (#61)**
   Two defects, and the second is the one that mattered.
   **The hard cap was one dead ternary.** `tests/test_check_xrefs_root.py` carried

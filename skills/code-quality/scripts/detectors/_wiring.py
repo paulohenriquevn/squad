@@ -52,8 +52,13 @@ _TEST_FILE_RE = re.compile(r"(^test_|_test\.|\.test\.|\.spec\.|_test$)")
 
 _PY_ALL_RE = re.compile(r"^__all__\s*=\s*\[(?P<body>.*?)\]", re.MULTILINE | re.DOTALL)
 _PY_STRING_RE = re.compile(r"['\"]([A-Za-z_][A-Za-z0-9_]*)['\"]")
+#: A re-export in an `__init__.py`: a name the package republishes from ITS OWN
+#: modules. The module part is captured so the caller can tell that apart from a
+#: dependency — `from typing import TypeVar` used to land three typing primitives on
+#: the kit's public surface, and `TypeVar` was then reported as an orphan export whose
+#: only available fix would have been to stop importing `typing` (kit#63).
 _PY_INIT_IMPORT_RE = re.compile(
-    r"^from\s+[.\w]+\s+import\s+(?P<names>[^#\n(]+)", re.MULTILINE
+    r"^from\s+(?P<module>[.\w]+)\s+import\s+(?P<names>[^#\n(]+)", re.MULTILINE
 )
 
 _TS_EXPORT_RE = re.compile(
@@ -141,7 +146,15 @@ def _python_surface(manifest_dir: Path) -> list[tuple[str, Path]]:
         for match in _PY_ALL_RE.finditer(body):
             surface.extend((name, path) for name in _PY_STRING_RE.findall(match.group("body")))
         if path.name == "__init__.py":
+            package = path.parent.name
             for match in _PY_INIT_IMPORT_RE.finditer(body):
+                module = match.group("module")
+                # Relative (`from .engine import x`) or same-package
+                # (`from mypkg.helpers import x`) is a re-export. An absolute import of
+                # anything else is a dependency this module happens to need, and
+                # publishing it as this package's surface makes the finding unactionable.
+                if not (module.startswith(".") or module.split(".")[0] == package):
+                    continue
                 for raw in match.group("names").split(","):
                     name = raw.strip().split(" as ")[-1].strip()
                     if name and name != "*" and not name.startswith("_"):

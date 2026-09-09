@@ -477,3 +477,41 @@ def test_an_empty_run_lists_no_findings_rather_than_omitting_the_key() -> None:
 
     summary = emit_json_summary([], verdict="PASS", hard_caps_triggered=[])
     assert summary["findings"] == []
+
+
+def test_a_stdlib_import_in_init_is_not_a_re_export(tmp_path) -> None:
+    """`from typing import TypeVar` in an `__init__.py` is a DEPENDENCY, not a surface.
+
+    `_PY_INIT_IMPORT_RE` matched `^from <anything> import ...` and treated every name as
+    re-exported, so `squad/__init__.py`'s `from typing import Any, NoReturn, TypeVar` put
+    three typing primitives on the kit's public surface. `TypeVar` was then reported as an
+    orphan export of the squad package, which is not a claim anyone can act on: the fix
+    would be to stop importing `typing` (kit#63).
+
+    A re-export is a name the package chose to republish from ITS OWN modules — a relative
+    import, or a submodule of the same package. An absolute import of an unrelated
+    distribution is not one.
+    """
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "code-quality"))
+    from scripts.detectors import _wiring
+
+    pkg = tmp_path / "mypkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(
+        "from typing import TypeVar\n"
+        "from .engine import run_engine\n"
+        "from mypkg.helpers import assist\n",
+        encoding="utf-8",
+    )
+    (pkg / "engine.py").write_text("def run_engine():\n    return 1\n", encoding="utf-8")
+    (pkg / "helpers.py").write_text("def assist():\n    return 2\n", encoding="utf-8")
+
+    names = {n for n, _ in _wiring._python_surface(tmp_path)}
+    assert "run_engine" in names, "a relative import in __init__ IS a re-export"
+    assert "assist" in names, "a same-package absolute import IS a re-export"
+    assert "TypeVar" not in names, (
+        "`from typing import TypeVar` is a dependency; calling it a public export of this "
+        "package makes the only available fix 'stop using typing'"
+    )
