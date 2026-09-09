@@ -46,6 +46,8 @@ if str(_HERE) not in sys.path:
 from check_backlog_structure import (  # noqa: E402
     BLOCK_RE,
     Item,
+    LINEAGE_EDGES,
+    _ID_IN_TEXT_RE,
     _parse_items,
     declares_impediment,
     parse_blocked_by,
@@ -144,11 +146,68 @@ def impediment_graph(items: list[Item]) -> tuple[dict[str, list[str]], dict[str,
     return blocked_by, blocks
 
 
+def lineage_chains(items: list[Item]) -> dict[str, list[str]]:
+    """For each item that has an ancestor, the chain behind it, newest first.
+
+    `supersedes` and `regression_of` point BACKWARD, at an item that already
+    closed. Following them answers the one question the registry held all the
+    pieces of and could not state: how many times has this been tried
+    (kit#55). B-200 regression_of B-050 supersedes B-012 is a third attempt, and
+    the third attempt at something is worth knowing before starting it.
+
+    Items with no ancestor are absent from the result rather than mapped to an
+    empty list. Most items are a first attempt; that is the normal case and
+    saying so on every row would bury the rare one.
+
+    Two things this walker does that the contract says are unnecessary, because
+    it renders registries the checker has not passed yet:
+
+    - an edge naming an id no block defines is FOLLOWED and then ends. The id is
+      kept in the chain — `check_backlog_structure` reports it as
+      `lineage_missing`, and dropping it here would hide the part of the history
+      that is visible.
+    - a ring terminates. `LINEAGE_EDGES` has no cycle gate because the edge points
+      only at terminal items, and that argument holds for a well-formed registry.
+      This function reads one that may be mid-edit, and a walker that trusts the
+      argument hangs the index instead of rendering it.
+    """
+    ancestor: dict[str, str] = {}
+    for item in items:
+        for field_name in LINEAGE_EDGES:
+            raw = item.fields.get(field_name, "").strip()
+            if not raw:
+                continue
+            found = _ID_IN_TEXT_RE.findall(raw)
+            if found and found[0] != item.item_id:
+                ancestor[item.item_id] = found[0]
+                break
+
+    chains: dict[str, list[str]] = {}
+    for item_id in ancestor:
+        chain: list[str] = []
+        seen = {item_id}
+        current = ancestor.get(item_id)
+        while current and current not in seen:
+            chain.append(current)
+            seen.add(current)
+            current = ancestor.get(current)
+        chains[item_id] = chain
+    return chains
+
+
+def _ordinal(n: int) -> str:
+    """`3` -> `3rd`. Small enough that a dependency would cost more than it saves."""
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
+
+
 def render_index(content: str, items: list[Item]) -> str:
     """The index block, markers included."""
     rows: dict[str, list[str]] = {b: [] for b in BUCKET_ORDER}
     unknown: list[Item] = []
     blocked_by, blocks = impediment_graph(items)
+    chains = lineage_chains(items)
     for item in items:
         bucket = bucket_of(item)
         if bucket is None:
@@ -167,6 +226,12 @@ def render_index(content: str, items: list[Item]) -> str:
         elif item.item_id in blocks:
             held = ", ".join(f"`{b}`" for b in blocks[item.item_id])
             severity = f"blocks {held} — {severity}" if severity != "—" else f"blocks {held}"
+        # An item with ancestors is not new, whatever its status says. The chain is
+        # the reason it looks familiar, and the count is the part a reader acts on.
+        if item.item_id in chains:
+            chain = chains[item.item_id]
+            note = f"{_ordinal(len(chain) + 1)} attempt — after {', '.join(f'`{a}`' for a in chain)}"
+            severity = f"{note} — {severity}" if severity != "—" else note
         rows[bucket].append(
             f"| [`{item.item_id}`](#{frag}) | {item.title} | `{status}` | {severity} |"
         )
