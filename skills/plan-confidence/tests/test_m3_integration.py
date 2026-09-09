@@ -216,3 +216,63 @@ def test_main_runs_end_to_end_with_code_quality_active(tmp_path, monkeypatch, ca
     out = capsys.readouterr().out
     assert code in (0, 1, 2, 3), f"unexpected exit {code}"
     assert '"code_quality"' in out, "the CQ block must reach stdout on the active path"
+
+
+# ---------- kit#56: the merge must not destroy the value it replaces ----------
+
+
+def test_the_structural_verdict_survives_the_merge_that_replaces_it() -> None:
+    """The CLI composes; the library does not. Both numbers must stay readable.
+
+    `run_structural`'s library path returns the plan's own verdict. `main()` then
+    merges the code-quality verdict over it and prints THAT. Anyone reading a band
+    off the CLI — the obvious thing to do — was reading a value the snapshot suite
+    can never reproduce, with nothing in the payload to say why (kit#56).
+
+    The merge is deliberate: `rules/cycle-code-quality.md` § 1 requires it. What
+    was not deliberate is that the composed value overwrote the composed-from one,
+    so the difference could not be attributed to anything.
+    """
+    from run_structural import _merge_code_quality_verdict
+
+    out = {"verdict": "SHIPPABLE", "final_score_after_caps": 98.4, "hard_caps_triggered": []}
+    _merge_code_quality_verdict(out, {
+        "verdict": "FAIL_SOFT",
+        "score_cap": 70,
+        "soft_caps_triggered": ["soft_cap_mutation_deferred_go"],
+    })
+
+    assert out["verdict"] == "NON_SHIPPABLE"
+    assert out["verdict_before_code_quality"] == "SHIPPABLE"
+    assert out["final_score_after_caps"] == 70
+    assert out["score_before_code_quality"] == 98.4
+
+
+def test_a_merge_that_changes_nothing_adds_no_before_keys() -> None:
+    """A PASS composes to the same value, and a key saying so would be noise.
+
+    The keys exist to explain a DIFFERENCE. Emitting them when there is none
+    trains a reader to skip them, which is how the one that matters gets missed.
+    """
+    from run_structural import _merge_code_quality_verdict
+
+    out = {"verdict": "SHIPPABLE", "final_score_after_caps": 98.4, "hard_caps_triggered": []}
+    _merge_code_quality_verdict(out, {"verdict": "PASS", "score_cap": 100})
+
+    assert out["verdict"] == "SHIPPABLE"
+    assert "verdict_before_code_quality" not in out
+    assert "score_before_code_quality" not in out
+
+
+def test_a_cap_that_only_lowers_the_score_still_records_the_score_it_lowered() -> None:
+    """Score and verdict move independently; each records its own before-value."""
+    from run_structural import _merge_code_quality_verdict
+
+    out = {"verdict": "NON_SHIPPABLE", "final_score_after_caps": 95.0, "hard_caps_triggered": []}
+    _merge_code_quality_verdict(out, {
+        "verdict": "FAIL_SOFT", "score_cap": 70, "soft_caps_triggered": ["x"],
+    })
+
+    assert out["score_before_code_quality"] == 95.0
+    # The verdict did not move — it was already NON_SHIPPABLE — so nothing to explain.
+    assert "verdict_before_code_quality" not in out

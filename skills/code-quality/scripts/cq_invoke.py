@@ -107,8 +107,23 @@ def merge_verdict_into_plan_confidence(
     if cq_score_cap >= 100:
         return
 
-    out["final_score_after_caps"] = min(out.get("final_score_after_caps", 100), cq_score_cap)
-    current = out.get("verdict", "SHIPPABLE")
+    # What is about to be replaced. The merge is deliberate — `cycle-code-quality.md`
+    # § 1 requires the plan's verdict to carry the quality state of the code it
+    # targets — but it USED to overwrite in place, and the composed-from value was
+    # gone (kit#56). `run_structural`'s library path returns the plan's own verdict
+    # and `main()` prints the composed one, so a reader taking a band off the CLI —
+    # the obvious thing to do — took a value the snapshot suite cannot reproduce,
+    # with nothing in the payload to attribute the difference to.
+    #
+    # Recorded only when the value actually MOVED. A key that always appears is a
+    # key readers learn to skip, and then the one that matters is skipped too.
+    score_before = out.get("final_score_after_caps", 100)
+    verdict_before = out.get("verdict", "SHIPPABLE")
+
+    out["final_score_after_caps"] = min(score_before, cq_score_cap)
+    if out["final_score_after_caps"] != score_before:
+        out["score_before_code_quality"] = score_before
+    current = verdict_before
     if cq_verdict in ("FAIL_HARD", "INVALID"):
         out["verdict"] = "INVALID"
     elif cq_verdict == "FAIL_SOFT":
@@ -134,3 +149,6 @@ def merge_verdict_into_plan_confidence(
     elif cq_verdict == "PASS_WITH_CAVEATS":
         if current == "SHIPPABLE":
             out["verdict"] = "SHIPPABLE_WITH_CAVEATS"
+
+    if out.get("verdict") != verdict_before:
+        out["verdict_before_code_quality"] = verdict_before

@@ -44,6 +44,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   which fields they are.
 
 ### Fixed
+- **The composed verdict destroyed the value it was composed from (#56)**
+  `run_structural`'s library path returns the plan's own verdict; `main()` merges the code-quality
+  verdict over it and prints THAT. The merge is deliberate and contractual — `cycle-code-quality.md`
+  § 1 requires a plan's verdict to carry the quality state of the code it targets — but it
+  overwrote `verdict` and `final_score_after_caps` **in place**, so the composed-from value was
+  gone and the difference could be attributed to nothing. Anyone reading a band off the CLI, which
+  is the obvious thing to do, was reading a value the snapshot suite can never reproduce.
+  Worse, that cap is not a property of the plan: it reflects the repository, so two plans of
+  different quality print the same capped number on the same day and one plan prints different
+  numbers on different days. `verdict_before_code_quality` and `score_before_code_quality` now
+  carry what was composed from — **emitted only when the merge actually moved the value**, because
+  a key that always appears is a key readers learn to skip, and then the one that matters is
+  skipped too. `test_real_plans_snapshot.py` says in its own header which of the two quantities it
+  pins, so the next reader does not try to reconcile them.
+  **Not done, deliberately:** the caps are not renamed to declare their origin. #56 suggested it;
+  renaming would break every consumer's `code-quality-allowlist.txt` and `-baseline.txt`, and the
+  provenance is already readable — the code-quality caps are listed under `code_quality`, and the
+  two new keys name the boundary they crossed.
+
+### Fixed
 - **`check_backlog_structure`'s own inventory of findings did not match what it emits (#55)**
   Found while adding the two lineage checks below, by computing the comparison the docstring
   invites. The list declared `malformed_block`, which **no code path emits**, and omitted

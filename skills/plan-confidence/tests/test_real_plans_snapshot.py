@@ -8,6 +8,24 @@ revert the detector change.
 
 We pin BAND (not exact score) because exact scores can shift slightly with
 detector refinements. Bands are the semantic gate.
+
+WHICH VERDICT THIS FILE PINS, AND WHY IT IS NOT THE ONE THE CLI PRINTS
+----------------------------------------------------------------------
+These snapshots pin the STRUCTURAL verdict — what `run_structural()` returns for
+the plan alone. `run_structural.py`'s `main()` then merges the code-quality
+verdict over it and prints the composed one, because `cycle-code-quality.md` § 1
+requires a plan's verdict to carry the quality state of the code it targets.
+
+So the CLI and this suite report different quantities, and that is by design. A
+band read off the CLI output cannot be pinned here: the code-quality cap reflects
+the repository, not the plan, so it moves with commits that touch neither. Two
+plans of different quality can print the same capped number on the same day, and
+one plan can print different numbers on different days (kit#56).
+
+When the merge moves a value, the payload now says so: `verdict_before_code_quality`
+and `score_before_code_quality` carry what was composed FROM, and appear only when
+the composition actually changed it. Those are the fields to compare against a
+band pinned here.
 """
 from __future__ import annotations
 
