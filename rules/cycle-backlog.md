@@ -94,6 +94,8 @@ dod:
 | `dod` | yes | ≥ 1 verifiable criterion (G4) |
 | `kill_reason` | when `killed` | before approval: why the measurement did not support the hypothesis. After: **who reversed the decision, and what changed** |
 | `blocked_by` | when impeded | what stops the item from advancing — see below (G6, G7) |
+| `supersedes` | when re-filing a `killed` item | the id this one replaces — see *Lineage* below |
+| `regression_of` | when a `shipped` item's problem returned | the id that shipped and came back — see *Lineage* below |
 
 `suggested_mode` being non-binding is deliberate. A hunch filed as a `bug` that measurement reveals to be a `evolve` must change mode without leaving the backlog — reclassification is a DISCOVER outcome, not a re-intake.
 
@@ -173,6 +175,39 @@ called seven honest impediments malformed.
 
 An item may not ship while an impediment is live. `backlog_status.py` refuses it, and
 `check_backlog_structure.py` reports the ones that got in by hand.
+
+### Lineage
+
+An item may be the descendant of one that already closed. Two fields say so, and the
+dedup gate at intake is what produces them: a search hit on a `killed` item prescribes
+`supersedes`, a hit on a `shipped` item prescribes `regression_of`
+(`check_intake_gates.ACTION_BY_STATUS`). A hit on an item that is still **open** produces
+neither — it folds in as `ITEM_MERGED` and no new id is allocated.
+
+| Field | Points at | Means |
+|---|---|---|
+| `supersedes` | an item that is `killed` | the hypothesis was measured, did not hold, and something has changed since |
+| `regression_of` | an item that is `shipped` | the work was delivered and the problem came back |
+
+**Both fields were specified here only from 2026-09-09.** Before that they lived in
+`skills/backlog-item/SKILL.md`, which is where they are PRODUCED rather than where they
+are stored, and `cycle-maintenance.md` pointed readers there for the specification of a
+registry field — the inversion of this file's own opening rule. The consequence was
+mechanical: `blocked_by` carried five deterministic findings and these two carried none,
+so `supersedes: B-999` naming an id nothing defines passed clean. That is the defect G6
+exists to catch on the other edge (kit#55).
+
+**Each field is a claim about a state, so the claim is checked.**
+`check_backlog_structure.py` reports `lineage_missing` when the named id is undefined or
+is the item itself, and `lineage_wrong_status` when the target exists but is not in the
+terminal state the field asserts.
+
+**There is deliberately no cycle gate here.** A lineage edge points only at a terminal
+item, and a terminal item is not reopened, so a ring is unreachable — G7 has no analogue.
+
+**Re-filing without the link is what the gate prevents.** A hypothesis killed in April
+can be legitimately re-filed in August; the edge is the difference between doing that
+knowingly and doing it because nobody looked.
 
 ## Domain routing
 

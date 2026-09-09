@@ -6,6 +6,62 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **`check_install_drift --consumer-local` lists what an install owns, by path (#33)**
+  The classification was already correct and the paths were already computed — then discarded at
+  the print site, which reported `consumer-local: N` and nothing else. A number tells a person
+  that N files are theirs; it does not tell them WHICH, and which is the only form the answer is
+  usable in. A consumer's own `hooks/delivery-gate.sh` was deleted three times by cleanups of
+  `.claude/` and restored twice; the third deletion stood for days. At each of those moments the
+  kit held the right answer in a drawer. The flag lists the files and exits 0 — asking is not
+  auditing — and prints `no files` rather than nothing when the install owns nothing, because
+  blank output cannot be told from a crash. Kept off the default report on the issue's own
+  argument: `consumer-local` is normally a healthy number, so the right moment to surface it is
+  the destructive one, not every session.
+
+- **The two lineage edges are specified where they are stored, and checked (#55)**
+  `supersedes` and `regression_of` are the other two item-to-item edges in the registry, and until
+  now the kit prescribed writing both and read neither. `blocked_by` carries five deterministic
+  findings; these carried zero, so `supersedes: B-999` naming an id no block defines passed clean —
+  the exact defect G6 exists to catch on the other edge. **The cause was where they were specified:**
+  in `skills/backlog-item/SKILL.md`, which is where they are PRODUCED rather than where they are
+  stored, with `cycle-maintenance.md` pointing readers there for a registry field — the inversion of
+  `cycle-backlog.md`'s own opening rule (*"Skills consume this; do not duplicate content into
+  SKILL.md"*). Both fields now sit in the contract's field table with a `§ Lineage` section, and
+  `check_backlog_structure.py` reports `lineage_missing` (undefined id, or the item naming itself)
+  and `lineage_wrong_status` (the target exists but is not in the terminal state the field asserts —
+  a duplicate of an OPEN item folds in as `ITEM_MERGED` instead). **Deliberately no cycle gate:** a
+  lineage edge points only at a terminal item and a terminal item is not reopened, so a ring is
+  unreachable and G7 has no analogue. Not done, and stated rather than implied: the index does not
+  yet walk the chain, so *"third attempt at this hypothesis"* is still not a question the registry
+  can answer.
+
+### Fixed
+- **`check_backlog_structure`'s own inventory of findings did not match what it emits (#55)**
+  Found while adding the two lineage checks below, by computing the comparison the docstring
+  invites. The list declared `malformed_block`, which **no code path emits**, and omitted
+  `duplicate_field` and `index_stale`, which two do. A reader consulting it would hunt for a
+  finding that cannot fire and would not know to expect two that can — and being the list a reader
+  consults is the entire job of that docstring. The list is now correct AND recomputed by a test,
+  the same rule `check_mechanisms_inventory.py` already enforces over `mechanisms/README.md`.
+  Both directions are pinned, and both mutants were killed before the test was kept: declaring a
+  finding nothing emits fails, and emitting one nothing declares fails, each with its own message.
+
+### Fixed
+- **The plan-confidence declaration gate could not fail in this repository (#30)**
+  `test_snapshots_cover_active_plans_with_matrix` selects from `PLANS_DIR`, which is
+  `records/plans/` — gitignored, consumer-owned, and **absent from the kit's own checkout**.
+  `glob` on a missing directory yields nothing without raising, so `eligible` was empty,
+  `uncovered` was empty, and the assertion compared the empty set against itself. That is the
+  same defect #30 reported about the parametrised half of this file, surviving in the half #30
+  described as working (*"This one fires, and it fired today"* — it fired in a consumer, where the
+  directory exists). The absence is now an explicit `pytest.skip` naming the directory and pointing
+  at `test_every_committed_fixture_is_pinned`, which is where the kit's own floor actually lives.
+  **And the second half of the same finding:** the gate's sentence scoped it to plans *"that have a
+  Coverage Matrix"* while selecting on a bare `glob("*.md")`, so any markdown dropped in — a
+  one-line note — was demanded to be pinned or declared. `_eligible_plans()` now reads each file
+  and implements the sentence, with an unreadable file erring toward demanding a declaration.
+
 ### Fixed
 - **`plan-confidence`'s property tests shared one directory across every generated example (#51)**
   Four `@given` tests took pytest's `tmp_path`, a function-scoped fixture that runs **once** for

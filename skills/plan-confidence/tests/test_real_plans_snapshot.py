@@ -27,6 +27,40 @@ THRESHOLDS = SKILL_ROOT.parent.parent / "rules" / "plan-confidence-thresholds.tx
 FIXTURES_DIR = SKILL_ROOT / "fixtures"
 
 
+#: What makes a markdown file a PLAN rather than a note somebody left in the
+#: directory. The declaration gate below scoped itself to plans "with a Coverage
+#: Matrix" in prose and selected with a bare `glob("*.md")`, so the two never
+#: agreed; a probe file was enough to trip it.
+_COVERAGE_MATRIX_HEADING = "coverage matrix"
+
+
+def _eligible_plans(plans_dir: Path) -> set[str]:
+    """The plan files in `plans_dir` that carry a Coverage Matrix.
+
+    Returns the empty set for a directory that does not exist. That is not a
+    failure and it is not a pass either — it means there was nothing to examine,
+    and the CALLER has to say so out loud rather than assert emptiness against
+    emptiness. `records/plans/` is gitignored and consumer-owned, so in the kit's
+    own checkout the answer is always empty.
+    """
+    if not plans_dir.is_dir():
+        return set()
+    eligible = set()
+    for path in plans_dir.glob("*.md"):
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            # An unreadable file is not evidence that it is not a plan. Treat it
+            # as eligible so the gate errs toward demanding a declaration.
+            eligible.add(path.name)
+            continue
+        if _COVERAGE_MATRIX_HEADING in text.lower():
+            eligible.add(path.name)
+    return eligible
+
+
 def _resolve_plan(filename: str) -> Path | None:
     """The kit's own corpus first, then a consumer's plans if it has any.
 
@@ -129,8 +163,49 @@ def test_real_plan_snapshot(plan_filename: str, expected: dict[str, object]) -> 
     )
 
 
+def test_a_plan_without_a_coverage_matrix_is_not_eligible(tmp_path: Path) -> None:
+    """The declaration gate scopes itself to plans that carry a Coverage Matrix.
+
+    It said so in prose and selected on `glob("*.md")`, so any markdown dropped
+    into the directory — a one-line note — was demanded to be pinned or declared.
+    """
+    (tmp_path / "note.md").write_text("just a note someone left here\n", encoding="utf-8")
+    (tmp_path / "real-plan.md").write_text(
+        "# Plan\n\n## Coverage Matrix\n\n| requirement | test |\n", encoding="utf-8"
+    )
+    assert _eligible_plans(tmp_path) == {"real-plan.md"}
+
+
+def test_eligible_plans_is_empty_when_the_directory_is_absent(tmp_path: Path) -> None:
+    """An absent consumer directory yields nothing, and the CALLER must say so.
+
+    `records/plans/` is gitignored and consumer-owned, so in the kit's own
+    checkout it does not exist. `glob` on a missing directory returns empty
+    without raising, which made the declaration gate assert the empty set
+    against the empty set — green, forever, having examined nothing.
+    """
+    assert _eligible_plans(tmp_path / "nope") == set()
+
+
 def test_snapshots_cover_active_plans_with_matrix() -> None:
-    """Sanity: snapshots should cover every ACTIVE (non-completed) plan that has a Coverage Matrix."""
+    """Every ACTIVE consumer plan carrying a Coverage Matrix is pinned or declared.
+
+    Two things were wrong with this gate, and they hid each other.
+
+    It selected on `glob("*.md")` while its own sentence scoped it to plans with a
+    Coverage Matrix, so any markdown in the directory was demanded to be declared.
+    And `PLANS_DIR` is `records/plans/` — gitignored, consumer-owned, and ABSENT
+    from the kit's own checkout. `glob` on a missing directory yields nothing
+    without raising, so `eligible` was empty, `uncovered` was empty, and the
+    assertion compared the empty set to itself. **This gate could not fail here.**
+
+    That is the same defect kit#30 reported about the parametrised half of this
+    file, surviving in the half kit#30 described as working ("This one fires, and
+    it fired today"). It fired in a consumer, where the directory exists.
+
+    The kit's own committed corpus is held by `test_every_committed_fixture_is_pinned`
+    instead — that one has files to examine here, and is where this file's floor lives.
+    """
     skipped_known = {
         "l2-wiring-keep-wire-followup.md",
         "memory-write-redesign-followup.md",
@@ -140,10 +215,13 @@ def test_snapshots_cover_active_plans_with_matrix() -> None:
         # under records/plans/); not a regression-snapshot fixture.
         "patterns-consumption-gate-plan.md",
     }
-    snapshot_plans = set(SNAPSHOTS.keys())
-    active_plans = {p.name for p in PLANS_DIR.glob("*.md") if p.is_file()}
-    eligible = active_plans - skipped_known
-    uncovered = eligible - snapshot_plans
+    if not PLANS_DIR.is_dir():
+        pytest.skip(
+            f"no consumer plan directory at {PLANS_DIR}; this gate governs a "
+            f"consumer's records/plans/, which the kit does not ship. The kit's own "
+            f"corpus is covered by test_every_committed_fixture_is_pinned."
+        )
+    uncovered = _eligible_plans(PLANS_DIR) - skipped_known - set(SNAPSHOTS)
     assert not uncovered, (
         f"new active plans missing snapshot: {uncovered}. Add them to SNAPSHOTS or skipped_known."
     )

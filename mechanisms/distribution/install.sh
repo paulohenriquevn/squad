@@ -887,6 +887,14 @@ Next steps for the target project:
 
   8. First item: /backlog-item, or /plan-write "{one-sentence feature}"
 
+  BEFORE you ever clean out .claude/ by hand — ask which files are YOURS:
+       python3 .claude/mechanisms/gates/check_install_drift.py \
+         --install .claude --kit <path-to-the-kit> --consumer-local
+     It lists every file this install holds that the kit does not ship: a push gate
+     the project wrote, a per-review directory /review generated. A cleanup that
+     deletes "old kit leftovers" cannot tell those from the kit's own obsolete files
+     — that is how one consumer's delivery-gate.sh was deleted three times (kit#33).
+
   The 360º view — every phase, who owns it, and what it reads:
     .claude/rules/squad-map.md
   A compact form of it is injected at every SessionStart, so an agent starting

@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from check_install_drift import Drift, classify_file, scan
+from check_install_drift import Drift, classify_file, main, scan
 
 
 def _write(p: Path, body: str) -> Path:
@@ -122,6 +122,71 @@ def test_a_directory_the_kit_does_not_have_at_all_is_a_consumer_artifact(tmp_pat
     assert report.unharvested_files == []
     assert report.only_in_install == ["review-b052-tests-knowledge/SKILL.md"]
     assert report.needs_attention is False
+
+
+# --- ownership, at the moment a cleanup needs it (kit#33) ---------------------
+
+
+def test_consumer_local_files_are_listable_and_not_just_countable(tmp_path: Path) -> None:
+    """The count was printed; the paths were computed and thrown away.
+
+    kit#33: a consumer's own `hooks/delivery-gate.sh` was deleted three times by a
+    cleanup of `.claude/`, because nothing put the project's files in front of
+    whoever was cleaning. The classification was already correct at that moment —
+    it just had nowhere to be read. A number tells you that N files are yours; it
+    does not tell you WHICH, which is the only form the answer is usable in.
+    """
+    install, kit = tmp_path / "install", tmp_path / "kit"
+    _write(install / "review" / "scripts" / "known.py", "a\n")
+    _write(kit / "review" / "scripts" / "known.py", "a\n")
+    _write(install / "hooks" / "delivery-gate.sh", "the project's own push gate\n")
+    _write(install / "review-b052-tests-knowledge" / "SKILL.md", "generated\n")
+
+    report = scan(install, kit)
+    assert report.consumer_local_files == [
+        "hooks/delivery-gate.sh",
+        "review-b052-tests-knowledge/SKILL.md",
+    ]
+    # And it stays the complement of the other bucket, so no file is in both or neither.
+    assert sorted(report.consumer_local_files + report.unharvested_files) == report.only_in_install
+
+
+def test_the_consumer_local_flag_prints_each_path(tmp_path: Path, capsys) -> None:
+    """`--consumer-local` is the named way to ask before deleting.
+
+    Cheapest of the three shapes kit#33 proposed, and the one that converts an
+    answer the kit already had into an answer somebody consults.
+    """
+    install, kit = tmp_path / "install", tmp_path / "kit"
+    _write(install / "review" / "scripts" / "known.py", "a\n")
+    _write(kit / "review" / "scripts" / "known.py", "a\n")
+    _write(install / "hooks" / "delivery-gate.sh", "the project's own push gate\n")
+
+    code = main(["--install", str(install), "--kit", str(kit), "--consumer-local"])
+    out = capsys.readouterr().out
+    assert "hooks/delivery-gate.sh" in out
+    assert code == 0, "listing what a consumer owns is a question, not a violation"
+
+
+def test_the_consumer_local_flag_says_so_when_the_install_owns_nothing(
+    tmp_path: Path, capsys
+) -> None:
+    """Silence reads as 'the tool did not run'. An empty answer must be spoken.
+
+    This is the shape the kit refuses everywhere else: an inability, or an empty
+    result, published as nothing at all. A cleanup reading blank output cannot
+    tell it from a crash.
+    """
+    install, kit = tmp_path / "install", tmp_path / "kit"
+    _write(install / "review" / "scripts" / "known.py", "a\n")
+    _write(kit / "review" / "scripts" / "known.py", "a\n")
+
+    main(["--install", str(install), "--kit", str(kit), "--consumer-local"])
+    out = capsys.readouterr().out
+    # Both halves, not either: the count alone reads as a header with the list cut
+    # off, and the sentence alone leaves nothing to compare against a later run.
+    assert "consumer-local: 0" in out
+    assert "no files" in out.lower()
 
 
 # --- the gate can only run if something tells it where the kit came from ------

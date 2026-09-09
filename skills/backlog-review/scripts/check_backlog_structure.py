@@ -16,7 +16,7 @@ What it checks instead — the ways a maintenance registry actually rots:
 
   DETERMINISTIC (a machine can be sure)
     duplicate_id            two blocks share a B-NNN — the audit trail is broken
-    malformed_block         a header the loop cannot parse
+    duplicate_field         one field written twice in a block, with two values
     missing_field           a required field absent
     illegal_status          a status outside the declared set
     killed_without_reason   killed with no kill_reason (gate G-K, after the fact)
@@ -31,6 +31,9 @@ What it checks instead — the ways a maintenance registry actually rots:
     self_block              an item declaring itself its own blocker
     stale_block             every blocker closed, the edge still written
     closed_but_blocked      shipped while an open blocker is still declared
+    lineage_missing         supersedes/regression_of names an undefined id, or the item itself
+    lineage_wrong_status    the named ancestor exists but is not in the terminal state the field implies
+    index_stale             the rendered index no longer matches the blocks it summarises
 
   HEURISTIC (a reader decides; labelled as such in every finding)
     vague_dod               a DoD bullet nothing could falsify
@@ -191,6 +194,21 @@ def _routing(backlog_dir: Path) -> dict[str, dict] | None:
 
 _ID_IN_TEXT_RE = re.compile(r"\bB-\d{3,}\b")
 _NO_IMPEDIMENT = {"none", "-", "none-yet", "nothing"}
+
+#: The two lineage edges, and the terminal status each one asserts about its target.
+#:
+#: `check_intake_gates.ACTION_BY_STATUS` produces them: a dedup hit on a `killed` item
+#: prescribes `supersedes`, on a `shipped` item `regression_of`. So each field is a
+#: CLAIM about the state its target is in, and a claim is checkable. Until kit#55 both
+#: were written and never read — the kit's own `mentioned-not-used` pattern, applied to
+#: a schema field.
+#:
+#: Deliberately no cycle check: a lineage edge points only at a terminal item, and a
+#: terminal item is not re-opened, so a ring is unreachable. G7 has no analogue here.
+LINEAGE_EDGES = {
+    "supersedes": "killed",
+    "regression_of": "shipped",
+}
 
 
 def declares_impediment(raw: str) -> bool:
@@ -485,6 +503,38 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
         findings.append(Finding("blocker_cycle", "deterministic", "blocker", ring[0],
             f"impediment cycle: {' -> '.join(ring)}. Every item in the ring waits for another "
             "in it, so none can ever ship. Break it by splitting one item or dropping one edge."))
+
+    # ── lineage edges ─────────────────────────────────────────────────────────
+    #
+    # Same shape as the impediment edge above, one question shorter: a lineage edge
+    # cannot go stale (its target is terminal and stays terminal) and cannot ring.
+    # What it CAN do is name nothing, or name something that is not what the field
+    # says it is.
+    for item in items:
+        iid = item.item_id
+        for field_name, required_status in LINEAGE_EDGES.items():
+            raw = item.fields.get(field_name, "").strip()
+            if not raw or raw.lower() in _NO_IMPEDIMENT:
+                continue
+            targets = _ID_IN_TEXT_RE.findall(raw)
+            if not targets:
+                findings.append(Finding("lineage_missing", "deterministic", "blocker", iid,
+                    f"`{field_name}: {raw}` names no item id. This edge exists to point at the "
+                    f"item this one replaces; prose alone cannot be resolved."))
+                continue
+            for target in targets:
+                if target == iid:
+                    findings.append(Finding("lineage_missing", "deterministic", "blocker", iid,
+                        f"`{field_name}` names `{iid}` itself. An item cannot be its own ancestor."))
+                elif target not in statuses:
+                    findings.append(Finding("lineage_missing", "deterministic", "blocker", iid,
+                        f"`{field_name}` names {target}, which no block in this file defines. "
+                        f"An edge pointing at nothing never resolves; the id is the audit trail."))
+                elif statuses[target] != required_status:
+                    findings.append(Finding("lineage_wrong_status", "deterministic", "major", iid,
+                        f"`{field_name}` names {target}, which is `{statuses[target]}` and not "
+                        f"`{required_status}`. The field asserts a state its target is not in — "
+                        f"a duplicate of an OPEN item folds in as ITEM_MERGED instead."))
 
     counts = {"blocker": 0, "major": 0, "minor": 0}
     for f in findings:

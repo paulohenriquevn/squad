@@ -216,6 +216,22 @@ class DriftReport:
         ]
 
     @property
+    def consumer_local_files(self) -> list[str]:
+        """Install-only files in a directory this repository does NOT have.
+
+        The complement of `unharvested_files` within `only_in_install`, and the
+        bucket a project's own work falls into: a push gate it wrote, a directory
+        `/review` generates per run. The kit has no business harvesting either.
+
+        This was computed as a COUNT at the print site and the paths discarded
+        (kit#33). A consumer's `hooks/delivery-gate.sh` was deleted three times by
+        cleanups of `.claude/`; the classification was already right each time and
+        had nowhere to be read. `--consumer-local` is where it is read now.
+        """
+        unharvested = set(self.unharvested_files)
+        return [rel for rel in self.only_in_install if rel not in unharvested]
+
+    @property
     def needs_attention(self) -> bool:
         """The install holds work this repository does not."""
         return bool(
@@ -262,6 +278,13 @@ def main(argv: list[str] | None = None) -> int:
     # invocation to one of the six trees an install carries.
     parser.add_argument("--kit", type=Path, default=Path(__file__).resolve().parents[2],
                         help="this repository's skills directory")
+    # Asking is not auditing: this lists what the install owns and exits 0, so a
+    # cleanup can diff against it. Folding it into the default output would put a
+    # normally-healthy list in front of everyone on every run, and kit#33 argued
+    # the right moment is the destructive one, not every session.
+    parser.add_argument("--consumer-local", action="store_true",
+                        help="list the files this install holds that the kit does not ship, "
+                             "and exit — consult this BEFORE deleting anything under .claude/")
     args = parser.parse_args(argv)
 
     for label, root in (("install", args.install), ("kit", args.kit)):
@@ -270,6 +293,16 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     report = scan(args.install, args.kit)
+
+    if args.consumer_local:
+        local = report.consumer_local_files
+        print(f"consumer-local: {len(local)}   (files this install holds and the kit does not ship)")
+        for rel in local:
+            print(f"    {rel}")
+        if not local:
+            # An empty answer stated is not the same artifact as no answer at all.
+            print("    no files — everything here came from the kit")
+        return 0
 
     for verdict in (Drift.DIVERGED, Drift.INSTALL_AHEAD, Drift.STALE, Drift.KIT_AHEAD):
         files = report.by_class[verdict]
@@ -281,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"install-only, in a directory the kit has (yours, or work to harvest — this check cannot tell): {len(report.unharvested_files)}")
         for rel in report.unharvested_files:
             print(f"    {rel}")
-    consumer_local = len(report.only_in_install) - len(report.unharvested_files)
+    consumer_local = len(report.consumer_local_files)
     print(f"identical: {report.counts[Drift.IDENTICAL]}   only_in_kit: {len(report.only_in_kit)}"
           f"   consumer-local: {consumer_local}")
 

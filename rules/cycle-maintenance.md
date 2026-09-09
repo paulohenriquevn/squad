@@ -211,7 +211,7 @@ the item that wrote it ended up in the very state it invented.
 - **Treating `BACKLOG_EMPTY` as completion.** It means nobody has looked recently. Sweep.
 - **Two items in flight.** Two loops editing `BACKLOG.md` collide on `B-NNN` allocation, and the ids are the audit trail.
 - **Advancing status without the sub-cycle's verdict.** `shipped` set by hand means the checkbox stopped meaning anything — the exact rot this loop exists to prevent.
-- **Re-selecting a killed item.** It carries `kill_reason` for a reason. Re-filing needs a new id with `supersedes:`, per `skills/backlog-item/SKILL.md` — which is where that field is specified.
+- **Re-selecting a killed item.** It carries `kill_reason` for a reason. Re-filing needs a new id with `supersedes:`, specified in [`cycle-backlog.md`](cycle-backlog.md) § Lineage.
 - **Working only what is loud.** The ranking is there precisely because urgency and importance are not the same signal.
 - **Selecting an item whose repo has no checkout.** It routes nowhere; `ITEM_UNROUTABLE` says so instead of pretending.
 

@@ -92,6 +92,8 @@ Running it IS the evidence that G2 happened; the old instruction was a `grep` wh
 - **`shipped` item, problem is back** → new id with `regression_of: B-NNN`. This is a regression, and naming it as one matters more than the item itself.
 - **No hit** → proceed.
 
+Both lineage fields are specified in [`cycle-backlog.md`](../../rules/cycle-backlog.md) § Lineage, which is also what checks them: a `supersedes` naming an undefined id, or a `regression_of` naming an item that never shipped, is a finding rather than a line nobody reads.
+
 Skipping this step is a G2 violation. The single-registry decision only holds if intake actually looks — and a gate whose execution depends on the agent remembering is an intention, not a gate.
 
 ### Step 3 — Detect next id

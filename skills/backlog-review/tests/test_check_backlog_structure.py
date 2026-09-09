@@ -17,6 +17,118 @@ def _find(report: dict, check: str) -> dict:
     return next(f for f in report["findings"] if f["check"] == check)
 
 
+def test_the_docstring_inventory_names_exactly_the_findings_emitted() -> None:
+    """A list of checks that nothing recomputes drifts from the code it describes.
+
+    Measured 2026-09-09: the inventory declared `malformed_block`, which no code
+    path emits, and omitted `duplicate_field` and `index_stale`, which two do. A
+    reader consulting it would look for a finding that cannot fire and would not
+    know to expect two that can — and the file's whole purpose is to be the list a
+    reader consults.
+
+    This is the same rule `check_mechanisms_inventory.py` enforces over
+    `mechanisms/README.md`, applied to the one other place in this repository that
+    keeps a hand-written list of what a script can say.
+    """
+    import re
+
+    src = Path(check_backlog_structure.__file__).read_text(encoding="utf-8")
+    emitted = set(re.findall(r'Finding\("([a-z_]+)"', src))
+    declared = set(re.findall(r"^\s{4}([a-z_]+)\s{2,}", src.split('"""')[1], re.M))
+
+    assert not emitted - declared, (
+        f"emitted and undeclared: {sorted(emitted - declared)} — a finding a reader "
+        f"cannot look up"
+    )
+    assert not declared - emitted, (
+        f"declared and unemitted: {sorted(declared - emitted)} — a check the docstring "
+        f"promises and no code path can produce"
+    )
+
+
+# --- lineage edges: supersedes / regression_of (kit#55) -----------------------
+#
+# The kit prescribes writing both (`check_intake_gates.ACTION_BY_STATUS`) and, until
+# this block existed, read neither. `blocked_by` has five deterministic findings
+# guarding it; these two had zero, so a lineage edge could name an id nothing defines
+# and the registry reported clean — the exact defect G6 exists to catch on the other
+# edge.
+
+
+def test_supersedes_pointing_at_an_undefined_id_is_a_blocker(tmp_path: Path) -> None:
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="raw", extra="supersedes: B-999\n"),
+    ))
+    assert "lineage_missing" in _checks(report)
+    assert report["verdict"] == "INVALID"
+
+
+def test_regression_of_pointing_at_an_undefined_id_is_a_blocker(tmp_path: Path) -> None:
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="raw", extra="regression_of: B-404\n"),
+    ))
+    assert "lineage_missing" in _checks(report)
+
+
+def test_an_item_naming_itself_in_a_lineage_edge_is_a_blocker(tmp_path: Path) -> None:
+    """A lineage edge points at the item this one replaces. Itself is not that."""
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="raw", extra="supersedes: B-001\n"),
+    ))
+    assert "lineage_missing" in _checks(report)
+
+
+def test_supersedes_must_name_a_killed_item(tmp_path: Path) -> None:
+    """`supersedes` means the measurement said no and something changed since.
+
+    Pointing it at an item that is still open says nothing happened yet, and hides
+    a duplicate that the dedup gate would have folded in with ITEM_MERGED.
+    """
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="triaged", evidence="src/a.py:10"),
+        item_block("B-002", status="raw", extra="supersedes: B-001\n"),
+    ))
+    assert "lineage_wrong_status" in _checks(report)
+    assert "B-001" in _find(report, "lineage_wrong_status")["message"]
+
+
+def test_regression_of_must_name_a_shipped_item(tmp_path: Path) -> None:
+    """A regression is work that was delivered and came back. Nothing else is one."""
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="killed", extra="kill_reason: measured, did not hold\n"),
+        item_block("B-002", status="raw", extra="regression_of: B-001\n"),
+    ))
+    assert "lineage_wrong_status" in _checks(report)
+
+
+def test_well_formed_lineage_edges_are_clean(tmp_path: Path) -> None:
+    """The positive case is pinned as hard as the negatives.
+
+    A checker that only ever fires is one nobody can distinguish from a broken one.
+    """
+    report = check_backlog(write_backlog(
+        tmp_path,
+        item_block("B-001", status="killed", extra="kill_reason: measured, did not hold\n"),
+        item_block("B-002", status="shipped"),
+        item_block("B-003", status="raw", extra="supersedes: B-001\n"),
+        item_block("B-004", status="raw", extra="regression_of: B-002\n"),
+    ))
+    assert "lineage_missing" not in _checks(report)
+    assert "lineage_wrong_status" not in _checks(report)
+
+
+def test_an_absent_lineage_field_is_not_a_finding(tmp_path: Path) -> None:
+    """Both fields are optional. Most items have no ancestor, and that is normal."""
+    report = check_backlog(write_backlog(tmp_path, item_block("B-001", status="raw")))
+    assert "lineage_missing" not in _checks(report)
+    assert "lineage_wrong_status" not in _checks(report)
+
+
 def test_clean_backlog_is_shippable(clean_backlog: Path) -> None:
     report = check_backlog(clean_backlog)
     assert report["verdict"] == "SHIPPABLE", report["findings"]
