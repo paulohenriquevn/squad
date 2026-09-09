@@ -170,3 +170,29 @@ def test_the_failure_block_reaches_the_report() -> None:
     )
     assert any("assert 1 == 2" in line for line in report.lines), report.lines
     assert "failures" in report.detail, "--json must carry the reason too"
+
+
+def test_an_unresolvable_ref_widens_instead_of_selecting_nothing() -> None:
+    """The fail-safe that matters most: a bad base must never narrow the run.
+
+    `--since` with a ref git cannot resolve returns no paths. Reading that as "nothing
+    changed" would run nothing and report success, which is under-running dressed as a
+    pass. The caller is told to widen instead, and given the reason.
+    """
+    paths, base, widen = run_suites._changed_paths(ROOT, "a-ref-that-does-not-exist")
+    assert paths == []
+    assert base is None
+    assert widen and "cannot scope" in widen, widen
+
+
+def test_a_resolvable_ref_reports_the_base_sha() -> None:
+    """Without the base in the output, a scoped selection is unreproducible."""
+    _, base, widen = run_suites._changed_paths(ROOT, "HEAD~1")
+    assert widen is None
+    assert base and base.startswith("HEAD~1@"), base
+
+
+def test_the_working_tree_is_the_default_base() -> None:
+    """Defaulting to the trunk returned all 792 tracked files on a long-lived branch."""
+    _, base, _ = run_suites._changed_paths(ROOT, None)
+    assert base == "working tree"
