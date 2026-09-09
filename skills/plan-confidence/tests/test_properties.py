@@ -76,6 +76,7 @@ markdown_text = st.text(
 @given(content=markdown_text)
 @settings(
     max_examples=50,
+    deadline=None,  # see the note above: the deadline measured machine load, not the code
     suppress_health_check=[HealthCheck.too_slow],
 )
 def test_smell_total_penalty_always_non_positive(content: str) -> None:
@@ -98,6 +99,7 @@ def test_smell_total_penalty_always_non_positive(content: str) -> None:
 )
 @settings(
     max_examples=50,
+    deadline=None,  # see the note above: the deadline measured machine load, not the code
 )
 def test_coverage_ratio_always_in_range(n_gaps: int, n_mapped: int) -> None:
     # Build a synthetic plan with n_gaps rows, n_mapped of which have task refs
@@ -143,6 +145,27 @@ def test_coverage_ratio_always_in_range(n_gaps: int, n_mapped: int) -> None:
 #   before   2 failures in 15 runs   (~13%)
 #   after    1 failure in 85 runs    (~1.2%)
 #
+# THE RESIDUAL WAS FOUND ON 2026-09-09, AND IT WAS NOT SHARED STATE
+#
+# 104 runs, eight at a time, produced 21 failures — and every single one of them was
+# Hypothesis's DEADLINE, not an assertion:
+#
+#   "Unreliable test timings! On an initial run, this test took 257.20ms, which
+#    exceeded the deadline of 200.00ms, but on a subsequent run it took 180.23ms"
+#
+# Under load an example crosses the 200 ms default; on the confirming re-run it does
+# not, and Hypothesis reports `FlakyFailure`. That explains every symptom recorded
+# above — it failed in a parallel suite run, passed in isolation, and the reported
+# counter-example did not reproduce alone, because the input was never the problem.
+#
+# `suppress_health_check=[HealthCheck.too_slow]` does NOT cover this. The health check
+# and the deadline are different mechanisms, and only the first was suppressed.
+#
+# These tests assert PROPERTIES, never latency. A wall-clock budget on them measures
+# how busy the machine is, which is not a property of the code under test — so the
+# deadline is off, deliberately, rather than raised to a number that would fail again
+# on a busier host.
+#
 # Both original failures were in `test_end_to_end_score_invariants` and
 # `test_smell_idempotent`, and NEITHER reproduced when its reported counter-example
 # was replayed alone — the inputs pass in isolation, which is what pointed at shared
@@ -172,6 +195,7 @@ VALID_VERDICTS = {"SHIPPABLE", "SHIPPABLE_WITH_CAVEATS", "NON_SHIPPABLE", "INVAL
 )
 @settings(
     max_examples=30,
+    deadline=None,  # see the note above: the deadline measured machine load, not the code
     suppress_health_check=[HealthCheck.too_slow],
 )
 def test_end_to_end_score_invariants(
@@ -269,6 +293,7 @@ def test_hard_cap_monotonicity(tmp_path: Path) -> None:
 @given(content=markdown_text)
 @settings(
     max_examples=30,
+    deadline=None,  # see the note above: the deadline measured machine load, not the code
     suppress_health_check=[HealthCheck.too_slow],
 )
 def test_smell_idempotent(content: str) -> None:

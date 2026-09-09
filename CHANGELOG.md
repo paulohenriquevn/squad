@@ -7,6 +7,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The plan-confidence flake was Hypothesis's deadline, not shared state (#60)**
+  It had fired three times in one day and been captured none of them. Hunting it directly
+  — 104 runs, eight at a time — produced **21 failures**, and every one was the same
+  thing, with no assertion involved:
+  > *Unreliable test timings! On an initial run, this test took 257.20ms, which exceeded
+  > the deadline of 200.00ms, but on a subsequent run it took 180.23ms.*
+  Under load an example crosses Hypothesis's 200 ms default; on the confirming re-run it
+  does not, and that is reported as `FlakyFailure`. **That explains every symptom recorded
+  since the first occurrence** — it failed inside a parallel suite run, passed in
+  isolation, and the reported counter-example never reproduced alone, because the input
+  was never the problem.
+  `suppress_health_check=[HealthCheck.too_slow]`, which these tests already carried, does
+  **not** cover it: the health check and the deadline are separate mechanisms and only the
+  first was suppressed. All four `@settings` blocks now set `deadline=None`, deliberately
+  rather than raising it to a number that would fail again on a busier host — these tests
+  assert properties, never latency, and a wall-clock budget on them measures how busy the
+  machine is.
+  **Measured, before and after, same load and same machine: 21 failures in 104 runs → 0
+  in 104.**
+  Two hypotheses were eliminated on the way and are recorded so nobody re-derives them:
+  per-example isolation was intact (`example_dir()` gives each example its own directory),
+  and `run_structural.py` has no cache, no mutable module state, and writes nothing outside
+  the plan it is handed. My own leading suspect — the shared `.hypothesis/` database across
+  eight parallel processes — was wrong.
+
+### Fixed
 - **`d3_orphan_export` called every import in an `__init__.py` a re-export (#63)**
   `_PY_INIT_IMPORT_RE` matched `^from <anything> import ...`, so
   `from typing import Any, NoReturn, TypeVar` put three typing primitives on the kit's
