@@ -631,3 +631,51 @@ def test_the_detector_matches_commands_written_as_inline_code(tmp_path) -> None:
     this file spent the day removing."""
     assert _advisory(tmp_path, "- AC-001: `! grep -q X f.md`")
     assert _advisory(tmp_path, "- AC-002: run ! grep -q X f.md")
+
+# ── ported from a consumer install, where both defects were measured ──────────
+#
+# Both were found in `theokit-framework/theokit`'s copy of this kit and fixed there
+# first — a fix that reached exactly one machine, because `.claude/` is gitignored in
+# every consumer. `~/.claude/CLAUDE.md § Ambiente Pessoal` states the consequence as a
+# rule: a correction written inside a consumer's `.claude/` does not exist until it
+# lands here. These are the regression tests that make the port real rather than
+# asserted.
+
+
+def test_a_wrapped_continuation_line_is_not_counted_as_a_bullet(tmp_path) -> None:
+    """`^\s*[-*\d]` counts ANY line starting with a digit, and a wrapped requirement
+    routinely continues on one — "…under 800ms at\n50 rps." The scorer then read one
+    requirement as two, and a section with a single hollow bullet plus its own
+    continuation scored as though it had two.
+
+    A bullet is `-`, `*`, `+`, or an ordered marker `1.` / `1)`. A bare digit is prose."""
+    brief = tmp_path / "b.md"
+    brief.write_text(
+        "# V\n\n## Functional Requirements\n\n"
+        "- FR-001: the listing endpoint shall answer in\n"
+        "800ms at 50 rps.\n",
+        encoding="utf-8",
+    )
+    result = score_alignment(brief)
+    frs = [c for c in result.criteria if "requirement" in c.name or "Requirement" in c.title]
+    # One bullet was written; the continuation must not become a second.
+    assert result.requirement_ids == ["FR-001"], result.requirement_ids
+    assert frs, "the requirement criteria must still be scored"
+
+
+def test_a_walkthrough_link_is_not_evidence_the_file_exists(tmp_path) -> None:
+    """Criterion 17 matched a `.html` REFERENCE and scored on `bool(html)` twice — so a
+    brief citing a walkthrough nobody generated scored full marks for producing one.
+
+    That is the fabricated-mechanism shape this kit exists to refuse, inside the gate
+    that decides whether an item may be built. The citation must resolve on disk."""
+    brief = tmp_path / "b.md"
+    brief.write_text("# V\n\n## Walkthrough\n\n`b-walkthrough.html`\n", encoding="utf-8")
+    missing = score_alignment(brief)
+    artefact = next(c for c in missing.criteria if c.name == "interactive_artefact")
+    assert artefact.score < 2, "a link to a file that does not exist is not an artefact"
+
+    (tmp_path / "b-walkthrough.html").write_text("<html></html>", encoding="utf-8")
+    present = score_alignment(brief)
+    artefact_now = next(c for c in present.criteria if c.name == "interactive_artefact")
+    assert artefact_now.score == 2, "a citation that resolves IS the artefact"

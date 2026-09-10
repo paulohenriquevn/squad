@@ -7,7 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
-- **`/sign` — the one act a machine may not perform now has a mechanism** (#69)
+- **`/sign` — the one act a machine may not perform now has a mechanism** (#74)
   Four points in the chain stop until a person signs, and a person had no tool for it.
   `alignment_judge.py` can sign a brief as a judge; `score_product_alignment.py` states
   its own limit — *"it cannot supply the signature, and there is no flag that makes
@@ -76,7 +76,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   the retired zone; measured, it guards `study-material/` alone (`boundary-check.py:50`),
   so the claim was removed rather than repointed.
 
-- **A runtime proof that everything the Squad produces lands in `.squad/`** (#67)
+- **A runtime proof that everything the Squad produces lands in `.squad/`** (#72)
   `check_write_containment.py` proves a static property — no module outside
   `squad/paths.py` may spell a data root. It cannot see a writer whose destination
   never passes through `squad.paths`. Tracing all 135 write call sites through the AST
@@ -86,8 +86,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   where every file allowed to sit outside carries a class and a reason.
 - **`rules/write-exemptions.txt`** — the eight files that cannot live under the write
   root, each naming what forces it: Claude Code resolves agents and skills by
-  directory, and `BACKLOG.md`/`CHANGELOG.md` are opened by people at the root (#67)
-- **`/squad-fit` — a diagnosis of whether the squad can run in a given project** (#66)
+  directory, and `BACKLOG.md`/`CHANGELOG.md` are opened by people at the root (#72)
+- **`/squad-fit` — a diagnosis of whether the squad can run in a given project** (#71)
   The kit ships `agents/<domain>.md` empty on purpose, so every project has a gap on the
   day it installs. Nothing measured that gap: the kit could report one unroutable item
   (`route_domain.py`) and one unfillable seat (`check_panel_capability.py`), after the
@@ -98,7 +98,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   correctly-named stub routes items into an empty prompt.
 
 ### Changed
-- **Domains derive from the module boundary the project already declared** (#68)
+- **Domains derive from the module boundary the project already declared** (#73)
   `detect_domains.py` gave a single repository exactly one domain, however many
   modules it held. A `go.mod` / `Cargo.toml` / workspace `package.json` is a
   compilation and versioning boundary somebody committed to, and invariants differ
@@ -110,14 +110,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   because `route()` matches exactly and items filed against the repo name must still
   route. Measured on an adopter: 8 modules, and 13 of 17 live items (76%) touch
   exactly one.
-- **The routing table moved to `.squad/domain-routing.txt`** (#67)
+- **The routing table moved to `.squad/domain-routing.txt`** (#72)
   It was the one file under `rules/` that code produced — `detect_domains.py --write`
   derives it, `route_domain.py` reads it, and nothing outside the kit touches either
   (measured across every `.json`, `.yml`, `.yaml` and `.toml`: zero references). Readers
   fall back to both old locations indefinitely, so a consumer that updates without
   migrating keeps routing. `--write` now takes no path and writes where the table
   belongs; a test refuses any document that teaches the old one.
-- **Bytecode is no longer written into the installed kit** (#67)
+- **Bytecode is no longer written into the installed kit** (#72)
   Python writes `__pycache__/` next to the source, and the kit's source lives in the
   consumer's `.claude/` — eight `.pyc` files after four commands in a clean sandbox.
   `PYTHONDONTWRITEBYTECODE` is now set in `settings.plugin.json`. Measured cost over
