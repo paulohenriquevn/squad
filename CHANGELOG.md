@@ -110,6 +110,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   152 agent files underneath them.
 
 ### Fixed
+- **Three defects in the soft-cap dismissal marker, none of them covered by a test**
+  `<!-- ADR-DISMISS-SOFT-CAP: id: reason -->` is how a plan waives a soft cap. Its parser refused
+  a `>` anywhere in the reason, so a justification written with an arrow — `warnings fell 15 -> 0`,
+  the idiom this ecosystem states before/after with — ended the match early and the dismissal
+  registered as ABSENT: the plan stayed capped and demoted, indistinguishable from a cap nobody
+  tried to waive. It refused a `-` in the id, so `auditor_unavailable_dependency-cruiser` — a cap
+  this kit's own detector emits — could not be dismissed at all, in any consumer, ever. And it
+  accepted an EMPTY reason, registering a waiver with no justification behind it. The parser now
+  spans lines, accepts hyphens in the id, and refuses a blank reason; six tests cover it, where
+  before there were none.
 - **The architecture detector picked the wrong script and reported a clean cruise that never ran**
   It searched `package.json` for the first script mentioning `depcruise` and ran that one. In a
   repository whose `lint` script chains several tools (`eslint . && depcruise ...`), `lint` sorted

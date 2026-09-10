@@ -772,7 +772,19 @@ except ImportError:
 #: order to say it will NOT be dismissed, and a grep cannot tell the two apart.
 #: The gate has to read a decision, not a keyword.
 _DISMISS_SOFT_CAP_RE = re.compile(
-    r"<!--\s*ADR-DISMISS-SOFT-CAP:\s*([a-z0-9_]+)\s*:\s*[^>]+?-->"
+    #: B-170 (TheoCode) — two defects in one expression, neither covered by a test.
+    #:
+    #: The reason excluded `>`, so a reason written with an arrow (`warnings fell 15 -> 0`, the idiom
+    #: this ecosystem states before/after with) ended the match early and the dismissal registered as
+    #: ABSENT — silently: the plan stayed capped and demoted, which reads exactly like a cap nobody
+    #: tried to dismiss. Reaching an undismissable soft cap by accident is the state
+    #: `cycle-code-quality.md` § 1 says must not exist.
+    #:
+    #: And the id excluded `-`, so `auditor_unavailable_dependency-cruiser` — a real cap id emitted by
+    #: this kit's own detector — could never be dismissed at all.
+    #:
+    #: `(?s)` so a reason may wrap across lines. The empty-reason case is refused by the caller.
+    r"(?s)<!--\s*ADR-DISMISS-SOFT-CAP:\s*([a-z0-9_-]+)\s*:(?P<reason>(?:(?!-->).)*)-->"
 )
 
 
@@ -782,7 +794,14 @@ def _dismissed_soft_caps(plan_text: str) -> set[str]:
     `rules/cycle-code-quality.md` § 1 promised the escape and nothing read it.
     This is the reading half.
     """
-    return set(_DISMISS_SOFT_CAP_RE.findall(plan_text))
+    # An EMPTY reason is not a dismissal. `\s*` absorbed the nothing between the colon and the closer,
+    # so `<!-- ADR-DISMISS-SOFT-CAP: some_cap: -->` counted — a dismissal with no justification, which
+    # is precisely what the audit trail exists to refuse. Found by the test written for the `>` defect.
+    return {
+        m.group(1)
+        for m in _DISMISS_SOFT_CAP_RE.finditer(plan_text)
+        if m.group("reason").strip()
+    }
 
 
 def _merge_code_quality_verdict(out: dict, cq_summary: dict, plan_text: str = "") -> None:
