@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **The alignment scorer counted a wrapped line as a requirement, and scored a walkthrough it never opened** (#B-013)
+  Both measured in a consumer install and ported here, because a fix written inside a
+  consumer's `.claude/` reaches exactly one machine — that directory is gitignored
+  everywhere, so the correction produces no diff and no release.
+
+  `_bullets` matched `^\s*[-*\d]`, so ANY line starting with a digit became a bullet — and
+  a wrapped requirement routinely continues on one ("…answers under\n800ms at p95."). The
+  report then lied in both directions at once: a single requirement with no number of its
+  own was reported as `1/2 measurable`, because the continuation became a second
+  requirement AND was credited with the digits that had been wrapped off the first. A
+  bullet is now `-`, `*`, `+`, or an ordered `1.` / `1)`; a bare digit is prose.
+
+  Criterion 17 scored `_tri(bool(html), bool(html))` — the presence of a `.html`
+  REFERENCE, twice. A brief citing a walkthrough nobody generated took full marks for
+  producing one. The citation is now resolved on disk, against the brief's own directory
+  and the working directory. A gate reporting that it verified something it never opened
+  is the fabricated mechanism this kit exists to refuse, and this gate decides whether an
+  item may be built at all.
+
+  Two regression tests, each verified by mutation.
+
 ### Added
 - **`/sign` — the one act a machine may not perform now has a mechanism** (#74)
   Four points in the chain stop until a person signs, and a person had no tool for it.

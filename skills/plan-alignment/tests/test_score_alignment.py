@@ -643,24 +643,30 @@ def test_the_detector_matches_commands_written_as_inline_code(tmp_path) -> None:
 
 
 def test_a_wrapped_continuation_line_is_not_counted_as_a_bullet(tmp_path) -> None:
-    """`^\s*[-*\d]` counts ANY line starting with a digit, and a wrapped requirement
-    routinely continues on one — "…under 800ms at\n50 rps." The scorer then read one
-    requirement as two, and a section with a single hollow bullet plus its own
-    continuation scored as though it had two.
+    r"""`^\s*[-*\d]` counted ANY line starting with a digit, and a wrapped requirement
+    routinely continues on one — "…answers under\n800ms at p95."
 
-    A bullet is `-`, `*`, `+`, or an ordered marker `1.` / `1)`. A bare digit is prose."""
+    The report then LIES about the brief in both directions at once. Measured on the
+    fixture below: one requirement with no number was reported as `1/2 measurable` —
+    two requirements, one of them measurable — because the continuation became a
+    second bullet AND carried the number that had been wrapped off the first.
+
+    So a hollow requirement was credited with the digits of its own wrap, and the
+    author reading the report was told they had written something they had not."""
     brief = tmp_path / "b.md"
     brief.write_text(
-        "# V\n\n## Functional Requirements\n\n"
-        "- FR-001: the listing endpoint shall answer in\n"
-        "800ms at 50 rps.\n",
+        "# V\n\n## Non-Functional Requirements\n\n"
+        "- NFR-001: the endpoint answers under\n"
+        "800ms at p95.\n",
         encoding="utf-8",
     )
-    result = score_alignment(brief)
-    frs = [c for c in result.criteria if "requirement" in c.name or "Requirement" in c.title]
-    # One bullet was written; the continuation must not become a second.
-    assert result.requirement_ids == ["FR-001"], result.requirement_ids
-    assert frs, "the requirement criteria must still be scored"
+    nfr = next(
+        c for c in score_alignment(brief).criteria if c.key == "nfr_measurable"
+    )
+    assert nfr.why == "0/1 measurable", (
+        "one wrapped bullet is one requirement, and it carries no number of its own — "
+        f"got {nfr.why!r} (the old regex reported '1/2 measurable')"
+    )
 
 
 def test_a_walkthrough_link_is_not_evidence_the_file_exists(tmp_path) -> None:
@@ -672,10 +678,10 @@ def test_a_walkthrough_link_is_not_evidence_the_file_exists(tmp_path) -> None:
     brief = tmp_path / "b.md"
     brief.write_text("# V\n\n## Walkthrough\n\n`b-walkthrough.html`\n", encoding="utf-8")
     missing = score_alignment(brief)
-    artefact = next(c for c in missing.criteria if c.name == "interactive_artefact")
+    artefact = next(c for c in missing.criteria if c.key == "interactive_artefact")
     assert artefact.score < 2, "a link to a file that does not exist is not an artefact"
 
     (tmp_path / "b-walkthrough.html").write_text("<html></html>", encoding="utf-8")
     present = score_alignment(brief)
-    artefact_now = next(c for c in present.criteria if c.name == "interactive_artefact")
+    artefact_now = next(c for c in present.criteria if c.key == "interactive_artefact")
     assert artefact_now.score == 2, "a citation that resolves IS the artefact"
