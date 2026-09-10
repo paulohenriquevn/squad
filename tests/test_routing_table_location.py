@@ -118,3 +118,51 @@ def test_no_document_teaches_the_old_write_path() -> None:
 
     assert not offenders, (
         "these still teach writing the table into the kit's directory: " + ", ".join(offenders))
+
+
+def test_moving_the_table_does_not_unroute_every_specialist(tmp_path: Path) -> None:
+    """The regression the move introduced, found only by writing real specialists.
+
+    `route_domain` resolved the specialist as `rule_path.parent.parent / agent`. That
+    worked by accident: with the table at `<eco>/rules/`, two levels up landed on the
+    installed kit, and specialists sit beside it. With the table at `.squad/`, two
+    levels up is the PROJECT — so every domain reported BROKEN ROUTE while all seven
+    files sat on disk the whole time.
+
+    The location of the table and the location of the specialists are independent
+    facts. Deriving one from the other is what coupled them.
+    """
+    proj = _project(tmp_path)
+    (proj / ".squad").mkdir(parents=True, exist_ok=True)
+    (proj / ".squad" / ROUTING_TABLE).write_text(
+        "engine | engine-repo | agents/engine.md\n", encoding="utf-8")
+    # The specialists live where a PLUGIN INSTALL puts them, not beside the table.
+    (proj / ".claude" / "agents").mkdir(parents=True)
+    (proj / ".claude" / "agents" / "engine.md").write_text("# engine\n", encoding="utf-8")
+
+    out = subprocess.run(
+        [sys.executable, str(KIT / "mechanisms" / "cycle" / "route_domain.py"),
+         "engine-repo", "--project-root", str(proj)],
+        cwd=proj, capture_output=True, text=True, timeout=120, check=False)
+
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "BROKEN ROUTE" not in out.stdout
+    assert "agents/engine.md" in out.stdout
+
+
+def test_a_standalone_layout_still_resolves_its_specialists(tmp_path: Path) -> None:
+    """No `.claude/` at all: the specialists sit at the project root."""
+    proj = _project(tmp_path)
+    (proj / ".squad").mkdir(parents=True, exist_ok=True)
+    (proj / ".squad" / ROUTING_TABLE).write_text(
+        "engine | engine-repo | agents/engine.md\n", encoding="utf-8")
+    (proj / "agents").mkdir(parents=True)
+    (proj / "agents" / "engine.md").write_text("# engine\n", encoding="utf-8")
+
+    out = subprocess.run(
+        [sys.executable, str(KIT / "mechanisms" / "cycle" / "route_domain.py"),
+         "engine-repo", "--project-root", str(proj)],
+        cwd=proj, capture_output=True, text=True, timeout=120, check=False)
+
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "BROKEN ROUTE" not in out.stdout

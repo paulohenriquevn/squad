@@ -72,7 +72,9 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "mechanisms" / "cycle" / "route_domain.py").is_file():
         sys.path.insert(0, str(_up / "mechanisms" / "cycle"))
         sys.path.insert(0, str(_up / "mechanisms" / "gates"))
+        sys.path.insert(0, str(_up))
         break
+from squad.paths import routing_table, write_routing_table  # noqa: E402
 
 #: The fourteen roles `agents/README.md` calls "mechanism": each describes a DECISION
 #: rather than a repository, which is why they may be versioned in the kit when a
@@ -163,15 +165,22 @@ def diagnose_agents(project: Path) -> Section:
     instead of one item at a time. Its wording is deliberately the same, so a person
     who hits BROKEN ROUTE later recognises what this told them earlier.
     """
-    eco = eco_dir(project)
-    table_path = eco / "rules" / "domain-routing.txt"
     agents = agents_dir(project)
 
-    if not table_path.is_file():
+    #: Asked of the path owner, not resolved here. This check carried its own
+    #: `eco / "rules" / "domain-routing.txt"` and kept it through the 2026-09-10 move
+    #: to the write root — so it reported NOT MEASURED against a project whose table
+    #: was on disk the whole time. It failed honestly, which is why the defect was
+    #: visible at all, but a second resolver is how two mechanisms come to disagree
+    #: about where a project keeps its routing.
+    table_path = routing_table(project)
+
+    if table_path is None:
         return Section(
             "agents", measured=False,
             unmeasured_because=(
-                f"no routing table at {table_path} — derive one with "
+                f"no routing table under {write_routing_table(project)} or the "
+                "locations installs used before it — derive one with "
                 "`skills/backlog-init/scripts/detect_domains.py --root . --write`. "
                 "Reporting every domain as uncovered from a missing table would "
                 "assert a violation the evidence does not support"))

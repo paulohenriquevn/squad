@@ -302,6 +302,31 @@ def parse_routing_table(rule_path: Path) -> dict[str, dict[str, Any]]:
     return table
 
 
+def _specialist_path(agent: str, rule_path: Path, project_root: Path | None) -> Path:
+    """Where the specialist file lives, asked of the project rather than of the table.
+
+    This used to be `rule_path.parent.parent / agent`, which worked only because the
+    table sat at `<eco>/rules/` — two levels up landed on the installed kit, and the
+    specialists sit beside it. Moving the table to the write root on 2026-09-10 broke
+    that silently: two levels up became the PROJECT, and every domain reported BROKEN
+    ROUTE while the files were on disk the whole time. Found by writing seven
+    specialists and watching all seven fail to resolve.
+
+    The location of the routing table and the location of the specialists are two
+    independent facts, and deriving one from the other is what coupled them.
+    `convene_panel.agents_dir` already owns the second question.
+    """
+    root = project_root or rule_path.parent.parent
+    name = Path(agent).name
+
+    try:
+        from convene_panel import agents_dir  # type: ignore
+        return agents_dir(root) / name
+    except ImportError:
+        nested = root / ".claude" / "agents"
+        return (nested if nested.is_dir() else root / "agents") / name
+
+
 def route(repo: str, table: dict[str, dict[str, Any]]) -> tuple[str, str | None] | None:
     for domain, entry in table.items():
         if repo in entry["repos"]:
@@ -320,10 +345,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     rule_path = args.rule
+    #: The project the table was found UNDER — the specialists are resolved against
+    #: this, never against the table's own directory. Keeping the two independent is
+    #: what stopped moving the table from silently unrouting every domain.
+    found_under = args.project_root
     if rule_path is None:
         for candidate in _candidate_roots(args.project_root):
             rule_path = _routing_table_path(candidate)
             if rule_path is not None:
+                found_under = candidate
                 break
     if rule_path is None or not rule_path.is_file():
         # Name where it looked. "not found" over an unstated search is what makes
@@ -364,7 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     # The specialist has to EXIST. Routing to a filename nobody wrote reads as success at every
     # downstream step — the item looks owned, and the failure only surfaces when someone tries to
     # open the file. See the exit-code note at the top of this module for how it was measured.
-    resolved = (rule_path.parent.parent / agent) if agent else None
+    resolved = _specialist_path(agent, rule_path, found_under) if agent else None
     if resolved is None or not resolved.is_file():
         payload = {"repo": repo, "routed": False, "domain": domain, "agent": agent}
         if args.json:

@@ -367,3 +367,37 @@ def test_the_report_names_every_section_it_could_not_measure(tmp_path: Path) -> 
 
     assert report["partial"] is True
     assert "agents" in report["unmeasured_sections"]
+
+
+def test_the_table_is_found_where_the_path_owner_says_it_is(tmp_path: Path) -> None:
+    """This check carried its own `eco / "rules" / "domain-routing.txt"` and kept it
+    through the move to the write root, so it reported NOT MEASURED against a project
+    whose table was on disk the whole time. It failed honestly — which is why the
+    defect was visible — but a second resolver is how two mechanisms come to disagree
+    about where a project keeps its routing.
+    """
+    eco = _install(tmp_path)
+    (tmp_path / ".squad").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".squad" / "domain-routing.txt").write_text(
+        "engine | engine-repo | agents/engine.md\n", encoding="utf-8")
+    (eco / "agents" / "engine.md").write_text(
+        "# engine\n\nCovers `engine-repo`.\n\n```bash\nmake test\n```\n", encoding="utf-8")
+
+    section = diagnose_agents(tmp_path)
+
+    assert section.measured is True, section.unmeasured_because
+    assert section.findings == [], [f.code for f in section.findings]
+
+
+def test_a_legacy_table_location_is_still_found(tmp_path: Path) -> None:
+    """Readers fall back; a consumer that updated the kit and migrated nothing must
+    not be told it has no routing table."""
+    eco = _install(tmp_path)
+    (eco / "rules" / "domain-routing.txt").write_text(
+        "engine | engine-repo | agents/engine.md\n", encoding="utf-8")
+    (eco / "agents" / "engine.md").write_text(
+        "# engine\n\nCovers `engine-repo`.\n\n```bash\nmake test\n```\n", encoding="utf-8")
+
+    section = diagnose_agents(tmp_path)
+
+    assert section.measured is True, section.unmeasured_because
