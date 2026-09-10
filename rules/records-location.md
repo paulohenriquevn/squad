@@ -140,8 +140,8 @@ any document that teaches the old path.
 
 ## What this does NOT reach — named, so the claim stops outrunning it
 
-- **Coverage is 11 mechanisms.** 49 files in the kit write to disk. The gate prints the
-  number it exercised on every run, so a green result is read as worth eleven probes
+- **Coverage is 18 mechanisms.** 49 files in the kit write to disk. The gate prints the
+  number it exercised on every run, so a green result is read as worth eighteen probes
   rather than as a sweep of everything. Growing `PROBES` is how the guarantee gets
   stronger.
 - **Bytecode is suppressed by an environment variable.** `PYTHONDONTWRITEBYTECODE` is set

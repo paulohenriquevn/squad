@@ -112,7 +112,6 @@ def _candidate_roots(declared_root: Path | None = None) -> list[Path]:
     return roots
 
 
-import sys as _sys_bootstrap  # noqa: E402
 from pathlib import Path as _Path_bootstrap  # noqa: E402
 
 

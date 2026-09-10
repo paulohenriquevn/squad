@@ -128,6 +128,18 @@ PROBES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("backlog_status --to",
      ("{eco}/mechanisms/cycle/backlog_status.py", "{proj}/BACKLOG.md", "B-001",
       "--to", "triaged", "--because", "the probe moved it")),
+    #: Writers whose destination is a `--output-dir` or `--output`: the CALLER decides,
+    #: which is exactly the shape static tracing could not resolve. Probed with the
+    #: flag omitted, so what gets exercised is each script's own default.
+    ("spawn_stages",
+     ("{eco}/skills/pipeline/scripts/spawn_stages.py",
+      "--item", "B-001", "--repo", "project")),
+    ("apply_fixes (plan-improve)",
+     ("{eco}/skills/plan-improve/scripts/apply_fixes.py", "{plan}")),
+    ("consolidate_findings",
+     ("{eco}/skills/review/scripts/consolidate_findings.py",
+      "--findings-dir", "{proj}", "--output", "{plan}", "--slug", "probe",
+      "--repo-root", "{proj}")),
 )
 
 

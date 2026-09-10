@@ -11,7 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   `check_write_containment.py` proves a static property — no module outside
   `squad/paths.py` may spell a data root. It cannot see a writer whose destination
   never passes through `squad.paths`. Tracing all 135 write call sites through the AST
-  left 64 UNKNOWN, so `check_produced_files.py` runs 15 mechanisms in a scratch project
+  left 64 UNKNOWN, so `check_produced_files.py` runs 18 mechanisms in a scratch project
   and looks at the disk instead. It reports its own coverage on every run, refuses to
   count a probe that errored as one that ran, and reads `rules/write-exemptions.txt`,
   where every file allowed to sit outside carries a class and a reason.

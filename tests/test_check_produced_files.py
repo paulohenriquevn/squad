@@ -19,15 +19,15 @@ KIT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(KIT / "mechanisms" / "gates"))
 
 from check_produced_files import (  # noqa: E402
+    _HOME_CALL,
     ACCEPTED_EXITS,
     HOME_WRITERS,
-    _HOME_CALL,
-    scan_home_writers,
     Exemption,
     Report,
     _matches,
     parse_exemptions,
     render,
+    scan_home_writers,
 )
 
 # ------------------------------------------------------------------ exemptions
