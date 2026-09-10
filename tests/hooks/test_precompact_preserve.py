@@ -19,7 +19,19 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from pathlib import Path as _P
+
+sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
+import sys
 from pathlib import Path
+
+from squad.paths import (
+    SESSION_STATE,
+    SNAPSHOTS,
+    active_plan_pointer,
+    write_records_dir,
+    write_state_dir,
+)
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -27,14 +39,16 @@ REPO = Path(__file__).resolve().parents[2]
 def _eco(tmp_path: Path, *, with_progress: bool = True) -> Path:
     for tree in ("skills", "rules", "hooks"):
         (tmp_path / tree).mkdir(parents=True, exist_ok=True)
-    plans = tmp_path / "records" / "plans"
+    plans = write_records_dir(tmp_path, "plans")
     plans.mkdir(parents=True)
     (plans / "b-014-plan.md").write_text(
         "# Plan\n\n## Goal\n\n> Make the gate fire once.\n", encoding="utf-8")
-    (tmp_path / ".active_plan").write_text("b-014\n", encoding="utf-8")
+    pointer = active_plan_pointer(tmp_path)
+    pointer.parent.mkdir(parents=True, exist_ok=True)
+    pointer.write_text("b-014\n", encoding="utf-8")
     if with_progress:
-        state = tmp_path / "session-state"
-        state.mkdir()
+        state = write_state_dir(tmp_path, SESSION_STATE)
+        state.mkdir(parents=True)
         (state / "b-014-progress.md").write_text(
             "\n".join(f"- step {n}" for n in range(12)), encoding="utf-8")
     return tmp_path
@@ -84,7 +98,7 @@ def test_the_snapshot_holds_what_the_closing_line_says_it_holds(
     eco = _eco(tmp_path)
     _run(eco)
 
-    snapshots = eco / ".compaction-snapshots"
+    snapshots = write_state_dir(eco, SNAPSHOTS)
     kinds = {p.name.split("-")[0] for p in snapshots.iterdir()}
     assert "plan" in kinds
     assert "progress" in kinds, (
@@ -97,7 +111,7 @@ def test_with_no_progress_log_the_sentence_does_not_promise_one(
     eco = _eco(tmp_path, with_progress=False)
     out = _run(eco)
 
-    snapshots = eco / ".compaction-snapshots"
+    snapshots = write_state_dir(eco, SNAPSHOTS)
     assert not any(p.name.startswith("progress") for p in snapshots.iterdir())
     assert "progress are on disk" not in out, \
         "the hook promised a progress snapshot it had no progress log to make"
@@ -107,7 +121,9 @@ def test_a_failed_snapshot_is_not_reported_as_a_snapshot(tmp_path: Path) -> None
     """A promise that silently failed is worse than none — the hook says so
     itself, and the closing lines must not contradict the failure above them."""
     eco = _eco(tmp_path)
-    (eco / ".compaction-snapshots").write_text("not a directory\n", encoding="utf-8")
+    blocker = write_state_dir(eco, SNAPSHOTS)
+    blocker.parent.mkdir(parents=True, exist_ok=True)
+    blocker.write_text("not a directory\n", encoding="utf-8")
 
     out = _run(eco)
     assert "Could NOT snapshot" in out

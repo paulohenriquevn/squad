@@ -43,11 +43,22 @@ import json
 import re
 import subprocess
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
 from typing import Any
 
 import yaml
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import records_dir  # noqa: E402
 
 # The upstream gate lives beside this script. It runs as `__main__` (the directory
 # enters sys.path on its own) and is also imported by tests that insert the directory
@@ -285,7 +296,7 @@ def _project_root_for(findings_dir: Path) -> Path:
     """
     current = findings_dir.resolve()
     for candidate in (current, *current.parents):
-        if (candidate / "records").is_dir() or (candidate / ".claude" / "records").is_dir():
+        if records_dir(candidate) is not None:
             return candidate
     return current
 

@@ -50,8 +50,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "conventions"))
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from installed_plugins import Plugin
 from installed_plugins import load as load_plugins
+
+from squad.paths import write_records_dir
 
 OK, INVALID, UNREADABLE, NOT_INSTALLED = 0, 1, 2, 3
 
@@ -71,11 +75,25 @@ class Auditor:
     domain: str
     plugin: str
     diff_mode: str
-    output_dir: str
     report_glob: str = DEFAULT_REPORT_GLOB
+
+    def output_dir(self, project: Path) -> Path:
+        """Where this auditor's report must land.
+
+        DERIVED, not declared. The registry used to carry each plugin's own default
+        (`code-review-output/`, `security-output/`), which put a third party's output at
+        the project root — outside the one write root, on the kit's own instruction.
+        A tool the kit tells where to write is a tool the kit is responsible for.
+        """
+        return write_records_dir(project, "audits") / self.plugin
 
 
 def registry_path(project: Path) -> Path:
+    """The registry is a RULE, so it lives with the kit — not under the write root.
+
+    `.squad/` holds only what the system produces; a rule the project configures is an
+    input, and putting it there would make the one write root a mixed directory.
+    """
     for base in (project / ".claude" / "rules", project / "rules"):
         if (base / "review-auditors.txt").is_file():
             return base / "review-auditors.txt"
@@ -96,18 +114,18 @@ def parse_registry(text: str) -> list[Auditor]:
             continue
         _, _, value = line.partition("=")
         parts = [p.strip() for p in value.split("|")]
-        if len(parts) not in (4, 5) or not all(parts[:4]):
+        if len(parts) not in (3, 4) or not all(parts[:3]):
             raise ValueError(
                 f"malformed auditor row: {raw.strip()!r} — expected `auditor = "
-                "<domain> | <plugin> | <diff-mode> | <output dir> | [report glob]`")
+                "<domain> | <plugin> | <diff-mode> | [report glob]`")
         if parts[2] not in DIFF_MODES:
             raise ValueError(
                 f"unknown diff mode {parts[2]!r} in {raw.strip()!r}; the plugin "
                 f"declares one of {DIFF_MODES}. Recording the wrong one would let a "
                 "diff-only analysis be read as a whole-tree one")
         out.append(Auditor(domain=parts[0].lower(), plugin=parts[1],
-                           diff_mode=parts[2], output_dir=parts[3],
-                           report_glob=parts[4] if len(parts) == 5 else DEFAULT_REPORT_GLOB))
+                           diff_mode=parts[2],
+                           report_glob=parts[3] if len(parts) == 4 else DEFAULT_REPORT_GLOB))
     return out
 
 
@@ -142,9 +160,10 @@ def scope_flag(scope: dict) -> str:
     return ""
 
 
-def command_for(a: Auditor, *, target: str, scope: dict) -> str:
+def command_for(a: Auditor, *, target: str, scope: dict, project: Path) -> str:
     """The exact invocation, so nobody has to reconstruct it from prose."""
-    return f"/{a.plugin} {target} --output-dir {a.output_dir}{scope_flag(scope)}"
+    return (f"/{a.plugin} {target} --output-dir {a.output_dir(project)}"
+            f"{scope_flag(scope)}")
 
 
 def select(
@@ -192,11 +211,13 @@ def select(
     def row(a: Auditor, p: Plugin | None) -> dict:
         return {
             "plugin": a.plugin, "domain": a.domain, "diff_mode": a.diff_mode,
-            "output_dir": a.output_dir, "report_glob": a.report_glob,
+            "output_dir": str(a.output_dir(project)),
+            "report_glob": a.report_glob,
             "installed": p is not None,
             "install_path": str(p.install_path) if p else None,
             "version": p.version if p else None,
-            "command": command_for(a, target=target, scope=scope_spec),
+            "command": command_for(a, target=target, scope=scope_spec,
+                                   project=project),
         }
 
     rows = [row(a, installed.get(a.plugin)) for a in required]
@@ -227,10 +248,7 @@ def select(
 
 
 def assignment_path(project: Path, slug: str) -> Path:
-    for base in (project / ".claude" / "records", project / "records"):
-        if base.is_dir():
-            return base / "audits" / f"{slug}-auditors.json"
-    return project / "records" / "audits" / f"{slug}-auditors.json"
+    return write_records_dir(project, "audits") / f"{slug}-auditors.json"
 
 
 def main(argv: list[str] | None = None) -> int:

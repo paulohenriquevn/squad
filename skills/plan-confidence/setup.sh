@@ -65,6 +65,22 @@ echo "1️⃣  Copying skills to $TARGET/.claude/skills/ ..."
 mkdir -p "$TARGET/.claude/skills"
 cp -r "$SOURCE_SKILLS_PARENT/plan-confidence" "$TARGET/.claude/skills/"
 echo "    ✓ plan-confidence/"
+
+# The shared package carries the ONE owner of every data-root literal
+# (`squad/paths.py`). A skill installed alone still writes where the kit writes, and
+# the alternative — a local copy of the roots — is exactly what
+# `check_write_containment.py` refuses, because six copies in four orders is how a
+# reader came to resolve a directory no writer had ever filled.
+SOURCE_KIT_ROOT="$(cd "$SOURCE_SKILLS_PARENT/.." && pwd)"
+if [[ -d "$SOURCE_KIT_ROOT/squad" ]]; then
+    mkdir -p "$TARGET/.claude/squad"
+    cp -r "$SOURCE_KIT_ROOT/squad/." "$TARGET/.claude/squad/"
+    rm -rf "$TARGET/.claude/squad/tests" "$TARGET/.claude/squad/__pycache__"
+    echo "    ✓ squad/ (shared conventions)"
+else
+    echo "    ✗ squad/ not found beside the skills — the install cannot resolve paths" >&2
+    exit 2
+fi
 if [[ -d "$SOURCE_SKILLS_PARENT/plan-improve" ]]; then
     cp -r "$SOURCE_SKILLS_PARENT/plan-improve" "$TARGET/.claude/skills/"
     echo "    ✓ plan-improve/"

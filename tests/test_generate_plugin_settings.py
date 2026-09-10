@@ -50,10 +50,17 @@ def test_it_rewrites_every_directory_the_installer_copies():
         )
 
 
-def test_it_rewrites_the_records_prefix():
-    assert _mod.rewrite_value("$CLAUDE_PROJECT_DIR/records/y.md").startswith(
-        "$CLAUDE_PROJECT_DIR/.claude/records/"
-    )
+def test_it_does_not_rewrite_the_records_prefix_any_more():
+    """`records/` used to be rewritten INTO the install, and that was the mixing.
+
+    The kit's trees move into `.claude/`; everything the system writes moves OUT of
+    it, to `<project>/.squad/`. Rewriting a data path into the dependency's own
+    directory is how 17 consumer repositories came to carry the kit in git, each with
+    348-566 permanently dirty files inside it.
+    """
+    value = "$CLAUDE_PROJECT_DIR/records/y.md"
+
+    assert _mod.rewrite_value(value) == value
 
 
 def test_it_does_not_rewrite_a_path_outside_the_kit():

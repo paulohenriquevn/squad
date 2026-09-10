@@ -134,13 +134,14 @@ def check_record(path: Path) -> ScopeReport:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("records", type=Path, nargs="+", help="review or audit record files")
+    parser.add_argument("record_files", type=Path, nargs="+",
+                        help="review or audit record files")
     parser.add_argument("--strict", action="store_true",
                         help="exit 1 when any record fails to declare its scope")
     args = parser.parse_args(argv)
 
     bad = 0
-    for path in args.records:
+    for path in args.record_files:
         r = check_record(path)
         if r.verdict is ScopeVerdict.DECLARED:
             extra = f" (read {r.head}..{r.baseline})" if r.head else ""

@@ -52,16 +52,24 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal — no local fallback copy, because a copy is
+# what the containment gate exists to refuse.
+import sys as _sys_bootstrap
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+_here = _Path_bootstrap(__file__).resolve()
+for _up in _here.parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import records_dir  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "conventions"))
 
-try:  # the shared root resolver; a local fallback keeps the script portable
-    from sop_format import KB_DIRS
-except ImportError:  # pragma: no cover - exercised only in a stripped checkout
-    KB_DIRS = (".claude/records", "records", ".claude/knowledge-base", "knowledge-base")
 
 SUFFICIENT = "EVIDENCE_SUFFICIENT"
 WITH_CAVEATS = "EVIDENCE_WITH_CAVEATS"
@@ -117,11 +125,7 @@ class HonestyReport:
 
 
 def _records_dir(root: Path, leaf: str) -> Path | None:
-    for relative in KB_DIRS:
-        candidate = root / relative / leaf
-        if candidate.is_dir():
-            return candidate
-    return None
+    return records_dir(root, leaf)
 
 
 def _frontmatter(text: str) -> dict[str, str]:

@@ -2,7 +2,7 @@
 """Spawn specialized review agents by instantiating templates with plan-specific context.
 
 For each agent template at `templates/agent-*.md`, perform substitution and write the
-result to `.claude/agents/review-{slug}-{date}/{role}.md`. These files are the agent
+result to `<project>/.squad/records/reviews/review-{slug}-{date}/{role}.md`. These files are the agent
 definitions consumed by the Agent tool (general-purpose subagent_type + prompt content).
 
 Outputs:
@@ -16,11 +16,20 @@ Exit codes:
 """
 from __future__ import annotations
 
-import argparse
-import json
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
+import sys as _s
+from pathlib import Path as _P
+
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+import argparse  # noqa: E402
+import json  # noqa: E402
+import sys  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from squad.paths import write_records_dir  # noqa: E402
 
 TEMPLATES = {
     "architecture": "agent-architecture-reviewer.md",
@@ -200,6 +209,16 @@ def write_skill_file(
     return skill_path
 
 
+def _project_root(skill_dir: Path) -> Path:
+    """The project this skill was installed into.
+
+    `skill_dir` is `<eco>/skills/review`; the write root hangs off the PROJECT, so the
+    ecosystem's own `.claude/` wrapper is stepped over when it is there.
+    """
+    eco = skill_dir.parent.parent
+    return eco.parent if eco.name == ".claude" else eco
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Spawn specialized review agents for a plan.")
     parser.add_argument("--plan", type=Path, required=True, help="Path to plan markdown")
@@ -254,7 +273,12 @@ def main() -> int:
         except FileNotFoundError:
             skill_dir = _find_skill_dir(Path(__file__).resolve().parent)
     date_str = args.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    output_dir = args.output_dir or (skill_dir.parent.parent / "agents" / f"review-{args.slug}-{date_str}")
+    # Generated per-item files are OUTPUT, so they land in the project's write root —
+    # never in `agents/`, where the kit keeps its DECLARED specialists, and never
+    # inside the install, which receives nothing this system writes.
+    output_dir = args.output_dir or (
+        write_records_dir(_project_root(skill_dir), "reviews")
+        / f"review-{args.slug}-{date_str}")
     skills_root = args.skills_dir or (skill_dir.parent)  # `.claude/skills/` parent of review/ skill dir
 
     routing_rule_path = args.routing_rule or _default_routing_rule_path(skill_dir)

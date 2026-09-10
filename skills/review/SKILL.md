@@ -45,7 +45,7 @@ Refuse to start when:
 
 ## The 5 specialized agents (generated dynamically)
 
-Before review begins, `scripts/spawn_reviewers.py` generates N agent definition files at `.claude/agents/review-{slug}-{date}/`. These are PERSISTENT (audit trail in git) and each contains a focused system prompt. The script reads templates `agent-{role}-reviewer.md` and writes them as `{role}.md` (without the `agent-` prefix or `-reviewer` suffix) into the run directory:
+Before review begins, `scripts/spawn_reviewers.py` generates N agent definition files at `.squad/records/reviews/review-{slug}-{date}/`. These are PERSISTENT (audit trail in git) and each contains a focused system prompt. The script reads templates `agent-{role}-reviewer.md` and writes them as `{role}.md` (without the `agent-` prefix or `-reviewer` suffix) into the run directory:
 
 | Role key | Output filename | Always generated? | What it reviews |
 |---|---|---|---|
@@ -151,7 +151,7 @@ python3 .claude/skills/review/scripts/spawn_reviewers.py \
   --slug {slug} \
   --primary-domain memory-layer \
   --secondary-domains pgvector-schema,llm-extraction \
-  --output-dir .claude/agents/review-{slug}-{YYYY-MM-DD}/
+  --output-dir .squad/records/reviews/review-{slug}-{YYYY-MM-DD}/
 ```
 
 Both `--slug` and `--primary-domain` are required. `--date` defaults to today UTC; `--diff-base` defaults to `main`.
@@ -193,7 +193,7 @@ Each agent runs its review independently and returns findings in a structured fo
 
 ```bash
 python3 .claude/skills/review/scripts/consolidate_findings.py \
-  --findings-dir .claude/agents/review-{slug}-{date}/findings/ \
+  --findings-dir .squad/records/reviews/review-{slug}-{date}/findings/ \
   --output .claude/records/reviews/{slug}-review-{date}.md \
   --plan .claude/records/plans/{slug}-plan.md
 ```
@@ -291,12 +291,12 @@ Report format (see `consolidate_findings.py`):
 - Wiring triad: 12/12 symbols pillar (a) PASS; 11/12 pillar (b); 8/12 pillar (c) observed
 
 ## Spawned agents (audit trail)
-- .claude/agents/review-{slug}-{date}/architecture.md
-- .claude/agents/review-{slug}-{date}/tests.md
-- .claude/agents/review-{slug}-{date}/wiring.md
-- .claude/agents/review-{slug}-{date}/cross-validation.md
-- .claude/agents/review-{slug}-{date}/domain-memory-layer.md
-- .claude/agents/review-{slug}-{date}/domain-pgvector-schema.md
+- .squad/records/reviews/review-{slug}-{date}/architecture.md
+- .squad/records/reviews/review-{slug}-{date}/tests.md
+- .squad/records/reviews/review-{slug}-{date}/wiring.md
+- .squad/records/reviews/review-{slug}-{date}/cross-validation.md
+- .squad/records/reviews/review-{slug}-{date}/domain-memory-layer.md
+- .squad/records/reviews/review-{slug}-{date}/domain-pgvector-schema.md
 
 ## Handoff decision
 {READY_TO_MERGE or READY_TO_MERGE_WITH_FOLLOWUPS: open PR / NEEDS_FIXES: loop /implement / NEEDS_DEEPER: re-spawn with broader scope}
@@ -418,7 +418,7 @@ Per `cycle-review.md § Verdicts` — `BLOCKED` is the honest outcome here:
 - Orchestrator prompt: `prompts/orchestrator-prompt.md`
 - Scripts: `scripts/detect_domain.py`, `scripts/spawn_reviewers.py`, `scripts/edge_case_coverage.py`, `scripts/consolidate_findings.py`
 - Reuses: `.claude/skills/implement/scripts/run_validation.py` (quality gates), `.claude/skills/implement/scripts/check_wiring.py` (wiring re-validation)
-- Generated audit trail: `.claude/agents/review-{slug}-{date}/`
+- Generated audit trail: `.squad/records/reviews/review-{slug}-{date}/`
 - Final reports: `.claude/records/reviews/{slug}-review-{date}.md`
 - Project rules consumed: `architecture.md`, `testing.md`, `public-copy.md`, `discover-plan-golden-rule.md` and `discover-opportunity-golden-rule.md` (if the review touches discovery artifacts)
 

@@ -54,7 +54,7 @@ def _vote(reviewer: str, model: str, verdict: str, reason: str = WHY) -> dict:
 
 def _project(tmp_path: Path, *, votes=None, assigned=PANEL, slug="B-014") -> Path:
     root = tmp_path / "proj"
-    panels = root / "records" / "panels"
+    panels = root / ".squad" / "records" / "panels"
     panels.mkdir(parents=True, exist_ok=True)
     if assigned is not None:
         (panels / f"{slug}-discover.assignment.json").write_text(
@@ -187,7 +187,7 @@ def test_an_ungated_phase_passes_untouched(tmp_path: Path) -> None:
 
 def test_an_unreadable_record_is_not_a_pass(tmp_path: Path) -> None:
     project = _project(tmp_path, votes=[])
-    (project / "records" / "panels" / "B-014-discover.json").write_text(
+    (project / ".squad" / "records" / "panels" / "B-014-discover.json").write_text(
         "{ not json", encoding="utf-8")
 
     code, result = check("B-014", "discover", project=project,
@@ -197,17 +197,23 @@ def test_an_unreadable_record_is_not_a_pass(tmp_path: Path) -> None:
     assert result["status"] == "unchecked"
 
 
-def test_the_gate_reads_where_a_plugin_install_writes(tmp_path: Path) -> None:
+def test_the_gate_reads_the_one_write_root_whatever_the_layout(tmp_path: Path) -> None:
     """Regression: the writer and the reader must resolve the same directory.
 
-    Both paths were hardcoded to `<project>/records/panels`. The kit keeps records
-    under `.claude/records` in a plugin install — `cycle_events.py` resolves that pair
-    in that order — so on every plugin consumer the gate would have looked in a
-    directory nothing writes, reported `no_record` forever, and held every DISCOVER and
-    PLAN permanently. Fail-closed in the wrong place is still a jammed pipeline.
+    Both paths were hardcoded to `<project>/records/panels` while the kit wrote under
+    `.claude/records` in a plugin install, so on every plugin consumer the gate looked
+    in a directory nothing writes, reported `no_record` forever, and held every
+    DISCOVER and PLAN permanently. Fail-closed in the wrong place is still a jammed
+    pipeline.
+
+    Centralising on `<project>/.squad/` removes the class rather than the instance:
+    there is one root, so a layout cannot separate the writer from the reader. This
+    project is shaped like a plugin install — `.claude/` present — and the panel is
+    still found.
     """
     root = tmp_path / "plugin-shaped"
-    panels = root / ".claude" / "records" / "panels"
+    (root / ".claude" / "skills").mkdir(parents=True)
+    panels = root / ".squad" / "records" / "panels"
     panels.mkdir(parents=True)
     (panels / "B-014-discover.assignment.json").write_text(
         json.dumps({"assigned": PANEL}), encoding="utf-8")

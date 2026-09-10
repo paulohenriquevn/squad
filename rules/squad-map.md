@@ -22,7 +22,7 @@ its executable half — `sq where <name>` resolves a mechanism to a path and an 
 `sq test` runs the suites and names the ones it did not, `sq check` replays what CI
 verifies. It computes no verdict; it is a façade over the mechanisms, which is why it lives
 at the root and in `squad/cli/` rather than as a sixth family under `mechanisms/`
-([the ADR](../wiki/decisions/the-cli-navigates-mechanisms-compute.md)).
+([the ADR](../.squad/wiki/decisions/the-cli-navigates-mechanisms-compute.md)).
 
 The question that places a file is **not who reads it — it is who owns it**
 (`rules/README.md`). A file a consumer tunes must live where the installer
@@ -55,7 +55,7 @@ BRAINSTORM → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → 
 Everything from BACKLOG down runs unattended, merge included. That is only
 defensible because BRAINSTORM happened — see
 [`rules/autonomy-envelope.md`](autonomy-envelope.md) floor 2 and
-[`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md).
+[`.squad/wiki/decisions/merge-is-inside-the-envelope.md`](../.squad/wiki/decisions/merge-is-inside-the-envelope.md).
 
 **DISCOVER through ACCEPTANCE is closed to human intervention** (2026-09-08). Ten phase
 rules used to end a halt with *escalate to the human*; all ten now return the item to the

@@ -7,11 +7,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from squad.plan import attestation, goal_line, resolve
+from squad.paths import (
+    ATTESTATIONS,
+    active_plan_pointer,
+    write_records_dir,
+    write_state_dir,
+)
+
+
+def _pointer(project):
+    p = active_plan_pointer(project)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+from squad.plan import attestation, goal_line, resolve  # noqa: E402
 
 
 def _plan(eco: Path, slug: str, body: str = "# Plan\n") -> Path:
-    p = eco / "records" / "plans" / f"{slug}-plan.md"
+    # The write root hangs off the PROJECT, not off the ecosystem directory. Joining it
+    # to `eco` would produce `.claude/.squad/records/` and hide every plan.
+    p = write_records_dir(eco, "plans") / f"{slug}-plan.md"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(body, encoding="utf-8")
     return p
@@ -20,7 +34,7 @@ def _plan(eco: Path, slug: str, body: str = "# Plan\n") -> Path:
 def test_a_pinned_plan_wins_and_says_it_was_pinned(tmp_path: Path) -> None:
     _plan(tmp_path, "older")
     _plan(tmp_path, "chosen")
-    (tmp_path / ".active_plan").write_text("chosen\n", encoding="utf-8")
+    _pointer(tmp_path).write_text("chosen\n", encoding="utf-8")
 
     found = resolve(tmp_path)
 
@@ -44,7 +58,7 @@ def test_the_newest_plan_is_the_fallback_and_says_so(tmp_path: Path) -> None:
 def test_a_pointer_naming_a_missing_plan_falls_back(tmp_path: Path) -> None:
     """A stale pointer must not silence the plan that IS there."""
     _plan(tmp_path, "real")
-    (tmp_path / ".active_plan").write_text("deleted-long-ago\n", encoding="utf-8")
+    _pointer(tmp_path).write_text("deleted-long-ago\n", encoding="utf-8")
 
     found = resolve(tmp_path)
 
@@ -54,7 +68,7 @@ def test_a_pointer_naming_a_missing_plan_falls_back(tmp_path: Path) -> None:
 def test_a_pointer_with_a_path_in_it_is_refused(tmp_path: Path) -> None:
     """The slug is joined onto a path, so it is validated rather than trusted."""
     _plan(tmp_path, "real")
-    (tmp_path / ".active_plan").write_text("../../etc/passwd\n", encoding="utf-8")
+    _pointer(tmp_path).write_text("../../etc/passwd\n", encoding="utf-8")
 
     found = resolve(tmp_path)
 
@@ -81,7 +95,7 @@ def test_a_goal_section_with_no_blockquote_yields_nothing(tmp_path: Path) -> Non
 
 
 def _attest(eco: Path, slug: str, digest: str) -> None:
-    d = eco / ".attestations"
+    d = write_state_dir(eco, ATTESTATIONS)
     d.mkdir(parents=True, exist_ok=True)
     (d / f"{slug}.sha256").write_text(digest + "\n", encoding="utf-8")
 

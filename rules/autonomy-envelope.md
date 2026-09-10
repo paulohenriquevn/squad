@@ -139,7 +139,7 @@ agent moves them.
    It was amended once `cycle-brainstorm` existed, because autonomy over merging is only
    defensible downstream of a product a person signed for. The reasoning, the
    alternatives rejected and what it costs are in
-   [`wiki/decisions/merge-is-inside-the-envelope.md`](../wiki/decisions/merge-is-inside-the-envelope.md).
+   [`.squad/wiki/decisions/merge-is-inside-the-envelope.md`](../.squad/wiki/decisions/merge-is-inside-the-envelope.md).
 
    **Merging to the trunk is a PREMISE, not a capability the project may withhold**
    (decided 2026-09-08). Branch protection that requires a human reviewer does not

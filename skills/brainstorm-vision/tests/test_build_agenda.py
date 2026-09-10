@@ -10,12 +10,21 @@ Two properties matter more than the collection itself:
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+import sys as _s
+from pathlib import Path as _P
+
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from squad.paths import write_records_dir, write_wiki_dir  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from build_agenda import build, render
+from build_agenda import build, render  # noqa: E402
 
 ROUTING = "web | web-console | agents/web.md\napi | search-api | agents/api.md\n"
 
@@ -24,11 +33,11 @@ def _project(tmp_path: Path, backlog: str = "", *, routing: str = ROUTING,
              objectives: str = "") -> Path:
     (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
     (tmp_path / "rules" / "domain-routing.txt").write_text(routing, encoding="utf-8")
-    (tmp_path / "records").mkdir(parents=True, exist_ok=True)
+    write_records_dir(tmp_path).mkdir(parents=True, exist_ok=True)
     if backlog:
         (tmp_path / "BACKLOG.md").write_text(backlog, encoding="utf-8")
     if objectives:
-        d = tmp_path / "wiki" / "product"
+        d = write_wiki_dir(tmp_path, "product")
         d.mkdir(parents=True, exist_ok=True)
         (d / "objectives.md").write_text(objectives, encoding="utf-8")
     return tmp_path
@@ -119,7 +128,7 @@ def test_shipped_work_tracing_to_no_objective_is_surfaced(tmp_path: Path) -> Non
 
 def test_a_blocked_report_on_disk_becomes_a_halt(tmp_path: Path) -> None:
     root = _project(tmp_path, _item("B-010", domain="web", repo="web-console", status="planned"))
-    (root / "records" / "B-010-BLOCKED.md").write_text("halted", encoding="utf-8")
+    (write_records_dir(root) / "B-010-BLOCKED.md").write_text("halted", encoding="utf-8")
     ag = build(root)
     assert [h["item"] for h in ag.halts] == ["B-010"]
 

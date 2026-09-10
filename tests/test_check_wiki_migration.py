@@ -53,7 +53,7 @@ def test_scaffold_only_is_not_migrated(tmp_path: Path) -> None:
     """A fresh install has the directories and no knowledge. It is not done."""
     (tmp_path / "wiki" / "sops").mkdir(parents=True)
     (tmp_path / "wiki" / "sops" / ".gitkeep").write_text("", encoding="utf-8")
-    _write(tmp_path, "wiki/sops", "index.md")
+    _write(tmp_path, ".squad/wiki/sops", "index.md")
 
     assert check_leaf(tmp_path, "sops", "sops").state == EMPTY
 
@@ -69,14 +69,14 @@ def test_unmigrated_when_only_the_old_root_holds_documents(tmp_path: Path) -> No
 
 
 def test_migrated_when_only_the_bundle_holds_documents(tmp_path: Path) -> None:
-    _write(tmp_path, "wiki/decisions", "where-knowledge-lives.md")
+    _write(tmp_path, ".squad/wiki/decisions", "where-knowledge-lives.md")
 
     assert check_leaf(tmp_path, "decisions", "adrs").state == MIGRATED
 
 
 def test_split_is_reported_when_both_roots_hold_documents(tmp_path: Path) -> None:
     """The worst state: the old copy is unreachable, so it cannot be seen to rot."""
-    _write(tmp_path, "wiki/decisions", "a.md")
+    _write(tmp_path, ".squad/wiki/decisions", "a.md")
     _write(tmp_path, "records/adrs", "a.md")
 
     report = check_leaf(tmp_path, "decisions", "adrs")
@@ -121,7 +121,7 @@ def test_exit_code_is_one_when_a_leaf_still_reads_the_old_root(tmp_path: Path) -
 
 
 def test_exit_code_is_zero_when_nothing_reads_the_old_root(tmp_path: Path) -> None:
-    _write(tmp_path, "wiki/sops", "a-procedure.md")
+    _write(tmp_path, ".squad/wiki/sops", "a-procedure.md")
 
     assert main(["--root", str(tmp_path)]) == 0
 

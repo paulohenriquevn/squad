@@ -52,6 +52,16 @@ def _kit_at(root: Path, *, gate: bool = True) -> Path:
         real = _REPO / "mechanisms" / "gates" / "check_install_drift.py"
         (gate_dir / "check_install_drift.py").write_text(
             real.read_text(encoding="utf-8"), encoding="utf-8")
+        # The gate resolves data roots through the shared package rather than
+        # restating them, so a synthetic kit needs it too. Copying the real file keeps
+        # this exercising the actual gate instead of a stub that cannot drift.
+        pkg = root / "squad"
+        pkg.mkdir(parents=True, exist_ok=True)
+        for module in ("__init__.py", "paths.py", "contexts.py", "outputs.py"):
+            source = _REPO / "squad" / module
+            if source.is_file():
+                (pkg / module).write_text(source.read_text(encoding="utf-8"),
+                                          encoding="utf-8")
     return root
 
 

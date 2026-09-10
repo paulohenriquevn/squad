@@ -50,8 +50,19 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir, write_wiki_dir  # noqa: E402
 
 _HERE = Path(__file__).resolve()
 for _candidate in (_HERE.parents[3] / "skills" / "backlog-review" / "scripts",):
@@ -90,8 +101,7 @@ def _records_root(root: Path) -> Path:
     one: an audit reported a repository as having zero implementations, reviews and
     releases when it had six, twelve and eight.
     """
-    plugin = root / ".claude" / "records"
-    return plugin if plugin.is_dir() else root / "records"
+    return write_records_dir(root)
 
 
 def _load_items(root: Path):
@@ -107,7 +117,7 @@ def _load_items(root: Path):
 
 
 def _objectives(root: Path) -> list[tuple[str, str]]:
-    path = root / "wiki" / "product" / "objectives.md"
+    path = write_wiki_dir(root, "product") / "objectives.md"
     if not path.is_file():
         return []
     return [(m.group(1), m.group(2).strip()) for m in OBJ_RE.finditer(path.read_text(encoding="utf-8"))]

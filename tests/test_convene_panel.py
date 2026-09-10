@@ -232,6 +232,7 @@ panel_phases = discover
                  "--write", "--json"])
 
     assert code == OK
-    written = project / "records" / "panels" / "B-014-discover.assignment.json"
+    written = (project / ".squad" / "records" / "panels"
+               / "B-014-discover.assignment.json")
     assert json.loads(written.read_text())["assigned"] == [
         "nemesis", "leo", "judge-codex:judge"]

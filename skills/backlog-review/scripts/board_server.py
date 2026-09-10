@@ -56,10 +56,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 from board_state import build_state, item_detail
 
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+
 POLL_SECONDS = 0.5
-WATCHED = ("BACKLOG.md", "records/cycle-events.jsonl", ".claude/records/cycle-events.jsonl")
+WATCHED = ("BACKLOG.md", *(f"{b}/cycle-events.jsonl"
+                          for b in (f"{DATA_DIRNAME}/records", *LEGACY_RECORDS_ROOTS)))
 
 #: Set by `main()` from the flags, and read by every `build_state` call. Module-level
 #: because the handler and the watcher both need them and neither owns the other.

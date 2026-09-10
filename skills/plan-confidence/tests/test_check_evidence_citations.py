@@ -1,14 +1,22 @@
 """T1.1 — tests for check_evidence_citations (M3 v0.1 detector)."""
 from __future__ import annotations
 
-from pathlib import Path
+import sys as _s
+from pathlib import Path as _P
 
-import pytest
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
 from check_evidence_citations import (  # noqa: E402
     Citation,
     EvidenceReport,
     check_evidence_citations,
 )
+from squad.paths import write_records_dir  # noqa: E402
 
 
 def _write_plan(tmp_path: Path, body: str) -> Path:
@@ -31,17 +39,17 @@ def _make_project_root(
     """
     root = tmp_path / "project"
     (root / "rules").mkdir(parents=True)
-    (root / "records" / "discoveries" / "blueprints").mkdir(parents=True)
-    (root / "records" / "discoveries" / "opportunities").mkdir(parents=True)
+    (write_records_dir(root, "discoveries") / "blueprints").mkdir(parents=True)
+    (write_records_dir(root, "discoveries") / "opportunities").mkdir(parents=True)
     if rules:
         for name, content in rules.items():
             (root / "rules" / name).write_text(content, encoding="utf-8")
     if blueprints:
         for name, content in blueprints.items():
-            (root / "records" / "discoveries" / "blueprints" / name).write_text(content, encoding="utf-8")
+            (write_records_dir(root, "discoveries") / "blueprints" / name).write_text(content, encoding="utf-8")
     if opportunities:
         for name, content in opportunities.items():
-            (root / "records" / "discoveries" / "opportunities" / name).write_text(content, encoding="utf-8")
+            (write_records_dir(root, "discoveries") / "opportunities" / name).write_text(content, encoding="utf-8")
     return root
 
 

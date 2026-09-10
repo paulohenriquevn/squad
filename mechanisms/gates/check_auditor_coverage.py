@@ -148,7 +148,11 @@ def validate_with_plugin(install_path: Path, report: Path) -> tuple[bool, str]:
 
 
 def find_report(project: Path, output_dir: str, glob: str) -> Path | None:
-    base = project / output_dir
+    # The assignment carries an absolute path derived from the write root; a relative
+    # one is still accepted so an older assignment on disk keeps resolving.
+    base = Path(output_dir)
+    if not base.is_absolute():
+        base = project / output_dir
     if not base.is_dir():
         return None
     hits = sorted(base.glob(glob))

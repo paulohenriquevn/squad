@@ -34,9 +34,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 from squad import PreToolUseContext, create_context
 from squad.boundaries import violation
 from squad.layout import resolve
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import DATA_DIRNAME, RECORDS  # noqa: E402
 
 # ── the read-only zone (rules/reference-provenance.md § 1) ────────────────────
 ZONE = r"(\./)?(\.claude/)?study-material/"
@@ -318,7 +329,8 @@ def check_zone(command: str, project_dir: Path) -> str | None:
 
     if ZONE_WRITE_RE.search(command):
         return ("BLOCKED: 'study-material/' is read-only third-party material. Capture "
-                "findings in 'records/discoveries/blueprints/'. For initial bootstrap, "
+                f"findings in '{DATA_DIRNAME}/{RECORDS}/discoveries/blueprints/'. For "
+                "initial bootstrap, "
                 "create '.references-bootstrap' at project root AND cite the source in "
                 "CHANGELOG.md; remove the marker when done.")
 
@@ -332,7 +344,8 @@ def check_zone(command: str, project_dir: Path) -> str | None:
             return ("BLOCKED: copying content OUT of 'study-material/' is forbidden — "
                     "that is third-party study material and a literal copy carries its "
                     "licence into this project. Read it, learn from it, and write your "
-                    "own version; record the finding in 'records/discoveries/blueprints/' "
+                    f"own version; record the finding in "
+                f"'{DATA_DIRNAME}/{RECORDS}/discoveries/blueprints/' "
                     "citing the source.")
     return None
 

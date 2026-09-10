@@ -42,6 +42,11 @@ site, not a condition of the machine.
 """
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
+
 import argparse
 import json
 import math
@@ -51,16 +56,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from squad.paths import (
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+    write_records_dir,
+)
+
 #: One file, appended to by every phase. Named alongside the records it
 #: complements rather than hidden, because a stream nobody can find is a stream
 #: nobody reads.
 EVENTS_FILENAME = "cycle-events.jsonl"
 
-#: Canonical first. `rules/records-location.md` makes
-#: `.claude/records/` the location in a plugin install, with the
-#: standalone repo as the single exception. A stream written to the wrong half
-#: recreates the split records that `roadmap-review` reports as MAJOR.
-_KB_DIRS = (".claude/records", "records")
 
 PHASE_START = "cycle:phase:start"
 PHASE_END = "cycle:phase:end"
@@ -69,47 +75,32 @@ PHASE_END = "cycle:phase:end"
 _KIT_PARTS = ("skills", "rules", "hooks")
 
 
+_KIT_PARTS = ("skills", "rules", "hooks")
+
+
 def _holds_the_kit(directory: Path) -> bool:
     """What `_squad_has_kit` did in the retired `detect-layout.sh`, in Python.
 
-    One definition of "this directory is the kit" already exists and is the one
-    every hook resolves against. A second, subtly different one here would be
-    the duplicated knowledge this repository has paid for before — so this
-    mirrors it deliberately rather than inventing its own test.
+    One definition of "this directory is the kit" already exists and is the one every
+    hook resolves against. A second, subtly different one here would be the duplicated
+    knowledge this repository has paid for before.
     """
     return all((directory / part).is_dir() for part in _KIT_PARTS)
 
 
-def _is_standalone(project_root: Path) -> bool:
-    """The kit's own repository, by the same order the layout detector uses.
-
-    The test is whether `.claude/` HOLDS THE KIT, not whether it exists: this
-    repository has a `.claude/` carrying local settings and is still standalone.
-    Getting that wrong created `.claude/records/` at the root here on the
-    very first instrumented run.
-    """
-    if _holds_the_kit(project_root / ".claude"):
-        return False
-    return _holds_the_kit(project_root)
-
-
 def resolve_events_path(project_root: Path) -> Path:
-    """Where this project's stream lives, in either install layout."""
-    project_root = Path(project_root)
-    for relative in _KB_DIRS:
-        candidate = project_root / relative
-        if candidate.is_dir():
-            return candidate / EVENTS_FILENAME
+    """Where this project's stream is WRITTEN: `<project>/.squad/records/`.
 
-    # Neither exists yet, so the first phase to run decides where the trail
-    # begins. Getting this wrong is not a cosmetic error: creating
-    # `.claude/records/` inside the kit's own repository plants the split
-    # records that `backlog-review` reports as MAJOR — the defect the
-    # CHANGELOG records the test suite having planted on every run. Found
-    # exactly that way here, by running the instrumented gate against this repo.
-    if _is_standalone(project_root):
-        return project_root / "records" / EVENTS_FILENAME
-    return project_root / _KB_DIRS[0] / EVENTS_FILENAME
+    One root, no layout special case. This function used to answer differently for a
+    plugin install and for the kit's own repository, and getting that wrong once
+    planted `.claude/records/` at the root here on the very first instrumented run —
+    the split trail `backlog-review` reports as MAJOR.
+
+    A project whose stream is still in a legacy root keeps it until somebody moves it;
+    `check_data_root.py` reports that, because a migration this code performed inside
+    a consumer's repository would be the kit writing to a project it does not own.
+    """
+    return write_records_dir(project_root) / EVENTS_FILENAME
 
 
 def project_root_for(work_path: Path) -> Path:
@@ -137,7 +128,12 @@ def project_root_for(work_path: Path) -> Path:
         work_path = work_path.parent
     candidates = [work_path, *work_path.parents]
     for candidate in candidates:
-        for relative in _KB_DIRS:
+        # The write root first, then the legacy ones a project may not have migrated.
+        # This walks UP looking for a project, so it must recognise both — a consumer
+        # mid-migration is still one project, not none.
+        if (candidate / DATA_DIRNAME).is_dir():
+            return candidate
+        for relative in LEGACY_RECORDS_ROOTS:
             if (candidate / relative).is_dir():
                 return candidate
         if _holds_the_kit(candidate) or _holds_the_kit(candidate / ".claude"):

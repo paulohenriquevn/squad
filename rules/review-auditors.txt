@@ -46,31 +46,34 @@
 #
 # FORMAT
 # ------
-#   auditor = <domain> | <plugin> | <diff-mode> | <output dir> | [report glob]
+#   auditor = <domain> | <plugin> | <diff-mode> | [report glob]
 #
 # <domain>      one of `detect_domain.py`'s domains, or `always` for an auditor that
 #               runs whatever the change is about.
 # <plugin>      the plugin name; resolved against the plugins installed on this
 #               machine. A mapped plugin that is NOT installed is a coverage gap, not
 #               a silence — `check_auditor_coverage.py` reports it and blocks.
-# <output dir>  passed as `--output-dir`, so the report lands where the gate looks.
-#               Left as the plugin's own default, which keeps a hand-run and a
-#               kit-driven run writing to the same place.
+#               The report's location is NOT declared here. It is derived —
+#               `<project>/.squad/records/audits/<plugin>/` — and passed as
+#               `--output-dir`. Each plugin's own default (`security-output/`,
+#               `code-review-output/`) would put a third party's output at the project
+#               root, outside the one write root, on this kit's instruction. A tool the
+#               kit tells where to write is a tool the kit is responsible for.
 # [report glob] only where a plugin does not write `final_report.md`.
 
-auditor = always         | loop-code-review        | analysis-scoped | code-review-output
-auditor = security       | loop-security-audit     | analysis-scoped | security-output
-auditor = auth           | loop-security-audit     | analysis-scoped | security-output
-auditor = testing        | loop-test-audit         | analysis-scoped | test-audit-output
-auditor = infrastructure | loop-infra-audit        | analysis-scoped | infra-audit-output
-auditor = infrastructure | loop-delivery-audit     | analysis-scoped | delivery-audit-output
-auditor = data-pipeline  | loop-infra-audit        | analysis-scoped | infra-audit-output
-auditor = database       | loop-performance-audit  | analysis-scoped | performance-audit-output
-auditor = concurrency    | loop-performance-audit  | analysis-scoped | performance-audit-output
-auditor = observability  | loop-performance-audit  | analysis-scoped | performance-audit-output
-auditor = frontend       | loop-performance-audit  | analysis-scoped | performance-audit-output
-auditor = api-design     | loop-surface-closure    | report-filtered | surface-closure-output
-auditor = cli-tooling    | loop-surface-closure    | report-filtered | surface-closure-output
+auditor = always         | loop-code-review        | analysis-scoped 
+auditor = security       | loop-security-audit     | analysis-scoped 
+auditor = auth           | loop-security-audit     | analysis-scoped 
+auditor = testing        | loop-test-audit         | analysis-scoped 
+auditor = infrastructure | loop-infra-audit        | analysis-scoped 
+auditor = infrastructure | loop-delivery-audit     | analysis-scoped 
+auditor = data-pipeline  | loop-infra-audit        | analysis-scoped 
+auditor = database       | loop-performance-audit  | analysis-scoped 
+auditor = concurrency    | loop-performance-audit  | analysis-scoped 
+auditor = observability  | loop-performance-audit  | analysis-scoped 
+auditor = frontend       | loop-performance-audit  | analysis-scoped 
+auditor = api-design     | loop-surface-closure    | report-filtered 
+auditor = cli-tooling    | loop-surface-closure    | report-filtered 
 
 # WHAT IS DELIBERATELY NOT MAPPED
 # -------------------------------

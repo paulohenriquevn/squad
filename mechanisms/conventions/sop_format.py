@@ -28,83 +28,50 @@ SOP and its run record apart to avoid.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
-#: Where the dated trail lives, newest name first. `knowledge-base/` is kept as
-#: a fallback because 42 consumers have it on disk and the rename cannot reach
-#: another project's repository — the same reason the wiki fallback exists.
-#:
-#: The rename happened because the name had become the inverse of the contents:
-#: once durable knowledge moved to the bundle, `knowledge-base/` held exactly
-#: what is NOT knowledge. See rules/records-location.md.
-KB_DIRS = (".claude/records", "records", ".claude/knowledge-base", "knowledge-base")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-#: The OKF bundle, checked before the records. Writers only ever write
-#: here; readers fall back, so a consumer that has not migrated keeps working
-#: and migrates the moment it runs.
-WIKI_DIRS = (".claude/wiki", "wiki")
+from squad.paths import (
+    DURABLE_LEAVES,
+    LEGACY_RECORDS_ROOTS,
+    LEGACY_WIKI_ROOTS,
+    records_dir,
+)
+from squad.paths import resolve_knowledge_dir as _resolve_knowledge_dir
+from squad.paths import wiki_dir as _wiki_dir
 
-#: What moved into the bundle, mapped to where the old root actually kept it.
-#:
-#: The mapping is not decoration: two of the four were RENAMED by the migration
-#: — `adrs/` became `decisions/`, and `discoveries/opportunities/` flattened to
-#: `opportunities/`. A fallback that looked for the new name under the old root
-#: would find nothing, and it would fail precisely for the consumers that most
-#: need it: the ones whose files still sit under the old names.
-#:
-#: Everything absent from this map stays in the records. A record of one
-#: execution on one day is not a concept that evolves, and OKF's own fields
-#: (`status`, `stale_after`, `verified`) mean nothing for one.
-DURABLE_LEAVES: dict[str, str] = {
-    "sops": "sops",
-    "decisions": "adrs",
-    "references": "references",
-    "opportunities": "discoveries/opportunities",
-}
+__all__ = ["DURABLE_LEAVES", "KB_DIRS", "WIKI_DIRS", "knowledge_base_dir",
+           "resolve_knowledge_dir", "wiki_dir", "split_frontmatter"]
+
+#: Every data-root literal now lives in `squad/paths.py`, and this module re-exports
+#: what its consumers already import. Six modules each held their own copy of this
+#: list, in four different orders, and a reader resolving one order found a directory a
+#: writer using another had never filled. `check_write_containment.py` fails any kit
+#: file outside the owner that names a root, so the copies cannot come back.
+KB_DIRS = LEGACY_RECORDS_ROOTS
+WIKI_DIRS = LEGACY_WIKI_ROOTS
 
 
 def knowledge_base_dir(project_root: Path, leaf: str) -> Path | None:
-    """`<project>/{.claude/,}records/<leaf>`, whichever exists.
+    """`<project>/.squad/records/<leaf>`, or the legacy root that still holds it.
 
-    The dated trail only. For knowledge that may have migrated to the bundle,
-    call `resolve_knowledge_dir`.
+    The dated trail only. For knowledge that may have migrated to the bundle, call
+    `resolve_knowledge_dir`.
     """
-    for relative in KB_DIRS:
-        candidate = Path(project_root) / relative / leaf
-        if candidate.is_dir():
-            return candidate
-    return None
+    return records_dir(project_root, leaf)
 
 
 def wiki_dir(project_root: Path, leaf: str) -> Path | None:
-    """`<project>/{.claude/,}wiki/<leaf>`, whichever exists."""
-    for relative in WIKI_DIRS:
-        candidate = Path(project_root) / relative / leaf
-        if candidate.is_dir():
-            return candidate
-    return None
+    """`<project>/.squad/wiki/<leaf>`, or the legacy root that still holds it."""
+    return _wiki_dir(project_root, leaf)
 
 
 def resolve_knowledge_dir(project_root: Path, leaf: str) -> Path | None:
-    """Where this project's `<leaf>` knowledge lives — bundle first.
+    """Where this project's `<leaf>` knowledge lives — bundle first."""
+    return _resolve_knowledge_dir(project_root, leaf)
 
-    Order matters and is the whole migration strategy: 42 consumers already have
-    `records/` on disk, a hard cut would break every one that updates
-    without migrating, and the kit cannot run anything inside another project's
-    repository. So readers fall back and writers do not.
-
-    A leaf outside `DURABLE_LEAVES` never resolves to the bundle. Accepting
-    `wiki/sop-runs/` because someone created it would invite exactly the mixing
-    the split exists to prevent.
-    """
-    project_root = Path(project_root)
-    legacy = DURABLE_LEAVES.get(leaf)
-    if legacy is not None:
-        found = wiki_dir(project_root, leaf)
-        if found is not None:
-            return found
-        return knowledge_base_dir(project_root, legacy)
-    return knowledge_base_dir(project_root, leaf)
 
 
 def split_frontmatter(text: str) -> tuple[dict[str, str], str]:

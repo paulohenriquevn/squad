@@ -8,11 +8,17 @@ failures `squad-lead`'s README records, all of which are a session being wrong.
 """
 from __future__ import annotations
 
+import sys as _s
+from pathlib import Path as _P
+
+_s.path.insert(0, str(_P(__file__).resolve().parents[1]))
 import time
 from pathlib import Path
 
 import pytest
 from squad_lead import SQUAD_FACILITATOR, Decision, Lead, watch
+
+from squad.paths import write_records_dir
 
 # The menu, as captured. Option 1 moves the registry; option 2 asks for a decision
 # only the sponsor holds.
@@ -636,8 +642,9 @@ def _project_with(tmp_path: Path, *events, blocking: str = "AWAITING_HUMAN\nFAIL
     import json
     (tmp_path / "rules").mkdir(exist_ok=True)
     (tmp_path / "rules" / "blocking-verdicts.txt").write_text(blocking, encoding="utf-8")
-    (tmp_path / "records").mkdir(exist_ok=True)
-    (tmp_path / "records" / "cycle-events.jsonl").write_text(
+    trail = write_records_dir(tmp_path)
+    trail.mkdir(parents=True, exist_ok=True)
+    (trail / "cycle-events.jsonl").write_text(
         "".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
     (tmp_path / "BACKLOG.md").write_text("# Backlog\n", encoding="utf-8")
     return tmp_path

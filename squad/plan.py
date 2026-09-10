@@ -10,8 +10,24 @@ from __future__ import annotations
 
 import hashlib
 import re
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from dataclasses import dataclass
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import (  # noqa: E402
+    ATTESTATIONS,
+    active_plan_pointer,
+    write_records_dir,
+    write_state_dir,
+)
 
 #: A pointer file is data from disk, and a slug is used to build a path. Anything
 #: outside this shape is refused rather than joined onto `records/plans/`.
@@ -28,16 +44,27 @@ class ActivePlan:
     how: str
 
 
+def _project_of(eco: Path) -> Path:
+    """The project that owns this ecosystem directory.
+
+    `eco` is where the KIT is — `<project>/.claude/` in a plugin install, the repo root
+    in the standalone kit. The write root hangs off the PROJECT, so joining it to `eco`
+    would produce `.claude/.squad/records/` and hide every plan from the hooks that
+    read them. Caught by `squad/tests/test_plan.py` the moment the roots centralised.
+    """
+    return eco.parent if eco.name == ".claude" else eco
+
+
 def resolve(eco: Path) -> ActivePlan | None:
-    pointer = eco / ".active_plan"
+    pointer = active_plan_pointer(_project_of(eco))
     if pointer.is_file():
         slug = pointer.read_text(encoding="utf-8", errors="replace").strip()
-        candidate = eco / "records" / "plans" / f"{slug}-plan.md"
+        candidate = write_records_dir(_project_of(eco), "plans") / f"{slug}-plan.md"
         if slug and _SLUG_RE.match(slug) and candidate.is_file():
             return ActivePlan(candidate, slug, "pinned")
 
     try:
-        plans = sorted((eco / "records" / "plans").glob("*-plan.md"),
+        plans = sorted(write_records_dir(_project_of(eco), "plans").glob("*-plan.md"),
                        key=lambda p: p.stat().st_mtime, reverse=True)
     except OSError:
         return None
@@ -83,7 +110,7 @@ class Attestation:
 
 
 def attestation(eco: Path, plan: ActivePlan) -> Attestation:
-    record = eco / ".attestations" / f"{plan.slug}.sha256"
+    record = write_state_dir(_project_of(eco), ATTESTATIONS) / f"{plan.slug}.sha256"
     expected = None
     if record.is_file():
         expected = record.read_text(encoding="utf-8", errors="replace").strip() or None

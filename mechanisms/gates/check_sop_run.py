@@ -120,7 +120,7 @@ def check_sop_runs(project_root: Path) -> RunReport:
     # The trail stays in the records; the procedures may have moved to
     # the bundle. Two different resolutions on purpose — a record of one
     # execution is not a concept, and the split is the decision this migration
-    # rests on (wiki/decisions/where-knowledge-lives.md).
+    # rests on (.squad/wiki/decisions/where-knowledge-lives.md).
     runs_dir = knowledge_base_dir(project_root, "sop-runs")
     sops_dir = resolve_knowledge_dir(project_root, "sops")
     if runs_dir is None:

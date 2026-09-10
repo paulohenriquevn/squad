@@ -54,7 +54,7 @@ deadcode-output/
 
 # Study material, kept local (not part of the shipped cycle)
 specs/
-
+.squad/
 # Nested repository with its own remote — never a submodule of the cycle
 codex-plugin-cc/
 

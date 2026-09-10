@@ -60,8 +60,18 @@ if [ -z "$ECOSYSTEM_DIR" ]; then
   echo "  nothing will look — an attestation nobody reads verifies nothing." >&2
   exit 1
 fi
-ATTEST_DIR="${ECOSYSTEM_DIR}/.attestations"
-PLANS_DIR="${ECOSYSTEM_DIR}/records/plans"
+ATTEST_REL="$(python3 -c "import sys; sys.path.insert(0, '$KIT_ROOT'); from squad.paths import DATA_DIRNAME, ATTESTATIONS; print(f'{DATA_DIRNAME}/{ATTESTATIONS}')" 2>/dev/null)"
+[ -n "$ATTEST_REL" ] || { echo "FATAL: cannot read the attestation root from squad/paths.py" >&2; exit 2; }
+ATTEST_DIR="${PROJECT_DIR}/${ATTEST_REL}"
+# The write root hangs off the PROJECT, never off the ecosystem directory: joining it
+# to $ECOSYSTEM_DIR would produce `.claude/.squad/records/` and hide every plan from the
+# hooks that read them. Shell cannot import the owner, so it asks it.
+PROJECT_DIR="$ECOSYSTEM_DIR"
+case "$ECOSYSTEM_DIR" in */.claude) PROJECT_DIR="$(dirname "$ECOSYSTEM_DIR")" ;; esac
+KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DATA_REL="$(python3 -c "import sys; sys.path.insert(0, '$KIT_ROOT'); from squad.paths import DATA_DIRNAME, RECORDS; print(f'{DATA_DIRNAME}/{RECORDS}')" 2>/dev/null)"
+[ -n "$DATA_REL" ] || { echo "FATAL: cannot read the write root from squad/paths.py" >&2; exit 2; }
+PLANS_DIR="${PROJECT_DIR}/${DATA_REL}/plans"
 
 mkdir -p "$ATTEST_DIR"
 

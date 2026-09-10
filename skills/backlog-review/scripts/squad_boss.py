@@ -57,7 +57,18 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
 
 #: Phase output directory -> the phase that writes there. A BLOCKED report is named
 #: `{slug}-BLOCKED.md` and lives beside the phase's other artefacts.
@@ -90,7 +101,7 @@ _SLUG_ITEM_RE = re.compile(r"\bb-?(\d{3,})\b", re.IGNORECASE)
 
 
 def _records_dir(project_root: Path) -> Path | None:
-    for relative in (".claude/records", "records"):
+    for relative in (f"{DATA_DIRNAME}/records", *LEGACY_RECORDS_ROOTS):
         candidate = project_root / relative
         if candidate.is_dir():
             return candidate

@@ -30,7 +30,7 @@ from check_auditor_coverage import (
     severity_counts,
 )
 
-REGISTRY = ("auditor = always | loop-code-review | analysis-scoped | code-review-output\n")
+REGISTRY = "auditor = always | loop-code-review | analysis-scoped\n"
 
 #: A report the fake checker accepts, carrying the two sections that must travel.
 GOOD_REPORT = """# Fake Report — .
@@ -95,17 +95,17 @@ def _project(tmp_path: Path, *, registry: str = REGISTRY, assignment: bool = Tru
     (root / "rules").mkdir(parents=True, exist_ok=True)
     (root / "rules" / "review-auditors.txt").write_text(registry, encoding="utf-8")
     if assignment:
-        d = root / "records" / "audits"
+        d = root / ".squad" / "records" / "audits"
         d.mkdir(parents=True, exist_ok=True)
         (d / "B-014-auditors.json").write_text(json.dumps({
             "status": "selected", "slug": "B-014",
             "scope": {"kind": "change", "diff_base": "develop"},
             "required": [{"plugin": "loop-code-review", "domain": "always",
                           "diff_mode": "analysis-scoped",
-                          "output_dir": "code-review-output",
+                          "output_dir": str(root / ".squad" / "records" / "audits" / "loop-code-review"),
                           "report_glob": "final_report.md"}]}), encoding="utf-8")
     if report is not None:
-        out = root / "code-review-output"
+        out = root / ".squad" / "records" / "audits" / "loop-code-review"
         out.mkdir(parents=True, exist_ok=True)
         (out / "final_report.md").write_text(report, encoding="utf-8")
     return root

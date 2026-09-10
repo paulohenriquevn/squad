@@ -39,7 +39,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "conventions"))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 from ecosystem_utils import find_ecosystem_dir
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 
 def _find_ecosystem_dir() -> Path:
@@ -266,6 +277,44 @@ def check_verdict_bands(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     if rows:
         return False, [f"  {v} is declared and names no band" for v in rows]
     return True, []
+
+
+def check_data_root(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Is anything still outside `<project>/.squad/`?
+
+    The empirical half of the write-root guarantee: containment proves no MODULE can
+    spell another root, and this proves no DATA is sitting in one. The kit's own
+    repository is checked like any other, because a rule the kit does not follow is a
+    rule its consumers read as optional.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_data_root import check_project
+
+    project = ecosystem_dir.parent if ecosystem_dir.name == ".claude" else ecosystem_dir
+    stale = [r for r in check_project(project) if r.state in ("UNMIGRATED", "SPLIT")]
+    if not stale:
+        return True, []
+    return False, [f"{r.state} {r.relative} ({r.files} file(s)) — {r.detail}"
+                   for r in stale]
+
+
+def check_write_containment(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Can any module outside the owner spell a data root?
+
+    The structural half of the guarantee that everything this system writes lands
+    under `<project>/.squad/`. If no other module can name a root, every path a writer
+    builds came from `squad/paths.py`, and that module produces one root.
+
+    Running it HERE matters: the scan is what makes the guarantee re-runnable, and a
+    guarantee nobody re-runs decays into a sentence in a rule.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_write_containment import scan
+
+    findings = scan(ecosystem_dir)
+    if not findings:
+        return True, []
+    return False, [f"{f['file']}:{f['line']}  {f['literal']}" for f in findings[:10]]
 
 
 def check_panel_capability(ecosystem_dir: Path) -> tuple[bool, list[str]]:
@@ -628,7 +677,7 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         # smoke exercises is detect_domain → spawn_reviewers → consolidate, so the
         # upstream context is declared here — the same way a real `/review` finds
         # it after a green `/code-quality`.
-        audits = findings_dir.parent.parent / "records" / "audits"
+        audits = write_records_dir(findings_dir.parent.parent, "audits")
         audits.mkdir(parents=True, exist_ok=True)
         (audits / "smoke-code-quality-2026-01-01.md").write_text(
             "**Verdict:** PASS\n**Hard caps triggered:** _none_\n"
@@ -707,6 +756,8 @@ def main(argv: list[str] | None = None) -> int:
         ("Mechanisms inventory", check_mechanisms_inventory),
         ("Merge autonomy (envelope floor 2)", check_merge_autonomy),
         ("Review panel can be formed", check_panel_capability),
+        ("Write containment (.squad)", check_write_containment),
+        ("Data root (.squad)", check_data_root),
         ("Verdict bands", check_verdict_bands),
         ("Orphan verdicts", check_orphan_verdicts),
         ("Phase emitters", check_phase_emitters),

@@ -38,8 +38,19 @@ import argparse
 import re
 import subprocess
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 
 def _header_re(milestone_id: str) -> re.Pattern[str]:
@@ -143,12 +154,11 @@ def _default_runs_dir(project_root: Path) -> Path:
     landed beside the other half and nobody noticed — an auditor reading one side
     reports absence where the evidence is on the other.
 
-    See rules/records-location.md: `.claude/records/` is canonical,
-    except in the standalone layout (the kit's own repo).
+    See rules/records-location.md: `<project>/.squad/` is the one write root, in every
+    layout. The branch that used to sit here — plugin install versus standalone kit —
+    is gone, and with it the `None` it returned when neither matched.
     """
-    if (project_root / ".claude").exists():
-        return project_root / ".claude" / "records" / "roadmap-runs"
-    return project_root / "records" / "roadmap-runs"
+    return write_records_dir(project_root, "roadmap-runs")
 
 
 def main() -> int:

@@ -34,9 +34,20 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from collections import defaultdict
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
 from typing import Any
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+
 
 # The family this file lives in, plus `lib/` — the import namespace stayed flat
 # when `scripts/` became `mechanisms/<family>/`, so a sibling family is reached
@@ -44,6 +55,13 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "conventions"))
 
+from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl  # noqa: E402
+
+from squad.paths import (  # noqa: E402
+    DATA_DIRNAME,
+    wiki_dir,
+)
+from squad.paths import WIKI as WIKI_FALLBACK  # noqa: E402
 
 # Skills documented as "auxiliary" (not bound to any cycle)
 # - ast-grep: structural search utility
@@ -221,7 +239,6 @@ SKILLS_REF_RE = re.compile(
 )
 
 
-from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl  # noqa: E402
 
 
 def _find_ecosystem_dir(start: Path) -> Path | None:
@@ -264,13 +281,20 @@ _NOT_A_REPO_PATH = ("http://", "https://", "#", "mailto:", "file://", "~")
 #: distinction was found: the gate's first run against one produced exactly that.
 _NOT_INSTALLED_INTO_CONSUMERS = (
     "README.md", "CONTRIBUTING.md", "SECURITY.md", "LICENSE", "CHANGELOG.md",
-    "HOW-TO-USE.md", "wiki/", "study-material/", "images/", "tests/",
+    "HOW-TO-USE.md", f"{DATA_DIRNAME}/", f"{WIKI_FALLBACK}/",
+    "study-material/", "images/", "tests/",
 )
 
 
 def _is_kit_repo_only(target: str) -> bool:
     """Is this link's target a document the kit keeps and does not ship?"""
-    bare = target.lstrip("./").replace("../", "")
+    # NOT `lstrip("./")`: that strips CHARACTERS, so `.squad/wiki/x.md` came back as
+    # `squad/wiki/x.md` and matched neither the write root nor the package. The same
+    # trap turned `.claude-plugin/plugin.json` into `claude-plugin/plugin.json`
+    # elsewhere in this kit.
+    bare = target.replace("../", "")
+    while bare.startswith("./"):
+        bare = bare[2:]
     return bare.startswith(_NOT_INSTALLED_INTO_CONSUMERS) or bare in _NOT_INSTALLED_INTO_CONSUMERS
 
 
@@ -294,7 +318,7 @@ def broken_markdown_links(ecosystem_dir: Path) -> list[tuple[str, str]]:
     paths reports ten false positives at once.
     """
     broken: list[tuple[str, str]] = []
-    wiki_root = ecosystem_dir / "wiki"
+    wiki_root = wiki_dir(ecosystem_dir) or (ecosystem_dir / WIKI_FALLBACK)
     for md in sorted(ecosystem_dir.rglob("*.md")):
         rel = str(md.relative_to(ecosystem_dir))
         if any(part in rel for part in (".git/", "study-material/", "__pycache__/")):

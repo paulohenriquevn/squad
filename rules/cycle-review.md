@@ -132,7 +132,7 @@ re-run by hand, or quietly ignored. The mechanism is now part of the line.
 ## Output
 
 - `records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix.
-- `agents/review-{slug}-{YYYY-MM-DD}/` — per-agent audit trail.
+- `.squad/records/reviews/review-{slug}-{YYYY-MM-DD}/` — per-agent audit trail. Generated per-item files are output; `agents/` holds the kit's DECLARED specialists, and mixing the two put a run's trail where a reader looks for a roster.
 
 ## Anti-patterns
 

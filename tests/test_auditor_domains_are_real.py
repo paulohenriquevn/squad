@@ -58,12 +58,21 @@ def test_no_plugin_is_declared_with_two_different_diff_modes() -> None:
     assert not conflicting, f"one plugin, two declared diff modes: {conflicting}"
 
 
-def test_no_plugin_is_declared_with_two_different_output_dirs() -> None:
-    """The gate looks in the directory the assignment names. Two rows disagreeing would
-    send one domain's audit somewhere the gate does not look."""
-    dirs: dict[str, set[str]] = {}
-    for a in _registry():
-        dirs.setdefault(a.plugin, set()).add(a.output_dir)
+def test_every_auditor_writes_inside_the_write_root() -> None:
+    """The report location is derived, so two rows cannot disagree about it.
 
-    conflicting = {p: sorted(d) for p, d in dirs.items() if len(d) > 1}
-    assert not conflicting, f"one plugin, two output directories: {conflicting}"
+    This test replaced one that checked exactly that disagreement. The column is gone:
+    each plugin's own default (`security-output/`, `code-review-output/`) put a third
+    party's output at the project root — outside the one write root, on this kit's
+    instruction. A tool the kit tells where to write is a tool the kit is responsible
+    for.
+    """
+    from pathlib import Path
+
+    from squad.paths import contains
+
+    project = Path("/tmp/some-project")
+    for auditor in _registry():
+        target = auditor.output_dir(project)
+        assert contains(project, target), f"{auditor.plugin} writes to {target}"
+        assert auditor.plugin in target.parts, target

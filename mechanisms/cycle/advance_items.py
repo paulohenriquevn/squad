@@ -43,10 +43,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 import backlog_status as bs
 
-#: Where a consumer's stream lives, in the two layouts that exist.
-_STREAM_RELATIVE = (".claude/records/cycle-events.jsonl", "records/cycle-events.jsonl")
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+
+#: Where a consumer's stream lives: the one write root, then the legacy roots a
+#: project may not have migrated. Readers fall back; writers never do.
+_STREAM_RELATIVE = tuple(
+    f"{base}/cycle-events.jsonl"
+    for base in (f"{DATA_DIRNAME}/records", *LEGACY_RECORDS_ROOTS)
+)
 
 
 @dataclass

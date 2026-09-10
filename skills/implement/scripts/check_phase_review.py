@@ -35,12 +35,23 @@ import json
 import re
 import subprocess
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
 from typing import Any
 
 from _layout import default_mini_reviews_dir
 from check_phase_completeness import PHASE_HEADER_RE, _plan_task_ids_in_phase
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -250,7 +261,7 @@ def main() -> int:
         root = root.parent
     review_dirs = args.review_dir or [
         default_mini_reviews_dir(root),
-        root / "records" / "mini-reviews",
+        write_records_dir(root, "mini-reviews"),
     ]
     report = check_phase_review(args.plan, progress, args.slug, review_dirs)
 

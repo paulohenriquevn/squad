@@ -47,8 +47,19 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_wiki_dir  # noqa: E402
 
 FLOOR_PCT = 90.0
 
@@ -145,7 +156,7 @@ def _has_number(value: str) -> bool:
 
 def score(root: Path) -> Report:
     rep = Report()
-    product = root / "wiki" / "product"
+    product = write_wiki_dir(root, "product")
     texts: dict[str, str] = {}
     for name in DOCS:
         path = product / name

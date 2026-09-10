@@ -113,3 +113,25 @@ def test_the_same_link_IS_reported_where_the_document_should_exist(tmp_path: Pat
     (tmp_path / "wiki" / "a.md").write_text("[gone](/missing.md)\n", encoding="utf-8")
 
     assert broken_markdown_links(tmp_path) == [("wiki/a.md", "/missing.md")]
+
+
+def test_a_dot_prefixed_directory_is_matched_as_a_prefix_not_as_characters() -> None:
+    """Regression: `lstrip("./")` strips CHARACTERS, not a prefix.
+
+    `.squad/wiki/x.md` came back as `squad/wiki/x.md`, which matched neither the write
+    root nor the shared package — so every link from a rule into the kit's own bundle
+    was reported broken on each consumer, for something no consumer can fix. The same
+    trap turned `.claude-plugin/plugin.json` into `claude-plugin/plugin.json` elsewhere
+    in this kit, which is why it is worth a test rather than a comment.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "gates"))
+    from check_xrefs import _is_kit_repo_only
+
+    assert _is_kit_repo_only(".squad/wiki/decisions/a.md")
+    assert _is_kit_repo_only("../.squad/wiki/references/b.md")
+    assert _is_kit_repo_only("./.squad/wiki/sops/c.md")
+    # The shared package is NOT the write root, and must not be swept up with it.
+    assert not _is_kit_repo_only("squad/paths.py")

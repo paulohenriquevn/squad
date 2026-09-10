@@ -90,7 +90,7 @@ _UNMECHANIZED_RE = re.compile(
 #:               work. Permanent by decision, and measured: four were pressure-tested
 #:               across model tiers on 2026-08-28 — redundant on Opus, and one caught
 #:               a fabricated justification on Haiku. See
-#:               `wiki/references/judgement-gates-are-insurance.md`.
+#:               `.squad/wiki/references/judgement-gates-are-insurance.md`.
 #:   debt        it is missing, and the line says what is missing.
 #:   regression  a mechanism EXISTED and was withdrawn. Lost coverage, not debt never
 #:               paid — and reading it as debt hides that the kit used to be stricter.

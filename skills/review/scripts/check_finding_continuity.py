@@ -32,8 +32,19 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
 
 #: `### F-arch-1: the shard client leaks its cursor`
 _FINDING_RE = re.compile(r"^###\s+([A-Za-z][\w-]*-\d+)\s*:?(.*)$", re.MULTILINE)
@@ -44,8 +55,9 @@ _CLOSED_RE = re.compile(r"status:\s*CLOSED", re.IGNORECASE)
 _ORDER = ["BLOCKER", "HIGH", "MEDIUM", "LOW", "INFO"]
 
 #: Both layouts, plus the knowledge-base convention one consumer declares.
-_ROOTS = ((".claude", "records"), ("records",),
-          (".claude", "knowledge-base"), ("knowledge-base",))
+_ROOTS = tuple(
+    tuple(r.split("/")) for r in (f"{DATA_DIRNAME}/records", *LEGACY_RECORDS_ROOTS)
+)
 
 
 @dataclass(frozen=True)

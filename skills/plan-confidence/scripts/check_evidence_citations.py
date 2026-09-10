@@ -19,8 +19,19 @@ Per ADR D1 of `harden-fabrication-and-cq-gate-plan.md`, code-file refs
 from __future__ import annotations
 
 import re
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 UNBREAKABLE_RULE_MAX = 13
 
@@ -205,14 +216,14 @@ def _resolve_rule_file(filename: str, project_root: Path) -> Path | None:
     candidates = [
         project_root / "rules" / filename,
         project_root / ".claude" / "rules" / filename,
-        project_root / "records" / filename,
+        write_records_dir(project_root) / filename,
         project_root / filename,  # e.g. CHANGELOG.md, CLAUDE.md
     ]
     for c in candidates:
         if c.exists() and c.is_file():
             return c
     # Last-resort: shallow search inside records/ (handles ADRs etc.).
-    kb = project_root / "records"
+    kb = write_records_dir(project_root)
     if kb.exists():
         try:
             for p in kb.rglob(filename):
@@ -262,7 +273,7 @@ def _scan_blueprint_refs(
     # every `Opportunity §X` citation in a real plan resolved against an empty set and
     # was reported fabricated. Both are searched: the current path first, the legacy
     # one after, so plans predating the rename keep resolving.
-    discoveries = project_root / "records" / "discoveries"
+    discoveries = write_records_dir(project_root, "discoveries")
     available = []
     for sub in ("opportunities", "blueprints"):
         d = discoveries / sub

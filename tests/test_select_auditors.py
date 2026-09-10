@@ -25,11 +25,11 @@ from select_auditors import (
 )
 
 REGISTRY = """
-auditor = always      | loop-code-review       | analysis-scoped | code-review-output
-auditor = security    | loop-security-audit    | analysis-scoped | security-output
-auditor = database    | loop-performance-audit | analysis-scoped | performance-audit-output
-auditor = concurrency | loop-performance-audit | analysis-scoped | performance-audit-output
-auditor = api-design  | loop-surface-closure   | report-filtered | surface-closure-output
+auditor = always      | loop-code-review       | analysis-scoped 
+auditor = security    | loop-security-audit    | analysis-scoped 
+auditor = database    | loop-performance-audit | analysis-scoped 
+auditor = concurrency | loop-performance-audit | analysis-scoped 
+auditor = api-design  | loop-surface-closure   | report-filtered 
 """
 
 ALL_PLUGINS = ("loop-code-review", "loop-security-audit", "loop-performance-audit",
@@ -132,7 +132,7 @@ def test_a_required_plugin_that_is_not_installed_is_a_coverage_gap(tmp_path: Pat
 def test_an_unknown_diff_mode_is_refused(tmp_path: Path) -> None:
     """Recording the wrong mode would let a diff-only analysis read as whole-tree."""
     code, result = _select(tmp_path, [],
-                           registry="auditor = always | p | sometimes | out\n")
+                           registry="auditor = always | p | sometimes\n")
 
     assert code == INVALID
     assert "diff mode" in result["detail"]
@@ -141,7 +141,7 @@ def test_an_unknown_diff_mode_is_refused(tmp_path: Path) -> None:
 def test_a_half_written_row_is_refused_not_skipped(tmp_path: Path) -> None:
     """A malformed row must never parse to 'no auditor' and read as a domain nobody
     needed to audit."""
-    code, _ = _select(tmp_path, [], registry="auditor = always | loop-code-review\n")
+    code, _ = _select(tmp_path, [], registry="auditor = always\n")
 
     assert code == INVALID
 

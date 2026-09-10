@@ -39,6 +39,11 @@ _SKILL_ROOT = Path(__file__).resolve().parent.parent
 if str(_SKILL_ROOT) not in sys.path:
     sys.path.insert(0, str(_SKILL_ROOT))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap  # noqa: E402
+from pathlib import Path as _Path_bootstrap  # noqa: E402
+
 from scripts._detector_contract import (  # noqa: E402
     Finding,
     compute_verdict,
@@ -52,6 +57,12 @@ from scripts.detectors.go import GoDetector  # noqa: E402
 from scripts.detectors.python import PythonDetector  # noqa: E402
 from scripts.detectors.rust import RustDetector  # noqa: E402
 from scripts.detectors.typescript import TypescriptDetector  # noqa: E402
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 _DETECTOR_CLASSES = {
     "python": PythonDetector,
@@ -75,14 +86,14 @@ def _find_repo_root(start: Path) -> Path:
 def _resolve_plan_path(slug: str, repo_root: Path) -> Path:
     """EC-6 — strict slug resolution. Refuse discovery plans."""
     candidates = [
-        repo_root / ".claude" / "records" / "plans" / f"{slug}-plan.md",
-        repo_root / ".claude" / "records" / "plans" / "completed" / f"{slug}-plan.md",
+        write_records_dir(repo_root, "plans") / f"{slug}-plan.md",
+        write_records_dir(repo_root, "plans") / "completed" / f"{slug}-plan.md",
     ]
     for p in candidates:
         if p.is_file():
             return p
     discovery_alt = (
-        repo_root / ".claude" / "records" / "discoveries" / "plans" / f"{slug}-plan.md"
+        write_records_dir(repo_root, "discoveries") / "plans" / f"{slug}-plan.md"
     )
     if discovery_alt.is_file():
         raise FileNotFoundError(
@@ -542,10 +553,7 @@ def _emit_and_exit(
         audit_path = (
             Path(args.audit_out)
             if args.audit_out
-            else repo_root
-            / ".claude"
-            / "records"
-            / "audits"
+            else write_records_dir(repo_root, "audits")
             / f"{args.slug}-code-quality-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.md"
         )
         _write_markdown_report(findings, summary, audit_path, args.slug)

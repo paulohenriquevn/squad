@@ -53,6 +53,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "conventions"))
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from installed_plugins import resolve as resolve_plugin
 from review_panel import (
     HOME_FAMILY,
@@ -61,6 +63,8 @@ from review_panel import (
     parse_panel_phases,
     seats_for,
 )
+
+from squad.paths import write_records_dir
 
 OK, INVALID, UNREADABLE, UNFILLABLE = 0, 1, 2, 3
 
@@ -197,18 +201,15 @@ def convene(
     }
 
 
-#: The kit keeps its records under `.claude/` in a plugin install and at the root in a
-#: standalone one. `cycle_events.py` resolves the same pair in the same order, and the
-#: writer and the reader MUST agree: a gate reading the other location would report "no
-#: record" forever and hold every item in a plugin install permanently.
-_RECORD_BASES = (".claude/records", "records")
-
-
 def panels_dir(project: Path) -> Path:
-    for base in _RECORD_BASES:
-        if (project / base).is_dir():
-            return project / base / "panels"
-    return project / "records" / "panels"
+    """Where a panel's assignment and record live: `<project>/.squad/records/panels`.
+
+    This held its own copy of the root list until the roots were centralised. The
+    writer and the reader MUST agree — a gate reading the other location would report
+    "no record" forever and hold every item permanently — and two copies is exactly how
+    they come to disagree.
+    """
+    return write_records_dir(project, "panels")
 
 
 def assignment_path(project: Path, slug: str, phase: str) -> Path:

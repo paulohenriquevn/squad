@@ -5,8 +5,15 @@ these tests focus on the ways a run could dishonestly earn an ACCEPTED.
 """
 from __future__ import annotations
 
-import pytest
-from compute_acceptance_verdict import (
+import sys as _s
+from pathlib import Path as _P
+
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+import pytest  # noqa: E402
+from compute_acceptance_verdict import (  # noqa: E402
     ACCEPTED,
     ACCEPTED_WITH_CAVEATS,
     FLIP_ALLOWED,
@@ -15,6 +22,8 @@ from compute_acceptance_verdict import (
     MalformedEvidence,
     compute,
 )
+
+from squad.paths import write_records_dir  # noqa: E402
 
 
 class TestGreenPaths:
@@ -171,7 +180,7 @@ def test_main_emits_a_phase_event_and_does_not_crash(tmp_path, monkeypatch):
     )
 
     assert "Traceback" not in result.stderr, result.stderr
-    events = (tmp_path / ".claude" / "records" / "cycle-events.jsonl")
+    events = write_records_dir(tmp_path) / "cycle-events.jsonl"
     assert events.is_file(), "the phase left no event"
     event = json.loads(events.read_text(encoding="utf-8").splitlines()[-1])
     assert event["cycle"] == "acceptance"
