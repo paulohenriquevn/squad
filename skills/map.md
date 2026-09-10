@@ -10,8 +10,8 @@ status: stable
 
 # The skill map
 
-**32 skills.** Most are a phase of a cycle and are invoked in an order the
-cycle rule fixes; seven are invoked on demand and belong to no chain.
+**33 skills.** Most are a phase of a cycle and are invoked in an order the
+cycle rule fixes; eight are invoked on demand and belong to no chain.
 
 **Every row below carries three things**: what the skill does, when to reach for
 it, and — the column that is usually missing from an index — when reaching for it
@@ -177,6 +177,7 @@ A phase of no cycle. Invoked when the question arises.
 | `code-quality` | *(also the whole of cycle-code-quality — see above)* | Outside the chain, to audit a tree | — |
 | `honesty-gate` | Blocks a "production-ready" / v1.0 claim without recorded evidence of sustained internal use | Someone is about to make that claim | Read `EVIDENCE_WITH_CAVEATS` as `SUFFICIENT` — the caveats are explicit. Never log evidence for one scenario and claim it satisfies another anchor |
 | `quality-init` | Emits quality-gate hooks calibrated to the project's real p90 metrics | Setting a project up, once | Generate hooks that auto-fix — hooks are gates, not fixers. Never set thresholds below the floors: the hook would block every write |
+| `sign` | Records a person's signature on a document waiting for one — the tick, the `signed-by` marker, and the date | A scorer returned `AWAITING_REVIEW`, or `/brainstorm-pieces` computed 90% and stopped because only a person may sign | Sign without reading. The preview exists for one reason, and there is deliberately no `--yes`. Never read a signature as a pass: a signed document below the score floor is still refused, and correctly |
 | `squad-fit` | Reports which domains have no specialist, which of the project's own skills are undocumented, and whether a review panel can be formed at all | Adopting the kit into a project, after a restructure moved repositories, or before writing the agents and skills a project is missing | Write a specialist to silence `domain_without_agent` — a correctly-named stub routes the item into an empty prompt and trades a visible failure for a silent one. Never read its verdict without reading `PARTIAL`: the verdict covers only the sections that ran |
 | `skill-creator` | Authors, improves and evaluates skills; `run_eval.py` measures whether a description actually makes the model reach for the skill | Creating or improving a skill, and before trusting a description | **Re-sync it blindly.** It is vendored, but `run_eval.py` now carries a local fix — its trigger detector decided the whole turn from its first observation and could only produce false negatives. A copy from upstream reverts that silently, and the symptom is a trigger rate that reads low and looks like a fact about the skill |
 | `backlog-init`, `backlog-review` | *(see BACKLOG above)* | — | — |

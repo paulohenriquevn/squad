@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`/sign` — the one act a machine may not perform now has a mechanism** (#69)
+  Four points in the chain stop until a person signs, and a person had no tool for it.
+  `alignment_judge.py` can sign a brief as a judge; `score_product_alignment.py` states
+  its own limit — *"it cannot supply the signature, and there is no flag that makes
+  it."* Both refusals are right, and the consequence was that the only act reserved for
+  a person was the only one with no mechanism: edit the markdown, find the section,
+  change `[ ]` to `[x]` in the right place, add an HTML comment whose syntax lives in a
+  regex inside someone else's script. The default run previews and writes nothing —
+  there is deliberately no `--yes`, because a tool that makes signing frictionless turns
+  a signature into a stamp. Refuses to re-sign, and refuses an author signing their own
+  work unless they pass `--despite-authorship "<reason>"`, which does not silence the
+  check: it writes the fact and the reason into the document, stating that the signature
+  is weaker than one from a reviewer who did not write it. Measured on this kit: one
+  author across its whole history, so without that escape the tool would be useless
+  exactly where it is needed.
 - **The mirror of `check_orphan_verdicts.py`: every verdict a skill INSTRUCTS is one its
   cycle declares** (#70) That sweep asks whether every declared verdict is reachable.
   Nothing asked the other direction, and it fails louder — `cycle_events.py` REFUSES an
