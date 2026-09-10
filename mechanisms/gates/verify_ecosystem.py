@@ -317,6 +317,27 @@ def check_write_containment(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return False, [f"{f['file']}:{f['line']}  {f['literal']}" for f in findings[:10]]
 
 
+def check_prose_write_paths(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Does executable prose instruct a write outside `<project>/.squad/`?
+
+    The third half of the same guarantee, and the one neither sibling can see. The
+    structural scan reads code and strips prose; the runtime scan watches what the
+    mechanisms produce. Neither watches a `SKILL.md`, and an agent following
+    `Persist to records/brainstorms/{date}-session.md` creates a legacy root without
+    importing the owner or running a mechanism.
+
+    Measured 2026-09-10, when a live session did exactly that: 164 legacy-root
+    instructions across 49 files.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_prose_write_paths import scan
+
+    findings = scan(ecosystem_dir)
+    if not findings:
+        return True, []
+    return False, [f"{f['file']}:{f['line']}  {f['path']}" for f in findings[:10]]
+
+
 def check_produced_files(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Does anything the mechanisms PRODUCE land outside `<project>/.squad/`?
 
@@ -782,6 +803,7 @@ def main(argv: list[str] | None = None) -> int:
         ("Merge autonomy (envelope floor 2)", check_merge_autonomy),
         ("Review panel can be formed", check_panel_capability),
         ("Write containment (.squad)", check_write_containment),
+        ("Write paths in prose", check_prose_write_paths),
         ("Produced-file containment (runtime)", check_produced_files),
         ("Data root (.squad)", check_data_root),
         ("Verdict bands", check_verdict_bands),

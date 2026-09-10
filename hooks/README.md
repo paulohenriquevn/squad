@@ -33,7 +33,7 @@ environment variable for another to read.
 | `stop-validation.py` | Stop | CHANGELOG gate (HARD), secret leak gate (HARD), TDD gate (warn), public-copy claims (warn). Blocks once — the second attempt reports and lets the session end | 0=clean, 2=block |
 | `precompact-preserve.py` | PreCompact | Snapshots plan + progress before context compaction | 0 always |
 
-The prior-art study zone under `records/references/` was retired on 2026-09-01
+The prior-art study zone under `records/references/` was retired on 2026-09-01  <!-- write-path: names the retired zone to record that it was retired -->
 and is no longer guarded by any hook — a consumer still holding material there
 must move it (`rules/reference-provenance.md`).
 

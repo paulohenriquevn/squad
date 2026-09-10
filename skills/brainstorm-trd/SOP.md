@@ -35,7 +35,7 @@ an agreed document.
 
 ## Prerequisites
 
-- `wiki/product/objectives.md` exists and its objectives carry metrics.
+- `.squad/wiki/product/objectives.md` exists and its objectives carry metrics.
 - The same person from phases 1 and 2 is present.
 
 ## Steps
@@ -44,7 +44,7 @@ an agreed document.
 2. **Work** objective by objective, finishing one before starting the next — that is what makes an objective with no requirements visible.
 3. **Apply** the two-teams test to every requirement: could two competent teams satisfy this with different technology? If not, it is a design.
 4. **Ask** three questions per requirement, one per turn: what must be true; which objective it serves; how someone checks it.
-5. **Write** `wiki/product/trd.md` using `## REQ-N — title` blocks with `serves:`, `statement:` and `acceptance:`.
+5. **Write** `.squad/wiki/product/trd.md` using `## REQ-N — title` blocks with `serves:`, `statement:` and `acceptance:`.
 6. **Verify** every citation resolves before moving on — a dangling one caps the cascade at INVALID.
 
 ## Decisions

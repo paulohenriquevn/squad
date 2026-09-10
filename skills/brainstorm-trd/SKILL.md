@@ -10,7 +10,7 @@ argument-hint: "[scope-name]"
 
 # `/brainstorm-trd` — What the system must do
 
-Phase 3 of four. Produces `wiki/product/trd.md`: `REQ-N` statements, each tied to
+Phase 3 of four. Produces `.squad/wiki/product/trd.md`: `REQ-N` statements, each tied to
 the objective that justifies it.
 
 ## Cycle contract
@@ -22,7 +22,7 @@ the source of truth for the chain, the gates and the verdicts.
 
 ## Pre-conditions
 
-- `wiki/product/objectives.md` exists and its objectives carry metrics. A
+- `.squad/wiki/product/objectives.md` exists and its objectives carry metrics. A
   requirement citing an objective with no number inherits the un-measurability.
 - The same person from phases 1 and 2 is present.
 

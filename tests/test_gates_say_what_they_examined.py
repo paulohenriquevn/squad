@@ -54,6 +54,10 @@ ROOT_FLAG = {
     # Joined 2026-09-09 with the write root. It scans the kit's own trees for a data
     # root spelled outside `squad/paths.py`, so it takes a root like its siblings.
     "check_write_containment": "--root",
+    # Joined 2026-09-10. Its sibling above proves the roots no MODULE spells;
+    # this one covers the prose an agent executes, where a recipe creates a
+    # legacy root without ever importing the owner.
+    "check_prose_write_paths": "--root",
 }
 
 #: Ways a gate can say "there was nothing here". Deliberately generous: the point

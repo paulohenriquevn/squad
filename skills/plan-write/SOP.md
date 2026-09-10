@@ -28,7 +28,7 @@ last_reviewed: 2026-08-31
 
 ## Purpose
 
-Produce `records/plans/{slug}-plan.md`: what will be built, in what order, with what proves each part.
+Produce `.squad/records/plans/{slug}-plan.md`: what will be built, in what order, with what proves each part.
 
 ## Prerequisites
 

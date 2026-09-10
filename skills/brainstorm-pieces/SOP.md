@@ -35,15 +35,15 @@ run without anyone watching.
 
 ## Prerequisites
 
-- `wiki/product/trd.md` exists and every `serves:` citation resolves.
+- `.squad/wiki/product/trd.md` exists and every `serves:` citation resolves.
 - The person from phases 1 to 3 is present. **The phase cannot complete without them.**
 
 ## Steps
 
 1. **Ask** two questions per piece, one per turn: what it owns; which requirements it realises.
 2. **Run** the reverse check out loud — is every `REQ-N` realised by some piece?
-3. **Write** `wiki/product/technical-pieces.md` using `## PIECE-N — title` blocks with `realises:` and `responsibility:`.
-4. **Generate** `wiki/product/alignment.md` with the sign-off checklist **always unticked**. Never tick a box.
+3. **Write** `.squad/wiki/product/technical-pieces.md` using `## PIECE-N — title` blocks with `realises:` and `responsibility:`.
+4. **Generate** `.squad/wiki/product/alignment.md` with the sign-off checklist **always unticked**. Never tick a box.
 5. **Run** the gate — `python3 skills/brainstorm-pieces/scripts/score_product_alignment.py --root .`.
 6. **Ask** the person to review and sign, replacing `<!-- signed-by: -->` with their name.
 7. **Emit** the verdict event, including `AWAITING_REVIEW` — a phase that stopped at a human gate ended, it did not skip.

@@ -1,6 +1,6 @@
 ---
 type: holdout-entry
-plan_path: records/plans/EXAMPLE-plan.md
+plan_path: .squad/records/plans/EXAMPLE-plan.md
 plan_slug: EXAMPLE
 graded_by: reviewer-name
 graded_at: 2026-MM-DD

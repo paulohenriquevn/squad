@@ -127,7 +127,7 @@ conclusion — is exactly the one no script can ask.
 2. **Invoke every assigned agent as a sub-agent**, one per seat, each judging the
    document against its own speciality. Here: `nemesis-claim-auditor` on whether the claim is supported, `leonardo-researcher` on what the decision needed to know, and `judge-codex:discover-judge` from outside the family.
 
-3. **Write the votes** to `records/panels/<slug>-discover.json`:
+3. **Write the votes** to `.squad/records/panels/<slug>-discover.json`:
 
    ```bash
    ARTIFACT=<path to the document the panel judged>

@@ -35,7 +35,7 @@ computable facts rather than impressions.
 
 ## Prerequisites
 
-- `wiki/product/product-vision.md` exists.
+- `.squad/wiki/product/product-vision.md` exists.
 - The same person from phase 1 is present.
 
 ## Steps
@@ -45,7 +45,7 @@ computable facts rather than impressions.
 3. **Refuse** any metric with no digit in it — gate G-B2, a floor cap rather than a scored criterion.
 4. **Capture** `why` for each, drawn from something observed rather than from a peer product.
 5. **Aim** for three to five objectives.
-6. **Write** `wiki/product/objectives.md` using `## OBJ-N — title` blocks with `metric:`, `horizon:` and `why:`.
+6. **Write** `.squad/wiki/product/objectives.md` using `## OBJ-N — title` blocks with `metric:`, `horizon:` and `why:`.
 7. **Score** early — run `score_product_alignment.py` and read the objectives criteria even though the cascade is still INVALID.
 
 ## Decisions

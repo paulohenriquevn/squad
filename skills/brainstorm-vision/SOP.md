@@ -46,7 +46,7 @@ after `/backlog-init` runs unattended, and that is only defensible if this happe
 3. **Ask** the four questions, one per turn, persisting after each answer.
 4. **Refuse** a user who is a category ("developers", "users") and ask again for someone whose situation can be pictured.
 5. **Insist** on at least two non-goals. This is the section that settles later arguments.
-6. **Write** `wiki/product/product-vision.md` with the four named sections, plus the session record under `records/brainstorms/`.
+6. **Write** `.squad/wiki/product/product-vision.md` with the four named sections, plus the session record under `.squad/records/brainstorms/`.
 7. **Record** what was discarded and why — the session record is the only thing that can answer "did we consider X?" later.
 
 ## Decisions

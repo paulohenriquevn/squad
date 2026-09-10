@@ -2,7 +2,7 @@
 
 > Written {{DATE}} in a `/brainstorm-vision` session. Living document: revise it and
 > re-score rather than starting a new one. The session that produced it, including
-> what was discarded, is at `records/brainstorms/{{DATE}}-session.md`.
+> what was discarded, is at `.squad/records/brainstorms/{{DATE}}-session.md`.
 
 ## Who it is for
 

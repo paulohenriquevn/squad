@@ -122,7 +122,7 @@ conclusion — is exactly the one no script can ask.
 2. **Invoke every assigned agent as a sub-agent**, one per seat, each judging the
    document against its own speciality. Here: `vera-technical-arbiter` on the technical shape, `nemesis-claim-auditor` on the plan's claims, and `judge-codex:plan-judge` from outside the family.
 
-3. **Write the votes** to `records/panels/<slug>-plan.json`:
+3. **Write the votes** to `.squad/records/panels/<slug>-plan.json`:
 
    ```bash
    ARTIFACT=<path to the document the panel judged>

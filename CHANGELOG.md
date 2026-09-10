@@ -7,6 +7,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **The prose an agent executes now names the write root, and a gate keeps it there** (#69)
+  `check_write_containment.py` proves that no module outside `squad/paths.py` spells a
+  data root, and it strips prose before matching — correctly, since the kit argues in
+  prose about the very directories it forbids in code. A `SKILL.md` is not that kind of
+  prose: it INSTRUCTS, and an agent following `Persist to records/brainstorms/…` creates
+  a legacy root without importing the owner or running a mechanism. **Measured when a
+  live `/brainstorm-vision` session hit it: 164 legacy-root instructions across 49
+  files**, 19 of them `SKILL.md`, while `rules/records-location.md` had said the opposite
+  since 2026-09-09 — *"`<project>/.squad/` is the one write root. Always, in every
+  layout."* Two contracts disagreed and the one an agent reads at execution time won: the
+  session wrote its record to `records/` and its vision to `wiki/`, outside the root every
+  reader resolves first. All 164 corrected, and `check_prose_write_paths.py` scans
+  `skills/`, `commands/`, `agents/` and `hooks/` so the next edit cannot reintroduce one.
+  It deliberately skips `rules/` and `docs/`, which argue rather than instruct — scanning
+  them would flag `records-location.md` for stating the rule this enforces. Prose that
+  genuinely names a legacy root marks itself `<!-- write-path: reason -->`, and an empty
+  reason does not count, for the same reason it does not in `rules/english-only.md`.
+
+### Fixed
+- **`records/references/` was still being cited as a live zone, 9 days after it was
+  retired** (#69) `rules/reference-provenance.md` retired it on 2026-09-01 in favour of
+  `study-material/` and states that it is "no longer guarded". Ten places still pointed
+  at it as the study zone — including `plan-write`'s `ls records/references/`, two
+  golden-rule clauses whose checkers resolve the live path, and `deps-audit`'s exclusion
+  list. Repointed. Two others describe the retirement itself and keep the name behind an
+  exemption marker. `skills/implement/SKILL.md` also claimed `boundary-check.py` guards
+  the retired zone; measured, it guards `study-material/` alone (`boundary-check.py:50`),
+  so the claim was removed rather than repointed.
+
 - **A runtime proof that everything the Squad produces lands in `.squad/`** (#67)
   `check_write_containment.py` proves a static property — no module outside
   `squad/paths.py` may spell a data root. It cannot see a writer whose destination

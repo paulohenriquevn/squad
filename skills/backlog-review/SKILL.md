@@ -151,7 +151,7 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-revie
 ```
 
 Serves `http://127.0.0.1:8765` — every item, the phase it sits in, and what holds it,
-re-rendering by itself whenever `BACKLOG.md` or `records/cycle-events.jsonl` changes on
+re-rendering by itself whenever `BACKLOG.md` or `.squad/records/cycle-events.jsonl` changes on
 disk. Standard library only; nothing to install.
 
 It reads two sources that answer different questions, and says which one it used:
@@ -159,7 +159,7 @@ It reads two sources that answer different questions, and says which one it used
 | Source | Answers | Shown as |
 |---|---|---|
 | `BACKLOG.md` | where each item stands | `derived` — inferred from `status` |
-| `records/cycle-events.jsonl` | which phase actually ran | measured; no qualifier |
+| `.squad/records/cycle-events.jsonl` | which phase actually ran | measured; no qualifier |
 
 **The distinction is on the screen, not in a footnote.** The stream is per-machine and
 starts empty in every clone, so the inferred case is what most viewers see first — and

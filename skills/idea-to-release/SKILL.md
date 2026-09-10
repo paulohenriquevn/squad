@@ -12,7 +12,7 @@ argument-hint: "[M<N> | B-NNN | {topic-slug}] [--plan-only] [--depth=none|light|
 
 End-to-end autonomous orchestration of the 6-cycle pipeline: `cycle-discover` → `cycle-plan` → `cycle-implement` → `cycle-code-quality` → `cycle-review` → `cycle-release`. Replaces the 9+ slash manual sequence with a single invocation that:
 
-1. **Assesses confidence** deterministically against repo state — signals about OUR system: patterns skills, ADRs, ROADMAP/CLAUDE.md, completed plans, tool study-material, user context. Peer projects under `records/references/` are **reported and score zero**: prior art cannot buy past the measurement, because a peer project cannot tell you what is true of your system (`README.md` § Prior art can never be evidence).
+1. **Assesses confidence** deterministically against repo state — signals about OUR system: patterns skills, ADRs, ROADMAP/CLAUDE.md, completed plans, tool study-material, user context. Peer projects under `study-material/` are **reported and score zero**: prior art cannot buy past the measurement, because a peer project cannot tell you what is true of your system (`README.md` § Prior art can never be evidence).
 2. **Derives depth** from the confidence band (no interactive prompts — overridable via CLI flag).
 3. **Chains skills autonomously** through every cycle, gating each transition on the downstream cycle's pre-conditions.
 4. **Auto-injects MUST-FIX items** from `/plan-edge-cases` into the plan before `/plan-confidence` re-scores — eliminating the manual "human absorbs MUST FIX" step.
@@ -162,7 +162,7 @@ that is not the author:
 
 ```
 Bash(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/alignment_judge.py" \
-       records/alignment/{slug}-alignment.md \
+       .squad/records/alignment/{slug}-alignment.md \
        --verdict signed --reason "<what was checked, against which evidence>")
 ```
 
@@ -177,11 +177,11 @@ Skill(/plan-write {topic-slug} [--milestone M<N>])   # --milestone forwarded onl
 Skill(/plan-edge-cases {topic-slug})
 # AUTO-INJECT MUST-FIX items into the plan (no AskUserQuestion):
 Bash(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/idea-to-release/scripts/inject_must_fix.py" \
-       --plan records/plans/{slug}-plan.md \
-       --edge-cases records/reviews/{slug}-edge-cases-*.md)
+       --plan .squad/records/plans/{slug}-plan.md \
+       --edge-cases .squad/records/reviews/{slug}-edge-cases-*.md)
 # INJECT milestone_id into plan frontmatter (roadmap-driven mode only):
 Bash(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/idea-to-release/scripts/inject_milestone_id.py" \
-       --plan records/plans/{slug}-plan.md \
+       --plan .squad/records/plans/{slug}-plan.md \
        --milestone-id M<N>)
 Skill(/deps-audit {topic-slug})
 Skill(/plan-confidence {topic-slug})
@@ -254,12 +254,12 @@ Review phase:       {SKIP | READY_TO_MERGE | NEEDS_FIXES | NEEDS_DEEPER}
 Release phase:      {SKIP | RELEASED | PR_OPEN_AWAITING_APPROVAL}
 Acceptance phase:   {SKIP (no milestone_id) | ACCEPTED | ACCEPTED_WITH_CAVEATS | REJECTED | NOT_VALIDATED}
 
-Final plan: records/plans/{slug}-plan.md
-Implementation: records/implementations/{slug}-implementation.md
-Code-quality audit: records/audits/{slug}-code-quality-*.md
-Review: records/reviews/{slug}-review-*.md
-Release: records/releases/v{version}-release.md (if released)
-Acceptance: records/acceptance/{milestone-id}-acceptance-*.md (if a milestone was accepted)
+Final plan: .squad/records/plans/{slug}-plan.md
+Implementation: .squad/records/implementations/{slug}-implementation.md
+Code-quality audit: .squad/records/audits/{slug}-code-quality-*.md
+Review: .squad/records/reviews/{slug}-review-*.md
+Release: .squad/records/releases/v{version}-release.md (if released)
+Acceptance: .squad/records/acceptance/{milestone-id}-acceptance-*.md (if a milestone was accepted)
 Attestation hash: {sha256}
 
 Next step:

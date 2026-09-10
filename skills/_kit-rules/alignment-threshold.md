@@ -12,7 +12,7 @@ An item nobody can draw is an item somebody is about to guess at. Below 90% shar
 | Every box in `## Reviewer sign-off` ticked | **A reviewer who is not the author** | `AWAITING_REVIEW` |
 
 Both come from `skills/plan-alignment/scripts/score_alignment.py`, run against
-`records/alignment/{slug}-alignment.md`. Exit 0 permits the work; exit 1 forbids it.
+`.squad/records/alignment/{slug}-alignment.md`. Exit 0 permits the work; exit 1 forbids it.
 There is no band in between and no override for urgency — urgency is the condition
 under which guessing is most expensive, not least.
 
@@ -118,7 +118,7 @@ stay a human judgement, stated out loud rather than counted as passing.
 
 Two layers, and the rule was PROSE in three documents until they existed —
 `alignment-threshold.md`, a pre-condition in `cycle-implement.md`, a phase
-contract in `cycle-plan.md`. A grep for anything reading `records/alignment/`
+contract in `cycle-plan.md`. A grep for anything reading `.squad/records/alignment/`
 returned nothing. Three documents said the item must not be built; no code
 could stop it.
 

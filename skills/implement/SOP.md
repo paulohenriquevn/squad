@@ -37,7 +37,7 @@ that was reported as passing.
 Every one of these is refused rather than warned about. If one fails, the phase
 does not start and the missing item is surfaced.
 
-- A plan at `records/plans/{slug}-plan.md` with verdict **≥ `SHIPPABLE_WITH_CAVEATS`**.
+- A plan at `.squad/records/plans/{slug}-plan.md` with verdict **≥ `SHIPPABLE_WITH_CAVEATS`**.
 - The item scored `ALIGNED` — machine score ≥ 90% **and** every `## Reviewer
   sign-off` box ticked. `AWAITING_REVIEW` is not a pass, and no agent may tick a box.
 - The repository is on `workspace`. Never `develop`, never `main`.

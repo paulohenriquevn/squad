@@ -54,7 +54,7 @@ python3 "$ECO/skills/brainstorm-pieces/scripts/score_product_alignment.py" --roo
 ### Step 0.5 — Read the brainstorm, if there is one
 
 `cycle-brainstorm` runs before this skill and produces four documents under
-`wiki/product/`. **Read all four before inventorying anything**, and hold them for
+`.squad/wiki/product/`. **Read all four before inventorying anything**, and hold them for
 the whole run:
 
 | Document | What it changes here |

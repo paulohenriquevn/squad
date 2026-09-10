@@ -32,7 +32,7 @@ Surface real risks inside the plan as written, and get the MUST-FIX ones absorbe
 
 ## Prerequisites
 
-- A plan exists at `records/plans/{slug}-plan.md`.
+- A plan exists at `.squad/records/plans/{slug}-plan.md`.
 - `/plan-write` has finished — this is phase 2 and that is phase 1.
 
 ## Steps

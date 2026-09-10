@@ -2,7 +2,7 @@
 name: ast-grep
 version: 0.1.0
 requires: []
-description: Structural search and refactor across multi-language codebases via tree-sitter patterns. Use when you need queries Grep can't express — function signatures, class hierarchies, decorator + function, call sites, async patterns, type definitions. Especially useful inside records/references/ during /discover-execute. Composable from any context.
+description: Structural search and refactor across multi-language codebases via tree-sitter patterns. Use when you need queries Grep can't express — function signatures, class hierarchies, decorator + function, call sites, async patterns, type definitions. Especially useful inside study-material/ during /discover-execute. Composable from any context.
 user-invocable: true
 allowed-tools: Bash Read Glob
 argument-hint: "{pattern} [--lang LANG] [--path PATH]"
@@ -48,7 +48,7 @@ Discovery question: "How does Project A implement the `Memory` class surface?"
 
 ```bash
 ast-grep scan --rule .claude/skills/ast-grep/rules/method-in-class-ts.yml \
-  .claude/records/references/project-a/project-a-ts/src/oss/src/memory/index.ts
+  .claude/study-material/project-a/project-a-ts/src/oss/src/memory/index.ts
 # → 27 methods, each with line range. One query, compact output.
 ```
 
@@ -56,7 +56,7 @@ Output: a hotspot list of 27 methods + their line ranges in `index.ts`.
 
 **Step 2 — Read at each hotspot (Fase B):**
 
-For each method on the list, `Read index.ts L153-L189` (constructor), `Read L191-L240` (add()), etc. Each Read produces a paragraph for the opportunity + a `.claude/records/references/project-a/.../index.ts:N` citation.
+For each method on the list, `Read index.ts L153-L189` (constructor), `Read L191-L240` (add()), etc. Each Read produces a paragraph for the opportunity + a `.claude/study-material/project-a/.../index.ts:N` citation.
 
 Result: an opportunity section that BOTH lists the entire surface (from Fase A) AND explains each non-trivial method (from Fase B), with line-exact citations.
 
@@ -77,15 +77,15 @@ Result: an opportunity section that BOTH lists the entire surface (from Fase A) 
 ```bash
 # Single-pattern search (TS): class with extends
 ast-grep run --pattern 'class $NAME extends $BASE { $$$ }' \
-  --lang typescript .claude/records/references/project-a/
+  --lang typescript .claude/study-material/project-a/
 
 # Method call by name (TS)
 ast-grep run --pattern '$OBJ.embed($$$)' \
-  --lang typescript .claude/records/references/project-a/
+  --lang typescript .claude/study-material/project-a/
 
 # Python async functions
 ast-grep run --pattern 'async def $NAME($$$):
-    $$$' --lang python .claude/records/references/project-c/
+    $$$' --lang python .claude/study-material/project-c/
 ```
 
 Pattern syntax:
@@ -136,7 +136,7 @@ rule:
 
 ## How `/discover-execute` consumes this skill
 
-During the halt-loop, the agent runs the **two-phase workflow above** for every code-shape research question: Fase A (ast-grep map) → Fase B (Read at each hotspot). The `execute-mode-prompt.md` enforces Fase A as mandatory before any Read for structural questions; only text-shape questions (README content, raw config files) skip Fase A. The Fase A output produces the hotspot table; the Fase B Reads produce the prose + `.claude/records/references/{project}/{path}:N` citations that go into the opportunity.
+During the halt-loop, the agent runs the **two-phase workflow above** for every code-shape research question: Fase A (ast-grep map) → Fase B (Read at each hotspot). The `execute-mode-prompt.md` enforces Fase A as mandatory before any Read for structural questions; only text-shape questions (README content, raw config files) skip Fase A. The Fase A output produces the hotspot table; the Fase B Reads produce the prose + `.claude/study-material/{project}/{path}:N` citations that go into the opportunity.
 
 ## Setup
 
@@ -168,7 +168,7 @@ For automated checks, run `bash setup.sh` from this skill directory.
 1. **Don't use ast-grep for "find file containing word X"** — Grep is faster and clearer. ast-grep shines when the question is about AST shape.
 2. **Don't write multi-statement patterns inline** — `ast-grep run -p 'pattern1\npattern2'` triggers the "Multiple AST nodes" error. Use a YAML rule file with `kind:` or relational rules (`inside:`, `has:`).
 3. **Don't write rules without testing** — keep `ast-grep scan --rule <file> <small-dir>` in your loop. Rules silently match zero things when patterns drift from real AST shapes.
-4. **Don't cite ast-grep output as a citation without re-verifying the line** — ast-grep gives line ranges; the opportunity cites `.claude/records/references/path:N`. Always re-read the file at that line before committing to the citation.
+4. **Don't cite ast-grep output as a citation without re-verifying the line** — ast-grep gives line ranges; the opportunity cites `.claude/study-material/path:N`. Always re-read the file at that line before committing to the citation.
 
 ## Related
 

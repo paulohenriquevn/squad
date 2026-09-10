@@ -5,7 +5,7 @@ How to retire generated artifacts so the repository stays navigable.
 ## What counts as audit trail
 
 - `agents/{cycle}-{slug}-{date}/` — per-agent logs from `/review` and `/implement`
-- `records/implementations/{slug}/` — per-iteration halt-loop logs
+- `.squad/records/implementations/{slug}/` — per-iteration halt-loop logs
 - `.compaction-snapshots/` — PreCompact snapshots
 - `session-state/{slug}-progress.md` — incremental progress logs
 
@@ -14,7 +14,7 @@ How to retire generated artifacts so the repository stays navigable.
 | Artifact | Active retention | Archive after | Delete after |
 |---|---|---|---|
 | `agents/{review,implement}-*` of MERGED features | until merge + 30 days | move to `agents/archive/` | 180 days |
-| `records/implementations/{slug}/` iter logs | until plan slug closed | summarize into `{slug}-implementation.md`, delete dir | — |
+| `.squad/records/implementations/{slug}/` iter logs | until plan slug closed | summarize into `{slug}-implementation.md`, delete dir | — |
 | `.compaction-snapshots/` | last 10 by mtime | — | rolling delete |
 | `session-state/{slug}-progress.md` | duration of plan | append-only into implementation summary | delete with implementation dir |
 
@@ -32,9 +32,9 @@ How to retire generated artifacts so the repository stays navigable.
 
 ## What NEVER rotates
 
-- `records/plans/{slug}-plan.md` — kept indefinitely; the canonical record of "what we agreed to build".
-- `records/discoveries/opportunities/` — kept indefinitely; institutional knowledge.
-- `records/adrs/` — kept indefinitely; architectural decisions.
+- `.squad/records/plans/{slug}-plan.md` — kept indefinitely; the canonical record of "what we agreed to build".
+- `.squad/records/discoveries/opportunities/` — kept indefinitely; institutional knowledge.
+- `.squad/records/adrs/` — kept indefinitely; architectural decisions.
 - `CHANGELOG.md` — kept indefinitely (it's the public contract).
 
 ## Anti-patterns
@@ -42,4 +42,4 @@ How to retire generated artifacts so the repository stays navigable.
 - Deleting audit trail before its retention window elapses.
 - Bulk-archiving without summarizing first — the summary is what makes the archive useful later.
 - Letting `.compaction-snapshots/` grow unbounded.
-- Putting audit trail in `records/references/` (read-only enforced; will be blocked).
+- Putting audit trail in `study-material/` (read-only enforced; will be blocked).
