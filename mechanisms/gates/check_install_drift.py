@@ -43,8 +43,19 @@ import argparse
 import enum
 import subprocess
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
 
 
 class Drift(enum.Enum):
@@ -126,7 +137,7 @@ def classify_file(install_file: Path, kit_file: Path,
 #: in one day that a rule lived in one file and was missing from another.
 _CACHE_DIRS = ("__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache",
                ".hypothesis")
-_CONSUMER_LOCAL = (*_CACHE_DIRS, ".benchmarks", "records")
+_CONSUMER_LOCAL = (*_CACHE_DIRS, ".benchmarks", DATA_DIRNAME, *LEGACY_RECORDS_ROOTS)
 
 #: Files that belong to the PROJECT even while living in a directory the kit also has.
 #: `agents/<domain>.md` describes the consumer's repository — harvesting it into the kit

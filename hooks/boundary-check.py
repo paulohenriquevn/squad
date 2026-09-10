@@ -30,9 +30,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 from squad import PreToolUseContext, create_context
 from squad.boundaries import violation
 from squad.layout import resolve
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import DATA_DIRNAME, RECORDS  # noqa: E402
 
 #: `rules/reference-provenance.md` § 1. `records/references/` was retired on
 #: 2026-09-01 with the practice that filled it; the rule records what that costs.
@@ -42,7 +53,7 @@ ZONE_REASON = (
     "BOUNDARY VIOLATION: study-material/ holds third-party material we depend on "
     "and is read-only. Never edit or create files there — a literal copy carries "
     "its licence into this repository. Capture findings in "
-    "records/discoveries/blueprints/."
+    f"{DATA_DIRNAME}/{RECORDS}/discoveries/blueprints/."
 )
 
 

@@ -382,15 +382,28 @@ done
 #
 # Only creates what is missing, and only empty directories. Existing content is
 # never touched, so this stays inside the "patch never deletes" contract.
+# Shell cannot import `squad/paths.py`, so it ASKS it rather than restating the root.
+# One owner, two languages: a literal here is a copy, and a copy is how six lists in
+# four different orders happened.
+DATA_ROOT_NAME="$(python3 -c "import sys; sys.path.insert(0, '$SRC_DIR'); from squad.paths import DATA_DIRNAME; print(DATA_DIRNAME)" 2>/dev/null)"
+if [ -z "$DATA_ROOT_NAME" ]; then
+  echo "FATAL: cannot read the write root from squad/paths.py — refusing to guess it" >&2
+  exit 2
+fi
+DATA_ROOT="$TARGET/$DATA_ROOT_NAME"
+
+RECORDS_NAME="$(python3 -c "import sys; sys.path.insert(0, '$SRC_DIR'); from squad.paths import RECORDS; print(RECORDS)" 2>/dev/null)"
+[ -n "$RECORDS_NAME" ] || { echo "FATAL: cannot read the trail name from squad/paths.py" >&2; exit 2; }
+
 NEW_KB_DIRS=(
-  "records/acceptance"           # cycle-acceptance records
-  "records/acceptance/evidence"  # screenshots, console/network dumps, transcripts
-  "records/roadmap-runs"         # per-milestone macro-loop audit trail
+  "$RECORDS_NAME/acceptance"           # cycle-acceptance records
+  "$RECORDS_NAME/acceptance/evidence"  # screenshots, console/network dumps, transcripts
+  "$RECORDS_NAME/roadmap-runs"         # per-milestone macro-loop audit trail
 )
 KB_CREATED=0
 for d in "${NEW_KB_DIRS[@]}"; do
-  if [ ! -d "$ECO/$d" ]; then
-    mkdir -p "$ECO/$d"
+  if [ ! -d "$DATA_ROOT/$d" ]; then
+    mkdir -p "$DATA_ROOT/$d"
     KB_CREATED=$((KB_CREATED + 1))
     echo "  + $d/ (scaffold)"
   fi

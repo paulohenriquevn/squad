@@ -17,10 +17,19 @@ and the split came back. Knowing about a bad default does not protect you from i
 """
 from __future__ import annotations
 
-import re
-import subprocess
-import sys
-from pathlib import Path
+import sys as _s
+from pathlib import Path as _P
+
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+import re  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from squad.paths import write_records_dir  # noqa: E402
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -40,23 +49,28 @@ def _standalone_root(tmp_path: Path) -> Path:
     return root
 
 
-def test_a_plugin_layout_resolves_under_dot_claude(tmp_path: Path) -> None:
+def test_a_plugin_layout_resolves_to_the_write_root(tmp_path: Path) -> None:
     root = _plugin_root(tmp_path)
 
     resolved = default_mini_reviews_dir(root)
 
-    assert resolved == root / ".claude" / "records" / "mini-reviews"
-    assert ".claude" in resolved.parts
+    assert resolved == write_records_dir(root, "mini-reviews")
+    assert ".claude" not in resolved.parts, (
+        "the installed kit receives nothing this system writes")
 
 
-def test_a_standalone_layout_resolves_at_the_root(tmp_path: Path) -> None:
-    # The kit's own repository: skills/ at the root, no .claude/ wrapper. Returning the plugin path
-    # here would break the one install the standalone default was written for.
+def test_a_standalone_layout_resolves_to_the_same_place(tmp_path: Path) -> None:
+    """The kit's own repository was the one exception, and the exception is gone.
+
+    It used to resolve to `<repo>/records/` while a plugin install resolved to
+    `.claude/records/`. Two answers meant two ways to be wrong; there is one now, so
+    this asserts that both layouts agree rather than that each is right.
+    """
     root = _standalone_root(tmp_path)
 
     resolved = default_mini_reviews_dir(root)
 
-    assert resolved == root / "records" / "mini-reviews"
+    assert resolved == write_records_dir(root, "mini-reviews")
     assert ".claude" not in resolved.parts
 
 
@@ -143,10 +157,12 @@ def test_an_explicit_output_dir_still_wins(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert str(explicit) not in result.stdout
-    assert ".claude" in result.stdout
+    assert ".squad" in result.stdout
+    assert ".claude" not in result.stdout, (
+        "the installed kit receives nothing this system writes")
 
 
-def test_the_writer_actually_writes_under_dot_claude(tmp_path: Path) -> None:
+def test_the_writer_actually_writes_under_the_write_root(tmp_path: Path) -> None:
     """Runs `mini_review.py` for real.
 
     A first pass asserted only the RESOLVER, and a mutant that reverted the writer's wiring to the

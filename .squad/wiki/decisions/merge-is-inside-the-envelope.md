@@ -130,8 +130,8 @@ everything while looking like review.
 
 ## Cross-references
 
-- The envelope this amends: [`rules/autonomy-envelope.md`](../../rules/autonomy-envelope.md)
-- The cycle it governs: [`rules/cycle-release.md`](../../rules/cycle-release.md)
-- The human gate this rests on: [`rules/cycle-brainstorm.md`](../../rules/cycle-brainstorm.md)
-- The parallel amendment one level up: [`skills/_kit-rules/alignment-threshold.md`](../../skills/_kit-rules/alignment-threshold.md)
-- The bookkeeping whose argument this changed: [`rules/cycle-maintenance.md`](../../rules/cycle-maintenance.md)
+- The envelope this amends: [`rules/autonomy-envelope.md`](../../../rules/autonomy-envelope.md)
+- The cycle it governs: [`rules/cycle-release.md`](../../../rules/cycle-release.md)
+- The human gate this rests on: [`rules/cycle-brainstorm.md`](../../../rules/cycle-brainstorm.md)
+- The parallel amendment one level up: [`skills/_kit-rules/alignment-threshold.md`](../../../skills/_kit-rules/alignment-threshold.md)
+- The bookkeeping whose argument this changed: [`rules/cycle-maintenance.md`](../../../rules/cycle-maintenance.md)

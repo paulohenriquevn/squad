@@ -23,20 +23,32 @@ the merge is registered as a followup.
 """
 from __future__ import annotations
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 
 def knowledge_base_root(project_root: Path) -> Path:
-    """`.claude/records` in a plugin install, `records` in the standalone kit.
+    """`<project>/.squad/records` — one root, in every layout.
 
-    Detected from the tree, never taken as a flag. The item's decisive evidence is a recurrence:
-    the defect was known for eight mini-review runs because the operator passed the flag every
-    time, and the ninth time they did not, the split came back. A default that depends on
-    remembering IS the defect.
+    This used to detect the layout from the tree: `.claude/records` for a plugin
+    install, `records` for the standalone kit. The item's decisive evidence was a
+    recurrence — the defect was known for eight mini-review runs because the operator
+    passed the flag every time, and the ninth time they did not, the split came back. A
+    default that depends on remembering IS the defect.
+
+    Centralising removes the detection rather than making it more careful. There is no
+    layout left to get wrong.
     """
-    if (project_root / ".claude").exists():
-        return project_root / ".claude" / "records"
-    return project_root / "records"
+    return write_records_dir(project_root)
 
 
 def default_mini_reviews_dir(project_root: Path) -> Path:

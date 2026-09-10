@@ -19,11 +19,22 @@ from typing import Any
 # Allow sibling imports when invoked directly
 sys.path.insert(0, str(Path(__file__).parent))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 from _rubric_loader import load_rubric  # noqa: F401
 from check_corner_coverage import check_corner_coverage
 from check_evidence_pointers import check_evidence_pointers
 from check_opportunity_completeness import check_opportunity_completeness
 from check_spec_smells import check_spec_smells
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 SKILL_ROOT = Path(__file__).parent.parent
 
@@ -41,7 +52,7 @@ def _resolve_opportunity(arg: str) -> Path:
     p = Path(arg)
     if p.exists() and p.suffix == ".md":
         return p.resolve()
-    base = Path(".claude/records/discoveries/opportunities")
+    base = write_records_dir(Path.cwd(), "discoveries") / "opportunities"
     for c in (base / f"{arg}-opportunity.md", base / f"{arg}.md"):
         if c.exists():
             return c.resolve()

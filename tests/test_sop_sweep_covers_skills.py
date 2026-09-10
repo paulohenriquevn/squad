@@ -1,6 +1,6 @@
 """The SOP sweep reads both places a procedure can live.
 
-`wiki/sops/` holds procedures ABOUT the kit — installing it into a consumer,
+`.squad/wiki/sops/` holds procedures ABOUT the kit — installing it into a consumer,
 propagating a delta, porting a fix. A skill's `SOP.md` holds the procedure for
 OPERATING that skill.
 

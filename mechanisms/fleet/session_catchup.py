@@ -32,9 +32,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "conventions"))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 from ecosystem_utils import (
     resolve_ecosystem_dir as _resolve_ecosystem_dir,
 )
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import SNAPSHOTS, active_plan_pointer, write_records_dir  # noqa: E402
 
 
 def run(cmd: list[str], cwd: Path) -> str:
@@ -106,9 +117,9 @@ def main() -> int:
     # 3. Active plan
     print(section("active plan"))
     active_plan = None
-    plans_dir = ecosystem_dir / "records" / "plans"
+    plans_dir = write_records_dir(ecosystem_dir, "plans")
 
-    active_pointer = ecosystem_dir / ".active_plan"
+    active_pointer = active_plan_pointer(ecosystem_dir)
     if active_pointer.is_file():
         slug = active_pointer.read_text().strip()
         candidate = plans_dir / f"{slug}-plan.md"
@@ -147,7 +158,7 @@ def main() -> int:
     print(section("recent progress"))
     if active_plan:
         slug = active_plan.name.removesuffix("-plan.md")
-        progress_file = ecosystem_dir / "records" / "progress" / f"{slug}-progress.md"
+        progress_file = write_records_dir(ecosystem_dir, "progress") / f"{slug}-progress.md"
         if progress_file.is_file():
             lines = progress_file.read_text().splitlines()
             # Show last 20 lines
@@ -168,7 +179,7 @@ def main() -> int:
 
     # 6. Compaction snapshots
     print(section("recent compaction snapshots"))
-    snap_dir = ecosystem_dir / ".compaction-snapshots"
+    snap_dir = ecosystem_dir / f".{SNAPSHOTS}"
     if snap_dir.is_dir():
         snaps = sorted(snap_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
         if snaps:

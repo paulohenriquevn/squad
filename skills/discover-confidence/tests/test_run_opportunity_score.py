@@ -1,12 +1,21 @@
 """End-to-end tests for run_opportunity_score.py — verifies scorer integration."""
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
-from pathlib import Path
+import sys as _s
+from pathlib import Path as _P
 
-import pytest
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+import json  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+
+from squad.paths import write_records_dir  # noqa: E402
 
 SCRIPT = Path(__file__).parent.parent / "scripts" / "run_opportunity_score.py"
 
@@ -54,7 +63,7 @@ def staged(project_root: Path):
         restore = ...  # a real table: leave it exactly as found
 
     def _write(name: str, content: str) -> Path:
-        directory = project_root / ".claude" / "records" / "discoveries" / "opportunities"
+        directory = write_records_dir(project_root, "discoveries") / "opportunities"
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / name
         path.write_text(content, encoding="utf-8")
@@ -105,8 +114,7 @@ def test_the_panel_carries_a_good_opportunity_to_shippable(
     """The other side: convened, approved, and the structural verdict stands."""
     slug = good_opportunity.stem.replace("-opportunity", "")
     # Resolve exactly as the gate does: `.claude/records` wins where it exists.
-    base = next((project_root / b for b in (".claude/records", "records")
-                 if (project_root / b).is_dir()), project_root / "records")
+    base = write_records_dir(project_root)
     panels = base / "panels"
     panels.mkdir(parents=True, exist_ok=True)
     assignment = panels / f"{slug}-discover.assignment.json"

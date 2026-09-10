@@ -36,9 +36,26 @@ is reserved for a measured finding.
 """
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
-from pathlib import Path
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and a reader resolving one order found a directory a writer
+# using another had never filled.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
+_here = _Path_bootstrap(__file__).resolve()
+for _up in _here.parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+import re  # noqa: E402
+from dataclasses import dataclass, field  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from squad.paths import (  # noqa: E402
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+    records_dir,
+)
 
 _VERDICT_RE = re.compile(r"^\*\*Verdict:\*\*\s*(?P<verdict>[A-Z_]+)", re.MULTILINE)
 _SECTION_RE = re.compile(
@@ -56,7 +73,6 @@ _CLEAN = frozenset({"PASS", "PASS_WITH_CAVEATS"})
 _HARD = frozenset({"FAIL_INSECURE", "INVALID_PLAN_DEPS"})
 _SOFT = frozenset({"FAIL_MEDIUM"})
 
-_KB_DIRS = ("records", ".claude/records")
 
 
 @dataclass
@@ -94,7 +110,9 @@ def _declared_dependencies(plan_body: str) -> list[str]:
 def _project_root(plan_path: Path) -> Path:
     """Walk up from the plan to the root carrying the records, in both layouts."""
     for parent in plan_path.resolve().parents:
-        for kb in _KB_DIRS:
+        if (parent / DATA_DIRNAME).is_dir():
+            return parent
+        for kb in LEGACY_RECORDS_ROOTS:
             if (parent / kb).is_dir():
                 return parent
     return plan_path.resolve().parent
@@ -102,10 +120,9 @@ def _project_root(plan_path: Path) -> Path:
 
 def _latest_audit(root: Path, slug: str) -> Path | None:
     candidates: list[Path] = []
-    for kb in _KB_DIRS:
-        audits = root / kb / "audits"
-        if audits.is_dir():
-            candidates.extend(audits.glob(f"{slug}-deps-audit-*.md"))
+    audits = records_dir(root, "audits")
+    if audits is not None:
+        candidates.extend(audits.glob(f"{slug}-deps-audit-*.md"))
     if not candidates:
         return None
     # By NAME: it carries the audit date. An mtime reshuffles with any copy or read,

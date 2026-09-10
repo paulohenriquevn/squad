@@ -66,6 +66,12 @@ def test_the_root_comes_from_the_script_and_not_from_the_cwd(tmp_path: Path) -> 
                 parents=True, exist_ok=True)
             (eco_sujo / "mechanisms" / shared.relative_to(_REPO / "mechanisms")).write_bytes(
                 shared.read_bytes())
+    # The gate resolves data roots through the shared package rather than restating
+    # them, so a synthetic ecosystem needs it. Without this the script cannot import
+    # and the run produces no JSON at all — which reads as "no findings".
+    for module in (_REPO / "squad").glob("*.py"):
+        (eco_sujo / "squad").mkdir(parents=True, exist_ok=True)
+        (eco_sujo / "squad" / module.name).write_bytes(module.read_bytes())
 
     broken = [
         f for f in _findings(copia, cwd=limpo)

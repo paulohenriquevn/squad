@@ -65,7 +65,22 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import (  # noqa: E402
+    records_dir,
+    resolve_knowledge_dir,
+    write_records_dir,
+)
 
 
 def tokenize_slug(slug: str) -> list[str]:
@@ -105,7 +120,7 @@ def score_references(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
     **The matches are still returned**, because knowing that peer material exists is
     genuinely useful to whoever writes the plan. They inform; they no longer score.
     """
-    refs_dir = repo / "records" / "references"
+    refs_dir = resolve_knowledge_dir(repo, "references")
     if not refs_dir.is_dir():
         return 0, []
     signals = []
@@ -122,7 +137,7 @@ def score_references(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
 
 def score_tools(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
     """+25 if any tool/{name} matches a keyword or its alias."""
-    tools_dir = repo / "records" / "tools"
+    tools_dir = records_dir(repo, "tools")
     if not tools_dir.is_dir():
         return 0, []
     signals = []
@@ -181,7 +196,7 @@ def score_patterns_skills(repo: Path, keywords: list[str]) -> tuple[int, list[st
 
 def score_adrs(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
     """+20 if any ADR title/filename matches a keyword."""
-    adrs_dir = repo / "records" / "adrs"
+    adrs_dir = resolve_knowledge_dir(repo, "decisions")
     if not adrs_dir.is_dir():
         return 0, []
     signals = []
@@ -215,7 +230,7 @@ def score_claude_md(repo: Path, keywords: list[str], slug: str) -> tuple[int, li
 
 def score_completed_plans(repo: Path, keywords: list[str]) -> tuple[int, list[str]]:
     """+10 each completed plan matching a keyword (cap +20)."""
-    plans_dir = repo / "records" / "plans" / "completed"
+    plans_dir = write_records_dir(repo, "plans") / "completed"
     if not plans_dir.is_dir():
         return 0, []
     signals = []

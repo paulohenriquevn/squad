@@ -31,8 +31,21 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and a reader resolving one order found a directory a writer
+# using another had never filled.
+import sys as _sys_bootstrap
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
 from typing import Any
+
+_here = _Path_bootstrap(__file__).resolve()
+for _up in _here.parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import records_dir, resolve_knowledge_dir  # noqa: E402
 
 _VERDICT_RE = re.compile(r"^\*\*Verdict:\*\*\s*(?P<verdict>[A-Z_]+)", re.MULTILINE)
 _SOFT_CAPS_RE = re.compile(r"^\*\*Soft caps triggered:\*\*\s*(?P<caps>.+)$", re.MULTILINE)
@@ -40,8 +53,6 @@ _SOFT_CAPS_RE = re.compile(r"^\*\*Soft caps triggered:\*\*\s*(?P<caps>.+)$", re.
 _ADMITS = frozenset({"PASS", "PASS_WITH_CAVEATS"})
 _BLOCKS_OUTRIGHT = frozenset({"FAIL_HARD", "INVALID"})
 
-#: Both install layouts. A gate that only sees one of them is half a gate.
-_KB_DIRS = ("records", ".claude/records")
 
 
 def _finding(title: str, evidence: str, remediation: str) -> dict[str, Any]:
@@ -57,10 +68,9 @@ def _finding(title: str, evidence: str, remediation: str) -> dict[str, Any]:
 
 def _latest_audit(project_root: Path, slug: str) -> Path | None:
     candidates: list[Path] = []
-    for kb in _KB_DIRS:
-        audits = project_root / kb / "audits"
-        if audits.is_dir():
-            candidates.extend(audits.glob(f"{slug}-code-quality-*.md"))
+    audits = records_dir(project_root, "audits")
+    if audits is not None:
+        candidates.extend(audits.glob(f"{slug}-code-quality-*.md"))
     if not candidates:
         return None
     # By NAME, not mtime: the name carries the audit date, and a re-read or a copy
@@ -69,22 +79,33 @@ def _latest_audit(project_root: Path, slug: str) -> Path | None:
 
 
 def _dismissal_corpus(project_root: Path, slug: str) -> str:
-    """Everywhere an ADR may legitimately live, concatenated."""
+    """Everywhere an ADR may legitimately live, concatenated.
+
+    `decisions` is a DURABLE leaf: the bundle holds it after migration and
+    `records/adrs/` before it. One resolver knows both roots; a literal here would
+    know one, and the caps dismissed in the other would read as undismissed.
+    """
     chunks: list[str] = []
-    for kb in _KB_DIRS:
-        adrs = project_root / kb / "adrs"
-        if adrs.is_dir():
-            for path in sorted(adrs.glob("*.md")):
-                try:
-                    chunks.append(path.read_text(encoding="utf-8", errors="replace"))
-                except OSError:
-                    continue
-        plan = project_root / kb / "plans" / f"{slug}-plan.md"
+
+    adrs = resolve_knowledge_dir(project_root, "decisions")
+    if adrs is not None:
+        for path in sorted(adrs.glob("*.md")):
+            try:
+                chunks.append(path.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                continue
+
+    # The plan itself may carry the dismissal, and it is a dated artifact, not a
+    # durable one — so it resolves through the trail rather than the bundle.
+    plans = records_dir(project_root, "plans")
+    if plans is not None:
+        plan = plans / f"{slug}-plan.md"
         if plan.is_file():
             try:
                 chunks.append(plan.read_text(encoding="utf-8", errors="replace"))
             except OSError:
                 pass
+
     return "\n".join(chunks)
 
 
@@ -94,7 +115,7 @@ def check_upstream_gate(project_root: Path, slug: str) -> list[dict[str, Any]]:
     if audit is None:
         return [_finding(
             f"no /code-quality audit for `{slug}`",
-            f"looked in {', '.join(f'{kb}/audits/' for kb in _KB_DIRS)} for "
+            f"looked in {records_dir(project_root, 'audits')} for "
             f"`{slug}-code-quality-*.md`",
             "run `/code-quality {slug}` before `/review` — reviewing code that no audit "
             "swept means the review inherits whatever the audit would have caught",

@@ -29,9 +29,12 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys as _s
 from pathlib import Path
 
+_s.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from squad.layout import resolve
+from squad.paths import ATTESTATIONS, write_state_dir
 from squad.plan import attestation
 from squad.plan import resolve as resolve_plan
 
@@ -56,8 +59,8 @@ def _run(project: Path, *args: str, plugin: bool = True) -> subprocess.Completed
 def _plugin_project(tmp_path: Path) -> Path:
     """A consumer in the plugin-native layout: `.claude/` present, kit outside it."""
     project = tmp_path / "proj"
-    (project / ".claude" / "records" / "plans").mkdir(parents=True)
-    (project / ".claude" / "records" / "plans" / "demo-plan.md").write_text(
+    (project / ".squad" / "records" / "plans").mkdir(parents=True)
+    (project / ".squad" / "records" / "plans" / "demo-plan.md").write_text(
         _PLAN, encoding="utf-8"
     )
     return project
@@ -145,7 +148,7 @@ def test_verify_agrees_with_the_hooks_about_the_same_plan(tmp_path: Path) -> Non
 def test_verify_reports_the_tamper_it_is_there_to_catch(tmp_path: Path) -> None:
     project = _plugin_project(tmp_path)
     _run(project, "demo")
-    plan = project / ".claude" / "records" / "plans" / "demo-plan.md"
+    plan = project / ".squad" / "records" / "plans" / "demo-plan.md"
     plan.write_text(_PLAN + "\nedited\n", encoding="utf-8")
 
     done = _run(project, "--verify", "demo")
@@ -154,24 +157,28 @@ def test_verify_reports_the_tamper_it_is_there_to_catch(tmp_path: Path) -> None:
     assert "TAMPERED" in done.stdout
 
 
-# ── the standalone layout keeps its exception ─────────────────────────────────
+# ── the standalone layout has no exception left ───────────────────────────────
 
-def test_the_standalone_layout_still_uses_the_repository_root(tmp_path: Path) -> None:
-    """`records-location.md`'s single exception: the kit's own repository.
+def test_the_standalone_layout_uses_the_same_write_root(tmp_path: Path) -> None:
+    """`records-location.md` used to carve out one exception: the kit's own repository,
+    where `skills/`, `rules/` and `hooks/` sit at the root and the trail was
+    `<repo>/records/` rather than `<repo>/.claude/records/`.
 
-    There, `skills/`, `rules/` and `hooks/` sit at the root and the records are
-    `<repo>/records/` — not `<repo>/.claude/records/`.
+    Two answers meant two ways to be wrong, and the exception is what the first
+    instrumented run tripped over. There is one write root now, in every layout, so
+    this test asserts the absence of the exception rather than its shape.
     """
     project = tmp_path / "kit"
     for tree in ("skills", "rules", "hooks"):
         (project / tree).mkdir(parents=True)
-    (project / "records" / "plans").mkdir(parents=True)
-    (project / "records" / "plans" / "demo-plan.md").write_text(_PLAN, encoding="utf-8")
+    plans = project / ".squad" / "records" / "plans"
+    plans.mkdir(parents=True)
+    (plans / "demo-plan.md").write_text(_PLAN, encoding="utf-8")
 
     done = _run(project, "demo", plugin=False)
 
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
-    assert (project / ".attestations" / "demo.sha256").is_file()
+    assert (write_state_dir(project, ATTESTATIONS) / "demo.sha256").is_file()
     assert not (project / ".claude").exists(), "a standalone repo grew a .claude/"
 
     eco = _eco_of(project, plugin=False)
@@ -210,4 +217,4 @@ def test_a_project_with_no_kit_says_so_instead_of_writing_somewhere(
     )
 
     assert done.returncode != 0
-    assert not (project / ".attestations").exists()
+    assert not write_state_dir(project, ATTESTATIONS).exists()

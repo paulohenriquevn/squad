@@ -35,6 +35,61 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 | cross-validation | Plan claims ↔ implementation ↔ tests consistency |
 | domain-specific (1-3) | Per-domain checks (e.g., SQL injection for web, IAM misconfig for infra) |
 
+## Independent auditors — the review consumes an audit it did not produce
+
+The specialists above are Claude sub-agents with ad-hoc prompts. Nothing behind them
+refuses a finding that was never grounded: no versioned catalog to cite, no tool
+measuring what the prose estimates, no store that rejects an invented id. The `loop-*`
+plugins audit the same domains with instruments that refuse their own theatre — a
+finding whose catalog id is not registered is rejected at the database boundary,
+complexity comes from radon / lizard / gocyclo rather than from reading, and a run that
+found nothing is a hard block instead of a success.
+
+So REVIEW runs both: opinions it produces, and an audit it consumes.
+[`cycle-judge-codex.md`](cycle-judge-codex.md) already made this argument for cycle
+ARTIFACTS; this extends it to the CODE.
+
+| | |
+|---|---|
+| Who audits what | [`rules/review-auditors.txt`](review-auditors.txt) — **the project's**, because which plugins it has and what they cost it are not the kit's business |
+| Selects | [`mechanisms/cycle/select_auditors.py`](../mechanisms/cycle/select_auditors.py), from the domain [`detect_domain.py`](../skills/review/scripts/detect_domain.py) already derives |
+| **Blocks** | [`mechanisms/gates/check_auditor_coverage.py`](../mechanisms/gates/check_auditor_coverage.py), entering `consolidate_findings.py` as BLOCKER findings |
+| Where plugins are found | [`mechanisms/conventions/installed_plugins.py`](../mechanisms/conventions/installed_plugins.py) |
+
+**The selection is derived, not chosen.** The reviewing agent does not pick its own
+auditor — the same rule the review panel enforces when it refuses to seat an author,
+because the CHOICE is already a judgement. Point a concurrency change at a docs auditor
+and the report comes back clean, honestly, having examined nothing that mattered: an
+independent report about the wrong thing is worse than no report, because it reads as
+coverage. The agent may **widen** the selection and never narrow it, which is the
+fail-safe direction [`touched_slices.py`](../mechanisms/conventions/touched_slices.py)
+already takes.
+
+**Scope is passed, and the mode is recorded.** REVIEW audits a change, so each auditor
+is given the change: `--diff-base <ref>`, `--pr <n>`, or `--commits <a>..<b>` — the same
+three forms the plugins accept. Naming two at once is refused, because which one wins is
+undefined there and an undefined scope silently audits the wrong thing. What that does depends on the domain and the plugin declares
+it: `analysis-scoped` reads only the changed files, `report-filtered` reads the whole
+tree and reports only what the change touched — because reachability, duplication and
+dependency cycles are properties of the whole graph, and analysing the diff alone would
+make every new function look orphaned. The mode is recorded so a scoped review is never
+read as a full audit. **A run with no base says, in writing, that it covered the whole
+tree**; the base is never guessed.
+
+**The report contract is the plugins', not a copy.** The coverage gate runs each
+plugin's own report checker against that plugin's own schema config, from its install
+path. A second copy of that contract would diverge on the day it changes, and the kit
+would accept a report shape the plugin itself rejects.
+
+**Two sections travel out of every report on purpose**: `## Verdict`, quoted rather
+than re-graded, and `## What Was NOT Analyzed`, which the contract never omits and
+which is the single thing stopping partial coverage from reading as complete. The seam
+between two honest halves is exactly where that caveat gets dropped.
+
+**What the gate does NOT judge**, and says so: whether the audit had teeth — a plugin
+whose tools were all absent still writes a well-formed report — and severity, which is
+a parse of another tool's markdown, carried as a signal and never used to pass or fail.
+
 ## Verdicts
 
 - `READY_TO_MERGE` — no BLOCKER, ≤ 2 HIGH findings with documented mitigation.
@@ -72,10 +127,12 @@ re-run by hand, or quietly ignored. The mechanism is now part of the line.
   Rule 6) — `stop-validation.py`, which accepts a package `CHANGELOG.md` or a
   `.changeset/` entry as the record.
 
+- A required independent audit that did not happen — `check_auditor_coverage.py`, entering `consolidate_findings.py` as BLOCKER findings so the verdict cannot be computed while ignoring it, the shape `check_upstream_gate.py` established. It fires on a report that is missing, one the plugin's own checker rejects, or a plugin this machine does not have. A project that declares no auditor is **not** blocked: that opt-out is a visible edit to a file the installer preserves, never a silence.
+
 ## Output
 
 - `records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix.
-- `agents/review-{slug}-{YYYY-MM-DD}/` — per-agent audit trail.
+- `.squad/records/reviews/review-{slug}-{YYYY-MM-DD}/` — per-agent audit trail. Generated per-item files are output; `agents/` holds the kit's DECLARED specialists, and mixing the two put a run's trail where a reader looks for a roster.
 
 ## Anti-patterns
 

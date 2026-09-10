@@ -4,17 +4,79 @@ Every cycle writes a dated artifact — plans, implementation logs, review repor
 
 ## The rule
 
-**`<project>/.claude/records/` is canonical. Always.**
+**`<project>/.squad/` is the one write root. Always, in every layout.**
 
-The single exception is the **standalone layout** — the kit's own repository, where `skills/`, `rules/` and `hooks/` sit at the root with no `.claude/` wrapper. There, and only there, the records is `<repo>/records/`.
+Everything this system produces goes there and nowhere else:
 
-In a **plugin install** — every consumer — the ecosystem lives at `<project>/.claude/`, and so does its records.
+```
+<project>/.squad/
+  records/     the dated trail — plans, implementation logs, review reports,
+               releases, acceptance records, audits, the cycle event stream
+  wiki/        the OKF bundle — durable knowledge: decisions, sops, references,
+               opportunities
+```
 
-## Why this needed writing down
+**Nothing executes from `.squad/`.** The kit is an installed dependency and stays where
+the installer put it (`<project>/.claude/` in a plugin install, the repository root in
+the standalone kit). `.squad/` holds output.
 
-Measured across three consumers in 2026-08: two wrote to `.claude/records/`, the third wrote to the project root, and all three had **both** directories present. An audit reading `.claude/` reported the third as having "0 implementations, 0 reviews, 0 releases" — the repository actually had 6, 12 and 8. The claim was false, and nothing in the system detected it.
+There is **no layout exception**. There used to be: `.claude/records/` for a plugin
+install, `<repo>/records/` for the kit's own repository. Two answers meant two ways to
+be wrong, and the exception is what the first instrumented run tripped over — it
+created `.claude/records/cycle-events.jsonl` at the root here, the split trail this
+convention exists to prevent. One root removes the question instead of answering it
+more carefully.
 
-The failure mode is quiet by nature: a second records never errors. It just accumulates half the truth.
+## Why the separation, and not just a rename
+
+Until 2026-09-09 the system wrote its output into the same directory as the installed
+kit. Measured across 20 consumer repositories that day: **17 had the kit committed to
+git**, tracking between 142 and 984 files each, and **every repository carried between
+348 and 566 permanently dirty files — all of them inside `.claude/`.** Nothing outside
+it was dirty anywhere.
+
+So a project could not un-version the dependency without also un-versioning its own
+decision records, and a `git status` nobody can read is a `git status` nobody reads.
+Separating the two makes the versioning question answerable: `.claude/` is a
+dependency, `.squad/` is the project's, and each is versioned or not on its own terms.
+
+## One owner, and a gate that proves it
+
+Every data-root literal lives in [`squad/paths.py`](../squad/paths.py).
+[`check_write_containment.py`](../mechanisms/gates/check_write_containment.py) fails any
+other kit file that spells one in code — so every path a writer builds came from the
+owner, and the owner produces one root.
+
+That is the whole proof, and it is re-runnable. The alternative, reading 164 writing
+call sites, is not.
+
+Six modules each held their own copy of the root list, in **four different orders**,
+before this. A reader resolving one order found a directory a writer using another had
+never filled.
+
+## Readers fall back; writers never do
+
+A consumer that updates the kit without migrating keeps working: readers resolve
+`.squad/` first, then the legacy roots in order. Writers only ever produce `.squad/`.
+
+That asymmetry is the migration strategy, and it is deliberate in both directions. A
+writer that fell back would keep every project on its old root forever, and the
+centralisation would be a sentence in a rule with nothing behind it. A reader that did
+not fall back would break every consumer on the day it updated.
+
+**The kit does not migrate a consumer.** A migration this code performed inside another
+project's repository would be the kit writing to a repository it does not own.
+[`check_data_root.py`](../mechanisms/gates/check_data_root.py) reports what has not
+moved; a person moves it.
+
+Its loudest state is `SPLIT`: once the write root holds data and a legacy root still
+does, a reader resolving the first never sees the second, so the older copy is
+unreachable rather than merely old — and it looks current.
+
+**This repository followed its own rule on 2026-09-09.** Its bundle lived at
+`<repo>/wiki/` and its event stream at `.claude/records/`; both moved, and
+`tests/test_check_data_root.py` holds it there. A rule the kit does not follow is a
+rule its consumers read as optional.
 
 ## Autonomy
 

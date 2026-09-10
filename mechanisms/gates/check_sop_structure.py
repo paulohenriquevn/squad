@@ -118,7 +118,7 @@ class SopReport:
 def _sop_files(project_root: Path, bundle: Path | None) -> list[Path]:
     """Every SOP this project keeps, from both places one can live.
 
-    The bundle at `wiki/sops/` holds procedures ABOUT the kit — installing it into
+    The bundle at `.squad/wiki/sops/` holds procedures ABOUT the kit — installing it into
     a consumer, propagating a delta, porting a fix between the sibling kits. A
     skill's `SOP.md` holds the procedure for OPERATING that skill: what must be
     true before invoking it, what comes back, and what each verdict obliges.

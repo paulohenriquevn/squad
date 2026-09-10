@@ -101,20 +101,29 @@ def test_the_alignment_gate_reaches_a_knowledge_base_plan(tmp_path: Path) -> Non
     assert "B-014" in result["reason"]
 
 
-def test_new_artefacts_are_written_where_the_project_already_writes(tmp_path: Path) -> None:
-    """Reading the wrong directory goes quiet. Writing to it does damage.
+def test_a_writer_does_not_follow_the_project_legacy_trail(tmp_path: Path) -> None:
+    """Writers go to the one root; only readers fall back.
 
-    A validation report landing in `records/reviews/` inside a project whose trail
-    lives in `knowledge-base/` creates the second audit trail that consumer's own
-    rule calls worse than none — and it would do it silently, on every run.
+    This test used to assert the opposite — that a new artifact landed wherever the
+    project already wrote — and the reasoning was sound for its time: a report landing
+    in `records/reviews/` inside a project whose trail lived in `knowledge-base/`
+    created the second audit trail that rule calls worse than none.
+
+    Centralising answers it differently. A writer that followed would keep every
+    project on its old root forever, and the split it avoided would be replaced by a
+    migration that never happens. The split is now temporary, reported by
+    `check_wiki_migration.py`, and closed by a person moving the old trail.
     """
     root = tmp_path / "kb"
     _make(root, ".claude/knowledge-base", "plans", "demo-plan.md")
+
     target = rv._artefact_write_dir(root, "reviews")
-    assert target == root / ".claude" / "knowledge-base" / "reviews", target
+
+    assert target == root / ".squad" / "records" / "reviews", target
 
 
-def test_a_project_with_no_trail_at_all_gets_the_kit_layout(tmp_path: Path) -> None:
-    """Nothing to split, so the default is safe and stays the kit's own."""
+def test_a_project_with_no_trail_at_all_gets_the_same_root(tmp_path: Path) -> None:
+    """There is no layout-dependent default left to get wrong."""
     target = rv._artefact_write_dir(tmp_path / "fresh", "reviews")
-    assert target.parts[-3:] == (".claude", "records", "reviews"), target
+
+    assert target.parts[-3:] == (".squad", "records", "reviews"), target

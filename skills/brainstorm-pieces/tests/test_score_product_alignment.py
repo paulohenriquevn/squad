@@ -6,14 +6,23 @@ to hold — see `rules/cycle-brainstorm.md § Why the judge may not sign this on
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+import sys as _s
+from pathlib import Path as _P
 
-import pytest
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+
+from squad.paths import write_wiki_dir  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from score_product_alignment import FLOOR_PCT, score, verdict
+from score_product_alignment import FLOOR_PCT, score, verdict  # noqa: E402
 
 VISION = """# Product vision
 
@@ -73,7 +82,7 @@ responsibility: Enumerates services and keeps the series index current.
 
 
 def _product(root: Path, **overrides: str) -> Path:
-    d = root / "wiki" / "product"
+    d = write_wiki_dir(root, "product")
     d.mkdir(parents=True, exist_ok=True)
     files = {
         "product-vision.md": VISION,

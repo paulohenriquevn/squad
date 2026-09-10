@@ -32,8 +32,13 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
 from typing import Any
 
 from coverage_gate import evaluate as coverage_evaluate
@@ -46,6 +51,16 @@ from suite_runners import (
     run_command,
 )
 from wiring_recheck import recheck_pillar_a
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import (  # noqa: E402
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+    write_records_dir,
+)
 
 
 def _find_project_root(start: Path) -> Path:
@@ -380,11 +395,8 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
 #: Widening the search cannot produce a false finding. It can only stop a false
 #: SKIP, and a SKIP caused by looking in the wrong place is indistinguishable in
 #: the report from one that legitimately had nothing to check.
-_ARTEFACT_ROOTS = (
-    (".claude", "records"),
-    ("records",),
-    (".claude", "knowledge-base"),
-    ("knowledge-base",),
+_ARTEFACT_ROOTS = tuple(
+    tuple(r.split("/")) for r in (f"{DATA_DIRNAME}/records", *LEGACY_RECORDS_ROOTS)
 )
 
 
@@ -403,24 +415,20 @@ def _find_artefact(project_root: Path, kind: str, filename: str) -> Path | None:
 
 
 def _artefact_write_dir(project_root: Path, kind: str) -> Path:
-    """Where to WRITE a new artefact: the root this project already uses.
+    """Where to WRITE a new artefact: the one write root, always.
 
-    Reading from the wrong directory goes quiet; writing to it does damage. The
-    consumer that prompted this carries a rule of its own on the point —
-    *"an audit trail split across two directories is worse than none: a reader
-    who checks the wrong one reports absence where evidence exists"* — written
-    after exactly that happened across three repositories, all of which ended up
-    with both directories present.
+    This used to pick the root the project already used, and the reasoning was sound
+    for its time — *"an audit trail split across two directories is worse than none: a
+    reader who checks the wrong one reports absence where evidence exists"*, written
+    after exactly that happened across three repositories.
 
-    So the choice is made by evidence, not by default: the first root that already
-    holds artefacts of ANY kind wins. Only a project with no audit trail at all
-    falls through to the kit's own layout, and then there is nothing to split.
+    Following the project answers it the wrong way round. A writer that follows keeps
+    every project on its old root forever, so the split it avoids is replaced by a
+    migration that never happens. Writers go to `<project>/.squad/`; READERS still fall
+    back, which is what keeps an unmigrated consumer working, and
+    `check_wiki_migration.py` reports the trail that has not moved.
     """
-    for parts in _ARTEFACT_ROOTS:
-        root = project_root.joinpath(*parts)
-        if root.is_dir() and any(root.iterdir()):
-            return root / kind
-    return project_root / ".claude" / "records" / kind
+    return write_records_dir(project_root, kind)
 
 
 def _find_plan(project_root: Path, slug: str) -> Path | None:

@@ -63,65 +63,75 @@ def _events(root: Path) -> list[dict]:
 # Where the stream lives
 # ---------------------------------------------------------------------------
 
-def test_the_stream_lands_in_the_canonical_knowledge_base(tmp_path: Path) -> None:
-    """`rules/records-location.md` makes `.claude/records/` canonical
-    in a plugin install. A second stream beside the first is the split
-    records this ecosystem classifies as MAJOR."""
-    (tmp_path / ".claude" / "records").mkdir(parents=True)
+def test_the_stream_lands_in_the_one_write_root(tmp_path: Path) -> None:
+    """`<project>/.squad/records/` — and nowhere else.
 
+    This used to answer differently per layout, and the layout question is exactly
+    what produced the defect this stream exists to reveal: running the instrumented
+    `/code-quality` against the kit's own repository created
+    `.claude/records/cycle-events.jsonl` at the root, the **split trail** that
+    `backlog-review` reports as MAJOR. A stream that plants the defect it was built to
+    reveal is worse than no stream.
+
+    One root removes the question rather than answering it more carefully.
+    """
     assert resolve_events_path(tmp_path) == (
-        tmp_path / ".claude" / "records" / EVENTS_FILENAME
+        tmp_path / ".squad" / "records" / EVENTS_FILENAME
     )
 
 
-def test_the_standalone_layout_is_served_too(tmp_path: Path) -> None:
-    (tmp_path / "records").mkdir()
-    assert resolve_events_path(tmp_path) == tmp_path / "records" / EVENTS_FILENAME
+def test_the_standalone_layout_gets_the_same_root(tmp_path: Path) -> None:
+    """The kit's own repository is no longer an exception.
 
-
-def test_a_project_with_no_knowledge_base_gets_the_canonical_one_created(tmp_path: Path) -> None:
-    """A fresh adopter has no records yet, and the first phase to run must
-    not be the one that loses its record."""
-    emit_phase_start(tmp_path, cycle="code-quality", slug="demo")
-
-    assert (tmp_path / ".claude" / "records" / EVENTS_FILENAME).is_file()
-
-
-def test_the_standalone_repo_never_gets_a_dot_claude_knowledge_base(tmp_path: Path) -> None:
-    """The kit's own repository is the one place `.claude/records/` is wrong.
-
-    `rules/records-location.md` states the single exception: in the
-    standalone layout — `skills/`, `rules/` and `hooks/` at the root, no
-    `.claude/` wrapper — the records is `<repo>/records/`.
-
-    Caught by running the instrumented `/code-quality` against this repository:
-    the first emit created `.claude/records/cycle-events.jsonl` at the
-    root, which is precisely the **split records** the CHANGELOG records
-    the test suite having planted before, and that `backlog-review` reports as
-    MAJOR. A stream that plants the defect it was built to reveal is worse than
-    no stream.
+    It was: `records/` at the root for standalone, `.claude/records/` for a plugin
+    install. Two answers meant two ways to be wrong, and the exception is what the
+    first instrumented run tripped over.
     """
     for directory in ("skills", "rules", "hooks"):
         (tmp_path / directory).mkdir()
 
     emit_phase_start(tmp_path, cycle="code-quality", slug="demo")
 
-    assert (tmp_path / "records" / EVENTS_FILENAME).is_file()
-    assert not (tmp_path / ".claude").exists(), (
-        "the standalone layout must not grow a .claude/ wrapper"
-    )
+    assert (tmp_path / ".squad" / "records" / EVENTS_FILENAME).is_file()
+    assert not (tmp_path / ".claude").exists()
+    assert not (tmp_path / "records").exists()
 
 
-def test_an_existing_dot_claude_still_wins_in_a_consumer(tmp_path: Path) -> None:
-    """A consumer that installed by copy has `.claude/skills/` — and its
-    records stays canonical. The standalone exception is about the kit's
-    own repo, not about any project that happens to own a `skills/` folder."""
+def test_a_plugin_install_gets_the_same_root(tmp_path: Path) -> None:
+    """`.claude/` holds the installed kit and receives nothing this system writes."""
     (tmp_path / ".claude" / "skills").mkdir(parents=True)
-    (tmp_path / "skills").mkdir()
 
     emit_phase_start(tmp_path, cycle="code-quality", slug="demo")
 
-    assert (tmp_path / ".claude" / "records" / EVENTS_FILENAME).is_file()
+    assert (tmp_path / ".squad" / "records" / EVENTS_FILENAME).is_file()
+    assert not (tmp_path / ".claude" / "records").exists()
+
+
+def test_a_legacy_trail_does_not_capture_the_writer(tmp_path: Path) -> None:
+    """Writers never fall back, and the old trail is left exactly as it was.
+
+    Readers fall back so an unmigrated consumer keeps working. A writer that fell back
+    would keep every project on its old root forever, and the centralisation would be a
+    sentence in a rule with nothing behind it. Moving the old trail is a person's job:
+    a migration this code performed inside a consumer's repository would be the kit
+    writing to a project it does not own.
+    """
+    legacy = tmp_path / ".claude" / "records"
+    legacy.mkdir(parents=True)
+    (legacy / EVENTS_FILENAME).write_text('{"old": true}\n', encoding="utf-8")
+
+    emit_phase_start(tmp_path, cycle="code-quality", slug="demo")
+
+    assert (tmp_path / ".squad" / "records" / EVENTS_FILENAME).is_file()
+    assert (legacy / EVENTS_FILENAME).read_text(encoding="utf-8") == '{"old": true}\n'
+
+
+def test_a_fresh_adopter_does_not_lose_its_first_phase(tmp_path: Path) -> None:
+    """No root on disk yet, and the first phase to run must not be the one that
+    leaves no record."""
+    emit_phase_start(tmp_path, cycle="code-quality", slug="demo")
+
+    assert (tmp_path / ".squad" / "records" / EVENTS_FILENAME).is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +360,7 @@ def test_the_cli_emits_to_the_project_root_from_a_deep_subdirectory(tmp_path):
                  "--verdict", "PLAN_WRITTEN", "--project-root", str(deep)]) == 0
 
     streams = sorted(p.relative_to(root).as_posix() for p in root.rglob("cycle-events.jsonl"))
-    assert streams == ["records/cycle-events.jsonl"], streams
+    assert streams == [".squad/records/cycle-events.jsonl"], streams
 
 
 def test_the_cli_and_the_python_caller_write_to_the_same_place(tmp_path):
@@ -503,7 +513,7 @@ def test_once_refuses_an_identical_end_with_nothing_since(tmp_path):
             "--verdict", "IMPLEMENTATION_COMPLETE", "--project-root", str(deep)]
     assert main(args + ["--once"]) == 0
     assert main(args + ["--once"]) == 1
-    stream = (root / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
+    stream = (root / ".squad" / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
     assert stream.count("IMPLEMENTATION_COMPLETE") == 1
 
 
@@ -519,7 +529,7 @@ def test_without_once_a_repeat_is_recorded(tmp_path):
             "--verdict", "INVALID", "--project-root", str(deep)]
     assert main(args) == 0
     assert main(args) == 0
-    stream = (root / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
+    stream = (root / ".squad" / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
     assert stream.count("INVALID") == 2
 
 
@@ -535,5 +545,5 @@ def test_once_allows_the_same_verdict_after_something_else_ran(tmp_path):
     assert main(["end", "--cycle", "code-quality", "--slug", "B-169",
                  "--verdict", "FAIL_SOFT", "--project-root", str(deep)]) == 0
     assert main(done) == 0
-    stream = (root / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
+    stream = (root / ".squad" / "records" / "cycle-events.jsonl").read_text(encoding="utf-8")
     assert stream.count("IMPLEMENTATION_COMPLETE") == 2

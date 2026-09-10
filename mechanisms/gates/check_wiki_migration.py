@@ -5,7 +5,7 @@
 
 WHY THIS EXISTS
 ---------------
-`rules/records-location.md` and `wiki/decisions/where-knowledge-lives.md` split
+`rules/records-location.md` and `.squad/wiki/decisions/where-knowledge-lives.md` split
 one directory into two kinds of artifact: durable knowledge into the OKF bundle
 at `wiki/`, the dated trail left in `records/`. Readers fall back — bundle
 first, records second — because a hard cut would break every consumer that
@@ -24,7 +24,7 @@ the migration visible was the only evidence that nothing kept it visible — the
 kit's signature defect, a contract with no mechanism, in the file whose job was
 to prevent exactly this. Measured 2026-08-31, four days after the split was
 declared: the bundle held 6 files against 4406 lines still in `rules/`, and
-`wiki/opportunities/` was empty in the kit and in all eight consumers. The
+`.squad/wiki/opportunities/` was empty in the kit and in all eight consumers. The
 migration had not stalled loudly. It had stalled silently, which is worse,
 because a fallback that always falls back looks identical to a fallback nobody
 needs.
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wiki migration — {root}")
     for r in reports:
         print(f"  {r.state:<11} {r.leaf:<15} bundle={r.in_bundle} "
-              f"records/{r.legacy_leaf}={r.in_records}")
+              f"legacy {r.legacy_leaf}={r.in_records}")
         print(f"              {r.detail}")
     print()
     if failing:

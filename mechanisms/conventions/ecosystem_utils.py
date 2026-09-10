@@ -11,7 +11,16 @@ import from here instead of duplicating the detection logic.
 """
 from __future__ import annotations
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
 
 
 def is_ecosystem_layout(d: Path) -> bool:
@@ -74,20 +83,25 @@ def resolve_ecosystem_dir(project_dir: Path) -> Path | None:
       2. ``project_dir/.claude/``
       3. ``project_dir/.claude/plugins/cycle/``
 
-    Returns the first match with ``records/`` present, falling back
-    to any layout with ``skills/ + rules/ + hooks/``.  Returns None if
-    nothing matches.
+    Returns the first candidate holding ``skills/ + rules/ + hooks/``. Returns None
+    if nothing matches.
+
+    It used to prefer a candidate containing ``records/``, and that signal died when
+    the write root moved out: the ecosystem directory holds the installed KIT, and
+    everything the system writes now lives at ``<project>/.squad/``. Probing for a
+    directory that is no longer there made this resolve one level too high — it
+    returned the project instead of ``.claude/``. The kit trees are what "this
+    directory is the kit" actually means, and it is the test every hook already uses.
     """
+    # `.claude/` FIRST. When both it and the root hold the kit trees, the install is
+    # what should win — the same order `cycle_events._is_standalone` uses, where the
+    # test is whether `.claude/` HOLDS the kit rather than whether it exists. The
+    # records probe used to break that tie; it moved out, so the order carries it.
     candidates = [
-        project_dir,
         project_dir / ".claude",
+        project_dir,
         project_dir / ".claude" / "plugins" / "cycle",
     ]
-    # Prefer candidate with records/
-    for c in candidates:
-        if c.is_dir() and (c / "records").is_dir():
-            return c
-    # Fallback: any layout with skills/+rules/+hooks/
     for c in candidates:
         if c.is_dir() and is_ecosystem_layout(c):
             return c

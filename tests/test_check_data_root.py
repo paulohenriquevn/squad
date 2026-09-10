@@ -1,0 +1,94 @@
+"""Reporting the data a project has not moved into `<project>/.squad/` yet.
+
+The companion to `check_write_containment.py`, and it answers the other half:
+containment proves no MODULE can spell another root, this proves no DATA is sitting in
+one. Both are needed — an owner that is itself wrong passes the first and fails this.
+
+`SPLIT` is the state to be loudest about. Once the write root has content and a legacy
+root still does, a reader resolving the first never sees the second: the older copy is
+unreachable rather than merely old, and it looks current.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+_REPO = Path(__file__).parent.parent
+sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
+sys.path.insert(0, str(_REPO))
+
+from check_data_root import check_project  # noqa: E402
+
+from squad.paths import write_records_dir  # noqa: E402
+
+
+def _states(root: Path) -> dict[str, str]:
+    return {r.relative: r.state for r in check_project(root)}
+
+
+def _file(directory: Path, name: str = "a.md") -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / name).write_text("x\n", encoding="utf-8")
+
+
+def test_an_empty_project_has_nothing_to_migrate(tmp_path: Path) -> None:
+    assert _states(tmp_path) == {".squad": "EMPTY"}
+
+
+def test_a_project_writing_only_to_the_root_is_centralised(tmp_path: Path) -> None:
+    _file(write_records_dir(tmp_path, "plans"))
+
+    assert _states(tmp_path) == {".squad": "CENTRALISED"}
+
+
+def test_a_legacy_root_alone_is_unmigrated(tmp_path: Path) -> None:
+    """Readers still fall back to it, and nothing else says so."""
+    _file(tmp_path / ".claude" / "records" / "plans")
+
+    assert _states(tmp_path)[".claude/records"] == "UNMIGRATED"
+
+
+def test_both_roots_holding_data_is_split(tmp_path: Path) -> None:
+    """The loudest state: the old copy is unreachable and looks current."""
+    _file(write_records_dir(tmp_path, "plans"))
+    _file(tmp_path / ".claude" / "records" / "plans")
+
+    report = {r.relative: r for r in check_project(tmp_path)}
+    assert report[".claude/records"].state == "SPLIT"
+    assert "unreachable" in report[".claude/records"].detail
+
+
+def test_the_legacy_session_state_is_reported_too(tmp_path: Path) -> None:
+    """`session-state/` and `.attestations/` sat beside the installed kit. Policing
+    only the trail and the bundle left them outside the guarantee."""
+    _file(tmp_path / "session-state", "b-1-progress.md")
+
+    assert _states(tmp_path)["session-state"] == "UNMIGRATED"
+
+
+def test_a_scaffold_nobody_filled_is_not_data(tmp_path: Path) -> None:
+    """An empty directory carrying only `.gitkeep` is a scaffold, and reporting it
+    would send somebody to migrate nothing."""
+    legacy = tmp_path / "records" / "plans"
+    legacy.mkdir(parents=True)
+    (legacy / ".gitkeep").write_text("", encoding="utf-8")
+
+    assert _states(tmp_path) == {".squad": "EMPTY"}
+
+
+def test_the_bundle_counts_as_data(tmp_path: Path) -> None:
+    _file(tmp_path / "wiki" / "decisions")
+
+    assert _states(tmp_path)["wiki"] == "UNMIGRATED"
+
+
+def test_this_repository_follows_the_rule_it_enforces(tmp_path: Path) -> None:
+    """A rule the kit does not follow is a rule its consumers read as optional.
+
+    Its own bundle lived at `<repo>/wiki/` and its event stream at
+    `.claude/records/`; both moved when the write root was declared.
+    """
+    stale = [r for r in check_project(_REPO) if r.state in ("UNMIGRATED", "SPLIT")]
+
+    assert not stale, [f"{r.state} {r.relative} ({r.files} files)" for r in stale]

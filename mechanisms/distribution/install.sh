@@ -690,7 +690,7 @@ fi
 # the source (e.g. implementations/slice-X/, tools/argo-cd/, discoveries/
 # snapshots/slice-X/) are NOT mirrored — those are historical artefacts of
 # the plan repo's own honesty-gate, not part of the template.
-echo "==> Scaffolding records/ subdirs (semantic structure)"
+echo "==> Naming the write-root subdirs (semantic structure)"
 KB_DIRS=(
   "plans"                       # /plan-write outputs
   "implementations"             # /implement halt-loop logs
@@ -716,13 +716,29 @@ KB_DIRS=(
   "brainstorms"                 # one record per product-alignment session, discards included
 )
 
+# EVERYTHING this system writes goes under `<project>/.squad/`, never into `$ECO`.
+# `$ECO` is the installed dependency; `.squad/` is what the system produces, and
+# nothing executes from it. Keeping them apart is what lets a project un-version the
+# dependency without un-versioning its own records — measured across 20 consumers, 17
+# had the kit committed and every one carried 348-566 permanently dirty files, all of
+# them inside the install directory. See `squad/paths.py`.
+# Shell cannot import `squad/paths.py`, so it ASKS it rather than restating the root.
+# One owner, two languages.
+DATA_ROOT_NAME="$(python3 -c "import sys; sys.path.insert(0, '$SRC_DIR'); from squad.paths import DATA_DIRNAME; print(DATA_DIRNAME)" 2>/dev/null)"
+if [ -z "$DATA_ROOT_NAME" ]; then
+  echo "FATAL: cannot read the write root from squad/paths.py — refusing to guess it" >&2
+  exit 2
+fi
+DATA_ROOT="$TARGET/$DATA_ROOT_NAME"
+echo "==> Scaffolding the write root at $DATA_ROOT"
+
 # The OKF bundle: durable knowledge, separate from the dated trail above.
-# `rules/sop-schema.md` and wiki/decisions/where-knowledge-lives.md say why.
+# `rules/sop-schema.md` and .squad/wiki/decisions/where-knowledge-lives.md say why.
 for d in sops decisions references opportunities product; do
-  mkdir -p "$ECO/wiki/$d"
+  mkdir -p "$DATA_ROOT/wiki/$d"
 done
 for d in "${KB_DIRS[@]}"; do
-  mkdir -p "$ECO/records/$d"
+  mkdir -p "$DATA_ROOT/records/$d"
 done
 
 # agents/ holds only the README above. The routing table ships empty alongside it,

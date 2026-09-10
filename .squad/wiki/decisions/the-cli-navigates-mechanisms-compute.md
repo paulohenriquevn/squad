@@ -44,10 +44,10 @@ The measurements are not opinion. They were taken from one working session on
 The first proposal for this CLI was "every check, in one place". That part of the
 problem is already solved, and solved better than a new entry point would solve it:
 
-- [`verify_ecosystem.py`](../../mechanisms/gates/verify_ecosystem.py) aggregates. Of
+- [`verify_ecosystem.py`](../../../mechanisms/gates/verify_ecosystem.py) aggregates. Of
   the 23 gates on disk, the CI invokes 10 directly and roughly 11 more are reached
   through it.
-- [`test_every_gate_is_reachable.py`](../../tests/test_every_gate_is_reachable.py)
+- [`test_every_gate_is_reachable.py`](../../../tests/test_every_gate_is_reachable.py)
   proves no gate is orphaned — and it is not naive about it. It strips Python
   comments, triple-quoted literals and shell comments before matching, because nine
   prose mentions once looked exactly like call sites and hid an unrun gate for ten
@@ -63,7 +63,7 @@ tool built to prevent it.
 The kit has no execution problem. It has a **navigation** problem, and the cause is
 structural rather than accidental.
 
-[`rules/README.md`](../../rules/README.md) states that the question which places a
+[`rules/README.md`](../../../rules/README.md) states that the question which places a
 file is *not who reads it — it is who owns it*. That rule is correct for the disk: it
 is what lets an installer preserve a consumer's configuration and overwrite the kit's
 contracts. It is also what makes the tree unsearchable by task, because ownership and
@@ -128,7 +128,7 @@ which changes how work is done rather than only how long it takes.
 existing machine-readable registers (`rules/verdict-bands.txt`,
 `rules/cycle-phases.txt`, `rules/blocking-verdicts.txt`) and never restate them. An
 `explain` carrying prose of its own would rot, and
-[`check_prose_tests.py`](../../mechanisms/gates/check_prose_tests.py) exists because
+[`check_prose_tests.py`](../../../mechanisms/gates/check_prose_tests.py) exists because
 this repository has already paid for that lesson.
 
 ### The CI calls the CLI
@@ -139,7 +139,7 @@ a CLI that diverges from the CI.
 
 ### Where it lives, and why not in `mechanisms/`
 
-[`mechanisms/README.md`](../../mechanisms/README.md) organises five families by the
+[`mechanisms/README.md`](../../../mechanisms/README.md) organises five families by the
 **work they do** — gates, cycle, fleet, distribution, conventions. A sixth family named
 `cli/` would be organised by **form**, which is precisely the error the `scripts/` →
 `mechanisms/` rename corrected: that name described the shape of the files and said
@@ -155,7 +155,7 @@ its bin list, and its docstring requirement applies only to `.py`/`.sh` suffixes
 same suffix filter means **no gate reads the shim at all**: `verify_ecosystem` compiles
 `*.py` and `bash -n`s three `*.sh` globs, `ruff` is handed directories, and `shellcheck`
 reads `git ls-files '*.sh'`. So the shim is six lines and
-[`tests/test_sq_entry_point.py`](../../tests/test_sq_entry_point.py) executes it — that
+[`tests/test_sq_entry_point.py`](../../../tests/test_sq_entry_point.py) executes it — that
 test is the other half of the trade between the short name and the syntax gate.
 
 ## What is deliberately not in it
@@ -194,7 +194,7 @@ own evidence.
 than list them, and a gate should confirm the CLI reaches everything the CI reaches.
 Without that, the CLI lies by omission on the day a gate is added — the same failure
 mode as the prose-mention hole that
-[`test_every_gate_is_reachable.py`](../../tests/test_every_gate_is_reachable.py) had to
+[`test_every_gate_is_reachable.py`](../../../tests/test_every_gate_is_reachable.py) had to
 close.
 
 **The CI's step list moves into the CLI.** That is the point, and it means a bug in the
@@ -204,7 +204,7 @@ depends on it, which is the correct direction for that dependency.
 **A consumer does NOT get the `sq` file, and this ADR said otherwise until 2026-09-09.**
 The sentence here used to read *"Consumers gain an entry point that must keep working
 across installs"*. That was false when written and was caught during implementation
-planning: [`install.sh:235`](../../mechanisms/distribution/install.sh) iterates
+planning: [`install.sh:235`](../../../mechanisms/distribution/install.sh) iterates
 DIRECTORIES — `for item in skills rules hooks commands mechanisms squad` — and hands each
 to `copy_tree`. A loose file at the repository root is copied by nothing, and the manifest
 loop at `:820` does not list it either.
@@ -219,7 +219,7 @@ special-casing a file in the copy loop and in the manifest writer — a separate
 deliberately not folded into this one.
 
 Either way the entry point resolves its own location through
-[`squad/layout.py`](../../squad/layout.py), which already distinguishes plugin, copy and
+[`squad/layout.py`](../../../squad/layout.py), which already distinguishes plugin, copy and
 standalone, rather than assuming a path.
 
 **`--touched` can be wrong in a way that is silent.** A file-to-slice map that misses an
@@ -229,11 +229,11 @@ fail-safe direction the delegation rules take.
 
 ## Cross-references
 
-- [`rules/README.md`](../../rules/README.md) — ownership places a file, which is why a
+- [`rules/README.md`](../../../rules/README.md) — ownership places a file, which is why a
   task-oriented surface has to be a separate projection.
-- [`mechanisms/README.md`](../../mechanisms/README.md) — the five families, and why
+- [`mechanisms/README.md`](../../../mechanisms/README.md) — the five families, and why
   `cli/` is not a sixth.
-- [`rules/squad-map.md`](../../rules/squad-map.md) — the answer to *where am I and who
+- [`rules/squad-map.md`](../../../rules/squad-map.md) — the answer to *where am I and who
   decides this*; `sq` is its executable half.
-- [`wiki/decisions/where-knowledge-lives.md`](where-knowledge-lives.md) — the same
+- [`.squad/wiki/decisions/where-knowledge-lives.md`](where-knowledge-lives.md) — the same
   question asked of documents rather than of commands.

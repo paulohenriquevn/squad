@@ -240,7 +240,7 @@ suites had not run.
 `sq` computes no verdict — it runs the mechanisms and reports what they said. A consumer
 gets it as `python3 .claude/squad/cli`, since the installer copies directories and the root
 `sq` is a convenience for this repository. The reasoning is in
-[`wiki/decisions/the-cli-navigates-mechanisms-compute.md`](wiki/decisions/the-cli-navigates-mechanisms-compute.md).
+[`.squad/wiki/decisions/the-cli-navigates-mechanisms-compute.md`](.squad/wiki/decisions/the-cli-navigates-mechanisms-compute.md).
 
 ## Project structure
 
@@ -284,7 +284,7 @@ and re-verifying it would falsify what it is. That is why they are two
 directories and not one — and why `records/` is no longer called
 `knowledge-base/`, a name that came to mean *everything left after the knowledge
 moved out*. The reasoning is a concept in the bundle:
-[`wiki/decisions/where-knowledge-lives.md`](wiki/decisions/where-knowledge-lives.md).
+[`.squad/wiki/decisions/where-knowledge-lives.md`](.squad/wiki/decisions/where-knowledge-lives.md).
 
 Rules are the contract; a SKILL.md carries only phase-specific detail and points back at its rule.
 

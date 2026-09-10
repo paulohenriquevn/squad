@@ -47,12 +47,31 @@ def _which(*names: str):
     return lambda cmd: f"/usr/bin/{cmd}" if cmd in names else None
 
 
+def _plugins(tmp_path: Path, **supplied: tuple[str, ...]) -> Path:
+    """A fake Claude Code manifest holding exactly these plugins and their agents."""
+    cfg = tmp_path / "claude"
+    (cfg / "plugins").mkdir(parents=True, exist_ok=True)
+    entries = {}
+    for name, agents in supplied.items():
+        name = name.replace("_", "-")
+        tree = tmp_path / "installed" / name
+        (tree / "agents").mkdir(parents=True, exist_ok=True)
+        for a in agents:
+            (tree / "agents" / f"{a}.md").write_text(f"---\nname: {a}\n---\n",
+                                                     encoding="utf-8")
+        entries[f"{name}@m"] = [{"installPath": str(tree), "version": "1.0.0"}]
+    (cfg / "plugins" / "installed_plugins.json").write_text(
+        json.dumps({"version": 2, "plugins": entries}), encoding="utf-8")
+    return cfg
+
+
 def _convene(tmp_path, *, author="", body=ROSTER, agents=("nemesis", "leo"),
-             on_path=("codex",), phase="discover"):
+             on_path=("codex",), phase="discover", plugins=None):
     return convene("B-014", phase, author,
                    panel_path=_roster(tmp_path, body),
                    project=_project(tmp_path, *agents),
-                   which=_which(*on_path))
+                   which=_which(*on_path),
+                   config_dir=_plugins(tmp_path, **(plugins or {})))
 
 
 def test_a_complete_roster_assigns_every_seat(tmp_path: Path) -> None:
@@ -99,17 +118,40 @@ def test_an_absent_binary_is_unfillable_too(tmp_path: Path) -> None:
     assert result["unfilled"][0]["agent"] == "judge"
 
 
-def test_a_plugin_qualified_agent_needs_no_file(tmp_path: Path) -> None:
-    """`plugin:agent` is supplied by a plugin, not by this tree."""
-    body = """
+PLUGIN_ROSTER = """
 reviewer = discover | nemesis           | claude-opus-5   | builtin
 reviewer = discover | leo               | claude-sonnet-5 | builtin
 reviewer = discover | judge-codex:judge | gpt-5-codex     | builtin
 panel_phases = discover
 """
-    code, _ = _convene(tmp_path, body=body, on_path=())
+
+
+def test_an_installed_plugin_agent_fills_its_seat(tmp_path: Path) -> None:
+    """`plugin:agent` is supplied by a plugin, not by this tree — and it is verified
+    there, from Claude Code's own manifest."""
+    code, _ = _convene(tmp_path, body=PLUGIN_ROSTER, on_path=(),
+                       plugins={"judge-codex": ("judge",)})
 
     assert code == OK
+
+
+def test_a_seat_naming_an_uninstalled_plugin_is_unfillable(tmp_path: Path) -> None:
+    """This seat was accepted WITHOUT verification until 2026-09-09, on the strength of
+    its name — in a mechanism that refuses exactly that everywhere else."""
+    code, result = _convene(tmp_path, body=PLUGIN_ROSTER, on_path=(), plugins={})
+
+    assert code == UNFILLABLE
+    assert "not installed" in result["unfilled"][0]["reason"]
+
+
+def test_an_installed_plugin_that_lacks_the_agent_is_unfillable(tmp_path: Path) -> None:
+    """Installed is not the same as supplies-this-agent, and a typo in the roster must
+    not seat somebody who does not exist."""
+    code, result = _convene(tmp_path, body=PLUGIN_ROSTER, on_path=(),
+                            plugins={"judge-codex": ("some-other-judge",)})
+
+    assert code == UNFILLABLE
+    assert "supplies no agent" in result["unfilled"][0]["reason"]
 
 
 def test_a_short_panel_is_refused(tmp_path: Path) -> None:
@@ -186,9 +228,11 @@ panel_phases = discover
     project = _project(tmp_path, "nemesis", "leo")
     code = main(["--slug", "B-014", "--phase", "discover",
                  "--panel", str(_roster(tmp_path, body)), "--project", str(project),
+                 "--config-dir", str(_plugins(tmp_path, **{"judge-codex": ("judge",)})),
                  "--write", "--json"])
 
     assert code == OK
-    written = project / "records" / "panels" / "B-014-discover.assignment.json"
+    written = (project / ".squad" / "records" / "panels"
+               / "B-014-discover.assignment.json")
     assert json.loads(written.read_text())["assigned"] == [
         "nemesis", "leo", "judge-codex:judge"]

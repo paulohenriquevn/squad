@@ -19,7 +19,18 @@ from __future__ import annotations
 import argparse
 import shutil
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURE_BACKLOG = REPO / "skills" / "backlog-item" / "evals" / "fixtures" / "BACKLOG.md"
@@ -75,7 +86,7 @@ def build(dest: Path, with_plan: str | None = None, baseline: bool = False) -> N
     )
 
     for sub in ("discoveries/plans", "discoveries/opportunities", "backlog", "reviews"):
-        (dest / "records" / sub).mkdir(parents=True, exist_ok=True)
+        write_records_dir(dest, sub).mkdir(parents=True, exist_ok=True)
 
     # Make it a git repo: skills walk up looking for .git or .claude to find the root, and
     # without a marker they resolve to somewhere outside the sandbox.
@@ -102,7 +113,7 @@ def build(dest: Path, with_plan: str | None = None, baseline: bool = False) -> N
 
 def _write_plan(dest: Path, slug: str) -> None:
     """A scored measurement plan, for evals that start at /discover-execute."""
-    plan = dest / "records" / "discoveries" / "plans" / f"{slug}-plan.md"
+    plan = write_records_dir(dest, "discoveries") / "plans" / f"{slug}-plan.md"
     plan.write_text(
         "# Measurement Plan: round-trips in the trace listing\n\n"
         "**Item:** B-014\n"

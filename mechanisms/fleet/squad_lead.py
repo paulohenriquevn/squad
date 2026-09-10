@@ -84,10 +84,21 @@ import json
 import re
 import subprocess
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import records_dir  # noqa: E402
 
 #: A menu option the lead may confirm: its effect is a registry write the contract
 #: already prescribes. Matched against the option's own text, which the session wrote.
@@ -673,11 +684,10 @@ class Lead:
             ended = phrases["ended"].format(verdict=verdict) if verdict else ""
             history = phrases["some"].format(count=count, item=item, ended=ended)
         if self.project is not None:
-            for base in (".claude/records", "records"):
-                directory = self.project / base / "implementations"
-                if directory.is_dir() and any(directory.glob(f"*{item[2:]}*-BLOCKED.md")):
-                    history += phrases["blocked"]
-                    break
+            directory = records_dir(self.project, "implementations")
+            if directory is not None and any(
+                    directory.glob(f"*{item[2:]}*-BLOCKED.md")):
+                history += phrases["blocked"]
         template = _START_TEMPLATES.get(self.language, _START_TEMPLATES[DEFAULT_LANGUAGE])
         return template.format(item=item, why=why.rstrip(". "), history=history)
 

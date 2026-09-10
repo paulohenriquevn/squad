@@ -24,12 +24,21 @@ does.
 """
 from __future__ import annotations
 
-import importlib.util
-import subprocess
-import sys
-from pathlib import Path
+import sys as _s
+from pathlib import Path as _P
 
-import pytest
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+import importlib.util  # noqa: E402
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import pytest  # noqa: E402
+
+from squad.paths import write_records_dir  # noqa: E402
 
 yaml = pytest.importorskip("yaml")
 
@@ -187,13 +196,15 @@ def _kit_at(root: Path) -> Path:
     return root
 
 
-def test_the_destination_is_the_projects_data_root_not_the_callers_cwd(tmp_path) -> None:
+def test_the_destination_is_the_projects_write_root_not_the_callers_cwd(tmp_path) -> None:
     """Three answers to "where do the stage agents live" were in circulation, and
     both written-down ones were relative to whoever ran the command. On a real
     consumer the documented form built a second `records/` tree at the repository
-    root while the cycle's own sat in `.claude/records/` — putting the run's audit
-    trail outside the tree that holds every other record of the cycle. The old
-    code default was worse: `.claude/agents/`, where DECLARED agents live."""
+    root while the cycle's own sat in `.claude/records/`. The old code default was
+    worse: `.claude/agents/`, where DECLARED agents live.
+
+    All three are gone: there is one write root, so "where" has one answer.
+    """
     project = _kit_at(tmp_path / "consumer")
 
     done = subprocess.run(
@@ -201,12 +212,14 @@ def test_the_destination_is_the_projects_data_root_not_the_callers_cwd(tmp_path)
         capture_output=True, text=True, check=False)
 
     assert done.returncode == 0, done.stderr
-    written = project / ".claude" / "records" / "pipeline-agents" / "b-014"
+    written = write_records_dir(project, "pipeline-agents") / "b-014"
     assert {p.name for p in written.glob("*.md")} == {f"{s}.md" for s in STAGES}
     assert not (project / ".claude" / "agents").exists(), \
         "generated per-item files do not go where the kit keeps its declared agents"
     assert not (project / "records").exists(), \
-        "nor at the repository root, beside a data root that already exists"
+        "nor at the repository root, beside the write root that already exists"
+    assert not (project / ".claude" / "records").exists(), \
+        "nor inside the installed kit, which receives nothing this system writes"
 
 
 def test_a_project_with_no_kit_is_refused_rather_than_guessed_at(tmp_path) -> None:

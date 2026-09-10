@@ -45,7 +45,7 @@ Refuse to start when:
 
 ## The 5 specialized agents (generated dynamically)
 
-Before review begins, `scripts/spawn_reviewers.py` generates N agent definition files at `.claude/agents/review-{slug}-{date}/`. These are PERSISTENT (audit trail in git) and each contains a focused system prompt. The script reads templates `agent-{role}-reviewer.md` and writes them as `{role}.md` (without the `agent-` prefix or `-reviewer` suffix) into the run directory:
+Before review begins, `scripts/spawn_reviewers.py` generates N agent definition files at `.squad/records/reviews/review-{slug}-{date}/`. These are PERSISTENT (audit trail in git) and each contains a focused system prompt. The script reads templates `agent-{role}-reviewer.md` and writes them as `{role}.md` (without the `agent-` prefix or `-reviewer` suffix) into the run directory:
 
 | Role key | Output filename | Always generated? | What it reviews |
 |---|---|---|---|
@@ -102,6 +102,47 @@ Output: JSON with detected domains + confidence per domain.
 }
 ```
 
+### Step 2b — Independent auditors (selected from Step 2, never chosen here)
+
+The agents in Step 3 are yours, with ad-hoc prompts. These are not: the `loop-*`
+plugins audit the same domains against versioned catalogs that reject an unregistered
+finding id at the database boundary, measure complexity with real tools, and treat a
+run that found nothing as a hard block rather than a success.
+
+**You do not pick which ones run.** The domains Step 2 derived select them, and you may
+only WIDEN that — the same rule that forbids an author sitting on the panel judging
+their own document. Choosing a docs auditor for a concurrency change returns a clean
+report that honestly examined nothing that mattered, and an independent report about
+the wrong thing reads as coverage.
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/select_auditors.py" \
+  --slug {slug} --domains "<primary,secondary from Step 2>" --diff-base main --write
+```
+
+Name the change the way it is actually named: `--diff-base <ref>`, `--pr <n>` or
+`--commits <a>..<b>`. Exactly one — naming two is refused, because which would win is
+undefined in the plugins. Omit all three only when you mean a whole-tree audit, and the
+assignment will say so in writing.
+
+- **Exit 3** — a required plugin is not installed here. That is a coverage gap and an
+  `access` impediment, not a defect in the code and not a clean review. It becomes a
+  BLOCKER finding in Step 4 with its own remediation; do not work around it.
+- **`none_declared`** — this project requires no independent audit. Nothing to run.
+
+Run each command the assignment prints, exactly as printed. The `--output-dir` is where
+Step 4 looks, and the `--diff-base` is what keeps the audit about this change; each
+plugin applies its own declared `diff_mode` to that base.
+
+**Do not paraphrase an auditor's findings into your own.** They travel as that
+plugin's report, with its `## Verdict` quoted and its `## What Was NOT Analyzed`
+carried — that section is the only thing stopping partial coverage from reading as
+complete, and the seam between two honest halves is exactly where it gets dropped.
+
+`consolidate_findings.py` verifies in Step 4 that every required audit produced a
+report its own plugin accepts. A required audit that left no report did not pass — it
+did not run.
+
 ### Step 3 — Spawn specialized agents (parallel)
 
 ```bash
@@ -110,7 +151,7 @@ python3 .claude/skills/review/scripts/spawn_reviewers.py \
   --slug {slug} \
   --primary-domain memory-layer \
   --secondary-domains pgvector-schema,llm-extraction \
-  --output-dir .claude/agents/review-{slug}-{YYYY-MM-DD}/
+  --output-dir .squad/records/reviews/review-{slug}-{YYYY-MM-DD}/
 ```
 
 Both `--slug` and `--primary-domain` are required. `--date` defaults to today UTC; `--diff-base` defaults to `main`.
@@ -152,7 +193,7 @@ Each agent runs its review independently and returns findings in a structured fo
 
 ```bash
 python3 .claude/skills/review/scripts/consolidate_findings.py \
-  --findings-dir .claude/agents/review-{slug}-{date}/findings/ \
+  --findings-dir .squad/records/reviews/review-{slug}-{date}/findings/ \
   --output .claude/records/reviews/{slug}-review-{date}.md \
   --plan .claude/records/plans/{slug}-plan.md
 ```
@@ -250,12 +291,12 @@ Report format (see `consolidate_findings.py`):
 - Wiring triad: 12/12 symbols pillar (a) PASS; 11/12 pillar (b); 8/12 pillar (c) observed
 
 ## Spawned agents (audit trail)
-- .claude/agents/review-{slug}-{date}/architecture.md
-- .claude/agents/review-{slug}-{date}/tests.md
-- .claude/agents/review-{slug}-{date}/wiring.md
-- .claude/agents/review-{slug}-{date}/cross-validation.md
-- .claude/agents/review-{slug}-{date}/domain-memory-layer.md
-- .claude/agents/review-{slug}-{date}/domain-pgvector-schema.md
+- .squad/records/reviews/review-{slug}-{date}/architecture.md
+- .squad/records/reviews/review-{slug}-{date}/tests.md
+- .squad/records/reviews/review-{slug}-{date}/wiring.md
+- .squad/records/reviews/review-{slug}-{date}/cross-validation.md
+- .squad/records/reviews/review-{slug}-{date}/domain-memory-layer.md
+- .squad/records/reviews/review-{slug}-{date}/domain-pgvector-schema.md
 
 ## Handoff decision
 {READY_TO_MERGE or READY_TO_MERGE_WITH_FOLLOWUPS: open PR / NEEDS_FIXES: loop /implement / NEEDS_DEEPER: re-spawn with broader scope}
@@ -377,7 +418,7 @@ Per `cycle-review.md § Verdicts` — `BLOCKED` is the honest outcome here:
 - Orchestrator prompt: `prompts/orchestrator-prompt.md`
 - Scripts: `scripts/detect_domain.py`, `scripts/spawn_reviewers.py`, `scripts/edge_case_coverage.py`, `scripts/consolidate_findings.py`
 - Reuses: `.claude/skills/implement/scripts/run_validation.py` (quality gates), `.claude/skills/implement/scripts/check_wiring.py` (wiring re-validation)
-- Generated audit trail: `.claude/agents/review-{slug}-{date}/`
+- Generated audit trail: `.squad/records/reviews/review-{slug}-{date}/`
 - Final reports: `.claude/records/reviews/{slug}-review-{date}.md`
 - Project rules consumed: `architecture.md`, `testing.md`, `public-copy.md`, `discover-plan-golden-rule.md` and `discover-opportunity-golden-rule.md` (if the review touches discovery artifacts)
 

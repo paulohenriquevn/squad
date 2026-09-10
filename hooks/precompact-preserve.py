@@ -23,6 +23,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import PreCompactContext, create_context
 from squad.layout import resolve
+from squad.paths import (
+    SESSION_STATE,
+    SNAPSHOTS,
+    write_records_dir,
+    write_state_dir,
+)
 from squad.plan import goal_line
 from squad.plan import resolve as resolve_plan
 
@@ -39,16 +45,19 @@ def main() -> None:
         # there is nothing of ours to preserve.
         return
     eco = layout.eco
+    # State the system writes goes under the project's write root, never beside the
+    # installed kit. `layout.eco` is where the KIT is.
+    project = layout.project_dir
 
     active = resolve_plan(eco)
-    snapshots = eco / ".compaction-snapshots"
+    snapshots = write_state_dir(project, SNAPSHOTS)
     preserved: list[str] = []
     if active is not None:
         plan = active.path
         # The slug comes from `ActivePlan`, not from slicing the filename again.
         # Three hooks resolving one plan by hand is what `squad/plan.py` exists
         # to have ended, and this was the copy that survived it.
-        progress = eco / "session-state" / f"{active.slug}-progress.md"
+        progress = write_state_dir(project, SESSION_STATE) / f"{active.slug}-progress.md"
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
         # The progress log is snapshotted too, and that is the point of the hook
@@ -93,7 +102,8 @@ def main() -> None:
               f"{snapshots}/.")
     else:
         print(f"{TAG} Post-compaction: nothing was snapshotted.")
-    print(f"{TAG} Re-read {eco}/records/plans/ and {eco}/session-state/ to rebuild context.")
+    print(f"{TAG} Re-read {write_records_dir(project, 'plans')} and "
+          f"{write_state_dir(project, SESSION_STATE)} to rebuild context.")
 
 
 if __name__ == "__main__":

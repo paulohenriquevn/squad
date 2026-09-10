@@ -56,7 +56,7 @@ So the kit measures that a skill is *found* and never that it *holds up*. This i
 the gap the Skills-Coach paper names as its third sub-question and answers by
 grading prose, which `skills/_kit-rules/prompt-text-is-not-behaviour.md` refuses. The oracle
 this kit would use instead already exists and has been used once —
-`wiki/references/judgement-gates-are-insurance.md` records running the scenario
+`.squad/wiki/references/judgement-gates-are-insurance.md` records running the scenario
 WITHOUT the rule, under pressure, and reading what the agent did.
 
 Written here rather than fixed here because a runner is a build, not an edit, and

@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import UserPromptSubmitContext, create_context
 from squad.layout import resolve
+from squad.paths import SESSION_STATE, write_state_dir
 from squad.plan import attestation, goal_line
 from squad.plan import resolve as resolve_plan
 
@@ -68,7 +69,8 @@ def plan_context(eco: Path, kit_dir: Path) -> str:
     goal = goal_line(active.path)
     if goal:
         lines.append(f"Goal: {goal}")
-    progress = eco / "session-state" / f"{active.slug}-progress.md"
+    project = eco.parent if eco.name == ".claude" else eco
+    progress = write_state_dir(project, SESSION_STATE) / f"{active.slug}-progress.md"
     if progress.is_file():
         lines.append(f"Progress log: {progress} (Read its tail for recent state).")
 

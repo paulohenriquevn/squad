@@ -54,7 +54,18 @@ deadcode-output/
 
 # Study material, kept local (not part of the shipped cycle)
 specs/
-
+# The write root. Run data never travels; the OKF bundle does, because this kit's
+# durable knowledge IS its source.
+#
+# `.squad/*` and not `.squad/`: git does not descend into an excluded DIRECTORY, so a
+# negation under one never fires. Excluding the CONTENTS leaves the directory visible
+# and lets `!.squad/wiki/` re-include the bundle.
+#
+# Without this, a new ADR here is ignored and `git status` says nothing. The bundle's 11
+# files survived the move only because they were already tracked — luck, not a rule, and
+# `tests/test_write_root_is_versioned_correctly.py` is what turns it into one.
+.squad/*
+!.squad/wiki/
 # Nested repository with its own remote — never a submodule of the cycle
 codex-plugin-cc/
 

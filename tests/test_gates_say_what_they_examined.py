@@ -47,7 +47,13 @@ ROOT_FLAG = {
     "check_semantic_names": "--repo",
     "check_skill_map": "--root",
     "check_squad_map": "--root",
+    # Joined 2026-09-09 with the write root: it reports a project still holding data
+    # outside `.squad/`, so it sweeps a tree and takes a root.
+    "check_data_root": "--root",
     "check_wiki_migration": "--root",
+    # Joined 2026-09-09 with the write root. It scans the kit's own trees for a data
+    # root spelled outside `squad/paths.py`, so it takes a root like its siblings.
+    "check_write_containment": "--root",
 }
 
 #: Ways a gate can say "there was nothing here". Deliberately generous: the point

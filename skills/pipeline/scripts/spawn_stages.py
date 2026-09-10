@@ -59,7 +59,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 from squad.layout import resolve
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 #: The stages this script materialises. IMPLEMENT and beyond are not here yet —
 #: they write to the repository, and a writing stage needs its own review of what
@@ -181,7 +192,7 @@ def _default_output_dir(repo: Path, item: str) -> Path:
         raise SystemExit(
             f"FATAL: no kit under {repo}, so there is no data root to write to. "
             f"Pass --output-dir explicitly if that is deliberate.")
-    return layout.eco / "records" / "pipeline-agents" / item.lower()
+    return write_records_dir(layout.project_dir, "pipeline-agents") / item.lower()
 
 
 def main(argv: list[str] | None = None) -> int:

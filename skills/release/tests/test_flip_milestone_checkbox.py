@@ -1,10 +1,19 @@
 """Tests for flip_milestone_checkbox.py."""
 from __future__ import annotations
 
-import subprocess
-from pathlib import Path
+import sys as _s
+from pathlib import Path as _P
 
-from flip_milestone_checkbox import flip
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _s.path.insert(0, str(_up))
+        break
+import subprocess  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from flip_milestone_checkbox import flip  # noqa: E402
+
+from squad.paths import write_records_dir  # noqa: E402
 
 
 def test_flips_unchecked_milestone(roadmap_pre_flip: Path) -> None:
@@ -110,14 +119,15 @@ def test_cli_returncode_2_on_invalid_milestone_id(roadmap_pre_flip: Path) -> Non
 class TestCanonicalRunsDir:
     """The CWD-relative default was what split the records in every consumer."""
 
-    def test_the_plugin_layout_uses_the_knowledge_base_inside_dot_claude(self, tmp_path) -> None:
+    def test_a_plugin_layout_uses_the_write_root(self, tmp_path) -> None:
         from flip_milestone_checkbox import _default_runs_dir
 
         (tmp_path / ".claude").mkdir()
 
-        assert _default_runs_dir(tmp_path) == tmp_path / ".claude" / "records" / "roadmap-runs"
+        assert _default_runs_dir(tmp_path) == write_records_dir(tmp_path, "roadmap-runs")
 
-    def test_the_standalone_layout_uses_the_root(self, tmp_path) -> None:
+    def test_a_standalone_layout_uses_the_same_root(self, tmp_path) -> None:
+        """The layout exception is gone: one answer, so one way to be wrong."""
         from flip_milestone_checkbox import _default_runs_dir
 
-        assert _default_runs_dir(tmp_path) == tmp_path / "records" / "roadmap-runs"
+        assert _default_runs_dir(tmp_path) == write_records_dir(tmp_path, "roadmap-runs")

@@ -20,9 +20,14 @@ import argparse
 import json
 import re
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
 from typing import Any
 
 from _rubric_loader import load_rubric
@@ -41,6 +46,12 @@ from check_patterns_consumption import PatternsConsumptionReport, check_patterns
 from check_spec_smells import SmellReport, check_spec_smells
 from check_task_interfaces import check_task_interfaces
 from check_tdd_in_bugfix import TDDReport, check_tdd_in_bugfix
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_records_dir  # noqa: E402
 
 SKILL_ROOT = Path(__file__).parent.parent
 DEFAULT_RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"
@@ -71,7 +82,7 @@ def _find_project_root(start: Path) -> Path:
 def _find_plans_dir(project_root: Path) -> Path:
     """Auto-detect the plans directory across common project conventions."""
     candidates = [
-        project_root / ".claude" / "records" / "plans",
+        write_records_dir(project_root, "plans"),
         project_root / ".claude" / "plans",
         project_root / "plans",
         project_root / "docs" / "plans",
@@ -86,7 +97,7 @@ def _find_plans_dir(project_root: Path) -> Path:
 def _find_holdout_dir(project_root: Path) -> Path:
     """Auto-detect holdout dir; fall back to canonical path."""
     candidates = [
-        project_root / ".claude" / "records" / "concepts" / "plan-confidence" / "holdout",
+        write_records_dir(project_root, "concepts") / "plan-confidence" / "holdout",
         project_root / ".claude" / "plan-confidence" / "holdout",
     ]
     for candidate in candidates:

@@ -43,11 +43,22 @@ import json
 import re
 import subprocess
 import sys
+
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import Path as _Path_bootstrap
 from typing import Any
 
 import yaml
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import records_dir  # noqa: E402
 
 # The upstream gate lives beside this script. It runs as `__main__` (the directory
 # enters sys.path on its own) and is also imported by tests that insert the directory
@@ -57,6 +68,28 @@ try:
 except ImportError:  # pragma: no cover - alternative import path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from check_upstream_gate import check_upstream_gate
+
+# The independent auditors are the kit's, not this skill's, so their coverage gate
+# lives in `mechanisms/gates/`. Resolved through the project root rather than a fixed
+# relative path, because a plugin install puts the kit under `.claude/`.
+def _load_auditor_coverage():
+    """`auditor_coverage_findings`, or None when the kit's gates are unreachable.
+
+    A kit without the gate returns None and this skill says so as a finding, rather
+    than silently reviewing as if no audit had ever been required.
+    """
+    here = Path(__file__).resolve()
+    for root in here.parents:
+        for gates in (root / "mechanisms" / "gates", root / ".claude" / "mechanisms" / "gates"):
+            if (gates / "check_auditor_coverage.py").is_file():
+                if str(gates) not in sys.path:
+                    sys.path.insert(0, str(gates))
+                try:
+                    from check_auditor_coverage import auditor_coverage_findings
+                except ImportError:  # pragma: no cover - environment, not logic
+                    return None
+                return auditor_coverage_findings
+    return None
 
 SEVERITY_ORDER = ["BLOCKER", "HIGH", "MEDIUM", "LOW", "INFO"]
 # Back-compat alias map for findings emitted by agents using legacy tokens.
@@ -263,7 +296,7 @@ def _project_root_for(findings_dir: Path) -> Path:
     """
     current = findings_dir.resolve()
     for candidate in (current, *current.parents):
-        if (candidate / "records").is_dir() or (candidate / ".claude" / "records").is_dir():
+        if records_dir(candidate) is not None:
             return candidate
     return current
 
@@ -648,6 +681,32 @@ def main() -> int:
         _normalize_finding(f, "check_upstream_gate")
         for f in check_upstream_gate(_project_root_for(args.findings_dir), slug)
     )
+
+    # The independent audits enter the same way, for the same reason. `/review` spawns
+    # Claude sub-agents with ad-hoc prompts; the `loop-*` plugins audit the same domains
+    # against versioned catalogs that reject an unregistered finding id at the database
+    # boundary. `rules/review-auditors.txt` derives WHICH ones this change must face —
+    # derived, because letting the reviewing agent choose its own auditor is the failure
+    # the review panel already refuses when it will not seat an author.
+    _auditor_findings = _load_auditor_coverage()
+    _project = _project_root_for(args.findings_dir)
+    if _auditor_findings is None:
+        all_findings.append(_normalize_finding({
+            "severity": "BLOCKER",
+            "category": "auditor-coverage",
+            "title": "The independent-auditor gate could not be reached",
+            "evidence": "no `mechanisms/gates/check_auditor_coverage.py` above "
+                        f"{_project}",
+            "remediation": "Reinstall the kit. Reviewing without it would report a "
+                           "verdict on a change whose required independent audits "
+                           "nobody checked for.",
+            "source": "consolidate_findings",
+        }, "check_auditor_coverage"))
+    else:
+        all_findings.extend(
+            _normalize_finding(f, "check_auditor_coverage")
+            for f in _auditor_findings(_project, slug)
+        )
 
     # Deduplicate
     deduped = _dedupe_findings(all_findings)

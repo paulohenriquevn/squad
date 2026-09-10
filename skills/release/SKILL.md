@@ -10,7 +10,7 @@ argument-hint: "[bump-level: patch|minor|major] (optional — auto-derived from 
 
 # Release — develop → main with semver tag
 
-Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automates the release ritual end-to-end, merge included — see [`rules/autonomy-envelope.md`](../../rules/autonomy-envelope.md) floor 2 and the decision behind it, [`wiki/decisions/merge-is-inside-the-envelope.md`](../../wiki/decisions/merge-is-inside-the-envelope.md).
+Single entry-point for [`cycle-release`](../../rules/cycle-release.md). Automates the release ritual end-to-end, merge included — see [`rules/autonomy-envelope.md`](../../rules/autonomy-envelope.md) floor 2 and the decision behind it, [`.squad/wiki/decisions/merge-is-inside-the-envelope.md`](../../.squad/wiki/decisions/merge-is-inside-the-envelope.md).
 
 ## Cycle contract
 

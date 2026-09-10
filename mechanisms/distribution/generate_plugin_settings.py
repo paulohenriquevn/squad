@@ -30,9 +30,13 @@ PLUGIN_PREFIX = "$CLAUDE_PROJECT_DIR/.claude/"
 #: `tests/test_generate_plugin_settings.py` reads the tree list out of
 #: `install.sh` and confronts it with this one, so the next tree added to the
 #: installer fails here instead of shipping a broken path.
+#: `records/` is deliberately absent. It used to be rewritten to
+#: `.claude/records/`, which is exactly the mixing the write root removes: the kit's
+#: trees move INTO the install, and everything the system writes moves OUT of it, to
+#: `<project>/.squad/`. Rewriting a data path into the dependency's directory is what
+#: made 17 consumer repositories carry the kit in git.
 REWRITE_DIRS = (
     "skills/", "rules/", "hooks/", "commands/", "mechanisms/", "squad/",
-    "records/",
 )
 
 

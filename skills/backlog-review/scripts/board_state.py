@@ -37,12 +37,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# The one owner of every data-root literal. A local copy is what produced six lists in
+# four different orders, and `check_write_containment.py` refuses a second one.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
 from check_backlog_structure import (
     OPEN_STATUS,
     _parse_items,
     declares_impediment,
     parse_blocked_by,
 )
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
 
 
 #: The board's columns, in cycle order, READ FROM THE DECLARATION rather than copied.
@@ -130,7 +141,8 @@ def item_id_of(slug: str) -> str:
 
 
 def _events_path(project_root: Path) -> Path | None:
-    for rel in (".claude/records/cycle-events.jsonl", "records/cycle-events.jsonl"):
+    for rel in (f"{b}/cycle-events.jsonl"
+                for b in (f"{DATA_DIRNAME}/records", *LEGACY_RECORDS_ROOTS)):
         candidate = project_root / rel
         if candidate.is_file():
             return candidate
@@ -248,7 +260,7 @@ _DONE_TASK_STATUS = frozenset({"committed", "done", "completed", "merged"})
 
 
 def _records_dir(project_root: Path) -> Path | None:
-    for rel in (".claude/records", "records"):
+    for rel in (f"{DATA_DIRNAME}/records", *LEGACY_RECORDS_ROOTS):
         candidate = project_root / rel
         if candidate.is_dir():
             return candidate

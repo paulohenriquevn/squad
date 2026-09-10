@@ -104,9 +104,14 @@ def test_find_ecosystem_dir_not_found_optional(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_ecosystem_dir_with_knowledge_base(tmp_path: Path) -> None:
-    """Prefers candidate that has records/ even over standalone layout."""
-    # Standalone layout at root (no records)
+def test_resolve_ecosystem_dir_prefers_the_install_over_the_root(tmp_path: Path) -> None:
+    """When both hold the kit, `.claude/` wins.
+
+    The tie used to be broken by which candidate contained `records/`. That signal
+    moved out with the write root, so the probe order carries it instead — the same
+    order `cycle_events._is_standalone` uses.
+    """
+    # Standalone-shaped layout at the root
     (tmp_path / "skills").mkdir()
     (tmp_path / "rules").mkdir()
     (tmp_path / "hooks").mkdir()
@@ -117,7 +122,6 @@ def test_resolve_ecosystem_dir_with_knowledge_base(tmp_path: Path) -> None:
     (claude_dir / "skills").mkdir()
     (claude_dir / "rules").mkdir()
     (claude_dir / "hooks").mkdir()
-    (claude_dir / "records").mkdir()
 
     result = resolve_ecosystem_dir(tmp_path)
 
