@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **`/squad-fit` — a diagnosis of whether the squad can run in a given project** (#66)
+  The kit ships `agents/<domain>.md` empty on purpose, so every project has a gap on the
+  day it installs. Nothing measured that gap: the kit could report one unroutable item
+  (`route_domain.py`) and one unfillable seat (`check_panel_capability.py`), after the
+  work had already been selected. This asks both of everything at once, plus whether the
+  project's own skills carry an SOP and are visible to the validator, and answers the
+  question a person asks before adopting — what has to be written, and what breaks until
+  it is. Read-only; it never writes the specialist it says is missing, because a
+  correctly-named stub routes items into an empty prompt.
+
 ### Fixed
 - **The panel's diversity rule protected the seat, not the decision**
   `review_panel.py` checked that a recognised non-home family had VOTED, over the votes
