@@ -329,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         # Name where it looked. "not found" over an unstated search is what makes
         # a layout defect read as a missing file the reader is supposed to create.
         looked = ", ".join(str(r) for r in _candidate_roots(args.project_root)[:4])
-        print(f"FATAL: no rules/domain-routing.txt (nor a legacy cycle-backlog.md) "
+        print(f"FATAL: no routing table (nor a legacy cycle-backlog.md) "
               f"under any of: {looked} — cannot route", file=sys.stderr)
         return 2
 

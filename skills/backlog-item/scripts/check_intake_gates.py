@@ -109,7 +109,7 @@ STATUS_RE = re.compile(r"^status:\s*`?([a-z_]+)`?", re.MULTILINE)
 #: it just gets re-filed verbatim tomorrow (`skills/backlog-item/SKILL.md` § Step 7).
 _ACTION_BY_REASON = {
     "unroutable_repo":
-        "the repo is in no domain. Add it to rules/domain-routing.txt, or file the "
+        "the repo is in no domain. Add it to `domain-routing.txt`, or file the "
         "item against a repo the table knows.",
     "broken_route":
         "the table routes this repo to a specialist nobody wrote. Write "
