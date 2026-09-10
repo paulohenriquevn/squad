@@ -110,6 +110,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   152 agent files underneath them.
 
 ### Fixed
+- **The architecture detector picked the wrong script and reported a clean cruise that never ran**
+  It searched `package.json` for the first script mentioning `depcruise` and ran that one. In a
+  repository whose `lint` script chains several tools (`eslint . && depcruise ...`), `lint` sorted
+  first — so the detector shelled out to the whole chain, and a failure anywhere in it was read as
+  a dependency-graph result. It now prefers a script that neither chains (`&&`, `||`, `;`, `|`) nor
+  delegates (`npm run`, `pnpm run`, `yarn run`, `npm-run-all`), falling back to the first match when
+  a chain is genuinely the only one. Measured in a consumer whose `depcruise` script existed and was
+  never the one invoked.
 - **A `plugin:agent` panel seat was accepted without verification, and no longer is (#65)**
   `convene_panel.py` skipped the existence check for any seat whose name contained a colon,
   because there is no file for it in this tree. So the largest pool of specialists a project
