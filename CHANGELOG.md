@@ -29,6 +29,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   correctly-named stub routes items into an empty prompt.
 
 ### Changed
+- **Domains derive from the module boundary the project already declared** (#68)
+  `detect_domains.py` gave a single repository exactly one domain, however many
+  modules it held. A `go.mod` / `Cargo.toml` / workspace `package.json` is a
+  compilation and versioning boundary somebody committed to, and invariants differ
+  exactly there — a module has its own dependencies, its own build, and its own answer
+  to what may import it. Modules nested under another join their ancestor; what
+  remains groups by first path segment, so six thin packages under `packages/` stay
+  ONE domain (the measured case that argued against per-package domains) while
+  top-level modules become their own. The repository stays a domain beside them,
+  because `route()` matches exactly and items filed against the repo name must still
+  route. Measured on an adopter: 8 modules, and 13 of 17 live items (76%) touch
+  exactly one.
 - **The routing table moved to `.squad/domain-routing.txt`** (#67)
   It was the one file under `rules/` that code produced — `detect_domains.py --write`
   derives it, `route_domain.py` reads it, and nothing outside the kit touches either

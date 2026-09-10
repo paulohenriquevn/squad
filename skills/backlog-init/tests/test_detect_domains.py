@@ -42,8 +42,11 @@ def test_single_repo_becomes_one_domain_named_after_it(tmp_path: Path) -> None:
 def test_npm_monorepo_lists_each_package_by_path(tmp_path: Path) -> None:
     """The adopter-sdk case: one repo, several packages, items citing `packages/x`.
 
-    A single domain — there is one SDK, not six teams. The packages enter as
-    path-addressed repos, a form the kit already supports.
+    There is one SDK, not six teams, and that still holds — the packages share a root
+    segment, so they group into ONE `packages` domain rather than one each. What
+    changed on 2026-09-10 is that the repository itself is now its own domain beside
+    them, because `route()` matches a repo exactly and an item filed against the repo
+    name needs a row that names it.
     """
     root = _repo(tmp_path, "adopter-sdk")
     for pkg in ("sdk", "acp", "sdk-pty"):
@@ -52,9 +55,11 @@ def test_npm_monorepo_lists_each_package_by_path(tmp_path: Path) -> None:
     (root / "node_modules" / "lodash").mkdir(parents=True)
     (root / "node_modules" / "lodash" / "package.json").write_text("{}", encoding="utf-8")
 
-    domains = detect_domains(root)
-    assert len(domains) == 1
-    assert domains[0].repos == ["adopter-sdk", "packages/acp", "packages/sdk", "packages/sdk-pty"]
+    domains = {d.name: d.repos for d in detect_domains(root)}
+    assert domains == {
+        "adopter-sdk": ["adopter-sdk"],
+        "packages": ["packages/acp", "packages/sdk", "packages/sdk-pty"],
+    }, "six thin packages must not become six specialists"
 
 
 def test_go_workspace_modules_become_repos(tmp_path: Path) -> None:
@@ -63,8 +68,11 @@ def test_go_workspace_modules_become_repos(tmp_path: Path) -> None:
                                   encoding="utf-8")
     (root / "api").mkdir()
     (root / "operators").mkdir()
-    domains = detect_domains(root)
-    assert domains[0].repos == ["theo", "api", "operators"]  # the sibling outside the repo stays out
+    domains = {d.name: d.repos for d in detect_domains(root)}
+    # A `go.work` may `use ../sibling-repo`. That module belongs to another repository,
+    # with gates of its own, and must not appear here under any grouping rule.
+    assert domains == {"theo": ["theo"], "api": ["api"], "operators": ["operators"]}
+    assert not any("sibling" in r for repos in domains.values() for r in repos)
 
 
 def test_umbrella_gives_one_domain_per_checked_out_repo(tmp_path: Path) -> None:
@@ -100,7 +108,11 @@ def test_rendered_table_is_parseable_by_route_domain(tmp_path: Path) -> None:
 
     table = parse_routing_table(rule)
     assert "stale-domain" not in table, "the other ecosystem's table has to go"
-    assert route("packages/sdk", table) == ("adopter-sdk", "agents/adopter-sdk.md")
+    # The package routes to the boundary that owns it, and the repository name still
+    # routes — the contract this test exists for is that BOTH resolve through the
+    # parser, not that they resolve to the same specialist.
+    assert route("packages/sdk", table) == ("packages", "agents/packages.md")
+    assert route("adopter-sdk", table) == ("adopter-sdk", "agents/adopter-sdk.md")
     assert route("adopter-sdk", table) == ("adopter-sdk", "agents/adopter-sdk.md")
     assert "## Verdicts" in rule.read_text(encoding="utf-8"), "the rest of the file survives"
 
