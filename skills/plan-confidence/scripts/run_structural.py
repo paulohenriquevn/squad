@@ -772,7 +772,7 @@ except ImportError:
 #: order to say it will NOT be dismissed, and a grep cannot tell the two apart.
 #: The gate has to read a decision, not a keyword.
 _DISMISS_SOFT_CAP_RE = re.compile(
-    #: B-170 (TheoCode) — two defects in one expression, neither covered by a test.
+    #: B-170 (an adopter) — two defects in one expression, neither covered by a test.
     #:
     #: The reason excluded `>`, so a reason written with an arrow (`warnings fell 15 -> 0`, the idiom
     #: this ecosystem states before/after with) ended the match early and the dismissal registered as

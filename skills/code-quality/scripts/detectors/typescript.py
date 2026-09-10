@@ -563,7 +563,7 @@ def _depcruise_script(pkg: Path) -> str | None:
     ]
     if not matches:
         return None
-    # B-166 (TheoCode) — prefer a script that runs ONLY the cruise. Returning the first match picks
+    # B-166 (an adopter) — prefer a script that runs ONLY the cruise. Returning the first match picks
     # whatever `package.json` happens to list first, and in a real repository that is the lint chain:
     # a `lint` that ends in `npm run depcruise` contains the token and usually sorts before the
     # dedicated script. Measured on an adopter: matches were `['lint', 'depcruise']`, first won, so the

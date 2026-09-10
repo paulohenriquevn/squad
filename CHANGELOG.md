@@ -6,6 +6,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **The panel's diversity rule protected the seat, not the decision**
+  `review_panel.py` checked that a recognised non-home family had VOTED, over the votes
+  cast. Nothing checked the votes that CARRY. So two Claudes approving while the only
+  orthogonal reviewer returned produced APPROVED, with the dissent filed beside it —
+  advancing a conclusion on exactly the correlated approval the seat was bought to
+  prevent. An external reviewer found it in the panel's own worked example; this
+  repository's `test_a_majority_carries_the_document` had frozen the failure as the
+  contract. The majority must now span two recognised families, and the test is
+  inverted. No token was invented: a document the orthogonal seat returned is
+  `NEEDS_REVISION`, which already means what it needs to mean.
+- **A dissent travelled as a name, so nobody downstream could act on it**
+  The record carried `["judge"]`. The reason — the thing the objection was ABOUT — was
+  dropped, and "kept in the record" then meant kept where nobody looks. Dissent now
+  carries reviewer, family and reason, and `check_panel_approval.py` prints it under an
+  APPROVAL, where the reader who advances the artifact is the one who must see it.
+- **An approval survived a rewrite of the thing approved**
+  Every panel guarantee was about WHO voted and HOW; nothing bound the votes to the
+  text. Editing the artifact after the votes landed was the cheapest way to launder a
+  change past a panel. The record now carries `artifact_sha256`, the gate recomputes it,
+  and a record without one is reported as an unverified binding rather than accepted.
+- **`check_panel_approval.py` did not say what it could not check**
+  It now carries `not_checked`, and the first line is the one that matters: the record
+  is written by the session that was meant to collect the votes, so three fabricated
+  votes produce a file this gate accepts. `alignment_judge.py` admits the same of
+  itself. Building a panel on top made the ceremony more elaborate, not the independence
+  real — and closing it needs a signature the executor cannot mint.
+- **`scope` and `threshold` could redefine success silently**
+  Fail a requirement, delegate the requirement away or lower its target, approve what
+  remains, declare success: every step legitimate, the result a pass nothing earned. The
+  rationale requirement did not stop it, because a rationale is a sentence and the
+  sentence can be true. Both classes must now name the obligation they SUPERSEDE, and
+  `rewrite_wall` refuses one that does not. The record then shows an obligation that was
+  moved rather than one that was never there.
+- **An autonomous run could reach a human decision by returning to the entrance**
+  Halts return work to the registry, and intake gate G5 says a person decides. "Zero
+  interventions after BACKLOG" did not survive the recirculation. `g5_route` gives the
+  items the SYSTEM creates an executable route: a `why_now` citing a phase verdict this
+  project's own stream carries is a LOOKUP, not a claim. It fails closed — an
+  unconfirmable citation stays with a person, because a fabricated local reason is
+  exactly what G5's second half was written about.
+
+### Added
+- **`check_review_binding.py` — an approval bound to a revision, not to a name**
+  A review verdict said the work was examined and never said WHICH work, so a commit
+  landing after consolidation travelled to `develop` on an approval that never saw it.
+  This compares the reviewed commit against the tip and refuses when the files the
+  review examined have changed. It does NOT refuse on any movement — a gate that did
+  would be bypassed within a week, and a bypassed gate protects nothing — and a record
+  listing no files widens to every move rather than assuming harmlessness.
+  `promote_to_develop.py` calls it, because promotion is where reviewed work leaves.
+- **The autonomy envelope names what it does not contain**
+  Three findings could not be mechanized in a patch and are now declared where a reader
+  looks, because an undeclared gap is indistinguishable from a solved problem: nothing
+  restarts the controller if it dies; recovery after publication is contained, not
+  closed; and nine hooks existing is not nine constraints holding. Each is listed with
+  what would close it, and the section ends on the reviewer's own summary — autonomy
+  intended, mechanisms implemented, whole-chain operation and recovery not demonstrated.
+
 ### Changed
 - **Everything the system writes now lands under `<project>/.squad/`, and a gate proves it**
   The kit wrote its output into the same directory that holds the installed kit. Measured

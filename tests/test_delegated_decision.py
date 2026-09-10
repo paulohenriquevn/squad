@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "cycle"))
 
+import delegated_decision as dd
 from delegated_decision import DecisionClass, classify_wall, rewrite_wall
 
 # ── The prose that must stay walled ────────────────────────────────────────────
@@ -206,3 +207,60 @@ def test_rewrite_refuses_a_decision_with_no_rationale():
     except ValueError:
         return
     raise AssertionError("a decision with no rationale must be refused")
+
+
+def test_a_scope_decision_must_name_what_it_supersedes() -> None:
+    """The sequence an external reviewer put plainly: fail a requirement, delegate it
+    away, approve what remains, declare success.
+
+    Every step is individually legitimate and the result is a pass nothing earned. The
+    rationale requirement did not stop it — a rationale is a sentence, and the sentence
+    can be true. Refusing to let the original obligation disappear does.
+    """
+    import pytest
+
+    with pytest.raises(ValueError, match="supersedes"):
+        dd.rewrite_wall(
+            wall="blocked_by: coverage floor not met",
+            decision="this pass covers only the parser",
+            rationale="the tokenizer needs a fixture nobody has written",
+            klass=dd.DecisionClass.SCOPE,
+        )
+
+
+def test_a_threshold_decision_must_name_what_it_supersedes() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="supersedes"):
+        dd.rewrite_wall(
+            wall="blocked_by: p95 above target",
+            decision="target set to 400ms",
+            rationale="the measured range bounds it between 380 and 420",
+            klass=dd.DecisionClass.THRESHOLD,
+        )
+
+
+def test_the_superseded_obligation_travels_in_the_line() -> None:
+    line = dd.rewrite_wall(
+        wall="blocked_by: coverage floor not met",
+        decision="this pass covers only the parser",
+        rationale="the tokenizer needs a fixture nobody has written",
+        klass=dd.DecisionClass.SCOPE,
+        supersedes="80% line coverage across the module",
+    )
+
+    assert "Supersedes obligation: 80% line coverage across the module" in line
+    assert not line.startswith("blocked_by")
+
+
+def test_a_class_that_does_not_redefine_success_needs_no_supersedes() -> None:
+    """`binary` and `option` pick among alternatives the item already stated. They
+    cannot narrow an obligation, so demanding one would be ceremony."""
+    line = dd.rewrite_wall(
+        wall="blocked_by: which serialiser",
+        decision="msgpack, as the item's second option",
+        rationale="the item enumerates both and msgpack is already a dependency",
+        klass=dd.DecisionClass.OPTION,
+    )
+
+    assert "msgpack" in line

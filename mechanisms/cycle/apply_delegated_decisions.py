@@ -94,10 +94,16 @@ def apply(registry: Path, decisions: dict[str, dict]) -> tuple[str, list[str]]:
         wall = wall_match.group("wall").strip()
         if not classify_wall(wall).delegated:
             continue
+        # The class travels so `rewrite_wall` can refuse a narrowing that does not name
+        # what it narrowed. Passing it here is what makes the refusal reachable at all:
+        # without the class the mechanism cannot tell a scope call from an option pick.
+        verdict = classify_wall(wall)
         replacement = rewrite_wall(
             wall=wall,
             decision=decisions[item_id]["decision"],
             rationale=decisions[item_id]["rationale"],
+            klass=verdict.klass,
+            supersedes=decisions[item_id].get("supersedes", ""),
         )
         new_block = block[: wall_match.start()] + replacement + block[wall_match.end() :]
         text = text[:start] + new_block + text[end:]

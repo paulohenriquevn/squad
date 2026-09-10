@@ -283,11 +283,43 @@ class Panel:
 
     # -- the tally --------------------------------------------------------
 
+    @property
+    def approving_families(self) -> set[str]:
+        return {v.family for v in self.votes if v.approves}
+
+    @property
+    def carried_by_one_family(self) -> bool:
+        """Would this majority be correlated?
+
+        The composition rule guarantees a non-home reviewer SITS. It does not
+        guarantee one APPROVES, and the difference is the whole value of the seat:
+        two Claudes can outvote the orthogonal reviewer, and the panel then advances a
+        document on exactly the correlated approval the seat was bought to prevent.
+        """
+        return not (self.approving_families - {HOME_FAMILY, "unknown"})
+
     def tally(self) -> PanelOutcome:
-        """APPROVED on a majority of a full, valid panel; RETURNED otherwise."""
+        """APPROVED on a majority that spans two recognised families; RETURNED otherwise.
+
+        Counting to two was never the point, and neither is seating three. Until
+        2026-09-10 the diversity check ran over the votes CAST rather than the votes
+        that CARRY — so `nemesis` and `leonardo` approving while
+        `judge-codex` returned produced APPROVED, with the dissent filed and the
+        conclusion advanced. A reviewer flagged it, and this repository's own test
+        suite had frozen the failure as the contract: `test_a_majority_carries_the_document`
+        asserted exactly that combination.
+
+        A `return` from the only orthogonal seat is therefore not outvoted by the home
+        family. The document goes back — which is what `NEEDS_REVISION` already means,
+        so no token is invented for it.
+        """
         self._validate()
         approvals = sum(1 for v in self.votes if v.approves)
-        return PanelOutcome.APPROVED if approvals >= MAJORITY else PanelOutcome.RETURNED
+        if approvals < MAJORITY:
+            return PanelOutcome.RETURNED
+        if self.carried_by_one_family:
+            return PanelOutcome.RETURNED
+        return PanelOutcome.APPROVED
 
     def dissenting(self) -> list[Vote]:
         """The votes on the losing side.
@@ -318,6 +350,8 @@ class Panel:
             "panel_size": PANEL_SIZE,
             "majority": MAJORITY,
             "families": sorted({v.family for v in counted}),
+            "approving_families": sorted(self.approving_families),
+            "carried_by_one_family": self.carried_by_one_family,
             "votes": [
                 {
                     "reviewer": v.reviewer,
@@ -328,7 +362,14 @@ class Panel:
                 }
                 for v in self.votes
             ],
-            "dissent": [v.reviewer for v in self.dissenting()],
+            # The REASON travels, not just the name. A dissent reduced to a name is a
+            # dissent nobody downstream can act on, and "kept in the record" then means
+            # kept where nobody looks. An objection that lost a vote is still an
+            # objection about the artifact that just advanced.
+            "dissent": [
+                {"reviewer": v.reviewer, "family": v.family, "reason": v.reason}
+                for v in self.dissenting()
+            ],
         }
 
 

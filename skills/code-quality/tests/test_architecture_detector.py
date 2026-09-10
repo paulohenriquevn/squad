@@ -151,7 +151,7 @@ class TestDepcruiseScript:
         assert _depcruise_script(pkg) is None
 
     def test_prefers_the_dedicated_script_over_a_chain_that_delegates_to_it(self, tmp_path: Path) -> None:
-        """B-166 (TheoCode) — the first match wins, and in a real repository the first match is `lint`.
+        """B-166 (an adopter) — the first match wins, and in a real repository the first match is `lint`.
 
         Measured on an adopter: `lint` is a chain ending in `npm run depcruise`, so it contains the
         token and sorts first. The detector then ran eslint, knip and seven checkers instead of the

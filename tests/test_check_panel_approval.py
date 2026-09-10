@@ -87,26 +87,55 @@ def test_a_missing_record_is_not_an_approval(tmp_path: Path) -> None:
     assert "NOT an approval" in result["detail"]
 
 
-def test_a_majority_carries_the_document(tmp_path: Path) -> None:
+def test_a_majority_spanning_two_families_carries_the_document(tmp_path: Path) -> None:
+    code, result = _check(tmp_path, votes=[
+        _vote("nemesis", "claude-opus-5", "approve"),
+        _vote("leo", "claude-sonnet-5", "return"),
+        _vote("judge", "gpt-5-codex", "approve"),
+    ])
+
+    assert code == APPROVED
+    assert result["approvals"] == 2
+    assert result["approving_families"] == ["anthropic", "openai"]
+
+
+def test_the_home_family_cannot_outvote_the_orthogonal_seat(tmp_path: Path) -> None:
+    """The finding this test was rewritten for, and it used to assert the opposite.
+
+    Until 2026-09-10 this exact combination — two Claudes approving, the only
+    orthogonal reviewer returning — produced APPROVED, with the dissent filed beside
+    it. The composition rule guaranteed a non-home reviewer SAT; nothing guaranteed one
+    APPROVED, and the difference is the entire value of the seat.
+
+    A reviewer who had never seen this repository found it by reading the panel's own
+    worked example. The test that should have caught it had frozen the failure as the
+    contract instead.
+    """
     code, result = _check(tmp_path, votes=[
         _vote("nemesis", "claude-opus-5", "approve"),
         _vote("leo", "claude-sonnet-5", "approve"),
         _vote("judge", "gpt-5-codex", "return"),
     ])
 
-    assert code == APPROVED
-    assert result["approvals"] == 2
+    assert code == NOT_APPROVED
+    assert result["status"] == "returned"
+    assert result["carried_by_one_family"] is True
+    assert result["approving_families"] == ["anthropic"]
 
 
 def test_the_losing_minority_is_kept(tmp_path: Path) -> None:
     """A minority that loses is the most interesting thing in the record."""
     _, result = _check(tmp_path, votes=[
         _vote("nemesis", "claude-opus-5", "approve"),
-        _vote("leo", "claude-sonnet-5", "approve"),
-        _vote("judge", "gpt-5-codex", "return"),
+        _vote("leo", "claude-sonnet-5", "return"),
+        _vote("judge", "gpt-5-codex", "approve"),
     ])
 
-    assert result["dissent"] == ["judge"]
+    assert [d["reviewer"] for d in result["dissent"]] == ["leo"]
+    # The REASON travels too: a dissent reduced to a name is one nobody downstream can
+    # act on, and "kept in the record" then means kept where nobody looks.
+    assert result["dissent"][0]["reason"] == WHY
+    assert result["dissent"][0]["family"] == "anthropic"
 
 
 def test_below_the_majority_the_document_is_returned(tmp_path: Path) -> None:
@@ -228,3 +257,55 @@ def test_the_gate_reads_the_one_write_root_whatever_the_layout(tmp_path: Path) -
                          panel_path=_roster(tmp_path))
 
     assert code == APPROVED, result
+
+
+def test_an_artifact_edited_after_the_vote_is_not_approved(tmp_path: Path) -> None:
+    """Editing the text after the votes land is the cheapest way to launder a rewrite.
+
+    The panel's guarantees were all about WHO voted and HOW. Nothing said the votes were
+    about the document now on disk, so an approval survived a rewrite of the thing it
+    approved.
+    """
+    import hashlib
+
+    project = _project(tmp_path, votes=[
+        _vote("nemesis", "claude-opus-5", "approve"),
+        _vote("leo", "claude-sonnet-5", "return"),
+        _vote("judge", "gpt-5-codex", "approve"),
+    ])
+    artifact = project / "opportunity.md"
+    artifact.write_text("the text the panel read\n", encoding="utf-8")
+    rec = project / ".squad" / "records" / "panels" / "B-014-discover.json"
+    data = json.loads(rec.read_text(encoding="utf-8"))
+    data["artifact"] = "opportunity.md"
+    data["artifact_sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    rec.write_text(json.dumps(data), encoding="utf-8")
+
+    code, result = check("B-014", "discover", project=project, panel_path=_roster(tmp_path))
+    assert code == APPROVED, result
+
+    artifact.write_text("a different text nobody voted on\n", encoding="utf-8")
+
+    code, result = check("B-014", "discover", project=project, panel_path=_roster(tmp_path))
+    assert code == NOT_APPROVED
+    assert result["status"] == "stale"
+    assert "changed after the panel voted" in result["detail"]
+
+
+def test_the_gate_says_it_cannot_prove_a_model_was_called(tmp_path: Path) -> None:
+    """The irreducible limit, stated where the reader is rather than left to inference.
+
+    A record is written by the session that was meant to collect the votes. Three
+    fabricated votes produce a file this gate accepts, and `alignment_judge.py` admits
+    the same of itself. Building a panel on top made the ceremony more elaborate, not
+    the independence real.
+    """
+    _, result = _check(tmp_path, votes=[
+        _vote("nemesis", "claude-opus-5", "approve"),
+        _vote("leo", "claude-sonnet-5", "return"),
+        _vote("judge", "gpt-5-codex", "approve"),
+    ])
+
+    assert any("WHETHER A MODEL WAS CALLED" in n for n in result["not_checked"])
+    assert any("artifact_sha256" in n for n in result["not_checked"]), (
+        "a record with no hash must say the binding went unverified")

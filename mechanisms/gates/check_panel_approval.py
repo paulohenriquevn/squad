@@ -26,6 +26,22 @@ intake premise and 377 lines of tests, and for a day nothing convened a panel wh
 `rules/cycle-discover.md` stated the phase advanced on 2 of 3 signed approvals
 (issue #65). Every DISCOVER and PLAN in that window passed a gate nobody ran.
 
+## What a signature can and cannot prove
+
+This verifies that the record matches the assignment, that every voter is distinct and
+reasoned, that the approving majority spans two families, and that the artifact still
+hashes to what the panel voted on.
+
+It does **not** prove a model was called. The record is written by the session that was
+meant to collect the votes, so a session that fabricated three votes produces a file
+this gate accepts. `alignment_judge.py` says the same of itself: *"It takes its verdict
+on the command line. It does not read the evidence itself."* Building a panel on top did
+not remove that — it made the ceremony more elaborate.
+
+Closing it needs a signature the executor cannot mint: a transcript id, a provider
+response id. Until that exists this is a check on FORM and on BINDING, and the reader is
+told so in `not_checked` rather than left to infer independence from the word "panel".
+
 ## Three outcomes, deliberately not two
 
   approved      the majority carried it — advance
@@ -44,6 +60,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -68,6 +85,34 @@ def default_panel_path() -> Path:
 def record_path(project: Path, slug: str, phase: str) -> Path:
     # Same resolution as the writer — see `convene_panel.panels_dir`.
     return panels_dir(project) / f"{slug}-{phase}.json"
+
+
+def _artifact_drifted(project: Path, record: Path) -> str:
+    """Empty when the artifact still hashes to what was voted on, else why not.
+
+    An absent hash is NOT drift: records written before this check existed cannot be
+    retro-fitted, and refusing them would fail every panel that already ran. What is
+    unverifiable is reported as unverified rather than asserted either way.
+    """
+    try:
+        data = json.loads(record.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    claimed, relative = data.get("artifact_sha256"), data.get("artifact") or ""
+    if not claimed or not relative:
+        return ""
+    target = Path(relative)
+    if not target.is_absolute():
+        target = project / relative
+    if not target.is_file():
+        return (f"the panel voted on {relative}, which is no longer on disk. An "
+                "approval of a document nobody can produce is not an approval")
+    actual = hashlib.sha256(target.read_bytes()).hexdigest()
+    if actual == claimed:
+        return ""
+    return (f"{relative} changed after the panel voted (recorded {claimed[:12]}, now "
+            f"{actual[:12]}). Editing an artifact after its approval is the cheapest "
+            "way to launder a rewrite past a panel")
 
 
 def check(
@@ -130,6 +175,12 @@ def check(
         return UNCHECKED, {"status": "unchecked", "slug": slug, "phase": phase,
                            "detail": f"cannot read the assignment {assign}: {exc}"}
 
+    # The votes must be about THIS document.
+    drifted = _artifact_drifted(project, rec)
+    if drifted:
+        return NOT_APPROVED, {"status": "stale", "slug": slug, "phase": phase,
+                              "detail": drifted}
+
     try:
         outcome = panel.tally()
     except PanelInvalid as exc:
@@ -137,6 +188,17 @@ def check(
                                  "phase": phase, "detail": str(exc)}
 
     body = panel.record()
+    body["not_checked"] = [
+        "WHETHER A MODEL WAS CALLED. The record is written by the session that was "
+        "meant to collect the votes, so three fabricated votes produce a file this "
+        "gate accepts. What is checked is form and binding, never independence",
+        "WHETHER A REASON IS TRUE. The floor is 15 words saying what was checked "
+        "against which evidence; nothing confronts that claim with the evidence",
+    ]
+    if not json.loads(rec.read_text(encoding="utf-8")).get("artifact_sha256"):
+        body["not_checked"].append(
+            "WHETHER THE ARTIFACT IS THE ONE VOTED ON — this record carries no "
+            "`artifact_sha256`, so the binding could not be verified")
     if outcome is PanelOutcome.APPROVED:
         return APPROVED, {"status": "approved", **body}
     return NOT_APPROVED, {"status": "returned", **body,
@@ -165,8 +227,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"panel APPROVED {args.slug} {args.phase} "
                   f"({result['approvals']}/{result['panel_size']}, "
                   f"families: {', '.join(result['families'])})")
-            if result.get("dissent"):
-                print(f"  dissent, kept on purpose: {', '.join(result['dissent'])}")
+            for d in result.get("dissent", []):
+                # Printed under an APPROVAL on purpose: the reader who advances this
+                # artifact is the one who must see what the losing vote objected to.
+                print(f"  DISSENT ({d['family']}) {d['reviewer']}: {d['reason'][:160]}")
         else:
             print(result["detail"])
         return code

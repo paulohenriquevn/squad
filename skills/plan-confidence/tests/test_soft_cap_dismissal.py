@@ -21,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from run_structural import _dismissed_soft_caps  # noqa: E402
 
-
 CAP = "soft_cap_mutation_unconfigured_typescript"
 HYPHENATED = "auditor_unavailable_dependency-cruiser"
 

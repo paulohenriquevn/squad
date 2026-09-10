@@ -131,10 +131,13 @@ def test_the_panel_carries_a_good_opportunity_to_shippable(
             "votes": [
                 {"reviewer": "nemesis-claim-auditor", "model": "claude-opus-5",
                  "verdict": "approve", "reason": why},
+                # The approving majority must SPAN two families. Two Claudes approving
+                # over the orthogonal seat's objection is the correlated approval the
+                # seat exists to prevent, and it now returns the document.
                 {"reviewer": "leonardo-researcher", "model": "claude-sonnet-5",
-                 "verdict": "approve", "reason": why},
-                {"reviewer": "judge-codex:discover-judge", "model": "gpt-5-codex",
                  "verdict": "return", "reason": why},
+                {"reviewer": "judge-codex:discover-judge", "model": "gpt-5-codex",
+                 "verdict": "approve", "reason": why},
             ]}), encoding="utf-8")
 
         rc, data = _run(good_opportunity, project_root)
