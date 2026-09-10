@@ -112,17 +112,55 @@ def _candidate_roots(declared_root: Path | None = None) -> list[Path]:
     return roots
 
 
-#: Where the routing table lives, newest first. `rules/domain-routing.txt` is the
-#: project's own file; `cycle-backlog.md` is the kit's contract, which used to
-#: carry the table as a section.
-#:
-#: Readers fall back and writers do not — the rule this repository already
-#: follows for the wiki migration, for the same reason: the kit cannot run
-#: anything inside another project's repository, so a hard cut would break every
-#: consumer that updates without migrating.
+import sys as _sys_bootstrap  # noqa: E402
+from pathlib import Path as _Path_bootstrap  # noqa: E402
+
+
+def _load_paths():
+    """The data-root owner, loaded as a FILE rather than through the package.
+
+    `import squad.paths` runs `squad/__init__.py`, which imports the rest of the
+    package — so a mechanism copied next to `squad/paths.py` and nothing else dies on
+    a dependency it never uses. This module needs two strings from that file.
+
+    It is loaded rather than copied because `check_write_containment.py` refuses a
+    second module that spells a data root, and it refuses it for a reason: six lists
+    in four different orders is what the single owner replaced.
+    """
+    import importlib.util
+
+    for up in _Path_bootstrap(__file__).resolve().parents:
+        candidate = up / "squad" / "paths.py"
+        if not candidate.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location("_squad_paths", candidate)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    # `install.sh` copies `squad/` beside `mechanisms/`, so the two always travel
+    # together in a real install. Name the missing file rather than raising
+    # `No module named 'squad'` at whoever moved one mechanism on its own.
+    raise SystemExit(
+        "route_domain.py needs `squad/paths.py`, which owns every data-root name and "
+        "is not on disk near this file. `install.sh` copies it beside `mechanisms/`; "
+        "a mechanism moved out of an install alone cannot resolve where this project "
+        "keeps its routing table."
+    )
+
+
+_paths = _load_paths()
+
+#: `.squad/` first: the table is DERIVED data and belongs with everything else the
+#: system produces. The two `rules/` entries are where installs kept it before
+#: 2026-09-10 and stay readable indefinitely — a consumer that updates the kit
+#: without migrating keeps routing.
 _TABLE_LOCATIONS = (
-    ("rules", "domain-routing.txt"),
-    (".claude/rules", "domain-routing.txt"),
+    (_paths.DATA_DIRNAME, _paths.ROUTING_TABLE),
+    ("rules", _paths.ROUTING_TABLE),
+    (".claude/rules", _paths.ROUTING_TABLE),
     ("rules", "cycle-backlog.md"),
     (".claude/rules", "cycle-backlog.md"),
 )

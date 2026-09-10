@@ -129,7 +129,7 @@ Once confirmed, write it — this step is not optional and not cosmetic:
 
 ```bash
 python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
-  --write "$ECO/rules/domain-routing.txt"
+  --write
 ```
 
 **Skipping this leaves routing FATAL, and the failure does not look like a missing step.** `route_domain.py` reads `rules/domain-routing.txt` (falling back to `rules/cycle-backlog.md`) and nothing else. A table written anywhere else — including into `BACKLOG.md`, which earlier versions of this skill prescribed — is a table nothing reads.

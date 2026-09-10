@@ -79,7 +79,7 @@ One agent per domain of the project this kit governs. Each knows the repos it co
 ```bash
 ECO=$([ -d .claude/skills ] && echo .claude || echo .)   # plugin vs standalone
 python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
-  --write "$ECO/rules/domain-routing.txt"
+  --write
 ```
 
 The script reads the topology from disk — not from an inventory, not from a `CLAUDE.md` — and writes the routing table. Then write one file here per domain it names, and `route_domain.py` will resolve them: a domain naming a specialist that is not on disk exits 3 (`BROKEN ROUTE`) rather than reporting a route to nobody.

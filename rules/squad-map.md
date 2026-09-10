@@ -242,7 +242,7 @@ from a field the item already declares.
 
 | Step | Mechanism | Failure |
 |---|---|---|
-| **1. Born** | `detect_domains.py --root . --write` reads the topology from disk and writes `rules/domain-routing.txt` | Empty table → G1 refuses *every* item, and the refusal is correct: with no table, routing would be a guess |
+| **1. Born** | `detect_domains.py --root . --write` reads the topology from disk and writes the table into the write root | Empty table → G1 refuses *every* item, and the refusal is correct: with no table, routing would be a guess |
 | **2. Filled in** | `scaffold_specialists.py --write` writes one `agents/<domain>.md` per domain, carrying what it measured and marking the invariants `OPEN` | `check_xrefs.py` WARNs on unfilled sections — a scaffold routes correctly and judges nothing, which reads as a specialist that is ready |
 | **3. Reached** | The item declares `repo`; `mechanisms/cycle/route_domain.py` resolves it to exactly one domain | exit 1 = repo not in the table · exit 2 = table unreadable · **exit 3 = BROKEN ROUTE** |
 

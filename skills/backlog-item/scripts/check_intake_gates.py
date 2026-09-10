@@ -116,7 +116,7 @@ _ACTION_BY_REASON = {
         "agents/<domain>.md — do NOT stand in for it (agents/README.md).",
     "routing_table_unreadable":
         "the routing table could not be parsed. Derive it: "
-        "detect_domains.py --root . --write rules/domain-routing.txt. "
+        "detect_domains.py --root . --write. "
         "The ITEM was not judged.",
     "route_domain_missing":
         "route_domain.py is not installed. The ITEM was not judged; fix the "

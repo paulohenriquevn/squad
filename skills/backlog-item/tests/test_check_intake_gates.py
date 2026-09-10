@@ -58,6 +58,12 @@ def _project(tmp_path: Path) -> Path:
     (root / "mechanisms" / "cycle" / "route_domain.py").write_bytes(
         (REPO_ROOT / "mechanisms" / "cycle" / "route_domain.py").read_bytes()
     )
+    # `install.sh` copies `squad/` beside `mechanisms/`, and `route_domain.py` reads
+    # the write root's name from it. A fixture with one and not the other models an
+    # install that does not exist.
+    (root / "squad").mkdir(exist_ok=True)
+    (root / "squad" / "paths.py").write_bytes(
+        (REPO_ROOT / "squad" / "paths.py").read_bytes())
     (root / "rules" / "cycle-backlog.md").write_text(
         "# Cycle: BACKLOG\n\n## Domain routing\n\n"
         "| Domain | Repos | Specialist |\n|---|---|---|\n"

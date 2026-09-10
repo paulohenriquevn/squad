@@ -159,7 +159,7 @@ Three things make a section unmeasurable, and each says what closes it:
 
 | Section | Cause | What closes it |
 |---|---|---|
-| agents | no `rules/domain-routing.txt` | `detect_domains.py --root . --write` |
+| agents | no routing table | `detect_domains.py --root . --write` |
 | agents | the table exists and does not parse | fix the table; a file that does not parse tested nothing |
 | skills | neither `.kit-manifest.txt` nor `skills/map.md` | re-run the installer to regenerate the manifest |
 | panel | the declaration does not parse | fix `rules/review-panel.txt` |

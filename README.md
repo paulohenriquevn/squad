@@ -143,7 +143,7 @@ all `unroutable_repo`.
 ```bash
 ECO=$([ -d .claude/skills ] && echo .claude || echo .)   # plugin vs standalone
 python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
-  --write "$ECO/rules/domain-routing.txt"
+  --write
 ```
 
 The script reads the topology from disk and writes the table; then write one

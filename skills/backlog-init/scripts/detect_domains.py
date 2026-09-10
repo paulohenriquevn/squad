@@ -43,7 +43,7 @@ layout reveals and no detector should guess.
 Usage:
     python3 detect_domains.py                       # print the proposed table
     python3 detect_domains.py --from-backlog BACKLOG.md
-    python3 detect_domains.py --write rules/domain-routing.txt
+    python3 detect_domains.py --write
     python3 detect_domains.py --json
 
 Exit codes:
@@ -57,8 +57,15 @@ import argparse
 import json
 import re
 import sys
+import sys as _sys_bootstrap
 from dataclasses import dataclass
 from pathlib import Path
+
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_routing_table as _write_root_table  # noqa: E402
 
 #: Directories that are never an architectural unit, in any ecosystem.
 _IGNORED_DIRS = {
@@ -387,7 +394,7 @@ _ROUTING_HEADER = """\
 #
 # Derive it:
 #   python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \\
-#     --write .claude/rules/domain-routing.txt
+#     --write
 #
 # Edit by hand when ownership does not follow the directory layout — that case is
 # why this is a file you own rather than one the kit overwrites.
@@ -457,6 +464,12 @@ def rewrite_routing_section(rule_path: Path, domains: list[Domain]) -> None:
     )
 
 
+#: Distinguishes "bare --write" from "--write <path>". A plain default cannot: the
+#: destination depends on --root, which argparse has not parsed yet when defaults are
+#: built.
+_DEFAULT_WRITE = Path("\0default")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
@@ -464,12 +477,19 @@ def main(argv: list[str] | None = None) -> int:
                         help="derive from the (domain, repo) pairs the items already "
                              "declare — use it when the registry exists: the semantics of "
                              "ownership live there, and no directory layout reveals them")
-    parser.add_argument("--write", type=Path, default=None,
-                        help="path of rules/domain-routing.txt to write. A `.md` path is "
-                             "still accepted and rewrites the legacy section, for a consumer "
-                             "that has not migrated")
+    #: Bare `--write` writes where the table BELONGS, which the caller should not have
+    #: to know. It used to be mandatory to spell the path, so every doc, SKILL.md and
+    #: README repeated `rules/domain-routing.txt` — and moving the table meant finding
+    #: every copy. An explicit path is still honoured for a consumer mid-migration.
+    parser.add_argument("--write", type=Path, nargs="?", const=_DEFAULT_WRITE, default=None,
+                        help="write the table. Bare: to the write root, where it belongs. "
+                             "With a path: there instead — a `.md` rewrites the legacy "
+                             "section, for a consumer that has not migrated")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.write == _DEFAULT_WRITE:
+        args.write = _write_root_table(args.root.resolve())
 
     try:
         domains = (domains_from_backlog(args.from_backlog, args.root.resolve())

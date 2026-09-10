@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **A runtime proof that everything the Squad produces lands in `.squad/`** (#67)
+  `check_write_containment.py` proves a static property — no module outside
+  `squad/paths.py` may spell a data root. It cannot see a writer whose destination
+  never passes through `squad.paths`. Tracing all 135 write call sites through the AST
+  left 64 UNKNOWN, so `check_produced_files.py` runs 15 mechanisms in a scratch project
+  and looks at the disk instead. It reports its own coverage on every run, refuses to
+  count a probe that errored as one that ran, and reads `rules/write-exemptions.txt`,
+  where every file allowed to sit outside carries a class and a reason.
+- **`rules/write-exemptions.txt`** — the eight files that cannot live under the write
+  root, each naming what forces it: Claude Code resolves agents and skills by
+  directory, and `BACKLOG.md`/`CHANGELOG.md` are opened by people at the root (#67)
 - **`/squad-fit` — a diagnosis of whether the squad can run in a given project** (#66)
   The kit ships `agents/<domain>.md` empty on purpose, so every project has a gap on the
   day it installs. Nothing measured that gap: the kit could report one unroutable item
@@ -16,6 +27,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   question a person asks before adopting — what has to be written, and what breaks until
   it is. Read-only; it never writes the specialist it says is missing, because a
   correctly-named stub routes items into an empty prompt.
+
+### Changed
+- **The routing table moved to `.squad/domain-routing.txt`** (#67)
+  It was the one file under `rules/` that code produced — `detect_domains.py --write`
+  derives it, `route_domain.py` reads it, and nothing outside the kit touches either
+  (measured across every `.json`, `.yml`, `.yaml` and `.toml`: zero references). Readers
+  fall back to both old locations indefinitely, so a consumer that updates without
+  migrating keeps routing. `--write` now takes no path and writes where the table
+  belongs; a test refuses any document that teaches the old one.
+- **Bytecode is no longer written into the installed kit** (#67)
+  Python writes `__pycache__/` next to the source, and the kit's source lives in the
+  consumer's `.claude/` — eight `.pyc` files after four commands in a clean sandbox.
+  `PYTHONDONTWRITEBYTECODE` is now set in `settings.plugin.json`. Measured cost over
+  five runs: 415 ms/run with a warm cache against 360 ms without one.
 
 ### Fixed
 - **The panel's diversity rule protected the seat, not the decision**

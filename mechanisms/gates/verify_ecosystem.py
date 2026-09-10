@@ -317,6 +317,31 @@ def check_write_containment(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return False, [f"{f['file']}:{f['line']}  {f['literal']}" for f in findings[:10]]
 
 
+def check_produced_files(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Does anything the mechanisms PRODUCE land outside `<project>/.squad/`?
+
+    The runtime half, and it exists because the structural half above cannot see a
+    writer whose destination never passes through `squad.paths` — one taken from argv,
+    joined onto the installed kit's directory, or handed down by a caller. Tracing
+    those statically left 64 of 135 call sites UNKNOWN; running the mechanisms and
+    looking at the disk answers it whatever the code path was.
+
+    Reports its own coverage. A green run over four probes is worth four probes, and
+    the count travels so nobody reads it as a sweep of everything.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_produced_files import check
+
+    r = check(ecosystem_dir)
+    if r.unmeasured_because:
+        return False, [f"not measured: {r.unmeasured_because}"]
+    detail = [f"{r.probes_run}/{r.probes_total} probe(s) exercised, "
+              f"{len(r.produced)} file(s) produced, {len(r.exempted)} exempt"]
+    if r.contained:
+        return True, detail
+    return False, detail + [f"escaped: {e['path']}" for e in r.escaped[:10]]
+
+
 def check_panel_capability(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Can a DISCOVER/PLAN review panel be formed from what the project declared?
 
@@ -757,6 +782,7 @@ def main(argv: list[str] | None = None) -> int:
         ("Merge autonomy (envelope floor 2)", check_merge_autonomy),
         ("Review panel can be formed", check_panel_capability),
         ("Write containment (.squad)", check_write_containment),
+        ("Produced-file containment (runtime)", check_produced_files),
         ("Data root (.squad)", check_data_root),
         ("Verdict bands", check_verdict_bands),
         ("Orphan verdicts", check_orphan_verdicts),
