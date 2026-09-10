@@ -122,13 +122,13 @@ reads them by name:
 Then `CHANGELOG.md`, one line under `[Unreleased] § Added`, and the phase event:
 
 ```bash
-python3 "$ECO/mechanisms/cycle/cycle_events.py" end --cycle brainstorm --slug {scope} --verdict VISION_WRITTEN
+python3 "$ECO/mechanisms/cycle/cycle_events.py" end --cycle brainstorm --slug {scope} --verdict AWAITING_REVIEW
 ```
 
 ### Step 5 — Report and hand off
 
 ```
-VISION_WRITTEN  .squad/wiki/product/product-vision.md
+AWAITING_REVIEW  .squad/wiki/product/product-vision.md
   for:       {the named user}
   problem:   {one line}
   non-goals: {n} recorded

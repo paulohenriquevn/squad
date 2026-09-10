@@ -143,7 +143,7 @@ Once the plan file exists, record the transition in the stream:
 
 ```bash
 python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
-    --cycle plan --slug {slug} --verdict PLAN_WRITTEN
+    --cycle plan --slug {slug} --verdict AWAITING_REVIEW
 ```
 
 After the file is written, never before — the event asserts that a plan exists, and a

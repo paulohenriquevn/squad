@@ -338,6 +338,24 @@ def check_prose_write_paths(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return False, [f"{f['file']}:{f['line']}  {f['path']}" for f in findings[:10]]
 
 
+def check_emitted_verdicts(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Does a skill instruct a verdict its cycle does not declare?
+
+    `check_orphan_verdicts` asks the other direction. This one matters because the
+    failure is silent in the worst way: `cycle_events.py` refuses the emission, so the
+    phase records NOTHING, and an unrecorded phase is indistinguishable from one nobody
+    ran — the board draws it as underived and a watchdog restarts it.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_emitted_verdicts import scan
+
+    findings = scan(ecosystem_dir)
+    if not findings:
+        return True, []
+    return False, [f"{f['file']}:{f['line']}  --verdict {f['verdict']}  ({f['reason']})"
+                   for f in findings[:10]]
+
+
 def check_produced_files(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Does anything the mechanisms PRODUCE land outside `<project>/.squad/`?
 
@@ -804,6 +822,7 @@ def main(argv: list[str] | None = None) -> int:
         ("Review panel can be formed", check_panel_capability),
         ("Write containment (.squad)", check_write_containment),
         ("Write paths in prose", check_prose_write_paths),
+        ("Emitted verdicts declared", check_emitted_verdicts),
         ("Produced-file containment (runtime)", check_produced_files),
         ("Data root (.squad)", check_data_root),
         ("Verdict bands", check_verdict_bands),

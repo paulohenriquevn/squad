@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **The mirror of `check_orphan_verdicts.py`: every verdict a skill INSTRUCTS is one its
+  cycle declares** (#70) That sweep asks whether every declared verdict is reachable.
+  Nothing asked the other direction, and it fails louder — `cycle_events.py` REFUSES an
+  undeclared verdict, so the phase records **nothing at all**, and `cycle-maintenance.md`
+  already names the cost: work left silent "is indistinguishable from one nobody touched".
+  Measured 2026-09-10, closing a live session: **five skills passed a halt-loop completion
+  promise where a verdict goes** — `VISION_WRITTEN`, `OBJECTIVES_WRITTEN`, `TRD_WRITTEN`,
+  `PLAN_WRITTEN`, `OPPORTUNITY_COMPLETE`. Three are the brainstorm cascade, phases 1-3 of
+  the only cycle a human attends; the other two are the **only** emitters of `end` for
+  their cycles, so `discover` and `plan` never closed either. All five now emit
+  `AWAITING_REVIEW` — the document exists and nothing has scored it, which is what is
+  true. `check_emitted_verdicts.py` keeps it that way, honouring the runtime's rule that a
+  rule with no `## Verdicts` section permits any verdict (`implement` and `code-quality`
+  rely on it) while separating that from a `--cycle` naming no rule at all.
+
 - **The prose an agent executes now names the write root, and a gate keeps it there** (#69)
   `check_write_containment.py` proves that no module outside `squad/paths.py` spells a
   data root, and it strips prose before matching — correctly, since the kit argues in
@@ -26,6 +41,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   reason does not count, for the same reason it does not in `rules/english-only.md`.
 
 ### Fixed
+- **`cycle-discover.md` used a verdict it never declared** (#70) Gate G-P states *"no
+  record yet is `AWAITING_REVIEW` — complete and unsigned, neither a failure nor a pass"*,
+  and the `## Verdicts` table did not list it. So the contract relied on a state it had
+  not declared, which is why `/discover-execute` had no honest verdict available and
+  reached for a completion promise. Declared.
+- **The board coloured green two events that never arrived** (#70) `board.html` listed
+  `PLAN_WRITTEN` and `OPPORTUNITY_COMPLETE` among `GOOD_VERDICTS`. Neither was ever a
+  verdict, so nothing ever emitted one. Replaced with verdicts `rules/verdict-bands.txt`
+  actually bands as clean. **Known gap:** the board still keeps its own copy of the bands
+  rather than reading that file — two copies of one fact, and a separate item.
 - **`records/references/` was still being cited as a live zone, 9 days after it was
   retired** (#69) `rules/reference-provenance.md` retired it on 2026-09-01 in favour of
   `study-material/` and states that it is "no longer guarded". Ten places still pointed

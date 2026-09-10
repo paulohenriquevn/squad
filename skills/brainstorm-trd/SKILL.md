@@ -96,7 +96,7 @@ Then emit the event:
 
 ```bash
 python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
-    --cycle brainstorm --slug {scope} --verdict TRD_WRITTEN
+    --cycle brainstorm --slug {scope} --verdict AWAITING_REVIEW
 ```
 
 ## Anti-patterns

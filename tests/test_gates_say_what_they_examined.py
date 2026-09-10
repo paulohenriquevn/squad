@@ -58,6 +58,10 @@ ROOT_FLAG = {
     # this one covers the prose an agent executes, where a recipe creates a
     # legacy root without ever importing the owner.
     "check_prose_write_paths": "--root",
+    # Joined 2026-09-10, the mirror of check_orphan_verdicts: that one asks whether
+    # every DECLARED verdict is reachable, this one whether every INSTRUCTED verdict
+    # is declared. Five skills failed it, and cycle_events.py refuses each.
+    "check_emitted_verdicts": "--root",
 }
 
 #: Ways a gate can say "there was nothing here". Deliberately generous: the point

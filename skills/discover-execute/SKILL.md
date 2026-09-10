@@ -157,7 +157,7 @@ Then record the transition in the stream, carrying the outcome above as the verd
 
 ```bash
 python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
-    --cycle discover --slug B-NNN --verdict OPPORTUNITY_COMPLETE
+    --cycle discover --slug B-NNN --verdict AWAITING_REVIEW
 ```
 
 Emit on `ITEM_KILLED` too. A killed item is a **successful** discover — the phase ran

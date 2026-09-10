@@ -107,6 +107,7 @@ The **Blast radius** corner is the one whose shape depends most on the project. 
 | `SHIPPABLE_WITH_CAVEATS` | Complete, with stated open questions | `/plan-write`, caveats carried into the plan |
 | `NEEDS_REVISION` | Recoverable via `/discover-improve` | loop |
 | `INVALID` | Structural — a fabricated pointer, or an empty corner | back to `/discover-plan` |
+| `AWAITING_REVIEW` | The opportunity is written and nothing has scored it. **Orthogonal to the four bands** — neither a failure nor a pass; the machine finished and the judgement has not started. Gate G-P already names this state; it was missing from this table until 2026-09-10, so `/discover-execute` could not close its own phase and emitted a completion promise as a verdict instead | `/discover-confidence` |
 | `ITEM_KILLED` | Measured honestly; the hypothesis did not hold | Item → `killed` + `kill_reason`. **Chain ends. This is success.** |
 | `AWAITING_HUMAN` | The phase ran and stopped at a gate only a person opens — a T3 boundary call, a sign-off, a dependency in another repository | **Emit it.** Without the event the work leaves no trace, and every reader sees an item nobody touched |
 
