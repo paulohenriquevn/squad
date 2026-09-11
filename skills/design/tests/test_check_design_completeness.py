@@ -316,3 +316,43 @@ def test_the_contract_does_not_point_at_the_wrong_generator() -> None:
         "the wrong generator must stay NAMED as wrong — removing the mention silently "
         "invites the next author to reach for it")
     assert "Not `build_walkthrough.py`" in render_section
+
+
+# ------------------------------------------------------------------ parseability
+
+
+def test_a_delimiter_in_an_unquoted_label_is_reported(tmp_path: Path) -> None:
+    """Found by running `diagram-design`'s extractor over a real drawing, not by
+    reading the spec: `ops[Operators: app, tenant, preview]` made it report
+    "unterminated statement at line 6" — and this gate had passed the same file,
+    because it checked that a block EXISTS and declares the right kind, never that
+    it parses.
+    """
+    from check_design_completeness import unquoted_delimiters
+
+    broken = "flowchart TB\n    ops[Operators: app, tenant]\n    ops --> api"
+    assert unquoted_delimiters(broken) == ["Operators: app, tenant"]
+
+    files = dict(GOOD, **{"trust.md": f"# D2\n```mermaid\n{broken}\n```\n"})
+    rep = check(_project(tmp_path, files=files))
+
+    assert "unquoted_delimiter_in_label" in [f.code for f in rep.findings]
+
+
+def test_a_quoted_label_carrying_delimiters_is_fine(tmp_path: Path) -> None:
+    """The fix is quoting, and the check must not fire on the fixed form — otherwise
+    it flags the very shape it asked for."""
+    from check_design_completeness import unquoted_delimiters
+
+    assert unquoted_delimiters('flowchart TB\n    ops["Operators: app, tenant"]') == []
+
+
+def test_ordinary_labels_do_not_trip_the_check(tmp_path: Path) -> None:
+    """A check that fires on normal drawings is a check people disable."""
+    from check_design_completeness import unquoted_delimiters
+
+    for line in ("    api[Control API] --> pg[(Postgres)]",
+                 "    a -->|writes| b",
+                 "    subgraph zone[PLATFORM]",
+                 "    state --> other : event"):
+        assert unquoted_delimiters(f"flowchart TB\n{line}") == [], line

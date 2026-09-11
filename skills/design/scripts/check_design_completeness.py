@@ -148,6 +148,33 @@ def declares_kind(block: str, kinds: tuple[str, ...]) -> bool:
     return any(head.startswith(kind) for kind in kinds)
 
 
+#: A label carrying a delimiter — `:`, `,`, `|` — outside quotes ends the statement
+#: early for every mermaid parser. Found by running `diagram-design`'s extractor over a
+#: real drawing: `ops[Operators: app, tenant, preview]` reported "unterminated statement
+#: at line 6", and the gate had passed the same file, because it checked that a block
+#: EXISTS and declares the right kind, never that it parses.
+#:
+#: This is not a parser. It catches the one shape that breaks them all, which is the
+#: shape a person writing an honest label reaches for.
+_UNQUOTED_LABEL = re.compile(r"""[\[\{]\s*(?!["'])([^"'\]\}\n]*[:,|][^"'\]\}\n]*)[\]\}]""")
+
+
+def unquoted_delimiters(block: str) -> list[str]:
+    """Labels holding a delimiter outside quotes — each one ends its statement early."""
+    out = []
+    for line in block.splitlines():
+        stripped = line.strip()
+        #: An edge label sits between pipes and is a different construct; `|a, b|` is
+        #: only broken when the mermaid version predates quoted edge labels, and
+        #: flagging it here would report working diagrams.
+        if stripped.startswith(("%%", "|")):
+            continue
+        for match in _UNQUOTED_LABEL.findall(line):
+            if match.strip():
+                out.append(match.strip())
+    return out
+
+
 def check(project: Path) -> Report:
     rep = Report()
     design = wiki_dir(project, DESIGN_LEAF)
@@ -197,6 +224,16 @@ def check(project: Path) -> Report:
                 f"every mermaid block is under {MIN_MERMAID_LINES} lines — a header and "
                 "almost nothing else. A stub in this slot reads as a decision that was "
                 "made"))
+
+        for block in blocks:
+            for label in unquoted_delimiters(block):
+                rep.findings.append(Finding(
+                    "unquoted_delimiter_in_label", "major", drawing.filename,
+                    f'the label `{label}` carries a delimiter outside quotes, which ends '
+                    f'the statement early for every mermaid parser. Write it as '
+                    f'`["{label}"]`. Measured on a real drawing: the extractor reported '
+                    '"unterminated statement" and this gate had passed the same file'))
+                break
 
         if PLACEHOLDER_RE.search(body):
             rep.findings.append(Finding(
