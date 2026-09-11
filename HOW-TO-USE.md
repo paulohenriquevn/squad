@@ -66,6 +66,13 @@ It refuses to close while a `PIECE-N` from the brainstorm has no place in the ma
 ends at `AWAITING_REVIEW` until a person signs. **Skip it only if the system is already
 drawn** — an item filed against a system nobody drew is an item nobody can scope.
 
+The mermaid it writes IS the drawing: the gate reads it, git versions it, and an agent
+reads it back later. To look at one as a picture — optional, and nothing depends on it:
+
+```bash
+/diagram-design:import-mermaid .squad/wiki/design/states.md --format=html
+```
+
 ### 1. Create the registry (once)
 
 ```bash

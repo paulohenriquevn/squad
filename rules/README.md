@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at fifty-seven files is
-not one — a model told to read fifty-seven files before an architectural decision
+That makes the pointer the whole interface, and a pointer at sixty-one files is
+not one — a model told to read sixty-one files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
@@ -62,6 +62,7 @@ Each `cycle-{name}.md` defines:
 |---|---|---|
 | `cycle-brainstorm.md` | Product alignment (phase −1) — the only phase a person attends | PRODUCT_ALIGNED / NEEDS_REVISION / AWAITING_REVIEW / INVALID |
 | [`cycle-design.md`](cycle-design.md) | Draw the system before a backlog is filed against it — four drawings that force the decisions no product retrofits (lifecycle, trust boundary, call order with failures, durability) plus the component map DERIVED from them. A map drawn first looks like design happened and forces no choice |
+| [`design-golden-rule.md`](design-golden-rule.md) | What a DESIGN panel audits against — does the drawing contradict the code, is an open question disguised as a decision, do the drawings contradict each other. Its scope is DERIVED: with code on disk the panel checks against it; with none it checks internal coherence and may not conclude the design is right |
 | `cycle-backlog.md` | Intake (phase 0) | ITEM_REGISTERED / ITEM_REJECTED |
 | `cycle-maintenance.md` | Macro super-loop | ITEM_SHIPPED / ITEM_KILLED / BACKLOG_EMPTY |
 | `cycle-discover.md` | Measurement of our own system | SHIPPABLE_WITH_CAVEATS / ITEM_KILLED |
@@ -79,6 +80,9 @@ Each `cycle-{name}.md` defines:
 | File | Purpose |
 |---|---|
 | `code-quality-golden-rule.md` | Code quality severity levels |
+| [`contribution-conventions.md`](contribution-conventions.md) | What a commit, PR, issue and name must carry. **The kit's**, and every rule in it is either computed by `check_contribution_conventions.py` or declared unenforceable with the reason — a convention nobody can check is a preference, and this repository's own CONTRIBUTING drifted from its practice for long enough that nobody noticed |
+| `contribution-overrides.txt` | **THIS PROJECT's** overrides: extra commit types, its own scopes, a different subject limit. Ships empty, survives a reinstall. The co-authorship refusal and the secrets rule cannot be overridden and an attempt is refused rather than ignored |
+| `critic-phases.txt` | Which phases get a critic, the contract it judges against, and how many rounds before the disagreement escalates. **Four**: the ones measured as having no panel, no judge, no signature and no scorer. A phase absent from this file has no critic ON PURPOSE, which is a statement about the phase rather than an omission |
 | `discover-opportunity-golden-rule.md` | Opportunity confidence hard caps |
 | `plan-confidence-golden-rule.md` | Plan confidence scoring rubric |
 | `deps-audit-golden-rule.md` | Dependency audit severity |

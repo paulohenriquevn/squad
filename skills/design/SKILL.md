@@ -120,9 +120,24 @@ failed on the first run.
 python3 "$ECO/skills/design/scripts/check_design_completeness.py" --project .
 ```
 
-Then `/sign` the checklist. The machine counts drawings and cross-references pieces; it
-cannot say a state machine has the RIGHT states, and does not pretend to — the verdict
-stays `AWAITING_REVIEW` until a person signs.
+### Step 5b — Convene the panel
+
+```bash
+python3 "$ECO/mechanisms/cycle/convene_panel.py" --slug {scope} --phase design --project .
+```
+
+Three reviewers, 2-of-3, spanning two model families, audited against
+[`rules/design-golden-rule.md`](../../rules/design-golden-rule.md): does the drawing
+contradict the code, is an open question disguised as a decision, do the drawings
+contradict each other. With code on disk the panel checks the drawing AGAINST it; with
+no code yet it checks internal coherence and may not conclude the design is right.
+
+### Step 5c — Sign
+
+Then `/sign` the checklist. **The panel and the signature are different claims** — the
+panel says *"nothing here contradicts what we could check"*, the signature says *"I read
+this and am willing to say it holds"*. A judge may make the first. Only a person makes
+the second.
 
 ### Step 6 — Emit and hand off
 

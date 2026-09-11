@@ -534,3 +534,77 @@ def test_a_real_impediment_on_another_item_survives_both_shapes() -> None:
 
     assert check_backlog_structure.impediment_edges(prose, "B-060") == ["B-075"]
     assert check_backlog_structure.impediment_edges("B-075", "B-060") == ["B-075"]
+
+
+# ------------------------------------------------------------------ #78
+
+
+def _registry(tmp_path, status: str, repo: str = "sibling-repo"):
+    """One item against a repo the routing table does not name."""
+    (tmp_path / "rules").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "rules" / "domain-routing.txt").write_text(
+        "core | my-repo | agents/core.md\n", encoding="utf-8")
+    extra = "kill_reason: the measurement refuted it\n" if status == "killed" else ""
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(f"""# Backlog
+
+## Index
+
+## Items
+
+## B-001 — an item against a sibling repo   [ ]
+
+domain: core
+repo: {repo}
+suggested_mode: review
+source: human
+evidence: measured
+why_now: someone noticed it and filed it against that repository
+status: {status}
+{extra}dod:
+- [ ] done
+""", encoding="utf-8")
+    return backlog
+
+
+def test_a_shipped_item_that_does_not_route_is_history_not_a_blocker(tmp_path) -> None:
+    """#78. G1 is about work that cannot proceed — `cycle-backlog.md` puts it as "an
+    item nobody owns is an item nobody does". A shipped item is not work.
+
+    Firing there made the verdict PERMANENTLY INVALID: the contract forbids renumbering
+    ("a killed B-007 stays B-007 forever") and forbids an impediment on closed work
+    ("the registry then tells everyone after you that finished work is stuck"). The only
+    remaining move was widening the routing table to name a repository the project
+    deliberately does not govern.
+    """
+    report = check_backlog_structure.check_backlog(_registry(tmp_path, "shipped"))
+
+    codes = {f["check"] for f in report["findings"]}
+    assert "unroutable_repo" not in codes
+    assert "unroutable_repo_closed" in codes
+
+
+def test_a_killed_item_that_does_not_route_is_history_too(tmp_path) -> None:
+    report = check_backlog_structure.check_backlog(_registry(tmp_path, "killed"))
+
+    assert "unroutable_repo" not in {f["check"] for f in report["findings"]}
+
+
+def test_an_open_item_that_does_not_route_still_blocks(tmp_path) -> None:
+    """The finding must keep firing where it can be acted on — an open item routing to
+    nobody is exactly what G1 exists for."""
+    report = check_backlog_structure.check_backlog(_registry(tmp_path, "raw"))
+
+    blockers = [f for f in report["findings"] if f["check"] == "unroutable_repo"]
+    assert blockers and blockers[0]["severity"] == "blocker"
+
+
+def test_the_closed_finding_is_reported_rather_than_silenced(tmp_path) -> None:
+    """A registry that hides which closed items name repositories it no longer governs
+    has lost the record, which is the one thing a terminal item is for."""
+    report = check_backlog_structure.check_backlog(_registry(tmp_path, "shipped"))
+
+    finding = next(f for f in report["findings"] if f["check"] == "unroutable_repo_closed")
+    assert finding["severity"] == "minor"
+    assert "history" in finding["message"]
+    assert "shipped" in finding["message"]

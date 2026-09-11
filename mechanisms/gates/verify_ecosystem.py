@@ -356,6 +356,29 @@ def check_emitted_verdicts(ecosystem_dir: Path) -> tuple[bool, list[str]]:
                    for f in findings[:10]]
 
 
+def check_contribution_conventions(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Do the recent commits follow the conventions this project declares?
+
+    Runs HERE because a convention nobody checks is a preference. This repository's own
+    `CONTRIBUTING.md` told contributors to add a co-authorship trailer while zero of the
+    last 200 commits carried one — the document and the practice disagreed for long
+    enough that nobody noticed.
+
+    Scoped to the last 40 commits: the whole history predates the conventions, and a
+    gate that fails on work done before the rule existed is a gate people disable.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_contribution_conventions import check
+
+    report = check(ecosystem_dir, "-40")
+    if report.unmeasured_because:
+        return False, [f"not measured: {report.unmeasured_because}"]
+    detail = [f"{report.commits_checked} commit(s) against {report.conventions.source}"]
+    if not report.findings:
+        return True, detail
+    return False, detail + [f"{f.sha} {f.code}" for f in report.findings[:8]]
+
+
 def check_produced_files(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Does anything the mechanisms PRODUCE land outside `<project>/.squad/`?
 
@@ -824,6 +847,7 @@ def main(argv: list[str] | None = None) -> int:
         ("Write paths in prose", check_prose_write_paths),
         ("Emitted verdicts declared", check_emitted_verdicts),
         ("Produced-file containment (runtime)", check_produced_files),
+        ("Contribution conventions (last 40 commits)", check_contribution_conventions),
         ("Data root (.squad)", check_data_root),
         ("Verdict bands", check_verdict_bands),
         ("Orphan verdicts", check_orphan_verdicts),

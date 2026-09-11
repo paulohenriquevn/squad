@@ -38,6 +38,7 @@ from review_panel import (
     PanelOutcome,
     Vote,
     family_of,
+    main,
 )
 
 REASON = (
@@ -245,3 +246,91 @@ def test_a_valid_panel_reports_who_sat_on_it() -> None:
     assert sorted(record["families"]) == ["anthropic", "openai"]
     assert len(record["votes"]) == 3
     assert all(v["reason"] for v in record["votes"])
+
+
+# ------------------------------------------------------------------ #79
+
+
+def _record_file(tmp_path, votes):
+    import json
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    path = tmp_path / "rec.json"
+    path.write_text(json.dumps({
+        "slug": "s", "phase": "design", "author": "claude/opus-5", "artifact": "x.md",
+        "assigned": ["a", "b", "c"], "votes": votes,
+    }), encoding="utf-8")
+    return path
+
+
+_LONG = ("checked the drawing against the code and found nothing that contradicts it "
+         "anywhere in the five files under review here today")
+
+
+def test_a_dissenting_panel_renders_instead_of_raising(tmp_path, capsys) -> None:
+    """#79. `dissent` was enriched from a bare name to reviewer + family + reason — the
+    comment above it argues correctly that the objection must travel — and the only
+    place that renders it was left doing `', '.join(...)` over dicts.
+
+    It survived because it fires only on DISAGREEMENT, which is the case a panel is
+    bought for. Every unanimous panel skipped the line.
+    """
+    record = _record_file(tmp_path, [
+        {"reviewer": "a", "model": "claude-opus-5", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "b", "model": "gpt-5-codex", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "c", "model": "claude-sonnet-5", "verdict": "return", "reason": _LONG},
+    ])
+
+    code = main(["--record", str(record)])
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "Traceback" not in out
+    assert "c (anthropic)" in out, out
+
+
+def test_the_crash_exit_code_was_indistinguishable_from_a_verdict(tmp_path) -> None:
+    """`main()` returns 1 for any non-approved outcome, and an uncaught TypeError also
+    exits 1 — so a caller reading the exit code saw the right number for the wrong
+    reason. The rendering must not be able to raise at all."""
+    record = _record_file(tmp_path, [
+        {"reviewer": "a", "model": "claude-opus-5", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "b", "model": "claude-sonnet-5", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "c", "model": "gpt-5-codex", "verdict": "return", "reason": _LONG},
+    ])
+
+    assert main(["--record", str(record)]) == 1
+
+
+def test_the_losing_side_is_labelled_by_which_side_it_is(tmp_path, capsys) -> None:
+    """`dissenting()` returns the LOSING side and that flips with the outcome: under
+    APPROVED it is the reviewers who returned, under RETURNED it is the reviewers who
+    approved. Printing both as "dissent" reported two approvals as objections."""
+    returned = _record_file(tmp_path, [
+        {"reviewer": "a", "model": "claude-opus-5", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "b", "model": "claude-sonnet-5", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "c", "model": "gpt-5-codex", "verdict": "return", "reason": _LONG},
+    ])
+    main(["--record", str(returned)])
+    assert "approvals, which did not carry" in capsys.readouterr().out
+
+    approved = _record_file(tmp_path / "two", [
+        {"reviewer": "a", "model": "claude-opus-5", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "b", "model": "gpt-5-codex", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "c", "model": "claude-sonnet-5", "verdict": "return", "reason": _LONG},
+    ])
+    main(["--record", str(approved)])
+    assert "objections, over which this was approved" in capsys.readouterr().out
+
+
+def test_the_reason_is_not_truncated_in_the_dissent(tmp_path, capsys) -> None:
+    """The vote list truncates at 90 chars for scanning; the objection must not. A
+    dissent cut mid-sentence is the defect this payload was enriched to prevent."""
+    record = _record_file(tmp_path, [
+        {"reviewer": "a", "model": "claude-opus-5", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "b", "model": "gpt-5-codex", "verdict": "approve", "reason": _LONG},
+        {"reviewer": "c", "model": "claude-sonnet-5", "verdict": "return", "reason": _LONG},
+    ])
+
+    main(["--record", str(record)])
+
+    assert _LONG in capsys.readouterr().out

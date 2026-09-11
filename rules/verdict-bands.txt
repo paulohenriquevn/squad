@@ -86,6 +86,7 @@ ITEM_SHIPPED                  | clean      | the item reached RELEASED and its b
 ITEM_VERIFIED_LOCAL           | clean      | implemented and verified, every changed file untracked so no release can carry it; reporting this as blocked would file finished work as outstanding
 MILESTONE_RELEASED            | clean      | a milestone cut a version
 OPPORTUNITY_COMPLETE          | clean      | the discover completion promise: every question answered, every pointer resolving
+CRITIC_ACCEPTED               | clean      | the phase's critic found nothing it could name; the phase may proceed
 PASS                          | clean      | the quality audit found nothing above the soft floor
 PLAN_WRITTEN                  | clean      | the plan artifact exists and is scored
 PRODUCT_ALIGNED               | clean      | four documents complete, rubric >= 90%, signed by a person
@@ -104,6 +105,7 @@ SHIPPABLE_WITH_CAVEATS        | caveats    | complete, with stated open question
 
 # ---- redo -------------------------------------------------------------------
 BACKLOG_BLOCKED               | redo       | the registry itself is blocked; the cause is worked and the sweep repeats
+CRITIC_RETURNED               | redo       | the critic named what to change and the agent fixes it inside the same autonomous span. Deliberately NOT blocking, on FAIL_SOFT's argument: walling ordinary rework walls every loop that is working correctly
 FAIL_SOFT                     | redo       | soft caps fired; may proceed only with an ADR dismissing each one. Deliberately NOT blocking — it sends work back without forbidding the chain from advancing once redone
 ITEM_BLOCKED                  | redo       | a sub-cycle blocked recoverably; other items still move
 ITEM_HALTED                   | redo       | a BLOCKED report exists on disk for this item; SELECT declines to hand it out again
@@ -120,6 +122,7 @@ BLOCKED                       | structural | a pre-condition failed or a hard ga
 FAIL                          | structural | the gate did not pass
 FAIL_HARD                     | structural | a hard cap fired; blocks /review and returns to /implement
 INVALID                       | structural | a fabricated pointer, an empty corner, or a broken contract — no editing of the citing document fixes it
+CRITIC_EXHAUSTED              | structural | critic and agent did not converge inside the declared rounds. The disposition passes to `halt_disposition.py` — the escalation this kit already has, not a second one
 INVALID_AWAITING_HUMAN        | structural | structurally invalid AND waiting on a person; the two take different next actions
 ITEM_REJECTED                 | structural | outside the ecosystem, or gate G5 refused the justification
 ITEM_UNROUTABLE               | structural | the item's repo belongs to no domain; it cannot proceed until the table names it

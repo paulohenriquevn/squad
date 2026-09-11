@@ -1,0 +1,26 @@
+# THIS PROJECT's contribution conventions, overriding the kit's defaults.
+#
+# `rules/contribution-conventions.md` is the kit's contract and a reinstall overwrites
+# it. This file is yours: it ships empty, a reinstall preserves it, and
+# `check_contribution_conventions.py` reads it before applying any default.
+#
+# Format:  key = value        (one per line; `#` comments; unknown keys are refused)
+#
+# Keys:
+#   commit_types    = comma-separated. REPLACES the kit's set
+#   commit_scopes   = comma-separated. When set, a scope outside it is refused
+#   subject_max     = integer. Default 72
+#   body_required   = comma-separated types. Default: feat,fix
+#   branch_trunk    = the trunk's name, when it is not detected from origin/HEAD
+#
+# TWO THINGS CANNOT BE OVERRIDDEN and an attempt is refused rather than ignored:
+#
+#   the co-authorship refusal — the author of a commit is one person, and a trailer
+#   crediting a tool misattributes the accountability authorship carries
+#
+#   the secrets rule for issues — no token, cookie, password or customer data in an
+#   issue body, ever
+#
+# Example:
+#   commit_types = fix,feat,docs,test,chore,perf,build,ci,revert,refactor,deps
+#   subject_max  = 80

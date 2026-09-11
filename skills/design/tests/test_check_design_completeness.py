@@ -356,3 +356,74 @@ def test_ordinary_labels_do_not_trip_the_check(tmp_path: Path) -> None:
                  "    subgraph zone[PLATFORM]",
                  "    state --> other : event"):
         assert unquoted_delimiters(f"flowchart TB\n{line}") == [], line
+
+
+def test_the_sop_does_not_send_the_operator_at_a_file_nothing_makes() -> None:
+    """Step 4 of `SKILL.md` pointed at `build_walkthrough.py` and was corrected; the
+    SOP kept telling the operator to open `walkthrough.html`, which nothing generates
+    any more. A procedure naming an artifact that does not exist is worse than one
+    naming none — the reader assumes the step failed on their machine.
+    """
+    sop = (Path(__file__).resolve().parents[1] / "SOP.md").read_text(encoding="utf-8")
+
+    assert "walkthrough.html" not in sop
+    assert "import-mermaid" in sop, "the render path must be named where the operator reads"
+
+
+# ------------------------------------------------------------------ the panel
+
+
+def test_design_is_a_panel_phase() -> None:
+    """The user's ask, and the reason it is possible here: a system drawing can be
+    audited against code, which a product vision cannot."""
+    panel = (Path(__file__).resolve().parents[3] / "rules" / "review-panel.txt")
+    text = panel.read_text(encoding="utf-8")
+
+    phases = [ln.split("=", 1)[1] for ln in text.splitlines() if ln.startswith("panel_phases")]
+    assert phases and "design" in phases[0]
+
+
+def test_the_design_panel_spans_two_model_families() -> None:
+    """Correlated models share failure modes: a plausible fabrication that survives one
+    tends to survive its siblings. The seat outside the home family is what the panel
+    is for."""
+    panel = (Path(__file__).resolve().parents[3] / "rules" / "review-panel.txt")
+    seats = [ln for ln in panel.read_text(encoding="utf-8").splitlines()
+             if ln.startswith("reviewer") and "design" in ln.split("|")[0]]
+
+    assert len(seats) == 3, seats
+    families = {ln.split("|")[3].strip() for ln in seats}
+    assert len(families) >= 2, families
+
+
+def test_the_cycle_separates_the_panel_from_the_signature() -> None:
+    """The first version said "a judge may NOT sign here", which did two jobs at once
+    and only one was the argument. `alignment-threshold.md § Amended 2026-09-01`
+    separated them: the author must not grade the author's own form was always the
+    rule; the reviewer must be human never was."""
+    rule = (Path(__file__).resolve().parents[3] / "rules" / "cycle-design.md")
+    text = rule.read_text(encoding="utf-8")
+
+    assert "G-D8" in text
+    assert "Two gates, two different claims" in text
+    assert "A judge may review. A judge may not assume." in text
+
+
+def test_the_golden_rule_forbids_refusing_an_open_question() -> None:
+    """An open question, listed as open, is the phase working. Refuse when one is
+    HIDDEN, not when one exists — otherwise the panel teaches people to draw
+    placeholders as decisions, which is what the phase exists to prevent."""
+    gr = (Path(__file__).resolve().parents[3] / "rules" / "design-golden-rule.md")
+    text = gr.read_text(encoding="utf-8")
+
+    assert "Refuse because a question is open" in text
+    assert "Refuse when one is **hidden**" in text
+    assert "Rewrite the drawing" in text
+
+
+def test_an_abstention_is_never_agreement() -> None:
+    """A reviewer with no code to check against cannot audit R1. Counting that as
+    approval would make the panel report coverage it did not have."""
+    gr = (Path(__file__).resolve().parents[3] / "rules" / "design-golden-rule.md")
+
+    assert "Counted as incomplete, never as agreement" in gr.read_text(encoding="utf-8")

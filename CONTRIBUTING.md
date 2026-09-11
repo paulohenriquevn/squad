@@ -68,10 +68,27 @@ the short checklist.
 
 ## Commit messages
 
-- Use clear, scoped messages (e.g. `fix(review): …`, `feat(plan): …`,
-  `docs: …`, `chore: …`).
-- End commit messages with the project's co-author trailer when pairing with an
-  assistant, per the repo conventions.
+Shape, types, limits and the rules a project may override live in
+[`rules/contribution-conventions.md`](rules/contribution-conventions.md), and
+`mechanisms/gates/check_contribution_conventions.py` computes them:
+
+```bash
+python3 mechanisms/gates/check_contribution_conventions.py --range origin/develop..HEAD
+```
+
+Two things are worth knowing before your first commit:
+
+- **The body is the point.** The subject says what changed; the body says what was true
+  that made it necessary — the measurement, the counter-example, the belief that turned
+  out false. No mechanism can check this and it is the only durable record of why the
+  code is the way it is.
+- **No co-authorship trailer.** `Co-Authored-By:` in any spelling is refused by the gate.
+  The author of a commit is one person.
+
+  *This section instructed the opposite until 2026-09-11 — it asked contributors to add
+  the trailer, while zero of the last 200 commits carried one. The document and the
+  practice had disagreed long enough that nobody noticed, which is the reason the
+  conventions are now computed rather than described.*
 
 ## Code style
 
@@ -83,6 +100,9 @@ the short checklist.
 
 ## Reporting bugs and proposing features
 
-Open an issue describing the observed vs expected behavior, with a minimal
-reproduction where possible. For security issues, follow
-[`SECURITY.md`](SECURITY.md) instead of filing a public issue.
+The floor is a repro and an expectation — below that, an issue is a report of a feeling.
+[`rules/contribution-conventions.md` § Issues](rules/contribution-conventions.md) lists
+what an issue must carry and what it must never: a secret, a token, a cookie, a password
+or customer data. That one has no exception and no override.
+
+For security issues, follow [`SECURITY.md`](SECURITY.md) instead of filing a public issue.

@@ -118,4 +118,8 @@ reviewer = plan     | judge-codex:plan-judge     | gpt-5-codex     | codex
 # CODE-QUALITY and RELEASE are deliberately absent: both already derive their
 # verdict from a script, and a panel voting on a decision already made
 # deterministically adds cost and no information.
-panel_phases = discover, plan
+reviewer = design   | vera-technical-arbiter     | claude-opus-5   | builtin
+reviewer = design   | nemesis-claim-auditor      | claude-sonnet-5 | builtin
+reviewer = design   | judge-codex:judge-codex-jury | gpt-5-codex   | codex
+
+panel_phases = discover, plan, design

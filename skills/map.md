@@ -10,8 +10,8 @@ status: stable
 
 # The skill map
 
-**34 skills.** Most are a phase of a cycle and are invoked in an order the
-cycle rule fixes; eight are invoked on demand and belong to no chain.
+**37 skills.** Most are a phase of a cycle and are invoked in an order the
+cycle rule fixes; eleven are invoked on demand and belong to no chain.
 
 **Every row below carries three things**: what the skill does, when to reach for
 it, and — the column that is usually missing from an index — when reaching for it
@@ -176,8 +176,11 @@ A phase of no cycle. Invoked when the question arises.
 | `arch-check` | Verifies declared architecture boundaries, or proposes ones the repo already obeys | Boundaries exist and may have drifted, or none are declared | Expect it to invent a boundary the code does not already respect, or to report a clean run it could not perform |
 | `deps-audit` | *(also phase 3 of cycle-plan — see above)* | Outside a plan, when dependency risk is the question | — |
 | `code-quality` | *(also the whole of cycle-code-quality — see above)* | Outside the chain, to audit a tree | — |
+| `critic` | A reader for the four phases measured as having none — acceptance, code-quality, backlog, release. RETURNS work rather than blocking; the agent fixes and the phase re-runs | A phase emitted its verdict and nothing else reviews it | Use it where a panel already votes — four opinions over three is the noise that makes people stop reading verdicts. Never raise `max_rounds` to win an argument: the ceiling is what keeps a disagreement from becoming an invisible halt |
+| `issue-confidence` | An issue carrying what developers measurably use — weighted by the FSE 2008 survey of 872 developers, scored before filing, refused if it carries a secret | A finding has a repro and evidence, from any source | Mention it in a report instead of filing — the worst outcome, because it reads as coverage. Never pad the cheap fields: environment is 4% and severity is 0%, and an issue that is all metadata and no repro is the 74% case |
 | `honesty-gate` | Blocks a "production-ready" / v1.0 claim without recorded evidence of sustained internal use | Someone is about to make that claim | Read `EVIDENCE_WITH_CAVEATS` as `SUFFICIENT` — the caveats are explicit. Never log evidence for one scenario and claim it satisfies another anchor |
 | `quality-init` | Emits quality-gate hooks calibrated to the project's real p90 metrics | Setting a project up, once | Generate hooks that auto-fix — hooks are gates, not fixers. Never set thresholds below the floors: the hook would block every write |
+| `panel` | Runs the review panel a gated phase needs — assigns, briefs each reviewer against the phase contract, invokes them, records votes, tallies | `check_panel_approval` reports NO_RECORD and an artifact is ready | Write the votes yourself. The refusals are about FORM, which is exactly why the invocation has to be real. Never read an abstention as agreement — it counts as an incomplete panel |
 | `sign` | Records a person's signature on a document waiting for one — the tick, the `signed-by` marker, and the date | A scorer returned `AWAITING_REVIEW`, or `/brainstorm-pieces` computed 90% and stopped because only a person may sign | Sign without reading. The preview exists for one reason, and there is deliberately no `--yes`. Never read a signature as a pass: a signed document below the score floor is still refused, and correctly |
 | `squad-fit` | Reports which domains have no specialist, which of the project's own skills are undocumented, and whether a review panel can be formed at all | Adopting the kit into a project, after a restructure moved repositories, or before writing the agents and skills a project is missing | Write a specialist to silence `domain_without_agent` — a correctly-named stub routes the item into an empty prompt and trades a visible failure for a silent one. Never read its verdict without reading `PARTIAL`: the verdict covers only the sections that ran |
 | `skill-creator` | Authors, improves and evaluates skills; `run_eval.py` measures whether a description actually makes the model reach for the skill | Creating or improving a skill, and before trusting a description | **Re-sync it blindly.** It is vendored, but `run_eval.py` now carries a local fix — its trigger detector decided the whole turn from its first observation and could only produce false negatives. A copy from upstream reverts that silently, and the symptom is a trigger rate that reads low and looks like a fact about the skill |

@@ -79,7 +79,8 @@ they read, and moving them would separate them from the parser they share.
 | `renumbered` | blocker | Ids are never reused or reordered; a reused id makes every earlier reference ambiguous |
 | `illegal_status` | blocker | A status outside the declared set means the loop cannot route the item |
 | `triaged_without_evidence` | blocker | Triaged means measured. Without evidence the status is a claim nobody made |
-| `unroutable_repo` | blocker | A repo in no domain routes to nobody (gate G1) |
+| `unroutable_repo` | blocker | A repo in no domain routes to nobody (gate G1). **Open items only** — G1 is about work that cannot proceed |
+| `unroutable_repo_closed` | minor | The same on a `shipped` or `killed` item. History, not an impediment: the contract forbids renumbering it and forbids an impediment on closed work, so a blocker there is permanent and unfixable |
 | `raw_with_evidence` | major | Measurement happened and the status was never advanced — the rot the loop exists to prevent |
 | `killed_without_reason` | major | Indistinguishable from an abandoned run (gate G-K) |
 | `missing_field` | major | A required field absent |

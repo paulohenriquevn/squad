@@ -1,0 +1,57 @@
+# Which phases get a critic, what it reads, and what it is asked.
+#
+# WHY NOT EVERY PHASE
+# -------------------
+# Measured 2026-09-11 across the ten declared phases:
+#
+#   discover · plan · design    a panel of THREE already votes
+#   brainstorm · implement      a judge and a scorer already run
+#   acceptance                  NOTHING — no panel, no judge, no signature, no scorer
+#   code-quality                detectors only
+#   backlog                     intake gates only
+#   release                     no scorer
+#
+# A critic on a phase that already has a three-reviewer panel is a fourth opinion over
+# three, and `rules/auxiliary-skills.txt` records what repeated redundant output does:
+# it teaches people to ignore the validator. So the critic goes where there is nothing.
+#
+# ACCEPTANCE IS THE URGENT ONE. It is the phase that decides whether a release works for
+# its user, it has no reviewer at all, and `cycle-acceptance.md` carries two debts dated
+# 2026-08-27 that are exactly a critic's job:
+#
+#   "nothing compares the token the agent wrote in the report against the one the
+#    script emitted; the gate is the script's output existing, not the report agreeing
+#    with it"
+#
+#   "no script confronts the caveat list with a tracker"
+#
+# WHAT A CRITIC MAY AND MAY NOT DO
+# --------------------------------
+# It returns work. It does not stop the chain and wait for a person.
+#
+# `verdict-bands.txt` already separates these two axes and says why deriving one from
+# the other is wrong in both directions: FAIL_SOFT is `redo` and does NOT block —
+# "it sends work back without forbidding the chain from advancing once redone", because
+# blocking ordinary rework "would wall every loop that is working correctly".
+#
+# A critic emits CRITIC_RETURNED, the agent fixes what was named, and the phase runs
+# again. The autonomous span keeps moving.
+#
+# AND THE CEILING, WHICH IS THE OTHER HALF
+# ----------------------------------------
+# A critic with no round limit is a different way of stopping the chain: two parties
+# disagreeing forever is a halt nobody declared. After `max_rounds` the disposition
+# passes to `halt_disposition.py`, which is where this kit already decides whether a
+# stop returns the item to the registry or waits for a person — so the escalation is
+# the one that already exists, not a second one.
+#
+# FORMAT
+#   phase | contract | max_rounds | what the critic is asked
+#
+# A phase absent from this file has no critic, and that is a statement about the phase,
+# not an omission.
+
+acceptance   | rules/cycle-acceptance.md   | 2 | Does the report's verdict match what compute_acceptance_verdict.py emitted, and is every caveat a filed issue rather than a sentence? Both are debts this cycle recorded on 2026-08-27 and never closed
+code-quality | rules/code-quality-golden-rule.md | 2 | What did the detectors not look at? A language with no detector, a directory excluded by config, a suppression added in the same change. The verdict covers what ran, and the critic's job is naming what did not
+backlog      | rules/cycle-backlog.md      | 1 | Could somebody who was not in the room act on this item? A why_now that cites no trigger, a DoD nothing could falsify, a domain that does not match the repo
+release      | rules/cycle-release.md      | 1 | Does the CHANGELOG describe what shipped, in the consumer's terms? An entry naming an internal refactor, or a fix with no entry at all, is the release lying to whoever reads it

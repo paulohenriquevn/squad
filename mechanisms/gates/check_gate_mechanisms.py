@@ -128,10 +128,21 @@ _CLASS_RE = re.compile(
 #:
 #: `(?P=level)` requires the closing heading to be at least as shallow: `###` no
 #: longer ends a `##` section, and `##` still does.
+#: ANY heading naming a gate, not the literal string `Hard gate`. Measured 2026-09-11:
+#: 14 cycle rules on disk, 9 swept. `cycle-design.md` heads its section `## Gates` and
+#: `cycle-idea-to-release.md` heads its `## Confidence gates between phases`; both fell
+#: through `if not sections: continue`, which neither swept them nor said so. The sweep
+#: then reported `0 unresolved` over a population that excluded them — absent reading as
+#: clean, which `reference-provenance.md` §6 names and `check_reference_leakage.py`
+#: avoids by reporting PARTIAL rather than claiming coverage silently.
 _SECTION_RE = re.compile(
-    r"^(?P<level>#{2,})[^\n]*Hard gate[^\n]*\n(.*?)(?=^(?P=level)(?!#) |\Z)",
+    r"^(?P<level>#{2,})[^\n]*[Gg]ate[^\n]*\n(.*?)(?=^(?P=level)(?!#) |\Z)",
     re.MULTILINE | re.DOTALL,
 )
+
+#: Not a cycle. It is the schema every cycle rule is written against, so it declares no
+#: gates of its own and is not a rule the sweep failed to read.
+_NOT_A_CYCLE = {"cycle-rule-schema.md"}
 
 #: A markdown table's separator row: `|---|---|`.
 _SEPARATOR_CHARS = set("|-: ")
@@ -162,6 +173,14 @@ class GateReport:
     partial: int = 0
     unmechanized: int = 0
     rules_swept: int = 0
+    #: Cycle rules holding no gate section at all. NAMED rather than dropped: a sweep
+    #: whose population is smaller than the directory must say which files it did not
+    #: read, or `0 unresolved` means something narrower than a reader takes it to mean.
+    rules_without_gates: list[str] = field(default_factory=list)
+    #: Cycle rules holding no gate section at all. NAMED rather than dropped: a sweep
+    #: whose population is smaller than the directory must say which files it did not
+    #: read, or `0 unresolved` means something narrower than a reader takes it to mean.
+    rules_without_gates: list[str] = field(default_factory=list)
     findings: list[GateFinding] = field(default_factory=list)
 
     #: How many exemptions of each class. Reported separately because the four make
@@ -253,8 +272,14 @@ def check_gate_mechanisms(repo_root: Path, *, max_debt_age_days: int | None = No
 
     for rule_path in sorted(rules_dir.glob("cycle-*.md")):
         text = rule_path.read_text(encoding="utf-8", errors="replace")
+        if rule_path.name in _NOT_A_CYCLE:
+            continue
         sections = _SECTION_RE.findall(text)
         if not sections:
+            #: Named, not skipped. A rule with no gate section is a fact about the
+            #: population — `check_prose_write_paths.py` sets the precedent of printing
+            #: what was swept so CLEAN can never mean "nothing read".
+            report.rules_without_gates.append(rule_path.name)
             continue
         report.rules_swept += 1
 
@@ -430,6 +455,12 @@ def main(argv: list[str] | None = None) -> int:
     # The counts print on every run, pass or fail. A checker that says PASS
     # without saying how much it inspected is the empty gate this ecosystem
     # refuses everywhere else.
+    #: The population, stated before the counts. A sweep smaller than the directory
+    #: that does not say so reports `0 unresolved` about files it never opened.
+    if report.rules_without_gates:
+        print(f"  no gate section (not swept, not a defect): "
+              f"{', '.join(report.rules_without_gates)}")
+
     plural = "" if report.total_gates == 1 else "s"
     print(
         f"swept {report.rules_swept} cycle rule(s): {report.total_gates} gate{plural} "
