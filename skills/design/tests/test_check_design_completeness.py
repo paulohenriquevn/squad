@@ -284,3 +284,35 @@ def test_mermaid_extraction_and_kind_detection() -> None:
     assert len(blocks) == 1
     assert declares_kind(blocks[0], ("stateDiagram-v2",))
     assert not declares_kind(blocks[0], ("sequenceDiagram",))
+
+
+# ------------------------------------------------------------------ the render path
+
+
+def test_the_gate_never_requires_a_rendered_file(tmp_path: Path) -> None:
+    """Rendering is for a review session; the mermaid is the drawing.
+
+    The first version of `SKILL.md` pointed step 4 at `build_walkthrough.py`, which
+    takes a declarative YAML spec of ONE ITEM's flows — a different input and a
+    different artifact. It would have failed on the first run. `diagram-design` accepts
+    Markdown carrying fenced mermaid blocks, which is exactly the shape of these files,
+    and it is a separate install: a phase that depended on it would stop for a plugin
+    nobody asked the project to have.
+    """
+    rep = check(_project(tmp_path))
+
+    assert rep.verdict != "INVALID"
+    assert not any("html" in f.subject or "render" in f.code for f in rep.findings)
+
+
+def test_the_contract_does_not_point_at_the_wrong_generator() -> None:
+    """`build_walkthrough.py` belongs to `/plan-alignment` and takes a YAML spec.
+    Naming it here sends the operator at a script that cannot read these files."""
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+
+    render_section = skill.split("### Step 4")[1].split("### Step 5")[0]
+    assert "import-mermaid" in render_section
+    assert "build_walkthrough.py" in render_section, (
+        "the wrong generator must stay NAMED as wrong — removing the mention silently "
+        "invites the next author to reach for it")
+    assert "Not `build_walkthrough.py`" in render_section

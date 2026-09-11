@@ -90,14 +90,29 @@ A piece with no place in the map is a finding worth having **before** an item is
 against it: either it has no place in the system as drawn, or the map is missing a
 component.
 
-### Step 4 — Render the walkthrough
+### Step 4 — Render, when a person has to look at it
+
+The mermaid IS the drawing. It is what the gate reads, what git versions, and what an
+agent reads back later — so it is never regenerated from a rendered file. Rendering is
+for the review session, where a person reads a picture faster than a fenced block.
 
 ```bash
-python3 "$ECO/skills/plan-alignment/scripts/build_walkthrough.py" <spec> -o .squad/wiki/design/walkthrough.html
+/diagram-design:import-mermaid .squad/wiki/design/states.md --format=html
+/diagram-design:import-mermaid .squad/wiki/design/system-map.md --format=html+png --audience=mixed
 ```
 
-The same generator `/plan-alignment` uses — Graphviz for layout, because hand-placed
-nodes have no invariant to violate and only ever *look* wrong.
+The `diagram-design` plugin accepts Markdown carrying fenced `mermaid` blocks, which is
+exactly the shape of these files. Nothing has to be exported or converted first.
+
+**It is optional, and the phase does not depend on it.** The plugin is a separate
+install; `check_design_completeness.py` never asks for a rendered file, because a
+drawing that exists only as a picture is a drawing no gate can check and no agent can
+read.
+
+**Not `build_walkthrough.py`.** That generator belongs to `/plan-alignment` and takes a
+declarative YAML spec of one item's flows — a different input and a different artifact.
+Pointing this step at it was wrong in the first version of this file and would have
+failed on the first run.
 
 ### Step 5 — Score, then hand the checklist to a person
 

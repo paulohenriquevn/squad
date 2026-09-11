@@ -53,7 +53,7 @@ reports `INVALID` with the reason rather than a pass.
 | D4 | `durability.md` | `flowchart` / `graph` / `stateDiagram-v2` | yes |
 | D5 | `system-map.md` | `flowchart` / `graph` / `C4*` | derived |
 | — | `sign-off.md` | — | the checklist a person ticks |
-| — | `walkthrough.html` | — | rendered, not authored |
+| — | *(rendered files)* | — | optional — `/diagram-design:import-mermaid`, for a review session. No gate asks for one |
 
 **D5 is derived, not drawn first.** A component map produced before the four decisions
 is decoration: it looks like design happened and forces no choice.
