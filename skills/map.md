@@ -10,8 +10,8 @@ status: stable
 
 # The skill map
 
-**36 skills.** Most are a phase of a cycle and are invoked in an order the
-cycle rule fixes; ten are invoked on demand and belong to no chain.
+**37 skills.** Most are a phase of a cycle and are invoked in an order the
+cycle rule fixes; eleven are invoked on demand and belong to no chain.
 
 **Every row below carries three things**: what the skill does, when to reach for
 it, and — the column that is usually missing from an index — when reaching for it
@@ -176,6 +176,7 @@ A phase of no cycle. Invoked when the question arises.
 | `arch-check` | Verifies declared architecture boundaries, or proposes ones the repo already obeys | Boundaries exist and may have drifted, or none are declared | Expect it to invent a boundary the code does not already respect, or to report a clean run it could not perform |
 | `deps-audit` | *(also phase 3 of cycle-plan — see above)* | Outside a plan, when dependency risk is the question | — |
 | `code-quality` | *(also the whole of cycle-code-quality — see above)* | Outside the chain, to audit a tree | — |
+| `critic` | A reader for the four phases measured as having none — acceptance, code-quality, backlog, release. RETURNS work rather than blocking; the agent fixes and the phase re-runs | A phase emitted its verdict and nothing else reviews it | Use it where a panel already votes — four opinions over three is the noise that makes people stop reading verdicts. Never raise `max_rounds` to win an argument: the ceiling is what keeps a disagreement from becoming an invisible halt |
 | `issue-confidence` | An issue carrying what developers measurably use — weighted by the FSE 2008 survey of 872 developers, scored before filing, refused if it carries a secret | A finding has a repro and evidence, from any source | Mention it in a report instead of filing — the worst outcome, because it reads as coverage. Never pad the cheap fields: environment is 4% and severity is 0%, and an issue that is all metadata and no repro is the 74% case |
 | `honesty-gate` | Blocks a "production-ready" / v1.0 claim without recorded evidence of sustained internal use | Someone is about to make that claim | Read `EVIDENCE_WITH_CAVEATS` as `SUFFICIENT` — the caveats are explicit. Never log evidence for one scenario and claim it satisfies another anchor |
 | `quality-init` | Emits quality-gate hooks calibrated to the project's real p90 metrics | Setting a project up, once | Generate hooks that auto-fix — hooks are gates, not fixers. Never set thresholds below the floors: the hook would block every write |
