@@ -622,3 +622,68 @@ def test_max_debt_age_is_opt_in(tmp_path: Path) -> None:
 
     aged = check_gate_mechanisms(root, max_debt_age_days=30)
     assert [f for f in aged.findings if f.kind == "debt_too_old"]
+
+
+# ------------------------------------------------------------------ #77
+
+
+def test_a_gate_section_under_any_heading_is_swept(tmp_path) -> None:
+    """#77. `_SECTION_RE` required the literal `Hard gate`, so `## Gates` and
+    `## Confidence gates between phases` fell through `if not sections: continue` —
+    neither swept nor reported.
+
+    Measured 2026-09-11: 14 cycle rules on disk, 9 swept, `0 unresolved` claimed over a
+    population that excluded two rules holding 16 gates between them. Widening the match
+    surfaced 7 real findings that had been invisible.
+    """
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-x.md").write_text(
+        "# X\n\n## Gates\n\n| Gate | What | By |\n|---|---|---|\n"
+        "| G-1 | something | `check_x.py` |\n", encoding="utf-8")
+
+    report = check_gate_mechanisms(tmp_path)
+
+    assert report.rules_swept == 1, "a section headed `## Gates` must be swept"
+
+
+def test_a_rule_with_no_gate_section_is_named_not_dropped(tmp_path) -> None:
+    """Absent must not read as clean. `check_prose_write_paths.py` sets the precedent:
+    print what was swept so CLEAN can never mean "nothing read"."""
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-quiet.md").write_text("# Quiet\n\n## Purpose\n\nNo gates here.\n",
+                                          encoding="utf-8")
+
+    report = check_gate_mechanisms(tmp_path)
+
+    assert report.rules_without_gates == ["cycle-quiet.md"]
+    assert report.rules_swept == 0
+
+
+def test_the_schema_is_not_counted_as_a_rule_that_lost_its_gates(tmp_path) -> None:
+    """`cycle-rule-schema.md` is what every cycle rule is written AGAINST. Listing it
+    as a rule with no gate section reports a fact about a document that was never
+    supposed to have any."""
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-rule-schema.md").write_text("# Schema\n\n## Purpose\n\nx\n",
+                                                encoding="utf-8")
+
+    report = check_gate_mechanisms(tmp_path)
+
+    assert report.rules_without_gates == []
+    assert report.rules_swept == 0
+
+
+def test_this_repository_sweeps_every_cycle_rule_it_has() -> None:
+    """The population and the directory must agree, or `0 unresolved` means something
+    narrower than a reader takes it to mean."""
+    repo = Path(__file__).resolve().parents[1]
+    on_disk = {p.name for p in (repo / "rules").glob("cycle-*.md")} - {"cycle-rule-schema.md"}
+
+    report = check_gate_mechanisms(repo)
+
+    assert report.rules_swept + len(report.rules_without_gates) == len(on_disk), (
+        f"swept {report.rules_swept} + {len(report.rules_without_gates)} without gates, "
+        f"but {len(on_disk)} cycle rules are on disk")

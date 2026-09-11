@@ -81,10 +81,13 @@ was the argument.
 not grade the author's own form** was always the rule; *"the reviewer must be human"*
 never was. A judge may review. A judge may not assume.
 
-| Gate | The claim | Who can make it |
-|---|---|---|
-| **G-D8** panel | *"nothing here contradicts what we could check"* | three reviewers, 2-of-3, spanning two model families |
-| **G-D7** signature | *"I read this and am willing to say it holds"* | a person, and only a person |
+The panel claims *"nothing here contradicts what we could check"* — three reviewers,
+2-of-3, spanning two model families, and a judge may make that claim. The signature
+claims *"I read this and am willing to say it holds"* — a person, and only a person.
+
+Both ids are declared once, in the gate table above. Restating them as a second table
+made `check_gate_mechanisms.py` read the restatement as a fresh declaration naming no
+enforcer, which is the shape it exists to catch and was right to flag.
 
 **Why the panel is possible here when G-B5 refuses one.** A judge grading a product
 VISION grades it against nothing — the vision is what everything else is measured

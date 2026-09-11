@@ -428,7 +428,23 @@ def main(argv: list[str] | None = None) -> int:
             mark = {"approve": "+", "return": "-", "abstain": "~"}.get(v["verdict"], "?")
             print(f"  {mark} {v['reviewer']} ({v['model']}) — {v['reason'][:90]}")
         if record["dissent"]:
-            print(f"  dissent recorded: {', '.join(record['dissent'])}")
+            #: Rendered as objections, not as names. `dissent` carries reviewer, family
+            #: and REASON — enriched from a bare name so the objection could travel, and
+            #: this printer was left joining strings. It raised `TypeError` on every
+            #: panel with a dissenting vote, and `main()` returns 1 for any non-approved
+            #: outcome, so the crash exited 1 too: the right number for the wrong reason.
+            #: It survived because it fires only on DISAGREEMENT, which is the case a
+            #: panel is bought for.
+            #: The LABEL has to say which side, because `dissenting()` returns the
+            #: losing side and that flips with the outcome: under APPROVED it is the
+            #: reviewers who returned, under RETURNED it is the reviewers who approved.
+            #: Printing both as "dissent" reported two approvals as objections.
+            approved = record["outcome"] == "approved"
+            print("  objections, over which this was approved:" if approved
+                  else "  approvals, which did not carry:")
+            for objection in record["dissent"]:
+                print(f"    {objection['reviewer']} ({objection['family']}) "
+                      f"— {objection['reason']}")
 
     return 0 if record["outcome"] == "approved" else 1
 

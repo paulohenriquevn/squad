@@ -22,7 +22,8 @@ What it checks instead — the ways a maintenance registry actually rots:
     killed_without_reason   killed with no kill_reason (gate G-K, after the fact)
     triaged_without_evidence  triaged but evidence is still none-yet
     raw_with_evidence       raw but carrying evidence — status never advanced
-    unroutable_repo         repo in no domain (gate G1)
+    unroutable_repo         repo in no domain, on an OPEN item (gate G1)
+    unroutable_repo_closed  same, on a shipped or killed one — history, not an impediment
     broken_route            domain exists but its specialist file does not
     invalid_mode            suggested_mode outside the four
     renumbered              ids not monotonic — a reused id destroys traceability
@@ -406,8 +407,32 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
 
         repo = item.fields.get("repo", "")
         if repo and known_repos is not None and repo not in known_repos:
-            findings.append(Finding("unroutable_repo", "deterministic", "blocker", iid,
-                f"`{repo}` is in no domain — the item routes to nobody (gate G1)"))
+            #: G1 is about work that cannot proceed — `cycle-backlog.md` puts it as
+            #: "an item nobody owns is an item nobody does". A shipped or killed item
+            #: is not work; it is history, and nothing about it can be done by anyone.
+            #:
+            #: Firing on terminal items made the verdict PERMANENTLY INVALID, because
+            #: the contract forbids both escapes. Renumbering: "the number is the audit
+            #: trail; a killed B-007 stays B-007 forever." An impediment: "leaving
+            #: blocked_by on a closed item — the registry then tells everyone after you
+            #: that finished work is stuck." The only remaining move was widening the
+            #: routing table to name a repository the project deliberately does not
+            #: govern, which makes the table describe a scope that is not the scope.
+            #:
+            #: Measured on a consumer with 227 items: 10 unroutable_repo blockers, 3
+            #: shipped and 6 killed. One was live, and it was the one that could act.
+            if item.fields.get("status", "") in OPEN_STATUS:
+                findings.append(Finding("unroutable_repo", "deterministic", "blocker", iid,
+                    f"`{repo}` is in no domain — the item routes to nobody (gate G1)"))
+            else:
+                #: Reported, not silenced. The history stays visible — a registry that
+                #: hides which closed items name repositories it no longer governs has
+                #: lost the record, which is the one thing a terminal item is for.
+                findings.append(Finding("unroutable_repo_closed", "deterministic", "minor", iid,
+                    f"`{repo}` is in no domain, and this item is "
+                    f"`{item.fields.get('status', '?')}` — history, not an impediment. "
+                    "Nothing can be done about it and nothing should be: the id is the "
+                    "audit trail and the routing table describes the scope as it is now"))
 
         if not item.dod:
             findings.append(Finding("thin_dod", "heuristic", "major", iid,
