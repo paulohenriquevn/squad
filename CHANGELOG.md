@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **`cycle-design` — the system is drawn before a backlog is filed against it** (#75)
+  `brainstorm-pieces` names PIECE-N as *"a responsibility with a boundary"* and states
+  its own limit: *"the mapping is not decided here."* `backlog-init` then inventories
+  repos from disk. Nothing joined the two, so items were filed against a system nobody
+  drew — and the two decisions no product retrofits, state ownership and trust
+  boundary, were never forced. The new phase produces five drawings, four of them
+  mandatory because each answers a question that is cheap now and expensive later:
+  what the central object's lifecycle is, where untrusted code stops, what the real
+  call order is when things fail, and what survives a process death. The component map
+  is DERIVED from those four and never drawn first — a map drawn first looks like
+  design happened and forces no choice. `check_design_completeness.py` refuses a
+  document with no mermaid block, a diagram filed in the wrong slot, a stub, a
+  placeholder, and a `PIECE-N` with no place in the map; it ends at `AWAITING_REVIEW`
+  until a person signs, because whether a state machine has the RIGHT states is not a
+  countable property.
+
 ### Fixed
 - **The alignment scorer counted a wrapped line as a requirement, and scored a walkthrough it never opened** (#B-013)
   Both measured in a consumer install and ported here, because a fix written inside a

@@ -77,6 +77,7 @@
 # ---- clean ------------------------------------------------------------------
 ACCEPTED                      | clean      | the released delivery was exercised and every DoD criterion held
 ALIGNED                       | clean      | machine score >= 90% and a non-author reviewer signed; PLAN may proceed
+DESIGN_AGREED                 | clean      | the five drawings exist, every PIECE-N has a place in the map, and a person signed; BACKLOG may open
 IMPLEMENTATION_COMPLETE       | clean      | the completion promise; every plan task has a passing test behind it
 ITEM_KILLED                   | clean      | the measurement ran honestly and the hypothesis did not hold — a run that kills an item SUCCEEDED, and the chain ends there
 ITEM_REGISTERED               | clean      | the item entered the registry through the intake gates

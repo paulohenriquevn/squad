@@ -10,7 +10,7 @@ status: stable
 
 # The skill map
 
-**33 skills.** Most are a phase of a cycle and are invoked in an order the
+**34 skills.** Most are a phase of a cycle and are invoked in an order the
 cycle rule fixes; eight are invoked on demand and belong to no chain.
 
 **Every row below carries three things**: what the skill does, when to reach for
@@ -116,6 +116,7 @@ rubric, same floor, one level up.
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
+| `design` | Five technical drawings that force the four decisions a product cannot retrofit — lifecycle, trust boundary, real call order with failures, durability — plus the component map derived from them | After `/brainstorm-pieces` and before `/backlog-init`, on any product where two people could read the TRD and picture different systems | Draw the component map FIRST — it looks like design happened and decides nothing. Never sign to unblock the backlog: a signed design with an uncovered PIECE-N still returns `NEEDS_REVISION` |
 | `backlog-init` | Creates `BACKLOG.md` once, inventorying repos from disk and deriving the routing table | The project has no registry yet — after `/brainstorm-pieces` returns `PRODUCT_ALIGNED`, whose four documents it reads as context | Write the inventory from `CLAUDE.md` — it drifts; `find` / `git -C` is the source. Never seed "obvious" items: every one needs a human `why_now` and a DoD |
 | `backlog-item` | Registers one `B-NNN` — a hypothesis; evidence is **not** required yet | Anyone notices something worth fixing, measuring or verifying | Ask for evidence during the intake grill — that turns intake into triage and silences the hunch this phase exists to capture. Never write to `BACKLOG.md` before the grill completes |
 | `backlog-review` | Reports what has rotted in the registry — duplicate ids, evidence-less triaged items, kills with no reason, repos routing to nobody | Before trusting the registry to pick work | Edit the backlog. It is read-only by contract: a reviewer that edits cannot be trusted to report what it found |

@@ -33,7 +33,7 @@ _SCHEMA = _ROOT / "rules" / "cycle-rule-schema.md"
 
 _NUMBER_WORDS = {
     "forty-eight": 48, "forty-nine": 49, "fifty": 50, "fifty-one": 51, "fifty-two": 52,
-    "fifty-three": 53, "fifty-four": 54, "fifty-five": 55, "fifty-six": 56,
+    "fifty-three": 53, "fifty-four": 54, "fifty-five": 55, "fifty-six": 56, "fifty-seven": 57,
 }
 
 

@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at fifty-six files is
-not one — a model told to read fifty-six files before an architectural decision
+That makes the pointer the whole interface, and a pointer at fifty-seven files is
+not one — a model told to read fifty-seven files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
@@ -61,6 +61,7 @@ Each `cycle-{name}.md` defines:
 | Contract | Cycle | Key Verdicts |
 |---|---|---|
 | `cycle-brainstorm.md` | Product alignment (phase −1) — the only phase a person attends | PRODUCT_ALIGNED / NEEDS_REVISION / AWAITING_REVIEW / INVALID |
+| [`cycle-design.md`](cycle-design.md) | Draw the system before a backlog is filed against it — four drawings that force the decisions no product retrofits (lifecycle, trust boundary, call order with failures, durability) plus the component map DERIVED from them. A map drawn first looks like design happened and forces no choice |
 | `cycle-backlog.md` | Intake (phase 0) | ITEM_REGISTERED / ITEM_REJECTED |
 | `cycle-maintenance.md` | Macro super-loop | ITEM_SHIPPED / ITEM_KILLED / BACKLOG_EMPTY |
 | `cycle-discover.md` | Measurement of our own system | SHIPPABLE_WITH_CAVEATS / ITEM_KILLED |

@@ -231,7 +231,8 @@ def _agents_dir(project: Path) -> Path | None:
 
 def waiting(project: Path) -> list[Path]:
     """Documents with an unticked sign-off box, wherever the kit keeps them."""
-    roots = [d for d in (wiki_dir(project, "product"), records_dir(project, "alignment"),
+    roots = [d for d in (wiki_dir(project, "product"), wiki_dir(project, "design"),
+                         records_dir(project, "alignment"),
                          records_dir(project, "discoveries"), records_dir(project, "plans"),
                          _agents_dir(project))
              if d is not None and d.is_dir()]

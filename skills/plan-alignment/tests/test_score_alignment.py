@@ -634,7 +634,7 @@ def test_the_detector_matches_commands_written_as_inline_code(tmp_path) -> None:
 
 # ── ported from a consumer install, where both defects were measured ──────────
 #
-# Both were found in `theokit-framework/theokit`'s copy of this kit and fixed there
+# Both were found in an adopter's copy of this kit and fixed there
 # first — a fix that reached exactly one machine, because `.claude/` is gitignored in
 # every consumer. `~/.claude/CLAUDE.md § Ambiente Pessoal` states the consequence as a
 # rule: a correction written inside a consumer's `.claude/` does not exist until it

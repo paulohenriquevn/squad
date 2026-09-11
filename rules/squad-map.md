@@ -122,6 +122,24 @@ the verdict. **No verdict in this kit is asserted in prose.**
 | Produces | `wiki/product/` — vision, objectives, trd, technical-pieces, alignment · `records/brainstorms/` for what was discarded |
 | Gates | G-B1…G-B5. **A judge may not sign this one** — a product vision has no independent evidence to be scored against |
 
+### DESIGN — phase 0 · Iris, with a person in the room
+
+| | |
+|---|---|
+| Skills | `/design` |
+| Rules | [`cycle-design.md`](cycle-design.md) |
+| Computes | `check_design_completeness.py` (five drawings, mermaid kind per slot, PIECE-N coverage, the signature) |
+| Produces | `wiki/design/` — states, trust, sequence, durability, system-map, sign-off, walkthrough.html |
+| Gates | G-D1…G-D7. **A judge may not sign this one either** — grading a system design against the document that declares it is the failure the sign-off prevents |
+
+**Four drawings decide and the fifth summarises.** Lifecycle, trust boundary, call
+order including failures, and durability are the decisions no product retrofits; the
+component map is DERIVED from them, because a map drawn first looks like design
+happened and forces no choice. It sits between BRAINSTORM and BACKLOG because
+`technical-pieces.md` names responsibilities and states its own limit — *"the mapping
+is not decided here"* — while `/backlog-init` inventories repos from disk. Nothing
+joined the two, so items were filed against a system nobody drew.
+
 **Two phases are gated by a panel, not by one judgement.** DISCOVER and PLAN each need
 **2 of 3** signed approvals, with at least one reviewer from a model family outside the
 kit's own — [`rules/review-panel.txt`](review-panel.txt), computed by

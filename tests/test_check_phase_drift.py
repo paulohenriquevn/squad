@@ -320,7 +320,7 @@ def test_this_repository_declares_a_readable_phase_plan() -> None:
     over nothing."""
     phases = load_declared_phases(REPO_ROOT)
 
-    assert [p.name for p in phases][:4] == ["brainstorm", "backlog", "discover", "plan"]
+    assert [p.name for p in phases][:5] == ["brainstorm", "design", "backlog", "discover", "plan"]
     assert any(p.required for p in phases), "a plan where nothing is required checks nothing"
 
     # `brainstorm` is deliberately `conditional` while the two after it are `required`,
