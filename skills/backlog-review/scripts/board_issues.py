@@ -85,7 +85,8 @@ def _diagnose(stderr: str) -> tuple[str, str]:
     configured for this repository point to a known GitHub host" is a true sentence
     that leaves the reader nowhere; it is produced by an SSH host alias, and the fix is
     one flag away. Measured against a real project whose remote is
-    `github-usetheo:usetheoai/theo.git`, where every unaided `gh` call fails this way.
+    an SSH host alias (`git@<alias>:<owner>/<repo>.git`), where every unaided `gh` call
+    fails this way.
     """
     low = stderr.lower()
     if "none of the git remotes" in low or "not a git repository" in low:

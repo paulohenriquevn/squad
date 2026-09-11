@@ -7,6 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`/backlog-approve` — the decision a backlog was never asked for** (#86)
+  `cycle-backlog.md` calls `approved` a commitment, *"somebody decided"*, and forbids
+  reaching a plan without it. Measured across four registries: 325 items, 243 of them
+  `shipped`, and **zero** at `approved`. The chain diagram in that same document routed
+  `triaged` straight to `/plan-write`, so the gate was bypassed in the doctrine as well
+  as in practice — the same shape recorded when `planned` was zero everywhere, and the
+  same cause: a status nothing asks for is a status nobody writes. The skill renders the
+  registry as one page carrying, per item, what it claims, what changed that makes it
+  worth doing now, how it closes, and whether the files its evidence cites are still on
+  disk; a person ticks and signs; `apply_approval.py` moves exactly those, through
+  `backlog_status.py` and never around it. Unticked is not rejected. Every box starts
+  empty, because a pre-ticked list makes the default yes-to-everything and turns the
+  signature into a formality.
+
 - **The board draws the issue tracker beside the cycle** (#84)
   `BACKLOG.md` says what the project decided to do; the tracker says what the people
   using it ran into. The board showed the first and not the second — measured on this

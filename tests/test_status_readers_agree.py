@@ -294,6 +294,11 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         "skills/brainstorm-vision/tests/test_build_agenda.py",
         "tests/test_advance_items.py",
         "tests/test_blocked_by_readers_agree.py",
+        # Tests OF `backlog-approve`. They assert that a signed brief moves items to
+        # `approved` and that `shipped` refuses the same move; the routing decision
+        # they exercise belongs to `backlog_status.py`, which IS pinned.
+        "skills/backlog-approve/tests/test_apply_approval.py",
+        "skills/backlog-approve/tests/test_approval_brief.py",
         # The board's renderer, in JS. It branches on `shipped` and `killed` by
         # NAME and falls through for everything else, so a status added to the
         # contract renders in the default column rather than vanishing. Safe by
