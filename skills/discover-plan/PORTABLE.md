@@ -2,11 +2,11 @@
 
 This skill works in **any project** that uses Claude Code and maintains a `BACKLOG.md` registry of maintenance items (see `rules/cycle-backlog.md`).
 
-It has no reference-clones requirement. The ancestor of this skill planned investigations into *other people's* code under `records/references/`; this one plans measurements of **your own system**, so the only inputs it needs are your repo, your rules, and the item being measured.
+It has no reference-clones requirement. The ancestor of this skill planned investigations into *other people's* code under `records/references/`; this one plans measurements of **your own system**, so the only inputs it needs are your repo, your rules, and the item being measured.  <!-- write-path: names the retired zone to record that it was retired -->
 
 ## What you get
 
-- `/discover-plan B-NNN` — writes a measurement plan to `records/discoveries/plans/{slug}-plan.md`
+- `/discover-plan B-NNN` — writes a measurement plan to `.squad/records/discoveries/plans/{slug}-plan.md`
 - A template (`templates/measurement-plan-template.md`) that bakes in the falsification criterion, Tool + Target per question, the four corners, and halt-loop checkpoints
 
 The skill produces no output until invoked. It is instructions plus a template.
@@ -37,7 +37,7 @@ The full chain:
 
 - **`rules/` (or `.claude/rules/`)** with at least `architecture.md` and `testing.md`, or your equivalents. Step 0 mandates reading them. Missing rules degrade the plan to a generic one.
 - **`BACKLOG.md`** at the workspace root. The skill takes a `B-NNN` item as its input — the hypothesis it plans to measure. Without a registry there is nothing to plan against; run `/backlog-init` first.
-- **`records/discoveries/plans/`** — created on first use if absent.
+- **`.squad/records/discoveries/plans/`** — created on first use if absent.
 
 ### Required for `--mode live-test` only
 
@@ -46,7 +46,7 @@ The full chain:
 ### Optional but recommended
 
 - **`rules/current-constraint.md`** — the constraint lens. Absent or undeclared, the constraint corner is deferred, which is the expected path rather than a failure.
-- Prior opportunities under `records/discoveries/opportunities/` — Step 1 reads them so a hypothesis killed three months ago is not silently re-measured.
+- Prior opportunities under `.squad/records/discoveries/opportunities/` — Step 1 reads them so a hypothesis killed three months ago is not silently re-measured.
 
 ## What happens out of the box
 

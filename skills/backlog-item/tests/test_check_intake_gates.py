@@ -58,6 +58,12 @@ def _project(tmp_path: Path) -> Path:
     (root / "mechanisms" / "cycle" / "route_domain.py").write_bytes(
         (REPO_ROOT / "mechanisms" / "cycle" / "route_domain.py").read_bytes()
     )
+    # `install.sh` copies `squad/` beside `mechanisms/`, and `route_domain.py` reads
+    # the write root's name from it. A fixture with one and not the other models an
+    # install that does not exist.
+    (root / "squad").mkdir(exist_ok=True)
+    (root / "squad" / "paths.py").write_bytes(
+        (REPO_ROOT / "squad" / "paths.py").read_bytes())
     (root / "rules" / "cycle-backlog.md").write_text(
         "# Cycle: BACKLOG\n\n## Domain routing\n\n"
         "| Domain | Repos | Specialist |\n|---|---|---|\n"
@@ -289,3 +295,64 @@ def test_every_judgement_gate_has_an_eval_of_its_own() -> None:
             f"{gate} is called conversational-and-eval-covered by the script's "
             f"docstring, and no eval case names it: {names}"
         )
+
+
+# ---------------------------------------------------------------------------
+# G5 has an executable route for the items the system itself creates
+# ---------------------------------------------------------------------------
+
+def _stream(root: Path, *events: dict) -> Path:
+    d = root / ".squad" / "records"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / "cycle-events.jsonl"
+    f.write_text("".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
+    return f
+
+
+def _g5():
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from check_intake_gates import g5_route
+    return g5_route
+
+
+def test_a_halt_born_item_answers_g5_by_lookup(tmp_path: Path) -> None:
+    """The recirculation an external reviewer found.
+
+    Halts return work to the registry, so an autonomous run reaches the entrance again —
+    and `cycle-backlog.md` says a person decides G5 there. "Zero interventions after
+    BACKLOG" does not survive that.
+
+    An item a halt produced has a `why_now` that is a citation into this project's own
+    stream, not a claim about another project. G5's question is then a lookup.
+    """
+    _stream(tmp_path, {"cycle": "implement", "verdict": "NEEDS_FIXES", "slug": "B-014"})
+
+    result = _g5()("implement ended NEEDS_FIXES for B-014", tmp_path)
+
+    assert result["outcome"] == "mechanized"
+    assert result["evidence"]["slug"] == "B-014"
+
+
+def test_an_unconfirmable_citation_stays_with_a_person(tmp_path: Path) -> None:
+    """G5's harder half, measured on 2026-08-28: a model refused the prior-art
+    justification and then invented a local one. A citation nobody can confirm is
+    exactly that, so the route must not accept the SHAPE of a citation."""
+    _stream(tmp_path, {"cycle": "implement", "verdict": "NEEDS_FIXES", "slug": "B-014"})
+
+    result = _g5()("implement ended NEEDS_FIXES for B-999", tmp_path)
+
+    assert result["outcome"] == "human"
+    assert "does not carry it" in result["reason"]
+
+
+def test_an_appeal_to_another_project_stays_with_a_person(tmp_path: Path) -> None:
+    _stream(tmp_path, {"cycle": "implement", "verdict": "NEEDS_FIXES", "slug": "B-014"})
+    g5 = _g5()
+
+    assert g5("project X does it this way", tmp_path)["outcome"] == "human"
+    assert g5("", tmp_path)["outcome"] == "human"
+
+
+def test_no_stream_on_disk_is_not_a_confirmation(tmp_path: Path) -> None:
+    """Absence of evidence read as evidence is the failure this kit is built around."""
+    assert _g5()("implement ended NEEDS_FIXES for B-014", tmp_path)["outcome"] == "human"

@@ -102,7 +102,7 @@ what is blocked:
 1. `BACKLOG.md` — statuses, domains, `blocked_by`
 2. `select_backlog_item.py BACKLOG.md --json` — its `walls` and `halted` lists
 3. `squad_boss.py . --json` — which halts have causes and which do not
-4. `records/cycle-events.jsonl` — what actually ran, and when
+4. `.squad/records/cycle-events.jsonl` — what actually ran, and when
 5. any `*-BLOCKED.md` the two scripts point at
 
 **`rules/autonomy-envelope.md` is your authority and your limit. Read it before you

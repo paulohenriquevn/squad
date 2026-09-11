@@ -239,7 +239,7 @@ problems instead of guarding against each.
 
 ```bash
 python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \
-  --write .claude/rules/domain-routing.txt
+  --write
 ```
 
 The script reads the topology from disk — not from an inventory, not from a

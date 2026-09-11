@@ -37,7 +37,7 @@ it gets built. **Read `cycle-plan.md § Chain` before invoking.**
 ```
 /discover-plan B-NNN        → evidence found, status: triaged
      ↓
-/plan-alignment B-NNN → records/alignment/{slug}-alignment.md + {slug}-walkthrough.html
+/plan-alignment B-NNN → .squad/records/alignment/{slug}-alignment.md + {slug}-walkthrough.html
      ├── ALIGNED         → /plan-write
      ├── AWAITING_REVIEW → structure is done; nobody has signed off yet
      └── BLOCKED         → the item is NOT built; close the gaps and re-score
@@ -72,7 +72,7 @@ session, any run where waiting means the item never moves:
 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/alignment_judge.py" \
-  records/alignment/{slug}-alignment.md \
+  .squad/records/alignment/{slug}-alignment.md \
   --verdict signed --reason "<what the evidence showed>"
 ```
 
@@ -114,7 +114,7 @@ enforces, for the same reason.
 
 ## Step 2 — Draft the brief from what you already know
 
-Write `records/alignment/{slug}-alignment.md` **before** asking anything, filling
+Write `.squad/records/alignment/{slug}-alignment.md` **before** asking anything, filling
 in every section you can. A draft with honest holes is a better interview
 instrument than a blank page: a human corrects a wrong guess faster than they
 answer an open question.
@@ -220,10 +220,10 @@ For each answer:
 **Write a spec. Do not place anything.**
 
 ```bash
-# records/alignment/{slug}-walkthrough.yaml
+# .squad/records/alignment/{slug}-walkthrough.yaml
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/build_walkthrough.py" \
-    records/alignment/{slug}-walkthrough.yaml \
-    -o records/alignment/{slug}-walkthrough.html
+    .squad/records/alignment/{slug}-walkthrough.yaml \
+    -o .squad/records/alignment/{slug}-walkthrough.html
 ```
 
 ```yaml
@@ -279,7 +279,7 @@ without surfacing a single disagreement.
 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/score_alignment.py" \
-    records/alignment/{slug}-alignment.md
+    .squad/records/alignment/{slug}-alignment.md
 ```
 
 Two independent conditions, and the verdict needs both:

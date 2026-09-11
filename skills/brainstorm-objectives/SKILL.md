@@ -10,7 +10,7 @@ argument-hint: "[scope-name]"
 
 # `/brainstorm-objectives` — What we are trying to achieve, in numbers
 
-Phase 2 of four. Produces `wiki/product/objectives.md`: the `OBJ-N` ids that every
+Phase 2 of four. Produces `.squad/wiki/product/objectives.md`: the `OBJ-N` ids that every
 requirement cites and every backlog item traces to.
 
 ## Cycle contract
@@ -22,7 +22,7 @@ the source of truth for the chain, the gates and the verdicts.
 
 ## Pre-conditions
 
-- `wiki/product/product-vision.md` exists. An objective written before the problem
+- `.squad/wiki/product/product-vision.md` exists. An objective written before the problem
   is agreed measures the wrong thing precisely.
 - The same person from phase 1 is present.
 
@@ -67,7 +67,7 @@ For each, also capture `why` — one line saying what makes this worth doing now
 drawn from something observed rather than from a peer product. This is gate G5's
 standard applied here: prior art is fine to know and never the justification.
 
-Persist to `records/brainstorms/{date}-session.md` after every answer.
+Persist to `.squad/records/brainstorms/{date}-session.md` after every answer.
 
 ### Step 3 — Write
 
@@ -98,7 +98,7 @@ Then emit the event and hand off:
 
 ```bash
 python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
-    --cycle brainstorm --slug {scope} --verdict OBJECTIVES_WRITTEN
+    --cycle brainstorm --slug {scope} --verdict AWAITING_REVIEW
 ```
 
 ## Anti-patterns

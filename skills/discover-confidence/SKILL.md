@@ -127,14 +127,25 @@ conclusion — is exactly the one no script can ask.
 2. **Invoke every assigned agent as a sub-agent**, one per seat, each judging the
    document against its own speciality. Here: `nemesis-claim-auditor` on whether the claim is supported, `leonardo-researcher` on what the decision needed to know, and `judge-codex:discover-judge` from outside the family.
 
-3. **Write the votes** to `records/panels/<slug>-discover.json`:
+3. **Write the votes** to `.squad/records/panels/<slug>-discover.json`:
+
+   ```bash
+   ARTIFACT=<path to the document the panel judged>
+   SHA=$(python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$ARTIFACT")
+   ```
 
    ```json
-   {"slug": "...", "phase": "discover", "artifact": "...", "author": "...",
+   {"slug": "...", "phase": "discover", "artifact": "<path>", "artifact_sha256": "<SHA>",
+    "author": "...",
     "votes": [{"reviewer": "<the assigned agent>", "model": "<what it ran on>",
                 "verdict": "approve | return | abstain",
                 "reason": "what was checked, against which evidence"}]}
    ```
+
+   **`artifact_sha256` binds the votes to the text.** Without it the approval survives a
+   rewrite of the thing approved, and editing the artifact after the votes land is the
+   cheapest way to launder a change past a panel. The gate reports the binding as
+   unverified when the field is absent — it does not silently accept it.
 
    A reason under 15 words is refused: a verdict with no reasoning is a tick, and a
    tick is what a panel exists to be more than.

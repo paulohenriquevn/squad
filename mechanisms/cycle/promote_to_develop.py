@@ -44,9 +44,14 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from squad.paths import records_dir
 
 Runner = Callable[[list[str]], "tuple[int, str, str]"]
 
@@ -77,6 +82,34 @@ def _runner(root: Path, program: str) -> Runner:
         return done.returncode, done.stdout, done.stderr
 
     return run
+
+
+def _reviews_that_drifted(project: Path) -> list[str]:
+    """Slugs whose review examined files that changed after it ran.
+
+    Empty when nothing drifted AND when nothing can be checked — an absent review
+    record is `check_review_binding`'s own `UNCHECKED`, and promotion is not the place
+    to invent a review requirement the cycle does not state. What this refuses is a
+    review that exists and no longer describes the branch.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "gates"))
+    try:
+        from check_review_binding import DRIFTED, check
+    except ImportError:  # pragma: no cover - environment, not logic
+        return []
+
+    directory = records_dir(project, "reviews")
+    if directory is None:
+        return []
+    drifted: list[str] = []
+    for record in sorted(directory.glob("*-review-*.json")):
+        slug = record.name.split("-review-")[0]
+        if slug in drifted:
+            continue
+        code, _ = check(slug, project=project)
+        if code == DRIFTED:
+            drifted.append(slug)
+    return drifted
 
 
 def promote(
@@ -141,6 +174,23 @@ def promote(
         return report
 
     report.lines.append(f"{count} commit(s) ahead of origin/{TARGET}")
+
+    # Promotion is where reviewed work leaves the branch, so it is where a review that
+    # no longer describes the branch has to be caught. A commit landing after
+    # consolidation would otherwise travel to `develop` on an approval that never saw
+    # it — the approval was bound to a NAME, not to a CONTENT.
+    drifted = _reviews_that_drifted(Path.cwd())
+    if drifted:
+        report.exit_code = REFUSED
+        report.lines.append(
+            f"{len(drifted)} review(s) no longer describe this branch: "
+            + ", ".join(drifted)
+        )
+        report.lines.append(
+            "Re-review the slice, or record a new review bound to the tip. Promoting "
+            "would carry an approval about a state that is not what ships."
+        )
+        return report
 
     existing = call(gh, ["pr", "list", "--base", TARGET, "--head", SOURCE,
                          "--state", "open", "--json", "number,url"])

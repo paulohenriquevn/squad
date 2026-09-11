@@ -989,7 +989,11 @@ const BAD_VERDICTS = new Set([
 ]);
 const GOOD_VERDICTS = new Set([
   "PASS", "SHIPPABLE", "RELEASED", "READY_TO_MERGE", "ACCEPTED", "VALIDATED",
-  "ITEM_REGISTERED", "PLAN_WRITTEN", "OPPORTUNITY_COMPLETE",
+  "ITEM_REGISTERED", "PRE_RELEASED", "ITEM_VERIFIED_LOCAL", "PRODUCT_ALIGNED",
+  // "PLAN_WRITTEN" and "OPPORTUNITY_COMPLETE" were here until 2026-09-10. Neither
+  // was ever a verdict: both are halt-loop completion promises that three skills
+  // passed to `--verdict`, where `cycle_events.py` REFUSED them. Nothing emitted
+  // them, so colouring them green was a rule for events that never arrived.
 ]);
 
 function cardClass(item) {

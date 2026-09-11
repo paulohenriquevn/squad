@@ -10,8 +10,8 @@ status: stable
 
 # The skill map
 
-**31 skills.** Most are a phase of a cycle and are invoked in an order the
-cycle rule fixes; six are invoked on demand and belong to no chain.
+**34 skills.** Most are a phase of a cycle and are invoked in an order the
+cycle rule fixes; eight are invoked on demand and belong to no chain.
 
 **Every row below carries three things**: what the skill does, when to reach for
 it, and — the column that is usually missing from an index — when reaching for it
@@ -107,7 +107,7 @@ rubric, same floor, one level up.
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
-| `brainstorm-vision` | Writes `wiki/product/product-vision.md`: the named user, the problem, what it is, and what it is **not** | Starting a product, adopting the kit into a new scope, or when "what are we building?" gets different answers | Accept a category ("developers") as the named user, or skip the non-goals because the session is going well — it is going well because nothing has been ruled out |
+| `brainstorm-vision` | Writes `.squad/wiki/product/product-vision.md`: the named user, the problem, what it is, and what it is **not** | Starting a product, adopting the kit into a new scope, or when "what are we building?" gets different answers | Accept a category ("developers") as the named user, or skip the non-goals because the session is going well — it is going well because nothing has been ruled out |
 | `brainstorm-objectives` | Writes `OBJ-N` objectives, each with a metric containing a number and a horizon | The vision exists and nobody can say what would count as achieving it | Write an objective that cannot fail. "Improve developer experience" closes never, so it is a value — put it in the vision, where nothing traces to it |
 | `brainstorm-trd` | Writes `REQ-N` requirements, each citing the `OBJ-N` it serves | The objectives exist and the team is arguing about implementation | Name a technology. If two competent teams could not satisfy it differently, it is a design and belongs to `cycle-plan`, where it gets an audit and a score |
 | `brainstorm-pieces` | Writes `PIECE-N` components, generates the unticked sign-off, and runs the product-alignment gate | The TRD is complete | **Tick your own boxes.** The one anti-pattern that defeats the gate. Never read `AWAITING_REVIEW` as a pass — a judge may not sign this one, by design |
@@ -116,6 +116,7 @@ rubric, same floor, one level up.
 
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
+| `design` | Five technical drawings that force the four decisions a product cannot retrofit — lifecycle, trust boundary, real call order with failures, durability — plus the component map derived from them | After `/brainstorm-pieces` and before `/backlog-init`, on any product where two people could read the TRD and picture different systems | Draw the component map FIRST — it looks like design happened and decides nothing. Never sign to unblock the backlog: a signed design with an uncovered PIECE-N still returns `NEEDS_REVISION` |
 | `backlog-init` | Creates `BACKLOG.md` once, inventorying repos from disk and deriving the routing table | The project has no registry yet — after `/brainstorm-pieces` returns `PRODUCT_ALIGNED`, whose four documents it reads as context | Write the inventory from `CLAUDE.md` — it drifts; `find` / `git -C` is the source. Never seed "obvious" items: every one needs a human `why_now` and a DoD |
 | `backlog-item` | Registers one `B-NNN` — a hypothesis; evidence is **not** required yet | Anyone notices something worth fixing, measuring or verifying | Ask for evidence during the intake grill — that turns intake into triage and silences the hunch this phase exists to capture. Never write to `BACKLOG.md` before the grill completes |
 | `backlog-review` | Reports what has rotted in the registry — duplicate ids, evidence-less triaged items, kills with no reason, repos routing to nobody | Before trusting the registry to pick work | Edit the backlog. It is read-only by contract: a reviewer that edits cannot be trusted to report what it found |
@@ -136,7 +137,7 @@ rubric, same floor, one level up.
 | Skill | Does | Use when | Do NOT |
 |---|---|---|---|
 | `plan-alignment` (phase 0.5) | Alignment brief + animated walkthrough + a reviewer checklist, scored on 17 criteria | **Unbreakable for anything from `BACKLOG.md`** — below 90% the item is not built | Tick your own review boxes — that is the single failure the sign-off exists to prevent. Never draw before grilling: a diagram of a vague brief looks rigorous |
-| `plan-write` (phase 1) | Turns context into a plan at `records/plans/{slug}-plan.md` | The item is `ALIGNED` | Invoke it before alignment. `check_alignment_gate.py` hard-caps an unaligned plan at 49, so the plan cannot enter `/implement` anyway |
+| `plan-write` (phase 1) | Turns context into a plan at `.squad/records/plans/{slug}-plan.md` | The item is `ALIGNED` | Invoke it before alignment. `check_alignment_gate.py` hard-caps an unaligned plan at 49, so the plan cannot enter `/implement` anyway |
 | `plan-edge-cases` (phase 2) | Annotates the plan with MUST-FIX edge cases | Right after `/plan-write` | Over-engineer. "An `ErrorRecoveryManager` for this edge case" → no; `if input.is_empty()` solves it. Speculation about future API changes is out of scope |
 | `deps-audit` (phase 3) | CVE + version audit across npm, Python, Rust, Go | Before any code is written | Edit manifests — read-only, diffs are suggestions. Never audit `package.json` without the lockfile: transitive vulnerabilities live there |
 | `plan-confidence` (phase 4) | Scores the plan; `INVALID` returns it to `/plan-write` | After `/deps-audit` | Add a bypass flag. Its golden rule makes the absence of `--skip-checks` a constructor invariant, and `check_deps_audit.py` caps the score when the audit is missing |
@@ -177,6 +178,8 @@ A phase of no cycle. Invoked when the question arises.
 | `code-quality` | *(also the whole of cycle-code-quality — see above)* | Outside the chain, to audit a tree | — |
 | `honesty-gate` | Blocks a "production-ready" / v1.0 claim without recorded evidence of sustained internal use | Someone is about to make that claim | Read `EVIDENCE_WITH_CAVEATS` as `SUFFICIENT` — the caveats are explicit. Never log evidence for one scenario and claim it satisfies another anchor |
 | `quality-init` | Emits quality-gate hooks calibrated to the project's real p90 metrics | Setting a project up, once | Generate hooks that auto-fix — hooks are gates, not fixers. Never set thresholds below the floors: the hook would block every write |
+| `sign` | Records a person's signature on a document waiting for one — the tick, the `signed-by` marker, and the date | A scorer returned `AWAITING_REVIEW`, or `/brainstorm-pieces` computed 90% and stopped because only a person may sign | Sign without reading. The preview exists for one reason, and there is deliberately no `--yes`. Never read a signature as a pass: a signed document below the score floor is still refused, and correctly |
+| `squad-fit` | Reports which domains have no specialist, which of the project's own skills are undocumented, and whether a review panel can be formed at all | Adopting the kit into a project, after a restructure moved repositories, or before writing the agents and skills a project is missing | Write a specialist to silence `domain_without_agent` — a correctly-named stub routes the item into an empty prompt and trades a visible failure for a silent one. Never read its verdict without reading `PARTIAL`: the verdict covers only the sections that ran |
 | `skill-creator` | Authors, improves and evaluates skills; `run_eval.py` measures whether a description actually makes the model reach for the skill | Creating or improving a skill, and before trusting a description | **Re-sync it blindly.** It is vendored, but `run_eval.py` now carries a local fix — its trigger detector decided the whole turn from its first observation and could only produce false negatives. A copy from upstream reverts that silently, and the symptom is a trigger rate that reads low and looks like a fact about the skill |
 | `backlog-init`, `backlog-review` | *(see BACKLOG above)* | — | — |
 

@@ -131,13 +131,37 @@ def classify_wall(wall: str) -> WallVerdict:
     return WallVerdict(DecisionClass.UNCLASSIFIED, False, "no pattern matched")
 
 
-def rewrite_wall(*, wall: str, decision: str, rationale: str) -> str:
+#: Classes that change what SUCCESS MEANS rather than how it is reached. A `scope`
+#: decision narrows the obligation; a `threshold` decision moves the bar. Both can turn
+#: a failure into a pass without anything failing — and neither is refused, because both
+#: are legitimately delegated. What is refused is doing it silently.
+REDEFINES_SUCCESS = frozenset({DecisionClass.SCOPE, DecisionClass.THRESHOLD})
+
+
+def rewrite_wall(*, wall: str, decision: str, rationale: str,
+                 klass: DecisionClass | None = None,
+                 supersedes: str = "") -> str:
     """Replace a wall with the decision that retired it.
 
     Never returns a `blocked_by` line, and never returns nothing: an item whose
     wall was deleted with no decision in its place is indistinguishable from an
     item nobody ever walled, and the next reader has no way to learn a choice was
     made or on what evidence.
+
+    WHY `supersedes` IS REQUIRED FOR SCOPE AND THRESHOLD
+    ---------------------------------------------------
+    An external reviewer put the sequence plainly: fail a requirement, delegate the
+    requirement away or lower its target, approve everything that remains, declare
+    success. Every step is individually legitimate and the result is a pass nothing
+    earned.
+
+    The rationale requirement did not stop it — a rationale is a sentence, and the
+    sentence can be true. What stops it is refusing to let the ORIGINAL obligation
+    disappear: a narrowing decision must name what it narrowed, so the next reader sees
+    an obligation that was moved rather than an obligation that was never there.
+
+    This does not decide whether the narrowing was right. It makes the narrowing
+    legible, which is the difference between a scope call and a quiet retreat.
     """
     if not decision.strip():
         raise ValueError("a delegated decision must state what was decided")
@@ -146,11 +170,21 @@ def rewrite_wall(*, wall: str, decision: str, rationale: str) -> str:
             "a delegated decision must carry its rationale — a wall removed with "
             "no reasoning in its place reads as a wall never written"
         )
-    return (
+    if klass in REDEFINES_SUCCESS and not supersedes.strip():
+        raise ValueError(
+            f"a `{klass.value}` decision changes what success means, so it must name "
+            "the obligation it supersedes. Without that, a failed requirement can be "
+            "narrowed away and the remaining criteria approved, and the record shows a "
+            "pass with nothing marking what stopped being required"
+        )
+    line = (
         f"decided_by: system under sponsor delegation "
         f"(rules/decision-delegation.txt) — {decision.strip()}. "
-        f"Rationale: {rationale.strip()}. Prior wall: {wall.strip()[:160]}"
+        f"Rationale: {rationale.strip()}."
     )
+    if supersedes.strip():
+        line += f" Supersedes obligation: {supersedes.strip()[:200]}."
+    return line + f" Prior wall: {wall.strip()[:160]}"
 
 
 def is_retained(klass: DecisionClass) -> bool:

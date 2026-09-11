@@ -54,7 +54,7 @@ python3 "$ECO/skills/brainstorm-pieces/scripts/score_product_alignment.py" --roo
 ### Step 0.5 — Read the brainstorm, if there is one
 
 `cycle-brainstorm` runs before this skill and produces four documents under
-`wiki/product/`. **Read all four before inventorying anything**, and hold them for
+`.squad/wiki/product/`. **Read all four before inventorying anything**, and hold them for
 the whole run:
 
 | Document | What it changes here |
@@ -129,7 +129,7 @@ Once confirmed, write it — this step is not optional and not cosmetic:
 
 ```bash
 python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
-  --write "$ECO/rules/domain-routing.txt"
+  --write
 ```
 
 **Skipping this leaves routing FATAL, and the failure does not look like a missing step.** `route_domain.py` reads `rules/domain-routing.txt` (falling back to `rules/cycle-backlog.md`) and nothing else. A table written anywhere else — including into `BACKLOG.md`, which earlier versions of this skill prescribed — is a table nothing reads.

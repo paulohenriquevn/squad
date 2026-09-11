@@ -2,7 +2,7 @@
 name: brainstorm-vision
 version: 0.1.0
 requires: []
-description: 'Run the product-vision session with a person: what the product is, who it is for, the problem it solves, and — the half that is always omitted — what it is explicitly NOT. Use this at the start of a product, when adopting the kit into a new scope, or when the answer to "what are we actually building?" differs depending on who you ask. This is phase 1 of cycle-brainstorm, the ONLY cycle in the kit where a human participates; everything after the backlog runs unattended. It writes wiki/product/product-vision.md and never a backlog item.'
+description: 'Run the product-vision session with a person: what the product is, who it is for, the problem it solves, and — the half that is always omitted — what it is explicitly NOT. Use this at the start of a product, when adopting the kit into a new scope, or when the answer to "what are we actually building?" differs depending on who you ask. This is phase 1 of cycle-brainstorm, the ONLY cycle in the kit where a human participates; everything after the backlog runs unattended. It writes .squad/wiki/product/product-vision.md and never a backlog item.'
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
 argument-hint: "[scope-name]"
@@ -10,7 +10,7 @@ argument-hint: "[scope-name]"
 
 # `/brainstorm-vision` — What the product is, and what it is not
 
-Phase 1 of four. Produces `wiki/product/product-vision.md`: the document every
+Phase 1 of four. Produces `.squad/wiki/product/product-vision.md`: the document every
 objective, requirement and piece downstream is measured against.
 
 ## Cycle contract
@@ -36,7 +36,7 @@ work."* This phase is where that judgement is written down.
 
 ## When NOT to invoke
 
-- **`wiki/product/product-vision.md` already exists and still holds.** Revise it
+- **`.squad/wiki/product/product-vision.md` already exists and still holds.** Revise it
   directly and re-score; the cascade is the order things are first decided, not a
   ritual to repeat.
 - **For one feature.** That is a `B-NNN`. `/backlog-item` takes it in four questions.
@@ -51,8 +51,8 @@ work."* This phase is where that judgement is written down.
 ECO=$([ -d .claude/skills ] && echo .claude || echo .)
 
 test -f CHANGELOG.md || { echo "FATAL: CHANGELOG.md missing (Unbreakable Rule 6)"; exit 1; }
-mkdir -p wiki/product records/brainstorms 2>/dev/null
-test -w wiki/product || { echo "FATAL: wiki/product not writable"; exit 1; }
+mkdir -p .squad/wiki/product .squad/records/brainstorms 2>/dev/null
+test -w .squad/wiki/product || { echo "FATAL: .squad/wiki/product not writable"; exit 1; }
 ```
 
 ### Step 1 — Build the agenda BEFORE asking anything
@@ -94,7 +94,7 @@ recommended answer and its reasoning, persisted after every answer.
 | 3 | What is the product, in one paragraph a stranger could repeat back? | If it cannot be repeated back, it cannot be agreed with — only nodded at. |
 | 4 | What is this explicitly NOT? Name at least two. | **The uncomfortable one, and the one that pays for itself.** Everything is in scope until someone writes down what is not, and the argument you avoid today is the re-scope you pay for after the code exists. |
 
-**Persist after every answer** to `records/brainstorms/{date}-session.md`, with
+**Persist after every answer** to `.squad/records/brainstorms/{date}-session.md`, with
 `status: in_progress`. Flip to `completed` at Step 4, or `aborted` if the person
 stops early. An abandoned session leaves a record, never a half-written vision.
 
@@ -105,7 +105,7 @@ reasoning that produced it.
 
 ### Step 4 — Write
 
-Write `wiki/product/product-vision.md` with exactly these sections — the scorer
+Write `.squad/wiki/product/product-vision.md` with exactly these sections — the scorer
 reads them by name:
 
 ```markdown
@@ -122,13 +122,13 @@ reads them by name:
 Then `CHANGELOG.md`, one line under `[Unreleased] § Added`, and the phase event:
 
 ```bash
-python3 "$ECO/mechanisms/cycle/cycle_events.py" end --cycle brainstorm --slug {scope} --verdict VISION_WRITTEN
+python3 "$ECO/mechanisms/cycle/cycle_events.py" end --cycle brainstorm --slug {scope} --verdict AWAITING_REVIEW
 ```
 
 ### Step 5 — Report and hand off
 
 ```
-VISION_WRITTEN  wiki/product/product-vision.md
+AWAITING_REVIEW  .squad/wiki/product/product-vision.md
   for:       {the named user}
   problem:   {one line}
   non-goals: {n} recorded

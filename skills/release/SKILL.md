@@ -20,7 +20,7 @@ This skill is **the only phase** of [`cycle-release`](../../rules/cycle-release.
 
 User invokes `/release [bump-level]` when:
 
-- A `/review {slug}` run emitted `READY_TO_MERGE` recently (audit at `records/reviews/{slug}-review-{date}.md`).
+- A `/review {slug}` run emitted `READY_TO_MERGE` recently (audit at `.squad/records/reviews/{slug}-review-{date}.md`).
 - The working branch is `workspace`; `develop` carries the commits ahead of `main` (promoted from `workspace` via PR).
 - `CHANGELOG.md` has content in `[Unreleased]`.
 - `gh` CLI is authenticated.
@@ -49,7 +49,7 @@ Derivation always picks. An `[Unreleased]` with no entries at all is refused as 
 # Clean tree
 [ -z "$(git status --porcelain)" ]
 # Latest /review verdict is READY_TO_MERGE
-LATEST_REVIEW=$(ls -t records/reviews/*-review-*.md 2>/dev/null | head -1)
+LATEST_REVIEW=$(ls -t .squad/records/reviews/*-review-*.md 2>/dev/null | head -1)
 grep -q '^\*\*Verdict:\*\* READY_TO_MERGE' "$LATEST_REVIEW"
 # CHANGELOG [Unreleased] has content
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/changelog_section_nonempty.py" --section Unreleased
@@ -106,7 +106,7 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/honesty-gate/
 | 1 | `EVIDENCE_INSUFFICIENT` | **refuse.** Cut `0.x` instead, or gather the evidence. Never lower the version claim by rewording the notes while cutting the tag anyway |
 | 2 | — | the gate could not be read; fix that before deciding |
 
-The gate reads `records/honesty-gate/manifest.md` and the evidence beside it. It
+The gate reads `.squad/records/honesty-gate/manifest.md` and the evidence beside it. It
 refuses to infer: a missing manifest is `EVIDENCE_INSUFFICIENT`, never *not
 applicable*. A project that has not declared what would prove the claim has not
 proved it.
@@ -266,7 +266,7 @@ Flipping after `cycle-acceptance` makes it mean *"we shipped it and watched it w
 So this step does exactly one thing: read `milestone_id` from the plan and name the handoff.
 
 ```bash
-PLAN_FILE="records/plans/${SLUG}-plan.md"
+PLAN_FILE=".squad/records/plans/${SLUG}-plan.md"
 
 MILESTONE_ID=$(python3 -c "
 import sys, yaml
@@ -324,7 +324,7 @@ notes and leaves it in place; the final promotes it.
 Tag and publish accordingly — `gh release create "v$NEXT_VERSION" --prerelease` for a
 pre-release, without the flag for a final.
 
-Write `records/releases/v${NEXT_VERSION}-release.md`:
+Write `.squad/records/releases/v${NEXT_VERSION}-release.md`:
 
 ```markdown
 # Release v{NEXT_VERSION}

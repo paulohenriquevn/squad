@@ -28,7 +28,7 @@ This skill is **the only phase** of [`cycle-implement`](../../rules/cycle-implem
 
 User explicitly invokes `/implement {plan-slug}` when:
 
-- A plan at `records/plans/{slug}-plan.md` has `/plan-confidence` verdict ≥ SHIPPABLE_WITH_CAVEATS
+- A plan at `.squad/records/plans/{slug}-plan.md` has `/plan-confidence` verdict ≥ SHIPPABLE_WITH_CAVEATS
 - Current branch is `workspace` (verify: `git branch --show-current` == `workspace`)
 - The development environment is operational (language toolchain installed; external services up if integration tests require them)
 
@@ -114,7 +114,7 @@ Failure of any pillar = HALT before commit. The halt-loop iterates until all thr
 
 ```bash
 # Check 1: plan exists and verdict is acceptable
-test -f records/plans/{slug}-plan.md
+test -f .squad/records/plans/{slug}-plan.md
 # Check 2: on workspace (NEVER on develop/main — develop integrates, main is release-only)
 [ "$(git branch --show-current)" = "workspace" ]
 # Check 3: no uncommitted changes
@@ -132,7 +132,7 @@ If any HARD check fails, refuse to start. Surface the missing piece.
 
 ### Step 2 — Parse plan into ordered task list
 
-Read `records/plans/{slug}-plan.md`. Extract:
+Read `.squad/records/plans/{slug}-plan.md`. Extract:
 
 - Phase list with dependencies (declared in plan's Dependency Graph section)
 - Per-task: Files to edit, TDD section (RED tests), Acceptance Criteria, DoD entries
@@ -143,7 +143,7 @@ Read `records/plans/{slug}-plan.md`. Extract:
 Before writing the implementation contract, run:
 
 ```bash
-python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/check_tdd_shape.py" --plan records/plans/{slug}-plan.md --json
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/check_tdd_shape.py" --plan .squad/records/plans/{slug}-plan.md --json
 ```
 
 This validates that every task has an executable RED-test shape (assertion API, Given/When/Then, OR `test_<behavior>` literal). Tasks whose `#### TDD` section is missing OR contains only prose cannot drive a TDD RED phase.
@@ -160,7 +160,7 @@ This is the **companion gate to `plan-confidence`'s `check_criterion_executabili
 
 #### 2.2  Write the implementation contract
 
-Write the ordered task list to `records/implementations/{slug}-implementation.md` using `templates/implementation-task-template.md`. This file is the halt-loop's working contract.
+Write the ordered task list to `.squad/records/implementations/{slug}-implementation.md` using `templates/implementation-task-template.md`. This file is the halt-loop's working contract.
 
 ### Step 2.5 — Resolve the domain specialist
 
@@ -249,11 +249,11 @@ After step 6 (PROGRESS), check whether THIS commit closed a `## Phase N` of the 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scripts/mini_review.py" \
   --slug {PLAN_SLUG} \
-  --plan records/plans/{PLAN_SLUG}-plan.md \
-  --progress records/implementations/.progress-{PLAN_SLUG}.json \
+  --plan .squad/records/plans/{PLAN_SLUG}-plan.md \
+  --progress .squad/records/implementations/.progress-{PLAN_SLUG}.json \
   --phase N \
   --project-root . \
-  --output-dir records/mini-reviews \
+  --output-dir .squad/records/mini-reviews \
   --json
 ```
 
@@ -276,7 +276,7 @@ The orchestrator aggregates four checks:
 
 Plans that do NOT structure tasks with `## Phase N` headers cause Step 4.7 to SKIP gracefully — no phase boundary means no mini review. The Step 5 final validation gate still runs.
 
-The report is persisted at `records/mini-reviews/{slug}-phase{N}-review-{date}.md`. Even on PASS, MEDIUM/LOW findings are logged for human awareness (carried forward as TODO context for the next phase).
+The report is persisted at `.squad/records/mini-reviews/{slug}-phase{N}-review-{date}.md`. Even on PASS, MEDIUM/LOW findings are logged for human awareness (carried forward as TODO context for the next phase).
 
 **Why this exists:** without phase-boundary mini reviews, design problems compound across phases — a wrong abstraction in Phase 1 contaminates Phase 2, Phase 3, etc. By the time `/review` (final) runs at the end, fixing it means re-implementing 3 phases. Mini review catches design drift the moment it crosses a story boundary, before it propagates further.
 
@@ -311,7 +311,7 @@ This script consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-imp
 **Outputs:**
 
 - JSON report on stdout (overall_status, per-check status, summary)
-- Markdown summary at `records/reviews/{slug}-implement-validate-{date}.md`
+- Markdown summary at `.squad/records/reviews/{slug}-implement-validate-{date}.md`
 - Exit code: `0` for `PASS` or `PARTIAL` (passes with documented SKIPs); `1` for `FAIL`; `2` for invocation error
 
 **Branching:**
@@ -406,7 +406,7 @@ If EITHER halt-loop emitted a BLOCKED report, Step 6 surfaces BLOCKED at the top
 - The skill NEVER skips `--no-verify` on pre-commit hooks (Unbreakable: fix the root cause, not bypass)
 - The skill NEVER writes production code without a failing test first (TDD-first, Unbreakable Rule 5)
 - The skill NEVER fabricates runtime-metric evidence — if `.wiring-evidence.json` is missing, the metric is unproven
-- The skill NEVER edits `records/plans/{slug}-plan.md` during execution — the plan is the contract; revisions go through `cycle-plan` again
+- The skill NEVER edits `.squad/records/plans/{slug}-plan.md` during execution — the plan is the contract; revisions go through `cycle-plan` again
 - The skill NEVER scope-creeps mid-task — opportunistic improvements logged to `{slug}-followups.md`, NOT included in current commit
 - **The skill NEVER drives implementation tasks manually outside of ralph-loop.** The halt-loop is the ONLY execution mode. If ralph-loop is cancelled mid-flight by a recoverable blocker, the skill re-invokes ralph-loop per § Step 4 "Resume after recovered blocker"; it does NOT continue task-by-task in the foreground session.
 - **The skill NEVER asks the user for permission between phases while pending tasks remain.** Once `/implement` is invoked with a SHIPPABLE plan, the only valid stops are the terminal conditions in `cycle-implement.md § Stop conditions`. Pausing to ask "continue?" after every committed task violates the autonomy contract and defeats the halt-loop's purpose. The promise-markers `<promise>IMPLEMENTATION_COMPLETE</promise>` (Step 4) and `<promise>VALIDATION_GATE_PASSED</promise>` (Step 5.5) — OR an honest BLOCKED report — are the only legitimate ways to exit each loop.
@@ -447,7 +447,7 @@ In all BLOCKED cases, `/review` and `/release` MUST NOT run until the human reso
 - Scripts: `scripts/check_wiring.py`, `scripts/run_validation.py`, `scripts/check_progress_schema.py` (checkpoint shape) + `scripts/check_checkpoint_consistency.py` (checkpoint vs git), `scripts/diff_symbols.py` + `scripts/wiring_recheck.py` (independent wiring re-verification), `scripts/check_acceptance_criteria.py`, `scripts/check_test_obligations.py`, `scripts/check_phase_review.py` (Step 4.7 actually ran), `scripts/suite_runners.py` (multi-language test execution), `scripts/coverage_gate.py` (coverage actually read)
 - Loop engine: `ralph-loop` plugin (must be enabled in `~/.claude/settings.json`)
 - Project rules consumed: `architecture.md` (DIP, naming, hygiene), `testing.md` (TDD pyramid)
-- Hooks enforced: `hooks/validate-command.py` (git safety), `hooks/boundary-check.py` (read-only `records/references/` and `study-material/`). DIP is a convention enforced by code review per `rules/architecture.md § 4`, not by a hook.
+- Hooks enforced: `hooks/validate-command.py` (git safety), `hooks/boundary-check.py` (read-only `study-material/`). DIP is a convention enforced by code review per `rules/architecture.md § 4`, not by a hook.
 
 ## Anti-patterns specific to /implement
 

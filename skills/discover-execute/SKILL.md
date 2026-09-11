@@ -49,13 +49,13 @@ The mode comes from the plan's `**Mode:**` header (or `--sweep`'s flag). It deci
 
 ### Step 1 — Resolve inputs
 
-1. Plan path: `records/discoveries/plans/{slug}-plan.md`. Read it fully — extract `**Item:**`, `**Repo:**`, `**Mode:**`, the Measurement Questions table, and `## Falsification`.
+1. Plan path: `.squad/records/discoveries/plans/{slug}-plan.md`. Read it fully — extract `**Item:**`, `**Repo:**`, `**Mode:**`, the Measurement Questions table, and `## Falsification`.
 2. Confirm the `B-NNN` item exists in `BACKLOG.md` and is `raw`. An item already `triaged`, `planned` or `shipped` is not re-measured — that is how duplicate work enters.
 3. For `live-test`, confirm the domain has a block in `rules/live-target.txt`. **No block, no probe.**
 
 ### Step 2 — Initialize the opportunity
 
-Create `records/discoveries/opportunities/{slug}-opportunity.md` from `templates/opportunity-template.md`. Every section present, each corner holding a `<!-- TBD -->` placeholder mapped to its question.
+Create `.squad/records/discoveries/opportunities/{slug}-opportunity.md` from `templates/opportunity-template.md`. Every section present, each corner holding a `<!-- TBD -->` placeholder mapped to its question.
 
 Fill the header lines immediately — `**Item:**`, `**Repo:**`, `**Mode:**` are checked by `check_opportunity_completeness.py`, and a mode token outside the four reads as a missing section.
 
@@ -157,7 +157,7 @@ Then record the transition in the stream, carrying the outcome above as the verd
 
 ```bash
 python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
-    --cycle discover --slug B-NNN --verdict OPPORTUNITY_COMPLETE
+    --cycle discover --slug B-NNN --verdict AWAITING_REVIEW
 ```
 
 Emit on `ITEM_KILLED` too. A killed item is a **successful** discover — the phase ran

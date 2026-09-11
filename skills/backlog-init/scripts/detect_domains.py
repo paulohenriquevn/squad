@@ -43,7 +43,7 @@ layout reveals and no detector should guess.
 Usage:
     python3 detect_domains.py                       # print the proposed table
     python3 detect_domains.py --from-backlog BACKLOG.md
-    python3 detect_domains.py --write rules/domain-routing.txt
+    python3 detect_domains.py --write
     python3 detect_domains.py --json
 
 Exit codes:
@@ -57,8 +57,15 @@ import argparse
 import json
 import re
 import sys
+import sys as _sys_bootstrap
 from dataclasses import dataclass
 from pathlib import Path
+
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+from squad.paths import write_routing_table as _write_root_table  # noqa: E402
 
 #: Directories that are never an architectural unit, in any ecosystem.
 _IGNORED_DIRS = {
@@ -182,6 +189,49 @@ def _looks_like_a_project(root: Path) -> bool:
     return any((root / sign).exists() for sign in _PROJECT_SIGNS)
 
 
+def _group_by_declared_boundary(packages: list[str]) -> list[tuple[str, list[str]]]:
+    """Group modules into domains by the boundary the project ALREADY declared.
+
+    A module manifest — `go.mod`, `Cargo.toml`, a workspace `package.json` — is a
+    compilation and versioning boundary the project committed to. Deriving domains from
+    it reads a line somebody drew rather than inventing one.
+
+    TWO RULES, AND EACH ANSWERS A CASE THAT BROKE THE OTHER SHAPE.
+
+    A module nested UNDER another module joins its ancestor: `operators/api` is part of
+    `operators`, not a peer of it. Splitting them would put one Go module's own
+    sub-module in a different domain from the code that compiles it.
+
+    What remains groups by its FIRST path segment. This is what keeps the rule from
+    regressing to one-domain-per-package, which `agents/README.md` argues against with
+    a measured case: an SDK with six thin packages sharing a stack produced six
+    specialists repeating the same facts, rotting once per copy. Under this rule those
+    six sit at `packages/*` and become ONE domain, while `theo`'s modules — `api`,
+    `pkg`, `operators` at the top level — stay separate, because the repository put
+    them at separate roots.
+
+    Measured on `theo` (2026-09-10): 17 live items touch a Go module, 13 of them (76%)
+    touch exactly one. The obvious fear — `pkg` is imported by four modules, so every
+    change there fragments under gate G3 — does not appear in the work: one live item
+    touches `pkg`.
+    """
+    if not packages:
+        return []
+
+    module_paths = set(packages)
+    grouped: dict[str, list[str]] = {}
+    for module in packages:
+        parts = module.split("/")
+        # Nested under another module -> the ancestor owns it.
+        ancestor = next((("/".join(parts[:i]))
+                         for i in range(len(parts) - 1, 0, -1)
+                         if "/".join(parts[:i]) in module_paths), None)
+        domain = (ancestor or module).split("/")[0]
+        grouped.setdefault(domain, []).append(module)
+
+    return [(domain, sorted(members)) for domain, members in sorted(grouped.items())]
+
+
 def detect_domains(root: Path) -> list[Domain]:
     """Derive the domains from the project's real topology."""
     root = root.resolve()
@@ -205,8 +255,21 @@ def detect_domains(root: Path) -> list[Domain]:
         return []
 
     name = root.name
-    return [Domain(name=name, repos=[name, *packages],
-                   agent=f"agents/{name}.md")]
+    boundaries = _group_by_declared_boundary(packages)
+    if not boundaries:
+        return [Domain(name=name, repos=[name, *packages],
+                       agent=f"agents/{name}.md")]
+
+    #: The root domain is NOT optional when boundaries exist. `route()` matches a repo
+    #: EXACTLY (`repo in entry["repos"]`), never by path prefix — so with only module
+    #: domains, an item about `charts/`, `docs/` or the Taskfile has no domain at all,
+    #: and so does every existing item whose `repo:` is the repository's own name.
+    #: Measured on an adopter: 224 items declaring `repo: theo` would have gone
+    #: unroutable the moment the table stopped naming `theo`.
+    domains = [Domain(name=name, repos=[name], agent=f"agents/{name}.md")]
+    domains += [Domain(name=domain, repos=members, agent=f"agents/{domain}.md")
+                for domain, members in boundaries]
+    return domains
 
 
 _ITEM_BLOCK_RE = re.compile(r"^##\s+(B-\d+)\s+—", re.MULTILINE)
@@ -387,7 +450,7 @@ _ROUTING_HEADER = """\
 #
 # Derive it:
 #   python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \\
-#     --write .claude/rules/domain-routing.txt
+#     --write
 #
 # Edit by hand when ownership does not follow the directory layout — that case is
 # why this is a file you own rather than one the kit overwrites.
@@ -457,6 +520,12 @@ def rewrite_routing_section(rule_path: Path, domains: list[Domain]) -> None:
     )
 
 
+#: Distinguishes "bare --write" from "--write <path>". A plain default cannot: the
+#: destination depends on --root, which argparse has not parsed yet when defaults are
+#: built.
+_DEFAULT_WRITE = Path("\0default")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path.cwd())
@@ -464,12 +533,19 @@ def main(argv: list[str] | None = None) -> int:
                         help="derive from the (domain, repo) pairs the items already "
                              "declare — use it when the registry exists: the semantics of "
                              "ownership live there, and no directory layout reveals them")
-    parser.add_argument("--write", type=Path, default=None,
-                        help="path of rules/domain-routing.txt to write. A `.md` path is "
-                             "still accepted and rewrites the legacy section, for a consumer "
-                             "that has not migrated")
+    #: Bare `--write` writes where the table BELONGS, which the caller should not have
+    #: to know. It used to be mandatory to spell the path, so every doc, SKILL.md and
+    #: README repeated `rules/domain-routing.txt` — and moving the table meant finding
+    #: every copy. An explicit path is still honoured for a consumer mid-migration.
+    parser.add_argument("--write", type=Path, nargs="?", const=_DEFAULT_WRITE, default=None,
+                        help="write the table. Bare: to the write root, where it belongs. "
+                             "With a path: there instead — a `.md` rewrites the legacy "
+                             "section, for a consumer that has not migrated")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+
+    if args.write == _DEFAULT_WRITE:
+        args.write = _write_root_table(args.root.resolve())
 
     try:
         domains = (domains_from_backlog(args.from_backlog, args.root.resolve())

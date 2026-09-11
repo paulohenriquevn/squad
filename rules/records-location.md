@@ -102,6 +102,62 @@ looking.
 So the honest statement: the scaffold is created, and a second records directory is caught by
 nobody. Closing that is worth an item; asserting it is closed is what this section did.
 
+## The guarantee, and exactly how far it reaches
+
+"Everything the Squad produces lands under `<project>/.squad/`" is a claim, and this
+section says what backs it, because the paragraph above records what happens when a
+rule lists enforcement a reader cannot find.
+
+**Two gates, answering different halves of the question.**
+
+| Gate | Proves | Blind to |
+|---|---|---|
+| `check_write_containment.py` | No module outside `squad/paths.py` may spell a data root, so every path a writer BUILDS came from the owner | A writer whose destination never passes through `squad.paths` — taken from argv, joined onto the installed kit, handed down by a caller |
+| `check_produced_files.py` | Runs the mechanisms in a scratch project and looks at the disk. Whatever appears is what they produce, whatever the code path was | Anything no probe reaches |
+
+The second exists because the static version of it does not work. Tracing all 135 write
+call sites through the AST to their originating root left **64 UNKNOWN** — 47%. A proof
+with a hole that size is not a proof, and widening the tracer produces a mechanism only
+its author can re-run.
+
+**What is allowed to sit outside, and why each one is.**
+`rules/write-exemptions.txt` holds the list. A row needs a path, a class
+(`platform` / `tool` / `human`) and a reason of at least five words, and the parser
+REFUSES a row missing any of them — "we made an exception" and "the platform gave us no
+choice" are different claims, and only the second survives review.
+
+As of 2026-09-10 the sweep produces 17 files and 8 sit outside: five `/review` knowledge
+skills and one domain specialist (`platform` — Claude Code resolves both by directory,
+so the location IS the interface and a file elsewhere is not an agent), plus `BACKLOG.md`
+and `CHANGELOG.md` (`human`).
+
+**`domain-routing.txt` was the ninth until this date.** It was the one file under
+`rules/` that CODE produced, and nothing outside the kit read it — measured across every
+`.json`, `.yml`, `.yaml` and `.toml` in the tree: zero references. It now lives at
+`.squad/domain-routing.txt`. Readers fall back to both old locations indefinitely;
+`detect_domains.py --write` no longer accepts the old one by default, and a test refuses
+any document that teaches the old path.
+
+## What this does NOT reach — named, so the claim stops outrunning it
+
+- **Coverage is 18 mechanisms.** 49 files in the kit write to disk. The gate prints the
+  number it exercised on every run, so a green result is read as worth eighteen probes
+  rather than as a sweep of everything. Growing `PROBES` is how the guarantee gets
+  stronger.
+- **Bytecode is suppressed by an environment variable.** `PYTHONDONTWRITEBYTECODE` is set
+  in `settings.plugin.json`, so it holds for anything Claude Code launches. A person
+  running `python3 .claude/mechanisms/...` from a bare terminal has no such variable, and
+  Python writes `__pycache__/` next to the installed kit again. Measured cost of the
+  suppression, over five runs: 415 ms/run with a warm cache against 360 ms without one —
+  inside the noise, which is why it was cheap to choose.
+- **An agent is not a mechanism.** A skill is a document an agent follows, and an agent
+  that decides to write somewhere is not running code any gate can call. Only the scripts
+  are exercised.
+- **`~/` and `/tmp` are out of scope, which is not the same as allowed.**
+  `skills/code-quality/scripts/_registry.py` caches under `~/.cache/` deliberately: what
+  it caches is about a tool version, identical across every repository, and a per-project
+  copy would re-fetch once per repo for the same bytes.
+
 ## Cross-references
 
 - Cycle that writes acceptance records: `rules/cycle-acceptance.md`

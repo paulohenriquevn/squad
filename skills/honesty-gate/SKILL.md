@@ -2,7 +2,7 @@
 name: honesty-gate
 version: 0.1.0
 requires: []
-description: Honesty gate that blocks any 'production-ready' / 'production-grade' / v1.0 claim without recorded evidence of sustained internal use. Reads the project's honesty-gate manifest at records/honesty-gate/manifest.md plus evidence files at records/honesty-gate/evidence/, applies the project-specific honesty-gate golden rule (rules/honesty-gate-golden-rule.md — created per project), and emits EVIDENCE_SUFFICIENT / EVIDENCE_WITH_CAVEATS / EVIDENCE_INSUFFICIENT. Invoke before any production claim, milestone promotion targeting v1.0, README/CHANGELOG edit that touches status language, or release decision.
+description: Honesty gate that blocks any 'production-ready' / 'production-grade' / v1.0 claim without recorded evidence of sustained internal use. Reads the project's honesty-gate manifest at .squad/records/honesty-gate/manifest.md plus evidence files at .squad/records/honesty-gate/evidence/, applies the project-specific honesty-gate golden rule (rules/honesty-gate-golden-rule.md — created per project), and emits EVIDENCE_SUFFICIENT / EVIDENCE_WITH_CAVEATS / EVIDENCE_INSUFFICIENT. Invoke before any production claim, milestone promotion targeting v1.0, README/CHANGELOG edit that touches status language, or release decision.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit
 argument-hint: "[audit|log-evidence|status]"
@@ -10,7 +10,7 @@ argument-hint: "[audit|log-evidence|status]"
 
 # Skill: honesty-gate
 
-Applies the project's **honesty-gate golden rule** (`rules/honesty-gate-golden-rule.md`) to the manifest at `records/honesty-gate/manifest.md` and evidence files in `records/honesty-gate/evidence/`. Emits a verdict on whether the project may legitimately claim `production-ready` / `production-grade` / `v1.0 ready`.
+Applies the project's **honesty-gate golden rule** (`rules/honesty-gate-golden-rule.md`) to the manifest at `.squad/records/honesty-gate/manifest.md` and evidence files in `.squad/records/honesty-gate/evidence/`. Emits a verdict on whether the project may legitimately claim `production-ready` / `production-grade` / `v1.0 ready`.
 
 **This skill is NOT optional for a v1.0 claim.** Read `rules/honesty-gate-golden-rule.md` before invoking.
 
@@ -44,8 +44,8 @@ the gate writing its own exam.
 This skill assumes the project has defined:
 
 1. **A honesty-gate golden rule** at `rules/honesty-gate-golden-rule.md` — declares the project's anchor scenario, the meaning of each `Status` value (e.g., `planned | wired | running | paused | abandoned`), evidence freshness thresholds, and the conditions under which the anchor may change.
-2. **A manifest** at `records/honesty-gate/manifest.md` — declares the project's anchor scenario slug, current `Status`, and target dates.
-3. **An evidence directory** at `records/honesty-gate/evidence/` — append-only log of honesty-gate runs. Each file carries frontmatter with `scenario:`, `date:`, and a structured summary of what was exercised.
+2. **A manifest** at `.squad/records/honesty-gate/manifest.md` — declares the project's anchor scenario slug, current `Status`, and target dates.
+3. **An evidence directory** at `.squad/records/honesty-gate/evidence/` — append-only log of honesty-gate runs. Each file carries frontmatter with `scenario:`, `date:`, and a structured summary of what was exercised.
 
 If any of these is missing, the skill emits `EVIDENCE_INSUFFICIENT` with the corresponding flag (`golden_rule_missing`, `manifest_missing`, or `evidence_dir_missing`).
 
@@ -65,7 +65,7 @@ The skill is the gate that keeps the production claim honest against that tempta
 
 ### Step 1 — Verify pre-conditions
 
-Check that `rules/honesty-gate-golden-rule.md`, `records/honesty-gate/manifest.md`, and `records/honesty-gate/evidence/` all exist. Missing any → emit the corresponding flag + verdict `EVIDENCE_INSUFFICIENT`. Stop.
+Check that `rules/honesty-gate-golden-rule.md`, `.squad/records/honesty-gate/manifest.md`, and `.squad/records/honesty-gate/evidence/` all exist. Missing any → emit the corresponding flag + verdict `EVIDENCE_INSUFFICIENT`. Stop.
 
 ### Step 2 — Locate the anchor section in the manifest
 
@@ -85,7 +85,7 @@ In order:
 |---|---|---|
 | 1 | Anchor section present + `Status` present | `anchor_missing` |
 | 2 | `Status` matches the golden rule's "running" value (case-insensitive) | `anchor_not_running` |
-| 3 | `glob` of `records/honesty-gate/evidence/*.md` returns ≥ 1 file whose frontmatter `scenario:` matches the anchor slug | `no_anchor_evidence` |
+| 3 | `glob` of `.squad/records/honesty-gate/evidence/*.md` returns ≥ 1 file whose frontmatter `scenario:` matches the anchor slug | `no_anchor_evidence` |
 | 4 | The most recent matching file (by `date:` frontmatter) is within the freshness threshold declared in the golden rule | `anchor_evidence_stale` |
 
 **Any flag → verdict `EVIDENCE_INSUFFICIENT`.** No exceptions.
@@ -106,7 +106,7 @@ Verdict goes to stdout in a fenced block; full details (which caps fired, eviden
 
 ## Process — `log-evidence` mode
 
-Interactive: asks for scenario slug, date (defaults to today), and a summary template. Writes `records/honesty-gate/evidence/{scenario}-{YYYY-MM-DD-HHMMSS}.md` with the required frontmatter.
+Interactive: asks for scenario slug, date (defaults to today), and a summary template. Writes `.squad/records/honesty-gate/evidence/{scenario}-{YYYY-MM-DD-HHMMSS}.md` with the required frontmatter.
 
 ## Process — `status` mode
 
@@ -114,7 +114,7 @@ Reads the manifest's anchor `Status` field, counts evidence files matching the a
 
 ## Output
 
-- `audit` and `log-evidence` modes write to `records/reviews/honesty-gate-{YYYY-MM-DD}.md`.
+- `audit` and `log-evidence` modes write to `.squad/records/reviews/honesty-gate-{YYYY-MM-DD}.md`.
 - `status` mode is stdout-only.
 
 ## Anti-patterns

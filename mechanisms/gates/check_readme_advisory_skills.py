@@ -29,7 +29,12 @@ from typing import Any
 #: Regex to extract skill names from backtick-quoted names in markdown table cells.
 #: Example: "| `cap-theorem-specialist` | Consistency vs availability | "
 #: Captures: "cap-theorem-specialist"
-_SKILL_NAME_RE = re.compile(r"`([a-z0-9-]+(?:-specialist)?)`", re.IGNORECASE)
+#: A skill name starts with a letter or digit. The character class allowed `-` in
+#: first position, so a flag written in backticks — `--yes`, `--strict` — read as a
+#: skill name and the gate reported a missing `--yes/SKILL.md`. Prose about a skill's
+#: flags is the most natural thing to write in a section about skills, so the class
+#: had to stop matching it rather than the prose being rewritten around the check.
+_SKILL_NAME_RE = re.compile(r"`([a-z0-9][a-z0-9-]*(?:-specialist)?)`", re.IGNORECASE)
 
 
 def advisory_skills_in_readme(root: Path) -> set[str]:

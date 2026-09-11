@@ -276,10 +276,20 @@ def _section(body: str, *titles: str) -> str | None:
     return None
 
 
+#: A bullet marker: `-`, `*`, `+`, or an ordered `1.` / `1)`.
+#:
+#: NOT `^\s*[-*\d]`, which was the pattern here until a consumer measured it. That
+#: matched ANY line beginning with a digit, and a wrapped requirement routinely
+#: continues on one — "…under 800ms at\n50 rps." One bullet then counted as two, so a
+#: section holding a single hollow requirement plus its own continuation scored as
+#: though somebody had written two things. The scorer read the wrap as substance.
+_BULLET_RE = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s)")
+
+
 def _bullets(text: str | None) -> list[str]:
     if not text:
         return []
-    return [ln.strip() for ln in text.splitlines() if re.match(r"^\s*[-*\d]", ln) and ln.strip()]
+    return [ln.strip() for ln in text.splitlines() if _BULLET_RE.match(ln) and ln.strip()]
 
 
 
@@ -576,10 +586,26 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
         "declared" if _bullets(demo) else "absent")
 
     # 17 — The interactive artefact.
+    #
+    # RESOLVED on disk, not merely referenced. This scored `_tri(bool(html), bool(html))`
+    # until a consumer measured it: a brief citing a walkthrough nobody generated took
+    # full marks for producing one. A gate reporting that it verified something it never
+    # opened is the fabricated mechanism this kit exists to refuse — and this gate decides
+    # whether an item may be BUILT.
     html = re.search(r"`([^`]*\.html)`|\]\(([^)]*\.html)\)", body)
+    cited = (html.group(1) or html.group(2)) if html else None
+    resolved = None
+    if cited:
+        for base in (Path(brief_path).parent, Path.cwd()):
+            candidate = base / cited
+            if candidate.is_file():
+                resolved = candidate
+                break
     add("interactive_artefact", "An interactive walkthrough was produced",
-        _tri(bool(html), bool(html)),
-        html.group(0) if html else "no .html referenced")
+        _tri(bool(html), bool(resolved)),
+        f"{cited} — resolved" if resolved
+        else f"cited but missing on disk: {cited}" if cited
+        else "no .html referenced")
 
     # ── the reviewer's half ────────────────────────────────────────────────
     # Generated unchecked by the agent that wrote the brief; ticked by a reviewer who

@@ -6,6 +6,221 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **`cycle-design` — the system is drawn before a backlog is filed against it** (#75)
+  `brainstorm-pieces` names PIECE-N as *"a responsibility with a boundary"* and states
+  its own limit: *"the mapping is not decided here."* `backlog-init` then inventories
+  repos from disk. Nothing joined the two, so items were filed against a system nobody
+  drew — and the two decisions no product retrofits, state ownership and trust
+  boundary, were never forced. The new phase produces five drawings, four of them
+  mandatory because each answers a question that is cheap now and expensive later:
+  what the central object's lifecycle is, where untrusted code stops, what the real
+  call order is when things fail, and what survives a process death. The component map
+  is DERIVED from those four and never drawn first — a map drawn first looks like
+  design happened and forces no choice. `check_design_completeness.py` refuses a
+  document with no mermaid block, a diagram filed in the wrong slot, a stub, a
+  placeholder, and a `PIECE-N` with no place in the map; it ends at `AWAITING_REVIEW`
+  until a person signs, because whether a state machine has the RIGHT states is not a
+  countable property.
+
+### Fixed
+- **The alignment scorer counted a wrapped line as a requirement, and scored a walkthrough it never opened** (#B-013)
+  Both measured in a consumer install and ported here, because a fix written inside a
+  consumer's `.claude/` reaches exactly one machine — that directory is gitignored
+  everywhere, so the correction produces no diff and no release.
+
+  `_bullets` matched `^\s*[-*\d]`, so ANY line starting with a digit became a bullet — and
+  a wrapped requirement routinely continues on one ("…answers under\n800ms at p95."). The
+  report then lied in both directions at once: a single requirement with no number of its
+  own was reported as `1/2 measurable`, because the continuation became a second
+  requirement AND was credited with the digits that had been wrapped off the first. A
+  bullet is now `-`, `*`, `+`, or an ordered `1.` / `1)`; a bare digit is prose.
+
+  Criterion 17 scored `_tri(bool(html), bool(html))` — the presence of a `.html`
+  REFERENCE, twice. A brief citing a walkthrough nobody generated took full marks for
+  producing one. The citation is now resolved on disk, against the brief's own directory
+  and the working directory. A gate reporting that it verified something it never opened
+  is the fabricated mechanism this kit exists to refuse, and this gate decides whether an
+  item may be built at all.
+
+  Two regression tests, each verified by mutation.
+
+### Added
+- **`/sign` — the one act a machine may not perform now has a mechanism** (#74)
+  Four points in the chain stop until a person signs, and a person had no tool for it.
+  `alignment_judge.py` can sign a brief as a judge; `score_product_alignment.py` states
+  its own limit — *"it cannot supply the signature, and there is no flag that makes
+  it."* Both refusals are right, and the consequence was that the only act reserved for
+  a person was the only one with no mechanism: edit the markdown, find the section,
+  change `[ ]` to `[x]` in the right place, add an HTML comment whose syntax lives in a
+  regex inside someone else's script. The default run previews and writes nothing —
+  there is deliberately no `--yes`, because a tool that makes signing frictionless turns
+  a signature into a stamp. Refuses to re-sign, and refuses an author signing their own
+  work unless they pass `--despite-authorship "<reason>"`, which does not silence the
+  check: it writes the fact and the reason into the document, stating that the signature
+  is weaker than one from a reviewer who did not write it. Measured on this kit: one
+  author across its whole history, so without that escape the tool would be useless
+  exactly where it is needed.
+- **The mirror of `check_orphan_verdicts.py`: every verdict a skill INSTRUCTS is one its
+  cycle declares** (#70) That sweep asks whether every declared verdict is reachable.
+  Nothing asked the other direction, and it fails louder — `cycle_events.py` REFUSES an
+  undeclared verdict, so the phase records **nothing at all**, and `cycle-maintenance.md`
+  already names the cost: work left silent "is indistinguishable from one nobody touched".
+  Measured 2026-09-10, closing a live session: **five skills passed a halt-loop completion
+  promise where a verdict goes** — `VISION_WRITTEN`, `OBJECTIVES_WRITTEN`, `TRD_WRITTEN`,
+  `PLAN_WRITTEN`, `OPPORTUNITY_COMPLETE`. Three are the brainstorm cascade, phases 1-3 of
+  the only cycle a human attends; the other two are the **only** emitters of `end` for
+  their cycles, so `discover` and `plan` never closed either. All five now emit
+  `AWAITING_REVIEW` — the document exists and nothing has scored it, which is what is
+  true. `check_emitted_verdicts.py` keeps it that way, honouring the runtime's rule that a
+  rule with no `## Verdicts` section permits any verdict (`implement` and `code-quality`
+  rely on it) while separating that from a `--cycle` naming no rule at all.
+
+- **The prose an agent executes now names the write root, and a gate keeps it there** (#69)
+  `check_write_containment.py` proves that no module outside `squad/paths.py` spells a
+  data root, and it strips prose before matching — correctly, since the kit argues in
+  prose about the very directories it forbids in code. A `SKILL.md` is not that kind of
+  prose: it INSTRUCTS, and an agent following `Persist to records/brainstorms/…` creates
+  a legacy root without importing the owner or running a mechanism. **Measured when a
+  live `/brainstorm-vision` session hit it: 164 legacy-root instructions across 49
+  files**, 19 of them `SKILL.md`, while `rules/records-location.md` had said the opposite
+  since 2026-09-09 — *"`<project>/.squad/` is the one write root. Always, in every
+  layout."* Two contracts disagreed and the one an agent reads at execution time won: the
+  session wrote its record to `records/` and its vision to `wiki/`, outside the root every
+  reader resolves first. All 164 corrected, and `check_prose_write_paths.py` scans
+  `skills/`, `commands/`, `agents/` and `hooks/` so the next edit cannot reintroduce one.
+  It deliberately skips `rules/` and `docs/`, which argue rather than instruct — scanning
+  them would flag `records-location.md` for stating the rule this enforces. Prose that
+  genuinely names a legacy root marks itself `<!-- write-path: reason -->`, and an empty
+  reason does not count, for the same reason it does not in `rules/english-only.md`.
+
+### Fixed
+- **`cycle-discover.md` used a verdict it never declared** (#70) Gate G-P states *"no
+  record yet is `AWAITING_REVIEW` — complete and unsigned, neither a failure nor a pass"*,
+  and the `## Verdicts` table did not list it. So the contract relied on a state it had
+  not declared, which is why `/discover-execute` had no honest verdict available and
+  reached for a completion promise. Declared.
+- **The board coloured green two events that never arrived** (#70) `board.html` listed
+  `PLAN_WRITTEN` and `OPPORTUNITY_COMPLETE` among `GOOD_VERDICTS`. Neither was ever a
+  verdict, so nothing ever emitted one. Replaced with verdicts `rules/verdict-bands.txt`
+  actually bands as clean. **Known gap:** the board still keeps its own copy of the bands
+  rather than reading that file — two copies of one fact, and a separate item.
+- **`records/references/` was still being cited as a live zone, 9 days after it was
+  retired** (#69) `rules/reference-provenance.md` retired it on 2026-09-01 in favour of
+  `study-material/` and states that it is "no longer guarded". Ten places still pointed
+  at it as the study zone — including `plan-write`'s `ls records/references/`, two
+  golden-rule clauses whose checkers resolve the live path, and `deps-audit`'s exclusion
+  list. Repointed. Two others describe the retirement itself and keep the name behind an
+  exemption marker. `skills/implement/SKILL.md` also claimed `boundary-check.py` guards
+  the retired zone; measured, it guards `study-material/` alone (`boundary-check.py:50`),
+  so the claim was removed rather than repointed.
+
+- **A runtime proof that everything the Squad produces lands in `.squad/`** (#72)
+  `check_write_containment.py` proves a static property — no module outside
+  `squad/paths.py` may spell a data root. It cannot see a writer whose destination
+  never passes through `squad.paths`. Tracing all 135 write call sites through the AST
+  left 64 UNKNOWN, so `check_produced_files.py` runs 18 mechanisms in a scratch project
+  and looks at the disk instead. It reports its own coverage on every run, refuses to
+  count a probe that errored as one that ran, and reads `rules/write-exemptions.txt`,
+  where every file allowed to sit outside carries a class and a reason.
+- **`rules/write-exemptions.txt`** — the eight files that cannot live under the write
+  root, each naming what forces it: Claude Code resolves agents and skills by
+  directory, and `BACKLOG.md`/`CHANGELOG.md` are opened by people at the root (#72)
+- **`/squad-fit` — a diagnosis of whether the squad can run in a given project** (#71)
+  The kit ships `agents/<domain>.md` empty on purpose, so every project has a gap on the
+  day it installs. Nothing measured that gap: the kit could report one unroutable item
+  (`route_domain.py`) and one unfillable seat (`check_panel_capability.py`), after the
+  work had already been selected. This asks both of everything at once, plus whether the
+  project's own skills carry an SOP and are visible to the validator, and answers the
+  question a person asks before adopting — what has to be written, and what breaks until
+  it is. Read-only; it never writes the specialist it says is missing, because a
+  correctly-named stub routes items into an empty prompt.
+
+### Changed
+- **Domains derive from the module boundary the project already declared** (#73)
+  `detect_domains.py` gave a single repository exactly one domain, however many
+  modules it held. A `go.mod` / `Cargo.toml` / workspace `package.json` is a
+  compilation and versioning boundary somebody committed to, and invariants differ
+  exactly there — a module has its own dependencies, its own build, and its own answer
+  to what may import it. Modules nested under another join their ancestor; what
+  remains groups by first path segment, so six thin packages under `packages/` stay
+  ONE domain (the measured case that argued against per-package domains) while
+  top-level modules become their own. The repository stays a domain beside them,
+  because `route()` matches exactly and items filed against the repo name must still
+  route. Measured on an adopter: 8 modules, and 13 of 17 live items (76%) touch
+  exactly one.
+- **The routing table moved to `.squad/domain-routing.txt`** (#72)
+  It was the one file under `rules/` that code produced — `detect_domains.py --write`
+  derives it, `route_domain.py` reads it, and nothing outside the kit touches either
+  (measured across every `.json`, `.yml`, `.yaml` and `.toml`: zero references). Readers
+  fall back to both old locations indefinitely, so a consumer that updates without
+  migrating keeps routing. `--write` now takes no path and writes where the table
+  belongs; a test refuses any document that teaches the old one.
+- **Bytecode is no longer written into the installed kit** (#72)
+  Python writes `__pycache__/` next to the source, and the kit's source lives in the
+  consumer's `.claude/` — eight `.pyc` files after four commands in a clean sandbox.
+  `PYTHONDONTWRITEBYTECODE` is now set in `settings.plugin.json`. Measured cost over
+  five runs: 415 ms/run with a warm cache against 360 ms without one.
+
+### Fixed
+- **The panel's diversity rule protected the seat, not the decision**
+  `review_panel.py` checked that a recognised non-home family had VOTED, over the votes
+  cast. Nothing checked the votes that CARRY. So two Claudes approving while the only
+  orthogonal reviewer returned produced APPROVED, with the dissent filed beside it —
+  advancing a conclusion on exactly the correlated approval the seat was bought to
+  prevent. An external reviewer found it in the panel's own worked example; this
+  repository's `test_a_majority_carries_the_document` had frozen the failure as the
+  contract. The majority must now span two recognised families, and the test is
+  inverted. No token was invented: a document the orthogonal seat returned is
+  `NEEDS_REVISION`, which already means what it needs to mean.
+- **A dissent travelled as a name, so nobody downstream could act on it**
+  The record carried `["judge"]`. The reason — the thing the objection was ABOUT — was
+  dropped, and "kept in the record" then meant kept where nobody looks. Dissent now
+  carries reviewer, family and reason, and `check_panel_approval.py` prints it under an
+  APPROVAL, where the reader who advances the artifact is the one who must see it.
+- **An approval survived a rewrite of the thing approved**
+  Every panel guarantee was about WHO voted and HOW; nothing bound the votes to the
+  text. Editing the artifact after the votes landed was the cheapest way to launder a
+  change past a panel. The record now carries `artifact_sha256`, the gate recomputes it,
+  and a record without one is reported as an unverified binding rather than accepted.
+- **`check_panel_approval.py` did not say what it could not check**
+  It now carries `not_checked`, and the first line is the one that matters: the record
+  is written by the session that was meant to collect the votes, so three fabricated
+  votes produce a file this gate accepts. `alignment_judge.py` admits the same of
+  itself. Building a panel on top made the ceremony more elaborate, not the independence
+  real — and closing it needs a signature the executor cannot mint.
+- **`scope` and `threshold` could redefine success silently**
+  Fail a requirement, delegate the requirement away or lower its target, approve what
+  remains, declare success: every step legitimate, the result a pass nothing earned. The
+  rationale requirement did not stop it, because a rationale is a sentence and the
+  sentence can be true. Both classes must now name the obligation they SUPERSEDE, and
+  `rewrite_wall` refuses one that does not. The record then shows an obligation that was
+  moved rather than one that was never there.
+- **An autonomous run could reach a human decision by returning to the entrance**
+  Halts return work to the registry, and intake gate G5 says a person decides. "Zero
+  interventions after BACKLOG" did not survive the recirculation. `g5_route` gives the
+  items the SYSTEM creates an executable route: a `why_now` citing a phase verdict this
+  project's own stream carries is a LOOKUP, not a claim. It fails closed — an
+  unconfirmable citation stays with a person, because a fabricated local reason is
+  exactly what G5's second half was written about.
+
+### Added
+- **`check_review_binding.py` — an approval bound to a revision, not to a name**
+  A review verdict said the work was examined and never said WHICH work, so a commit
+  landing after consolidation travelled to `develop` on an approval that never saw it.
+  This compares the reviewed commit against the tip and refuses when the files the
+  review examined have changed. It does NOT refuse on any movement — a gate that did
+  would be bypassed within a week, and a bypassed gate protects nothing — and a record
+  listing no files widens to every move rather than assuming harmlessness.
+  `promote_to_develop.py` calls it, because promotion is where reviewed work leaves.
+- **The autonomy envelope names what it does not contain**
+  Three findings could not be mechanized in a patch and are now declared where a reader
+  looks, because an undeclared gap is indistinguishable from a solved problem: nothing
+  restarts the controller if it dies; recovery after publication is contained, not
+  closed; and nine hooks existing is not nine constraints holding. Each is listed with
+  what would close it, and the section ends on the reviewer's own summary — autonomy
+  intended, mechanisms implemented, whole-chain operation and recovery not demonstrated.
+
 ### Changed
 - **Everything the system writes now lands under `<project>/.squad/`, and a gate proves it**
   The kit wrote its output into the same directory that holds the installed kit. Measured
@@ -110,6 +325,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   152 agent files underneath them.
 
 ### Fixed
+- **Three defects in the soft-cap dismissal marker, none of them covered by a test**
+  `<!-- ADR-DISMISS-SOFT-CAP: id: reason -->` is how a plan waives a soft cap. Its parser refused
+  a `>` anywhere in the reason, so a justification written with an arrow — `warnings fell 15 -> 0`,
+  the idiom this ecosystem states before/after with — ended the match early and the dismissal
+  registered as ABSENT: the plan stayed capped and demoted, indistinguishable from a cap nobody
+  tried to waive. It refused a `-` in the id, so `auditor_unavailable_dependency-cruiser` — a cap
+  this kit's own detector emits — could not be dismissed at all, in any consumer, ever. And it
+  accepted an EMPTY reason, registering a waiver with no justification behind it. The parser now
+  spans lines, accepts hyphens in the id, and refuses a blank reason; six tests cover it, where
+  before there were none.
+- **The architecture detector picked the wrong script and reported a clean cruise that never ran**
+  It searched `package.json` for the first script mentioning `depcruise` and ran that one. In a
+  repository whose `lint` script chains several tools (`eslint . && depcruise ...`), `lint` sorted
+  first — so the detector shelled out to the whole chain, and a failure anywhere in it was read as
+  a dependency-graph result. It now prefers a script that neither chains (`&&`, `||`, `;`, `|`) nor
+  delegates (`npm run`, `pnpm run`, `yarn run`, `npm-run-all`), falling back to the first match when
+  a chain is genuinely the only one. Measured in a consumer whose `depcruise` script existed and was
+  never the one invoked.
 - **A `plugin:agent` panel seat was accepted without verification, and no longer is (#65)**
   `convene_panel.py` skipped the existence check for any seat whose name contained a colon,
   because there is no file for it in this tree. So the largest pool of specialists a project

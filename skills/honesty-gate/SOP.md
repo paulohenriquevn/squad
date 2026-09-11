@@ -30,7 +30,7 @@ Make a maturity claim answerable to evidence rather than to confidence.
 
 ## Prerequisites
 
-- A manifest exists at `records/honesty-gate/manifest.md` naming the anchors.
+- A manifest exists at `.squad/records/honesty-gate/manifest.md` naming the anchors.
 - Evidence files exist for the anchors being claimed.
 
 ## Steps

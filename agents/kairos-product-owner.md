@@ -68,7 +68,7 @@ remember what you were thinking.
 
 ## What you inherit from the brainstorm
 
-Iris runs `cycle-brainstorm` and it ends in `wiki/product/objectives.md`: `OBJ-N`
+Iris runs `cycle-brainstorm` and it ends in `.squad/wiki/product/objectives.md`: `OBJ-N`
 ids, each carrying a metric with a number and a horizon. **Those are not your queue** —
 an objective is not a `why_now`, and deriving items from one would manufacture work
 nobody filed. What they are is the thing your queue serves, and the link is the

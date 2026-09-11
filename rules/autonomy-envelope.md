@@ -319,6 +319,65 @@ because one item is hard has converted a local problem into a global one.
 An uncovered case is the one thing that goes back to the human — not as a question to
 answer now, but as a gap in this file to close later.
 
+## What this envelope does NOT contain — named, so the claim stops outrunning it
+
+An external reviewer read the system's own description in 2026-09-10 and found that
+"autonomous" was being read further than the mechanisms reach. Several of his findings
+were mechanized the same day. **These were not**, and they are written here rather than
+left for the next reader to discover, because an undeclared gap is indistinguishable
+from a solved problem.
+
+### Nothing restarts the controller
+
+`fleet_router.py` detects an abandoned lane and offers it again. `squad_lead.py` keeps a
+heartbeat and re-reports a stall. Both run INSIDE the controller. **If the controller
+itself dies, nothing brings it back** — a checkpoint on disk does not restart a process,
+and re-examining an impediment does not clear it.
+
+The kit deliberately ships no daemon (`.squad/wiki/decisions/the-cli-navigates-mechanisms-compute.md`
+rejects one for `sq`, and the reasoning holds here). So supervision is the operator's:
+a unit file, a cron, a wrapper that restarts. **If the run stops because it is waiting
+for somebody to open another session, autonomy ended at that point** — and saying so is
+the difference between a limit and a surprise.
+
+### Recovery after publication is contained, not closed
+
+`ACCEPTANCE` exercises the released artifact and leaves the ROADMAP unticked when it
+fails. That records the failure; it does not undo it. There is no mechanized contract
+for halting an in-flight distribution, restoring a prior version, compensating a data
+change, or finishing a partial publish.
+
+`RELEASE` reaching `PR_OPEN_AWAITING_APPROVAL` means a person is already at the merge,
+so the blast radius is bounded by that gate rather than by a rollback the system owns.
+**"Every decision is reversible" is a property to verify before acting, never a
+consequence of having recorded it.**
+
+### A hook that fails is not a hook that blocked
+
+Hooks are the kit's enforcement surface and their failure modes belong to the harness,
+not to this repository: some errors and timeouts let the tool call proceed, `PostToolUse`
+runs after the work, and an API error takes a different path from a normal stop.
+`cycle_events.py` is deliberately fail-open and says so — bookkeeping must not fail the
+work.
+
+So **nine hooks existing is not nine constraints holding.** What holds a constraint at
+the point that authorizes a merge or a publish is branch protection on the remote, which
+is outside the agent's session and outside this kit. `git-safety.md` already draws that
+line for the promotion PR; it applies to every other hook-enforced rule too.
+
+### What would close each
+
+| Gap | What closes it |
+|---|---|
+| Controller restart | A supervisor outside the agent's session, with a durable schedule for waits and detection of a worker that stopped reporting |
+| Post-publication recovery | Explicit containment, reconciliation and retry states, with idempotent operations and a verified-reversible precondition |
+| Hook survival | Effective-permission tests against the installed harness, plus a remote control at the merge/publish point |
+
+Until those exist, the honest statement is the one the reviewer reached: **autonomy
+intended, control mechanisms implemented, whole-chain operation and recovery not yet
+demonstrated.**
+
+
 ## The cost, stated
 
 Deciding by doctrine means some decisions will be wrong in ways a person present would

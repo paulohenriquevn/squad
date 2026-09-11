@@ -48,8 +48,8 @@ Unlike its Cycle ancestor `/roadmap-feature`, this skill **does not refuse hotfi
 test -f BACKLOG.md || { echo "FATAL: BACKLOG.md missing — run /backlog-init first"; exit 1; }
 
 # 0.2  intake log must be writable
-mkdir -p records/backlog 2>/dev/null
-test -w records/backlog || { echo "FATAL: records/backlog not writable"; exit 1; }
+mkdir -p .squad/records/backlog 2>/dev/null
+test -w .squad/records/backlog || { echo "FATAL: .squad/records/backlog not writable"; exit 1; }
 
 # 0.3  CHANGELOG.md must exist (Unbreakable Rule 6)
 test -f CHANGELOG.md || { echo "FATAL: CHANGELOG.md missing"; exit 1; }
@@ -122,7 +122,7 @@ Same protocol as the Cycle grills: one question per turn, each with a recommende
 
 #### 4.X — Persistence after every answer (MANDATORY)
 
-Append to `records/backlog/{item-slug}-intake.md` after each answered question, with `generated_by: backlog-item`. Set `status: completed` on success at Step 6, `status: aborted` if the user stops early. A grill abandoned mid-way leaves a log, not a half-written registry entry — `BACKLOG.md` is touched only at Step 6.
+Append to `.squad/records/backlog/{item-slug}-intake.md` after each answered question, with `generated_by: backlog-item`. Set `status: completed` on success at Step 6, `status: aborted` if the user stops early. A grill abandoned mid-way leaves a log, not a half-written registry entry — `BACKLOG.md` is touched only at Step 6.
 
 ### Step 5 — No-prior-art check (MANDATORY — gate G5)
 
@@ -173,7 +173,7 @@ Only after Steps 2–5 pass. Four writes, in this order:
    `> Registered {{DATE}} by `/backlog-item` (slug: `{{SLUG}}`).`
    Append only. Never reorder, never renumber, never touch another block.
 2. **`CHANGELOG.md`** — one line under `[Unreleased] § Added`, attributed to the target repo per the umbrella convention: `**{repo}:** backlog B-NNN — {title} (#NNN)`.
-3. **`records/backlog/{slug}-intake.md`** — flip the log to `status: completed`.
+3. **`.squad/records/backlog/{slug}-intake.md`** — flip the log to `status: completed`.
 
 4. **The phase event** — the transition, into the stream rather than a file someone reconstructs later:
 

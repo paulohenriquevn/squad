@@ -77,7 +77,7 @@ from squad.paths import WIKI as WIKI_FALLBACK  # noqa: E402
 # - skill-creator: standalone skill-authoring tool (the official Anthropic skill-creator);
 #   invoked on demand to create/improve any skill at skills/{purpose}/. Deliberately decoupled
 #   from every cycle (replaced the retired skill-writer/validator/register discover tail).
-AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "quality-init", "skill-creator", "arch-check"}
+AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "quality-init", "skill-creator", "arch-check", "squad-fit", "sign"}
 
 
 def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:

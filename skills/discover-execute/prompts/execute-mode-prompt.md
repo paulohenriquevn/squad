@@ -6,7 +6,7 @@ You are mid-measurement, iteration {ITERATION}. The user invoked `/discover-exec
 **Opportunity (in progress):** `{OPPORTUNITY_PATH}`
 **Backlog item:** `B-{ITEM}` in `BACKLOG.md`
 **Mode:** `{MODE}`
-**Progress file:** `records/discoveries/.progress-{PLAN_SLUG}.json` (gitignored)
+**Progress file:** `.squad/records/discoveries/.progress-{PLAN_SLUG}.json` (gitignored)
 
 You are not studying how another project solved this. You are finding out what is true about ours, and you have the authority to conclude that nothing is.
 

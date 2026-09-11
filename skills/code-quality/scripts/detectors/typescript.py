@@ -556,10 +556,33 @@ def _depcruise_script(pkg: Path) -> str | None:
         declared = json.loads(pkg.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    for name, command in (declared.get("scripts") or {}).items():
-        if "depcruise" in command or "dependency-cruiser" in command:
-            return str(name)
-    return None
+    matches = [
+        str(name)
+        for name, command in (declared.get("scripts") or {}).items()
+        if "depcruise" in command or "dependency-cruiser" in command
+    ]
+    if not matches:
+        return None
+    # B-166 (an adopter) — prefer a script that runs ONLY the cruise. Returning the first match picks
+    # whatever `package.json` happens to list first, and in a real repository that is the lint chain:
+    # a `lint` that ends in `npm run depcruise` contains the token and usually sorts before the
+    # dedicated script. Measured on an adopter: matches were `['lint', 'depcruise']`, first won, so the
+    # detector ran eslint, knip and seven checkers instead of the cruise — and reported
+    # `auditor_unavailable_dependency-cruiser` whenever any unrelated link failed, while `depcruise`
+    # was on PATH and cruised 278 modules clean.
+    #
+    # "Only the cruise" is read as: no shell chaining, and no delegation back through the package
+    # manager. Both are what make a script a chain rather than a command.
+    for name in matches:
+        command = str((declared.get("scripts") or {})[name])
+        chained = any(token in command for token in ("&&", "||", ";", "|"))
+        delegates = any(token in command for token in ("npm run", "pnpm run", "yarn run", "npm-run-all"))
+        if not chained and not delegates:
+            return name
+    # Every match is a chain. Running one is worse than running the cruise directly and better than
+    # reporting no auditor at all, so the first is still used — the previous behaviour, now reached
+    # deliberately rather than by ordering.
+    return matches[0]
 
 
 def _rule_selfcheck(rule_set: dict, sources: set[str]) -> list[Finding]:

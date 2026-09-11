@@ -631,3 +631,57 @@ def test_the_detector_matches_commands_written_as_inline_code(tmp_path) -> None:
     this file spent the day removing."""
     assert _advisory(tmp_path, "- AC-001: `! grep -q X f.md`")
     assert _advisory(tmp_path, "- AC-002: run ! grep -q X f.md")
+
+# ── ported from a consumer install, where both defects were measured ──────────
+#
+# Both were found in an adopter's copy of this kit and fixed there
+# first — a fix that reached exactly one machine, because `.claude/` is gitignored in
+# every consumer. `~/.claude/CLAUDE.md § Ambiente Pessoal` states the consequence as a
+# rule: a correction written inside a consumer's `.claude/` does not exist until it
+# lands here. These are the regression tests that make the port real rather than
+# asserted.
+
+
+def test_a_wrapped_continuation_line_is_not_counted_as_a_bullet(tmp_path) -> None:
+    r"""`^\s*[-*\d]` counted ANY line starting with a digit, and a wrapped requirement
+    routinely continues on one — "…answers under\n800ms at p95."
+
+    The report then LIES about the brief in both directions at once. Measured on the
+    fixture below: one requirement with no number was reported as `1/2 measurable` —
+    two requirements, one of them measurable — because the continuation became a
+    second bullet AND carried the number that had been wrapped off the first.
+
+    So a hollow requirement was credited with the digits of its own wrap, and the
+    author reading the report was told they had written something they had not."""
+    brief = tmp_path / "b.md"
+    brief.write_text(
+        "# V\n\n## Non-Functional Requirements\n\n"
+        "- NFR-001: the endpoint answers under\n"
+        "800ms at p95.\n",
+        encoding="utf-8",
+    )
+    nfr = next(
+        c for c in score_alignment(brief).criteria if c.key == "nfr_measurable"
+    )
+    assert nfr.why == "0/1 measurable", (
+        "one wrapped bullet is one requirement, and it carries no number of its own — "
+        f"got {nfr.why!r} (the old regex reported '1/2 measurable')"
+    )
+
+
+def test_a_walkthrough_link_is_not_evidence_the_file_exists(tmp_path) -> None:
+    """Criterion 17 matched a `.html` REFERENCE and scored on `bool(html)` twice — so a
+    brief citing a walkthrough nobody generated scored full marks for producing one.
+
+    That is the fabricated-mechanism shape this kit exists to refuse, inside the gate
+    that decides whether an item may be built. The citation must resolve on disk."""
+    brief = tmp_path / "b.md"
+    brief.write_text("# V\n\n## Walkthrough\n\n`b-walkthrough.html`\n", encoding="utf-8")
+    missing = score_alignment(brief)
+    artefact = next(c for c in missing.criteria if c.key == "interactive_artefact")
+    assert artefact.score < 2, "a link to a file that does not exist is not an artefact"
+
+    (tmp_path / "b-walkthrough.html").write_text("<html></html>", encoding="utf-8")
+    present = score_alignment(brief)
+    artefact_now = next(c for c in present.criteria if c.key == "interactive_artefact")
+    assert artefact_now.score == 2, "a citation that resolves IS the artefact"

@@ -150,6 +150,33 @@ class TestDepcruiseScript:
         pkg.write_text(json.dumps({"scripts": {"test": "vitest"}}))
         assert _depcruise_script(pkg) is None
 
+    def test_prefers_the_dedicated_script_over_a_chain_that_delegates_to_it(self, tmp_path: Path) -> None:
+        """B-166 (an adopter) — the first match wins, and in a real repository the first match is `lint`.
+
+        Measured on an adopter: `lint` is a chain ending in `npm run depcruise`, so it contains the
+        token and sorts first. The detector then ran eslint, knip and seven checkers instead of the
+        cruise, reporting the auditor unavailable whenever any unrelated link failed.
+        """
+        pkg = tmp_path / "package.json"
+        pkg.write_text(
+            json.dumps(
+                {
+                    "scripts": {
+                        "lint": "eslint . && knip && node tools/check-x.mjs && npm run depcruise",
+                        "depcruise": "depcruise packages --config .dependency-cruiser.cjs",
+                    }
+                }
+            )
+        )
+        assert _depcruise_script(pkg) == "depcruise"
+
+    def test_a_chain_is_still_used_when_it_is_the_only_match(self, tmp_path: Path) -> None:
+        """Anti-vacuity: preferring the dedicated script must not mean refusing a repository that only
+        has a composite one. A cruise through a chain beats no cruise."""
+        pkg = tmp_path / "package.json"
+        pkg.write_text(json.dumps({"scripts": {"lint": "eslint . && depcruise src"}}))
+        assert _depcruise_script(pkg) == "lint"
+
     def test_malformed_package_json_is_absent_not_a_crash(self, tmp_path: Path) -> None:
         pkg = tmp_path / "package.json"
         pkg.write_text("{ not json")

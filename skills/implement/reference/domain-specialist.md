@@ -100,7 +100,7 @@ never the problem:
    the domain's blast-radius heuristics.
 
 Persist each response to
-`records/implementations/{slug}/specialist-consultations/iteration-{N}-{phase}.md`,
+`.squad/records/implementations/{slug}/specialist-consultations/iteration-{N}-{phase}.md`,
 where `{phase}` ∈ `pre-red`, `post-green`, `pre-commit`. These are **log outputs** and
 they stay under `records/` — `agents/` holds definitions, never invocation logs.
 

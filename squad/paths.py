@@ -59,6 +59,22 @@ SNAPSHOTS = "compaction-snapshots"
 ATTESTATIONS = "attestations"
 ACTIVE_PLAN = "active-plan"
 
+#: Bytecode is SUPPRESSED rather than relocated, via `PYTHONDONTWRITEBYTECODE` in
+#: `settings.plugin.json`. Python writes `__pycache__/` NEXT TO the source, and the
+#: kit's source lives in the consumer's `.claude/` — so running any mechanism wrote
+#: into the dependency. Measured in a clean sandbox: eight `.pyc` files after four
+#: commands.
+#:
+#: `PYTHONPYCACHEPREFIX` would MOVE the cache here instead of losing it, and was the
+#: first choice. It takes a path, and the only way to spell "this project" in a
+#: `settings.json` env block is `${CLAUDE_PROJECT_DIR}` — which the hooks expand
+#: because a shell runs them, and which nothing was verified to expand in `env`. An
+#: unexpanded value would create a directory literally named `${CLAUDE_PROJECT_DIR}`,
+#: which is worse than the problem.
+#:
+#: The cost of suppressing is what made the choice cheap. Measured over five runs of
+#: `check_panel_capability.py`: 415 ms/run with a warm cache, 360 ms without one —
+#: inside the noise. On the heaviest import in the kit: 314 ms against 339 ms.
 #: The names these state files carried when they sat beside the installed kit. Kept so
 #: `check_write_containment.py` can police them and a migration can find them — a
 #: legacy name nobody names is a legacy name nobody moves.
@@ -113,6 +129,43 @@ def write_state_dir(project_root: Path | str, leaf: str) -> Path:
 def active_plan_pointer(project_root: Path | str) -> Path:
     """The file naming which plan is active. One name, one place."""
     return data_root(project_root) / ACTIVE_PLAN
+
+
+#: The routing table: which repositories exist here, and who owns each. DERIVED by
+#: `detect_domains.py` and read by `route_domain.py`, so it is PRODUCED data and
+#: belongs under the write root with everything else the system makes.
+#:
+#: It lived in `<eco>/rules/` because that is where the kit keeps configuration a
+#: project may edit, and `install.sh` learned to preserve it there across reinstalls.
+#: But nothing outside this kit reads it — measured 2026-09-10 across every `.json`,
+#: `.yml`, `.yaml` and `.toml` in the tree: zero references. A file only the kit reads
+#: and only the kit writes is not configuration for a tool; it is our own output, and
+#: keeping it inside the dependency is what made `.claude/` un-deletable.
+ROUTING_TABLE = "domain-routing.txt"
+
+#: Read-only fallbacks for the table, newest first. Readers fall back, writers never
+#: do — the same rule the wiki migration follows, for the same reason: the kit cannot
+#: run anything inside another project's repository, so a hard cut breaks every
+#: consumer that updates without migrating.
+LEGACY_ROUTING_ROOTS: tuple[str, ...] = (".claude/rules", "rules")
+
+
+def write_routing_table(project_root: Path | str) -> Path:
+    """Where the derived routing table is WRITTEN. Never falls back."""
+    return data_root(project_root) / ROUTING_TABLE
+
+
+def routing_table(project_root: Path | str) -> Path | None:
+    """The table to READ: the write root first, then where installs used to keep it."""
+    root = Path(project_root)
+    primary = write_routing_table(root)
+    if primary.is_file():
+        return primary
+    for relative in LEGACY_ROUTING_ROOTS:
+        candidate = root / relative / ROUTING_TABLE
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _first_existing(project_root: Path, roots: tuple[str, ...], leaf: str) -> Path | None:

@@ -69,10 +69,19 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
-import sys
-from pathlib import Path
-from typing import Any
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any  # noqa: E402
+
+from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
 
 
 #: One definition of the block format, imported from whoever already maintains it.
@@ -100,14 +109,14 @@ STATUS_RE = re.compile(r"^status:\s*`?([a-z_]+)`?", re.MULTILINE)
 #: it just gets re-filed verbatim tomorrow (`skills/backlog-item/SKILL.md` § Step 7).
 _ACTION_BY_REASON = {
     "unroutable_repo":
-        "the repo is in no domain. Add it to rules/domain-routing.txt, or file the "
+        "the repo is in no domain. Add it to `domain-routing.txt`, or file the "
         "item against a repo the table knows.",
     "broken_route":
         "the table routes this repo to a specialist nobody wrote. Write "
         "agents/<domain>.md — do NOT stand in for it (agents/README.md).",
     "routing_table_unreadable":
         "the routing table could not be parsed. Derive it: "
-        "detect_domains.py --root . --write rules/domain-routing.txt. "
+        "detect_domains.py --root . --write. "
         "The ITEM was not judged.",
     "route_domain_missing":
         "route_domain.py is not installed. The ITEM was not judged; fix the "
@@ -143,6 +152,22 @@ _ROUTE_OUTCOME = {
     2: ("inconclusive", "routing_table_unreadable"),
     3: ("rejected", "broken_route"),
 }
+
+
+#: A `why_now` that names a phase, its verdict and the item it ended. Deliberately
+#: narrow: prose ABOUT a halt is still prose, and only a citation can be looked up.
+_HALT_CITATION = re.compile(
+    r"(?P<cycle>[a-z][a-z-]{2,})\s+(?:phase\s+)?ended\s+(?P<verdict>[A-Z][A-Z_]{3,})"
+    r"\s+for\s+(?P<slug>[A-Za-z][\w.-]{1,60})"
+)
+
+
+def _events_path(project_root: Path) -> Path | None:
+    for base in (f"{DATA_DIRNAME}/records", *LEGACY_RECORDS_ROOTS):
+        candidate = project_root / base / "cycle-events.jsonl"
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _route(repo: str, project_root: Path) -> dict[str, Any]:
@@ -220,6 +245,63 @@ def _dedup(backlog_text: str, terms: list[str]) -> list[dict[str, Any]]:
     return candidates
 
 
+def g5_route(why_now: str, project_root: Path) -> dict[str, Any]:
+    """Can G5 be answered without a person, for THIS item?
+
+    G5 asks whether `why_now` justifies the item by what another project does or by
+    something that changed in OUR system, and `cycle-backlog.md` says the human decides.
+    That is right for an item somebody typed. It is the wrong owner for an item the
+    system itself created.
+
+    A reviewer found the consequence: halts return work to the registry, so an
+    autonomous run can reach a human decision by coming back to the entrance. "Zero
+    interventions after BACKLOG" does not survive the recirculation.
+
+    An item born from a halt has a `why_now` that is a gate id and a run — a LOOKUP, not
+    a claim. When the event is on disk, G5 is answered by reading it; the class of
+    justification G5 refuses (an appeal to another project) cannot be what a phase of
+    ours emitted. When it is not on disk, this returns `human` and nothing is assumed:
+    a `why_now` that merely SAYS a gate fired is exactly the fabricated local reason
+    G5's second half was written about.
+    """
+    text = (why_now or "").strip()
+    if not text:
+        return {"outcome": "human", "reason": "no `why_now` to evaluate"}
+
+    match = _HALT_CITATION.search(text)
+    if match is None:
+        return {"outcome": "human",
+                "reason": "`why_now` cites no phase verdict from this system, so the "
+                          "prior-art question is a judgement about language"}
+
+    cycle, verdict, slug = match.group("cycle"), match.group("verdict"), match.group("slug")
+    events = _events_path(project_root)
+    if events is None:
+        return {"outcome": "human",
+                "reason": f"`why_now` cites {cycle}/{verdict} for {slug} and no event "
+                          "stream is on disk to confirm it. An unconfirmed citation is "
+                          "the fabricated local reason G5 exists to refuse"}
+
+    for line in events.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            ev = json.loads(line)
+        except ValueError:
+            continue
+        if (ev.get("cycle") == cycle and ev.get("verdict") == verdict
+                and ev.get("slug") == slug):
+            return {"outcome": "mechanized",
+                    "reason": f"`why_now` cites {cycle} ending {verdict} for {slug}, and "
+                              "that event is in this project's own stream. The "
+                              "justification is ours by construction — G5 needs no "
+                              "person here",
+                    "evidence": {"cycle": cycle, "verdict": verdict, "slug": slug,
+                                 "stream": str(events)}}
+
+    return {"outcome": "human",
+            "reason": f"`why_now` cites {cycle}/{verdict} for {slug} and the stream does "
+                      "not carry it. A citation nobody can confirm is worse than none"}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backlog", type=Path, required=True)
@@ -227,6 +309,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--term", action="append", default=[],
                         help="meaningful noun from the description (repeatable)")
     parser.add_argument("--project-root", type=Path, default=None)
+    parser.add_argument("--why-now", default="",
+                        help="the item's `why_now` field. When it cites a phase verdict "
+                             "this project's own stream carries, G5 is answered by "
+                             "lookup instead of by a person (gate G5)")
     args = parser.parse_args(argv)
 
     if not args.backlog.is_file():
@@ -272,11 +358,20 @@ def main(argv: list[str] | None = None) -> int:
     else:
         verdict, code = "GATES_PASS", 0
 
+    # G5 stays a judgement for an item somebody typed, and stops being one for an item
+    # a halt produced: `why_now` is then a citation into this project's own stream.
+    # Reported either way, so a reader sees which of the two this was.
+    g5 = g5_route(args.why_now, project_root)
     payload: dict[str, Any] = {
         "verdict": verdict,
         "g1": g1,
         "g2": {"searched": True, "terms": terms, "candidates": candidates},
+        "g5": g5,
     }
+    if g5["outcome"] == "human":
+        payload["not_checked"] = [
+            "G5 (prior-art justification) — " + g5["reason"],
+        ]
     action = _ACTION_BY_REASON.get(g1.get("reason", ""))
     if action:
         payload["action"] = action

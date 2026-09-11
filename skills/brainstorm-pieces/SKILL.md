@@ -10,8 +10,8 @@ argument-hint: "[scope-name]"
 
 # `/brainstorm-pieces` — What it is made of, and whether we agree
 
-Phase 4 of four. Produces `wiki/product/technical-pieces.md` and
-`wiki/product/alignment.md`, then runs the gate that emits the cycle's verdict.
+Phase 4 of four. Produces `.squad/wiki/product/technical-pieces.md` and
+`.squad/wiki/product/alignment.md`, then runs the gate that emits the cycle's verdict.
 
 ## Cycle contract
 
@@ -22,7 +22,7 @@ the source of truth for the chain, gates G-B1 to G-B5, and the verdicts.
 
 ## Pre-conditions
 
-- `wiki/product/trd.md` exists and every `serves:` citation resolves.
+- `.squad/wiki/product/trd.md` exists and every `serves:` citation resolves.
 - The same person from phases 1 to 3 is present. **This phase cannot complete
   without them** — see the gate below.
 
@@ -63,7 +63,7 @@ responsibility: {what this part owns}
 
 ### Step 3 — Generate the sign-off, unticked
 
-Write `wiki/product/alignment.md` with the checklist **always unticked**:
+Write `.squad/wiki/product/alignment.md` with the checklist **always unticked**:
 
 ```markdown
 # Product alignment — {scope}

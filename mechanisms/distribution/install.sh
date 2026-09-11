@@ -559,7 +559,7 @@ if not rows:
               "the kit can only read in part, and a partial map is worse than none")
         print("      derive it instead: python3 "
               ".claude/skills/backlog-init/scripts/detect_domains.py --root . \\")
-        print("        --write .claude/rules/domain-routing.txt")
+        print("        --write")
     raise SystemExit(0)
 
 write_routing_table(target, rows)
@@ -872,7 +872,7 @@ Next steps for the target project:
   2. Derive the domain routing table FOR THIS PROJECT (it ships EMPTY, and gate
      G1 refuses every item until this runs):
        python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \
-         --write .claude/rules/domain-routing.txt
+         --write
      Then write the specialist file(s) it names under .claude/agents/.
 
   3. Configure project-specific gates (defaults are no-op until set):

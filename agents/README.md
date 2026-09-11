@@ -79,7 +79,7 @@ One agent per domain of the project this kit governs. Each knows the repos it co
 ```bash
 ECO=$([ -d .claude/skills ] && echo .claude || echo .)   # plugin vs standalone
 python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
-  --write "$ECO/rules/domain-routing.txt"
+  --write
 ```
 
 The script reads the topology from disk — not from an inventory, not from a `CLAUDE.md` — and writes the routing table. Then write one file here per domain it names, and `route_domain.py` will resolve them: a domain naming a specialist that is not on disk exits 3 (`BROKEN ROUTE`) rather than reporting a route to nobody.
@@ -87,6 +87,23 @@ The script reads the topology from disk — not from an inventory, not from a `C
 ## Choosing the granularity
 
 One agent per repo duplicates the same facts across every repo that shares a stack, and rots once per copy. One agent per role (backend / frontend / SRE) is too coarse to carry an invariant like "this RDS instance is a protected unit" or "a root `go build ./...` covers nothing here, the repo is multi-module". **The domain is the granularity at which the invariants differ** — that is the line to cut on.
+
+### Where that line usually already exists
+
+`detect_domains.py` does not guess it. A **module manifest** — `go.mod`, `Cargo.toml`, a workspace `package.json` — is a compilation and versioning boundary the project already committed to, and invariants tend to differ exactly there: a module has its own dependencies, its own build, and its own answer to "what may import this".
+
+So the derivation reads that line instead of drawing one, under two rules:
+
+- A module nested under another module **joins its ancestor**. `operators/api` is part of `operators`, not a peer of it; splitting them would put a Go module's own sub-module in a different domain from the code that compiles it.
+- What remains **groups by its first path segment**. This is what keeps the rule from collapsing into one-domain-per-package: an SDK with six thin packages under `packages/` becomes ONE domain, which is the measured case above — six specialists repeating the same facts, rotting once per copy. A repository that puts `api`, `pkg` and `operators` at its own top level gets three, because it drew them apart itself.
+
+**The repository is always a domain too, beside the modules.** `route_domain.route()` matches a repo EXACTLY and never by path prefix, so without a row naming the repository, an item about `charts/`, `docs/` or a root Taskfile routes to nobody — and so does every item already filed against the repository's name. Measured on an adopter: 224 items declaring `repo: theo`.
+
+Measured on that adopter (2026-09-10), which is what the rule was checked against rather than argued from: 8 modules with their own `go.mod`, and of the 17 live items touching a module, **13 (76%) touch exactly one**. The obvious fear — `pkg` is imported by four modules, so every change there fragments into several items under gate G3 — does not appear in the work: one live item touches `pkg`.
+
+### What a module specialist adds that a repository specialist cannot
+
+It can state what does **not** belong in its module. That is real knowledge and it belongs in the file — but keep the two halves apart: the agent carries the WHY, and a dependency rule carries the NO. "`pkg` must not import `api`" written as prose in `agents/pkg.md` is a promise; the same sentence in `.go-arch-lint.yml` fails the build. `/arch-check` is where that half lives.
 
 ## What each agent is required to carry
 

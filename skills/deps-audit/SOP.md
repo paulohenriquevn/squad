@@ -35,7 +35,7 @@ will read it.
 
 ## Prerequisites
 
-- A plan exists at `records/plans/{slug}-plan.md`.
+- A plan exists at `.squad/records/plans/{slug}-plan.md`.
 - `/plan-edge-cases` has run — this is phase 3 and that is phase 2.
 - The plan has a `## Dependencies` section. Without one the verdict is
   `INVALID_PLAN_DEPS` and the fix is structural, in `/plan-write`.
@@ -45,7 +45,7 @@ will read it.
 ## Steps
 
 1. Run `/deps-audit {slug}`.
-2. Read the verdict at the head of `records/audits/{slug}-deps-audit-*.md`.
+2. Read the verdict at the head of `.squad/records/audits/{slug}-deps-audit-*.md`.
 3. Act on the verdict per the Decisions section below.
 4. Re-run this procedure after any change to the plan's `## Dependencies`
    section — `check_deps_audit.py` binds the plan to the **newest** report on

@@ -47,8 +47,25 @@
 # decider, the choice, and the evidence the choice rests on — so the next reader
 # finds a decision rather than an absence. A removed wall with no decision in its
 # place is indistinguishable from a wall nobody ever wrote.
+#
+# TWO CLASSES CHANGE WHAT SUCCESS MEANS, AND MUST NAME WHAT THEY MOVED
+#
+# `scope` narrows the obligation. `threshold` moves the bar. An external reviewer put
+# the sequence plainly: fail a requirement, delegate the requirement away or lower its
+# target, approve everything that remains, declare success. Every step is individually
+# legitimate and the result is a pass nothing earned.
+#
+# The rationale requirement above does not stop it — a rationale is a sentence, and the
+# sentence can be true. So a `scope` or `threshold` decision must additionally name the
+# obligation it SUPERSEDES, and `delegated_decision.rewrite_wall` refuses one that does
+# not. The record then shows an obligation that was moved instead of an obligation that
+# was never there.
+#
+# This does not judge whether the narrowing was right — nothing here can. It makes the
+# narrowing legible, which is the difference between a scope call and a quiet retreat.
 
 delegated_classes = scope, status, threshold, binary, option
 retained_classes  = access, elapsed, liveness, governance
 on_no_match       = retain
-require_rationale = true
+require_rationale  = true
+require_supersedes = scope, threshold
