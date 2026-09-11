@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at fifty-eight files is
-not one — a model told to read fifty-eight files before an architectural decision
+That makes the pointer the whole interface, and a pointer at sixty files is
+not one — a model told to read sixty files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
@@ -80,6 +80,8 @@ Each `cycle-{name}.md` defines:
 | File | Purpose |
 |---|---|
 | `code-quality-golden-rule.md` | Code quality severity levels |
+| [`contribution-conventions.md`](contribution-conventions.md) | What a commit, PR, issue and name must carry. **The kit's**, and every rule in it is either computed by `check_contribution_conventions.py` or declared unenforceable with the reason — a convention nobody can check is a preference, and this repository's own CONTRIBUTING drifted from its practice for long enough that nobody noticed |
+| `contribution-overrides.txt` | **THIS PROJECT's** overrides: extra commit types, its own scopes, a different subject limit. Ships empty, survives a reinstall. The co-authorship refusal and the secrets rule cannot be overridden and an attempt is refused rather than ignored |
 | `discover-opportunity-golden-rule.md` | Opportunity confidence hard caps |
 | `plan-confidence-golden-rule.md` | Plan confidence scoring rubric |
 | `deps-audit-golden-rule.md` | Dependency audit severity |

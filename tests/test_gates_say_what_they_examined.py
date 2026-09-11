@@ -30,6 +30,9 @@ _GATES = Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
 ROOT_FLAG = {
     "check_english_only": "--root",
     "check_install_drift": "--install",
+    # Joined 2026-09-11 with `rules/contribution-conventions.md`. It reads the project's
+    # overrides and then the repository's own log, so it takes a repo root.
+    "check_contribution_conventions": "--repo",
     "check_gate_mechanisms": "--repo",
     "check_mechanisms_inventory": "--root",
     "check_orphan_verdicts": "--repo",
