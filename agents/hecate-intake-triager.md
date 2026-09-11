@@ -95,4 +95,4 @@ duplicate per run. An unreadable tracker is not an empty one.
 - Who ranks what you accept: `agents/kairos-product-owner.md`
 - Dedup, mechanised: `mechanisms/fleet/file_findings.py`
 - The kit's own registry: `mechanisms/fleet/kit_issues.py`
-- Issue contract: `~/.claude/skills/file-issue/`
+- Issue contract: `~/.claude/skills/issue-confidence/`

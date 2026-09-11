@@ -1,14 +1,14 @@
 ---
-name: file-issue
+name: issue-confidence
 version: 0.1.0
 requires: []
-description: 'File an issue carrying what developers measurably use — weighted by the FSE 2008 survey of 872 developers, where steps to reproduce is wanted by 83%, severity by 0%, and incomplete information is the problem ranked as causing the most delay at 74%. Use whenever a finding has a repro and evidence, from any source: a triage file, a phase caveat, an ad-hoc observation, a re-verification. Scores the draft before filing, refuses a body carrying a secret, and requires a duplicate check because duplication is the leading cause of a report nobody can reproduce.'
+description: 'Score an issue draft before it is filed, then file it — carrying what developers measurably use — weighted by the FSE 2008 survey of 872 developers, where steps to reproduce is wanted by 83%, severity by 0%, and incomplete information is the problem ranked as causing the most delay at 74%. Use whenever a finding has a repro and evidence, from any source: a triage file, a phase caveat, an ad-hoc observation, a re-verification. Scores the draft before filing, refuses a body carrying a secret, and requires a duplicate check because duplication is the leading cause of a report nobody can reproduce.'
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write
 argument-hint: "{what you found, in your own words}"
 ---
 
-# `/file-issue` — write the report the fixer can act on
+# `/issue-confidence` — how much of the report the fixer can act on
 
 An issue is a message to somebody who was not there. Everything below follows from
 that, and from two studies rather than from taste.
@@ -112,7 +112,7 @@ When you have one. Never binding on whoever takes it.
 ### Score it before filing
 
 ```bash
-python3 "$ECO/skills/file-issue/scripts/score_issue.py" draft.md
+python3 "$ECO/skills/issue-confidence/scripts/score_issue.py" draft.md
 ```
 
 `READY` at 60% of weighted usefulness. `THIN` names what is missing, heaviest first.

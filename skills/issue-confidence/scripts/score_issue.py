@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Score an issue body BEFORE it is filed, weighted by what developers measurably use.
 
-    python3 skills/file-issue/scripts/score_issue.py draft.md
-    python3 skills/file-issue/scripts/score_issue.py draft.md --json
+Sibling of `plan-confidence` and `discover-confidence`: same shape — deterministic, no
+model call, a verdict derived from a rubric rather than asserted. The rubric here is not
+the kit's judgement, it is a measurement (see below), which is the one difference.
+
+    python3 skills/issue-confidence/scripts/score_issue.py draft.md
+    python3 skills/issue-confidence/scripts/score_issue.py draft.md --json
 
 ## The weights are not opinions
 

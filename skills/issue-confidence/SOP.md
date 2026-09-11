@@ -17,7 +17,7 @@ sources:
   - id: conventions
     resource: ../../rules/contribution-conventions.md
 
-sop: file-an-issue
+sop: score-and-file-an-issue
 version: 1.0.0
 owner: whoever found the defect
 standard: rules/contribution-conventions.md
@@ -45,7 +45,7 @@ Turn a finding into a report the fixer can act on without coming back to ask.
    a report nobody can reproduce (~29%).
 3. **Write the body to a file**, in the order of the template: severity, build, expected
    vs actual, repro, evidence, probable cause, dedup.
-4. **Score it** — `python3 skills/file-issue/scripts/score_issue.py draft.md`.
+4. **Score it** — `python3 skills/issue-confidence/scripts/score_issue.py draft.md`.
    `READY` files. `THIN` names what is missing, heaviest first. `REFUSED` means a secret
    was found; rewrite, do not file.
 5. **File it** — `gh issue create --title "<area>: <what is wrong>" --body-file - < draft.md`.
