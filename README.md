@@ -180,6 +180,9 @@ an adopter: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_rep
 names. The installer prints the sequence.
 
 ```bash
+# 0. Draw the system, once — four decisions no product retrofits, plus the map
+/design {scope}
+
 # 1. Create the registry, once (inventories repos FROM DISK, never from a table)
 /backlog-init
 
@@ -290,13 +293,21 @@ Rules are the contract; a SKILL.md carries only phase-specific detail and points
 
 ## Advisory skills
 
-Beyond the pipeline phases, the bundle ships one skill that answers architecture questions rather than driving a cycle. It is auxiliary — bound to no `cycle-*.md`, invoked on demand:
+Beyond the pipeline phases, the bundle ships skills bound to no `cycle-*.md` and invoked on demand:
 
 | Skill | Answers |
 |---|---|
 | `arch-check` | Whether a repo has architecture boundaries, whether they can still fire, and which ones it already obeys |
+| `squad-fit` | Whether the squad can run in this project at all — which domains have no specialist, which of the project's own skills lack an SOP, whether a review panel can be formed |
+| `sign` | Nothing. It records that a **person** signed a document that was waiting for one, which is the single act no mechanism here may perform |
+| `backlog-init` | What repositories exist, read from disk, and which domain owns each |
+| `backlog-review` | What has rotted in the registry — read-only, and honest about which findings are heuristics |
+| `honesty-gate` | Whether a "production-ready" claim has recorded evidence behind it |
+| `quality-init` | What thresholds this project's own p90 metrics justify, emitted as hooks |
+| `ast-grep` | Structural questions Grep cannot express — signatures, hierarchies, call sites |
+| `skill-creator` | Whether a skill's description actually makes the model reach for it |
 
-It refuses the shortcut its field is prone to: calling a boundary enforced because a linter names it, without checking the rule can still fire.
+Each refuses the shortcut its field is prone to. `arch-check` will not call a boundary enforced because a linter names it, without checking the rule can still fire. `squad-fit` will not write the specialist it says is missing — a correctly-named stub silences the blocker and routes items into an empty prompt. `sign` will not sign without showing what is being signed, and has no `--yes`.
 
 ## Unbreakable principles
 

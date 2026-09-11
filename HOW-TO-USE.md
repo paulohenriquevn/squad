@@ -23,6 +23,7 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 |---|---|---|
 | "Where am I, and who decides this?" | (orientation) | [`rules/squad-map.md`](rules/squad-map.md) — injected at SessionStart |
 | "What are we even building?" | `cycle-brainstorm` | `/brainstorm-vision`, then the four-phase cascade |
+| "The product is agreed — what IS the system?" | `cycle-design` | `/design {scope}` — four drawings that force the decisions no product retrofits, plus the map derived from them |
 | "First time — there is no registry yet" | (one-shot bootstrap) | `/backlog-init` |
 | "I noticed something worth looking at" | `cycle-backlog` | `/backlog-item {slug}` |
 | "Is this hunch real?" | `cycle-discover` | `/discover-plan B-NNN --mode {review\|live-test\|bug\|evolve}`, then the chain |
@@ -43,9 +44,27 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-trajectory-review` | `/trajectory-review [plan-slug]` |
 | "Block code smells automatically on every Write/Edit" | (setup, once) | `/quality-init TARGET` |
 | "Can we call this production-ready?" | auxiliary | `/honesty-gate audit` |
-| "What commands exist?" | auxiliary | `/commands-help` |
+| "Can the squad even run in this project?" | auxiliary | `/squad-fit` — which domains have no specialist, which skills lack an SOP, whether a panel can form |
+| "Something is waiting on my signature" | auxiliary | `/sign --list`, then `/sign {doc} --as {you}` |
+| "What commands exist?" | auxiliary | `skills/map.md` — every skill, when to reach for it, and when reaching for it is wrong |
 
 ## Quick start
+
+### 0. Draw the system (once, before the registry)
+
+```bash
+/design {scope}
+```
+
+Four drawings that force the decisions a product cannot retrofit — what the central
+object's lifecycle is, where untrusted code stops, the real call order **including
+failures**, and what survives a process death — plus the component map derived from
+them. The map is never drawn first: drawn first it looks like design happened and
+forces no choice.
+
+It refuses to close while a `PIECE-N` from the brainstorm has no place in the map, and
+ends at `AWAITING_REVIEW` until a person signs. **Skip it only if the system is already
+drawn** — an item filed against a system nobody drew is an item nobody can scope.
 
 ### 1. Create the registry (once)
 

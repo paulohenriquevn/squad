@@ -200,3 +200,18 @@ def test_the_advisory_prose_does_not_describe_more_skills_than_the_table_lists()
                 f"the table lists one skill and the prose says {plural!r}, which is "
                 f"how three deleted skills kept being described after their rows went"
             )
+
+
+def test_a_flag_in_backticks_is_not_a_skill_name(tmp_path: Path) -> None:
+    """The character class allowed `-` in first position, so `--yes` read as a skill
+    name and the gate reported a missing `--yes/SKILL.md`.
+
+    Prose about a skill's flags is the most natural thing to write in a section about
+    skills, so the class had to stop matching it — rewriting the prose around the check
+    would have moved the defect rather than fixed it.
+    """
+    from check_readme_advisory_skills import _SKILL_NAME_RE
+
+    assert _SKILL_NAME_RE.findall("`arch-check` has no `--yes`") == ["arch-check"]
+    assert _SKILL_NAME_RE.findall("pass `--strict` to `check-xrefs`") == ["check-xrefs"]
+    assert not _SKILL_NAME_RE.findall("`--force`")
