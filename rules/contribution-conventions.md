@@ -85,6 +85,11 @@ The floor is a repro and an expectation. Below that an issue is a report of a fe
 **Never in an issue body:** a secret, a token, a cookie, a password, or a customer's
 data. This is the one rule here with no exception and no override.
 
+**`/file-issue` writes one to this shape and scores it before filing.** The weights are
+the FSE 2008 percentages, not a checklist: steps to reproduce 83, stack traces 57,
+observed 33, expected 22, version 12, dedup 10, environment 4 — and severity 0, kept for
+triage and weighted at nothing, because developers fixing a bug do not use it.
+
 ## Names
 
 | Thing | Convention | Computed? |
