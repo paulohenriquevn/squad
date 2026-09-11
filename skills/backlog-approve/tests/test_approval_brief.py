@@ -169,3 +169,41 @@ def test_an_item_with_no_dod_is_called_out(tmp_path):
     body = bb.render(bb.parse(project / "BACKLOG.md", project, "triaged"),
                      project, "triaged")
     assert "no closing criterion" in body
+
+
+# ── the section the item list cannot produce ────────────────────────────────
+
+def test_the_brief_opens_with_coverage_not_with_items(tmp_path):
+    """A reader who scrolls straight into the boxes answers the easier half.
+
+    "Do I want each of these" is visible in the list. "Is anything I want missing" is
+    not, and it has to be asked before the attention is spent.
+    """
+    project = _registry(tmp_path, _item("B-001"))
+    body = bb.render(bb.parse(project / "BACKLOG.md", project, "triaged"),
+                     project, "triaged")
+    assert body.index("What this backlog is for") < body.index("## The items")
+
+
+def test_with_no_objectives_the_brief_says_not_measured(tmp_path):
+    project = _registry(tmp_path, _item("B-001"))
+    body = bb.render(bb.parse(project / "BACKLOG.md", project, "triaged"),
+                     project, "triaged")
+    assert "**Not measured.**" in body
+    # And it names what would make it answerable, rather than leaving a blank section.
+    assert "traces_to" in body
+
+
+def test_an_unserved_objective_is_stated_in_the_brief(tmp_path):
+    objectives = tmp_path / ".squad" / "wiki" / "product" / "objectives.md"
+    objectives.parent.mkdir(parents=True)
+    objectives.write_text("# Objectives\n\n## OBJ-1 — served\nmetric: x\n\n"
+                          "## OBJ-2 — nothing serves this\nmetric: y\n", encoding="utf-8")
+    project = _registry(tmp_path, _item("B-001").replace(
+        "status: triaged", "traces_to: OBJ-1\nstatus: triaged"))
+    body = bb.render(bb.parse(project / "BACKLOG.md", project, "triaged"),
+                     project, "triaged")
+    assert "1 objective(s) have no item at all" in body
+    assert "`OBJ-2`" in body
+    # The sentence that matters: ticking everything below still leaves it undone.
+    assert "Ticking every box below would still leave it undone" in body

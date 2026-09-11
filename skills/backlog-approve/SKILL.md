@@ -106,6 +106,27 @@ approved by the act of signing rather than by anyone deciding.
 | signed, nothing ticked | refused and said out loud; silent success would look like an approval |
 | item not at `triaged` | skipped and named, with the reason `backlog_status.py` gave |
 
+## The half the item list cannot show
+
+A page rendered from the registry shows what somebody wrote down. It cannot show what
+nobody wrote down — an item you did not want is visible and can be left unticked, while
+an item nobody thought of is invisible, and no amount of careful reading surfaces it.
+
+`traces_to` is what makes that computable. It has been read by `build_agenda.py` since
+the brainstorm phase shipped and was written **zero times in 651 items**, because
+`cycle-backlog.md` never listed it and `/backlog-item` never asked. Both now do, and the
+brief opens with the three states the link makes visible:
+
+| State | Means |
+|---|---|
+| objective with no item | work you said you wanted that nobody wrote down — **ticking every box still leaves it undone** |
+| item with no objective | either the objective was never declared, or the item should not exist |
+| citation to a missing id | the objective was withdrawn and the item still claims to serve it |
+
+**With no `.squad/wiki/product/objectives.md` the section reports NOT MEASURED** and
+names the document. A project that never ran `/brainstorm-objectives` has nothing to
+trace to, and calling its items orphans would invent a standard it never adopted.
+
 ## What it does not claim
 
 A signature says the ticked items are the work you want done. It does not say they are
@@ -118,6 +139,7 @@ and work somebody chose.
 | Script | Runs it | What it does |
 |---|---|---|
 | `build_approval_brief.py` | `/backlog-approve` | renders the registry as one decidable page |
+| `check_objective_coverage.py` | the brief, and on demand | objectives no item serves, items serving no objective, citations pointing at ids that are gone |
 | `apply_approval.py` | `/backlog-approve --apply` | moves the ticked items, via `backlog_status.py` |
 
 `backlog_status.py` stays the only writer of a status line. A second one here would

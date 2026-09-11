@@ -7,6 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **`traces_to` gets a producer, and the backlog can finally say what it leaves out** (#82, #86)
+  The field was read by `build_agenda.py`, described in the product owner's agent file,
+  and pointed at `OBJ-N` ids `/brainstorm-objectives` genuinely produces — and it was
+  written zero times in 651 items, because `cycle-backlog.md` never listed it among an
+  item's fields and `/backlog-item` never asked. A field read by one consumer and written
+  by no producer is not a schema; it is a plan somebody had. It is in the schema table
+  now, and Q5 of the intake grill asks for it whenever the project has declared
+  objectives. What the link buys is the one question a registry cannot answer about
+  itself: reading items tells you whether you want each of them, and never what is
+  missing, because an item nobody wrote is invisible to any report rendered from items.
+  `check_objective_coverage.py` computes the three states the link makes visible — an
+  objective no item serves, an item serving no objective, and a citation pointing at an
+  id that is gone — and the approval brief now opens with them. With no objectives
+  document it reports NOT MEASURED and names the document, rather than calling every
+  item an orphan against a standard the project never adopted.
+
 - **`/backlog-approve` — the decision a backlog was never asked for** (#86)
   `cycle-backlog.md` calls `approved` a commitment, *"somebody decided"*, and forbids
   reaching a plan without it. Measured across four registries: 325 items, 243 of them

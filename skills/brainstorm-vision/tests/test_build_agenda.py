@@ -200,13 +200,34 @@ def test_a_field_nobody_writes_is_one_finding_not_one_per_item(tmp_path) -> None
     assert agenda.schema_gaps[0]["field"] == "traces_to"
 
 
-def test_the_finding_names_the_kit_not_the_items(tmp_path) -> None:
+def test_with_no_objectives_the_finding_blames_neither_the_items_nor_the_kit(tmp_path) -> None:
+    """Nothing to trace to is not a gap in any item.
+
+    Before 2026-09-11 this said the field was written by nothing, which was true then
+    and became false the moment `/backlog-item` grew Q5. What an empty field means now
+    depends on whether the project declared objectives at all.
+    """
+    root = _traces_registry(tmp_path, "".join(_traces_item(n) for n in range(1, 4)))
+    # The shared fixture ships an objectives document; this case is the project that
+    # never ran the phase, so the document has to go.
+    (root / ".squad" / "wiki" / "product" / "objectives.md").unlink()
+
+    gap = build(root).schema_gaps[0]
+
+    assert "never adopted" in gap["why"]
+    assert "/brainstorm-objectives" in gap["why"]
+
+
+def test_with_objectives_declared_an_unlinked_registry_is_a_real_finding(tmp_path) -> None:
+    """Here the link WAS available and nobody made it, which is worth saying."""
     root = _traces_registry(tmp_path, "".join(_traces_item(n) for n in range(1, 4)))
 
     gap = build(root).schema_gaps[0]
 
-    assert gap["written_by"] == "nothing"
-    assert "consumed and never produced" in gap["why"]
+    assert gap["written_by"] == "/backlog-item Q5"
+    assert "leaves uncovered" in gap["why"]
+    # Still one finding about the registry, never one row per shipped item.
+    assert build(root).purposeless_shipped == []
 
 
 def test_a_real_gap_is_still_reported_item_by_item(tmp_path) -> None:

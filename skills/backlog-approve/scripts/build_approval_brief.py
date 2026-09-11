@@ -64,6 +64,9 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
+from check_objective_coverage import OBJECTIVES_REL  # noqa: E402
+from check_objective_coverage import measure as measure_coverage  # noqa: E402
+
 from squad.paths import DATA_DIRNAME, WIKI, write_records_dir  # noqa: E402
 
 #: File extensions an evidence pointer may plausibly name. The allowlist is the guard
@@ -244,6 +247,55 @@ def parse(backlog: Path, project: Path, wanted_status: str | None) -> list[Item]
     return items
 
 
+def _coverage_section(project: Path) -> list[str]:
+    """What the item list cannot show: the work nobody wrote down.
+
+    This sits ABOVE the items on purpose. A reader who scrolls straight into 28 boxes
+    is answering "do I want each of these", which is the easier half. The question that
+    only this section can raise — "is anything I want missing" — has to be asked before
+    the attention is spent.
+    """
+    cov = measure_coverage(project)
+    out = ["", "## What this backlog is for, and what it leaves uncovered", ""]
+    if not cov.measurable:
+        out += [
+            f"**Not measured.** {cov.reason}.",
+            "",
+            "This is the half of the question that reading the items below will never "
+            "reach. An item you did not want is visible and can be left unticked; an "
+            "item nobody thought to write is invisible, and no amount of careful "
+            f"reading surfaces it. Declaring objectives in `{OBJECTIVES_REL}` and "
+            "linking items to them with `traces_to` is what makes the gap computable.",
+            "",
+        ]
+        return out
+
+    out += ["| Objective | Served by |", "|---|---|"]
+    for obj, title in sorted(cov.objectives.items(),
+                             key=lambda kv: int(re.search(r"(\d+)", kv[0]).group(1))):
+        serving = cov.served.get(obj, [])
+        cell = ", ".join(f"`{i}`" for i in serving) if serving else "**— nothing**"
+        out.append(f"| `{obj}` {title} | {cell} |")
+    out.append("")
+    if cov.unserved:
+        out += [f"**{len(cov.unserved)} objective(s) have no item at all** "
+                f"({', '.join('`' + o + '`' for o in cov.unserved)}). That is work you "
+                "said you wanted and nobody wrote down. Ticking every box below would "
+                "still leave it undone.", ""]
+    if cov.untraced:
+        out += [f"**{len(cov.untraced)} item(s) serve no declared objective.** Either "
+                "the objective was never written down, or the item should not exist — "
+                "neither of those is neutral, and both are worth knowing before "
+                "committing to the work.", ""]
+    if cov.dangling:
+        out += [f"**{len(cov.dangling)} item(s) cite an objective that is not declared** "
+                + ", ".join(f"`{i}` → `{o}`" for i, o in cov.dangling[:6]) + ".", ""]
+    if not (cov.unserved or cov.untraced or cov.dangling):
+        out += ["Every objective is served by at least one item, and every item serves "
+                "a declared objective.", ""]
+    return out
+
+
 def render(items: list[Item], project: Path, wanted_status: str | None) -> str:
     by_domain: dict[str, list[Item]] = {}
     for it in items:
@@ -295,6 +347,7 @@ def render(items: list[Item], project: Path, wanted_status: str | None) -> str:
     ]
     for domain, group in sorted(by_domain.items(), key=lambda kv: (-len(kv[1]), kv[0])):
         out.append(f"| `{domain}` | {len(group)} |")
+    out += _coverage_section(project)
     out += ["", "---", "", "## The items", ""]
 
     for it in items:
