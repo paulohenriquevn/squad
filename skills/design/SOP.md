@@ -47,8 +47,14 @@ Force the four decisions that cannot be retrofitted, while they are still cheap.
 3. **Read each drawing as it lands**, and say what is wrong immediately. A drawing
    corrected in the session costs a sentence; corrected after the backlog opens it
    costs every item filed against it.
-4. **Watch the walkthrough** — `.squad/wiki/design/walkthrough.html`. It shows the
-   flow moving, which is where a missing step is visible and a static diagram hides it.
+4. **Render, if you would rather look at a picture** — optional, and nothing depends
+   on it:
+   ```bash
+   /diagram-design:import-mermaid .squad/wiki/design/sequence.md --format=html
+   ```
+   The plugin reads these files directly; they are Markdown carrying fenced mermaid.
+   `--format=html+png` when the review is not at a terminal. The mermaid stays the
+   drawing — the render is never edited back into it.
 5. **Score** —
    `python3 skills/design/scripts/check_design_completeness.py --project .`
 6. **Sign** the checklist — `/sign .squad/wiki/design/sign-off.md --as <you>`.
@@ -66,6 +72,20 @@ it is not done.
 | D3 sequence | what happens when each step fails, not only when it succeeds |
 | D4 durability | what is lost when the process dies, the node restarts, the platform deploys |
 | D5 map | which component owns each PIECE-N, and which components own none |
+
+## The commands, in one place
+
+| | |
+|---|---|
+| Produce the drawings | `/design {scope}` |
+| Score them | `python3 skills/design/scripts/check_design_completeness.py --project .` |
+| Sign the checklist | `python3 skills/sign/scripts/sign_document.py .squad/wiki/design/sign-off.md --as {you}` |
+| Render one, optional | `/diagram-design:import-mermaid <file.md> [--format=html\|svg\|png\|html+png]` |
+| Export an existing render | `/diagram-design:export-diagram` |
+
+The `diagram-design` plugin is a **separate install**. Nothing in this phase depends on
+it, and the gate never asks for a rendered file: a drawing that exists only as a picture
+is one no gate can check and no agent can read back.
 
 ## Escalation
 

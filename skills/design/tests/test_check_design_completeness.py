@@ -356,3 +356,15 @@ def test_ordinary_labels_do_not_trip_the_check(tmp_path: Path) -> None:
                  "    subgraph zone[PLATFORM]",
                  "    state --> other : event"):
         assert unquoted_delimiters(f"flowchart TB\n{line}") == [], line
+
+
+def test_the_sop_does_not_send_the_operator_at_a_file_nothing_makes() -> None:
+    """Step 4 of `SKILL.md` pointed at `build_walkthrough.py` and was corrected; the
+    SOP kept telling the operator to open `walkthrough.html`, which nothing generates
+    any more. A procedure naming an artifact that does not exist is worse than one
+    naming none — the reader assumes the step failed on their machine.
+    """
+    sop = (Path(__file__).resolve().parents[1] / "SOP.md").read_text(encoding="utf-8")
+
+    assert "walkthrough.html" not in sop
+    assert "import-mermaid" in sop, "the render path must be named where the operator reads"
