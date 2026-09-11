@@ -7,6 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **The board draws the issue tracker beside the cycle** (#84)
+  `BACKLOG.md` says what the project decided to do; the tracker says what the people
+  using it ran into. The board showed the first and not the second — measured on this
+  repository, fourteen open reports were visible nowhere while the cycle they were
+  filed against advanced on screen. Issues are grouped by the stage a fix has reached,
+  read from labels rather than from GitHub's two states, because OPEN/CLOSED cannot
+  express the window between *merged* and *installable* that the issue lifecycle keeps
+  an issue open for. The tracker is read on its own thread at its own interval: one
+  `gh issue list` took 1.7s against a watcher that runs every 0.5s, so reading it on
+  the request path would have traded a board that re-renders on a file save for one
+  that stalls. A tracker that could not be read renders as the reason it could not,
+  plus the flag that fixes it — never as four empty lanes. `--no-issues` removes the
+  tab entirely rather than leaving an empty one.
+
 - **`cycle-design` — the system is drawn before a backlog is filed against it** (#75)
   `brainstorm-pieces` names PIECE-N as *"a responsibility with a boundary"* and states
   its own limit: *"the mapping is not decided here."* `backlog-init` then inventories

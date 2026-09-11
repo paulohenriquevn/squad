@@ -923,6 +923,42 @@ button.theme {
 }
 button.theme:hover { border-color: var(--ink-3); }
 button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1px; }
+/* ── the tracker lane ──────────────────────────────────────────────────────
+   Issue cards borrow .col/.stack/.card so the two halves of the board read as
+   one surface. What they add is the provenance bar: a tracker is read over a
+   network on an interval, and a page that showed its contents with the same
+   authority as a file on disk would be overstating what it knows. */
+.prov {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1rem;
+  padding: .55rem .75rem; margin: 0 0 .6rem;
+  background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: var(--radius); font-size: .78rem; color: var(--ink-3);
+}
+.prov b { color: var(--ink-2); font-weight: 600; }
+.prov .age { font-variant-numeric: tabular-nums; }
+.prov.failed { background: var(--impeded-bg); border-color: var(--impeded); }
+.prov.failed b, .prov.failed .why { color: var(--impeded); }
+.prov .why { flex: 1 1 18rem; color: var(--ink-2); }
+.prov .fix { flex-basis: 100%; color: var(--ink-2); }
+.prov .fix code { background: var(--surface-2); padding: .05rem .3rem;
+  border-radius: 2px; }
+.icard { text-decoration: none; color: inherit; display: block; }
+.icard .num { font-size: .72rem; color: var(--ink-3); letter-spacing: .02em; }
+.icard .title { margin-top: .1rem; }
+.icard:hover { border-color: var(--moving); }
+.icard:focus-visible { outline: 2px solid var(--moving); outline-offset: 1px; }
+.ilabels { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .35rem; }
+.ilabel {
+  font-size: .68rem; padding: .05rem .35rem; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-3); border: 1px solid var(--line-soft);
+}
+.ilabel.bug { background: var(--impeded-bg); color: var(--impeded);
+  border-color: transparent; }
+.col.rest { justify-content: center; }
+.rest-note {
+  padding: .5rem .6rem; font-size: .75rem; color: var(--ink-3);
+  border: 1px dashed var(--line); border-radius: var(--radius);
+}
 </style>
 </head>
 <body>
@@ -1182,8 +1218,107 @@ function columnHtml(phase, items, ordinal) {
     </section>`;
 }
 
+// ── the tracker ──────────────────────────────────────────────────────────────
+// `BACKLOG.md` is what this project decided to do; the tracker is what the people
+// using it ran into. They are different registries and the board keeps them in
+// different lanes rather than merging ids that were never meant to line up.
+
+//: How many closed issues are drawn. The rest are counted, never silently dropped —
+//: a lane that shows twelve of seventy-eight and says nothing reads as a tracker with
+//: twelve closed issues in it.
+const RELEASED_SHOWN = 12;
+
+const STAGE_LABEL = {
+  "filed": "Filed",
+  "in-workspace": "In workspace",
+  "in-develop": "In develop",
+  "released": "Released",
+};
+
+const STAGE_NOTE = {
+  "filed": "open, nobody has claimed it",
+  "in-workspace": "fixed on the working branch, not integrated",
+  "in-develop": "merged to integration — validate here",
+  "released": "closed, and installable",
+};
+
+function ago(seconds) {
+  if (seconds === null || seconds === undefined) return "—";
+  if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  return `${Math.round(seconds / 3600)}h ago`;
+}
+
+function issueCard(it) {
+  const labels = (it.labels || [])
+    .map(l => `<span class="ilabel ${l === "bug" ? "bug" : ""}">${escapeHtml(l)}</span>`)
+    .join("");
+  return `<a class="card icard" href="${escapeHtml(it.url)}" target="_blank"
+             rel="noopener noreferrer">
+      <div class="num mono">#${it.number}</div>
+      <div class="title">${escapeHtml(it.title || "")}</div>
+      ${labels ? `<div class="ilabels">${labels}</div>` : ""}
+    </a>`;
+}
+
+function provenanceHtml(iss, interval) {
+  if (iss.pending) {
+    return `<div class="prov"><b>Reading the tracker…</b>
+      <span class="why">The first answer has not come back yet. This is not an empty
+      tracker — it is a question still in flight.</span></div>`;
+  }
+  if (!iss.ok) {
+    return `<div class="prov failed">
+      <b>The tracker could not be read.</b>
+      <span class="why">${escapeHtml(iss.reason || "no reason given")}</span>
+      ${iss.remedy ? `<span class="fix">Fix: <code class="mono">${escapeHtml(iss.remedy)}</code></span>` : ""}
+      </div>`;
+  }
+  const age = iss.fetched_at ? (Date.now() / 1000) - iss.fetched_at : null;
+  return `<div class="prov">
+      <span><b>${escapeHtml(iss.repo || "this repository")}</b></span>
+      <span><b>${iss.open}</b> open of <b>${(iss.issues || []).length}</b> read</span>
+      <span class="age">read ${ago(age)} · again every ${Math.round(interval || 60)}s</span>
+      <span class="why">GitHub does not push to a laptop, so this is polled. A change
+        reaches this page the moment the poll sees it — the delay is in the seeing.</span>
+    </div>`;
+}
+
+function renderIssues(state) {
+  const iss = state.issues || {};
+  const interval = state.issues_interval || 60;
+  const board = el("board");
+  if (!iss.ok) {
+    board.innerHTML = `<section class="zone">${provenanceHtml(iss, interval)}</section>`;
+    return;
+  }
+  const all = iss.issues || [];
+  const stages = iss.stages || [];
+  const lanes = stages.map(stage => {
+    let here = all.filter(i => i.stage === stage);
+    let note = "";
+    if (stage === "released" && here.length > RELEASED_SHOWN) {
+      const hidden = here.length - RELEASED_SHOWN;
+      here = here.slice(0, RELEASED_SHOWN);
+      note = `<div class="rest-note">${hidden} older closed issue(s) not drawn —
+        counted above, and in the tracker.</div>`;
+    }
+    return `<section class="col ${stage === "released" ? "terminal" : ""}
+               ${here.length ? "" : "vacant"}">
+        <div class="col-head"><span class="name">${STAGE_LABEL[stage] || stage}</span>
+          <span class="n">${(iss.counts || {})[stage] || 0}</span></div>
+        <div class="stack">${here.map(issueCard).join("")}${note}</div>
+      </section>`;
+  }).join("");
+  board.innerHTML = `<section class="zone">
+      ${provenanceHtml(iss, interval)}
+      <div class="lanes">${lanes}</div>
+    </section>`;
+}
+
 function render(state) {
   LAST_STATE = state;
+  if (TAB === "issues" && !state.issues) TAB = "cycle";
   el("path").textContent = state.project_path || "";
 
   const all = state.items || [];
@@ -1266,6 +1401,15 @@ function render(state) {
     ["implement", "In implement", plannedShown.length],
     ["settled", "Left the cycle", settledShown.length],
   ];
+  // The tab exists only when the server is reading a tracker. With --no-issues there
+  // is no tracker half to the board, and an empty tab would invite the reader to
+  // conclude there are no issues.
+  if (state.issues) {
+    const iss = state.issues;
+    // Not a zero. A count on a read that failed would be the board asserting the
+    // tracker is empty, which is the one thing it does not know.
+    TABS.push(["issues", "Issues", iss.ok ? iss.open : "—"]);
+  }
   el("tabs").innerHTML = TABS.map(([key, label, n]) =>
     `<button type="button" role="tab" data-tab="${key}" aria-selected="${TAB === key}">
        ${label}<span class="n">${n}</span></button>`).join("");
@@ -1277,6 +1421,8 @@ function render(state) {
     el("board").innerHTML = `<section class="zone">
         <div class="lanes">${phases.map((ph, i) => columnHtml(ph, inCycleShown, i + 1)).join("")}</div>
       </section>`;
+  } else if (TAB === "issues") {
+    renderIssues(state);
   } else if (TAB === "settled") {
     el("board").innerHTML = `<section class="zone settled">
         <div class="lanes">${SETTLED.map(ph => columnHtml(ph, settledShown, 0)).join("")}</div>

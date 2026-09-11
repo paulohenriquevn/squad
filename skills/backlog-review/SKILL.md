@@ -61,6 +61,7 @@ names is a tool nobody finds — `skills/map.md` records what that cost twice ov
 | `squad_boss.py` | Kairos, `squad_lead.py` | reads BLOCKED reports and names the halts a queue can attack |
 | `board_state.py` | `board_server.py`, `squad_boss.py` | builds the board's view of every item and its phase |
 | `board_server.py` | `/backlog-review --board` | serves that view on `127.0.0.1:8765` |
+| `board_issues.py` | `board_server.py` | reads the issue tracker, and says when it could not |
 | `board.html` | `board_server.py` | the page itself — no build step, no CDN |
 | `phase_coverage.py` | on demand | reconstructs which phases left a record, per item |
 
@@ -154,6 +155,43 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-revie
 Serves `http://127.0.0.1:8765` — every item, the phase it sits in, and what holds it,
 re-rendering by itself whenever `BACKLOG.md` or `.squad/records/cycle-events.jsonl` changes on
 disk. Standard library only; nothing to install.
+
+### The tracker lane
+
+`BACKLOG.md` is what this project decided to do; the issue tracker is what the people
+using it ran into. The board draws both, in separate lanes, because they are separate
+registries whose ids were never meant to line up.
+
+```bash
+# inferred from the remote
+... board_server.py . --port 8765
+
+# declared, for a remote gh cannot resolve (an SSH host alias, most often)
+... board_server.py . --issues-repo OWNER/NAME
+
+# not read at all — the tab disappears rather than showing an empty tracker
+... board_server.py . --no-issues
+```
+
+Issues are grouped by the stage a fix has travelled to, read from labels rather than
+from `state`, because GitHub's two states cannot express the window this project cares
+about — between *merged* and *installable*, where the issue stays open:
+
+| Lane | Means |
+|---|---|
+| `filed` | open, and nobody has claimed it |
+| `in-workspace` | fixed on the working branch, not integrated |
+| `in-develop` | merged to the integration branch — validate here |
+| `released` | closed, and installable |
+
+The tracker is polled, not pushed: GitHub does not reach a process on a laptop. The
+page states when the last read happened and how often the next one comes, because a
+board that implied live data would be claiming a freshness it cannot deliver. The push
+half is real — a change reaches every open board over SSE the moment the poller sees
+it. `--issues-interval` sets the floor, minimum 15s.
+
+**A tracker that cannot be read never renders as a tracker with nothing in it.** The
+lane is replaced by the reason and, where one exists, the flag that fixes it.
 
 It reads two sources that answer different questions, and says which one it used:
 

@@ -61,6 +61,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
+from board_issues import digest as issues_digest
+from board_issues import fetch as fetch_issues
 from board_state import build_state, item_detail
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
@@ -78,9 +80,37 @@ WATCHED = ("BACKLOG.md", *(f"{b}/cycle-events.jsonl"
 _LEAD_LOG: Path | None = None
 _LEAD_MARKER: Path | None = None
 
+#: The last tracker read, and the settings that produce the next one. Held behind a
+#: lock because the poller writes it while every request thread reads it.
+#:
+#: `None` is not "no issues" — it is "the first read has not returned yet", and the
+#: board says exactly that for the second or two it is true. The alternative, showing
+#: an empty tracker until the answer lands, would be a measurement the board does not
+#: have, which is the one thing this ecosystem refuses to print.
+_ISSUES: dict | None = None
+_ISSUES_LOCK = threading.Lock()
+_ISSUES_ENABLED = False
+_ISSUES_REPO: str | None = None
+_ISSUES_INTERVAL = 60.0
+_ISSUES_TIMEOUT = 25.0
+
+
+def _issues_snapshot() -> dict | None:
+    with _ISSUES_LOCK:
+        return _ISSUES
+
 
 def _state(root: Path) -> dict:
-    return build_state(root, _LEAD_LOG, _LEAD_MARKER)
+    state = build_state(root, _LEAD_LOG, _LEAD_MARKER)
+    if _ISSUES_ENABLED:
+        snapshot = _issues_snapshot()
+        state["issues"] = snapshot if snapshot is not None else {
+            "pending": True, "ok": False, "reason": "the first tracker read has not "
+            "returned yet", "remedy": "", "repo": _ISSUES_REPO or "", "issues": [],
+            "counts": {}, "open": 0, "stages": [], "fetched_at": None,
+        }
+        state["issues_interval"] = _ISSUES_INTERVAL
+    return state
 
 #: How long a granted browser stays granted. Long, because the alternative measured
 #: worse: a session cookie made the board look dead on the next browser start.
@@ -173,6 +203,37 @@ def _watch(root: Path, hub: _Hub, stop: threading.Event) -> None:
         if current != last:
             last = current
             hub.publish(json.dumps(_state(root), ensure_ascii=False))
+
+
+def _poll_issues(root: Path, hub: _Hub, stop: threading.Event) -> None:
+    """Read the tracker on its own clock, and wake the board only on a real change.
+
+    Separate from `_watch` for one measured reason: a `gh issue list` against a live
+    repository took 1.7 seconds, and `_watch` runs twice a second on the request path's
+    own data. Calling the network from there would have turned a board that re-renders
+    on a file save into a board that stutters for two seconds every half second.
+
+    ## What "live" honestly means here
+
+    GitHub does not push to a process on a laptop. Without a webhook and a public
+    address there is nothing to subscribe to, so this polls, and the page states when
+    the last read happened and how often the next one comes. The push half is real —
+    a change reaches every open board over SSE the moment this thread sees it — but
+    the discovery half has a floor of `--issues-interval`, and a board that implied
+    otherwise would be claiming a freshness it cannot deliver.
+    """
+    global _ISSUES
+    last: tuple | None = None
+    while True:
+        snapshot = fetch_issues(root, _ISSUES_REPO, timeout=_ISSUES_TIMEOUT)
+        with _ISSUES_LOCK:
+            _ISSUES = snapshot
+        current = issues_digest(snapshot)
+        if current != last:
+            last = current
+            hub.publish(json.dumps(_state(root), ensure_ascii=False))
+        if stop.wait(_ISSUES_INTERVAL):
+            return
 
 
 def _handler(root: Path, hub: _Hub, token: str | None):
@@ -313,6 +374,9 @@ def serve(root: Path, port: int, host: str = "127.0.0.1", token: str | None = No
     stop = threading.Event()
     watcher = threading.Thread(target=_watch, args=(root, hub, stop), daemon=True)
     watcher.start()
+    if _ISSUES_ENABLED:
+        threading.Thread(target=_poll_issues, args=(root, hub, stop),
+                         daemon=True).start()
 
     server = ThreadingHTTPServer((host, port), _handler(root, hub, token))
     state = _state(root)
@@ -323,6 +387,12 @@ def serve(root: Path, port: int, host: str = "127.0.0.1", token: str | None = No
     print(f"  {len(state.get('items', []))} item(s) · "
           f"stream {'present' if state.get('has_stream') else 'absent (positions derived from status)'}",
           flush=True)
+    if _ISSUES_ENABLED:
+        where = _ISSUES_REPO or "the repository this checkout points at"
+        print(f"  tracker: {where} · every {_ISSUES_INTERVAL:.0f}s "
+              "(the first read is in flight)", flush=True)
+    else:
+        print("  tracker: not read (--no-issues)", flush=True)
     shown = host if host not in ("0.0.0.0", "::") else "<this-host>"
     suffix = f"/?t={token}" if token else "/"
     print(f"  http://{shown}:{port}{suffix}  — Ctrl-C to stop", flush=True)
@@ -351,11 +421,27 @@ def main() -> int:
                         help="the supervisor's decision log, rendered on the board")
     parser.add_argument("--lead-marker", type=Path, default=None,
                         help="file whose mtime says when the executing session last moved")
+    parser.add_argument("--no-issues", action="store_true",
+                        help="do not read the issue tracker at all")
+    parser.add_argument("--issues-repo", default=None, metavar="OWNER/NAME",
+                        help="the tracker to read; inferred from the remote when omitted")
+    parser.add_argument("--issues-interval", type=float, default=60.0, metavar="SECONDS",
+                        help="how often the tracker is re-read (default: 60)")
+    parser.add_argument("--issues-timeout", type=float, default=25.0, metavar="SECONDS",
+                        help="how long one tracker read may take (default: 25)")
     args = parser.parse_args()
 
     global _LEAD_LOG, _LEAD_MARKER
+    global _ISSUES_ENABLED, _ISSUES_REPO, _ISSUES_INTERVAL, _ISSUES_TIMEOUT
     _LEAD_LOG = args.lead_log
     _LEAD_MARKER = args.lead_marker
+    _ISSUES_ENABLED = not args.no_issues
+    _ISSUES_REPO = args.issues_repo
+    # A floor, not a suggestion. Below this the poller spends more time waiting on the
+    # network than idle, and an unauthenticated `gh` would burn the rate limit on a
+    # question whose answer has not changed.
+    _ISSUES_INTERVAL = max(15.0, args.issues_interval)
+    _ISSUES_TIMEOUT = max(5.0, args.issues_timeout)
 
     root = args.project.resolve()
     if not (root / "BACKLOG.md").is_file():
