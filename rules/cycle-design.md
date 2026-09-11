@@ -68,12 +68,37 @@ is decoration: it looks like design happened and forces no choice.
 | **G-D4** | A stub: every block under three non-empty lines | `check_design_completeness.py` |
 | **G-D5** | A `PIECE-N` with no place in the system map | `check_design_completeness.py` |
 | **G-D6** | A placeholder — `TBD`/`TODO`/`FIXME` — in any drawing | `check_design_completeness.py` |
-| **G-D7** | No human signature. A judge may NOT sign here | `check_design_completeness.py` |
+| **G-D7** | No human signature | `check_design_completeness.py` |
+| **G-D8** | No 2-of-3 panel approval | `review_panel.py` · `check_panel_approval.py` |
 
-**G-D7 has the same argument as G-B5.** A judge scoring a system design would be
-grading it against the document that declares it, which is the failure the sign-off
-exists to prevent. The machine counts drawings and cross-references pieces; whether the
-state machine has the RIGHT states is not a countable property.
+## Two gates, two different claims
+
+G-D7 and G-D8 are not redundant, and the first version of this file conflated them —
+it said *"a judge may NOT sign here"*, which did two jobs at once and only one of them
+was the argument.
+
+`alignment-threshold.md § Amended 2026-09-01` separated exactly these: **the author must
+not grade the author's own form** was always the rule; *"the reviewer must be human"*
+never was. A judge may review. A judge may not assume.
+
+| Gate | The claim | Who can make it |
+|---|---|---|
+| **G-D8** panel | *"nothing here contradicts what we could check"* | three reviewers, 2-of-3, spanning two model families |
+| **G-D7** signature | *"I read this and am willing to say it holds"* | a person, and only a person |
+
+**Why the panel is possible here when G-B5 refuses one.** A judge grading a product
+VISION grades it against nothing — the vision is what everything else is measured
+against. A system drawing is different the moment code exists: the code is evidence that
+exists independently of the drawing and can contradict it. That is the condition the
+amendment names, and it is derived from disk rather than chosen.
+
+With no code yet, the panel audits internal coherence — D5 against the declared pieces,
+D3 against D1, D4 against D2 — and may not conclude that the design is RIGHT. A reviewer
+that cannot tell which case it is in abstains, and an abstention is counted as an
+incomplete panel rather than as agreement.
+
+The contract the reviewers are asked against is
+[`design-golden-rule.md`](design-golden-rule.md).
 
 ## Verdicts
 
