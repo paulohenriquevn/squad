@@ -82,6 +82,9 @@ class Agenda:
     unswept_domains: list[str] = field(default_factory=list)
     orphan_objectives: list[dict] = field(default_factory=list)
     purposeless_shipped: list[dict] = field(default_factory=list)
+    #: A field this agenda READS that nothing in the kit WRITES. Reported once, about
+    #: the kit, rather than once per item — the items are not where the gap is.
+    schema_gaps: list[dict] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -89,7 +92,7 @@ class Agenda:
         return sum(
             len(x) for x in (
                 self.halts, self.unroutable, self.prose_blockers, self.recent_kills,
-                self.orphan_objectives, self.purposeless_shipped,
+                self.orphan_objectives, self.purposeless_shipped, self.schema_gaps,
             )
         ) + len(self.unswept_domains)
 
@@ -196,6 +199,35 @@ def build(root: Path) -> Agenda:
         if status == "shipped" and not traces:
             ag.purposeless_shipped.append({"item": it.item_id, "title": it.title})
 
+    #: A FIELD NOBODY WRITES IS NOT A GAP IN EVERY ITEM — it is one gap, in the schema.
+    #:
+    #: `traces_to` is read here and by nothing else: `cycle-backlog.md` declares itself
+    #: the item schema's source of truth and lists twelve fields, none of them this one,
+    #: and `/backlog-item`'s grill never asks for it. So `not traces` was unconditionally
+    #: true and this section printed one row per shipped item.
+    #:
+    #: Measured on a consumer: 243 rows, in a registry where no item COULD have traced.
+    #: And it lands in the one cycle a person attends — `cycle-brainstorm.md` promises
+    #: them "what the machine already knows needs you", and handed them a list as long
+    #: as their shipped history.
+    #:
+    #: When NO item carries the field, the finding is about the kit, stated once. When
+    #: SOME do, the ones without it are a real gap and are reported item by item, which
+    #: is what this section was written for.
+    if not any(it.fields.get("traces_to", "").strip() for it in items):
+        ag.purposeless_shipped = []
+        ag.schema_gaps.append({
+            "field": "traces_to",
+            "read_by": "build_agenda.py",
+            "written_by": "nothing",
+            "why": (
+                "no item in this registry carries `traces_to`, and nothing in the kit "
+                "writes it — `cycle-backlog.md` owns the item schema and does not list "
+                "it, and `/backlog-item` never asks. Reporting every shipped item as "
+                "tracing to no objective would assert a gap the evidence cannot support: "
+                "the gap is that the field is consumed and never produced"),
+        })
+
     ag.unswept_domains = sorted(domains - cited_domains)
 
     for oid, title in _objectives(root):
@@ -245,6 +277,9 @@ def render(ag: Agenda) -> str:
           lambda r: f"`{r['id']}` {r['title']} — {r['why']}")
     block("Shipped, tracing to no objective", ag.purposeless_shipped,
           lambda r: f"`{r['item']}` {r['title']}")
+    block("A field this agenda reads and nothing writes", ag.schema_gaps,
+          lambda r: f"`{r['field']}` — read by {r['read_by']}, written by "
+                    f"{r['written_by']}. {r['why']}")
     block("Killed since you last looked (a successful outcome)", ag.recent_kills,
           lambda r: f"`{r['item']}` {r['title']} — {r['kill_reason']}")
     if ag.unswept_domains:

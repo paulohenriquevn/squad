@@ -157,3 +157,87 @@ def test_the_live_repository_has_no_unresolved_bare_rule_name() -> None:
     """The regression itself, on the tree that ships."""
     _, data = _run(_REPO)
     assert _findings(data) == [], [f["message"] for f in _findings(data)]
+
+
+# ------------------------------------------------------------------ #83
+
+
+def test_a_consumer_file_colliding_with_a_slot_name_does_not_fail_a_kit_gate(tmp_path) -> None:
+    """#83. The check asks "does any file anywhere have this name?" and treated a hit as
+    proof the citation pointed somewhere wrong. A name collision is not a misdirection.
+
+    Measured on a consumer install: the kit's `cycle-design.md` cites `trust.md` meaning
+    drawing D2; the consumer had a repository called `*-trust`; and the kit's own
+    `scaffold_specialists.py` wrote `agents/trust.md` for it. The gate FAILED with
+    `owner: kit`, on a name the consumer had every right to choose, in a file the
+    consumer could not edit.
+    """
+    eco = tmp_path
+    (eco / "rules").mkdir()
+    (eco / "agents").mkdir()
+    (eco / "skills").mkdir()
+    (eco / "rules" / "cycle-design.md").write_text(
+        "# Design\n\n## Chain\n\n```\n/design\n```\n\n| D2 | `trust.md` | flowchart | yes |\n",
+        encoding="utf-8")
+    # the kit shipped the rule; it did NOT ship the consumer's specialist
+    (eco / ".kit-manifest.txt").write_text(
+        "# Written by scripts/install.sh\nrules/cycle-design.md\n", encoding="utf-8")
+    (eco / "agents" / "trust.md").write_text("# trust specialist\n", encoding="utf-8")
+
+    _code, data = _run(eco)
+    findings = _findings(data)
+
+    assert findings, "the collision should still be REPORTED"
+    assert findings[0]["severity"] == "WARN", findings[0]
+    assert findings[0]["owner"] == "project", (
+        "a consumer's filename must not be attributed to the kit — the consumer "
+        "cannot edit the file it would have to change")
+
+
+def test_a_kit_shipped_collision_still_fails(tmp_path) -> None:
+    """The check must keep firing where it was right: a kit rule citing a bare name
+    that resolves to another KIT file is a genuinely misdirected citation."""
+    eco = tmp_path
+    (eco / "rules").mkdir()
+    (eco / "agents").mkdir()
+    (eco / "skills").mkdir()
+    (eco / "rules" / "cycle-x.md").write_text(
+        "# X\n\n## Chain\n\n```\n/x\n```\n\nsee `moved.md` for the contract\n",
+        encoding="utf-8")
+    (eco / "agents" / "moved.md").write_text("# moved\n", encoding="utf-8")
+    (eco / ".kit-manifest.txt").write_text(
+        "rules/cycle-x.md\nagents/moved.md\n", encoding="utf-8")
+
+    _code, data = _run(eco)
+    findings = _findings(data)
+
+    assert findings and findings[0]["severity"] == "FAIL", findings
+
+
+def test_the_kits_own_checkout_still_escalates(tmp_path) -> None:
+    """With no manifest the whole tree is the kit's, and a collision cannot be a
+    consumer's. Treating None as "nothing is ours" would silence the check entirely."""
+    eco = tmp_path
+    (eco / "rules").mkdir()
+    (eco / "agents").mkdir()
+    (eco / "skills").mkdir()
+    (eco / "rules" / "cycle-x.md").write_text(
+        "# X\n\n## Chain\n\n```\n/x\n```\n\nsee `moved.md`\n", encoding="utf-8")
+    (eco / "agents" / "moved.md").write_text("# moved\n", encoding="utf-8")
+
+    _code, data = _run(eco)
+    findings = _findings(data)
+
+    assert findings and findings[0]["severity"] == "FAIL"
+
+
+def test_the_design_slots_name_their_directory() -> None:
+    """The other half of the fix, and the one that makes the citation TRUE: a bare
+    `trust.md` does not say where the drawing lives, and the resolver already skips a
+    citation whose document spells a containing path."""
+    repo = Path(__file__).resolve().parents[1]
+    body = (repo / "rules" / "cycle-design.md").read_text(encoding="utf-8")
+
+    for slot in ("states", "trust", "sequence", "durability", "system-map", "sign-off"):
+        assert f"`design/{slot}.md`" in body, slot
+        assert f"| `{slot}.md` |" not in body, f"{slot} is still cited bare"
