@@ -156,3 +156,61 @@ def test_repos_named_outside_blast_radius_are_ignored(tmp_path: Path) -> None:
     )
     report = check_opportunity_completeness(path, known_repos=REPOS)
     assert report["cross_repo"] is False
+
+
+# --- The cross-repo detector was blind to negation --------------------------
+#
+# Naming a repo in order to record that it was checked and NOT reached cost an ADR for a
+# decision that does not exist. The honest alternative — deleting the name — erases the
+# enumerated negative, so authors had no move that both satisfied the gate and kept the
+# evidence. Marker shape: <!-- NOT-REACHED: <repo> [<repo> ...] -->
+
+
+def test_a_repo_named_as_not_reached_does_not_require_an_adr(tmp_path: Path) -> None:
+    """The enumerated negative is evidence, not a cross-repo change."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        blast=(
+            "Reaches `web-console` only. Verified NOT reached, each by dependency scan:\n"
+            "<!-- NOT-REACHED: contracts control-plane cli-tool -->\n"
+            "- `contracts` — 0 importer relations\n"
+            "- `control-plane` — 0\n"
+            "- `cli-tool` — names it in a string literal, never imports it\n"
+        ),
+    )
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["cross_repo"] is False, report
+    assert report["foreign_repos"] == [], report
+    assert report["adr_required"] is False, report
+    assert report["adr_missing"] is False, report
+
+
+def test_a_repo_genuinely_reached_still_requires_an_adr(tmp_path: Path) -> None:
+    """The marker must not become a way to switch the requirement off."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        blast=(
+            "Reaches `contracts`, whose importers all recompile.\n"
+            "<!-- NOT-REACHED: control-plane -->\n"
+            "- `control-plane` — 0 importer relations\n"
+        ),
+    )
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["cross_repo"] is True, report
+    assert "contracts" in report["foreign_repos"], report
+    assert "control-plane" not in report["foreign_repos"], report
+    assert report["adr_required"] is True, report
+
+
+def test_an_empty_not_reached_marker_subtracts_nothing(tmp_path: Path) -> None:
+    """A marker naming no repo is not a blanket exemption."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        blast="Reaches `contracts`.\n<!-- NOT-REACHED: -->\n",
+    )
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["cross_repo"] is True, report
+    assert "contracts" in report["foreign_repos"], report

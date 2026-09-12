@@ -135,7 +135,28 @@ def check_opportunity_completeness(
             r for r in repos
             if re.search(rf"(?<![A-Za-z0-9_./-]){re.escape(r)}(?![A-Za-z0-9_-])", blast_lower)
         }
-        foreign_repos = sorted(r for r in mentioned if r != own_repo)
+        # A repo NAMED IN ORDER TO RECORD THAT IT IS NOT REACHED is evidence, not a
+        # cross-repo change. Without this, an author who enumerates the negative — the
+        # strongest thing a blast radius can carry — is charged for a decision that does
+        # not exist, and the only way to clear the gate is to delete the measurement.
+        #
+        # Measured 2026-09-12: three independent DISCOVER agents hit this in one session
+        # on one project. Two wrote a defensive ADR for a non-existent decision; one
+        # relocated the measurement out of the corner it belonged in. None deleted the
+        # evidence, so the checker cost three authors work and bought nothing.
+        #
+        # The marker only ever SUBTRACTS, and only repos it names explicitly: an empty
+        # marker is not a blanket exemption, and a repo genuinely reached is unaffected
+        # by one appearing elsewhere in the same corner.
+        not_reached = {
+            r
+            for m in re.finditer(r"<!--\s*NOT-REACHED:(.*?)-->", blast_body, re.DOTALL)
+            for r in repos
+            if re.search(
+                rf"(?<![A-Za-z0-9_./-]){re.escape(r)}(?![A-Za-z0-9_-])", m.group(1).lower()
+            )
+        }
+        foreign_repos = sorted(r for r in mentioned - not_reached if r != own_repo)
         cross_repo = bool(foreign_repos)
         adr_required = cross_repo
     adr_missing = adr_required and adr_count == 0
