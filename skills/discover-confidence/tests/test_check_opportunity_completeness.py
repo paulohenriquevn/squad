@@ -214,3 +214,59 @@ def test_an_empty_not_reached_marker_subtracts_nothing(tmp_path: Path) -> None:
     report = check_opportunity_completeness(path, known_repos=REPOS)
     assert report["cross_repo"] is True, report
     assert "contracts" in report["foreign_repos"], report
+
+
+# --- A path-addressed repo counted ITSELF as foreign -----------------------
+#
+# `REPO_DECL_RE`'s character class excluded `/`, so `**Repo:** cmd/theo-ops` captured as
+# `cmd`. A routing table declaring `cmd/theo-ops` then failed to match its own document's
+# repo, the repo landed in `foreign_repos`, and the gate demanded an ADR for a cross-repo
+# change to the repository the document is about.
+#
+# Measured 2026-09-12 on a consumer whose routing table is path-addressed in 5 of 7
+# domains: `cmd/theo-ops`, `infra/scripts`, `infra/tests`, `operators/api`,
+# `tools/gen-service-auth-ed25519`. Every opportunity filed against one of them paid for a
+# decision that does not exist. Found by the fourth agent to hit the neighbouring
+# NOT-REACHED limit in one session.
+
+
+def test_a_path_addressed_repo_is_not_foreign_to_itself(tmp_path: Path) -> None:
+    """A repo declared as `owner/name` must match a routing entry spelled the same way."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        repo="tools/linter",
+        blast="Reaches nothing outside this module.\n",
+    )
+    report = check_opportunity_completeness(path, known_repos={"tools/linter", "contracts"})
+    assert report["own_repo"] == "tools/linter", report
+    assert report["foreign_repos"] == [], report
+    assert report["cross_repo"] is False, report
+    assert report["adr_required"] is False, report
+
+
+def test_a_path_addressed_repo_still_sees_a_real_foreign_repo(tmp_path: Path) -> None:
+    """Widening the capture must not stop the gate detecting a genuine cross-repo reach."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        repo="tools/linter",
+        blast="Recompiles every importer of `contracts`.\n",
+    )
+    report = check_opportunity_completeness(path, known_repos={"tools/linter", "contracts"})
+    assert report["own_repo"] == "tools/linter", report
+    assert report["foreign_repos"] == ["contracts"], report
+    assert report["adr_required"] is True, report
+
+
+def test_a_flat_repo_name_is_unchanged(tmp_path: Path) -> None:
+    """The common case must be untouched by the widening."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        repo="web-console",
+        blast="Reaches nothing else.\n",
+    )
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["own_repo"] == "web-console", report
+    assert report["foreign_repos"] == [], report
