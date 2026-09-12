@@ -7,6 +7,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The cross-repo detector charged an author for enumerating a negative** (#B-024, #B-027, #B-029)
+  `check_opportunity_completeness` collected every known repo name appearing anywhere in an
+  opportunity's Blast Radius and required an ADR for each, with no notion of negation. So an
+  author who named a repo **in order to record that it was checked and is NOT reached** paid for
+  a cross-repo decision that does not exist — and the only way to clear the gate was to delete
+  the measurement, which is the strongest thing such a corner can carry.
+
+  Measured 2026-09-12: three independent DISCOVER agents hit this in one session on one project.
+  Two wrote a defensive ADR for a non-existent decision; the third relocated the measurement out
+  of the corner it belonged in and said so in the document. None deleted the evidence. The
+  checker cost three authors work and bought nothing.
+
+  A `<!-- NOT-REACHED: <repo> [<repo> ...] -->` marker in the Blast Radius now subtracts the
+  repos it names, following the kit's existing marker shape (`<!-- UNKNOWN: … -->`,
+  `<!-- ADR-DEFER-WIRING-B: … -->`). It only ever subtracts, only what it names explicitly: an
+  empty marker is not a blanket exemption, and a repo genuinely reached is unaffected by one
+  appearing elsewhere in the same corner. Three behavioural tests cover all three directions.
+
+  Deliberately NOT retroactive: opportunities written before the marker existed score exactly as
+  they did, so the fix adds a capability rather than loosening a gate.
+
 - **The stop gate graded a Helm chart's own template as a secret** (#B-033)
   `SECRET_FILE` opened with `[a-z0-9_-]*` before `secrets?`, so any prefix glued to
   the word matched: `externalsecrets.yaml` — chart SOURCE, which contains template
