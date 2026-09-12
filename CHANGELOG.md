@@ -96,6 +96,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   until a person signs, because whether a state machine has the RIGHT states is not a
   countable property.
 
+### Changed
+- **`/design` names two renderers, and says what each one proves** (#75)
+  The render step pointed only at `/diagram-design:import-mermaid`. `archify` is now the
+  other option, with the slot-to-type mapping written down — the five slots map almost
+  one to one onto its five diagram types. What it adds is a different question than this
+  phase's gates ask: `check_design_completeness.py` asks whether a drawing EXISTS, sits
+  in the right slot and is not a stub, while archify asks whether it is READABLE — it
+  simulates a 1440px desktop and refuses a projected font under 6px, a label overlapping
+  a node, or a node outside the viewBox. It also constrains the drawing, which the step
+  now states before anyone picks it: a workflow column is a rank in 0..5 whose main path
+  may not move backwards, and a dataflow carries at most five stages. Both renderers stay
+  optional and the phase depends on neither; the mermaid is still the drawing.
+
 ### Fixed
 - **The published chain named nine phases and the kit runs ten** (#75)
   `plugin.json`, `marketplace.json`, `HOW-TO-USE.md` and `rules/squad-map.md` all
