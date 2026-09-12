@@ -959,6 +959,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A path-addressed repo counted itself as foreign** (`discover-confidence`)
+  `REPO_DECL_RE` excluded `/` from its character class, so `**Repo:** cmd/theo-ops` captured as
+  `cmd`. A routing table addressing a monorepo module by path matched nothing, the document's own
+  repo landed in `foreign_repos`, and the gate demanded an ADR for a cross-repo change to the
+  repository the opportunity is about.
+
+  Measured on a consumer path-addressed in 5 of 7 domains. Two authors had worked around it —
+  one extended a `NOT-REACHED` marker over its own module, the other wrote a defensive ADR and
+  recorded it as a scorer artifact. Three behavioural tests; verified non-regressive, with the
+  affected opportunities scoring exactly as before.
+
 - **`done` was a task status the schema accepted and no consumer recognised (#50)**
   Found while reviewing the loop's own documentation. `done` was in `_VALID_STATUSES`, so a
   checkpoint carrying it validated clean — but the halt-loop's exit condition is `committed` OR
