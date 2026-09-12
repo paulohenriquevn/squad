@@ -299,6 +299,12 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # they exercise belongs to `backlog_status.py`, which IS pinned.
         "skills/backlog-approve/tests/test_apply_approval.py",
         "skills/backlog-approve/tests/test_approval_brief.py",
+        # `as-is-to-be` and its tests. The skill FILTERS by status (`--status triaged`)
+        # and routes on none: every item it reads is rendered the same way whatever its
+        # status says. A status added to the contract reaches it through the filter
+        # without any branch here needing to change.
+        "skills/as-is-to-be/tests/test_gap_analysis.py",
+        "skills/as-is-to-be/scripts/build_gap_analysis.py",
         # The board's renderer, in JS. It branches on `shipped` and `killed` by
         # NAME and falls through for everything else, so a status added to the
         # contract renders in the default column rather than vanishing. Safe by

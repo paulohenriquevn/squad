@@ -77,7 +77,10 @@ from squad.paths import WIKI as WIKI_FALLBACK  # noqa: E402
 # - skill-creator: standalone skill-authoring tool (the official Anthropic skill-creator);
 #   invoked on demand to create/improve any skill at skills/{purpose}/. Deliberately decoupled
 #   from every cycle (replaced the retired skill-writer/validator/register discover tail).
-AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "quality-init", "skill-creator", "arch-check", "squad-fit", "sign", "panel", "issue-confidence", "critic"}
+# - as-is-to-be: read-only projection of the registry into current state vs future state,
+#   invoked on demand by whoever has to explain what a quarter buys. Same shape as
+#   backlog-review: it reads the registry a cycle owns and is a phase of none.
+AUXILIARY_SKILLS = {"ast-grep", "honesty-gate", "backlog-init", "backlog-review", "session-goal", "quality-init", "skill-creator", "arch-check", "squad-fit", "sign", "panel", "issue-confidence", "critic", "as-is-to-be"}
 
 
 def _declared_auxiliary_skills(ecosystem_dir: Path) -> set[str]:

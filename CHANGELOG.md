@@ -6,7 +6,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **The stop gate graded a Helm chart's own template as a secret** (#B-033)
+  `SECRET_FILE` opened with `[a-z0-9_-]*` before `secrets?`, so any prefix glued to
+  the word matched: `externalsecrets.yaml` — chart SOURCE, which contains template
+  directives and no value — was reported as a secret-shaped file. A prefix must now
+  be SEPARATED by `.`, `_` or `-`, so `secrets.yaml` and `app-secrets.yaml` keep
+  matching and the template does not. Measured on a consumer 2026-09-12: the gate
+  fired nine times in one session over a file that session never opened, and the
+  only escape offered is the env var this suite's own docstring calls the thing
+  that stops the gate protecting anything. Three behavioural tests cover both
+  directions, including the positive controls that must keep blocking.
+
+  Known and NOT fixed here: `changed_files()` folds `git diff HEAD~1..HEAD` into
+  "this session's diff", so a commit made BEFORE the session is reported as session
+  work. That is what put the template in front of the pattern in the first place.
+  Fixing it needs a session-start marker the hook does not have, so it stays open.
+
 ### Added
+- **`/as-is-to-be` — what this system is today, and what it becomes** (#89)
+  A backlog is a list of tickets and nobody can hold twenty-three of them in their head
+  to answer what the system will be when they are done. Both columns of a gap analysis
+  were already in every item and no page had put them side by side: `evidence` is a
+  measurement of the present that DISCOVER refuses to accept as a hunch, and `dod` is a
+  statement about the future that gate G4 refuses unless it can fail. The projection
+  adds no field and asks no question at intake. It states three limits above the
+  content, because a list of promises reads like a plan and the failure mode is being
+  read as complete: the current state is only what these items happened to measure, the
+  future state is not checked for coherence, and an item is a hypothesis until DISCOVER
+  measures it.
+
 - **`traces_to` gets a producer, and the backlog can finally say what it leaves out** (#82, #86)
   The field was read by `build_agenda.py`, described in the product owner's agent file,
   and pointed at `OBJ-N` ids `/brainstorm-objectives` genuinely produces — and it was
@@ -66,6 +95,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   placeholder, and a `PIECE-N` with no place in the map; it ends at `AWAITING_REVIEW`
   until a person signs, because whether a state machine has the RIGHT states is not a
   countable property.
+
+### Changed
+- **`/design` names two renderers, and says what each one proves** (#75)
+  The render step pointed only at `/diagram-design:import-mermaid`. `archify` is now the
+  other option, with the slot-to-type mapping written down — the five slots map almost
+  one to one onto its five diagram types. What it adds is a different question than this
+  phase's gates ask: `check_design_completeness.py` asks whether a drawing EXISTS, sits
+  in the right slot and is not a stub, while archify asks whether it is READABLE — it
+  simulates a 1440px desktop and refuses a projected font under 6px, a label overlapping
+  a node, or a node outside the viewBox. It also constrains the drawing, which the step
+  now states before anyone picks it: a workflow column is a rank in 0..5 whose main path
+  may not move backwards, and a dataflow carries at most five stages. Both renderers stay
+  optional and the phase depends on neither; the mermaid is still the drawing.
 
 ### Fixed
 - **The published chain named nine phases and the kit runs ten** (#75)

@@ -10,7 +10,7 @@ status: stable
 
 # The skill map
 
-**38 skills.** Most are a phase of a cycle and are invoked in an order the
+**39 skills.** Most are a phase of a cycle and are invoked in an order the
 cycle rule fixes; eleven are invoked on demand and belong to no chain.
 
 **Every row below carries three things**: what the skill does, when to reach for
@@ -120,6 +120,7 @@ rubric, same floor, one level up.
 | `backlog-init` | Creates `BACKLOG.md` once, inventorying repos from disk and deriving the routing table | The project has no registry yet — after `/brainstorm-pieces` returns `PRODUCT_ALIGNED`, whose four documents it reads as context | Write the inventory from `CLAUDE.md` — it drifts; `find` / `git -C` is the source. Never seed "obvious" items: every one needs a human `why_now` and a DoD |
 | `backlog-item` | Registers one `B-NNN` — a hypothesis; evidence is **not** required yet | Anyone notices something worth fixing, measuring or verifying | Ask for evidence during the intake grill — that turns intake into triage and silences the hunch this phase exists to capture. Never write to `BACKLOG.md` before the grill completes |
 | `backlog-review` | Reports what has rotted in the registry — duplicate ids, evidence-less triaged items, kills with no reason, repos routing to nobody | Before trusting the registry to pick work | Edit the backlog. It is read-only by contract: a reviewer that edits cannot be trusted to report what it found |
+| `as-is-to-be` | What this system is today and what it becomes if the open items are done — each item's measured `evidence` against its falsifiable `dod`, grouped by domain | Somebody asks what the backlog adds up to, or a quarter's scope needs a shape rather than a ticket list | Read it as complete. The current state is only what these items happened to measure, and the page says so |
 | `backlog-approve` | One page a person can decide on, and the `approved` status that follows from it — what each item claims, what changed, how it closes, and whether the files it cites still exist | The registry has items nobody has committed to, or somebody asks whether the backlog can be trusted | Tick on someone's behalf. The signature is the product; a brief approved by the agent that wrote it records nothing |
 
 ### DISCOVER — turning a hunch into evidence, or killing it

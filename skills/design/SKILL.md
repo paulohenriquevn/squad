@@ -96,18 +96,51 @@ The mermaid IS the drawing. It is what the gate reads, what git versions, and wh
 agent reads back later — so it is never regenerated from a rendered file. Rendering is
 for the review session, where a person reads a picture faster than a fenced block.
 
+Two renderers, and the choice is about what the session needs:
+
+| Renderer | Produces | Reach for it when |
+|---|---|---|
+| `archify` | one self-contained HTML with search, route tracing, themes and export | the drawing will be explored or presented, and legibility has to be provable |
+| `diagram-design` | HTML / PNG straight from the fenced block | a quick picture is enough, or `node` is unavailable |
+
 ```bash
+# archify — reads the Mermaid directly, then validates before it will deliver
+node ~/.claude/skills/archify/bin/archify.mjs validate lifecycle candidate.json \
+  --quality showcase --json
+node ~/.claude/skills/archify/bin/archify.mjs deliver lifecycle candidate.json \
+  .squad/wiki/design/states.html --quality showcase --json
+
+# diagram-design — no intermediate step
 /diagram-design:import-mermaid .squad/wiki/design/states.md --format=html
-/diagram-design:import-mermaid .squad/wiki/design/system-map.md --format=html+png --audience=mixed
 ```
 
-The `diagram-design` plugin accepts Markdown carrying fenced `mermaid` blocks, which is
-exactly the shape of these files. Nothing has to be exported or converted first.
+The five slots map onto archify's five diagram types almost one to one:
 
-**It is optional, and the phase does not depend on it.** The plugin is a separate
-install; `check_design_completeness.py` never asks for a rendered file, because a
-drawing that exists only as a picture is a drawing no gate can check and no agent can
-read.
+| Slot | Mermaid kind | archify type |
+|---|---|---|
+| D1 `states.md` | `stateDiagram-v2` | `lifecycle` |
+| D2 `trust.md` | `flowchart` | `architecture` |
+| D3 `sequence.md` | `sequenceDiagram` | `sequence` |
+| D4 `durability.md` | `flowchart` / `stateDiagram-v2` | `lifecycle` or `architecture` |
+| D5 `system-map.md` | `flowchart` / `C4*` | `architecture` |
+
+**What archify adds is a different question than this phase's gates ask.**
+`check_design_completeness.py` asks whether a drawing EXISTS, sits in the right slot and
+is not a stub. Archify asks whether it is READABLE — it simulates a 1440px desktop and
+refuses a projected font under 6px, refuses a label overlapping a node, and refuses a
+node outside the viewBox. Measured while drawing this kit's own chain: five rounds of
+repair, each diagnostic carrying the measured pixel and the fix.
+
+It also **constrains the drawing**, which is worth knowing before choosing it. A
+`workflow` column is a rank in `0..5` and its main path may not move backwards; a
+`dataflow` carries at most five stages. A ten-phase chain does not fit in a row and has
+to be grouped — the drawing that came out was more legible than the row of ten boxes it
+refused.
+
+**Both are optional, and the phase depends on neither.** Archify is a separate install
+(`npx skills add tt-a1i/archify -g`, needs `node`); `diagram-design` is a separate
+plugin. `check_design_completeness.py` never asks for a rendered file, because a drawing
+that exists only as a picture is a drawing no gate can check and no agent can read.
 
 **Not `build_walkthrough.py`.** That generator belongs to `/plan-alignment` and takes a
 declarative YAML spec of one item's flows — a different input and a different artifact.

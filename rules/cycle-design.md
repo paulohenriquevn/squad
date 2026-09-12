@@ -43,7 +43,12 @@ reports `INVALID` with the reason rather than a pass.
 
 ## What it produces
 
-`.squad/wiki/design/` — five documents plus a rendered walkthrough.
+`.squad/wiki/design/` — five documents, optionally rendered for a review session.
+
+**The mermaid is the drawing.** A rendered file is a reading aid: the gate reads the
+fenced block, git versions the fenced block, and an agent reads the fenced block back.
+No renderer is required and none is depended on — `archify` validates legibility and
+`diagram-design` converts directly, and the phase passes without either.
 
 | Id | File | Mermaid kind | Mandatory |
 |---|---|---|---|
@@ -53,7 +58,7 @@ reports `INVALID` with the reason rather than a pass.
 | D4 | `design/durability.md` | `flowchart` / `graph` / `stateDiagram-v2` | yes |
 | D5 | `design/system-map.md` | `flowchart` / `graph` / `C4*` | derived |
 | — | `design/sign-off.md` | — | the checklist a person ticks |
-| — | *(rendered files)* | — | optional — `/diagram-design:import-mermaid`, for a review session. No gate asks for one |
+| — | *(rendered files)* | — | optional — `archify` or `/diagram-design:import-mermaid`, for a review session. No gate asks for one |
 
 **D5 is derived, not drawn first.** A component map produced before the four decisions
 is decoration: it looks like design happened and forces no choice.
