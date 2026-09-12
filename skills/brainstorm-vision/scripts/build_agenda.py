@@ -62,7 +62,16 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir, write_wiki_dir  # noqa: E402
+from squad.paths import (  # noqa: E402  # noqa: E402
+    DATA_DIRNAME,
+    WIKI,
+    write_records_dir,
+    write_wiki_dir,
+)
+
+#: Where `/brainstorm-objectives` writes what the work is for. Same literal
+#: `check_objective_coverage.py` uses, built from the same constants.
+OBJECTIVES_REL = f"{DATA_DIRNAME}/{WIKI}/product/objectives.md"
 
 _HERE = Path(__file__).resolve()
 for _candidate in (_HERE.parents[3] / "skills" / "backlog-review" / "scripts",):
@@ -82,6 +91,9 @@ class Agenda:
     unswept_domains: list[str] = field(default_factory=list)
     orphan_objectives: list[dict] = field(default_factory=list)
     purposeless_shipped: list[dict] = field(default_factory=list)
+    #: A field this agenda READS that nothing in the kit WRITES. Reported once, about
+    #: the kit, rather than once per item — the items are not where the gap is.
+    schema_gaps: list[dict] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -89,7 +101,7 @@ class Agenda:
         return sum(
             len(x) for x in (
                 self.halts, self.unroutable, self.prose_blockers, self.recent_kills,
-                self.orphan_objectives, self.purposeless_shipped,
+                self.orphan_objectives, self.purposeless_shipped, self.schema_gaps,
             )
         ) + len(self.unswept_domains)
 
@@ -196,6 +208,57 @@ def build(root: Path) -> Agenda:
         if status == "shipped" and not traces:
             ag.purposeless_shipped.append({"item": it.item_id, "title": it.title})
 
+    #: A FIELD NOBODY WRITES IS NOT A GAP IN EVERY ITEM — it is one gap, in the schema.
+    #:
+    #: `traces_to` was read here and written by nothing: `cycle-backlog.md` declared
+    #: itself the item schema's source of truth and listed twelve fields, none of them
+    #: this one, and `/backlog-item`'s grill never asked. So `not traces` was
+    #: unconditionally true and this section printed one row per shipped item.
+    #:
+    #: Measured on a consumer: 243 rows, in a registry where no item COULD have traced.
+    #: And it lands in the one cycle a person attends — `cycle-brainstorm.md` promises
+    #: them "what the machine already knows needs you", and handed them a list as long
+    #: as their shipped history.
+    #:
+    #: The producer landed on 2026-09-11 — the field is in the schema table and Q5 of
+    #: the intake grill asks for it — so the old message ("nothing in the kit writes
+    #: it") became false the moment it was fixed, and a stale explanation is the same
+    #: defect one layer up. What an empty field means now depends on one thing this
+    #: function can check: whether the project HAS objectives to trace to.
+    #:
+    #: no objectives document → nothing to trace to; not a gap in any item
+    #: objectives declared     → the link was skipped, and that IS a finding
+    #:
+    #: When SOME items carry the field, the ones without it are a real gap and are
+    #: reported item by item, which is what this section was written for.
+    if not any(it.fields.get("traces_to", "").strip() for it in items):
+        ag.purposeless_shipped = []
+        objectives = root / OBJECTIVES_REL
+        if objectives.is_file():
+            ag.schema_gaps.append({
+                "field": "traces_to",
+                "read_by": "build_agenda.py",
+                "written_by": "/backlog-item Q5",
+                "why": (
+                    f"`{OBJECTIVES_REL}` declares objectives and no item in this "
+                    "registry cites one. The field is in the schema and the intake "
+                    "grill asks for it, so every item here predates that or skipped "
+                    "the question — and until they are linked, nothing can say which "
+                    "objective this backlog leaves uncovered"),
+            })
+        else:
+            ag.schema_gaps.append({
+                "field": "traces_to",
+                "read_by": "build_agenda.py",
+                "written_by": "/backlog-item Q5, when objectives exist",
+                "why": (
+                    f"this project has no `{OBJECTIVES_REL}`, so there is nothing for "
+                    "an item to trace to and no item carrying the field is correct. "
+                    "Reporting every shipped item as tracing to no objective would "
+                    "assert a gap against a standard this project never adopted; "
+                    "`/brainstorm-objectives` is what makes the question answerable"),
+            })
+
     ag.unswept_domains = sorted(domains - cited_domains)
 
     for oid, title in _objectives(root):
@@ -245,6 +308,9 @@ def render(ag: Agenda) -> str:
           lambda r: f"`{r['id']}` {r['title']} — {r['why']}")
     block("Shipped, tracing to no objective", ag.purposeless_shipped,
           lambda r: f"`{r['item']}` {r['title']}")
+    block("A field this agenda reads and nothing writes", ag.schema_gaps,
+          lambda r: f"`{r['field']}` — read by {r['read_by']}, written by "
+                    f"{r['written_by']}. {r['why']}")
     block("Killed since you last looked (a successful outcome)", ag.recent_kills,
           lambda r: f"`{r['item']}` {r['title']} — {r['kill_reason']}")
     if ag.unswept_domains:

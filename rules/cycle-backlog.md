@@ -42,9 +42,18 @@ Do NOT trigger BACKLOG for:
      ↓ (produces: B-NNN in BACKLOG.md · status: raw · evidence: none-yet)
 /discover-plan B-NNN --mode {review|live-test|bug|evolve}
      ↓ (measures against OUR code/runtime)
-     ├── evidence found  → status: triaged · evidence: <pointer>  → /plan-write
+     ├── evidence found  → status: triaged · evidence: <pointer>
+     │        ↓
+     │   /backlog-approve            ← THE DECISION, recorded · status: approved
+     │        ↓                        a person ticks and signs; nothing else writes it
+     │   /plan-write
      └── nothing found   → status: killed   · kill_reason: <why>  → chain ends here
 ```
+
+`triaged → /plan-write` was the chain as written until 2026-09-11, and it skipped the
+gate this same document calls a commitment. Measured consequence: `approved` stood at
+zero across 325 items while 243 reached `shipped`. A diagram that routes around a gate
+is how a gate stops existing.
 
 The second producer writes into the same registry without passing through this cycle:
 
@@ -90,6 +99,7 @@ dod:
 | `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` |
 | `evidence` | yes | `none-yet` at intake; a pointer once DISCOVER measures |
 | `why_now` | yes | what changed **in our system**; subject to G5 |
+| `traces_to` | when the project declares objectives | the `OBJ-N` ids this item serves, comma-separated. Required once `.squad/wiki/product/objectives.md` exists; absent and unenforced before that, because a project that never ran `/brainstorm-objectives` has nothing to trace to |
 | `status` | yes | `raw` \| `triaged` \| `approved` \| `planned` \| `shipped` \| `killed` |
 | `dod` | yes | ≥ 1 verifiable criterion (G4) |
 | `kill_reason` | when `killed` | before approval: why the measurement did not support the hypothesis. After: **who reversed the decision, and what changed** |
@@ -134,6 +144,37 @@ cause was not discipline. Nothing wrote to `BACKLOG.md` at all, so every transit
 was a human editing a line, and the middle one quietly stopped happening. No gate
 could see it either: an item that skipped `planned` is indistinguishable from one
 that has not reached it yet.
+
+**`approved` was in the same condition, and for the same reason.** Measured on
+2026-09-11 across four registries: 325 items, 243 of them `shipped`, and **zero** at
+`approved` — the gate this contract calls a commitment had never been crossed. Nothing
+was wrong with the rule; nothing asked for the decision. The only mention of
+`--to approved` anywhere in the kit was a line of prose, and a status nothing asks for
+is a status nobody writes.
+
+**`traces_to` had the same disease and a worse prognosis.** It was read by
+`build_agenda.py`, described in `agents/kairos-product-owner.md`, and pointed at ids that
+`/brainstorm-objectives` genuinely produces — and it was written **zero times in 651
+items across ten registries**, because this table never listed it and `/backlog-item`
+never asked. A field read by one consumer and written by no producer is not a schema; it
+is a plan somebody had. It is in the table above now, and Q5 of the intake grill asks
+for it.
+
+What the link buys is the one question a registry cannot answer about itself. Reading
+the items tells you whether you want each of them; it cannot tell you what is **missing**,
+because an item nobody wrote is invisible to any report rendered from the items.
+`skills/backlog-approve/scripts/check_objective_coverage.py` computes the three states
+the link makes visible: an objective no item serves (the gap), an item serving no
+objective (the drift), and a citation pointing at an id that is gone (the rot). With no
+objectives document it reports NOT MEASURED and names the document, rather than calling
+every item an orphan against a standard the project never adopted.
+
+`skills/backlog-approve` is what asks. It renders the registry as one page carrying, per
+item, what it claims, what changed that makes it worth doing now, how it closes, and
+whether the files its `evidence` cites are still on disk; a person ticks what they
+commit to and signs; `apply_approval.py` then moves exactly those, through
+`backlog_status.py` and never around it. Unticked is not rejected — it is work nobody
+has committed to yet, which is the honest state for it.
 
 ### Impediments
 

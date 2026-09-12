@@ -160,3 +160,90 @@ def test_building_the_agenda_writes_nothing(tmp_path: Path) -> None:
     build(root)
     after = {p: p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
     assert before == after
+
+
+# ------------------------------------------------------------------ #82
+
+
+def _traces_registry(tmp_path, items: str, *, objectives: str = "## OBJ-1 — ship it\n\nmetric: 1 by Q4\n"):
+    (tmp_path / ".squad" / "wiki" / "product").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".squad" / "wiki" / "product" / "objectives.md").write_text(
+        f"# Objectives\n\n{objectives}", encoding="utf-8")
+    (tmp_path / "BACKLOG.md").write_text(
+        f"# Backlog\n\n## Index\n\n## Items\n\n{items}", encoding="utf-8")
+    return tmp_path
+
+
+def _traces_item(n: int, *, status: str = "shipped", traces: str = "") -> str:
+    extra = f"traces_to: {traces}\n" if traces else ""
+    return (f"## B-{n:03d} — an item   [x]\n\ndomain: core\nrepo: r\n"
+            f"suggested_mode: review\nsource: human\nevidence: measured\n"
+            f"why_now: it mattered\nstatus: {status}\n{extra}dod:\n- [x] done\n\n")
+
+
+def test_a_field_nobody_writes_is_one_finding_not_one_per_item(tmp_path) -> None:
+    """#82. `traces_to` is read here and by nothing else — `cycle-backlog.md` declares
+    itself the item schema's source of truth and does not list it, and `/backlog-item`
+    never asks. So `not traces` was unconditionally true.
+
+    Measured on a consumer: 243 rows, one per shipped item, in a registry where no item
+    COULD have traced. And it lands in the one cycle a person attends, which
+    `cycle-brainstorm.md` promises will show them "what the machine already knows needs
+    you".
+    """
+    root = _traces_registry(tmp_path, "".join(_traces_item(n) for n in range(1, 11)))
+
+    agenda = build(root)
+
+    assert agenda.purposeless_shipped == [], "one gap must not be reported ten times"
+    assert len(agenda.schema_gaps) == 1
+    assert agenda.schema_gaps[0]["field"] == "traces_to"
+
+
+def test_with_no_objectives_the_finding_blames_neither_the_items_nor_the_kit(tmp_path) -> None:
+    """Nothing to trace to is not a gap in any item.
+
+    Before 2026-09-11 this said the field was written by nothing, which was true then
+    and became false the moment `/backlog-item` grew Q5. What an empty field means now
+    depends on whether the project declared objectives at all.
+    """
+    root = _traces_registry(tmp_path, "".join(_traces_item(n) for n in range(1, 4)))
+    # The shared fixture ships an objectives document; this case is the project that
+    # never ran the phase, so the document has to go.
+    (root / ".squad" / "wiki" / "product" / "objectives.md").unlink()
+
+    gap = build(root).schema_gaps[0]
+
+    assert "never adopted" in gap["why"]
+    assert "/brainstorm-objectives" in gap["why"]
+
+
+def test_with_objectives_declared_an_unlinked_registry_is_a_real_finding(tmp_path) -> None:
+    """Here the link WAS available and nobody made it, which is worth saying."""
+    root = _traces_registry(tmp_path, "".join(_traces_item(n) for n in range(1, 4)))
+
+    gap = build(root).schema_gaps[0]
+
+    assert gap["written_by"] == "/backlog-item Q5"
+    assert "leaves uncovered" in gap["why"]
+    # Still one finding about the registry, never one row per shipped item.
+    assert build(root).purposeless_shipped == []
+
+
+def test_a_real_gap_is_still_reported_item_by_item(tmp_path) -> None:
+    """The check must keep working where it was right: when SOME items carry the field,
+    the ones without it are a real gap and each is actionable on its own."""
+    items = _traces_item(1, traces="OBJ-1") + _traces_item(2) + _traces_item(3)
+    root = _traces_registry(tmp_path, items)
+
+    agenda = build(root)
+
+    assert agenda.schema_gaps == [], "the field IS written here"
+    assert {r["item"] for r in agenda.purposeless_shipped} == {"B-002", "B-003"}
+
+
+def test_an_objective_that_is_traced_is_not_orphaned(tmp_path) -> None:
+    """The other half of the same field: `served` feeds the orphan-objective section."""
+    root = _traces_registry(tmp_path, _traces_item(1, traces="OBJ-1"))
+
+    assert build(root).orphan_objectives == []

@@ -3,7 +3,7 @@
 A pipeline for taking a maintenance item from **hunch → measurement → plan → code → merge**, with Claude Code as the active agent at every phase. Each phase has hard gates, anti-patterns, rollback and an audit trail documented in `rules/cycle-*.md`.
 
 ```
-BRAINSTORM → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE
+BRAINSTORM → DESIGN → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE
     ↓           ↓          ↓         ↓        ↓            ↓           ↓        ↓
  4 docs +     B-NNN     measures   plans/  commits +   dead-code/    gate    develop→main
  a person's  (hunch)    OUR code           tests       fabrication/  tighter  PR + semver

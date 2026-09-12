@@ -160,6 +160,27 @@ def _kit_owned_skills(ecosystem_dir: Path) -> set[str] | None:
 
 
 
+def _kit_shipped_paths(ecosystem_dir: Path) -> set[str] | None:
+    """Every path the install manifest says the KIT brought, or None in the kit's repo.
+
+    Sibling of `_kit_owned_skills`, reading the same file for a wider question: not
+    "which skills are ours" but "did we ship this exact path". The manifest states the
+    rule in its own header — *anything not here is the project's* — and the installer
+    writes it on every install, which is the event that decides the answer.
+
+    None in the kit's own checkout, where there is no manifest and the whole tree is the
+    kit's. A caller must read None as "cannot tell" rather than as "nothing is ours":
+    the second would make every collision look like a consumer's and silence the check.
+    """
+    manifest = ecosystem_dir / ".kit-manifest.txt"
+    if not manifest.is_file():
+        return None
+    shipped = {line.split("#", 1)[0].strip()
+               for line in manifest.read_text(encoding="utf-8-sig").splitlines()}
+    shipped.discard("")
+    return shipped or None
+
+
 def _is_auto_generated(skill: str) -> bool:
     """Skills the cycles THEMSELVES write, not phases anyone maintains.
 
@@ -836,6 +857,9 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
     # plugin's state file (`ralph-loop.local.md`), and the golden rule
     # `cycle-judge-codex.md` names in a sentence saying it never existed here.
     _BARE_RULE_NAME_RE = re.compile(r"`([a-z0-9][a-z0-9._-]*\.(?:md|txt))`")
+    #: What the installer says it brought. None in the kit's own checkout, where the
+    #: whole tree is the kit's and a collision cannot be the consumer's.
+    kit_files = _kit_shipped_paths(ecosystem_dir)
     if rules_dir.is_dir():
         for rule_md in sorted(rules_dir.glob("*.md")):
             try:
@@ -858,6 +882,28 @@ def validate_xrefs(ecosystem_dir: Path, strict: bool = False) -> dict[str, Any]:
                 # add rules of its own, and one of them citing a file the kit does not
                 # ship is worth reporting without calling the install broken.
                 own = _kit_owned(rule_md)
+
+                #: A NAME COLLISION IS NOT A MISDIRECTION, and a consumer's filename
+                #: must not fail a kit gate.
+                #:
+                #: This check asks "does any file anywhere have this name?" and treats a
+                #: hit as proof the citation pointed at the wrong place. Two different
+                #: things can share a filename. Measured on a consumer install: the kit's
+                #: own `cycle-design.md` cites `trust.md` meaning drawing D2, the
+                #: consumer had a repository called `*-trust`, and `scaffold_specialists.py`
+                #: — also the kit's — wrote `agents/trust.md` for it. The gate then FAILED
+                #: with `owner: kit`, on a name the consumer had every right to choose and
+                #: in a file the consumer could not edit.
+                #:
+                #: The drawing slots are especially exposed: domain names come from
+                #: repository names, which the kit does not control.
+                #:
+                #: So when every match is a file the KIT DID NOT SHIP, this is the
+                #: consumer's tree colliding with the kit's vocabulary — reported, and
+                #: reported as theirs, never as a failure of the install.
+                if elsewhere and own and kit_files is not None:
+                    if not any(_rel(match) in kit_files for match in elsewhere):
+                        own = False
                 message = (
                     f"{_rel(rule_md)} cites `{name}` as if it were in rules/; "
                     f"the file is in {(_rel(elsewhere[0].parent) or '.')}/"

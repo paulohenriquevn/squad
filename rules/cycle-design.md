@@ -47,12 +47,12 @@ reports `INVALID` with the reason rather than a pass.
 
 | Id | File | Mermaid kind | Mandatory |
 |---|---|---|---|
-| D1 | `states.md` | `stateDiagram-v2` | yes |
-| D2 | `trust.md` | `flowchart` / `graph` | yes |
-| D3 | `sequence.md` | `sequenceDiagram` | yes |
-| D4 | `durability.md` | `flowchart` / `graph` / `stateDiagram-v2` | yes |
-| D5 | `system-map.md` | `flowchart` / `graph` / `C4*` | derived |
-| — | `sign-off.md` | — | the checklist a person ticks |
+| D1 | `design/states.md` | `stateDiagram-v2` | yes |
+| D2 | `design/trust.md` | `flowchart` / `graph` | yes |
+| D3 | `design/sequence.md` | `sequenceDiagram` | yes |
+| D4 | `design/durability.md` | `flowchart` / `graph` / `stateDiagram-v2` | yes |
+| D5 | `design/system-map.md` | `flowchart` / `graph` / `C4*` | derived |
+| — | `design/sign-off.md` | — | the checklist a person ticks |
 | — | *(rendered files)* | — | optional — `/diagram-design:import-mermaid`, for a review session. No gate asks for one |
 
 **D5 is derived, not drawn first.** A component map produced before the four decisions

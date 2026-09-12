@@ -53,12 +53,30 @@ LOCK item:
      ↓ record records/maintenance-runs/{B-NNN}-{date}.md (status: in_progress)
      ↓
 DELEGATE:
-     ↓ status raw     → /discover-plan B-NNN --mode {suggested_mode}, then the chain
-     ↓                  ├── opportunity → status triaged → continue below
-     ↓                  └── ITEM_KILLED → status killed → LOOP BACK to SELECT
-     ↓ status triaged → /idea-to-release B-NNN
-     ↓                  (cycle-plan → implement → code-quality → review → release)
+     ↓ status raw      → /discover-plan B-NNN --mode {suggested_mode}, then the chain
+     ↓                   ├── opportunity → status triaged → continue below
+     ↓                   └── ITEM_KILLED → status killed → LOOP BACK to SELECT
+     ↓ status triaged  → the DECISION to do the work, recorded:
+     ↓                   backlog_status.py {backlog} B-NNN --to approved --because "…"
+     ↓                   └── not approved → status unchanged, LOOP BACK to SELECT
+     ↓ status approved → /idea-to-release B-NNN
+     ↓                   (cycle-plan → implement → code-quality → review → release)
      ↓
+
+**`triaged → approved` is a step, not a formality, and this chain used to skip it.**
+`cycle-backlog.md` states the prohibition in its own words — *"`raw → planned` and
+`triaged → planned` are forbidden. Nothing reaches a plan without passing DISCOVER's
+measurement AND being approved — the two are separate questions"* — and this file
+prescribed the second of them until 2026-09-11. The code side was already correct:
+`select_backlog_item.py` answers `approved` with `ITEM_AWAITING_PLAN`, and
+`backlog_status.py` has carried the status since 2026-09-04.
+
+**And the step has never been taken.** Measured across ten registries and 651 items,
+496 of them shipped: `approved` appears **zero** times. A gate nobody has ever traversed
+is either a gate nothing invites, or one every path routes around — and this chain
+prescribing the forbidden transition is why. Fixing the prose does not fix that; what
+closes it is something in the loop that ASKS for the decision, and nothing does yet.
+
 ADVANCE:                              mechanisms/cycle/advance_items.py --apply
      ↓ RELEASED → status shipped, with the release artifact linked
      ↓ blocked  → status unchanged, blocker surfaced, LOOP BACK to SELECT

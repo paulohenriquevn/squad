@@ -107,7 +107,7 @@ Next free id:   B-028
 
 Ids are monotonic and never reused — including the ids of killed items. No cap.
 
-### Step 4 — Focused grill (4 questions, ONE per turn)
+### Step 4 — Focused grill (4 questions, plus a fifth when objectives exist — ONE per turn)
 
 Same protocol as the Cycle grills: one question per turn, each with a recommended answer and its reasoning, persisted after every answer.
 
@@ -117,6 +117,7 @@ Same protocol as the Cycle grills: one question per turn, each with a recommende
 | 2 | Which repo, and therefore which domain? | Feeds `domain` + `repo` (G1) and decides which specialist picks it up. Offer the routing table; if the answer names two domains, G3 fires and the item splits. |
 | 3 | Which discover mode looks right — review, live-test, bug or evolve? | Feeds `suggested_mode`. State explicitly to the user that this is **a suggestion DISCOVER may overrule**, so nobody treats their guess as a decision. |
 | 4 | What is the verifiable Definition of Done (1-3 bullets)? | Feeds `dod` (G4). This is the criterion that closes the item. Reject bullets that restate the title or cannot fail. |
+| 5 | Which declared objective does this serve? | Feeds `traces_to`. **Ask only if `.squad/wiki/product/objectives.md` exists** — offer its `OBJ-N` ids and titles as the options. If none fits, that is the interesting answer: either an objective is missing or the item is. Say so and let the user decide; do not invent an id. Without that document, skip the question entirely — a project that has not run `/brainstorm-objectives` has nothing to trace to, and demanding a link would be inventing a standard it never adopted. |
 
 **Note what is NOT asked: evidence.** Intake has no evidence gate. If the user offers a `file:line` or a trace id unprompted, record it — but never ask for it, and never let its absence block the item.
 
