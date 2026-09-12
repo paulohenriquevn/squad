@@ -169,7 +169,13 @@ objective (the drift), and a citation pointing at an id that is gone (the rot). 
 objectives document it reports NOT MEASURED and names the document, rather than calling
 every item an orphan against a standard the project never adopted.
 
-`skills/backlog-approve` is what asks. It renders the registry as one page carrying, per
+`skills/backlog-approve` is what asks.
+
+`skills/as-is-to-be` reads the same registry for a different question. An item's
+`evidence` is a measurement of the present and its `dod` is a falsifiable statement
+about the future, so the pair is a gap analysis that was already written down and
+already gated — nothing was added to the schema to produce it. It answers *what will we
+have*; the brief answers *is this what I want*, and only the second writes a status. It renders the registry as one page carrying, per
 item, what it claims, what changed that makes it worth doing now, how it closes, and
 whether the files its `evidence` cites are still on disk; a person ticks what they
 commit to and signs; `apply_approval.py` then moves exactly those, through

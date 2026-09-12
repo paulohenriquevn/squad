@@ -131,7 +131,7 @@ def test_skill_count() -> None:
     a schema two scripts already enforce, with zero run records ever written.
     """
     files = _get_skill_files()
-    assert len(files) == 38, (
-        f"Expected 38 SKILL.md files, found {len(files)}. "
+    assert len(files) == 39, (
+        f"Expected 39 SKILL.md files, found {len(files)}. "
         f"Update this test if skills were added or removed."
     )
