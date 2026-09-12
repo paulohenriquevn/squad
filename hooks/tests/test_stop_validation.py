@@ -321,3 +321,53 @@ def test_source_with_no_test_anywhere_still_warns(tmp_path):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# --- Defect: the secret pattern absorbed any prefix ------------------------
+#
+# `SECRET_FILE` opened with `[a-z0-9_-]*` before `secrets?`, so ANY prefix glued
+# to the word matched. A Helm chart's own template — the source that RENDERS a
+# Secret, and which contains no value — was graded as a secret. Measured on a
+# consumer 2026-09-12: the gate fired nine times in one session on a file that
+# session never opened, and the documented escape is the env var this suite's
+# own docstring calls the thing that stops the gate protecting anything.
+
+
+def test_a_helm_template_that_renders_a_secret_is_not_itself_a_secret(tmp_path):
+    """`externalsecrets.yaml` is chart SOURCE. It holds template directives, not values."""
+    repo = make_repo(tmp_path, with_remote=True)
+    tpl = repo / "charts" / "thing" / "templates" / "externalsecrets.yaml"
+    tpl.parent.mkdir(parents=True, exist_ok=True)
+    tpl.write_text("apiVersion: v1\nkind: ExternalSecret\n")
+    (repo / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n\n- chart\n")
+
+    result = run_hook(repo)
+
+    assert "Secret-pattern files" not in result.output, result.output
+
+
+def test_a_bare_secrets_manifest_is_still_graded_as_a_secret(tmp_path):
+    """The gate must keep catching what it was written for."""
+    repo = make_repo(tmp_path, with_remote=True)
+    man = repo / "deploy" / "secrets.yaml"
+    man.parent.mkdir(parents=True, exist_ok=True)
+    man.write_text("apiVersion: v1\nkind: Secret\n")
+    (repo / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n\n- deploy\n")
+
+    result = run_hook(repo)
+
+    assert "Secret-pattern files" in result.output, result.output
+    assert result.returncode == 2, result.output
+
+
+def test_a_hyphen_separated_secrets_manifest_is_still_graded(tmp_path):
+    """`app-secrets.yaml` keeps matching: the separator is what makes it a name."""
+    repo = make_repo(tmp_path, with_remote=True)
+    man = repo / "deploy" / "app-secrets.yaml"
+    man.parent.mkdir(parents=True, exist_ok=True)
+    man.write_text("apiVersion: v1\nkind: Secret\n")
+    (repo / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n\n- deploy\n")
+
+    result = run_hook(repo)
+
+    assert "Secret-pattern files" in result.output, result.output
