@@ -68,6 +68,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   countable property.
 
 ### Fixed
+- **The published chain named nine phases and the kit runs ten** (#75)
+  `plugin.json`, `marketplace.json`, `HOW-TO-USE.md` and `rules/squad-map.md` all
+  described `BRAINSTORM → BACKLOG → …`, written before `DESIGN` existed and not updated
+  when it shipped. The marketplace description is the first thing an adopter reads, and
+  it was missing the phase that decides what gets drawn before a backlog is filed
+  against it.
+
+### Fixed
 - **The alignment scorer counted a wrapped line as a requirement, and scored a walkthrough it never opened** (#B-013)
   Both measured in a consumer install and ported here, because a fix written inside a
   consumer's `.claude/` reaches exactly one machine — that directory is gitignored

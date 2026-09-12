@@ -46,7 +46,7 @@ Declared once, machine-readable, in [`rules/cycle-phases.txt`](cycle-phases.txt)
 emitted.
 
 ```
-BRAINSTORM → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ACCEPTANCE
+BRAINSTORM → DESIGN → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ACCEPTANCE
     ↑                      ↓
  a person                ITEM_KILLED ✔  (the chain ends — a successful outcome)
  is required

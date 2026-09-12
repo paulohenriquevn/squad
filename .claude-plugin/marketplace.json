@@ -9,7 +9,7 @@
     {
       "name": "squad",
       "source": "./",
-      "description": "A maintenance squad for any product: a measurement-first pipeline (BRAINSTORM → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ACCEPTANCE) where every item is a hypothesis, evidence comes from your own code and runtime, and killing an item is a successful outcome. Domain specialists are derived from your repositories, never shipped.",
+      "description": "A maintenance squad for any product: a measurement-first pipeline (BRAINSTORM → DESIGN → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-QUALITY → REVIEW → RELEASE → ACCEPTANCE) where every item is a hypothesis, evidence comes from your own code and runtime, and killing an item is a successful outcome. Domain specialists are derived from your repositories, never shipped.",
       "version": "0.1.0",
       "author": "Paulo Henrique",
       "license": "MIT",
