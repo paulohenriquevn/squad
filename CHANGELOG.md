@@ -959,6 +959,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **`NOT-REACHED` subtracted a repo it never named** (`discover-confidence`)
+  The marker's trailing lookahead permitted `/`, so a marker naming `operators/api` also matched
+  `operators` and removed a genuinely-reached repository from `foreign_repos` — suppressing the ADR
+  the gate exists to demand. That fails OPEN, worse in kind than the defect the marker fixed, which
+  merely charged an author for an ADR nobody needed and did it loudly. Found on a consumer whose
+  routing table carries both entries. One behavioural test; the mention matcher above it is left
+  permissive on purpose, because over-detecting a mention fails closed.
+
 - **A path-addressed repo counted itself as foreign** (`discover-confidence`)
   `REPO_DECL_RE` excluded `/` from its character class, so `**Repo:** cmd/theo-ops` captured as
   `cmd`. A routing table addressing a monorepo module by path matched nothing, the document's own
