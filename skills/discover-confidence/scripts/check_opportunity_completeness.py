@@ -157,8 +157,14 @@ def check_opportunity_completeness(
             r
             for m in re.finditer(r"<!--\s*NOT-REACHED:(.*?)-->", blast_body, re.DOTALL)
             for r in repos
+            # The trailing class EXCLUDES `/` here, unlike the mention matcher above.
+            # A marker naming `operators/api` must subtract that entry and nothing else:
+            # with `/` permitted, `operators` matched inside it and a genuinely-reached
+            # repo left `foreign_repos` unnamed, suppressing the ADR this gate exists to
+            # demand. That fails OPEN, which is worse than the defect the marker fixed —
+            # that one charged an author for an ADR nobody needed, and did it loudly.
             if re.search(
-                rf"(?<![A-Za-z0-9_./-]){re.escape(r)}(?![A-Za-z0-9_-])", m.group(1).lower()
+                rf"(?<![A-Za-z0-9_./-]){re.escape(r)}(?![A-Za-z0-9_\-/])", m.group(1).lower()
             )
         }
         foreign_repos = sorted(r for r in mentioned - not_reached if r != own_repo)

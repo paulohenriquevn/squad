@@ -270,3 +270,31 @@ def test_a_flat_repo_name_is_unchanged(tmp_path: Path) -> None:
     report = check_opportunity_completeness(path, known_repos=REPOS)
     assert report["own_repo"] == "web-console", report
     assert report["foreign_repos"] == [], report
+
+
+def test_not_reached_subtracts_only_the_repo_it_names(tmp_path: Path) -> None:
+    """A marker naming `owner/sub` must not silently subtract `owner`.
+
+    The first version of this marker used a lookahead that permitted `/`, so
+    `<!-- NOT-REACHED: operators/api -->` matched `operators` too and removed a
+    genuinely-reached repo from `foreign_repos` — suppressing an ADR the gate exists to
+    demand. That failure is OPEN, which is worse than the defect the marker was added to
+    fix: that one merely charged an author for an ADR nobody needed, loudly.
+
+    Measured 2026-09-12 by an agent whose Blast Radius named both entries.
+    """
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        repo="web-console",
+        blast=(
+            "Reaches `contracts` and `contracts/api`.\n"
+            "<!-- NOT-REACHED: contracts/api -->\n"
+        ),
+    )
+    report = check_opportunity_completeness(
+        path, known_repos={"web-console", "contracts", "contracts/api"}
+    )
+    assert "contracts" in report["foreign_repos"], report
+    assert "contracts/api" not in report["foreign_repos"], report
+    assert report["adr_required"] is True, report
