@@ -589,3 +589,86 @@ def test_an_unconfigured_language_file_says_so_rather_than_only_failing(
     # And it must say this is not a defect in the code under test, because reading it as
     # one is exactly what happened.
     assert "configuration, not a defect" in reason
+
+
+# --------------------------------------------------------------------------
+# The allowlist: the key the gate publishes, and the sunset it never announced
+# --------------------------------------------------------------------------
+
+
+def test_the_allowlist_key_the_gate_publishes_actually_works():
+    """Copying the key a tool hands you must not be indistinguishable from a typo.
+
+    The gate publishes `allowlist_key` — `go|.|mutation_low|soft_cap_mutation_deferred_go`
+    — in the finding, the JSON and the report. Matching ran against `symbol_or_line`,
+    which for that finding is `d4`, so the obvious act of copying the advertised fields
+    produced a well-formed six-column row matching nothing.
+
+    Measured on a consumer with a control: an allowlist carrying the published key and
+    one carrying `ZZZ_NO_SUCH_SYMBOL` produced byte-identical JSON, and `load_allowlist`
+    validated all six columns without complaint. The false claim that it worked reached
+    a brief and a panel vote before anyone tested it.
+    """
+    from datetime import date
+
+    from scripts._detector_contract import AllowlistEntry, Finding, is_allowlisted
+
+    finding = Finding(
+        detector="d4_mutation", language="go", severity="SOFT_CAP", file_path=".",
+        symbol_or_line="d4", message="go mutation testing is deferred",
+        allowlist_key="go|.|mutation_low|soft_cap_mutation_deferred_go")
+
+    def entry(symbol):
+        return AllowlistEntry(ecosystem="go", file_path=".", finding_type="mutation_low",
+                              symbol=symbol, sunset_date=date(2026, 12, 12),
+                              reason="deferred by ADR")
+
+    today = date(2026, 9, 14)
+    published = is_allowlisted(finding, [entry("soft_cap_mutation_deferred_go")], today)
+    invented = is_allowlisted(finding, [entry("ZZZ_NO_SUCH_SYMBOL")], today)
+    legacy = is_allowlisted(finding, [entry("d4")], today)
+
+    assert published.name == "ACTIVE", "the advertised key must match the finding"
+    assert invented.name == "NOT_LISTED", "widening must not match anything at all"
+    assert legacy.name == "ACTIVE", "existing entries keyed on symbol must keep working"
+
+
+def test_an_expired_entry_is_named_rather_than_silently_ignored(tmp_path, capsys):
+    """`EXPIRED` was produced and consumed by nobody.
+
+    It fell into the same `else` as `NOT_LISTED`, so an exemption whose sunset had
+    passed was indistinguishable from one that was never written. Golden rule § 4
+    promises the opposite — the entry listed under "Allowlist hits — expired" — and
+    nothing implemented it.
+
+    A dated exemption is a promise to revisit, and the date is the whole mechanism. The
+    finding re-firing at full severity is correct and is NOT the notification: it looks
+    exactly like a finding nobody ever exempted.
+    """
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "code-quality-languages.txt").write_text(
+        "python | pyproject.toml | ENABLED |\n", encoding="utf-8")
+    (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
+    (rules / "code-quality-allowlist.txt").write_text(
+        "python | . | mutation_low | d4 | sunset deliberately in the past | 2026-01-01\n",
+        encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n', encoding="utf-8")
+    write_records_dir(tmp_path, "plans").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+
+    main(["--repo-root", str(tmp_path), "--no-network"])
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+
+    assert data["expired_allowlist"], "an expired row must reach the payload"
+    assert "EXPIRED" in captured.err, "and the person at the terminal must be told"
+    assert "renew the sunset date" in captured.err
+
+
+def test_no_expired_entry_reports_an_empty_list_not_an_absent_key(tmp_path, capsys):
+    """An absent key asks whether the check ran; an empty list answers that it did."""
+    _write_rules(tmp_path)
+    main(["--repo-root", str(tmp_path), "--no-network"])
+    data = json.loads(capsys.readouterr().out)
+    assert data["expired_allowlist"] == []

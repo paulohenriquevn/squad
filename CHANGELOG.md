@@ -147,6 +147,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   never lets you start.
 
 ### Fixed
+- **The allowlist key the gate publishes matched nothing** (#95)
+  The gate publishes `allowlist_key` — `go|.|mutation_low|soft_cap_mutation_deferred_go`
+  — in the finding, the JSON and the report, and `is_allowlisted` matched the symbol
+  column against `symbol_or_line`, which for that finding is `d4`. Copying the advertised
+  fields produced a well-formed six-column row matching nothing, and `load_allowlist`
+  validated all six without complaint. Measured with a control: the published key and
+  `ZZZ_NO_SUCH_SYMBOL` were both `NOT_LISTED` — the advertised key was indistinguishable
+  from an invented symbol, and on a consumer the false claim that it worked reached a
+  brief and a panel vote before anyone tested it. Matching now accepts either the symbol
+  or the key's own symbol field, so existing entries keep working unchanged.
+
+- **An expired allowlist entry was never announced** (#95)
+  `is_allowlisted` returns ACTIVE / EXPIRED / NOT_LISTED and the only consumer branched
+  on ACTIVE, so an exemption whose sunset had passed fell into the same `else` as one
+  that was never written. Golden rule § 4 promises the entry listed under *"Allowlist
+  hits — expired"*; nothing implemented it. Measured with a sunset of 2026-01-01:
+  `FAIL_SOFT`/70 with the word `expired` absent from the JSON, from stderr and from the
+  report. A dated exemption is a promise to revisit and the date is the whole mechanism —
+  the finding re-firing at full severity is correct and is not the notification, because
+  it looks exactly like a finding nobody ever exempted. Expired rows are now named on
+  stderr and carried in `expired_allowlist`, always present so an empty list answers the
+  question an absent key would ask.
+
+### Fixed
 - **A fixture rewrote the real `rules/domain-routing.txt` and only restored it on teardown** (#87)
   The discover-confidence end-to-end fixture wrote the routing table into the repository
   whenever the shipped one held no data rows — which is how the kit ships it — and
