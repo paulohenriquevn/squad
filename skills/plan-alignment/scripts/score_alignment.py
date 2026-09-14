@@ -90,6 +90,23 @@ _MEASURABLE_RE = re.compile(
 )
 
 #: An acceptance criterion is executable when it names something that runs.
+#:
+#: This is a TEXT match over the bullet, and that is its limit: it asks whether a
+#: command is NAMED, never whether it could run or whether its answer distinguishes
+#: anything. A consumer measured the consequence — a brief scored 14/14 executable
+#: where two criteria could not pass at all, and `go test -run <pattern-that-matches-
+#: nothing>` exits 0 with `[no tests to run]`, so eight criteria in one brief were
+#: satisfied by writing no test.
+#:
+#: Executing them is the real fix and is not this function's to make: it needs three
+#: states (current tree, intended state, a deliberately WRONG implementation the
+#: criterion must reject) and a reconstruction control. Tracked separately.
+#:
+#: What IS in scope here is the composition. A criterion carrying an unresolved
+#: placeholder cannot run, whatever it names, so grading it executable is the scorer
+#: asserting something it did not establish — and it did so beside a placeholder scan
+#: that could not see the notation. Breaking that pair is cheap and removes the case
+#: where three defects agreed with each other.
 _EXECUTABLE_RE = re.compile(
     r"`[^`]*(?:npm|pytest|go |cargo|make|curl|grep|python3|bash|node|exit \d)[^`]*`"
     r"|\bexit\s+(?:code\s+)?\d",
@@ -100,7 +117,22 @@ _EXECUTABLE_RE = re.compile(
 #: WHOLE brief since v2 — a `TBD` in the data model is the same open question as
 #: an `UNKNOWN` in the answers, and it used to be invisible.
 _UNRESOLVED_RE = re.compile(
-    r"\b(UNKNOWN|TBD|TKTK|TODO|FIXME|to be decided|\?\?\?)\b|\{\{[A-Z_]+\}\}",
+    r"\b(UNKNOWN|TBD|TKTK|TODO|FIXME|to be decided|\?\?\?)\b|\{\{[A-Z_]+\}\}"
+    #: `<gate-name>`, `<module>` — the notation these briefs actually use, and the one
+    #: this scan did not see. Measured on a consumer: a brief with EIGHT occurrences of
+    #: `<gate-name>` was reported "No unresolved placeholder anywhere in the brief —
+    #: none", alongside "10/10 executable", over five commands its own prose said did
+    #: not run.
+    #:
+    #: The comment above already states the principle this pattern failed to implement:
+    #: v2 widened the scan because an open question is an open question wherever it
+    #: sits. A second notation for the same thing was invisible for the same reason.
+    #:
+    #: Shaped to an identifier — letters, digits, hyphen, underscore, no spaces — so a
+    #: shell redirect (`< file`), a comparison (`< 5`) and an arrow do not match. An
+    #: HTML-looking tag would; that over-report is accepted deliberately, because the
+    #: under-report cost five commands graded as running.
+    r"|<[A-Za-z][A-Za-z0-9_-]{1,40}>",
     re.IGNORECASE,
 )
 
@@ -337,12 +369,20 @@ _PRESENCE_RE = re.compile(
     r"-n\s|\bwc\s+-l|\btest\s+-s\b|\[\s*-s\s|grep\s+-q\s[^|]*&&|"
     r"\|\|\s*exit|\bif\s+grep\b")
 
+#: `wc -l` earns its place in `_PRESENCE_RE` only when the count is expected to be
+#: NON-ZERO. A criterion that counts something and asserts the answer is zero passes
+#: exactly when the subject is absent — which is the state this advisory exists to
+#: catch — and it was being exempted by coincidence rather than by design.
+_COUNTS_TO_ZERO_RE = re.compile(
+    r"\b(wc\s+-l|grep\s+-c)\b[^.]*?\b(0|zero|none|no\s+\w+)\b", re.IGNORECASE)
+
 
 def _vacuous_criteria(bullets: list[str]) -> tuple[str, ...]:
     """Acceptance criteria that could pass because their subject is absent."""
     return tuple(
         b.strip()[:120] for b in bullets
-        if _NEGATED_TEST_RE.search(b) and not _PRESENCE_RE.search(b))
+        if (_NEGATED_TEST_RE.search(b) or _COUNTS_TO_ZERO_RE.search(b))
+        and not (_PRESENCE_RE.search(b) and not _COUNTS_TO_ZERO_RE.search(b)))
 
 
 def _without_section(body: str, *headings: str) -> str:
@@ -474,10 +514,25 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     # 8 — Acceptance criteria that can fail.
     ac_section = _section(body, "Acceptance Criteria", "Acceptance criteria")
     ac = _bullets(ac_section)
-    executable = [b for b in ac if _EXECUTABLE_RE.search(b)]
+    # A criterion carrying an unresolved placeholder cannot run, whatever command it
+    # names. Grading it executable is the scorer asserting something it did not
+    # establish — and it did exactly that beside a placeholder scan that could not see
+    # the notation these briefs use. Measured on a consumer: "10/10 executable" and
+    # "No unresolved placeholder anywhere in the brief — none" reported together, over
+    # five commands the brief's own prose said did not run.
+    #
+    # This does not make the grade a measurement; it is still a text match, and a
+    # criterion whose pattern can never match still scores. What it removes is the case
+    # where two defects agreed with each other and the pair read as corroboration.
+    unrunnable = [b for b in ac if _UNRESOLVED_RE.search(b)]
+    executable = [b for b in ac
+                  if _EXECUTABLE_RE.search(b) and not _UNRESOLVED_RE.search(b)]
+    detail = f"{len(executable)}/{len(ac)} executable" if ac else "no acceptance criteria"
+    if unrunnable:
+        detail += (f" — {len(unrunnable)} carry an unresolved placeholder and cannot "
+                   "run whatever they name")
     add("acceptance_executable", "Acceptance criteria name something that runs",
-        _tri(bool(ac), bool(ac) and len(executable) == len(ac)),
-        f"{len(executable)}/{len(ac)} executable" if ac else "no acceptance criteria")
+        _tri(bool(ac), bool(ac) and len(executable) == len(ac)), detail)
 
     # 9 — spec-kit /analyze: stable ids. Every reference implementation converged
     # on this independently — FR-###/SC-### there, EARS ids in feature-forge,

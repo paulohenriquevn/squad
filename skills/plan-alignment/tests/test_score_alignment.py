@@ -18,6 +18,7 @@ from pathlib import Path
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
+import score_alignment as sa  # noqa: E402
 from score_alignment import THRESHOLD, score_alignment  # noqa: E402
 
 COMPLETE = """
@@ -685,3 +686,62 @@ def test_a_walkthrough_link_is_not_evidence_the_file_exists(tmp_path) -> None:
     present = score_alignment(brief)
     artefact_now = next(c for c in present.criteria if c.key == "interactive_artefact")
     assert artefact_now.score == 2, "a citation that resolves IS the artefact"
+
+
+# --------------------------------------------------------------------------
+# Three defects that agreed with each other, reported by a consumer session
+# --------------------------------------------------------------------------
+
+
+def test_an_angle_bracket_placeholder_is_unresolved(tmp_path):
+    """The notation these briefs actually use, and the one the scan could not see.
+
+    Measured on a consumer: a brief with EIGHT occurrences of `<gate-name>` was
+    reported "No unresolved placeholder anywhere in the brief — none", alongside
+    "10/10 executable", over five commands its own prose said did not run.
+
+    The comment on `_UNRESOLVED_RE` already stated the principle its pattern failed to
+    implement — v2 widened the scan because an open question is an open question
+    wherever it sits. A second notation for the same thing stayed invisible.
+    """
+    assert sa._UNRESOLVED_RE.search("run the `<gate-name>` check")
+    assert sa._UNRESOLVED_RE.search("`go test ./<module>/...` prints ok")
+
+
+def test_shell_syntax_is_not_read_as_a_placeholder():
+    """Over-reporting a placeholder is cheap; reading every redirect as one is not."""
+    for benign in ("`cmd < file` succeeds", "the count is < 5", "`a <<EOF` heredoc"):
+        assert not sa._UNRESOLVED_RE.search(benign), benign
+
+
+def test_a_criterion_that_counts_and_asserts_zero_is_vacuous():
+    """`wc -l` was exempting it by coincidence rather than by design.
+
+    A criterion that counts something and asserts the answer is zero passes exactly
+    when the subject is absent — which is the state the advisory exists to catch.
+    """
+    assert sa._vacuous_criteria(["`grep -c foo src/ | wc -l` prints 0"])
+
+
+def test_a_criterion_that_counts_a_real_number_is_not_vacuous():
+    assert not sa._vacuous_criteria(["`wc -l < out.txt` prints 42"])
+
+
+def test_a_criterion_with_a_placeholder_is_not_graded_executable(tmp_path):
+    """The composition, broken.
+
+    A criterion carrying an unresolved placeholder cannot run whatever command it
+    names. Grading it executable was the scorer asserting something it did not
+    establish, beside a scan that could not see the placeholder — two defects agreeing
+    with each other, which reads as corroboration.
+    """
+    brief = tmp_path / "b-001-alignment.md"
+    brief.write_text(
+        "# Brief\n\n## Acceptance Criteria\n\n"
+        "- AC-001: `go test ./real/...` exits 0\n"
+        "- AC-002: `go test ./<module>/...` exits 0\n",
+        encoding="utf-8")
+    report = sa.score_alignment(brief)
+    crit = next(c for c in report.criteria if c.key == "acceptance_executable")
+    assert "1/2 executable" in crit.why
+    assert "unresolved placeholder" in crit.why

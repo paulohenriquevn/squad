@@ -147,6 +147,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   never lets you start.
 
 ### Fixed
+- **Three defects in the acceptance-criteria scorer that agreed with each other** (#96)
+  `_UNRESOLVED_RE` matched `{{CAPS}}` and not `<angle-brackets>`, which is the notation
+  these briefs use; `_PRESENCE_RE` exempted on `wc -l` in any position, so a criterion
+  that counts something and asserts zero — passing exactly when the subject is absent —
+  was exempted by coincidence; and `_EXECUTABLE_RE` grades a criterion executable from a
+  text match, so one carrying an invisible placeholder scored beside a scan that could
+  not see it. Measured on a consumer: a brief with eight occurrences of `<gate-name>`
+  reported "No unresolved placeholder anywhere in the brief — none" together with "10/10
+  executable", over five commands its own prose said did not run. Re-measured over 19
+  briefs after the fix: vacuous criteria 0 → 61, and six briefs carrying a placeholder
+  that had been invisible. The composition is broken — a criterion with an unresolved
+  placeholder is no longer graded executable — but grading remains a text match, and
+  executing criteria against three states is tracked separately.
+
 - **The allowlist key the gate publishes matched nothing** (#95)
   The gate publishes `allowlist_key` — `go|.|mutation_low|soft_cap_mutation_deferred_go`
   — in the finding, the JSON and the report, and `is_allowlisted` matched the symbol
