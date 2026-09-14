@@ -213,3 +213,65 @@ def test_the_report_warns_that_the_reading_expires(tmp_path):
     text = cd.render(cd.run(brief, tmp_path), brief)
     assert "does not survive the tree it measured" in text
     assert "about to implement on" in text
+
+
+# ── a guard passing today is the criterion working ──────────────────────────
+
+def test_a_declared_guard_is_not_counted_as_a_defect(tmp_path):
+    """Reported by a consumer across 16 briefs, and the distinction is the point.
+
+        B-029 AC-007  "the declared non-goal holds"                 -> guard
+        B-020 AC-006  "the declared terminal sets are untouched"    -> guard
+        B-012 AC-001  "the four divergences are gone"               -> DEFECT
+
+    The first two passing today is the criterion working; the third passing today is an
+    item that closes on work nobody did. A `test -s store.go` asserting a file still
+    exists would be a BROKEN item if it failed today.
+    """
+    brief = _brief(tmp_path,
+                   "AC-006: the declared terminal sets are untouched — `true` exits 0")
+    rep = cd.run(brief, tmp_path)
+    assert rep.guards, "a declared guard must be recognised"
+    assert rep.already_passing == [], "and must not be counted as a defect"
+
+
+def test_a_real_defect_is_still_refused_beside_a_guard(tmp_path):
+    brief = _brief(tmp_path,
+                   "AC-006: the terminal sets are untouched — `true` exits 0",
+                   "AC-001: the four divergences are gone — `true` exits 0")
+    rep = cd.run(brief, tmp_path)
+    assert len(rep.guards) == 1
+    assert len(rep.already_passing) == 1
+
+
+def test_the_guard_label_is_read_narrowly(tmp_path):
+    """Without a label a criterion counts as a defect, which is the safe direction.
+
+    A defect called a guard is silence; a guard called a defect is a question.
+    """
+    brief = _brief(tmp_path, "AC-001: the endpoint returns quickly — `true` exits 0")
+    assert cd.run(brief, tmp_path).guards == []
+
+
+def test_the_report_names_guards_separately_from_defects(tmp_path):
+    brief = _brief(tmp_path, "AC-006: nothing stops compiling — `true` exits 0")
+    text = cd.render(cd.run(brief, tmp_path), brief)
+    assert "pass BY DESIGN" in text
+    assert "passes by design (guard)" in text or "guard, by design" in text
+
+
+# ── the parser must not invent clauses ──────────────────────────────────────
+
+def test_a_tool_named_in_prose_is_not_run_as_a_clause(tmp_path):
+    """Measured on a consumer's B-012: `awk` and `diff` sit in backticks inside the
+    prose around the command, match the runnable vocabulary, and were executed — `awk`
+    alone exits 0 and was reported as a clause that already passes, inflating the count
+    of inert clauses with artefacts of this parser."""
+    brief = _brief(tmp_path, "AC-003: `echo 1` prints 1, using `awk` and `diff`")
+    clauses = cd.run(brief, tmp_path).results[0].clauses
+    assert [c.command for c in clauses] == ["echo 1"]
+
+
+def test_a_self_sufficient_command_still_counts_with_one_token(tmp_path):
+    brief = _brief(tmp_path, "AC-001: `true` exits 0")
+    assert cd.run(brief, tmp_path).results[0].clauses
