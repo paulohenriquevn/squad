@@ -36,7 +36,12 @@ MANDATORY_SECTIONS = [
 ]
 
 ADR_HEADER_RE = re.compile(r"^###\s+D\d+\s*(?:—|-)", re.MULTILINE)
-REPO_DECL_RE = re.compile(r"^\*\*Repo:\*\*\s*`?([A-Za-z0-9_.\-]+)`?", re.MULTILINE)
+# `/` is in the class because a routing table addresses a monorepo module by PATH
+# (`cmd/service-ops`, `infra/tests`). Without it the capture stopped at the first segment,
+# so a document whose repo is `cmd/service-ops` matched no routing entry, counted ITSELF
+# among the foreign repos, and was charged an ADR for a cross-repo change to the very
+# repository it is about. Measured on a consumer path-addressed in 5 of 7 domains.
+REPO_DECL_RE = re.compile(r"^\*\*Repo:\*\*\s*`?([A-Za-z0-9_.\-/]+)`?", re.MULTILINE)
 
 
 def _known_repos(project_root: Path | None = None) -> set[str] | None:
@@ -135,7 +140,34 @@ def check_opportunity_completeness(
             r for r in repos
             if re.search(rf"(?<![A-Za-z0-9_./-]){re.escape(r)}(?![A-Za-z0-9_-])", blast_lower)
         }
-        foreign_repos = sorted(r for r in mentioned if r != own_repo)
+        # A repo NAMED IN ORDER TO RECORD THAT IT IS NOT REACHED is evidence, not a
+        # cross-repo change. Without this, an author who enumerates the negative — the
+        # strongest thing a blast radius can carry — is charged for a decision that does
+        # not exist, and the only way to clear the gate is to delete the measurement.
+        #
+        # Measured 2026-09-12: three independent DISCOVER agents hit this in one session
+        # on one project. Two wrote a defensive ADR for a non-existent decision; one
+        # relocated the measurement out of the corner it belonged in. None deleted the
+        # evidence, so the checker cost three authors work and bought nothing.
+        #
+        # The marker only ever SUBTRACTS, and only repos it names explicitly: an empty
+        # marker is not a blanket exemption, and a repo genuinely reached is unaffected
+        # by one appearing elsewhere in the same corner.
+        not_reached = {
+            r
+            for m in re.finditer(r"<!--\s*NOT-REACHED:(.*?)-->", blast_body, re.DOTALL)
+            for r in repos
+            # The trailing class EXCLUDES `/` here, unlike the mention matcher above.
+            # A marker naming `operators/api` must subtract that entry and nothing else:
+            # with `/` permitted, `operators` matched inside it and a genuinely-reached
+            # repo left `foreign_repos` unnamed, suppressing the ADR this gate exists to
+            # demand. That fails OPEN, which is worse than the defect the marker fixed —
+            # that one charged an author for an ADR nobody needed, and did it loudly.
+            if re.search(
+                rf"(?<![A-Za-z0-9_./-]){re.escape(r)}(?![A-Za-z0-9_\-/])", m.group(1).lower()
+            )
+        }
+        foreign_repos = sorted(r for r in mentioned - not_reached if r != own_repo)
         cross_repo = bool(foreign_repos)
         adr_required = cross_repo
     adr_missing = adr_required and adr_count == 0

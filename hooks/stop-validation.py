@@ -62,7 +62,10 @@ CONFIG_FILE = re.compile(r"(^|/)[a-z0-9.-]+\.config\.[a-z]+$")
 CHANGELOG_TOUCH = re.compile(r"(^|/)CHANGELOG\.md$|^\.changeset/[^/]+\.md$")
 SECRET_FILE = re.compile(
     r"(^|/)(\.env(\.[a-z0-9_-]+)?|credentials([._-][a-z0-9]+)?"
-    r"|[a-z0-9_-]*secrets?(\.[a-z0-9_-]+)?\.(ya?ml|json|env|txt))$"
+    # A prefix must be SEPARATED, not glued: `app-secrets.yaml` is a manifest,
+    # `externalsecrets.yaml` is a Helm template that RENDERS one and holds
+    # no value. The unanchored `[a-z0-9_-]*` graded chart sources as secrets.
+    r"|([a-z0-9_-]*[._-])?secrets?(\.[a-z0-9_-]+)?\.(ya?ml|json|env|txt))$"
     r"|\.(pem|key|p12|pfx|jks)$")
 #: The manifests that mark the root of a unit, so the test search stays inside
 #: one package instead of scanning a monorepo.

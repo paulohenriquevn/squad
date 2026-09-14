@@ -34,52 +34,84 @@ def _run(opportunity_path: Path, project_root: Path) -> tuple[int, dict]:
     return result.returncode, data
 
 
-@pytest.fixture
-def staged(project_root: Path):
-    """Write an opportunity inside the repo so the project root resolves to it.
+def _mirror_repo(real_root: Path, tmp_path: Path) -> Path:
+    """A stand-in repository the test may write to, sharing the real one's tree.
 
-    Pointer resolution walks up from the artifact, so an artifact parked in /tmp would
-    resolve every repo-relative pointer as fabricated.
+    Every top-level entry is symlinked, so a repo-relative pointer in the artifact still
+    resolves to the real file — which is why this fixture needed the real root in the
+    first place. `.squad` is the exception: it is copied shallowly so the routing table
+    and the records this test writes land on the copy.
+
+    ## Why this replaced writing into the checkout
+
+    The fixture used to write `rules/domain-routing.txt` in the repository itself
+    whenever the shipped table held no data rows, which is how the kit ships it, and
+    restore it after `yield`. That restore was the entire safety mechanism and teardown
+    is not guaranteed: kill the run — a CI timeout, Ctrl-C, an interrupted slice — and
+    the checkout is left holding two lines of test fixture in place of a 29-line rule
+    file. Observed on 2026-09-11, and found only because an unrelated `git status`
+    showed the file modified (#87).
+
+    A test that can corrupt its own repository when killed should not be able to,
+    however careful its teardown is.
     """
-    written: list[Path] = []
-
-    # Cross-repo detection reads the project's routing table. This repository ships
-    # it EMPTY on purpose (`agents/README.md` records what shipping a populated one
-    # cost an adopter), so an end-to-end test of the ADR cap has to provide one.
-    # Never overwrite a real table: a consumer running this suite owns theirs.
-    table = project_root / "rules" / "domain-routing.txt"
-    borrowed = table.read_text(encoding="utf-8") if table.is_file() else None
-    if borrowed is None or not [
-        ln for ln in borrowed.splitlines() if ln.strip() and not ln.startswith("#")
-    ]:
-        table.parent.mkdir(parents=True, exist_ok=True)
-        table.write_text(
-            "contracts | contracts | agents/contracts.md\n"
-            "platform  | control-plane, cli-tool | agents/platform.md\n",
-            encoding="utf-8",
-        )
-        restore = borrowed
+    mirror = tmp_path / "mirror"
+    mirror.mkdir()
+    for entry in real_root.iterdir():
+        if entry.name in (".squad", ".git"):
+            continue
+        (mirror / entry.name).symlink_to(entry)
+    # A real `.git` would make the mirror look like the same repository to anything that
+    # walks up looking for one; an empty marker directory is enough for root detection.
+    (mirror / ".git").mkdir()
+    real_data = real_root / ".squad"
+    if real_data.is_dir():
+        for entry in real_data.iterdir():
+            target = mirror / ".squad" / entry.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.symlink_to(entry)
     else:
-        restore = ...  # a real table: leave it exactly as found
+        (mirror / ".squad").mkdir()
+    return mirror
+
+
+@pytest.fixture
+def staged(project_root: Path, tmp_path: Path):
+    """Write an opportunity inside a mirror of the repo, never inside the repo.
+
+    Pointer resolution walks up from the artifact, so an artifact parked in a bare
+    temporary directory would resolve every repo-relative pointer as fabricated. The
+    mirror keeps that property — the tree is the real one through symlinks — while
+    keeping every write this test makes off the checkout.
+    """
+    root = _mirror_repo(project_root, tmp_path)
+
+    # The routing table: this repository ships it with no data rows on purpose
+    # (`agents/README.md` records what shipping a populated one cost an adopter), and
+    # cross-repo detection needs one. On the mirror it is simply written — there is
+    # nothing to preserve and nothing to restore.
+    table = root / ".squad" / "domain-routing.txt"
+    if table.is_symlink() or table.exists():
+        table.unlink()
+    table.write_text(
+        "contracts | contracts | agents/contracts.md\n"
+        "platform  | control-plane, cli-tool | agents/platform.md\n",
+        encoding="utf-8",
+    )
 
     def _write(name: str, content: str) -> Path:
-        directory = write_records_dir(project_root, "discoveries") / "opportunities"
+        directory = write_records_dir(root, "discoveries") / "opportunities"
+        # The mirrored `.squad/records` is a symlink to the real one; replace it with a
+        # real directory before writing, or these artifacts land in the checkout.
+        for part in (directory, *directory.parents):
+            if part.is_symlink():
+                part.unlink()
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / name
         path.write_text(content, encoding="utf-8")
-        written.append(path)
         return path
 
     yield _write
-
-    for path in written:
-        path.unlink(missing_ok=True)
-
-    if restore is not ...:
-        if restore is None:
-            table.unlink(missing_ok=True)
-        else:
-            table.write_text(restore, encoding="utf-8")
 
 
 def test_a_structurally_perfect_opportunity_is_held_until_the_panel_sits(
@@ -222,3 +254,44 @@ def test_cross_repo_without_adr_is_capped(staged) -> None:
     _rc, data = _run(path, path.parents[4])
     assert "no_adr_on_cross_repo_change" in data["hard_caps_triggered"]
     assert data["final_score_after_caps"] <= 70.0
+
+
+def test_the_fixture_never_writes_into_the_checkout(project_root: Path, tmp_path: Path):
+    """The guard for #87, asserted rather than trusted to a teardown.
+
+    The old fixture wrote `rules/domain-routing.txt` in the repository and restored it
+    after `yield`. Teardown does not run when a process is killed, so an interrupted
+    slice left the checkout holding two lines of test fixture in place of a 29-line rule
+    file — found by an unrelated `git status`, days later.
+
+    This asserts the property directly: build the mirror, write through it, and the real
+    file is byte-identical afterwards. A test that cannot corrupt its repository does
+    not need a teardown to be careful.
+    """
+    real_table = project_root / "rules" / "domain-routing.txt"
+    before = real_table.read_bytes() if real_table.is_file() else None
+
+    root = _mirror_repo(project_root, tmp_path)
+    mirror_table = root / ".squad" / "domain-routing.txt"
+    if mirror_table.is_symlink() or mirror_table.exists():
+        mirror_table.unlink()
+    mirror_table.write_text("contracts | contracts | agents/contracts.md\n",
+                            encoding="utf-8")
+
+    assert mirror_table.read_text(encoding="utf-8").startswith("contracts")
+    after = real_table.read_bytes() if real_table.is_file() else None
+    assert after == before, "the fixture wrote into the checkout"
+
+
+def test_the_mirror_keeps_repo_relative_pointers_resolvable(project_root: Path,
+                                                            tmp_path: Path):
+    """The property the real root was there for in the first place.
+
+    Pointer resolution walks up from the artifact. If the mirror did not carry the real
+    tree, every repo-relative pointer in an opportunity would score as fabricated and
+    these tests would pass for the wrong reason.
+    """
+    root = _mirror_repo(project_root, tmp_path)
+    for cited in ("rules/cycle-discover.md",
+                  "skills/discover-confidence/scripts/check_evidence_pointers.py"):
+        assert (root / cited).is_file(), f"{cited} does not resolve through the mirror"

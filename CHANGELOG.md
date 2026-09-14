@@ -7,6 +7,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The cross-repo detector charged an author for enumerating a negative** (#B-024, #B-027, #B-029)
+  `check_opportunity_completeness` collected every known repo name appearing anywhere in an
+  opportunity's Blast Radius and required an ADR for each, with no notion of negation. So an
+  author who named a repo **in order to record that it was checked and is NOT reached** paid for
+  a cross-repo decision that does not exist — and the only way to clear the gate was to delete
+  the measurement, which is the strongest thing such a corner can carry.
+
+  Measured 2026-09-12: three independent DISCOVER agents hit this in one session on one project.
+  Two wrote a defensive ADR for a non-existent decision; the third relocated the measurement out
+  of the corner it belonged in and said so in the document. None deleted the evidence. The
+  checker cost three authors work and bought nothing.
+
+  A `<!-- NOT-REACHED: <repo> [<repo> ...] -->` marker in the Blast Radius now subtracts the
+  repos it names, following the kit's existing marker shape (`<!-- UNKNOWN: … -->`,
+  `<!-- ADR-DEFER-WIRING-B: … -->`). It only ever subtracts, only what it names explicitly: an
+  empty marker is not a blanket exemption, and a repo genuinely reached is unaffected by one
+  appearing elsewhere in the same corner. Three behavioural tests cover all three directions.
+
+  Deliberately NOT retroactive: opportunities written before the marker existed score exactly as
+  they did, so the fix adds a capability rather than loosening a gate.
+
 - **The stop gate graded a Helm chart's own template as a secret** (#B-033)
   `SECRET_FILE` opened with `[a-z0-9_-]*` before `secrets?`, so any prefix glued to
   the word matched: `externalsecrets.yaml` — chart SOURCE, which contains template
@@ -108,6 +129,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   now states before anyone picks it: a workflow column is a rank in 0..5 whose main path
   may not move backwards, and a dataflow carries at most five stages. Both renderers stay
   optional and the phase depends on neither; the mermaid is still the drawing.
+
+### Fixed
+- **A fixture rewrote the real `rules/domain-routing.txt` and only restored it on teardown** (#87)
+  The discover-confidence end-to-end fixture wrote the routing table into the repository
+  whenever the shipped one held no data rows — which is how the kit ships it — and
+  restored it after `yield`. That restore was the entire safety mechanism, and teardown
+  does not run when a process is killed: an interrupted slice left the checkout holding
+  two lines of test fixture in place of a 29-line rule file, found days later by an
+  unrelated `git status`. The fixture now builds a mirror of the repository in
+  `tmp_path` — every top-level entry symlinked, so repo-relative pointers still resolve,
+  which is the property the real root was there for — and writes only into the mirror.
+  Two tests assert the property directly rather than trusting a teardown to be careful.
+
+- **The plan gate reached the network by default, and its answer changed every run** (#91)
+  `cq_invoke.py` appended `--no-network` only when `CODE_QUALITY_NO_NETWORK` was set, and
+  nothing in the kit or in any measured install ever set it — so every plan gate
+  everywhere took the networked path. That path is not reproducible: measured on a
+  consumer, four runs of one module answered 97, 76, 55 and 36 unverified modules, each
+  seeding a hard cap that is neither baselinable nor ADR-dismissible. Thirteen plans
+  scoring 89-100 structurally sat at INVALID because of it. The kit had already accepted
+  this argument for the baseline — `--write-baseline` forces offline because *"a baseline
+  recorded with the network on is worthless"* — and the asymmetry was the defect: the
+  baseline was protected from irreproducibility and the gate that blocks delivery was
+  not. Offline is now the default and `CODE_QUALITY_NETWORK=1` is an explicit opt-in;
+  `CODE_QUALITY_NO_NETWORK` still works and still means offline.
+
+- **A config with no enabled language never said why it audited nothing** (#91)
+  The run reported `verdict: INVALID`, `hard_caps_triggered: ["no_languages_audited"]`
+  and `skip_reasons: {}`. The stable id names the symptom; nothing named the cause, which
+  on the measured consumer was the shipped template — 83 lines, all commented examples,
+  never configured for that project. A session read the id and concluded a backlog item
+  had to be implemented before anything could move; the fix was one configuration row.
+  The reason now lands in `skip_reasons`, where a reader looks for why nothing happened,
+  and says it is configuration rather than a defect in the code under test.
 
 ### Fixed
 - **The published chain named nine phases and the kit runs ten** (#75)
@@ -937,6 +992,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   The syntax is documented in `rules/cycle-rule-schema.md § An exemption declares its class`.
 
 ### Fixed
+
+- **`NOT-REACHED` subtracted a repo it never named** (`discover-confidence`)
+  The marker's trailing lookahead permitted `/`, so a marker naming `operators/api` also matched
+  `operators` and removed a genuinely-reached repository from `foreign_repos` — suppressing the ADR
+  the gate exists to demand. That fails OPEN, worse in kind than the defect the marker fixed, which
+  merely charged an author for an ADR nobody needed and did it loudly. Found on a consumer whose
+  routing table carries both entries. One behavioural test; the mention matcher above it is left
+  permissive on purpose, because over-detecting a mention fails closed.
+
+- **A path-addressed repo counted itself as foreign** (`discover-confidence`)
+  `REPO_DECL_RE` excluded `/` from its character class, so `**Repo:** cmd/service-ops` captured as
+  `cmd`. A routing table addressing a monorepo module by path matched nothing, the document's own
+  repo landed in `foreign_repos`, and the gate demanded an ADR for a cross-repo change to the
+  repository the opportunity is about.
+
+  Measured on a consumer path-addressed in 5 of 7 domains. Two authors had worked around it —
+  one extended a `NOT-REACHED` marker over its own module, the other wrote a defensive ADR and
+  recorded it as a scorer artifact. Three behavioural tests; verified non-regressive, with the
+  affected opportunities scoring exactly as before.
 
 - **`done` was a task status the schema accepted and no consumer recognised (#50)**
   Found while reviewing the loop's own documentation. `done` was in `_VALID_STATUSES`, so a

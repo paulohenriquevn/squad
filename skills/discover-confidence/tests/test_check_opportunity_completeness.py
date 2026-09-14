@@ -156,3 +156,145 @@ def test_repos_named_outside_blast_radius_are_ignored(tmp_path: Path) -> None:
     )
     report = check_opportunity_completeness(path, known_repos=REPOS)
     assert report["cross_repo"] is False
+
+
+# --- The cross-repo detector was blind to negation --------------------------
+#
+# Naming a repo in order to record that it was checked and NOT reached cost an ADR for a
+# decision that does not exist. The honest alternative — deleting the name — erases the
+# enumerated negative, so authors had no move that both satisfied the gate and kept the
+# evidence. Marker shape: <!-- NOT-REACHED: <repo> [<repo> ...] -->
+
+
+def test_a_repo_named_as_not_reached_does_not_require_an_adr(tmp_path: Path) -> None:
+    """The enumerated negative is evidence, not a cross-repo change."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        blast=(
+            "Reaches `web-console` only. Verified NOT reached, each by dependency scan:\n"
+            "<!-- NOT-REACHED: contracts control-plane cli-tool -->\n"
+            "- `contracts` — 0 importer relations\n"
+            "- `control-plane` — 0\n"
+            "- `cli-tool` — names it in a string literal, never imports it\n"
+        ),
+    )
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["cross_repo"] is False, report
+    assert report["foreign_repos"] == [], report
+    assert report["adr_required"] is False, report
+    assert report["adr_missing"] is False, report
+
+
+def test_a_repo_genuinely_reached_still_requires_an_adr(tmp_path: Path) -> None:
+    """The marker must not become a way to switch the requirement off."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        blast=(
+            "Reaches `contracts`, whose importers all recompile.\n"
+            "<!-- NOT-REACHED: control-plane -->\n"
+            "- `control-plane` — 0 importer relations\n"
+        ),
+    )
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["cross_repo"] is True, report
+    assert "contracts" in report["foreign_repos"], report
+    assert "control-plane" not in report["foreign_repos"], report
+    assert report["adr_required"] is True, report
+
+
+def test_an_empty_not_reached_marker_subtracts_nothing(tmp_path: Path) -> None:
+    """A marker naming no repo is not a blanket exemption."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        blast="Reaches `contracts`.\n<!-- NOT-REACHED: -->\n",
+    )
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["cross_repo"] is True, report
+    assert "contracts" in report["foreign_repos"], report
+
+
+# --- A path-addressed repo counted ITSELF as foreign -----------------------
+#
+# `REPO_DECL_RE`'s character class excluded `/`, so `**Repo:** cmd/service-ops` captured as
+# `cmd`. A routing table declaring `cmd/service-ops` then failed to match its own document's
+# repo, the repo landed in `foreign_repos`, and the gate demanded an ADR for a cross-repo
+# change to the repository the document is about.
+#
+# Measured 2026-09-12 on a consumer whose routing table is path-addressed in 5 of 7
+# domains: `cmd/service-ops`, `infra/scripts`, `infra/tests`, `operators/api`,
+# `tools/gen-service-auth-ed25519`. Every opportunity filed against one of them paid for a
+# decision that does not exist. Found by the fourth agent to hit the neighbouring
+# NOT-REACHED limit in one session.
+
+
+def test_a_path_addressed_repo_is_not_foreign_to_itself(tmp_path: Path) -> None:
+    """A repo declared as `owner/name` must match a routing entry spelled the same way."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        repo="tools/linter",
+        blast="Reaches nothing outside this module.\n",
+    )
+    report = check_opportunity_completeness(path, known_repos={"tools/linter", "contracts"})
+    assert report["own_repo"] == "tools/linter", report
+    assert report["foreign_repos"] == [], report
+    assert report["cross_repo"] is False, report
+    assert report["adr_required"] is False, report
+
+
+def test_a_path_addressed_repo_still_sees_a_real_foreign_repo(tmp_path: Path) -> None:
+    """Widening the capture must not stop the gate detecting a genuine cross-repo reach."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        repo="tools/linter",
+        blast="Recompiles every importer of `contracts`.\n",
+    )
+    report = check_opportunity_completeness(path, known_repos={"tools/linter", "contracts"})
+    assert report["own_repo"] == "tools/linter", report
+    assert report["foreign_repos"] == ["contracts"], report
+    assert report["adr_required"] is True, report
+
+
+def test_a_flat_repo_name_is_unchanged(tmp_path: Path) -> None:
+    """The common case must be untouched by the widening."""
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        repo="web-console",
+        blast="Reaches nothing else.\n",
+    )
+    report = check_opportunity_completeness(path, known_repos=REPOS)
+    assert report["own_repo"] == "web-console", report
+    assert report["foreign_repos"] == [], report
+
+
+def test_not_reached_subtracts_only_the_repo_it_names(tmp_path: Path) -> None:
+    """A marker naming `owner/sub` must not silently subtract `owner`.
+
+    The first version of this marker used a lookahead that permitted `/`, so
+    `<!-- NOT-REACHED: operators/api -->` matched `operators` too and removed a
+    genuinely-reached repo from `foreign_repos` — suppressing an ADR the gate exists to
+    demand. That failure is OPEN, which is worse than the defect the marker was added to
+    fix: that one merely charged an author for an ADR nobody needed, loudly.
+
+    Measured 2026-09-12 by an agent whose Blast Radius named both entries.
+    """
+    path = _opportunity(
+        tmp_path,
+        "B-014-opportunity.md",
+        repo="web-console",
+        blast=(
+            "Reaches `contracts` and `contracts/api`.\n"
+            "<!-- NOT-REACHED: contracts/api -->\n"
+        ),
+    )
+    report = check_opportunity_completeness(
+        path, known_repos={"web-console", "contracts", "contracts/api"}
+    )
+    assert "contracts" in report["foreign_repos"], report
+    assert "contracts/api" not in report["foreign_repos"], report
+    assert report["adr_required"] is True, report
