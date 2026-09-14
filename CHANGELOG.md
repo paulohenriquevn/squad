@@ -131,6 +131,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   optional and the phase depends on neither; the mermaid is still the drawing.
 
 ### Fixed
+- **A fixture rewrote the real `rules/domain-routing.txt` and only restored it on teardown** (#87)
+  The discover-confidence end-to-end fixture wrote the routing table into the repository
+  whenever the shipped one held no data rows — which is how the kit ships it — and
+  restored it after `yield`. That restore was the entire safety mechanism, and teardown
+  does not run when a process is killed: an interrupted slice left the checkout holding
+  two lines of test fixture in place of a 29-line rule file, found days later by an
+  unrelated `git status`. The fixture now builds a mirror of the repository in
+  `tmp_path` — every top-level entry symlinked, so repo-relative pointers still resolve,
+  which is the property the real root was there for — and writes only into the mirror.
+  Two tests assert the property directly rather than trusting a teardown to be careful.
+
 - **The plan gate reached the network by default, and its answer changed every run** (#91)
   `cq_invoke.py` appended `--no-network` only when `CODE_QUALITY_NO_NETWORK` was set, and
   nothing in the kit or in any measured install ever set it — so every plan gate
@@ -991,7 +1002,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   permissive on purpose, because over-detecting a mention fails closed.
 
 - **A path-addressed repo counted itself as foreign** (`discover-confidence`)
-  `REPO_DECL_RE` excluded `/` from its character class, so `**Repo:** cmd/theo-ops` captured as
+  `REPO_DECL_RE` excluded `/` from its character class, so `**Repo:** cmd/service-ops` captured as
   `cmd`. A routing table addressing a monorepo module by path matched nothing, the document's own
   repo landed in `foreign_repos`, and the gate demanded an ADR for a cross-repo change to the
   repository the opportunity is about.

@@ -218,13 +218,13 @@ def test_an_empty_not_reached_marker_subtracts_nothing(tmp_path: Path) -> None:
 
 # --- A path-addressed repo counted ITSELF as foreign -----------------------
 #
-# `REPO_DECL_RE`'s character class excluded `/`, so `**Repo:** cmd/theo-ops` captured as
-# `cmd`. A routing table declaring `cmd/theo-ops` then failed to match its own document's
+# `REPO_DECL_RE`'s character class excluded `/`, so `**Repo:** cmd/service-ops` captured as
+# `cmd`. A routing table declaring `cmd/service-ops` then failed to match its own document's
 # repo, the repo landed in `foreign_repos`, and the gate demanded an ADR for a cross-repo
 # change to the repository the document is about.
 #
 # Measured 2026-09-12 on a consumer whose routing table is path-addressed in 5 of 7
-# domains: `cmd/theo-ops`, `infra/scripts`, `infra/tests`, `operators/api`,
+# domains: `cmd/service-ops`, `infra/scripts`, `infra/tests`, `operators/api`,
 # `tools/gen-service-auth-ed25519`. Every opportunity filed against one of them paid for a
 # decision that does not exist. Found by the fourth agent to hit the neighbouring
 # NOT-REACHED limit in one session.

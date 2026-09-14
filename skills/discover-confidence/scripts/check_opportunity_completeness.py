@@ -37,8 +37,8 @@ MANDATORY_SECTIONS = [
 
 ADR_HEADER_RE = re.compile(r"^###\s+D\d+\s*(?:—|-)", re.MULTILINE)
 # `/` is in the class because a routing table addresses a monorepo module by PATH
-# (`cmd/theo-ops`, `infra/tests`). Without it the capture stopped at the first segment,
-# so a document whose repo is `cmd/theo-ops` matched no routing entry, counted ITSELF
+# (`cmd/service-ops`, `infra/tests`). Without it the capture stopped at the first segment,
+# so a document whose repo is `cmd/service-ops` matched no routing entry, counted ITSELF
 # among the foreign repos, and was charged an ADR for a cross-repo change to the very
 # repository it is about. Measured on a consumer path-addressed in 5 of 7 domains.
 REPO_DECL_RE = re.compile(r"^\*\*Repo:\*\*\s*`?([A-Za-z0-9_.\-/]+)`?", re.MULTILINE)
