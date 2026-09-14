@@ -130,6 +130,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   may not move backwards, and a dataflow carries at most five stages. Both renderers stay
   optional and the phase depends on neither; the mermaid is still the drawing.
 
+### Added
+- **`check_chain_preconditions.py` — a chain that cannot finish no longer starts** (#93)
+  A consumer ran the loop for hours and produced 85 items, 57 opportunities, 39 panels
+  and 13 plans scoring 89-100 structurally — and zero implemented, because every plan hit
+  `no_languages_audited` at the quality gate. The cause was one unconfigured file,
+  readable in milliseconds before any of it started. Nothing was wrong with the work; the
+  refusal arrived at the end, after the effort, and item by item, which makes a property
+  of the installation look like a property of each item and sends the next session to fix
+  the wrong thing. It did. The gate now runs first in `cycle-maintenance`'s loop and
+  refuses to start on four conditions that stop every item whatever anyone does to the
+  item: a language config with no ENABLED row, an enabled row whose manifest is absent
+  (the case an enablement check alone hides — `go | go.mod` is well formed and audits
+  nothing in a `go.work` workspace), an empty routing table, and a missing registry. A
+  judgement is deliberately not checked: a gate that waits on a decision is a gate that
+  never lets you start.
+
 ### Fixed
 - **A fixture rewrote the real `rules/domain-routing.txt` and only restored it on teardown** (#87)
   The discover-confidence end-to-end fixture wrote the routing table into the repository
