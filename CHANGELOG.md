@@ -146,6 +146,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   judgement is deliberately not checked: a gate that waits on a decision is a gate that
   never lets you start.
 
+### Changed
+- **An item the loop finds is approved when it is filed** (#93)
+  A sweep finding is born `approved`, attributed to `system/autonomous-sweep`. Running
+  the loop unattended IS the decision to act on what the loop finds — a sweep is not a
+  proposal awaiting an answer, it is the execution of an answer already given, and
+  requiring a person per finding withdraws the decision already made and makes the
+  autonomy conditional on somebody being awake. An item whose `source` is `human` is
+  unaffected: born `raw`, and `/backlog-approve` still renders only those, because a
+  person deciding what a person asked for is the case that gate was built for. The new
+  `approved_by` field keeps the two apart for the same reason `signed-by: human/…` and
+  `signed-by: judge/…` are different claims — they are not worth the same, and a
+  registry where everything is `system/…` is one nobody has read. The preflight reports
+  the split rather than only the count, because a loop that approves its own findings
+  can feed itself and the only bound is somebody seeing the number before the next run.
+
 ### Added
 - **The system never starts on a backlog nobody approved** (#93)
   `check_chain_preconditions` now refuses to begin when no item is at `approved`. It has

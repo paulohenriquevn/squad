@@ -199,8 +199,24 @@ def check_approved(project: Path) -> Check:
     approved = len(re.findall(r"^status:\s*approved\s*$", text, re.M))
     triaged = len(re.findall(r"^status:\s*triaged\s*$", text, re.M))
     if approved:
-        return Check("approved work", True,
-                     f"{approved} item(s) approved and ready to run")
+        # WHO approved, not just how many. Since 2026-09-14 a sweep finding is born
+        # `approved` under a standing authorisation, so a count alone stopped being able
+        # to answer "has anyone read this registry?" — and a loop that approves its own
+        # findings can feed itself. The split is reported at the one moment it can still
+        # change a decision: before the next run starts.
+        by_human = len(re.findall(r"^approved_by:\s*human/", text, re.M))
+        by_system = len(re.findall(r"^approved_by:\s*system/", text, re.M))
+        unattributed = approved - by_human - by_system
+        parts = [f"{approved} item(s) approved"]
+        if by_human or by_system:
+            parts.append(f"{by_human} by a person, {by_system} by the loop itself")
+        if unattributed:
+            parts.append(f"{unattributed} with no attribution — those predate "
+                         "`approved_by` and are not evidence a person decided")
+        detail = " · ".join(parts)
+        # Not a failure: a registry nobody has read is a legitimate state to be in, and
+        # an illegitimate one to be in unknowingly. The gate makes it known.
+        return Check("approved work", True, detail)
     return Check(
         "approved work", False,
         f"no item is `approved` ({triaged} sit at `triaged`) — the registry holds "

@@ -161,7 +161,12 @@ def main() -> int:
     moved, skipped = [], []
     for item in ticked:
         cmd = [sys.executable, str(writer), str(backlog), item,
-               "--to", "approved", "--because", because]
+               "--to", "approved", "--because", because,
+               # The attribution the registry keeps. `--because` reaches only an
+               # impediment, so without this the registry records THAT an item was
+               # approved and never by whom — and a person's commitment becomes
+               # indistinguishable from one the loop filed for itself.
+               "--approved-by", signer]
         if args.dry_run:
             cmd.append("--dry-run")
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)

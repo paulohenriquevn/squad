@@ -139,16 +139,18 @@ def test_a_named_human_is_still_a_human(tmp_path):
     assert not ap.signer_is_human("")
 
 
-def test_who_decided_survives_in_the_brief_not_in_the_registry(tmp_path):
-    """Where the authorship of a decision actually lives, asserted rather than assumed.
+def test_who_decided_is_recorded_in_the_registry(tmp_path):
+    """The stronger property the earlier version of this test asked for.
 
-    `backlog_status.py` accepts `--because` and uses it only for an impediment, so the
-    reason and the signer do NOT reach the status line. The registry records THAT the
-    item was approved, never by whom.
+    It used to assert the opposite — that the signer does NOT reach the status line —
+    and said so with a note: if this starts passing, `backlog_status` began recording
+    the attribution and the test should assert the stronger property instead. It did,
+    on 2026-09-14, when a sweep finding started being born `approved` under a standing
+    authorisation and a count of approvals stopped being able to answer "has anyone
+    read this registry?".
 
-    The signed brief is the record: it names the signer, carries the ticks, and sits
-    under the records root beside the registry it moved. This test pins that division so
-    nobody reads the bare `status: approved` as carrying provenance it does not have.
+    `approved_by` is what keeps a person's commitment distinguishable from one the loop
+    filed for itself.
     """
     project = _registry(tmp_path, "B-001")
     brief = _brief(tmp_path, ticked=["B-001"], signed=True, signer="human/paulo")
@@ -156,10 +158,7 @@ def test_who_decided_survives_in_the_brief_not_in_the_registry(tmp_path):
 
     registry = (project / "BACKLOG.md").read_text(encoding="utf-8")
     assert "status: approved" in registry
-    assert "human/paulo" not in registry, (
-        "if this starts passing, backlog_status began recording the reason and this "
-        "test should assert the stronger property instead")
-    assert "human/paulo" in brief.read_text(encoding="utf-8")
+    assert "approved_by: human/paulo" in registry
 
 
 # ── the writing path ────────────────────────────────────────────────────────

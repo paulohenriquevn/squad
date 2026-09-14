@@ -195,3 +195,33 @@ def test_with_no_registry_approval_is_unmeasurable_not_failed(tmp_path):
     """Two questions, and the second only exists if the first has an answer."""
     project = _project(tmp_path, backlog=False)
     assert _by_name(pre.measure(project), "approved work").ok is None
+
+
+def test_the_preflight_reports_who_approved_not_only_how_many(tmp_path):
+    """A count alone stopped answering "has anyone read this registry?".
+
+    Since a sweep finding is born `approved` under a standing authorisation, a loop that
+    approves its own findings can feed itself: a sweep produces items, working them
+    produces sweeps. Nothing bounds that except a person seeing the split — so the split
+    is reported at the one moment it can still change a decision, before the next run.
+    """
+    project = _project(tmp_path)
+    (project / "BACKLOG.md").write_text(
+        "# Backlog\n\n## Items\n\n"
+        "## B-001 — t\n\nstatus: approved\napproved_by: human/paulo\n\n"
+        "## B-002 — t\n\nstatus: approved\napproved_by: system/autonomous-sweep\n\n"
+        "## B-003 — t\n\nstatus: approved\napproved_by: system/autonomous-sweep\n",
+        encoding="utf-8")
+    check = _by_name(pre.measure(project), "approved work")
+    assert check.ok is True
+    assert "1 by a person, 2 by the loop itself" in check.detail
+
+
+def test_an_unattributed_approval_is_not_counted_as_a_persons(tmp_path):
+    """A bare `approved` predates the field. It is not evidence anybody decided."""
+    project = _project(tmp_path)
+    (project / "BACKLOG.md").write_text(
+        "# Backlog\n\n## Items\n\n## B-001 — t\n\nstatus: approved\n", encoding="utf-8")
+    check = _by_name(pre.measure(project), "approved work")
+    assert "no attribution" in check.detail
+    assert "not evidence a person decided" in check.detail
