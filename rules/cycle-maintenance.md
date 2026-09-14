@@ -31,6 +31,12 @@ Do NOT trigger when:
 ## Chain
 
 ```
+PREFLIGHT (once per session, before any item is touched):
+     ↓ mechanisms/gates/check_chain_preconditions.py .
+     ↓ exit 0 → continue
+     ↓ exit 1 → REFUSE TO START and surface what is unconfigured
+     ↓ exit 2 → could not measure; surface that, and do not read it as a pass
+     ↓
 SELECT next item:
      ↓ read BACKLOG.md                    scripts/select_backlog_item.py
      ↓ filter status ∈ {raw, triaged}
@@ -62,6 +68,24 @@ DELEGATE:
      ↓ status approved → /idea-to-release B-NNN
      ↓                   (cycle-plan → implement → code-quality → review → release)
      ↓
+
+**PREFLIGHT is first because the alternative was measured.** A consumer ran this loop
+for hours on 2026-09-13 and produced 85 items, 57 measured opportunities, 39 panels and
+13 plans scoring 89-100 structurally — and zero implemented, because every plan hit
+`no_languages_audited` at the quality gate. The cause was one unconfigured file that had
+been readable in milliseconds before any of it started.
+
+Nothing was wrong with the work and no phase misbehaved. What was wrong is WHEN the
+refusal arrived: at the end, after the effort, and item by item — which makes a property
+of the INSTALLATION look like a property of each item, and sends the next session to fix
+the wrong thing. It did: a session read the stable id and concluded a backlog item had
+to be implemented first.
+
+**It is better to run nothing than to carry unresolved conditions that block the chain.**
+A precondition here is a fact no amount of good work can overcome. A judgement is not —
+which languages to audit, whether a soft cap deserves an ADR, whether to record a
+baseline all have defensible answers, and a gate that refused to start until someone
+made them would be a gate that refuses to start.
 
 **`triaged → approved` is a step, not a formality, and this chain used to skip it.**
 `cycle-backlog.md` states the prohibition in its own words — *"`raw → planned` and

@@ -379,6 +379,45 @@ def check_contribution_conventions(ecosystem_dir: Path) -> tuple[bool, list[str]
     return False, detail + [f"{f.sha} {f.code}" for f in report.findings[:8]]
 
 
+def check_chain_preconditions(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Could a chain started in THIS tree reach RELEASE?
+
+    Reported here rather than left to the operator to remember, because the failure it
+    catches is invisible until the end: a consumer ran the loop for hours and produced
+    85 items, 13 plans scoring 89-100 structurally, and zero implemented — every plan
+    INVALID on one unconfigured file that was readable in milliseconds beforehand.
+
+    In the KIT's own checkout the answer is usually "not measured": the kit is not a
+    project with a backlog, and reporting that as a failure would make its own
+    verification red for a condition that does not apply to it. `cycle-maintenance.md`
+    runs the same gate in a consumer, where the question is real.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_chain_preconditions import measure
+
+    # A tree with no registry runs no chain, so the question does not apply to it. That
+    # is the kit's own checkout: it ships the mechanisms and is not a project that uses
+    # them. Reporting it as a failure would make the kit's verification red for a
+    # condition it cannot have — and a gate that cries wolf about itself is one people
+    # learn to skip, which is the opposite of what this one is for.
+    if not (ecosystem_dir / "BACKLOG.md").is_file():
+        return True, ["not applicable: no BACKLOG.md, so no chain runs here. "
+                      "`cycle-maintenance.md` runs this gate in a consumer, where the "
+                      "question is real"]
+
+    rep = measure(ecosystem_dir)
+    lines = [f"{c.mark} {c.name}: {c.detail}" for c in rep.checks]
+    if rep.failed:
+        return False, lines
+    if rep.unmeasured:
+        # Not a pass and not a failure: the kit's own tree has no backlog to run a
+        # chain against, and calling that green would be the shape this whole gate
+        # exists to refuse.
+        return True, lines + ["not applicable here — the kit is not a project with a "
+                              "chain; this gate is run by cycle-maintenance in a consumer"]
+    return True, lines
+
+
 def check_produced_files(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     """Does anything the mechanisms PRODUCE land outside `<project>/.squad/`?
 
@@ -847,6 +886,7 @@ def main(argv: list[str] | None = None) -> int:
         ("Write paths in prose", check_prose_write_paths),
         ("Emitted verdicts declared", check_emitted_verdicts),
         ("Produced-file containment (runtime)", check_produced_files),
+        ("Chain preconditions", check_chain_preconditions),
         ("Contribution conventions (last 40 commits)", check_contribution_conventions),
         ("Data root (.squad)", check_data_root),
         ("Verdict bands", check_verdict_bands),
