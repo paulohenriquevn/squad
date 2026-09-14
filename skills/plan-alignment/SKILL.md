@@ -412,3 +412,43 @@ generated page requires nothing.
 - Upstream: `/discover-plan` — supplies the evidence the brief opens with
 - Downstream: `/plan-write` — the plan's `## Context` cites this brief
 - 95%-confidence principle: `~/.claude/CLAUDE.md § 1`
+
+
+## Scripts
+
+| Script | Runs it | What it does |
+|---|---|---|
+| `check_criteria_discriminate.py` | on demand, before implementing | runs each acceptance criterion against the tree as it is and refuses the ones that already pass |
+
+
+## A criterion that passes before the work is not a criterion
+
+The 17 machine criteria grade the brief's SHAPE. One of them — `acceptance_executable` —
+asks whether a criterion names something that runs, from a text match over the bullet. It
+never asks whether that command could run, or whether its answer distinguishes anything.
+
+Measured on a consumer: a brief scored 14/14 executable where two criteria could not pass
+at all, and `go test -run <pattern-that-matches-nothing>` exits 0 with `[no tests to
+run]` — eight criteria in one brief were satisfied by writing no test.
+
+`check_criteria_discriminate.py` runs them:
+
+```bash
+python3 "$ECO/skills/plan-alignment/scripts/check_criteria_discriminate.py" \
+  .squad/records/alignment/B-001-alignment.md --repo-root .
+```
+
+A criterion that already passes cannot tell a finished item from an unstarted one. The
+run refuses those, names the ones it could not run, and marks as **undecidable** — never
+as sound — the ones whose bullet does not state what it expects.
+
+**It checks one of three states, and says so.** The full method needs the intended state
+and a deliberately wrong implementation the criterion must reject; the third is what
+catches a criterion measuring a NAME rather than a behaviour. A reviewer's formulation is
+worth keeping: *the minimal artefact that satisfies a criterion says exactly what it is
+sensitive to.* If an empty function body with the right name turns it green, it measures
+the name.
+
+**It runs commands out of a document.** With a timeout, in the repository root, opt-in,
+never from a hook or a scorer. Read what you are about to run if the brief did not come
+from your own session.

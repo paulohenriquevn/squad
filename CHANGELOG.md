@@ -146,6 +146,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   judgement is deliberately not checked: a gate that waits on a decision is a gate that
   never lets you start.
 
+### Added
+- **`check_criteria_discriminate.py` — acceptance criteria are run, not read** (#96)
+  `score_alignment` grades a criterion `executable` from a text match over the bullet: it
+  asks whether a command is NAMED, never whether it could run or whether its answer
+  distinguishes anything. Measured on a consumer: a brief scored 14/14 executable where
+  two criteria could not pass at all, and `go test -run <pattern-that-matches-nothing>`
+  exits 0 with `[no tests to run]`, so eight criteria in one brief were satisfied by
+  writing no test. The new script runs each criterion against the tree as it is and
+  refuses the ones that already pass — a criterion that passes before the work cannot
+  tell a finished item from an unstarted one. It marks as undecidable, never as sound,
+  the ones whose bullet does not state what it expects, and it states that it checked one
+  of three states: the intended state and a deliberately wrong implementation the
+  criterion must reject are not covered, and the third is what catches a criterion
+  measuring a name rather than a behaviour. Measured on three real briefs: 3 of 13
+  criteria in one already passed.
+
 ### Fixed
 - **Three defects in the acceptance-criteria scorer that agreed with each other** (#96)
   `_UNRESOLVED_RE` matched `{{CAPS}}` and not `<angle-brackets>`, which is the notation
