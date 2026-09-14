@@ -161,3 +161,55 @@ def test_the_refusal_separates_the_whole_from_the_half(tmp_path):
     text = cd.render(cd.run(brief, tmp_path), brief)
     assert "FAIL as a whole today" in text
     assert "will pass after the work too" in text
+
+
+# ── a verification does not survive the tree it measured ────────────────────
+
+def test_the_result_is_stamped_with_the_tree_it_read(tmp_path):
+    """Not theoretical. On 2026-09-14 the kit wrote `go | api/go.mod | ENABLED` into a
+    consumer's language config to unblock its quality gate, and a criterion of that
+    consumer's B-034 — `grep -cE '^[[:space:]]*go[[:space:]]*\\|' <that file>` — went
+    from discriminating to inert in the same minute. The criterion did not change.
+
+    A reader comparing yesterday's run to today's decision needs to know they are not
+    the same question.
+    """
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=False)
+    (tmp_path / "f").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=False)
+    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t",
+                    "-c", "user.name=t", "commit", "-qm", "t"], check=False)
+    brief = _brief(tmp_path, "AC-001: `echo 0` prints 1")
+    rep = cd.run(brief, tmp_path)
+    assert rep.head, "a versioned tree must be stamped"
+    assert "read against" in cd.render(rep, brief)
+
+
+def test_a_dirty_tree_is_named_because_its_answers_do_not_reproduce(tmp_path):
+    import subprocess
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=False)
+    (tmp_path / "f").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=False)
+    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.email=t@t",
+                    "-c", "user.name=t", "commit", "-qm", "t"], check=False)
+    (tmp_path / "f").write_text("changed", encoding="utf-8")
+    brief = _brief(tmp_path, "AC-001: `echo 0` prints 1")
+    rep = cd.run(brief, tmp_path)
+    assert rep.dirty
+    assert "DIRTY" in cd.render(rep, brief)
+
+
+def test_an_unversioned_tree_says_so_rather_than_claiming_a_sha(tmp_path):
+    brief = _brief(tmp_path, "AC-001: `echo 0` prints 1")
+    rep = cd.run(brief, tmp_path)
+    assert rep.head == ""
+    assert "unversioned tree" in cd.render(rep, brief)
+
+
+def test_the_report_warns_that_the_reading_expires(tmp_path):
+    """The sentence that would have saved the B-034 clause."""
+    brief = _brief(tmp_path, "AC-001: `echo 0` prints 1")
+    text = cd.render(cd.run(brief, tmp_path), brief)
+    assert "does not survive the tree it measured" in text
+    assert "about to implement on" in text
