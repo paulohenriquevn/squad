@@ -147,6 +147,56 @@ def test_invoke_forwards_no_network_env(tmp_path: Path) -> None:
     assert "--no-network" in args, f"expected --no-network in argv; got {args}"
 
 
+def _argv_for(tmp_path: Path, env: dict) -> list:
+    """Run invoke() under `env` and return the argv the orchestrator was called with."""
+    cq_scripts = tmp_path / "skills" / "code-quality" / "scripts"
+    cq_scripts.mkdir(parents=True, exist_ok=True)
+    log_file = tmp_path / "argv.log"
+    (cq_scripts / "run_code_quality.py").write_text(
+        f"#!/usr/bin/env python3\n"
+        f"import json, sys\n"
+        f"open({str(log_file)!r}, 'w').write(json.dumps(sys.argv))\n"
+        f"sys.stdout.write('{{}}')\n"
+        f"sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    with patch.dict(os.environ, env, clear=True):
+        cq_invoke.invoke("test-slug", tmp_path)
+    return json.loads(log_file.read_text())
+
+
+def test_the_default_is_offline(tmp_path: Path) -> None:
+    """With no variable set, the gate must not go to the network.
+
+    This is the case that had no test and therefore had no default anybody chose. It
+    used to reach the network, and the networked reading is not reproducible: measured
+    on a consumer, four runs of one module answered 97, 76, 55 and 36 — and each answer
+    seeded a hard cap that held thirteen plans at INVALID while they scored 89-100
+    structurally. A gate whose answer depends on what a proxy said that second is not a
+    gate.
+    """
+    assert "--no-network" in _argv_for(tmp_path, {})
+
+
+def test_the_network_is_an_explicit_opt_in(tmp_path: Path) -> None:
+    assert "--no-network" not in _argv_for(tmp_path, {"CODE_QUALITY_NETWORK": "1"})
+
+
+def test_the_old_variable_still_means_offline(tmp_path: Path) -> None:
+    """An install that already sets CODE_QUALITY_NO_NETWORK keeps its behaviour."""
+    assert "--no-network" in _argv_for(tmp_path, {"CODE_QUALITY_NO_NETWORK": "1"})
+
+
+def test_offline_wins_when_both_are_set(tmp_path: Path) -> None:
+    """Setting both is asking for offline twice, not contradicting yourself.
+
+    The safe reading wins because the unsafe one is the irreproducible one, and a
+    configuration nobody can explain should not silently select it.
+    """
+    assert "--no-network" in _argv_for(
+        tmp_path, {"CODE_QUALITY_NETWORK": "1", "CODE_QUALITY_NO_NETWORK": "1"})
+
+
 def test_merge_verdict_pass_no_change() -> None:
     """`merge_verdict_into_plan_confidence`: PASS (score_cap 100) MUST not change the plan verdict."""
     out = {"verdict": "SHIPPABLE", "final_score_after_caps": 95.0, "hard_caps_triggered": []}

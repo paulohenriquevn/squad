@@ -131,6 +131,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   optional and the phase depends on neither; the mermaid is still the drawing.
 
 ### Fixed
+- **The plan gate reached the network by default, and its answer changed every run** (#91)
+  `cq_invoke.py` appended `--no-network` only when `CODE_QUALITY_NO_NETWORK` was set, and
+  nothing in the kit or in any measured install ever set it — so every plan gate
+  everywhere took the networked path. That path is not reproducible: measured on a
+  consumer, four runs of one module answered 97, 76, 55 and 36 unverified modules, each
+  seeding a hard cap that is neither baselinable nor ADR-dismissible. Thirteen plans
+  scoring 89-100 structurally sat at INVALID because of it. The kit had already accepted
+  this argument for the baseline — `--write-baseline` forces offline because *"a baseline
+  recorded with the network on is worthless"* — and the asymmetry was the defect: the
+  baseline was protected from irreproducibility and the gate that blocks delivery was
+  not. Offline is now the default and `CODE_QUALITY_NETWORK=1` is an explicit opt-in;
+  `CODE_QUALITY_NO_NETWORK` still works and still means offline.
+
+- **A config with no enabled language never said why it audited nothing** (#91)
+  The run reported `verdict: INVALID`, `hard_caps_triggered: ["no_languages_audited"]`
+  and `skip_reasons: {}`. The stable id names the symptom; nothing named the cause, which
+  on the measured consumer was the shipped template — 83 lines, all commented examples,
+  never configured for that project. A session read the id and concluded a backlog item
+  had to be implemented before anything could move; the fix was one configuration row.
+  The reason now lands in `skip_reasons`, where a reader looks for why nothing happened,
+  and says it is configuration rather than a defect in the code under test.
+
+### Fixed
 - **The published chain named nine phases and the kit runs ten** (#75)
   `plugin.json`, `marketplace.json`, `HOW-TO-USE.md` and `rules/squad-map.md` all
   described `BRAINSTORM → BACKLOG → …`, written before `DESIGN` existed and not updated

@@ -259,6 +259,23 @@ def main(argv: list[str] | None = None) -> int:
     languages_audited: list[str] = []
     languages_skipped: dict[str, str] = {}
 
+    # A config with no ENABLED row audits nothing, and the run that follows says so only
+    # through the stable id `no_languages_audited` — which names the SYMPTOM. Measured on
+    # a consumer on 2026-09-13: thirteen plans scoring 89-100 structurally, every one
+    # INVALID on that id, `skip_reasons: {}`, and a session that read the id and
+    # concluded a backlog item had to be implemented. The cause was a shipped template
+    # whose 83 lines are all commented examples, never configured for that project.
+    #
+    # `skip_reasons` is where a reader looks for why nothing happened, so the reason
+    # goes there rather than into a log line nobody reads. It is not a finding: the
+    # repository did nothing wrong, the installation was never finished.
+    if not enabled_languages:
+        languages_skipped["(none enabled)"] = (
+            f"{languages_rule} has no ENABLED row — the gate had nothing to audit. "
+            "This is configuration, not a defect in the code under test: add one row "
+            "per language this repository actually holds."
+        )
+
     for language in enabled_languages:
         manifest_marker = cfg[language]["manifest"]
         manifest_present = (repo_root / manifest_marker).exists()

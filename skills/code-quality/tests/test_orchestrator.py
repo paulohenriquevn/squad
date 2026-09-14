@@ -547,3 +547,45 @@ def test_a_language_left_off_with_a_recorded_reason_is_a_decision(tmp_path: Path
     main(["--repo-root", str(tmp_path), "--no-network"])
     data = json.loads(capsys.readouterr().out)
     assert "unaudited_manifest_present" not in data["hard_caps_triggered"], data
+
+
+def test_an_unconfigured_language_file_says_so_rather_than_only_failing(
+    tmp_path: Path, capsys
+) -> None:
+    """`no_languages_audited` names the symptom; `skip_reasons` has to name the cause.
+
+    Measured on a consumer on 2026-09-13: thirteen plans scoring 89-100 structurally,
+    every one INVALID on that id, `skip_reasons: {}` — and a session that read the id
+    and concluded a backlog item had to be implemented before anything could move. The
+    cause was a shipped template whose eighty-three lines are all commented examples,
+    never configured for that project.
+
+    A verdict that says what failed and not why costs whoever reads it the whole
+    diagnosis. Here it cost a night of work aimed at the wrong thing.
+
+    Distinct from the test above it: there, four languages are ENABLED and every
+    manifest is missing, so the run looked and found nothing. Here nothing is enabled at
+    all, so the run never had anything to look at — the same verdict from two different
+    causes, and only one of them is about the repository.
+    """
+    rules = tmp_path / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "code-quality-languages.txt").write_text(
+        "# every row here is an example, and none of them is enabled\n"
+        "# python | pyproject.toml | ENABLED |\n", encoding="utf-8")
+    (rules / "code-quality-thresholds.txt").write_text("vulture.min_confidence = 80\n")
+    (rules / "code-quality-allowlist.txt").write_text("")
+    write_records_dir(tmp_path, "plans").mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+
+    exit_code = main(["--repo-root", str(tmp_path), "--no-network"])
+    data = json.loads(capsys.readouterr().out)
+
+    assert exit_code != 0
+    assert data["verdict"] == "INVALID"
+    assert "no_languages_audited" in data["hard_caps_triggered"]
+    reason = (data.get("skip_reasons") or {}).get("(none enabled)", "")
+    assert "no ENABLED row" in reason, f"the cause must be stated; got {data.get('skip_reasons')!r}"
+    # And it must say this is not a defect in the code under test, because reading it as
+    # one is exactly what happened.
+    assert "configuration, not a defect" in reason
