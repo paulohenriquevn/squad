@@ -79,14 +79,58 @@ _EXPECT_RE = re.compile(r"\b(prints|outputs|exits?|returns)\s+`?([^`\s.,]+)", re
 
 
 @dataclass
-class Result:
-    criterion: str
-    command: str = ""
+class Clause:
+    """One runnable span of a criterion, and what it answered today.
+
+    A criterion is often a conjunction — `<gate exists>` AND `<test passes>` — and a
+    single verdict over the whole thing cannot separate them. Measured on a consumer:
+
+        clause 1 (the gate exists)   -> 0, because the gate is not written yet
+        clause 2 (`go test -run TestGateRegistryParity`) -> exit 0, [no tests to run]
+
+    The conjunction fails today, so a one-verdict reading calls the criterion sound.
+    But clause 2 exits 0 today and will exit 0 after the work, because the test it names
+    exists nowhere. When the gate is written and clause 1 passes, the whole criterion
+    passes with clause 2 measuring nothing.
+
+    A vacuous clause masked by one that fails for an unrelated reason. N clauses need N
+    readings.
+    """
+    command: str
     ran: bool = False
     exit_code: int | None = None
     stdout: str = ""
-    passes_today: bool | None = None      # None: could not decide
+    passes_today: bool | None = None
     note: str = ""
+
+
+@dataclass
+class Result:
+    criterion: str
+    clauses: list = field(default_factory=list)
+    note: str = ""
+
+    @property
+    def command(self) -> str:
+        return " AND ".join(c.command for c in self.clauses)
+
+    @property
+    def ran(self) -> bool:
+        return any(c.ran for c in self.clauses)
+
+    @property
+    def passing_clauses(self) -> list:
+        """Clauses that pass RIGHT NOW — suspect even when the conjunction fails."""
+        return [c for c in self.clauses if c.passes_today is True]
+
+    @property
+    def passes_today(self) -> bool | None:
+        """The conjunction's own answer. `None` when any clause was undecidable."""
+        if not self.clauses or not all(c.ran for c in self.clauses):
+            return None
+        if any(c.passes_today is None for c in self.clauses):
+            return None
+        return all(c.passes_today for c in self.clauses)
 
 
 @dataclass
@@ -95,7 +139,13 @@ class Report:
 
     @property
     def already_passing(self) -> list:
-        return [r for r in self.results if r.passes_today is True]
+        """Criteria with at least one clause that already passes.
+
+        Deliberately ANY clause, not the conjunction. A conjunction that fails today
+        because one half is not built yet still carries the other half into the future
+        unchecked — and that half is exactly what a criterion is supposed to be.
+        """
+        return [r for r in self.results if r.passing_clauses]
 
     @property
     def undecidable(self) -> list:
@@ -114,38 +164,72 @@ def _bullets(text: str) -> list[str]:
             if re.match(r"^\s*[-*]\s+\S", ln)]
 
 
-def _command_of(bullet: str) -> str:
-    """The runnable span, or "" when the bullet names none."""
-    spans = _COMMAND_RE.findall(bullet)
-    for span in spans:
-        if _RUNNABLE.search(span):
-            return span
-    return ""
+def _clauses_of(bullet: str) -> list[tuple[str, str]]:
+    """(command, its own expectation) for every runnable span, in order.
 
+    This returned only the first span until 2026-09-14, so the second half of
+    `<gate exists> AND <test passes>` was never run at all — not merely folded into one
+    verdict, but silently skipped. A clause nobody executes cannot be found vacuous.
 
-def _expected(bullet: str) -> str:
-    match = _EXPECT_RE.search(bullet)
-    return match.group(2).strip() if match else ""
-
-
-def _decide(result: Result, expected: str) -> tuple[bool | None, str]:
-    """Does this criterion pass RIGHT NOW?
-
-    Deliberately conservative. When the bullet does not state what it expects clearly
-    enough to compare, the answer is None — "could not decide" — and never False.
-    Reporting a criterion as sound because the comparison was too hard is the failure
-    this file exists to end, one level up.
+    The expectation is read from the text that FOLLOWS each span, up to the next one.
+    `` `a` prints 1 AND `b` exits 0 `` states two different expectations, and applying
+    the bullet's first one to both made a clause that exits 0 read as failing — the
+    exact opposite of the finding this decomposition exists to surface.
     """
+    spans = list(_COMMAND_RE.finditer(bullet))
+    out: list[tuple[str, str]] = []
+    for n, match in enumerate(spans):
+        command = match.group(1)
+        if not _RUNNABLE.search(command):
+            continue
+        stop = spans[n + 1].start() if n + 1 < len(spans) else len(bullet)
+        following = bullet[match.end():stop]
+        expectation = _EXPECT_RE.search(following)
+        if expectation:
+            # The VERB, not only the value. `exits 0` and `prints 0` are different
+            # questions about the same number, and deciding from the command text
+            # instead read `true` as having nothing to do with exit codes.
+            verb = expectation.group(1).lower()
+            out.append((command, f"{'exit' if verb.startswith('exit') else 'print'}:"
+                                 f"{expectation.group(2).strip()}"))
+        else:
+            out.append((command, ""))
+    return out
+
+
+def _bullet_expectation(bullet: str) -> str:
+    """The bullet's own expectation, used when a clause states none of its own."""
+    match = _EXPECT_RE.search(bullet)
+    if not match:
+        return ""
+    verb = match.group(1).lower()
+    return f"{'exit' if verb.startswith('exit') else 'print'}:{match.group(2).strip()}"
+
+
+def _decide(result, expected: str) -> tuple[bool | None, str]:
+    """Does this clause pass RIGHT NOW?
+
+    `expected` is `exit:<code>` or `print:<value>`, or "" when the bullet does not say.
+
+    Deliberately conservative. When the text does not state what it expects clearly
+    enough to compare, the answer is None — "could not decide" — and never False.
+    Reporting a clause as sound because the comparison was too hard is the failure this
+    file exists to end, one level up.
+    """
+    kind, _, value = expected.partition(":")
+    if kind == "exit":
+        code = result.exit_code
+        if str(code) == value:
+            return True, f"exits {code} today, which is what it asks for"
+        return False, f"exits {code} today, expects {value}"
     if result.exit_code != 0:
         return False, "exits non-zero today"
-    if not expected:
-        return None, "exit 0 today, and the bullet does not state an expected output"
+    if not value:
+        return None, "exit 0 today, and the text does not state an expected output"
     out = result.stdout.strip()
-    if expected.lower() in ("0",) and "exit" in result.criterion.lower():
-        return True, "exits 0 today, which is what it asks for"
-    if out == expected or out.splitlines()[:1] == [expected]:
-        return True, f"already prints {expected!r}"
-    return False, f"prints {out[:40]!r}, expects {expected!r}"
+    if out == value or out.splitlines()[:1] == [value]:
+        return True, f"already prints {value!r}"
+    return False, f"prints {out[:40]!r}, expects {value!r}"
 
 
 def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:
@@ -156,28 +240,34 @@ def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:
             r.note = "carries an unresolved placeholder — cannot run whatever it names"
             rep.results.append(r)
             continue
-        command = _command_of(bullet)
-        if not command:
+        clauses = _clauses_of(bullet)
+        if not clauses:
             r.note = "names no runnable command"
             rep.results.append(r)
             continue
-        r.command = command
-        try:
-            proc = subprocess.run(["bash", "-c", command], cwd=str(repo_root),
-                                  capture_output=True, text=True, timeout=timeout,
-                                  check=False)
-        except subprocess.TimeoutExpired:
-            r.note = f"did not finish within {timeout:.0f}s"
-            rep.results.append(r)
-            continue
-        except OSError as exc:
-            r.note = f"could not run: {exc}"
-            rep.results.append(r)
-            continue
-        r.ran = True
-        r.exit_code = proc.returncode
-        r.stdout = proc.stdout[:400]
-        r.passes_today, r.note = _decide(r, _expected(bullet))
+        for command, clause_expected in clauses:
+            expected = clause_expected or _bullet_expectation(bullet)
+            c = Clause(command=command)
+            try:
+                proc = subprocess.run(["bash", "-c", command], cwd=str(repo_root),
+                                      capture_output=True, text=True, timeout=timeout,
+                                      check=False)
+            except subprocess.TimeoutExpired:
+                c.note = f"did not finish within {timeout:.0f}s"
+                r.clauses.append(c)
+                continue
+            except OSError as exc:
+                c.note = f"could not run: {exc}"
+                r.clauses.append(c)
+                continue
+            c.ran = True
+            c.exit_code = proc.returncode
+            c.stdout = proc.stdout[:400]
+            # The stated expectation belongs to the whole bullet, so it is applied to
+            # each clause. A clause that exits 0 while the bullet expects `0` is the
+            # `[no tests to run]` shape, whatever the other clause did.
+            c.passes_today, c.note = _decide(c, expected)
+            r.clauses.append(c)
         rep.results.append(r)
     return rep
 
@@ -190,22 +280,44 @@ def render(rep: Report, brief: Path) -> str:
         lines.append(f"  [{mark}] {r.criterion[:80]}")
         if r.note:
             lines.append(f"                 {r.note}")
+        # A conjunction that FAILS today can still carry a clause that passes, and that
+        # clause goes into the future unchecked. Naming it is the whole point of reading
+        # the halves separately.
+        if len(r.clauses) > 1:
+            for n, c in enumerate(r.clauses, 1):
+                cm = {True: "passes", False: "fails ", None: "?     "}[c.passes_today] \
+                    if c.ran else "no run"
+                flag = "  <- already passes; will pass after the work too" \
+                    if c.passes_today is True and r.passes_today is not True else ""
+                lines.append(f"                 clause {n} [{cm}] {c.command[:52]}{flag}")
     lines.append("")
     n = len(rep.results)
     if rep.already_passing:
+        whole = sum(1 for r in rep.already_passing if r.passes_today is True)
+        partial = len(rep.already_passing) - whole
         lines += [
-            f"REFUSED: {len(rep.already_passing)} of {n} criteria already pass.",
+            f"REFUSED: {len(rep.already_passing)} of {n} criteria carry something that "
+            "already passes.",
             "",
             "  A criterion that passes before the work cannot tell a finished item from",
             "  an unstarted one. It will report success whatever is built, including",
             "  nothing.",
         ]
+        if partial:
+            lines += [
+                "",
+                f"  {partial} of those FAIL as a whole today, and that is the harder case:",
+                "  one clause is vacuous and another fails for an unrelated reason, so a",
+                "  single verdict over the conjunction calls the criterion sound. When the",
+                "  failing half is built, the whole thing passes with the vacuous half",
+                "  measuring nothing.",
+            ]
     elif rep.unrunnable or rep.undecidable:
         lines += [f"{len(rep.unrunnable)} could not run, {len(rep.undecidable)} could not "
                   "be decided. Neither is a pass."]
     else:
         lines.append(f"All {n} criteria fail today — each has something to prove.")
-    lines += ["", "  This ran each criterion ONCE, against the tree as it is. It does not",
+    lines += ["", "  This ran each CLAUSE once, against the tree as it is. It does not",
               "  check that a criterion REJECTS a wrong implementation, which is the state",
               "  that catches one measuring a name rather than a behaviour."]
     return "\n".join(lines) + "\n"
@@ -232,8 +344,11 @@ def main() -> int:
 
     if args.json:
         print(json.dumps({"results": [
-            {"criterion": r.criterion, "command": r.command, "ran": r.ran,
-             "exit_code": r.exit_code, "passes_today": r.passes_today, "note": r.note}
+            {"criterion": r.criterion, "ran": r.ran, "passes_today": r.passes_today,
+             "note": r.note,
+             "clauses": [{"command": c.command, "ran": c.ran,
+                          "exit_code": c.exit_code, "passes_today": c.passes_today,
+                          "note": c.note} for c in r.clauses]}
             for r in rep.results]}, indent=2, ensure_ascii=False))
     else:
         print(render(rep, args.brief), end="")

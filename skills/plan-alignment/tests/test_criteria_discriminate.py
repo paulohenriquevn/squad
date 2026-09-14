@@ -80,7 +80,9 @@ def test_a_hanging_criterion_is_stopped_and_named(tmp_path):
     brief = _brief(tmp_path, "AC-001: `sleep 30` exits 0")
     rep = cd.run(brief, tmp_path, timeout=1.0)
     assert rep.unrunnable
-    assert "did not finish" in rep.results[0].note
+    # The note lives on the CLAUSE since decomposition: a conjunction can have one
+    # clause that hangs and another that answered, and a single note could not say so.
+    assert "did not finish" in rep.results[0].clauses[0].note
 
 
 # ── the honest limits, stated in the output ─────────────────────────────────
@@ -108,3 +110,54 @@ def test_exit_zero_only_when_every_criterion_fails_today(tmp_path, monkeypatch):
                         ["check_criteria_discriminate.py", str(brief),
                          "--repo-root", str(tmp_path)])
     assert cd.main() == 0
+
+
+# ── decomposition: N clauses need N readings ────────────────────────────────
+
+def test_every_runnable_clause_is_executed(tmp_path):
+    """Only the first span was run until decomposition, so the second half of a
+    conjunction was never executed at all — not folded into one verdict, skipped."""
+    brief = _brief(tmp_path, "AC-001: `echo a` prints a AND `echo b` prints b")
+    rep = cd.run(brief, tmp_path)
+    assert [c.command for c in rep.results[0].clauses] == ["echo a", "echo b"]
+
+
+def test_a_vacuous_clause_masked_by_a_failing_one_is_caught(tmp_path):
+    """The case that motivated the executor and that one verdict could not see.
+
+    Measured on a consumer's B-067:
+
+        clause 1 (the gate exists)  -> 0, because the gate is not written yet
+        clause 2 (`go test -run TestGateRegistryParity`) -> exit 0, [no tests to run]
+
+    The conjunction fails today, so a single reading calls the criterion sound. But
+    clause 2 exits 0 today and will exit 0 after the work, because the test it names
+    exists nowhere — so when the gate is built the whole criterion passes with clause 2
+    measuring nothing.
+    """
+    brief = _brief(tmp_path, "AC-004: `false` prints 1 AND `true` exits 0")
+    rep = cd.run(brief, tmp_path)
+    result = rep.results[0]
+    assert result.passes_today is False, "the conjunction must still read as failing"
+    assert len(result.passing_clauses) == 1, "and the vacuous half must be named"
+    assert rep.already_passing, "a criterion carrying one is refused"
+
+
+def test_each_clause_is_judged_against_its_own_expectation(tmp_path):
+    """`prints 1` and `exits 0` are different questions about different clauses.
+
+    Applying the bullet's first expectation to every clause made one that exits 0 read
+    as failing — the exact opposite of the finding decomposition exists to surface.
+    """
+    brief = _brief(tmp_path, "AC-001: `echo 1` prints 1 AND `false` exits 0")
+    clauses = cd.run(brief, tmp_path).results[0].clauses
+    assert clauses[0].passes_today is True
+    assert clauses[1].passes_today is False
+
+
+def test_the_refusal_separates_the_whole_from_the_half(tmp_path):
+    """A reader needs to know which of the two shapes they have."""
+    brief = _brief(tmp_path, "AC-001: `false` prints 1 AND `true` exits 0")
+    text = cd.render(cd.run(brief, tmp_path), brief)
+    assert "FAIL as a whole today" in text
+    assert "will pass after the work too" in text

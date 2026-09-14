@@ -7,6 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A criterion's clauses are read separately** (#96)
+  `check_criteria_discriminate` ran only the FIRST runnable span of a bullet, so the
+  second half of `<gate exists> AND <test passes>` was never executed — not folded into
+  one verdict, silently skipped. And a single verdict over a conjunction cannot find a
+  vacuous clause masked by one that fails for an unrelated reason: measured on a
+  consumer's B-067, clause 1 returns 0 because the gate is not written yet and clause 2
+  (`go test -run TestGateRegistryParity`) exits 0 with `[no tests to run]` because the
+  test exists nowhere. The conjunction fails today, so one reading calls the criterion
+  sound — and when the gate is built the whole thing passes with clause 2 measuring
+  nothing. Every runnable span is now a clause with its own expectation, read from the
+  text that follows it: `prints 1` and `exits 0` are different questions, and applying
+  the bullet's first one to both made a clause that exits 0 read as failing. A criterion
+  carrying any already-passing clause is refused, and the report separates the two
+  shapes — passing as a whole, versus failing as a whole while carrying a half that will
+  survive the work.
+
 - **The cross-repo detector charged an author for enumerating a negative** (#B-024, #B-027, #B-029)
   `check_opportunity_completeness` collected every known repo name appearing anywhere in an
   opportunity's Blast Radius and required an ADR for each, with no notion of negation. So an
