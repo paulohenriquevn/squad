@@ -7,6 +7,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A guard that passes today is the criterion working, not a defect** (#96)
+  `check_criteria_discriminate` reported a non-regression guard with the same sentence
+  it reports an inert criterion — *"will pass after the work too"* — and the distinction
+  is the whole point: `"the declared terminal sets are untouched"` passing today is the
+  criterion working, while `"the four divergences are gone"` passing today is an item
+  that closes on work nobody did. The briefs already carry the label in their own words
+  and a judge had kept one deliberately for that reason; the tool did not read it. A
+  criterion that declares itself a guard is now reported in its own category and
+  excluded from the refusal count. Detection is narrow on purpose: without a label a
+  criterion counts as a defect, because a defect called a guard is silence while a guard
+  called a defect is a question. Re-measured on a consumer: B-023 went from 4 refusals
+  to 2 defects and 2 guards.
+
+- **The clause parser invented clauses out of tool names** (#96)
+  A criterion mentioning `awk` and `diff` in the prose around its command had both
+  executed as clauses, and `awk` alone exits 0 — so the parser inflated the count of
+  inert clauses with its own artefacts. A tool name is one token; a command has an
+  argument, an operator or a pipe. Self-sufficient commands (`true`, `false`, `pwd`)
+  keep working with one.
+
 - **A criterion verification is stamped with the tree it read** (#96)
   A verification does not survive the tree it measured, and the proof came from this
   kit's own hand: writing `go | api/go.mod | ENABLED` into a consumer's language config

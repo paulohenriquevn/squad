@@ -109,6 +109,7 @@ class Result:
     criterion: str
     clauses: list = field(default_factory=list)
     note: str = ""
+    is_guard: bool = False
 
     @property
     def command(self) -> str:
@@ -165,13 +166,20 @@ class Report:
 
     @property
     def already_passing(self) -> list:
-        """Criteria with at least one clause that already passes.
+        """Criteria with at least one clause that already passes, GUARDS EXCLUDED.
 
         Deliberately ANY clause, not the conjunction. A conjunction that fails today
         because one half is not built yet still carries the other half into the future
         unchecked — and that half is exactly what a criterion is supposed to be.
+
+        A guard is excluded because passing today is its contract, not its failure.
         """
-        return [r for r in self.results if r.passing_clauses]
+        return [r for r in self.results if r.passing_clauses and not r.is_guard]
+
+    @property
+    def guards(self) -> list:
+        """Criteria that declare themselves guards and pass, as they must."""
+        return [r for r in self.results if r.is_guard and r.passing_clauses]
 
     @property
     def undecidable(self) -> list:
@@ -188,6 +196,54 @@ def _bullets(text: str) -> list[str]:
         return []
     return [ln.strip() for ln in section.group(1).splitlines()
             if re.match(r"^\s*[-*]\s+\S", ln)]
+
+
+#: A criterion that declares itself a GUARD. These must pass today and after the work —
+#: that is what a guard is — and reporting them beside a real defect with the same
+#: sentence destroys the distinction that matters.
+#:
+#: Measured on a consumer across 16 briefs:
+#:
+#:     B-029 AC-007  "the declared non-goal holds"                  -> guard
+#:     B-020 AC-006  "the declared terminal sets are untouched"     -> guard
+#:     B-023 AC-011  "nothing stops compiling, suites stay green"   -> guard
+#:     B-012 AC-001  "the four divergences are gone"                -> DEFECT
+#:
+#: The first three passing today is the criterion working. The fourth passing today is
+#: an item that closes on work nobody did. `test -s store.go` asserting a file still
+#: exists would be a broken item if it failed today.
+#:
+#: The label is read from the criterion's own words because the briefs already carry it,
+#: and a judge kept one of these deliberately for that reason. Detection is deliberately
+#: narrow: without a label a criterion is counted as a defect, which is the safe
+#: direction — a defect called a guard is silence, a guard called a defect is a question.
+_GUARD_RE = re.compile(
+    r"\b(non-goal|untouched|unchanged|stays?\s+green|stay\s+the\s+same|remains?\s+"
+    r"(?:green|valid|true|intact)|still\s+(?:compiles?|passes|exists?|holds?)|"
+    r"nothing\s+(?:stops|breaks|regress\w*)|no\s+regression|keeps?\s+working|"
+    r"continues?\s+to\s+\w+)\b", re.IGNORECASE)
+
+
+#: Commands that are complete with no argument. Everything else needs one, because a
+#: bare tool name inside backticks is prose naming a tool, not a command to run.
+_SELF_SUFFICIENT = frozenset({"true", "false", "pwd", "date", "whoami"})
+
+
+def _is_a_command(span: str) -> bool:
+    """Is this span something to RUN, or a tool being named in a sentence?
+
+    Measured on a consumer's B-012: the criterion says the gate "moved the numbers it
+    checks" and mentions `awk` and `diff` in the prose around the command. Both sit in
+    backticks, both match the runnable vocabulary, and both were executed — `awk` alone
+    exits 0 and was reported as a clause that already passes, inflating the count of
+    inert clauses with artefacts of this parser.
+
+    A tool name is one token. A command has an argument, an operator or a pipe.
+    """
+    tokens = span.split()
+    if len(tokens) >= 2:
+        return True
+    return bool(tokens) and tokens[0] in _SELF_SUFFICIENT
 
 
 def _clauses_of(bullet: str) -> list[tuple[str, str]]:
@@ -207,6 +263,8 @@ def _clauses_of(bullet: str) -> list[tuple[str, str]]:
     for n, match in enumerate(spans):
         command = match.group(1)
         if not _RUNNABLE.search(command):
+            continue
+        if not _is_a_command(command):
             continue
         stop = spans[n + 1].start() if n + 1 < len(spans) else len(bullet)
         following = bullet[match.end():stop]
@@ -262,7 +320,7 @@ def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:
     rep = Report()
     rep.head, rep.dirty = _tree_state(repo_root)
     for bullet in _bullets(brief.read_text(encoding="utf-8-sig")):
-        r = Result(criterion=bullet[:110])
+        r = Result(criterion=bullet[:110], is_guard=bool(_GUARD_RE.search(bullet)))
         if _UNRESOLVED.search(bullet):
             r.note = "carries an unresolved placeholder — cannot run whatever it names"
             rep.results.append(r)
@@ -304,8 +362,11 @@ def render(rep: Report, brief: Path) -> str:
              if rep.head else "read against an unversioned tree")
     lines = [f"acceptance criteria — {brief.name}", f"  {stamp}", ""]
     for r in rep.results:
-        mark = {True: "PASSES TODAY", False: "fails today  ", None: "undecidable  "}[
-            r.passes_today] if r.ran else "did not run  "
+        if r.is_guard and r.passing_clauses:
+            mark = "guard, by design"
+        else:
+            mark = {True: "PASSES TODAY", False: "fails today  ", None: "undecidable  "}[
+                r.passes_today] if r.ran else "did not run  "
         lines.append(f"  [{mark}] {r.criterion[:80]}")
         if r.note:
             lines.append(f"                 {r.note}")
@@ -316,11 +377,23 @@ def render(rep: Report, brief: Path) -> str:
             for n, c in enumerate(r.clauses, 1):
                 cm = {True: "passes", False: "fails ", None: "?     "}[c.passes_today] \
                     if c.ran else "no run"
-                flag = "  <- already passes; will pass after the work too" \
-                    if c.passes_today is True and r.passes_today is not True else ""
+                flag = ""
+                if c.passes_today is True and r.passes_today is not True:
+                    flag = ("  <- passes by design (guard)" if r.is_guard else
+                            "  <- already passes; will pass after the work too")
                 lines.append(f"                 clause {n} [{cm}] {c.command[:52]}{flag}")
     lines.append("")
     n = len(rep.results)
+    if rep.guards:
+        lines += [f"{len(rep.guards)} criterion(s) pass BY DESIGN — they declare "
+                  "themselves guards:", ""]
+        for r in rep.guards:
+            lines.append(f"  · {r.criterion[:86]}")
+        lines += ["",
+                  "  A guard must pass today and after the work; that is what it is for.",
+                  "  It is reported here and NOT counted as a defect, because reporting",
+                  "  it beside one destroys the distinction that matters.",
+                  ""]
     if rep.already_passing:
         whole = sum(1 for r in rep.already_passing if r.passes_today is True)
         partial = len(rep.already_passing) - whole
@@ -345,7 +418,8 @@ def render(rep: Report, brief: Path) -> str:
         lines += [f"{len(rep.unrunnable)} could not run, {len(rep.undecidable)} could not "
                   "be decided. Neither is a pass."]
     else:
-        lines.append(f"All {n} criteria fail today — each has something to prove.")
+        lines.append(f"All {n} criteria fail today — each has something to prove."
+                     + (f" ({len(rep.guards)} guard(s) excluded)" if rep.guards else ""))
     lines += ["", "  This ran each CLAUSE once, against the tree as it is. It does not",
               "  check that a criterion REJECTS a wrong implementation, which is the state",
               "  that catches one measuring a name rather than a behaviour.",
@@ -383,7 +457,7 @@ def main() -> int:
     if args.json:
         print(json.dumps({"head": rep.head, "dirty": rep.dirty, "results": [
             {"criterion": r.criterion, "ran": r.ran, "passes_today": r.passes_today,
-             "note": r.note,
+             "note": r.note, "is_guard": r.is_guard,
              "clauses": [{"command": c.command, "ran": c.ran,
                           "exit_code": c.exit_code, "passes_today": c.passes_today,
                           "note": c.note} for c in r.clauses]}
