@@ -191,6 +191,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   criteria in one already passed.
 
 ### Fixed
+- **kit#18's exemption had no effect on any brief that followed the template** (#96)
+  `_without_section` stopped at the next heading of ANY level, so a section with a
+  subheading was cut at the subheading and everything under it stayed in the text the
+  caller believed it had removed. `## Questions answered` is exactly that shape, and
+  this skill's own SKILL.md prescribes it — *"`### Session YYYY-MM-DD` then `- Q: … →
+  A: …`"* — so the kit prescribed the structure that voided its own exemption. A brief
+  whose only imperfection was one honestly declared open question was charged twice,
+  three points of thirty-four, about 9% against a 90% threshold, and the cheapest way
+  past was to delete the question: the exact evasion kit#18 was written to remove. A
+  section now ends at the next heading of the same level or shallower. Measured over 38
+  real briefs: 37 clean afterwards.
+
+- **`<angle-brackets>` reverted out of the placeholder scan, one day after being added**
+  (#96) They went in to catch `<gate-name>`, reported by a consumer as invisible.
+  Re-measured over 38 briefs the next day: 23 were charged, and the hits were three
+  different things wearing one shape — `err=<nil>` (a Go literal quoted from real
+  output), `-C <path>` (CLI syntax in prose), and `START_SHA=<sha>` (a parameter a
+  criterion needs filled before it can run). Only the third is a defect, and it is not
+  the one `no_placeholders` measures: that criterion asks whether a DECISION is open,
+  while an unfilled command parameter is a question about executability, which
+  `check_criteria_discriminate.py` answers by refusing to run the criterion. Charging
+  two points for a Go nil made the column report the wrong thing loudly, which is how a
+  reader learns to skip a column.
+
+### Fixed
 - **Three defects in the acceptance-criteria scorer that agreed with each other** (#96)
   `_UNRESOLVED_RE` matched `{{CAPS}}` and not `<angle-brackets>`, which is the notation
   these briefs use; `_PRESENCE_RE` exempted on `wc -l` in any position, so a criterion

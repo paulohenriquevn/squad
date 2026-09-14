@@ -116,26 +116,25 @@ _EXECUTABLE_RE = re.compile(
 #: An unresolved decision, in whatever coat it is wearing. Scanned across the
 #: WHOLE brief since v2 — a `TBD` in the data model is the same open question as
 #: an `UNKNOWN` in the answers, and it used to be invisible.
+#: `<angle-brackets>` are deliberately NOT in this pattern, and the reason is a
+#: measurement. They were added on 2026-09-13 to catch `<gate-name>`, which a consumer
+#: reported as invisible. Re-measured over 38 real briefs the next day: 23 were charged,
+#: and the hits were three different things wearing one shape —
+#:
+#:     `err=<nil>`        a Go literal quoted from real output
+#:     `-C <path>`        CLI syntax described in prose
+#:     `START_SHA=<sha>`  a parameter a criterion needs filled before it can run
+#:
+#: Only the third is a defect, and it is not the defect THIS criterion measures.
+#: `no_placeholders` asks whether a DECISION is still open — `TBD`, `UNKNOWN`,
+#: `{{SLOT}}`. An unfilled command parameter is a question about EXECUTABILITY, which
+#: `check_criteria_discriminate.py` answers by refusing to run the criterion. Charging
+#: two points here for a Go nil made the column report the wrong thing loudly, which is
+#: how a reader learns to skip a column.
 _UNRESOLVED_RE = re.compile(
-    r"\b(UNKNOWN|TBD|TKTK|TODO|FIXME|to be decided|\?\?\?)\b|\{\{[A-Z_]+\}\}"
-    #: `<gate-name>`, `<module>` — the notation these briefs actually use, and the one
-    #: this scan did not see. Measured on a consumer: a brief with EIGHT occurrences of
-    #: `<gate-name>` was reported "No unresolved placeholder anywhere in the brief —
-    #: none", alongside "10/10 executable", over five commands its own prose said did
-    #: not run.
-    #:
-    #: The comment above already states the principle this pattern failed to implement:
-    #: v2 widened the scan because an open question is an open question wherever it
-    #: sits. A second notation for the same thing was invisible for the same reason.
-    #:
-    #: Shaped to an identifier — letters, digits, hyphen, underscore, no spaces — so a
-    #: shell redirect (`< file`), a comparison (`< 5`) and an arrow do not match. An
-    #: HTML-looking tag would; that over-report is accepted deliberately, because the
-    #: under-report cost five commands graded as running.
-    r"|<[A-Za-z][A-Za-z0-9_-]{1,40}>",
+    r"\b(UNKNOWN|TBD|TKTK|TODO|FIXME|to be decided|\?\?\?)\b|\{\{[A-Z_]+\}\}",
     re.IGNORECASE,
 )
-
 #: Stable identifiers. Without them nothing can cite anything: not an acceptance
 #: criterion, not a task, not a test, not a review comment.
 # The WHOLE id is captured, prefix included. Capturing only the digits made
@@ -386,17 +385,43 @@ def _vacuous_criteria(bullets: list[str]) -> tuple[str, ...]:
 
 
 def _without_section(body: str, *headings: str) -> str:
-    """`body` with the named section removed, heading and all.
+    """`body` with the named section removed, heading and all — SUBSECTIONS INCLUDED.
 
     Used where a criterion must not charge for something another criterion owns.
-    Matches `_section`'s heading conventions so the two agree on where a section
-    starts and stops.
+
+    ## Why the stop condition is the heading's own level
+
+    This used to stop at the next heading of ANY level, so a section with a subheading
+    was cut at the subheading and everything under it stayed in the text the caller
+    believed it had removed.
+
+    `## Questions answered` is exactly that shape, and this skill's own SKILL.md
+    prescribes it: *"`### Session YYYY-MM-DD` then `- Q: … → A: …`"*. So the kit
+    prescribed the structure that voided its own exemption. kit#18 exists to stop
+    `no_placeholders` charging for an `UNKNOWN` that `questions_closed` already charges
+    for — three points of thirty-four, about 9% against a 90% threshold — and it had no
+    effect on any brief that followed the template.
+
+    Measured by a consumer session on a real item: a brief whose only imperfection was
+    one honestly declared open question could not clear the gate, and the cheapest way
+    past was to delete the question. That is the evasion kit#18 was written to remove,
+    reintroduced by the pattern meant to implement it.
+
+    A section ends at the next heading of the same level or shallower. A deeper one is
+    part of it.
     """
     for heading in headings:
-        pattern = re.compile(
-            rf"^#{{1,6}}\s*{re.escape(heading)}\s*$.*?(?=^#{{1,6}}\s|\Z)",
-            re.IGNORECASE | re.MULTILINE | re.DOTALL)
-        body = pattern.sub("", body)
+        opener = re.compile(rf"^(#{{1,6}})\s*{re.escape(heading)}\s*$",
+                            re.IGNORECASE | re.MULTILINE)
+        while True:
+            match = opener.search(body)
+            if not match:
+                break
+            level = len(match.group(1))
+            closer = re.compile(rf"^#{{1,{level}}}\s", re.MULTILINE)
+            after = closer.search(body, match.end())
+            end = after.start() if after else len(body)
+            body = body[:match.start()] + body[end:]
     return body
 
 

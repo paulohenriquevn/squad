@@ -693,19 +693,41 @@ def test_a_walkthrough_link_is_not_evidence_the_file_exists(tmp_path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_an_angle_bracket_placeholder_is_unresolved(tmp_path):
-    """The notation these briefs actually use, and the one the scan could not see.
+def test_an_angle_bracket_is_not_charged_as_an_open_decision():
+    """Reverted on 2026-09-14, one day after being added, by a wider measurement.
 
-    Measured on a consumer: a brief with EIGHT occurrences of `<gate-name>` was
-    reported "No unresolved placeholder anywhere in the brief — none", alongside
-    "10/10 executable", over five commands its own prose said did not run.
+    They went in to catch `<gate-name>`, which a consumer reported as invisible.
+    Re-measured over 38 real briefs the next day: 23 were charged, and the hits were
+    three different things wearing one shape —
 
-    The comment on `_UNRESOLVED_RE` already stated the principle its pattern failed to
-    implement — v2 widened the scan because an open question is an open question
-    wherever it sits. A second notation for the same thing stayed invisible.
+        `err=<nil>`        a Go literal quoted from real output
+        `-C <path>`        CLI syntax described in prose
+        `START_SHA=<sha>`  a parameter a criterion needs filled before it can run
+
+    Only the third is a defect, and it is not the one this criterion measures.
+    `no_placeholders` asks whether a DECISION is still open. An unfilled command
+    parameter is a question about executability, and the test below is where it is
+    answered — by refusing to RUN the criterion rather than by docking two points for a
+    Go nil.
+
+    Charging the wrong thing loudly is how a reader learns to skip a column.
     """
-    assert sa._UNRESOLVED_RE.search("run the `<gate-name>` check")
-    assert sa._UNRESOLVED_RE.search("`go test ./<module>/...` prints ok")
+    assert not sa._UNRESOLVED_RE.search("`err=<nil>` is printed")
+    assert not sa._UNRESOLVED_RE.search("run `theo -C <path>` from the root")
+    # The decisions it DOES measure are untouched.
+    assert sa._UNRESOLVED_RE.search("the module is TBD")
+    assert sa._UNRESOLVED_RE.search("run `{{SLOT}}` here")
+
+
+def test_an_unfilled_command_parameter_is_answered_by_the_executor():
+    """Where the angle-bracket case went, and why it is the right place.
+
+    `check_criteria_discriminate` refuses to run a criterion carrying one, because it
+    cannot run whatever it names — which is a fact about the criterion, not a point on
+    a rubric.
+    """
+    import check_criteria_discriminate as cd
+    assert cd._UNRESOLVED.search("`START_SHA=<sha> bash -c 'true'` exits 0")
 
 
 def test_shell_syntax_is_not_read_as_a_placeholder():
@@ -739,9 +761,51 @@ def test_a_criterion_with_a_placeholder_is_not_graded_executable(tmp_path):
     brief.write_text(
         "# Brief\n\n## Acceptance Criteria\n\n"
         "- AC-001: `go test ./real/...` exits 0\n"
-        "- AC-002: `go test ./<module>/...` exits 0\n",
+        "- AC-002: `go test ./{{MODULE}}/...` exits 0\n",
         encoding="utf-8")
     report = sa.score_alignment(brief)
     crit = next(c for c in report.criteria if c.key == "acceptance_executable")
     assert "1/2 executable" in crit.why
     assert "unresolved placeholder" in crit.why
+
+
+def test_a_section_is_removed_with_its_subsections(tmp_path):
+    """kit#18's exemption had no effect on any brief that followed the template.
+
+    `_without_section` stopped at the next heading of ANY level, so a section with a
+    subheading was cut at the subheading and everything under it stayed in the text the
+    caller believed it had removed. `## Questions answered` is exactly that shape, and
+    this skill's own SKILL.md prescribes it: "`### Session YYYY-MM-DD` then `- Q: … →
+    A: …`". The kit prescribed the structure that voided its own exemption.
+
+    Measured by a consumer on a real item: a brief whose only imperfection was one
+    honestly declared open question could not clear the 90% gate — three points of
+    thirty-four, about 9% — and the cheapest way past was to delete the question. That
+    is the evasion kit#18 was written to remove.
+    """
+    body = ("## Questions answered\n\n### Session 1\n\n"
+            "Q: which module? UNKNOWN — still open\n\n## Next\n\nclean\n")
+    out = sa._without_section(body, "Questions answered", "Questions")
+    assert "UNKNOWN" not in out
+    assert "## Next" in out, "the following section must survive"
+
+
+def test_a_declared_open_question_costs_nothing_outside_its_section(tmp_path):
+    """The property kit#18 promised, asserted end to end rather than in the helper."""
+    brief = tmp_path / "b-001-alignment.md"
+    brief.write_text(
+        "# Brief\n\n## Problem\n\nclear\n\n"
+        "## Questions answered\n\n### Session 2026-09-14\n\n"
+        "- Q: which module owns it? → A: UNKNOWN, still open\n\n"
+        "## Acceptance Criteria\n\n- AC-001: `go test ./x/...` exits 0\n",
+        encoding="utf-8")
+    report = sa.score_alignment(brief)
+    crit = next(c for c in report.criteria if c.key == "no_placeholders")
+    assert crit.score == 2, f"a declared open question must not be charged twice: {crit.why}"
+
+
+def test_a_placeholder_outside_the_questions_section_is_still_charged():
+    """The exemption is narrow: it covers the section that owns open items, not the brief."""
+    body = "## Problem\n\nthe module is TBD\n\n## Questions answered\n\nnothing open\n"
+    out = sa._without_section(body, "Questions answered", "Questions")
+    assert sa._UNRESOLVED_RE.search(out)
