@@ -147,6 +147,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   never lets you start.
 
 ### Added
+- **The system never starts on a backlog nobody approved** (#93)
+  `check_chain_preconditions` now refuses to begin when no item is at `approved`. It has
+  the same shape as the other preconditions — a fact about the installation that no
+  amount of good work overcomes — because an unapproved registry is not a queue of work,
+  it is a queue of hypotheses, and a run over it decides by inference, item by item, the
+  one question `cycle-backlog.md` reserves for a person. Measured on a consumer: 85 items
+  at `triaged`, zero at `approved`, and hours of execution against a list nobody had said
+  yes to. ONE approved item satisfies it: a backlog is approved incrementally and the
+  loop works one item at a time, so demanding the whole registry be decided before
+  anything starts would make the preflight the thing it refuses. The refusal carries the
+  three commands that clear it.
+
+### Added
 - **`check_criteria_discriminate.py` — acceptance criteria are run, not read** (#96)
   `score_alignment` grades a criterion `executable` from a text match over the bullet: it
   asks whether a command is NAMED, never whether it could run or whether its answer
