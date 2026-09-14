@@ -356,7 +356,17 @@ def main(argv: list[str] | None = None) -> int:
         findings.extend(d5_findings)
 
     # Apply allowlist (downgrade severities by 1 level when ACTIVE entry matches)
-    findings = _apply_allowlist(findings, allowlist, repo_root)
+    expired_hits: list[Finding] = []
+    findings = _apply_allowlist(findings, allowlist, repo_root, expired_hits)
+    if expired_hits:
+        # Printed rather than only carried in the payload: an expired exemption is
+        # addressed to a person, and the person is looking at a terminal.
+        print(f"allowlist: {len(expired_hits)} entry(ies) EXPIRED — the finding is back "
+              "at full severity and the exemption no longer applies:", file=sys.stderr)
+        for f in expired_hits:
+            print(f"  {f.allowlist_key}", file=sys.stderr)
+        print("  renew the sunset date, or remove the row and fix the finding.",
+              file=sys.stderr)
 
     baseline_path = Path(args.baseline) if args.baseline else _default_baseline(repo_root)
     if args.write_baseline:
@@ -366,10 +376,26 @@ def main(argv: list[str] | None = None) -> int:
                           languages_audited=languages_audited,
                           languages_skipped=languages_skipped,
                           cfg=cfg,
-                          baseline=load_baseline(baseline_path))
+                          baseline=load_baseline(baseline_path),
+                          expired_allowlist=[f.allowlist_key for f in expired_hits])
 
 
-def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path) -> list[Finding]:
+def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path,
+                     expired_out: list | None = None) -> list[Finding]:
+    """Downgrade what an ACTIVE entry covers, and NAME what an expired one no longer does.
+
+    `EXPIRED` was produced by `is_allowlisted` and consumed by nobody: it fell into the
+    same `else` as `NOT_LISTED`, so an entry whose sunset had passed was indistinguishable
+    from an entry that was never written. Golden rule § 4 promises the opposite —
+    *"entry listed under 'Allowlist hits — expired' in the audit report"* — and nothing
+    implemented it. Measured with a sunset of 2026-01-01: FAIL_SOFT/70 and the word
+    `expired` absent from the JSON, from stderr, and from a 5018-byte report.
+
+    That silence is load-bearing rather than cosmetic. A dated exemption is a promise to
+    revisit, and the date is the whole mechanism; a sunset nobody is told about is an
+    exemption that never ends. The finding re-firing at full severity is correct and is
+    NOT the notification — it looks exactly like a finding nobody ever exempted.
+    """
     from datetime import date as _date
 
     from scripts._detector_contract import AllowlistMatch, is_allowlisted
@@ -392,6 +418,8 @@ def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path) 
                 )
             )
         else:
+            if match == AllowlistMatch.EXPIRED and expired_out is not None:
+                expired_out.append(f)
             out.append(f)
     return out
 
@@ -461,6 +489,10 @@ def _emit_and_exit(
     cfg: dict | None = None,
     #: Finding keys recorded as pre-existing. Removed from the verdict, kept in the report.
     baseline: frozenset[str] = frozenset(),
+    #: Allowlist rows whose sunset has passed. The finding is back at full severity and
+    #: the row no longer covers it — carried here so a machine reader sees it too, since
+    #: the re-fired finding alone looks exactly like one nobody ever exempted.
+    expired_allowlist: list[str] | None = None,
 ) -> int:
     verdict, stable_ids = compute_verdict(findings, baseline)
     baselined = [f for f in findings if f.allowlist_key in baseline] if baseline else []
@@ -552,6 +584,9 @@ def _emit_and_exit(
     # holding is indistinguishable from a gate that found nothing.
     summary["baselined"] = len(baselined)
     summary["languages_skipped"] = list((languages_skipped or {}).keys())
+    # Always present, never conditional: an absent key asks whether the check ran, an
+    # empty list answers that it did and found none.
+    summary["expired_allowlist"] = list(expired_allowlist or [])
     summary["skip_reasons"] = languages_skipped or {}
     summary["mode"] = "plan-bound" if plan_path else "standalone"
     if plan_path:

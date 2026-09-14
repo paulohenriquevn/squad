@@ -278,8 +278,20 @@ def _drop_field(body: str, key: str) -> str:
     return re.sub(rf"^{key}:[ \t]*.*\n", "", body, count=1, flags=re.MULTILINE)
 
 
-def advance(content: str, item_id: str, to: str, kill_reason: str = "") -> str:
-    """Move one item to `to`, refusing anything the contract forbids."""
+def advance(content: str, item_id: str, to: str, kill_reason: str = "",
+            approved_by: str = "") -> str:
+    """Move one item to `to`, refusing anything the contract forbids.
+
+    `approved_by` is written when the move is to `approved`, and it is the only way to
+    tell the two kinds of commitment apart later. `human/<name>` says a person read the
+    item and committed to it; `system/autonomous-sweep` says the loop filed it under a
+    standing authorisation. They are not worth the same, and a registry where everything
+    is `system/…` is one nobody has read — a legitimate state to be in, and an
+    illegitimate one to be in unknowingly.
+
+    A bare `approved` with no attribution predates the field. It is not evidence that a
+    person decided, and `check_chain_preconditions.py` reports it as such.
+    """
     if to not in LEGAL_STATUS:
         raise Refused(f"{to!r} is not a status; the set is {', '.join(LEGAL_STATUS)}")
     spans = _blocks(content)
@@ -323,6 +335,9 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "") -> str:
 
         if kill_reason:
             body = _write_field(body, "kill_reason", kill_reason, after="status")
+
+    if to == "approved" and approved_by:
+        body = _write_field(body, "approved_by", approved_by, after="status")
 
     # An item cannot ship while something still blocks it. `live_blockers`
     # answers the same question the selector and the gate already answer, so
@@ -445,6 +460,10 @@ def main() -> int:
     group.add_argument("--unblock", nargs="*", metavar="B-NNN", help="clear some, or with no ids every, impediment")
     parser.add_argument("--because", default="", help="state a non-item impediment (a decision, an external action)")
     parser.add_argument("--kill-reason", default="", help="required when --to killed")
+    parser.add_argument("--approved-by", default="", metavar="WHO",
+                        help="who made the commitment, written when --to approved: "
+                             "`human/<name>` or `system/autonomous-sweep`. A bare "
+                             "`approved` is not evidence that a person decided")
     parser.add_argument("--dry-run", action="store_true", help="print the new block, write nothing")
     args = parser.parse_args()
 
@@ -455,7 +474,8 @@ def main() -> int:
 
     try:
         if args.to:
-            updated = advance(content, args.item, args.to, args.kill_reason)
+            updated = advance(content, args.item, args.to, args.kill_reason,
+                              args.approved_by)
             action = f"{args.item} -> {args.to}"
         elif args.block_on is not None:
             updated = block(content, args.item, args.block_on, args.because)

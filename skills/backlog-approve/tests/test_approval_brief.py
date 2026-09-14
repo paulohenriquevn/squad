@@ -207,3 +207,25 @@ def test_an_unserved_objective_is_stated_in_the_brief(tmp_path):
     assert "`OBJ-2`" in body
     # The sentence that matters: ticking everything below still leaves it undone.
     assert "Ticking every box below would still leave it undone" in body
+
+
+def test_an_item_the_loop_approved_is_not_re_asked(tmp_path):
+    """Rendering it would ask the owner to re-make a decision they delegated.
+
+    A sweep finding is born `approved` under a standing authorisation. Putting it back
+    in front of a person is what makes autonomy conditional on somebody being awake —
+    the failure the standing authorisation exists to remove.
+    """
+    project = _registry(
+        tmp_path,
+        _item("B-001"),
+        _item("B-002").replace("status: triaged",
+                               "status: triaged\napproved_by: system/autonomous-sweep"))
+    ids = [i.item_id for i in bb.parse(project / "BACKLOG.md", project, "triaged")]
+    assert ids == ["B-001"]
+
+
+def test_an_item_a_person_approved_is_also_not_re_asked(tmp_path):
+    """Same reason, other direction: a decision made is not a decision pending."""
+    project = _registry(tmp_path, _item("B-001", status="approved"))
+    assert bb.parse(project / "BACKLOG.md", project, "triaged") == []

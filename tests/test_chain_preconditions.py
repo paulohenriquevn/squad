@@ -35,8 +35,11 @@ def _project(tmp_path: Path, *, languages: str | None = "go | go.mod | ENABLED |
         (tmp_path / ".squad" / "domain-routing.txt").write_text(
             "# domain | repos | agent\n" + routing, encoding="utf-8")
     if backlog:
-        (tmp_path / "BACKLOG.md").write_text("# Backlog\n\n## Items\n\n## B-001 — t\n",
-                                             encoding="utf-8")
+        # `approved`, because a complete installation is one a run can START on, and
+        # since 2026-09-14 that includes somebody having decided what the run is for.
+        (tmp_path / "BACKLOG.md").write_text(
+            "# Backlog\n\n## Items\n\n## B-001 — t\n\nstatus: approved\n",
+            encoding="utf-8")
     if manifest:
         (tmp_path / manifest).write_text("module example\n", encoding="utf-8")
     return tmp_path
@@ -153,3 +156,72 @@ def test_a_clean_installation_exits_zero(tmp_path, monkeypatch, capsys):
                                       str(_project(tmp_path))])
     assert pre.main() == 0
     assert "can complete" in capsys.readouterr().out
+
+
+# ── the system never starts on a backlog nobody approved ────────────────────
+
+def test_a_registry_with_nothing_approved_refuses_the_start(tmp_path):
+    """The owner's rule, after watching a run produce 85 items and zero implemented.
+
+    An unapproved registry is not a queue of work; it is a queue of hypotheses. A run
+    over it decides by inference, item by item, the one question `cycle-backlog.md`
+    reserves for a person — is this the work you want done?
+    """
+    project = _project(tmp_path)
+    (project / "BACKLOG.md").write_text(
+        "# Backlog\n\n## Items\n\n## B-001 — t\n\nstatus: triaged\n", encoding="utf-8")
+    check = _by_name(pre.measure(project), "approved work")
+    assert check.ok is False
+    assert "hypotheses nobody has committed to" in check.detail
+    assert "build_approval_brief" in check.fix
+
+
+def test_one_approved_item_is_enough_to_start(tmp_path):
+    """Satisfied by ONE, not by all.
+
+    A backlog is approved incrementally and a run works one item at a time. Demanding
+    the whole registry be decided before anything starts would make this gate the thing
+    it refuses — one that never lets you begin.
+    """
+    project = _project(tmp_path)
+    (project / "BACKLOG.md").write_text(
+        "# Backlog\n\n## Items\n\n## B-001 — t\n\nstatus: approved\n\n"
+        "## B-002 — t\n\nstatus: triaged\n", encoding="utf-8")
+    assert _by_name(pre.measure(project), "approved work").ok is True
+    assert pre.measure(project).failed == []
+
+
+def test_with_no_registry_approval_is_unmeasurable_not_failed(tmp_path):
+    """Two questions, and the second only exists if the first has an answer."""
+    project = _project(tmp_path, backlog=False)
+    assert _by_name(pre.measure(project), "approved work").ok is None
+
+
+def test_the_preflight_reports_who_approved_not_only_how_many(tmp_path):
+    """A count alone stopped answering "has anyone read this registry?".
+
+    Since a sweep finding is born `approved` under a standing authorisation, a loop that
+    approves its own findings can feed itself: a sweep produces items, working them
+    produces sweeps. Nothing bounds that except a person seeing the split — so the split
+    is reported at the one moment it can still change a decision, before the next run.
+    """
+    project = _project(tmp_path)
+    (project / "BACKLOG.md").write_text(
+        "# Backlog\n\n## Items\n\n"
+        "## B-001 — t\n\nstatus: approved\napproved_by: human/paulo\n\n"
+        "## B-002 — t\n\nstatus: approved\napproved_by: system/autonomous-sweep\n\n"
+        "## B-003 — t\n\nstatus: approved\napproved_by: system/autonomous-sweep\n",
+        encoding="utf-8")
+    check = _by_name(pre.measure(project), "approved work")
+    assert check.ok is True
+    assert "1 by a person, 2 by the loop itself" in check.detail
+
+
+def test_an_unattributed_approval_is_not_counted_as_a_persons(tmp_path):
+    """A bare `approved` predates the field. It is not evidence anybody decided."""
+    project = _project(tmp_path)
+    (project / "BACKLOG.md").write_text(
+        "# Backlog\n\n## Items\n\n## B-001 — t\n\nstatus: approved\n", encoding="utf-8")
+    check = _by_name(pre.measure(project), "approved work")
+    assert "no attribution" in check.detail
+    assert "not evidence a person decided" in check.detail

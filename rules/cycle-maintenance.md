@@ -81,6 +81,17 @@ of the INSTALLATION look like a property of each item, and sends the next sessio
 the wrong thing. It did: a session read the stable id and concluded a backlog item had
 to be implemented first.
 
+**The system never starts on a backlog nobody approved.** That is a precondition and
+not a phase gate, because it has the same shape as the others: an unapproved registry is
+not a queue of work, it is a queue of hypotheses, and a run over it decides by
+inference — item by item, in the middle of the night — the one question this contract
+reserves for a person. Measured on a consumer: 85 items at `triaged`, zero at
+`approved`, and hours of execution against a list nobody had said yes to.
+
+ONE approved item satisfies it. A backlog is approved incrementally and the loop works
+one item at a time; demanding the whole registry be decided before anything starts would
+make the preflight the thing it refuses.
+
 **It is better to run nothing than to carry unresolved conditions that block the chain.**
 A precondition here is a fact no amount of good work can overcome. A judgement is not —
 which languages to audit, whether a soft cap deserves an ADR, whether to record a

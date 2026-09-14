@@ -237,6 +237,19 @@ def load_allowlist(rule_file: Path) -> list[AllowlistEntry]:
     return entries
 
 
+def _allowlist_key_symbol(allowlist_key: str) -> str:
+    """The fourth field of `{language}|{file}|{type}|{symbol}`, unescaped.
+
+    Parsed rather than split naively: the symbol portion escapes its pipes, and a
+    `str.split("|")` on a symbol containing one would silently return the wrong field.
+    """
+    masked = allowlist_key.replace("\\|", "\x00")
+    parts = masked.split("|")
+    if len(parts) != 4:
+        return ""
+    return parts[3].replace("\x00", "|")
+
+
 def is_allowlisted(
     finding: Finding, allowlist: list[AllowlistEntry], today: date
 ) -> AllowlistMatch:
@@ -245,11 +258,29 @@ def is_allowlisted(
         # Patch 2026-05-30 — file_path uses fnmatch (literal-match still works when entry has no wildcards;
         # glob patterns like `examples/**/lib/*.ts` now match real findings). Symbol stays substring-match
         # for backward compat (entries without `*` continue to work as before; entries with `*` now glob).
-        symbol_match = (
-            fnmatch.fnmatch(finding.symbol_or_line, f"*{entry.symbol}*")
-            if any(c in entry.symbol for c in "*?[")
-            else entry.symbol in finding.symbol_or_line
-        )
+        # Two haystacks, and the second is the fix for a trap the gate set itself.
+        #
+        # The gate PUBLISHES `allowlist_key` — `go|.|mutation_low|soft_cap_mutation_
+        # deferred_go` — in the finding, the JSON and the report. The obvious thing to
+        # do with a key a tool hands you is copy its fields into the allowlist. That
+        # produced a well-formed six-column row that matched NOTHING, because matching
+        # ran against `symbol_or_line`, which for this finding is `d4`.
+        #
+        # Measured on a consumer with a control: an allowlist carrying the published
+        # key and one carrying `ZZZ_NO_SUCH_SYMBOL` produced byte-identical JSON. The
+        # advertised key was indistinguishable from an invented symbol, `load_allowlist`
+        # validated all six columns without complaint, and the false claim that it
+        # worked reached a brief AND a panel vote before anyone tested it.
+        #
+        # `symbol_or_line` stays first so every existing entry keeps working unchanged.
+        haystacks = [finding.symbol_or_line]
+        key_symbol = _allowlist_key_symbol(finding.allowlist_key)
+        if key_symbol and key_symbol != finding.symbol_or_line:
+            haystacks.append(key_symbol)
+        if any(c in entry.symbol for c in "*?["):
+            symbol_match = any(fnmatch.fnmatch(h, f"*{entry.symbol}*") for h in haystacks)
+        else:
+            symbol_match = any(entry.symbol in h for h in haystacks)
         if (
             entry.ecosystem == finding.language
             and fnmatch.fnmatch(finding.file_path, entry.file_path)

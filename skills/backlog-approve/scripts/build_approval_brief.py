@@ -235,9 +235,17 @@ def parse(backlog: Path, project: Path, wanted_status: str | None) -> list[Item]
             continue
         fields = {name: _field_block(block, name)
                   for name in ("domain", "repo", "status", "source", "evidence",
-                               "why_now", "suggested_mode", "blocked_by")}
+                               "why_now", "suggested_mode", "blocked_by",
+                               "approved_by")}
         fields["dod"] = _bullets(block, "dod")
         if wanted_status and fields["status"] != wanted_status:
+            continue
+        # An item the loop filed under a standing authorisation is already decided, and
+        # rendering it here would ask the owner to re-make a decision they delegated —
+        # which is the shape that makes autonomy conditional on somebody being awake.
+        # `/backlog-approve` is for the case the gate was built for: a person deciding
+        # what a person asked for.
+        if (fields.get("approved_by") or "").strip().startswith("system/"):
             continue
         item = Item(head.group(1), head.group(2).strip(), fields)
         found, resolved, missing = _verify(fields["evidence"], roots)

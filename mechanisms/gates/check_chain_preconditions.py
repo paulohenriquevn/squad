@@ -171,9 +171,67 @@ def check_backlog(project: Path) -> Check:
     return Check("backlog", True, f"{items} item(s) registered")
 
 
+def check_approved(project: Path) -> Check:
+    """Has anyone decided what the run is FOR?
+
+    This is the precondition the owner added after watching a run produce 85 items and
+    zero implemented: **the system never starts on a backlog nobody approved.**
+
+    It belongs here and not in the item loop because it has the shape every other check
+    here has — it is a fact about the installation that no amount of good work overcomes.
+    An unapproved registry is not a queue of work; it is a queue of hypotheses. Starting
+    on it spends hours deciding, item by item and by inference, the one question
+    `cycle-backlog.md` reserves for a person: *is this the work you want done?*
+
+    Measured on a consumer before this existed: 85 items at `triaged`, zero at
+    `approved`, and a night of execution against a list nobody had said yes to.
+
+    It is satisfied by ONE approved item, not by all of them. A backlog is approved
+    incrementally and a run works one item at a time; demanding the whole registry be
+    decided before anything starts would make the gate the thing it refuses — a gate
+    that never lets you begin.
+    """
+    path = project / "BACKLOG.md"
+    if not path.is_file():
+        return Check("approved work", None,
+                     "no BACKLOG.md, so nothing can be approved either", "")
+    text = path.read_text(encoding="utf-8-sig")
+    approved = len(re.findall(r"^status:\s*approved\s*$", text, re.M))
+    triaged = len(re.findall(r"^status:\s*triaged\s*$", text, re.M))
+    if approved:
+        # WHO approved, not just how many. Since 2026-09-14 a sweep finding is born
+        # `approved` under a standing authorisation, so a count alone stopped being able
+        # to answer "has anyone read this registry?" — and a loop that approves its own
+        # findings can feed itself. The split is reported at the one moment it can still
+        # change a decision: before the next run starts.
+        by_human = len(re.findall(r"^approved_by:\s*human/", text, re.M))
+        by_system = len(re.findall(r"^approved_by:\s*system/", text, re.M))
+        unattributed = approved - by_human - by_system
+        parts = [f"{approved} item(s) approved"]
+        if by_human or by_system:
+            parts.append(f"{by_human} by a person, {by_system} by the loop itself")
+        if unattributed:
+            parts.append(f"{unattributed} with no attribution — those predate "
+                         "`approved_by` and are not evidence a person decided")
+        detail = " · ".join(parts)
+        # Not a failure: a registry nobody has read is a legitimate state to be in, and
+        # an illegitimate one to be in unknowingly. The gate makes it known.
+        return Check("approved work", True, detail)
+    return Check(
+        "approved work", False,
+        f"no item is `approved` ({triaged} sit at `triaged`) — the registry holds "
+        "hypotheses nobody has committed to, and a run over it decides by inference "
+        "what only a person may decide",
+        "render the page, tick what you want done, sign, and apply:\n"
+        "         python3 <kit>/skills/backlog-approve/scripts/build_approval_brief.py .\n"
+        "         /sign <the brief it names> --as <your name>\n"
+        "         python3 <kit>/skills/backlog-approve/scripts/apply_approval.py . <brief>")
+
+
 def measure(project: Path) -> Report:
     rep = Report()
     rep.checks.append(check_backlog(project))
+    rep.checks.append(check_approved(project))
     rep.checks.append(check_routing(project))
     rep.checks.extend(check_languages(project))
     return rep

@@ -60,10 +60,44 @@ The second producer writes into the same registry without passing through this c
 ```
 /discover-execute --sweep {domain}     ← no prior item
      ↓ (registers findings directly)
-B-NNN · source: discover-review · evidence: <file:line> · status: triaged
+B-NNN · source: discover-review · evidence: <file:line> · status: approved
+                                         approved_by: system/autonomous-sweep
 ```
 
 One file, one schema, two entry paths. A sweep finding skips intake because it arrives with the evidence intake is not allowed to require.
+
+### An item the system found is approved when it is filed
+
+**Decided 2026-09-14.** An item arriving through the sweep is born `approved`, and the
+decision is attributed to the system rather than to a person.
+
+The argument is narrow and it is about WHERE the consent was given. Running the loop
+unattended IS the decision to act on what the loop finds: a sweep is not a proposal
+awaiting an answer, it is the execution of an answer already given. Requiring a person
+per finding does not add a decision — it withdraws the one already made, and it makes
+the autonomy conditional on somebody being awake.
+
+**What this deliberately does NOT change.** An item whose `source` is `human` is born
+`raw` and still needs the decision. `/backlog-approve` renders only those, because a
+person deciding what a person asked for is the case the gate was built for.
+
+**`approved_by` is the field that keeps the two apart**, for the same reason
+`signed-by: human/…` and `signed-by: judge/…` are different claims in a brief:
+
+| `approved_by` | Means |
+|---|---|
+| `human/<name>` | a person read the item and committed to it |
+| `system/autonomous-sweep` | the loop filed it under a standing authorisation |
+
+They are not worth the same, and a reader must be able to tell without opening a second
+file. A registry where everything is `system/…` is a registry nobody has read — which is
+a legitimate state to be in, and an illegitimate one to be in unknowingly.
+
+**The cost, stated rather than discovered later.** A loop that approves its own findings
+can feed itself: a sweep produces items, working them produces sweeps, and nothing in
+this contract bounds that. The bound is the person reading `approved_by` counts and
+deciding the loop has found enough. `check_chain_preconditions.py` reports the split so
+the number is in front of whoever starts the next run.
 
 ## Phase contracts
 
@@ -99,6 +133,7 @@ dod:
 | `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` |
 | `evidence` | yes | `none-yet` at intake; a pointer once DISCOVER measures |
 | `why_now` | yes | what changed **in our system**; subject to G5 |
+| `approved_by` | when `status` is `approved` or past it | `human/<name>` or `system/autonomous-sweep`. Who made the commitment. A bare `approved` with no attribution predates this field; it is not evidence that a person decided |
 | `traces_to` | when the project declares objectives | the `OBJ-N` ids this item serves, comma-separated. Required once `.squad/wiki/product/objectives.md` exists; absent and unenforced before that, because a project that never ran `/brainstorm-objectives` has nothing to trace to |
 | `status` | yes | `raw` \| `triaged` \| `approved` \| `planned` \| `shipped` \| `killed` |
 | `dod` | yes | ≥ 1 verifiable criterion (G4) |

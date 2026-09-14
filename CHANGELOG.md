@@ -146,6 +146,113 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   judgement is deliberately not checked: a gate that waits on a decision is a gate that
   never lets you start.
 
+### Changed
+- **An item the loop finds is approved when it is filed** (#93)
+  A sweep finding is born `approved`, attributed to `system/autonomous-sweep`. Running
+  the loop unattended IS the decision to act on what the loop finds — a sweep is not a
+  proposal awaiting an answer, it is the execution of an answer already given, and
+  requiring a person per finding withdraws the decision already made and makes the
+  autonomy conditional on somebody being awake. An item whose `source` is `human` is
+  unaffected: born `raw`, and `/backlog-approve` still renders only those, because a
+  person deciding what a person asked for is the case that gate was built for. The new
+  `approved_by` field keeps the two apart for the same reason `signed-by: human/…` and
+  `signed-by: judge/…` are different claims — they are not worth the same, and a
+  registry where everything is `system/…` is one nobody has read. The preflight reports
+  the split rather than only the count, because a loop that approves its own findings
+  can feed itself and the only bound is somebody seeing the number before the next run.
+
+### Added
+- **The system never starts on a backlog nobody approved** (#93)
+  `check_chain_preconditions` now refuses to begin when no item is at `approved`. It has
+  the same shape as the other preconditions — a fact about the installation that no
+  amount of good work overcomes — because an unapproved registry is not a queue of work,
+  it is a queue of hypotheses, and a run over it decides by inference, item by item, the
+  one question `cycle-backlog.md` reserves for a person. Measured on a consumer: 85 items
+  at `triaged`, zero at `approved`, and hours of execution against a list nobody had said
+  yes to. ONE approved item satisfies it: a backlog is approved incrementally and the
+  loop works one item at a time, so demanding the whole registry be decided before
+  anything starts would make the preflight the thing it refuses. The refusal carries the
+  three commands that clear it.
+
+### Added
+- **`check_criteria_discriminate.py` — acceptance criteria are run, not read** (#96)
+  `score_alignment` grades a criterion `executable` from a text match over the bullet: it
+  asks whether a command is NAMED, never whether it could run or whether its answer
+  distinguishes anything. Measured on a consumer: a brief scored 14/14 executable where
+  two criteria could not pass at all, and `go test -run <pattern-that-matches-nothing>`
+  exits 0 with `[no tests to run]`, so eight criteria in one brief were satisfied by
+  writing no test. The new script runs each criterion against the tree as it is and
+  refuses the ones that already pass — a criterion that passes before the work cannot
+  tell a finished item from an unstarted one. It marks as undecidable, never as sound,
+  the ones whose bullet does not state what it expects, and it states that it checked one
+  of three states: the intended state and a deliberately wrong implementation the
+  criterion must reject are not covered, and the third is what catches a criterion
+  measuring a name rather than a behaviour. Measured on three real briefs: 3 of 13
+  criteria in one already passed.
+
+### Fixed
+- **kit#18's exemption had no effect on any brief that followed the template** (#96)
+  `_without_section` stopped at the next heading of ANY level, so a section with a
+  subheading was cut at the subheading and everything under it stayed in the text the
+  caller believed it had removed. `## Questions answered` is exactly that shape, and
+  this skill's own SKILL.md prescribes it — *"`### Session YYYY-MM-DD` then `- Q: … →
+  A: …`"* — so the kit prescribed the structure that voided its own exemption. A brief
+  whose only imperfection was one honestly declared open question was charged twice,
+  three points of thirty-four, about 9% against a 90% threshold, and the cheapest way
+  past was to delete the question: the exact evasion kit#18 was written to remove. A
+  section now ends at the next heading of the same level or shallower. Measured over 38
+  real briefs: 37 clean afterwards.
+
+- **`<angle-brackets>` reverted out of the placeholder scan, one day after being added**
+  (#96) They went in to catch `<gate-name>`, reported by a consumer as invisible.
+  Re-measured over 38 briefs the next day: 23 were charged, and the hits were three
+  different things wearing one shape — `err=<nil>` (a Go literal quoted from real
+  output), `-C <path>` (CLI syntax in prose), and `START_SHA=<sha>` (a parameter a
+  criterion needs filled before it can run). Only the third is a defect, and it is not
+  the one `no_placeholders` measures: that criterion asks whether a DECISION is open,
+  while an unfilled command parameter is a question about executability, which
+  `check_criteria_discriminate.py` answers by refusing to run the criterion. Charging
+  two points for a Go nil made the column report the wrong thing loudly, which is how a
+  reader learns to skip a column.
+
+### Fixed
+- **Three defects in the acceptance-criteria scorer that agreed with each other** (#96)
+  `_UNRESOLVED_RE` matched `{{CAPS}}` and not `<angle-brackets>`, which is the notation
+  these briefs use; `_PRESENCE_RE` exempted on `wc -l` in any position, so a criterion
+  that counts something and asserts zero — passing exactly when the subject is absent —
+  was exempted by coincidence; and `_EXECUTABLE_RE` grades a criterion executable from a
+  text match, so one carrying an invisible placeholder scored beside a scan that could
+  not see it. Measured on a consumer: a brief with eight occurrences of `<gate-name>`
+  reported "No unresolved placeholder anywhere in the brief — none" together with "10/10
+  executable", over five commands its own prose said did not run. Re-measured over 19
+  briefs after the fix: vacuous criteria 0 → 61, and six briefs carrying a placeholder
+  that had been invisible. The composition is broken — a criterion with an unresolved
+  placeholder is no longer graded executable — but grading remains a text match, and
+  executing criteria against three states is tracked separately.
+
+- **The allowlist key the gate publishes matched nothing** (#95)
+  The gate publishes `allowlist_key` — `go|.|mutation_low|soft_cap_mutation_deferred_go`
+  — in the finding, the JSON and the report, and `is_allowlisted` matched the symbol
+  column against `symbol_or_line`, which for that finding is `d4`. Copying the advertised
+  fields produced a well-formed six-column row matching nothing, and `load_allowlist`
+  validated all six without complaint. Measured with a control: the published key and
+  `ZZZ_NO_SUCH_SYMBOL` were both `NOT_LISTED` — the advertised key was indistinguishable
+  from an invented symbol, and on a consumer the false claim that it worked reached a
+  brief and a panel vote before anyone tested it. Matching now accepts either the symbol
+  or the key's own symbol field, so existing entries keep working unchanged.
+
+- **An expired allowlist entry was never announced** (#95)
+  `is_allowlisted` returns ACTIVE / EXPIRED / NOT_LISTED and the only consumer branched
+  on ACTIVE, so an exemption whose sunset had passed fell into the same `else` as one
+  that was never written. Golden rule § 4 promises the entry listed under *"Allowlist
+  hits — expired"*; nothing implemented it. Measured with a sunset of 2026-01-01:
+  `FAIL_SOFT`/70 with the word `expired` absent from the JSON, from stderr and from the
+  report. A dated exemption is a promise to revisit and the date is the whole mechanism —
+  the finding re-firing at full severity is correct and is not the notification, because
+  it looks exactly like a finding nobody ever exempted. Expired rows are now named on
+  stderr and carried in `expired_allowlist`, always present so an empty list answers the
+  question an absent key would ask.
+
 ### Fixed
 - **A fixture rewrote the real `rules/domain-routing.txt` and only restored it on teardown** (#87)
   The discover-confidence end-to-end fixture wrote the routing table into the repository
