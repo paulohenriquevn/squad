@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A criterion verification is stamped with the tree it read** (#96)
+  A verification does not survive the tree it measured, and the proof came from this
+  kit's own hand: writing `go | api/go.mod | ENABLED` into a consumer's language config
+  to unblock its quality gate turned a criterion of that consumer's B-034 — a `grep -c`
+  over that same file — from discriminating to inert in the same minute. The criterion
+  did not change; the tree did. The run now reports the HEAD it read against, says when
+  the working tree is dirty because those answers do not reproduce from the commit
+  alone, and states that a reading expires: run it against the tree you are about to
+  implement on, not against a record of a tree that has moved.
+
 - **A criterion's clauses are read separately** (#96)
   `check_criteria_discriminate` ran only the FIRST runnable span of a bullet, so the
   second half of `<gate exists> AND <test passes>` was never executed — not folded into

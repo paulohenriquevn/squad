@@ -133,9 +133,35 @@ class Result:
         return all(c.passes_today for c in self.clauses)
 
 
+def _tree_state(repo_root: Path) -> tuple[str, bool]:
+    """(HEAD sha, is the working tree dirty). Empty sha when this is not a repository.
+
+    A verification does not survive the tree it measured, and that is not theoretical:
+    on 2026-09-14 the kit wrote `go | api/go.mod | ENABLED` into a consumer's language
+    config to unblock its quality gate, and a criterion of that consumer's B-034 —
+    `grep -cE '^[[:space:]]*go[[:space:]]*\|' <that file>` — went from discriminating to
+    inert in the same minute. The criterion did not change. The tree did.
+
+    So a result is stamped with the tree it was read against. A reader comparing a
+    yesterday's run to today's decision needs to know they are not the same question.
+    """
+    try:
+        head = subprocess.run(["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"],
+                              capture_output=True, text=True, timeout=10, check=False)
+        status = subprocess.run(["git", "-C", str(repo_root), "status", "--porcelain"],
+                                capture_output=True, text=True, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return "", False
+    if head.returncode != 0:
+        return "", False
+    return head.stdout.strip(), bool(status.stdout.strip())
+
+
 @dataclass
 class Report:
     results: list = field(default_factory=list)
+    head: str = ""
+    dirty: bool = False
 
     @property
     def already_passing(self) -> list:
@@ -234,6 +260,7 @@ def _decide(result, expected: str) -> tuple[bool | None, str]:
 
 def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:
     rep = Report()
+    rep.head, rep.dirty = _tree_state(repo_root)
     for bullet in _bullets(brief.read_text(encoding="utf-8-sig")):
         r = Result(criterion=bullet[:110])
         if _UNRESOLVED.search(bullet):
@@ -273,7 +300,9 @@ def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:
 
 
 def render(rep: Report, brief: Path) -> str:
-    lines = [f"acceptance criteria — {brief.name}", ""]
+    stamp = (f"read against {rep.head}" + (" · working tree DIRTY" if rep.dirty else "")
+             if rep.head else "read against an unversioned tree")
+    lines = [f"acceptance criteria — {brief.name}", f"  {stamp}", ""]
     for r in rep.results:
         mark = {True: "PASSES TODAY", False: "fails today  ", None: "undecidable  "}[
             r.passes_today] if r.ran else "did not run  "
@@ -319,7 +348,16 @@ def render(rep: Report, brief: Path) -> str:
         lines.append(f"All {n} criteria fail today — each has something to prove.")
     lines += ["", "  This ran each CLAUSE once, against the tree as it is. It does not",
               "  check that a criterion REJECTS a wrong implementation, which is the state",
-              "  that catches one measuring a name rather than a behaviour."]
+              "  that catches one measuring a name rather than a behaviour.",
+              "",
+              "  And it does not survive the tree it measured. A criterion that",
+              "  discriminated yesterday can be inert today because something else",
+              "  changed — a config line, a file appearing, a dependency installed. Run",
+              "  this against the tree you are about to implement on, not against a",
+              "  record of a tree that has moved."]
+    if rep.dirty:
+        lines += ["", "  The working tree is DIRTY, so some of these answers come from",
+                  "  uncommitted changes and will not reproduce from the commit alone."]
     return "\n".join(lines) + "\n"
 
 
@@ -343,7 +381,7 @@ def main() -> int:
         return 2
 
     if args.json:
-        print(json.dumps({"results": [
+        print(json.dumps({"head": rep.head, "dirty": rep.dirty, "results": [
             {"criterion": r.criterion, "ran": r.ran, "passes_today": r.passes_today,
              "note": r.note,
              "clauses": [{"command": c.command, "ran": c.ran,
