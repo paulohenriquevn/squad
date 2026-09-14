@@ -284,9 +284,20 @@ def test_a_real_item_id_is_still_accepted(tmp_path: Path) -> None:
 
 
 def test_only_the_implement_stage_can_write(tmp_path: Path) -> None:
-    """The four read-only stages share one tree safely and do. The writing stage
-    is the reason worktrees exist, and giving `Write` to a stage that does not
-    need it widens the blast radius of a prompt nobody has re-read lately."""
+    """The read-only stages share one tree safely and do. A writing stage is the
+    reason worktrees exist, and giving `Write` to a stage that does not need it
+    widens the blast radius of a prompt nobody has re-read lately.
+
+    RELEASE joined the writers on 2026-09-14 and carries `Edit` only: it writes one
+    changelog entry, on the lane's own branch, beside the change it describes. It does
+    NOT carry `Write`, because creating a file is not something recording a release
+    needs to do, and the narrower list is the one that stays true when nobody is
+    watching.
+
+    REVIEW deliberately stayed read-only. A reviewer who may edit cannot be trusted to
+    report what they found, because the finding and the fix become one act nobody can
+    separate afterwards.
+    """
     _run(tmp_path)
     agents = tmp_path / "agents"
 
@@ -299,7 +310,22 @@ def test_only_the_implement_stage_can_write(tmp_path: Path) -> None:
         if tools & {"Write", "Edit", "NotebookEdit"}:
             writers.add(stage)
 
-    assert writers == {"implement"}, f"unexpected writing stage(s): {writers - {'implement'}}"
+    assert writers == {"implement", "release"}, (
+        f"unexpected writing stage(s): {writers - {'implement', 'release'}}")
+
+    release_tools = {t.strip() for t in
+                     next(line for line in
+                          (agents / "release.md").read_text(encoding="utf-8")
+                          .split("---")[1].splitlines()
+                          if line.startswith("tools:")).split(":", 1)[1].split(",")}
+    assert "Write" not in release_tools, "recording a release does not create files"
+
+    review_tools = {t.strip() for t in
+                    next(line for line in
+                         (agents / "review.md").read_text(encoding="utf-8")
+                         .split("---")[1].splitlines()
+                         if line.startswith("tools:")).split(":", 1)[1].split(",")}
+    assert not (review_tools & {"Write", "Edit"}), "a reviewer that edits is not a reviewer"
 
 
 def test_the_writing_stage_makes_its_own_worktree_of_the_consumer(tmp_path: Path) -> None:
@@ -331,3 +357,38 @@ def test_the_writing_stage_runs_the_red_test_before_writing_code(tmp_path: Path)
 
     assert "before writing any production code" in body
     assert "record that it failed" in body, "a RED nobody watched fail is not a RED"
+
+
+def test_the_chain_runs_to_release(tmp_path: Path) -> None:
+    """Until 2026-09-14 it stopped at IMPLEMENT and the stages after it did not exist.
+
+    That is why an unattended run kept producing nothing: whatever was fixed upstream,
+    the chain ran five stages and stopped, and a consumer asking for autonomy got a
+    scheduler that was never able to finish. The gates were not the obstacle; the chain
+    ended before the work landed.
+    """
+    _run(tmp_path)
+    agents = tmp_path / "agents"
+    for stage in ("discover", "align", "judge", "plan", "implement", "review", "release"):
+        assert (agents / f"{stage}.md").is_file(), f"{stage} has no materialised prompt"
+
+
+def test_review_reruns_the_criteria_against_the_tree_at_review_time(tmp_path: Path) -> None:
+    """A verification does not survive the tree it measured.
+
+    A criterion that discriminated when the brief was written can be inert by review
+    time because something else changed — measured when this kit wrote one config line
+    into a consumer and turned one of its criteria inert in the same minute.
+    """
+    _run(tmp_path)
+    body = (tmp_path / "agents" / "review.md").read_text(encoding="utf-8")
+    assert "check_criteria_discriminate.py" in body
+    assert "at review time" in body
+
+
+def test_release_does_not_cut_a_version_or_merge(tmp_path: Path) -> None:
+    """Both have blast radius beyond one item, and several items ship in one release."""
+    _run(tmp_path)
+    body = (tmp_path / "agents" / "release.md").read_text(encoding="utf-8")
+    assert "do not cut a version" in body.lower()
+    assert "backlog_status.py" in body, "the only writer of a status line"

@@ -104,6 +104,22 @@ An item that parks is the gate working. The first run over a real registry retur
 planned, 3 parked**, and all three refused to fabricate the numbers that would
 have let them pass — which is the outcome the anti-patterns ask for.
 
+**A park is not the end of the run, and this sentence used to read as though it were.**
+The other lanes keep moving; a parked item is one item held, surfaced with the reason.
+What it needs is the reason addressed — usually a criterion rewritten or a number
+re-measured — and then `unpark()`. Reading a park as "the run is over" is how a
+scheduler built to keep several items moving ends up reporting zero.
+
+### Step 4 — The chain runs to RELEASE
+
+`discover → align → judge → plan → implement → review → release`.
+
+Until 2026-09-14 it stopped at IMPLEMENT, and the two stages after it did not exist —
+so a consumer asking for an unattended run got five stages and a stop, whatever was
+fixed upstream. REVIEW audits the diff read-only and re-runs the acceptance criteria
+against the tree AS IT IS at review time, because a verification does not survive the
+tree it measured. RELEASE writes the changelog entry and moves the status.
+
 ## Lane budget
 
 Derived, never chosen: `lane_budget()` computes `min(16, cpus-2)` minus REVIEW's
@@ -117,9 +133,14 @@ itself cited.
 - It does not decide whether a stage passed. Every gate keeps its verdict.
 - It does not sign an alignment brief. The lane's own chain does that, through a
   reviewer that is not the author — never the scheduler, and never the author.
-- It does not run IMPLEMENT or later. Those write to the repository, and a
-  writing stage needs its own decision about what its tool list should be —
-  named here rather than shipped with permissions nobody examined.
+- It does not cut a version or merge to a protected branch. RELEASE records what
+  shipped and leaves the branch ready; both of those decisions have blast radius
+  beyond one item, and several items ship in one release.
+- It does not run ACCEPTANCE. That validates a MILESTONE rather than an item, and
+  a per-item stage would answer a question nobody asked at this granularity.
+- It does not run CODE-QUALITY as a stage. `run_validation.py` invokes it inside
+  IMPLEMENT; a stage here would run it twice and make the second run look like an
+  independent confirmation of the first.
 
 ## Files
 

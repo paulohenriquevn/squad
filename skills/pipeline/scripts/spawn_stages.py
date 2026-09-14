@@ -92,7 +92,24 @@ from squad.paths import write_records_dir  # noqa: E402
 #: agent makes itself, of the CONSUMER's repository, on a branch named after the
 #: item. The read-only stages can share one tree and do; two writers in one tree
 #: produce a diff neither of them authored.
-STAGES = ("discover", "align", "judge", "plan", "implement")
+#: REVIEW and RELEASE land 2026-09-14, and the reason they were missing is the reason
+#: the loop kept stopping: the chain ran to IMPLEMENT and ended there, so a consumer
+#: asking for an unattended run got five stages and a stop, every time, whatever was
+#: fixed upstream.
+#:
+#: REVIEW is read-only on purpose — a reviewer who may edit cannot be trusted to report
+#: what they found, because the finding and the fix become one act nobody can separate
+#: afterwards. RELEASE carries `Edit` for the changelog and moves the status through
+#: `backlog_status.py`, which stays the only writer of a status line.
+#:
+#: CODE-QUALITY has no stage of its own because it is not one: `run_validation.py`
+#: invokes it inside IMPLEMENT, and `cycle-phases.txt` says so. A stage here would run
+#: it twice and make the second run look like an independent confirmation of the first.
+#:
+#: ACCEPTANCE is still absent, and that absence is honest: it validates a MILESTONE
+#: rather than an item, several items close one, and a per-item stage would be
+#: answering a question nobody asked at this granularity.
+STAGES = ("discover", "align", "judge", "plan", "implement", "review", "release")
 
 DEFAULT_MODEL = "opus"
 

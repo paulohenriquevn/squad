@@ -7,6 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The pipeline ran five stages and stopped, so an unattended run never landed work** (#93)
+  `/pipeline` scheduled `discover → align → judge → plan → implement` and ended there.
+  REVIEW and RELEASE did not exist, and the skill still claimed it did not run IMPLEMENT
+  either — a sentence that stopped being true on 2026-09-02 and was never corrected. So
+  a consumer asking for an unattended run got five stages and a stop, every time,
+  whatever was fixed upstream: the gates were never the obstacle, the chain ended before
+  the work could land. REVIEW audits the diff read-only — a reviewer who may edit cannot
+  be trusted to report what they found — reproduces the pre-change test failure, and
+  re-runs the acceptance criteria against the tree AS IT IS at review time, because a
+  verification does not survive the tree it measured. RELEASE carries `Edit` and not
+  `Write`, writes one changelog entry on the lane's own branch, and moves the status
+  through `backlog_status.py`; it does not cut a version or merge, because both have
+  blast radius beyond one item. CODE-QUALITY gets no stage because `run_validation.py`
+  already invokes it inside IMPLEMENT, and ACCEPTANCE gets none because it validates a
+  milestone rather than an item.
+
 - **A guard that passes today is the criterion working, not a defect** (#96)
   `check_criteria_discriminate` reported a non-regression guard with the same sentence
   it reports an inert criterion — *"will pass after the work too"* — and the distinction
