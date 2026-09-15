@@ -187,3 +187,29 @@ def test_the_cache_list_agrees_with_what_the_installer_refuses_to_copy() -> None
     assert set(check_install_drift._CACHE_DIRS) == excluded, (
         "the drift report and the installer disagree about what is a cache; a "
         "file the installer refuses to copy is not missing from an install")
+
+
+def test_the_installer_header_counts_the_specialists_it_actually_ships() -> None:
+    """`install.sh` said "agents/ receives ONLY README.md — the kit ships none" for every
+    install after the specialists landed. Measured while installing a consumer:
+    `agents/` went from 1 file to 15, and the header said that could not happen.
+
+    The same file already records this exact failure one paragraph above — a line that
+    described the behaviour before a change, and a reader who trusted it and avoided the
+    installer to protect permissions the merge would have kept. A comment about what a
+    tool does is load-bearing in the same way its code is, and neither is checked by the
+    other unless something like this does it.
+    """
+    root = Path(__file__).resolve().parents[1]
+    shipped = sorted(p.name for p in (root / "agents").glob("*.md")
+                     if p.name != "README.md")
+    header = (root / "mechanisms" / "distribution" / "install.sh").read_text(
+        encoding="utf-8").split("set -", 1)[0]
+
+    assert str(len(shipped)) in header, (
+        f"the installer ships {len(shipped)} specialists and its header does not say so")
+    # The retired claim may survive only as a quotation of itself, explaining the change.
+    for line in header.splitlines():
+        if "the kit ships none" in line:
+            assert "said" in line or "until" in line, (
+                f"the header still asserts the kit ships no specialists: {line.strip()}")

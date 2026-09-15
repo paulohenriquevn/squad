@@ -91,8 +91,21 @@ explanation.
 
 ```
 Workflow({scriptPath: "mechanisms/fleet/pipeline_workflow.js",
-          args: {queue: <the "queue" array from Step 0>, repo: "<consumer-path>"}})
+          args: {selection: <the WHOLE object from Step 0>, repo: "<consumer-path>"}})
 ```
+
+**The whole object, not the `queue` array.** SELECT emits three keys carrying
+items a stage can act on — `queue` (triaged and raw), `awaiting_plan` (approved,
+DISCOVER done) and `in_flight` (planned, work started) — and each exists because
+a scheduler reading only the earlier ones could not see most of the registry.
+Measured on a consumer 2026-09-15 with 102 items: the whole selection builds 71,
+of which 56 approved enter at PLAN; the `queue` array alone builds 13, none of
+them approved.
+
+This line said `queue` until 2026-09-15, so an operator following it exactly
+reproduced a defect the code no longer had. A fix that lands in code and not in
+the procedure that invokes it is half a fix, and the missing half is the one a
+new reader follows.
 
 `pipeline()`, never `parallel()` — there is no barrier between stages, so one
 item may be aligning while another is still discovering. A barrier rebuilds the

@@ -75,7 +75,21 @@ _RUNNABLE = re.compile(
 _UNRESOLVED = re.compile(r"\{\{[A-Z_]+\}\}|<[A-Za-z][A-Za-z0-9_-]{1,40}>|\bTBD\b")
 
 #: What the criterion says it expects. `prints 1`, `exits 0`, `is empty`.
-_EXPECT_RE = re.compile(r"\b(prints|outputs|exits?|returns)\s+`?([^`\s.,]+)", re.I)
+_EXPECT_RE = re.compile(
+    r"\b(prints|outputs|exits?|returns)\s+`?(?:at\s+(?:least|most)\s+`?|no\s+(?:more|fewer)\s+than\s+`?)?"
+    r"([<>]=?|[^`\s.,]+)", re.I)
+
+#: A criterion that states a BOUND rather than a value. Probed on a consumer 2026-09-15 at
+#: another session's request, and wider than the case that prompted it: `prints 4 or more`
+#: extracted `4` and compared for equality, so a correct `6` read as a failure; `prints at
+#: least 4` extracted the word `at`; `prints >= 3` extracted `>=`. Every comparative form
+#: in the vocabulary was mis-read, and the direction of the error is the dangerous one —
+#: a discrimination check satisfied by a number being DIFFERENT rather than by the
+#: criterion being unmet.
+_BOUND_RE = re.compile(
+    r"\b(?:prints|outputs|returns)\s+`?(?:(?P<word>at\s+least|at\s+most|no\s+more\s+than|"
+    r"no\s+fewer\s+than)\s+`?)?(?P<op>[<>]=?)?\s*`?(?P<num>\d+)`?"
+    r"(?P<tail>\s+or\s+(?:more|fewer|less|greater|higher|lower))?", re.I)
 
 
 @dataclass
@@ -435,8 +449,14 @@ def _clauses_of(bullet: str) -> list[tuple[str, str]]:
             # questions about the same number, and deciding from the command text
             # instead read `true` as having nothing to do with exit codes.
             verb = expectation.group(1).lower()
-            out.append((command, f"{'exit' if verb.startswith('exit') else 'print'}:"
-                                 f"{expectation.group(2).strip()}"))
+            kind = "exit" if verb.startswith("exit") else "print"
+            # A stated bound travels WITH the expectation — `print:>=4` — rather than in a
+            # second channel. One string reaches `_decide`, so there is no way for the two
+            # to arrive out of step.
+            bound = _bound_of(following) if kind == "print" else None
+            value = (f"{bound[0]}{bound[1]}" if bound
+                     else expectation.group(2).strip())
+            out.append((command, f"{kind}:{value}"))
         else:
             out.append((command, ""))
     return out
@@ -451,6 +471,48 @@ def _bullet_expectation(bullet: str) -> str:
     return f"{'exit' if verb.startswith('exit') else 'print'}:{match.group(2).strip()}"
 
 
+#: A runner SAYING it ran nothing. Not "produced no output" — plenty of correct commands
+#: are silent (`test -f x`, `git diff --quiet`) and silence is their answer. These are
+#: literal statements by the tool that it measured nothing, and a clause judged only by
+#: its exit code reads them as a pass.
+#:
+#: Named by a consumer session 2026-09-15 as the class nobody is counting: "the honest
+#: statement about today is not 24 defects found; it is 24 found and an unknown number
+#: that returned exit 0." Its four examples were a `grep` honouring `.gitignore`, a `cd`
+#: failing into the original directory, a `\s` crossing a newline, and a `find -newermt`
+#: window returning zero over a file inside it — every one found by accident while
+#: looking for something else.
+_MEASURED_NOTHING_RE = re.compile(
+    r"\bno tests? (?:to run|ran|files?)\b|\[no test files\]|"
+    r"\bcollected 0 items\b|\brunning 0 tests\b|\b0 tests? (?:ran|executed)\b|"
+    r"\bno files? (?:matched|found)\b|\bnothing to do\b",
+    re.IGNORECASE)
+
+
+def _bound_of(text: str) -> tuple[str, int] | None:
+    """The comparator a criterion states, when it states one rather than a value.
+
+    Returns `(">=", 4)` for "prints 4 or more", "prints at least 4" and "prints >= 4".
+    None when the text names a plain value or nothing this recognises — and the caller
+    then falls back to equality, or to "could not decide", never to a guess.
+    """
+    match = _BOUND_RE.search(text)
+    if match is None:
+        return None
+    word = (match.group("word") or "").lower().replace("  ", " ")
+    tail = (match.group("tail") or "").lower()
+    op = match.group("op") or ""
+    if op in (">=", ">", "<=", "<"):
+        return op, int(match.group("num"))
+    if word in ("at least", "no fewer than") or "more" in tail or "greater" in tail \
+            or "higher" in tail:
+        return ">=", int(match.group("num"))
+    if word in ("at most", "no more than") or "fewer" in tail or "less" in tail \
+            or "lower" in tail:
+        return "<=", int(match.group("num"))
+    return None
+
+
 def _decide(result, expected: str) -> tuple[bool | None, str]:
     """Does this clause pass RIGHT NOW?
 
@@ -462,16 +524,47 @@ def _decide(result, expected: str) -> tuple[bool | None, str]:
     file exists to end, one level up.
     """
     kind, _, value = expected.partition(":")
+    #: A tool that announced it ran nothing has not answered the question, whatever it
+    #: exited with. `None` rather than `False`, because the criterion may be perfectly
+    #: sound against a tree where the test exists — what is unknown is today's answer,
+    #: and "could not decide" is the honest word for that.
+    said_nothing = _MEASURED_NOTHING_RE.search(
+        f"{result.stdout or ''}\n{getattr(result, 'stderr', '') or ''}")
     if kind == "exit":
         code = result.exit_code
         if str(code) == value:
+            if said_nothing:
+                return None, (f"exits {code} as asked, but the runner reports it executed "
+                              f"nothing — the exit code is not an answer to this")
             return True, f"exits {code} today, which is what it asks for"
         return False, f"exits {code} today, expects {value}"
+    if said_nothing and result.exit_code == 0:
+        return None, ("exit 0 today, and the runner reports it executed nothing — "
+                      "the criterion did not measure what it claims to")
     if result.exit_code != 0:
         return False, "exits non-zero today"
     if not value:
         return None, "exit 0 today, and the text does not state an expected output"
     out = result.stdout.strip()
+    #: A stated BOUND is compared as one. Comparing `prints 4 or more` for equality made a
+    #: correct `6` read as a failure — and worse than the false verdict is its direction:
+    #: the check reported "discriminates" because the number DIFFERED, not because the
+    #: criterion was unmet. A discrimination check satisfied by difference measures
+    #: nothing about the criterion.
+    bound_match = re.fullmatch(r"(>=|<=|>|<)(\d+)", value)
+    if bound_match:
+        op, limit = bound_match.group(1), int(bound_match.group(2))
+        first = out.splitlines()[0] if out.splitlines() else ""
+        try:
+            actual = int(first.strip())
+        except ValueError:
+            return None, (f"states a bound ({op} {limit}) and prints {first[:30]!r}, "
+                          f"which is not a number to compare")
+        ok = {">=": actual >= limit, ">": actual > limit,
+              "<=": actual <= limit, "<": actual < limit}[op]
+        if ok:
+            return True, f"already prints {actual}, which satisfies {op} {limit}"
+        return False, f"prints {actual} today, needs {op} {limit}"
     if out == value or out.splitlines()[:1] == [value]:
         return True, f"already prints {value!r}"
     return False, f"prints {out[:40]!r}, expects {value!r}"

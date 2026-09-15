@@ -145,3 +145,49 @@ def test_every_valid_status_is_reachable_by_a_consumer() -> None:
         "pending", "red", "green", "refactor", "wired",   # in flight
         "committed", "blocked",                           # terminal
     }
+
+
+def test_a_task_that_correctly_produced_no_commit_may_say_so(tmp_path: Path) -> None:
+    """A measurement task whose DoD requires that no tracked file change finishes with
+    nothing to commit, and had three options: claim a SHA it does not have, borrow a
+    neighbour's, or take a MEDIUM it does not deserve.
+
+    A consumer agent on 2026-09-15 refused the first two and accepted the third. That is
+    the right order of preference and it should not have cost anything — the schema had
+    no state for a finished task that legitimately produced no commit.
+
+    `no_commit_reason` rather than a fifth terminal status, and the reason is this file's
+    own history: `done` was retired because six consumers compute pendency from
+    `committed` OR `blocked`, so a task carrying the new word stayed PENDING forever and
+    the completion promise was never emitted. A field the consumers ignore is safe; a
+    status they ignore is the defect this validator exists to end.
+    """
+    checkpoint = tmp_path / "p.json"
+    checkpoint.write_text(json.dumps({"tasks": [{
+        "id": "T0.1", "phase": "0", "status": "committed",
+        "no_commit_reason": "baseline measurement; the DoD requires no tracked file change",
+    }]}), encoding="utf-8")
+    codes = [f.code for f in check_progress_schema(checkpoint).findings]
+    assert "committed_without_sha" not in codes
+
+
+def test_an_empty_reason_is_not_a_reason(tmp_path: Path) -> None:
+    """The field exists to carry a statement, not to silence a finding. Blank, and the
+    charge stands."""
+    checkpoint = tmp_path / "p.json"
+    checkpoint.write_text(json.dumps({"tasks": [{
+        "id": "T0.1", "phase": "0", "status": "committed", "no_commit_reason": "   ",
+    }]}), encoding="utf-8")
+    assert "committed_without_sha" in [
+        f.code for f in check_progress_schema(checkpoint).findings]
+
+
+def test_the_terminal_states_are_unchanged_so_every_consumer_still_agrees() -> None:
+    """The whole point of using a FIELD rather than a status. Six consumers compute
+    pendency from `committed` OR `blocked`; if this fix had added a word to that set, a
+    task carrying it would count as pending forever — which is exactly what `done` did
+    before it was retired."""
+    from check_progress_schema import _VALID_STATUSES  # noqa: PLC0415
+
+    assert _VALID_STATUSES == {"pending", "red", "green", "refactor", "wired",
+                               "committed", "blocked"}

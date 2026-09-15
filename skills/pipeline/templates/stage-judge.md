@@ -31,12 +31,32 @@ You are what makes it a state that ends.
 
 ## What you do
 
-1. Read the brief for `{ITEM}` under the cycle's alignment records.
+1. Read the brief, **at its path in the repository and nowhere else**:
+
+   ```bash
+   BRIEF={REPO}/.squad/records/alignment/{ITEM}-alignment.md
+   ```
+
+   Not a copy in your scratchpad, and not a copy you were handed. Measured on a
+   consumer 2026-09-15: a judge scored a scratchpad copy of a 34 KB brief and
+   wrote its refusal into it, so two briefs existed for one item and the refusal
+   landed in a file nobody downstream can open. The judge named the problem in
+   its own words — *"a signature on a file that exists only in a session is the
+   class of evidence the judge contract names as unacceptable"* — and it was
+   right, which is why the path is stated here rather than left to inference.
+
+   A signature is only worth what the file carrying it outlives.
+
 2. Run the scorer yourself. Do not take a score reported to you:
 
    ```bash
-   python3 .claude/skills/plan-alignment/scripts/score_alignment.py <brief>
+   KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
+   python3 "$KIT/skills/plan-alignment/scripts/score_alignment.py" "$BRIEF"
    ```
+
+   Both paths are absolute because `.claude/` and `.squad/*` are gitignored in a
+   consumer repository: a relative probe resolves to whatever directory you happen
+   to be in, which for a stage running in a worktree holds neither.
 
    Its **exit code** is the verdict — `0` permits, `1` forbids. A high percentage
    with exit 1 is a refusal, not a near-miss.

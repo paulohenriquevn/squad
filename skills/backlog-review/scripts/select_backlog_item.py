@@ -48,6 +48,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# The `squad` package sits at the kit root, which is not on `sys.path` when this script
+# runs standalone in a consumer. Same bootstrap `board_state.py` uses, and the reason it
+# exists: the import worked here and failed there, which only a run in the consumer shows.
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+
+from squad.paths import records_dir  # noqa: E402
+
 from check_backlog_structure import (
     OPEN_STATUS,
     Item,
@@ -148,6 +161,11 @@ class Selection:
     #: and widening it would send an approved item back to DISCOVER to re-measure what
     #: 57 opportunity files already record.
     awaiting_plan: list[str] | None = None
+    #: Items at `planned` — work started, not finished. Absent from `queue` and from
+    #: `awaiting_plan` on purpose: both hand work to phases these items have passed.
+    in_flight: list[str] | None = None
+    #: The subset of `in_flight` whose IMPLEMENT wrote a record.
+    in_flight_implemented: list[str] | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -164,6 +182,11 @@ class Selection:
             # Always present, for the reason `awaiting_human` is: an absent key cannot
             # be told from a selector too old to report it.
             "awaiting_plan": self.awaiting_plan or [],
+            # Always present, same reason: an absent key cannot be told from an empty one.
+            "in_flight": self.in_flight or [],
+            # Which of those have an implementation record on disk. The scheduler enters
+            # these AFTER implement; the rest enter at it.
+            "in_flight_implemented": self.in_flight_implemented or [],
         }
 
 
@@ -244,7 +267,8 @@ def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[It
 
 def select(text: str, requested: str | None = None,
            halted: frozenset[str] = frozenset(),
-           unblocking: frozenset[str] = frozenset()) -> Selection:
+           unblocking: frozenset[str] = frozenset(),
+           root: Path | None = None) -> Selection:
     """Choose the next item, or explain why none may start.
 
     `requested` asks the narrower question — may THIS one start? — which is the form
@@ -299,11 +323,55 @@ def select(text: str, requested: str | None = None,
              and live_blockers(i, statuses) is None),
             key=_number)]
 
+    # In flight: work started and the item is not finished. Reported for the same reason
+    # `awaiting_plan` is, and it is the THIRD instance of one seam walking forward —
+    # `approved` was absent from `queue`, then nobody wrote `planned`, and now writing it
+    # removes the item from every key a scheduler reads. Measured on a consumer
+    # 2026-09-15: `--check` reported ITEM_IN_FLIGHT and named an entry point the pipeline
+    # does not use, so the only way to reach the item was to type its slug by hand.
+    #
+    # Not in `queue` and not in `awaiting_plan`: those hand work to phases this item has
+    # passed. A consumer of this key schedules it at the stage its records show it
+    # reached, and a halted lane is carried back to `approved` by the stage that halted.
+    # `halted` is NOT subtracted here, and that is the decision rather than an oversight.
+    # A BLOCKED report is a file with no expiry, and `planned` is written by the stage
+    # that STARTS work — so an item carrying both has either restarted after the halt or
+    # halted without walking its status back. Those are different statements and the
+    # reader has to tell them apart; `halted` is emitted beside this key, so a consumer
+    # intersects the two and sees the ambiguity rather than inheriting one reading of it.
+    #
+    # Measured on a consumer 2026-09-15: B-069 finished — implementation record, review
+    # with 0 FAIL, gate EXIT 0 — while a superseded BLOCKED report from a gate fixed that
+    # morning kept it out of every key. Hiding a finished item is the worse error of the
+    # two available.
+    #: An in-flight item whose IMPLEMENT produced a record has passed that stage; one
+    #: without a record has not. The scheduler cannot tell them apart from the registry
+    #: alone — `planned` says work started, never how far it got — and entering a
+    #: finished item at IMPLEMENT reruns the stage it completed, which is what happened
+    #: to B-069 twice on a consumer 2026-09-15.
+    implemented: set[str] = set()
+    if root is not None:
+        # `squad.paths` owns every data-root literal. Spelling one here is what
+        # `test_write_containment` exists to refuse, and it caught this — for the second
+        # time today, from the same hand.
+        directory = records_dir(root, "implementations")
+        if directory is not None and directory.is_dir():
+            implemented = {f.name.split("-implementation")[0]
+                           for f in directory.glob("*-implementation.md")}
+
+    in_flight = [
+        i.item_id for i in sorted(
+            (i for i in items
+             if i.fields.get("status") == "planned"
+             and live_blockers(i, statuses) is None),
+            key=_number)]
+
     if requested:
         if requested not in by_id:
             return Selection("BACKLOG_BLOCKED", reason=f"{requested} is not in this backlog",
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan)
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented])
         status = statuses.get(requested, "")
         if status not in SELECTABLE:
             entry = NOT_SELECTABLE.get(status)
@@ -312,13 +380,15 @@ def select(text: str, requested: str | None = None,
                                  reason=f"{requested} carries no status this contract knows"
                                         f" ({status or 'the field is absent'})",
                                  walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan)
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented])
             verdict, next_step = entry
             return Selection(verdict, item_id=requested,
                              reason=f"{requested} is {status}, past the point where SELECT hands"
                                     f" out work.{next_step}",
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan)
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented])
         if requested in halted:
             return Selection(
                 "ITEM_HALTED", item_id=requested,
@@ -326,7 +396,8 @@ def select(text: str, requested: str | None = None,
                         f"BLOCKED report. Starting it again reruns what halted; read the "
                         f"report first."),
                 walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan)
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented])
         blockers = live_blockers(by_id[requested], statuses)
         if blockers is not None:
             waiting = ", ".join(blockers) if blockers else "something with no item to point at"
@@ -335,11 +406,13 @@ def select(text: str, requested: str | None = None,
                 reason=(f"{requested} waits on {waiting}. Starting it now would build "
                         f"against a dependency that does not exist yet."),
                 walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan)
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented])
         return Selection("ITEM_SELECTED", item_id=requested,
                          reason=f"{requested} is {status} and nothing blocks it",
                          walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan)
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented])
 
     if ordered:
         chosen = ordered[0]
@@ -354,7 +427,8 @@ def select(text: str, requested: str | None = None,
                       f"unblocked item of the highest-ranked status")
         return Selection("ITEM_SELECTED", item_id=chosen.item_id, reason=reason,
                          walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan)
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented])
 
     if walls or stopped:
         held = len(walls) + len(stopped)
@@ -378,7 +452,8 @@ def select(text: str, requested: str | None = None,
                      reason=("nothing is raw or triaged. Not a finish line — "
                              "run /discover-execute --sweep {domain}."),
                      walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan)
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented])
 
 
 def main() -> int:
@@ -417,7 +492,7 @@ def main() -> int:
             print(f"halt detection unavailable ({error}); proceeding without it",
                   file=sys.stderr)
 
-    result = select(text, args.check, halted, unblocking)
+    result = select(text, args.check, halted, unblocking, root=Path(args.backlog).resolve().parent)
 
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))

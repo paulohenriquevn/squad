@@ -7,6 +7,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The documented dispatch prescribed the defect the code no longer had** (#86)
+  `pipeline/SKILL.md` told an operator to pass the `queue` array while SELECT had grown
+  two more keys carrying schedulable items, and the workflow's own input contract was a
+  flat array — so even an operator who knew about them had nowhere to put them. Measured
+  on a consumer registry of 102 items: the whole selection builds 71, of which 56 approved
+  enter at PLAN; the `queue` array alone builds 13, none approved. A test now pins the
+  procedure and the workflow together, so the next key cannot land in one and not the
+  other.
+
+- **The installer's header said it ships no specialists, and it ships 14** (#86)
+  True when written, false for every install since — found while installing a consumer,
+  where `agents/` went from 1 file to 15 and the comment said that could not happen. The
+  same file already records this failure happening once before, with a reader who trusted
+  a stale line and avoided the installer to protect permissions the merge would have kept.
+  The header now counts what it ships, and a test keeps the count honest.
+
+### Fixed
 - **Gates reported correct work as a defect, three ways** (#86)
   A phase declared as running *inside* another was judged by its position in the chain, so
   `code-quality` firing around `implement` — which `cycle-phases.txt` has always described

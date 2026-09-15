@@ -406,6 +406,22 @@ def from_selection(selection: dict, lanes: int | None = None) -> Pipeline:
         item.stage = "PLAN"
         items.append(item)
 
+    # In flight: `planned` says work STARTED, never how far it got. An item whose
+    # IMPLEMENT wrote a record has passed that stage and enters at REVIEW; one without a
+    # record has not, and enters at IMPLEMENT — whose brief now stops if another lane
+    # already holds it.
+    #
+    # Third instance of one seam walking forward, and the reason a test of this function
+    # alone would not have caught any of them: `approved` was absent from `queue`, then
+    # nobody wrote `planned`, and then writing it removed the item from every key this
+    # function reads. Measured on a consumer 2026-09-15: an item with a passing gate
+    # report was reachable only by typing its slug.
+    implemented = set(selection.get("in_flight_implemented") or [])
+    for slug in selection.get("in_flight") or []:
+        item = Item(slug=slug, status="planned")
+        item.stage = "REVIEW" if slug in implemented else "IMPLEMENT"
+        items.append(item)
+
     items += [Item(slug=slug, parked=True, surfaced=True, blocked_by=list(blockers),
                    park_reason=("blocked by " + ", ".join(blockers)) if blockers
                                else "blocked by something with no item to point at")

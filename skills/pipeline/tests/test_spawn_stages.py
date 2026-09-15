@@ -645,3 +645,45 @@ def test_a_status_a_stage_writes_mid_flight_has_a_way_back(tmp_path: Path) -> No
     assert "approved" in backlog_status.ALLOWED["planned"]
     assert "triaged" not in backlog_status.ALLOWED["planned"], \
         "if this changes, the brief's claim about the only legal return is stale"
+
+
+def test_an_already_planned_refusal_is_not_read_as_permission_to_proceed(
+        tmp_path: Path) -> None:
+    """`--to planned` refusing has two opposite causes: your own lane resuming, or a
+    second lane already working the item. The brief said the refusal was benign and told
+    the agent to carry on.
+
+    Measured on a consumer 2026-09-15: two lanes implemented B-069 thirty minutes apart —
+    the orchestrator dispatched an agent directly and then ran the pipeline over the same
+    item — and the only signal available to the second was that refusal. Their production
+    code came out byte-identical, which is a remarkable corroboration and an entirely
+    wasted lane.
+
+    The item's own checkpoint distinguishes the two, and it is addressed by item id,
+    which a lane branch is not any more: lanes are named by subject under § 5.1.
+    """
+    brief = _briefs(tmp_path)["implement"]
+    assert ".progress-" in brief
+    assert "another lane has it" in brief.lower(), \
+        "the brief does not name the case where a second lane already holds the item"
+    assert "stop" in brief.lower().split("already planned")[1][:600], \
+        "the brief still reads the refusal as permission to proceed"
+
+
+def test_the_judge_reads_the_brief_at_its_path_in_the_repository(tmp_path: Path) -> None:
+    """Measured on a consumer 2026-09-15: a judge scored a scratchpad COPY of a 34 KB
+    brief and wrote its refusal into it, so two briefs existed for one item and the
+    refusal landed in a file nobody downstream can open.
+
+    The judge named the problem itself — "a signature on a file that exists only in a
+    session is the class of evidence the judge contract names as unacceptable" — which is
+    why the path is stated in the brief rather than left to inference. A signature is only
+    worth what the file carrying it outlives.
+
+    Third stage in the same family: IMPLEMENT and REVIEW both resolved the kit relative to
+    the caller, and a stage running in a worktree has neither `.claude/` nor `.squad/`.
+    """
+    brief = _briefs(tmp_path)["judge"]
+    repo = str(tmp_path / "repo")
+    assert f"{repo}/.squad/records/alignment/" in brief
+    assert "scratchpad" in brief, "the brief does not name the failure it is preventing"
