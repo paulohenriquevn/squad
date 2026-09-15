@@ -20,8 +20,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   for the section. Reading rows also required tightening what counts as a declaration: a
   package is named in the first cell of a table row or at the head of a bullet, not
   mentioned in a sentence, and a token ending in a file suffix is a manifest rather than a
-  dependency. Measured across 19 consumer plans: 45 false entries removed, the router bump
-  now visible.
+  dependency, and a bullet declares a package only when the package opens it — a sentence
+  that merely contains a backtick (`- **B-057** — ... exits 5 on \`unhomed-logic\``) named a
+  gate, not a package. Measured across 19 consumer plans: 46 false entries removed, the
+  router bump now visible.
 - **The TDD gate refused executable Go and accepted a prose sentence** (#86)
   Measured on 19 consumer plans, 8 blocked: `RED: test_xxx` passed the gate and
   `RED: TestXxx` — the same claim in Go's spelling — did not, while "the tests should be
