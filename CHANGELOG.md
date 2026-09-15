@@ -7,6 +7,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The pipeline could not reach the stage that writes code** (#93)
+  `STATUS_ON_ENTERING` wrote `triaged` when an item entered PLAN — reading "DISCOVER
+  finished, so the item is measured", which is true and was already recorded.
+  `cycle-backlog` puts `approved` AFTER `triaged`, and only `approved` may become
+  `planned`, so the map DEMOTED an approved item on its way into PLAN and
+  `REQUIRES_STATUS` refused `planned` one stage later. Every item parked at IMPLEMENT
+  whatever its status had been. Traced on a consumer that ran three days and shipped
+  nothing: the park looked like a gate holding rather than a scheduler contradicting
+  itself, which is why it survived — the symptom was indistinguishable from the system
+  working. A status only moves forward now, and an approved item runs the whole chain to
+  `__done__`.
+
+- **The scheduler had no preference, so everything advanced one phase before anything advanced two** (#93)
+  Lanes were filled in registry order, so an item at DISCOVER took a lane ahead of one at
+  IMPLEMENT that was three stages from landing. Measured on a consumer: 44 discovers on
+  day one against 3 plans, 29 aligns on day three against 1 implement. With 93 items that
+  means nothing reaches RELEASE until nearly everything has crossed every phase before
+  it — 501 artefacts, zero shipped. Eligible work is now ordered furthest-along-first:
+  finishing beats starting, because an item at IMPLEMENT is closer to being work somebody
+  can use. Ties keep registry order, so `cycle-maintenance`'s fairness rule still decides
+  within a stage.
+
 - **The criteria executor ran whatever a criterion's sentence contained** (#96)
   It executed every runnable span in a bullet, and a consumer measured what that costs:
   a criterion carrying `git stash push` was run, and it pushed SEVEN entries onto a
@@ -125,6 +147,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   Fixing it needs a session-start marker the hook does not have, so it stays open.
 
 ### Added
+- **Alignment depth is derived per item, so a small change stops costing a 40 KB document** (#96)
+  Measured on a consumer over three days: 93 items, 501 artefacts, 4 implementations,
+  **zero shipped**, 78 hours of cycle time per item — and 2,740 KB of alignment briefs
+  signed by a person **zero** times, each 40-50 KB, longer than the code it described
+  (40 to 250 lines across the four items that reached a branch). The walkthrough HTML
+  added 1,032 KB across 38 files nobody opened. `cycle-brainstorm` and `cycle-design`
+  were already conditional; this phase was not, so deleting an unreferenced package
+  crossed the same phases as redesigning the data plane.
+  `classify_alignment_depth.py` answers LOCAL or FULL from the item itself. LOCAL keeps
+  everything a later phase consumes — requirements with ids, acceptance criteria that
+  execute, out-of-scope, closed questions, the signature — and drops the prose and the
+  walkthrough. Any one of four signals forces FULL: evidence spanning modules, a blocked
+  item, a DoD naming no command, or mode `evolve`. FULL is the default, because
+  shallower is the irreversible direction: a brief nobody wrote cannot be consulted
+  later, and one nobody needed only cost time. Measured on that registry, 34 of 93 items
+  (37%) are LOCAL.
+
 - **`/as-is-to-be` — what this system is today, and what it becomes** (#89)
   A backlog is a list of tickets and nobody can hold twenty-three of them in their head
   to answer what the system will be when they are done. Both columns of a gap analysis

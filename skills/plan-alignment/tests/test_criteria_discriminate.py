@@ -335,8 +335,8 @@ def test_a_refused_clause_is_unverified_and_never_sound(tmp_path):
 def test_a_built_binary_is_refused_and_the_reason_says_run_it_yourself(tmp_path):
     """The common legitimate case, refused deliberately.
 
-    `/tmp/theo-ops quality --list` appears throughout a real registry. That binary can
+    `/tmp/project-cli quality --list` appears throughout a real registry. That binary can
     do anything, and "not verified" is an honest answer while "ran something unknown
     against your tree" is not — so the reader is told precisely that, and can run it.
     """
-    assert "run it" in cd._refused_command("/tmp/theo-ops quality --list")
+    assert "run it" in cd._refused_command("/tmp/project-cli quality --list")

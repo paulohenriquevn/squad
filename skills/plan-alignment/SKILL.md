@@ -421,6 +421,46 @@ generated page requires nothing.
 | `check_criteria_discriminate.py` | on demand, before implementing | runs each acceptance criterion against the tree as it is and refuses the ones that already pass |
 
 
+## Not every item needs the whole document
+
+**Measured on a consumer over three days:** 93 items, 501 artefacts, 4 implementations,
+**0 shipped**, and 78 hours of cycle time per item. The alignment briefs came to
+**2,740 KB, signed by a person zero times** — 40-50 KB each, longer than the code they
+describe, which measured 40 to 250 lines across the four items that reached a branch.
+The walkthrough HTML added 1,032 KB across 38 files, an artefact made for a person to
+look at, and none was opened.
+
+`cycle-brainstorm` and `cycle-design` were already conditional. This phase was not, so
+deleting an unreferenced package crossed the same phases as redesigning the data plane.
+
+```bash
+python3 "$ECO/skills/plan-alignment/scripts/classify_alignment_depth.py" . B-NNN
+```
+
+| Depth | Produces | Exit |
+|---|---|---|
+| `LOCAL` | requirements with ids, acceptance criteria that execute, out-of-scope, closed questions, signature | 0 |
+| `FULL` | all of that plus the prose sections, the four scenario classes, the system design, the interaction model and the walkthrough | 1 |
+
+**Nothing a later phase consumes is dropped.** A criterion still has to discriminate,
+`traces_to` still has to resolve, the 90% score still applies to what is there, and the
+signature is still required. What LOCAL removes is the prose and the walkthrough.
+
+**The classification is derived, never chosen.** An item needs the full document when
+two readers could picture different systems from it — not directly measurable, so the
+signals are:
+
+| Signal | Forces FULL because |
+|---|---|
+| evidence spans modules | the change crosses a boundary two readers draw differently |
+| the item is blocked | its shape depends on what lands first, so aligning it now aligns a guess |
+| no DoD bullet names a command | the work is not concrete yet |
+| mode is `evolve` | `cycle-backlog` defines it as changing what the system IS |
+
+Any one means FULL, and **FULL is the default**: shallower is the irreversible
+direction. A brief nobody wrote cannot be consulted later; one nobody needed only cost
+time. Measured on that registry: 34 of 93 items (37%) are LOCAL.
+
 ## A criterion that passes before the work is not a criterion
 
 The 17 machine criteria grade the brief's SHAPE. One of them — `acceptance_executable` —

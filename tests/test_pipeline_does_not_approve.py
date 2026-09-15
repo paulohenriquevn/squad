@@ -94,8 +94,18 @@ def test_a_send_back_returns_a_plan_to_the_decision_that_still_stands() -> None:
 
 
 def test_the_send_back_map_is_not_the_forward_map() -> None:
-    """Reusing the forward map is the defect; a shared object would hide it."""
-    assert STATUS_ON_SEND_BACK["PLAN"] != STATUS_ON_ENTERING["PLAN"]
+    """Reusing the forward map is the defect; a shared object would hide it.
+
+    The two are now different in a stronger way than when this was written: the forward
+    map has NO entry for PLAN at all. It used to write `triaged` there, which demoted an
+    approved item on its way in and made IMPLEMENT unreachable — so the forward
+    direction writes nothing and the backward one writes `approved`, which is the state
+    a rejected plan returns to with the decision still standing.
+    """
+    assert "PLAN" not in STATUS_ON_ENTERING, (
+        "a forward write on entering PLAN demotes an approved item; that is kit#32's "
+        "shape and it made every item park at IMPLEMENT")
+    assert STATUS_ON_SEND_BACK["PLAN"] == "approved"
 
 
 # ── the durable half: no write the pipeline emits can be refused ─────────────

@@ -197,11 +197,46 @@ def _one(slug: str = "b-001") -> Pipeline:
     return Pipeline(items=[Item(slug=slug)], lanes=4)
 
 
-def test_finishing_discover_records_triaged():
+def test_finishing_discover_writes_nothing():
+    """It used to write `triaged`, and that write made IMPLEMENT unreachable.
+
+    The reading was "DISCOVER finished, so the item is measured" — true, and already
+    recorded. `cycle-backlog` puts `approved` AFTER `triaged`, and only `approved` may
+    become `planned`, so writing `triaged` on the way into PLAN DEMOTED an approved item
+    and `REQUIRES_STATUS` refused `planned` one stage later. Every item parked at
+    IMPLEMENT whatever its status had been.
+
+    Traced 2026-09-15 on a consumer that ran three days and shipped nothing. The park it
+    produced looked like a gate holding rather than a scheduler contradicting itself,
+    which is why it survived: the symptom was indistinguishable from the system working.
+
+    A status only moves forward here. Entering PLAN proves DISCOVER finished, and an
+    item at `approved` has already recorded that.
+    """
     p = _one()
     p.schedule()
     p.complete("b-001")
-    assert [(w.slug, w.status) for w in p.drain_writes()] == [("b-001", "triaged")]
+    assert p.drain_writes() == []
+
+
+def test_an_approved_item_reaches_the_end_of_the_chain():
+    """The property the demotion made impossible, asserted end to end.
+
+    Without this, every defect fixed upstream moved the stop somewhere else and the
+    chain still produced nothing — which is exactly what three days of a real run did.
+    """
+    p = Pipeline([Item(slug="b-001", status="approved")], lanes=1)
+    for _ in range(12):
+        p.schedule()
+        if not p.running:
+            break
+        p.complete(p.running[0].slug)
+        for w in p.drain_writes():
+            if w.status:
+                p.item(w.slug).status = w.status
+    item = p.items[0]
+    assert item.stage == "__done__", f"stalled at {item.stage}, parked={item.parked}"
+    assert not item.parked
 
 
 def test_finishing_plan_records_planned():
@@ -427,3 +462,35 @@ def test_a_prose_wall_carries_an_empty_list_not_none():
 def test_an_empty_selection_yields_an_empty_pipeline():
     assert from_selection({"queue": [], "walls": {}}).items == []
 
+
+
+def test_the_scheduler_prefers_the_item_closest_to_landing():
+    """Finishing beats starting, and until 2026-09-15 there was no preference at all.
+
+    Lanes were filled in registry order, so an item at DISCOVER took a lane ahead of one
+    at IMPLEMENT that was three stages from landing. Measured on a consumer over three
+    days:
+
+        12/09   44 discover ·  3 plan
+        13/09   13 discover ·  3 align ·  9 plan
+        14/09                  29 align ·  2 plan ·  1 implement
+
+    Everything advanced one phase before anything advanced two. With 93 items that means
+    nothing reaches RELEASE until nearly everything has crossed every phase before it.
+    """
+    early = Item(slug="b-001")
+    late = Item(slug="b-002", status="approved")
+    late.stage = "IMPLEMENT"
+    p = Pipeline([early, late], lanes=1)
+    started = p.schedule()
+    assert [i.slug for i in started] == ["b-002"], "the further-along item takes the lane"
+
+
+def test_ties_keep_registry_order():
+    """Within a stage the existing fairness rule still decides.
+
+    `cycle-maintenance` already ranks: triaged before raw, then oldest first. This
+    reorders ACROSS stages and must not disturb that.
+    """
+    p = Pipeline([Item(slug="b-001"), Item(slug="b-002"), Item(slug="b-003")], lanes=3)
+    assert [i.slug for i in p.schedule()] == ["b-001", "b-002", "b-003"]

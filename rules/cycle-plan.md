@@ -16,6 +16,25 @@ Do NOT trigger PLAN for:
 - Single-line changes (write the code).
 - Pure refactors with no behavior change (open a PR with the diff and a 1-line rationale).
 
+## How much alignment this item needs
+
+**Derived, never chosen**, by `skills/plan-alignment/scripts/classify_alignment_depth.py`.
+
+Measured on a consumer over three days: 93 items, 501 artefacts, 4 implementations, zero
+shipped, and 2,740 KB of alignment briefs signed by a person zero times — each 40-50 KB,
+longer than the code it described. `cycle-brainstorm` and `cycle-design` were already
+conditional; this phase was not, so deleting an unreferenced package crossed the same
+phases as redesigning the data plane.
+
+`LOCAL` keeps everything a later phase consumes — requirements with ids, acceptance
+criteria that execute, out-of-scope, closed questions, the signature — and drops the
+prose and the walkthrough. `FULL` keeps all of it.
+
+Any one of four signals forces FULL: evidence spanning modules, an item that is blocked,
+a DoD naming no command, or mode `evolve`. **FULL is the default**, because shallower is
+the irreversible direction: a brief nobody wrote cannot be consulted later, and one
+nobody needed only cost time.
+
 ## Chain
 
 Phase 0 is UNBREAKABLE for any item coming from `BACKLOG.md`, and so is everything

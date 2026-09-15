@@ -286,7 +286,7 @@ def _refused_command(span: str) -> str:
             return f"{head!r} is not run from a document"
         if head and head not in _ALLOWED_COMMANDS and "=" not in head:
             # A path to a binary the criterion built is the common legitimate case —
-            # `/tmp/theo-ops quality --list` appears throughout a real registry. It is
+            # `/tmp/project-cli quality --list` appears throughout a real registry. It is
             # still refused, and the trade is deliberate: that binary can do anything,
             # and "not verified" is an honest answer while "ran something unknown
             # against your tree" is not. The reader is told precisely this, so they can
