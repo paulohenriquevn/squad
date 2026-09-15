@@ -70,7 +70,7 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import data_root, write_records_dir  # noqa: E402
 
 #: The stages this script materialises. IMPLEMENT and beyond are not here yet —
 #: they write to the repository, and a writing stage needs its own review of what
@@ -151,6 +151,62 @@ def _parse_routing_rule(path: Path | None) -> dict[str, str]:
     return out
 
 
+#: Words that carry no subject. Dropped so a five-word lane name spends its budget on
+#: what the item is about rather than on grammar.
+_LANE_FILLER = frozenset({
+    "a", "an", "the", "to", "and", "or", "of", "for", "in", "on", "at", "by", "with",
+    "that", "this", "is", "are", "be", "its", "it", "as", "not", "no", "from", "into",
+    "what", "when", "where", "which", "than", "then", "so", "but",
+})
+#: A backlog id ANYWHERE in the title. `~/.claude/CLAUDE.md § 5.1` bans a ticket number
+#: from a branch or a directory name, and a title that quotes one would smuggle it in.
+_ID_IN_TEXT_RE = re.compile(r"\b[A-Z]{1,4}-\d+\b", re.IGNORECASE)
+#: Five words is what fits in a branch listing without wrapping, measured against the
+#: consumer's own headings.
+_LANE_WORDS = 5
+_LANE_MAX_CHARS = 48
+
+
+def lane_name(title: str, item: str) -> str:
+    """The branch and worktree name, derived from what the item IS.
+
+    `~/.claude/CLAUDE.md § 5.1` bans a ticket number from a branch or directory name:
+    "the name has to say what the thing DOES, not where it came from", and the number
+    dies while the branch stays. The pipeline was generating `pipeline/b-018` and
+    `/tmp/squad-worktrees/b-018-…`, so every consumer running it regenerated exactly
+    what a consumer had just finished cleaning out by hand.
+
+    There is NO fallback to the id. A lane that cannot be named by its subject is a
+    registry entry with no subject, and silently naming it `b-018` is how the rule got
+    broken in the first place — the caller is told to fix the title instead.
+    """
+    text = _ID_IN_TEXT_RE.sub(" ", title.replace("`", " "))
+    words = [w for w in re.split(r"[^\w]+", text.lower()) if w and w not in _LANE_FILLER]
+    name = "-".join(words[:_LANE_WORDS])[:_LANE_MAX_CHARS].strip("-")
+    if not name:
+        raise SystemExit(
+            f"FATAL: {item} has no title to name its lane from. A branch is named by "
+            f"what the work IS — `~/.claude/CLAUDE.md § 5.1` bans naming it `{item.lower()}`, "
+            f"and falling back to the id would reintroduce exactly what the rule removes. "
+            f"Give the item a heading in the registry and re-run.")
+    return name
+
+
+def title_of(repo: Path, item: str) -> str:
+    """The item's heading text, read from the registry the consumer keeps."""
+    for candidate in (repo / "BACKLOG.md", data_root(repo) / "BACKLOG.md"):
+        if not candidate.is_file():
+            continue
+        pattern = re.compile(rf"^#+\s*{re.escape(item)}\s*[-—:]*\s*(?P<title>.+)$", re.MULTILINE)
+        match = pattern.search(candidate.read_text(encoding="utf-8"))
+        if match:
+            # Trailing checkbox / status markers are decoration on the heading line.
+            return re.sub(r"\s*\[[ xX~]\]\s*$", "", match.group("title")).strip()
+    raise SystemExit(
+        f"FATAL: no heading for {item} in {repo}/BACKLOG.md — the lane's branch and "
+        f"worktree are named from it.")
+
+
 def spawn(item: str, repo: Path, output_dir: Path,
           date: str | None = None, routing_rule: Path | None = None) -> list[Path]:
     if not _ITEM_RE.match(item):
@@ -162,6 +218,9 @@ def spawn(item: str, repo: Path, output_dir: Path,
     templates = Path(__file__).resolve().parent.parent / "templates"
     date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     models = _parse_routing_rule(routing_rule)
+    # Resolved before any file is written: a lane that cannot be named must fail here,
+    # not halfway through generating seven prompts that name a branch nobody will cut.
+    lane = lane_name(title_of(repo, item), item)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []
@@ -173,6 +232,7 @@ def spawn(item: str, repo: Path, output_dir: Path,
         for token, value in (
             ("{ITEM}", item),
             ("{ITEM_SLUG}", item.lower()),
+            ("{LANE}", lane),
             ("{REPO}", str(repo)),
             ("{DATE}", date),
             ("{MODEL}", models.get(stage, DEFAULT_MODEL)),

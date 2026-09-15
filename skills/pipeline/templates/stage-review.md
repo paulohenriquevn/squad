@@ -17,7 +17,7 @@ a task for you.
 
 ## What you are given
 
-- the branch `pipeline/{ITEM_SLUG}` and the worktree IMPLEMENT created
+- the branch `pipeline/{LANE}` and the worktree IMPLEMENT created
 - the plan at `the plan the orchestrator handed you`
 - the alignment brief the plan traces to
 
@@ -26,7 +26,7 @@ a task for you.
 **1. Does the diff do what the plan said, and only that.**
 
 ```bash
-git -C {REPO} diff HEAD...pipeline/{ITEM_SLUG}
+git -C {REPO} diff HEAD...pipeline/{LANE}
 ```
 
 A change that also fixes something unrelated is not a bonus. It is a second
@@ -38,7 +38,7 @@ one's approval.
 IMPLEMENT reports two runs. Reproduce the first:
 
 ```bash
-git -C {REPO} worktree add /tmp/squad-review-{ITEM_SLUG}-$(date +%s) HEAD
+git -C {REPO} worktree add "$HOME/.squad-worktrees/review-{LANE}-$(date +%s)" HEAD
 # run the new test in the PRE-change tree; it must FAIL
 ```
 

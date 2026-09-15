@@ -18,9 +18,21 @@ them.
 it:**
 
 ```bash
-git -C {REPO} worktree add -b pipeline/{ITEM_SLUG} \
-    "/tmp/squad-worktrees/{ITEM_SLUG}-$(date +%s)" HEAD
+git -C {REPO} worktree add -b pipeline/{LANE} \
+    "$HOME/.squad-worktrees/{LANE}-$(date +%s)" HEAD
 ```
+
+**Not `/tmp`.** A lane holds unmerged commits, and `/tmp` is cleared by the OS, by a
+reboot, and by anyone tidying up. Measured on a consumer 2026-09-15: `/tmp` was wiped
+mid-session and took two in-progress measurement sweeps with it, while two lanes holding
+six commits between them sat in `/tmp/squad-worktrees/`. The objects survive in the
+shared `.git`, so the commits are recoverable — the checkout and the ref registration are
+not, and recovering by reflog is not what the next agent will think to do.
+
+**The branch is named for what the work IS, never for its id.** `~/.claude/CLAUDE.md
+§ 5.1` bans a ticket number in a branch or directory name: the number dies and the name
+stays, pointing at a tracker that may not resolve it. The id belongs in the commit
+message, where it travels with the history.
 
 The timestamp is not decoration. `settings.json` denies `Bash(rm -rf *)` — every
 form of it, deliberately — so a worktree path that already exists cannot be
@@ -31,7 +43,7 @@ around a rule it was right not to break. A fresh path needs no cleanup.
 If you must retire a worktree, `git worktree remove <path>` is the tool for it —
 it is not `rm -rf`, and it is not denied.
 
-Then work in `/tmp/squad-worktrees/{ITEM_SLUG}`, not in `{REPO}`.
+Then work in `$HOME/.squad-worktrees/{LANE}-…`, not in `{REPO}`.
 
 This is not ceremony. The pipeline runs items CONCURRENTLY — while you work,
 other agents are reading and possibly writing the same repository, and two
@@ -101,7 +113,7 @@ These are absolute, and none has an urgency exception:
 
 - **No `git push`.** You leave a branch in a worktree. A person or a later phase
   decides what happens to it.
-- **No commits on `{REPO}`'s current branch.** Yours is `pipeline/{ITEM_SLUG}`,
+- **No commits on `{REPO}`'s current branch.** Yours is `pipeline/{LANE}`,
   created above, and it is the only one you write to.
 - **No `--no-verify`, no `--force`, no `--allow-dirty-tree`, no `--skip-checks`.**
   If a hook or gate refuses your commit, that refusal is the answer. Report it.
