@@ -60,10 +60,63 @@ SHAPE_GWT_PATTERN = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# Shape 4: a native test harness. Compiled languages do not spell an assertion the way
+# the patterns above do, and until 2026-09-15 this gate rejected every one of them.
+#
+# Measured on a consumer: 8 of 19 plans blocked (42%), and probing one task written four
+# ways showed what the gate actually keyed on —
+#
+#     Go native     func TestXxx(t *testing.T) + t.Errorf   REJECTED
+#     Go testify    require.Equal(t, 2, len(got))           REJECTED
+#     Rust          assert_eq!(result, 42)                  REJECTED
+#     python        assert x == y                           accepted
+#     Given/When/Then, in prose                             accepted
+#
+# So the gate built to catch a plan whose RED is prose ACCEPTED a prose sentence and
+# REJECTED executable Go. Seven agents hit it across five items and every one refused to
+# rewrite its TDD bodies to clear it; one put the reason exactly right: "that changes
+# nothing about what is verified while making me the plan's author as well as its
+# implementer."
+#
+# A test function declaration IS the executable shape in these languages. Naming the
+# harness is naming the thing that runs.
+SHAPE_NATIVE_PATTERNS = (
+    # Go: the declaration, the failure calls, and testify.
+    r"\bfunc\s+Test\w*\s*\(\s*\w+\s+\*testing\.[TBF]\b",
+    r"\bt\.(?:Errorf?|Fatalf?)\s*\(",
+    r"\b(?:require|assert)\.\w+\s*\(\s*t\b",
+    # Rust.
+    r"\bassert(?:_eq|_ne)?!\s*\(",
+    r"#\[\s*test\s*\]",
+    # JUnit / Kotlin / C#.
+    r"@Test\b|\[Fact\]|\[Test\]",
+    # A shell oracle: a command whose expected output is stated. `go test -v | grep -c
+    # '^--- PASS:' prints 3` is as executable as an assertion and more reproducible.
+    r"`[^`]*\b(?:go|pytest|cargo|npm|grep|test)\b[^`]*`[^.\n]{0,80}?\b(?:prints|outputs|exits?|returns)\b",
+)
+
 # Shape 3: test-function literal `test_xxx(input) -> output`
 SHAPE_TEST_FN_PATTERNS = (
     r"\btest_\w+\s*\([^)]*\)\s*(?:->|=>|returns?|expects?)",
     r"\bRED:\s*test_\w+",  # plans commonly write "RED: test_xxx_yyy" — that's a shape
+)
+
+#: A RED that NAMES the failing test is executable whatever the language spells its
+#: test symbols. Measured on 26 blocked tasks 2026-09-15: the overwhelming majority
+#: named a real symbol (`TestClusterScopedNamesAreReleaseInvariant`) and often the
+#: commit it was verified red on — while `RED: test_xxx` sailed through. The gate was
+#: encoding Python's naming convention as the definition of "executable".
+_TEST_SYMBOL = r"(?:Test[A-Z]\w+|test_\w+|\w+(?:Test|Spec|Suite))"
+SHAPE_NAMED_TEST_PATTERNS = (
+    rf"\bRED[:.]\s*\**\s*`?{_TEST_SYMBOL}\b",
+    rf"\b{_TEST_SYMBOL}\b[^.\n]{{0,140}}?\b(?:must|should|will|has to)\s+"
+    r"(?:already\s+)?(?:exist\s+and\s+)?fails?\b",
+    rf"\b{_TEST_SYMBOL}\b[^.\n]{{0,140}}?\balready\s+fails?\b",
+    rf"-run\s+\^?{_TEST_SYMBOL}",
+    #: `test_the_package_directory_is_gone -> 1, expected 0` — a named test with its
+    #: measured before-value. Stronger evidence than most assertions carry, because the
+    #: number was read off the tree rather than predicted.
+    rf"\b{_TEST_SYMBOL}\b\s*(?:->|=>|⇒)\s*\S",
 )
 
 
@@ -75,11 +128,16 @@ class TaskShape:
     has_assertion_shape: bool
     has_gwt_shape: bool
     has_test_fn_shape: bool
+    has_native_shape: bool = False
+    has_named_test_shape: bool = False
+    has_command_oracle_shape: bool = False
 
     @property
     def has_executable_shape(self) -> bool:
         return self.has_tdd_block and (
             self.has_assertion_shape or self.has_gwt_shape or self.has_test_fn_shape
+            or self.has_native_shape or self.has_named_test_shape
+            or self.has_command_oracle_shape
         )
 
 
@@ -98,15 +156,45 @@ class ShapeReport:
         return len(self.blocked_tasks) == 0
 
 
+#: A fenced block, whatever fence it uses. Its CONTENTS are data, not document
+#: structure — a line inside it that looks like a heading is a heading in the example,
+#: not in the plan.
+FENCE_RE = re.compile(r"^(?P<f>```+|~~~+).*?^(?P=f)\s*$", re.MULTILINE | re.DOTALL)
+
+
+def _blank_fences(content: str) -> str:
+    """Return a copy of the same LENGTH with fenced-block content blanked out.
+
+    Measured on a consumer 2026-09-15: a plan quoting a CHANGELOG snippet inside a fence
+    carried the literal line `## [Unreleased]`, `NEXT_TASK_OR_H2_RE` matched it as the
+    next H2, and the task body was truncated there — hiding that task's own `#### TDD`
+    section and failing the plan for a section it actually had.
+
+    Every character is replaced one-for-one — newlines kept, everything else a space —
+    because the offsets found here index into the ORIGINAL. A first attempt preserved
+    the line count instead and shifted every offset past the first fence: it cut 11 of
+    19 real plans from passing to failing, which is how the distinction was measured
+    rather than argued.
+    """
+    def blank(match: re.Match) -> str:
+        return "".join(c if c == "\n" else " " for c in match.group(0))
+    return FENCE_RE.sub(blank, content)
+
+
 def _extract_task_blocks(content: str) -> list[tuple[str, str, str]]:
-    """Return list of (task_id, title, body) — body stops at next task/H2."""
-    matches = list(TASK_HEADER_RE.finditer(content))
+    """Return list of (task_id, title, body) — body stops at next task/H2.
+
+    Boundaries are found in a fence-blanked copy and the BODY is sliced from the
+    original, so a plan may quote headings in an example without losing them.
+    """
+    scan = _blank_fences(content)
+    matches = list(TASK_HEADER_RE.finditer(scan))
     blocks: list[tuple[str, str, str]] = []
     for m in matches:
         tid = m.group(1)
         title = m.group(2).strip()
         start = m.end()
-        nxt = NEXT_TASK_OR_H2_RE.search(content, pos=start)
+        nxt = NEXT_TASK_OR_H2_RE.search(scan, pos=start)
         end = nxt.start() if nxt else len(content)
         blocks.append((tid, title, content[start:end]))
     return blocks
@@ -130,8 +218,72 @@ def _has_gwt_shape(text: str) -> bool:
     return SHAPE_GWT_PATTERN.search(text) is not None
 
 
+def _has_native_shape(text: str) -> bool:
+    return any(re.search(p, text, re.IGNORECASE) for p in SHAPE_NATIVE_PATTERNS)
+
+
 def _has_test_fn_shape(text: str) -> bool:
     return any(re.search(p, text) for p in SHAPE_TEST_FN_PATTERNS)
+
+
+#: A command line that a reader could paste. Deliberately not a general shell grammar —
+#: it only has to recognise that something runnable is present.
+#: Up to 24 characters of label may precede it — plans write `RED: grep …`, `- go test …`,
+#: `$ pytest …`. Anchoring hard at line start was what hid 4 of the 6 oracles measured.
+#: Ambiguous English words (`go`, `test`) are only commands with their subcommand
+#: attached, so a sentence containing "go" or "test" is not mistaken for one.
+_COMMAND_RE = re.compile(
+    r"(?m)^[^\n]{0,24}?(?:cd\s+\S+\s*&&\s*)?\b("
+    r"go\s+(?:test|build|vet|run|generate)|test\s+[\"$]|"
+    r"pytest|python3?\s+-m|cargo\s+\w|npm\s+\w|npx\s+\w|bash\s+\S|sh\s+-c|"
+    r"make\s+\w|task\s+[\w:]|grep\b|rg\b|govulncheck|gofmt|golangci-lint|"
+    r"kubectl\s+\w|helm\s+\w|git\s+\w"
+    r")")
+
+#: What turns a command into an oracle: a stated expectation the reader can compare
+#: the output against. Without one, a command is a demonstration, not an assertion.
+#: An arrow after a command IS the expectation — `# today 0 -> after >= 1` states the
+#: before and after values as plainly as an assert does.
+_EXPECTATION_RE = re.compile(
+    r"(?:->|=>|⇒)\s*\S|\bexpected\b[:\s]+(?:to\s+)?\S|\bexit=|"
+    r"\bMUST\s+(?:fail|pass)|\bmust\s+(?:fail|pass)|\bfails?\s+before\b|"
+    r"\bRED\s+before\b|\bprints?\b|\boutputs?\b|\breturns?\s+\S|\bexits?\s+\S",
+    re.IGNORECASE)
+
+#: A task may legitimately carry no assertion of its own: a baseline measurement taken
+#: before any edit, or the GREEN half of a RED written in a sibling task. Both are TDD
+#: structure, not its absence — but only when the task SAYS so and still shows the
+#: command it runs. A bare "no test needed" with nothing runnable stays blocked.
+_NO_ASSERTION_DECLARED_RE = re.compile(
+    r"\bno\s+(?:new\s+)?test\b|\basserts?\s+nothing\b|\bnot\s+applicable\s+in\s+"
+    r"the\s+RED-first\b|\bmeasurement\s+step\b|\bbaseline\s+capture\b",
+    re.IGNORECASE)
+
+#: The sibling task carrying this one's RED, named so a reader can go read it.
+_DEFERRED_TO_SIBLING_RE = re.compile(
+    r"\b(?:GREEN|RED)\s+for\b[^.\n]{0,80}?\bT\d+\.\d+", re.IGNORECASE)
+
+
+def _has_command_oracle_shape(text: str) -> bool:
+    """A runnable command plus either a stated expectation or a declared reason.
+
+    Measured on 6 consumer plans 2026-09-15 that this gate blocked entirely: every one
+    ran a real command — `govulncheck`, `grep -c ... -> expected 0 (RED)`, `go test
+    -count=1 -v` — and stated what it must print. The gate refused them because the
+    only shell oracle it recognised was a backticked command followed by the word
+    "prints". It was matching one house style, not executability.
+    """
+    if not _COMMAND_RE.search(text):
+        return False
+    return bool(
+        _EXPECTATION_RE.search(text)
+        or _NO_ASSERTION_DECLARED_RE.search(text)
+        or _DEFERRED_TO_SIBLING_RE.search(text))
+
+
+def _has_named_test_shape(text: str) -> bool:
+    """A named failing test is greppable; a promise that tests will pass is not."""
+    return any(re.search(p, text) for p in SHAPE_NAMED_TEST_PATTERNS)
 
 
 def check_tdd_shape(plan_path: Path) -> ShapeReport:
@@ -154,6 +306,9 @@ def check_tdd_shape(plan_path: Path) -> ShapeReport:
             has_assertion_shape=_has_assertion_shape(tdd_body),
             has_gwt_shape=_has_gwt_shape(tdd_body),
             has_test_fn_shape=_has_test_fn_shape(tdd_body),
+            has_native_shape=_has_native_shape(tdd_body),
+            has_named_test_shape=_has_named_test_shape(tdd_body),
+            has_command_oracle_shape=_has_command_oracle_shape(tdd_body),
         ))
 
     return ShapeReport(
