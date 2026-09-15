@@ -174,8 +174,25 @@ an item that reaches RELEASE without this step is refused there, after the work 
 done and with nothing about the work at fault. Measured on a consumer 2026-09-15: 87
 items at `approved`, 9 with implementations behind them, and **zero** at `shipped`.
 
-If it refuses because the item is already `planned`, that is a resumed lane and the
-refusal is information, not an error — carry on.
+**If it refuses with "already planned", STOP and find out which.** That refusal has
+two causes and they are opposites: your own lane resuming, or a second lane already
+working this item. Measured on a consumer 2026-09-15: two lanes implemented the same
+item thirty minutes apart because this brief said the refusal was benign, and the
+duplicate was only discovered afterwards.
+
+```bash
+CHECKPOINT={REPO}/.squad/records/implementations/.progress-{ITEM}.json
+test -f "$CHECKPOINT" && grep -c '"commit_sha"' "$CHECKPOINT"
+git -C {REPO} log --oneline --all --grep="{ITEM}" | head
+```
+
+If the checkpoint records commits you did not make, or a branch already carries work
+for this item, **another lane has it**. Stop, report the collision naming both lanes,
+and do not write. Two lanes on one item produce two branches a person has to
+adjudicate, and the second one's work is thrown away whatever its quality.
+
+If the checkpoint is absent or holds only your own commits, this is your lane resuming
+and the refusal is information — carry on.
 
 **If you halt, walk it back before you stop.**
 

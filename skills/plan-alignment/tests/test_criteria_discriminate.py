@@ -420,3 +420,112 @@ def test_a_binary_the_criterion_built_is_still_refused():
     """The deliberate trade, unchanged: that binary can do anything, and "not verified"
     is an honest answer while "ran something unknown against your tree" is not."""
     assert cd._refused_command("/tmp/project-cli quality --list") != ""
+
+
+def test_a_runner_that_says_it_executed_nothing_has_not_answered() -> None:
+    """The class a consumer session named as the one nobody counts: "the honest statement
+    about today is not 24 defects found; it is 24 found and an unknown number that
+    returned exit 0."
+
+    Its four examples were a `grep` honouring `.gitignore`, a `cd` failing into the
+    original directory, a `\\s` crossing a newline, and a `find -newermt` window returning
+    zero over a file inside it. Every one was found by accident while looking for
+    something else.
+
+    `None` rather than `False`: the criterion may be sound against a tree where the test
+    exists. What is unknown is today's answer, and "could not decide" is the honest word.
+    """
+    class _Result:
+        def __init__(self, code, out, err=""):
+            self.exit_code, self.stdout, self.stderr = code, out, err
+
+    assert cd._decide(_Result(0, "no tests to run\n"), "exit:0")[0] is None
+    assert cd._decide(_Result(0, "collected 0 items\n"), "exit:0")[0] is None
+    assert cd._decide(_Result(0, "no tests ran\n"), "print:3")[0] is None
+
+
+def test_a_silent_command_is_not_a_command_that_measured_nothing() -> None:
+    """The distinction this rests on. `test -f x` and `git diff --quiet` answer by
+    exiting and say nothing at all, and reading silence as vacuity would refuse the
+    clearest criteria in the corpus. Only a runner's own STATEMENT that it ran nothing
+    counts.
+    """
+    class _Result:
+        def __init__(self, code, out, err=""):
+            self.exit_code, self.stdout, self.stderr = code, out, err
+
+    assert cd._decide(_Result(0, ""), "exit:0")[0] is True
+    assert cd._decide(_Result(0, "ok  pkg  0.2s\n"), "exit:0")[0] is True
+    assert cd._decide(_Result(1, "--- FAIL\n"), "exit:0")[0] is False
+
+
+def test_the_guard_finds_nothing_in_the_current_corpus_and_that_is_reported() -> None:
+    """Measured on a consumer 2026-09-15: 185 executed clauses across 12 briefs, zero
+    caught. The guard discriminates in both directions above and finds nothing today.
+
+    That is worth writing down rather than leaving implied: a guard that has never fired
+    is evidence about the corpus, not about the guard, and the two are easy to confuse
+    when someone reads the fix later and wonders what it bought.
+    """
+    assert cd._MEASURED_NOTHING_RE.search("no tests to run")
+    assert not cd._MEASURED_NOTHING_RE.search("ok  github.com/example/pkg  0.2s")
+
+
+class _Ran:
+    def __init__(self, code, out, err=""):
+        self.exit_code, self.stdout, self.stderr = code, out, err
+
+
+def test_a_criterion_that_states_a_bound_is_compared_as_one() -> None:
+    """`prints 4 or more` was compared for EQUALITY, so a correct `6` read as a failure.
+
+    Worse than the false verdict is its direction: the check reported "discriminates"
+    because the number DIFFERED, not because the criterion was unmet. A discrimination
+    check satisfied by difference measures nothing about the criterion.
+
+    Probed at a consumer session's request after it found one case, and wider than the
+    case that prompted it: every comparative form in the vocabulary was mis-read — `at
+    least 4` extracted the word `at`, `>= 3` extracted `>=`.
+
+    Measured through `_bound_of` itself: 16 clauses across 11 of that registry's briefs
+    state a bound. It took four numbers to get there — 14 and 19 from two ad-hoc sweep
+    regexes, one per session; then 15 from the RIGHT function with its input pre-filtered
+    to lines matching `^\s*-\s*AC-`; then 16, the function handed every line.
+
+    The last step is the transferable one: **calling the deciding function is not enough
+    if you choose what to feed it.** A pre-filter is a second, undeclared predicate, and
+    it fails silently in the direction of fewer results — which reads as clean. The brief
+    it dropped had its bounded clause on a continuation line, invisible to any sweep
+    assuming one criterion per bullet.
+    """
+    assert cd._decide(_Ran(0, "6\n"), "print:>=4")[0] is True
+    assert cd._decide(_Ran(0, "3\n"), "print:>=4")[0] is False
+    assert cd._decide(_Ran(0, "2\n"), "print:<=2")[0] is True
+
+
+def test_an_exact_expectation_stays_exact() -> None:
+    """Widening the comparison must not loosen the criteria that name a value."""
+    assert cd._decide(_Ran(0, "4\n"), "print:4")[0] is True
+    assert cd._decide(_Ran(0, "6\n"), "print:4")[0] is False
+
+
+def test_output_that_is_not_a_number_cannot_be_compared_to_a_bound() -> None:
+    """None, not False. The criterion may be sound; what failed is the comparison."""
+    decided, note = cd._decide(_Ran(0, "ok\n"), "print:>=4")
+    assert decided is None
+    assert "not a number to compare" in note
+
+
+def test_every_comparative_form_in_the_vocabulary_is_recognised() -> None:
+    for text, expected in (
+        ("`grep -c 'x' f.go` prints 4 or more", (">=", 4)),
+        ("prints `4` or more", (">=", 4)),
+        ("prints at least 4", (">=", 4)),
+        ("prints >= 3", (">=", 3)),
+        ("prints at most 2", ("<=", 2)),
+        ("prints 3 or fewer", ("<=", 3)),
+        ("prints no fewer than 5", (">=", 5)),
+        ("prints 4", None),
+        ("exits 0", None),
+    ):
+        assert cd._bound_of(text) == expected, text

@@ -158,12 +158,31 @@ def _validate_task(index: int, task: object, seen_ids: set[str]) -> list[Finding
             "MEDIUM", "task_invalid_status",
             f"{where} status '{status}' is not one of {sorted(_VALID_STATUSES)}."))
 
-    # committed → needs a SHA (diff_cohesion / diff_symbols rely on it)
+    # committed → needs a SHA (diff_cohesion / diff_symbols rely on it), UNLESS the task
+    # says why it produced none.
+    #
+    # A measurement task whose DoD requires that no tracked file change finishes with
+    # nothing to commit, and had three options: claim a SHA it does not have, borrow a
+    # neighbour's, or take a MEDIUM it does not deserve. A consumer agent on 2026-09-15
+    # refused the first two and accepted the third, which is the right order of
+    # preference and should not have cost anything.
+    #
+    # `no_commit_reason` rather than a fifth terminal status, and the reason is in this
+    # file's own history twelve lines up: `done` was retired because six consumers
+    # computed pendency from `committed` OR `blocked`, so a task carrying the new word
+    # stayed PENDING forever and the completion promise was never emitted. A field the
+    # consumers ignore is safe; a status they ignore is the defect this validator exists
+    # to end.
     if status == "committed" and not task.get("commit_sha"):
-        findings.append(Finding(
-            "MEDIUM", "committed_without_sha",
-            f"{where} is 'committed' but has no 'commit_sha'; diff-based gates cannot "
-            "derive its real diff."))
+        if str(task.get("no_commit_reason") or "").strip():
+            pass
+        else:
+            findings.append(Finding(
+                "MEDIUM", "committed_without_sha",
+                f"{where} is 'committed' but has no 'commit_sha'; diff-based gates cannot "
+                "derive its real diff. If the task correctly produced no commit — a "
+                "measurement whose DoD requires no tracked file change — say so in "
+                "'no_commit_reason' rather than borrowing a SHA."))
 
     # blocked → needs an explicit reason (honesty contract)
     if status == "blocked" and not task.get("blocked_reason"):

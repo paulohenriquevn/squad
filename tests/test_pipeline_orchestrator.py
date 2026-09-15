@@ -547,3 +547,68 @@ def test_a_selector_without_the_field_still_builds_a_pipeline():
     """An older selector emits no `awaiting_plan`; that must degrade, not crash."""
     p = from_selection({"queue": ["b-001"], "walls": {}}, lanes=1)
     assert [i.slug for i in p.items] == ["b-001"]
+
+
+# ── the seam, not either end of it ──────────────────────────────────────────
+
+
+def test_every_status_in_a_registry_reaches_the_scheduler_at_a_stage(tmp_path: Path) -> None:
+    """One registry, one item per status, walked from `BACKLOG.md` through SELECT into
+    the orchestrator — which is the only test that would have caught any of the three
+    times this seam broke.
+
+    `approved` was absent from `queue` and the scheduler read only `queue`, so a registry
+    of 92 handed it 5. Then nobody wrote `planned`, so RELEASE was refused after the work
+    was done. Then writing `planned` removed the item from every key SELECT emits, and an
+    item with a passing gate report was reachable only by typing its slug.
+
+    Each break was invisible to a test of `from_selection` alone, because `from_selection`
+    was correct every time — it was handed a selection that did not contain the item.
+    Testing the two ends separately is what let one seam break three times.
+    """
+    import json  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+    import sys as _sys  # noqa: PLC0415
+
+    registry = tmp_path / "BACKLOG.md"
+    registry.write_text(
+        "# Backlog\n\n"
+        "## B-001 — a raw idea   [ ]\n\nstatus: raw\n\n"
+        "## B-002 — a triaged item   [ ]\n\nstatus: triaged\n\n"
+        "## B-003 — an approved item   [ ]\n\nstatus: approved\n\n"
+        "## B-004 — an item being built   [ ]\n\nstatus: planned\n\n"
+        "## B-005 — a shipped item   [ ]\n\nstatus: shipped\n\n"
+        "## B-006 — a killed item   [ ]\n\nstatus: killed\n",
+        encoding="utf-8")
+    records = tmp_path / ".squad" / "records" / "implementations"
+    records.mkdir(parents=True)
+    (records / "B-004-implementation.md").write_text("# B-004\n", encoding="utf-8")
+
+    selector = (Path(__file__).resolve().parents[1] / "skills" / "backlog-review"
+                / "scripts" / "select_backlog_item.py")
+    done = subprocess.run([_sys.executable, str(selector), str(registry), "--json"],
+                          capture_output=True, text=True, check=False)
+    assert done.returncode in (0, 1), done.stderr
+    selection = json.loads(done.stdout)
+
+    pipeline = from_selection(selection)
+    stages = {item.slug: item.stage for item in pipeline.items}
+
+    # Every status that describes work still to do reaches a stage.
+    assert stages.get("B-002") == "DISCOVER", f"triaged: {stages}"
+    assert stages.get("B-003") == "PLAN", f"approved: {stages}"
+    assert stages.get("B-004") == "REVIEW", (
+        f"an item at `planned` WITH an implementation record must enter after implement, "
+        f"not at it: {stages}")
+    # Terminal statuses are correctly absent — they are not work.
+    assert "B-005" not in stages and "B-006" not in stages, f"terminal reached a stage: {stages}"
+
+
+def test_an_item_at_planned_without_a_record_enters_at_implement(tmp_path: Path) -> None:
+    """`planned` says work STARTED, never how far it got. Entering a finished item at
+    IMPLEMENT reruns the stage it completed — which happened to one consumer item twice —
+    and entering an unfinished one at REVIEW reviews work that does not exist yet."""
+    pipeline = from_selection({
+        "in_flight": ["B-010", "B-011"], "in_flight_implemented": ["B-010"], "walls": {}})
+    stages = {item.slug: item.stage for item in pipeline.items}
+    assert stages == {"B-010": "REVIEW", "B-011": "IMPLEMENT"}
