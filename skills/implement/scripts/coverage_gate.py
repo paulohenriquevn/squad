@@ -137,7 +137,12 @@ def evaluate(project_root: Path, *, command_ran: bool, command_failed: bool,
             return {
                 "name": "coverage",
                 "status": "SKIP",
-                "reason": "no coverage command and no coverage report on disk — pre-code phase",
+                # Says what was LOOKED FOR and not found, never what phase the project
+                # is in. Measured on a consumer 2026-09-15: a Go workspace with 8
+                # modules and 1918 lines of new Go read "pre-code phase" here.
+                "reason": ("no coverage command configured and no coverage report on "
+                           "disk — nothing to read, which is not the same as nothing "
+                           "to cover"),
                 "threshold": threshold,
                 "threshold_source": source,
             }

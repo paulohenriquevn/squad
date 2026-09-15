@@ -6,6 +6,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **Nothing wrote the status that makes shipping legal** (#86)
+  `approved -> shipped` is not a transition the registry accepts; `approved -> planned ->
+  shipped` is. RELEASE wrote the second hop and nothing wrote the first, so an item went
+  from `approved` to a RELEASE refused *after* the work was done — a consumer had 87 items
+  at `approved`, 9 with implementations behind them, and zero at `shipped`. IMPLEMENT now
+  records the hop, and a test walks the statuses the briefs write against the registry's
+  own transition table so a future stage cannot write one it would refuse.
+
+- **A lint verdict charged the item for a tree it did not write** (#86)
+  Scoping lint to the changed files degraded to absolute when the changed set could not be
+  derived, and an item whose work sits on a lane branch has no checkpoint to read commit
+  SHAs from — so the gate failed two items over 48 pre-existing findings neither had
+  touched. There are three outcomes now: failed for a file the change touched, passed with
+  the pre-existing count still reported, or warned when the set could not be derived —
+  reported in full, attributed to nobody.
+
+- **A failing test suite reported that it failed and nothing else** (#86)
+  `go test` prints failing test names to stdout and reserves stderr for build errors, so a
+  runner reading only stderr showed 5 of 8 failing modules with an empty diagnostic. The
+  stdout *tail* was no better — a chatty suite fills it with log lines from tests that
+  passed. The failing lines are extracted rather than tailed, with stderr still winning
+  when a build fails. `coverage` and the no-manifest skip also stopped concluding
+  "pre-code phase" from a missing file.
+
 ### Added
 - **A withdrawn sign-off can be restored** (#86)
   `<!-- sign-off: RESTORED: reason -->`, honoured only after the withdrawal it answers —

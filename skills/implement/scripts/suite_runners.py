@@ -73,6 +73,42 @@ def run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any]
         return {"exit_code": -1, "error": f"command not found: {exc}"}
 
 
+#: A line that names something that failed, across the test runners this module drives:
+#: `--- FAIL: TestX`, `FAIL\tpkg`, `# pkg` (a Go build error), pytest's `E ` and `FAILED`,
+#: and cargo's `error[E0308]`.
+_FAILURE_LINE_RE = re.compile(
+    r"^(?:-{2,}\s*FAIL[:\s]|FAIL\b|#\s+\S|E\s{2,}|FAILED\b|error(?:\[E\d+\])?:|"
+    r"panic:|thread '.*' panicked)")
+
+
+def _diagnostic(result: dict[str, Any]) -> str:
+    """What FAILED, from whichever stream the tool wrote it to.
+
+    `go test` prints failing test names to STDOUT and reserves stderr for build errors,
+    so a runner reading only `stderr_tail` reports `FAIL` with an empty diagnostic.
+    Measured on a consumer 2026-09-15: 5 of 8 Go modules failing, and the gate's report
+    named none of them — the reader learned that something broke and nothing else.
+
+    stderr first, because when a build fails that IS the finding; stdout when stderr has
+    nothing to say.
+    """
+    full = result.get("stdout_full") or ""
+    named = [line for line in full.splitlines() if _FAILURE_LINE_RE.match(line.strip())]
+    if named:
+        # The FINDING, not the last 500 bytes of whatever the suite logged on its way
+        # there. A tail of a chatty suite is INFO lines from a passing test, with the
+        # failing names cut off above it — measured on a consumer where six log lines
+        # filled the tail and no test name survived.
+        head = named[:25]
+        more = f"\n… and {len(named) - len(head)} more failing line(s)" if len(named) > len(head) else ""
+        return "\n".join(head) + more
+    for key in ("stderr_tail", "stdout_tail", "error"):
+        value = (result.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 def detect_languages(project_root: Path) -> list[str]:
     """Languages whose manifest sits at the repository root."""
     return [
@@ -123,7 +159,7 @@ def check_python_tests(project_root: Path) -> dict[str, Any]:
             "status": "FAIL",
             "runner": "pytest",
             "exit_code": code,
-            "stderr_tail": result.get("stderr_tail", result.get("error", "")),
+            "stderr_tail": _diagnostic(result),
         }
 
     # pytest is not installed — try the stdlib runner before giving up.
@@ -195,7 +231,7 @@ def check_go_tests(project_root: Path) -> dict[str, Any]:
                     "reason": "go.work present but the go toolchain is unavailable — "
                               "unverified is not verified",
                 }
-            failures.append({"module": module, "stderr_tail": outcome.get("stderr_tail", "")})
+            failures.append({"module": module, "stderr_tail": _diagnostic(outcome)})
         if failures:
             return {"name": name, "status": "FAIL", "runner": "go test",
                     "modules_tested": modules, "failed_modules": [f["module"] for f in failures],
@@ -219,7 +255,7 @@ def check_go_tests(project_root: Path) -> dict[str, Any]:
         "status": "FAIL",
         "runner": "go test",
         "exit_code": result.get("exit_code"),
-        "stderr_tail": result.get("stderr_tail", result.get("error", "")),
+        "stderr_tail": _diagnostic(result),
     }
 
 
@@ -244,7 +280,7 @@ def check_rust_tests(project_root: Path) -> dict[str, Any]:
         "status": "FAIL",
         "runner": "cargo test",
         "exit_code": result.get("exit_code"),
-        "stderr_tail": result.get("stderr_tail", result.get("error", "")),
+        "stderr_tail": _diagnostic(result),
     }
 
 
@@ -272,7 +308,9 @@ def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]])
             "name": "test_execution",
             "status": "SKIP",
             "languages_detected": [],
-            "reason": "no language manifest at the repo root — pre-code phase",
+            "reason": ("no language manifest at the repo root for any suite this gate "
+                       "knows how to run — nothing to run, which is not the same as "
+                       "nothing to test"),
         }
     if executed:
         return {
@@ -373,6 +411,21 @@ def check_lint(project_root: Path,
 
     Pre-existing findings are still REPORTED — as `pre_existing`, on a passing result.
     Silence about them would be the other failure: a tree nobody may be told is dirty.
+
+    Three states, not two, because "I could not work out which findings are yours" is
+    neither a pass nor a charge:
+
+      FAIL  the change touched a file this linter flags — named
+      PASS  it touched none, and the pre-existing count is reported anyway
+      WARN  the changed set could not be derived; the findings are reported in full
+            and attributed to nobody
+
+    The first version had two states and returned the whole failure when it could not
+    scope, reasoning that reporting everything beats guessing. Measured on a consumer
+    2026-09-15: an item whose work sits on a lane branch has no checkpoint to read SHAs
+    from, so the set came back empty and the gate FAILED it over 48 files it never
+    touched — the exact harm the scoping exists to prevent, arriving through the fix for
+    it. Reporting everything was right; charging the item for it was not.
     """
     present = detect_languages(project_root)
     results: list[dict[str, Any]] = []
@@ -392,8 +445,16 @@ def _scope_to_change(outcome: dict[str, Any],
     With no changed-file list the outcome is returned untouched: guessing which half of
     a failure belongs to the item is worse than reporting the whole of it.
     """
-    if outcome.get("status") != "FAIL" or not changed_files:
+    if outcome.get("status") != "FAIL":
         return outcome
+    flagged_all = outcome.get("flagged_files") or []
+    if not changed_files:
+        return {**outcome, "status": "WARN", "pre_existing": len(flagged_all),
+                "reason": (f"{len(flagged_all)} file(s) fail this linter and the gate "
+                           f"could not derive which of them this change touched — no "
+                           f"commit SHAs in the checkpoint. Reported, attributed to "
+                           f"nobody. Write `.progress-{{slug}}.json` and the verdict "
+                           f"becomes a real one.")}
     # `flagged_files` is the WHOLE list; `stderr_tail` is a 500-character tail and using
     # it here would scope the verdict against a truncated view of the findings.
     flagged = outcome.get("flagged_files") or [

@@ -573,3 +573,37 @@ def test_the_writing_stage_says_records_live_in_the_repository(tmp_path: Path) -
     brief = _briefs(tmp_path)["implement"]
     assert "gitignored" in brief, "the brief does not say WHY records are not beside the code"
     assert f"{tmp_path / 'repo'}/.squad/records" in brief
+
+
+def test_the_chain_records_the_hop_that_makes_shipping_legal(tmp_path: Path) -> None:
+    """`approved -> shipped` is not a legal transition; `approved -> planned -> shipped`
+    is. RELEASE moved an item to `shipped` and nothing moved it to `planned`, so RELEASE
+    was refused after the work was done, with nothing about the work at fault.
+
+    Measured on a consumer 2026-09-15: 87 items at `approved`, 9 with implementations
+    behind them, zero at `shipped`.
+    """
+    briefs = _briefs(tmp_path)
+    assert "--to planned" in briefs["implement"], \
+        "nothing in the chain records that work started"
+    assert "--to shipped" in briefs["release"]
+
+
+def test_every_status_a_stage_writes_is_a_legal_hop_from_the_one_before(
+        tmp_path: Path) -> None:
+    """The durable half: a stage may only write a status the registry will accept from
+    the status the previous stage left. Checked against `backlog_status.ALLOWED` rather
+    than against a list kept here, which would drift the moment the contract changes."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
+    import backlog_status  # noqa: PLC0415
+
+    briefs = _briefs(tmp_path)
+    written = [s for stage in STAGES
+               for s in re.findall(r"--to\s+(\w+)", briefs[stage])]
+    assert written, "no stage writes a status at all"
+    current = "approved"
+    for status in written:
+        assert status in backlog_status.ALLOWED[current], (
+            f"the chain writes {current} -> {status}, which the registry refuses; "
+            f"from {current} it accepts {sorted(backlog_status.ALLOWED[current])}")
+        current = status
