@@ -112,8 +112,23 @@ class Item:
 #:
 #: Keyed by the stage being ENTERED, because entering one is the evidence the previous
 #: finished. Stages with no entry are stages that do not change the registry.
+#: `PLAN` is deliberately absent, and its absence is the fix for the defect that made
+#: IMPLEMENT unreachable.
+#:
+#: It used to write `triaged` on entering PLAN — reading "DISCOVER finished, so the item
+#: is measured". True, but the item was ALREADY past it: `cycle-backlog` puts `approved`
+#: after `triaged`, and only `approved` may become `planned`. So the map demoted an
+#: approved item to `triaged` on its way into PLAN, and one stage later `REQUIRES_STATUS`
+#: refused `planned` because the registry now said `triaged`. Every item parked at
+#: IMPLEMENT, whatever its status had been.
+#:
+#: Traced 2026-09-15 on a consumer that ran three days and shipped nothing: the scheduler
+#: could not reach the stage that writes code, and the park it produced looked like a
+#: gate holding rather than a scheduler contradicting itself.
+#:
+#: A status only ever moves FORWARD here. Entering PLAN proves DISCOVER finished, which
+#: an item at `approved` has already recorded — there is nothing left to write.
 STATUS_ON_ENTERING = {
-    "PLAN": "triaged",
     "IMPLEMENT": "planned",
     "__done__": "shipped",
 }
@@ -185,9 +200,35 @@ class Pipeline:
         return next(i for i in self.items if i.slug == slug)
 
     def _eligible(self) -> list[Item]:
+        """Work that can start, FURTHEST ALONG FIRST.
+
+        The order is the whole scheduling policy, and until 2026-09-15 there was none:
+        lanes were filled in registry order, so an item at DISCOVER took a lane ahead of
+        one at IMPLEMENT that was three stages from landing.
+
+        Measured on a consumer over three days, and the shape is unmistakable:
+
+            12/09   44 discover ·  3 plan
+            13/09   13 discover ·  3 align ·  9 plan
+            14/09                  29 align ·  2 plan ·  1 implement
+            15/09                   6 align ·  1 plan ·  7 implement
+
+        Everything advanced one phase before anything advanced two. With 93 items that
+        means nothing reaches RELEASE until nearly everything has crossed every phase
+        before it — 501 artefacts, zero shipped.
+
+        Finishing beats starting. An item at IMPLEMENT is worth more lane-time than one
+        at DISCOVER because it is closer to being work somebody can use, and the item
+        left waiting loses nothing it would not have lost anyway.
+
+        Ties keep registry order, which `cycle-maintenance` already ranks: triaged
+        before raw, then oldest first. So within a stage the existing fairness rule
+        still decides, and only ACROSS stages does this reorder anything.
+        """
         busy = {i.slug for i in self.running}
-        return [i for i in self.items
-                if not i.parked and not i.done and not i.blocked and i.slug not in busy]
+        ready = [i for i in self.items
+                 if not i.parked and not i.done and not i.blocked and i.slug not in busy]
+        return sorted(ready, key=lambda i: -STAGES.index(i.stage))
 
     # ── scheduling ─────────────────────────────────────────────────────────
     def schedule(self) -> list[Item]:

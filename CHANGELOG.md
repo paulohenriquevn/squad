@@ -7,6 +7,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The pipeline could not reach the stage that writes code** (#93)
+  `STATUS_ON_ENTERING` wrote `triaged` when an item entered PLAN — reading "DISCOVER
+  finished, so the item is measured", which is true and was already recorded.
+  `cycle-backlog` puts `approved` AFTER `triaged`, and only `approved` may become
+  `planned`, so the map DEMOTED an approved item on its way into PLAN and
+  `REQUIRES_STATUS` refused `planned` one stage later. Every item parked at IMPLEMENT
+  whatever its status had been. Traced on a consumer that ran three days and shipped
+  nothing: the park looked like a gate holding rather than a scheduler contradicting
+  itself, which is why it survived — the symptom was indistinguishable from the system
+  working. A status only moves forward now, and an approved item runs the whole chain to
+  `__done__`.
+
+- **The scheduler had no preference, so everything advanced one phase before anything advanced two** (#93)
+  Lanes were filled in registry order, so an item at DISCOVER took a lane ahead of one at
+  IMPLEMENT that was three stages from landing. Measured on a consumer: 44 discovers on
+  day one against 3 plans, 29 aligns on day three against 1 implement. With 93 items that
+  means nothing reaches RELEASE until nearly everything has crossed every phase before
+  it — 501 artefacts, zero shipped. Eligible work is now ordered furthest-along-first:
+  finishing beats starting, because an item at IMPLEMENT is closer to being work somebody
+  can use. Ties keep registry order, so `cycle-maintenance`'s fairness rule still decides
+  within a stage.
+
 - **The criteria executor ran whatever a criterion's sentence contained** (#96)
   It executed every runnable span in a bullet, and a consumer measured what that costs:
   a criterion carrying `git stash push` was run, and it pushed SEVEN entries onto a
