@@ -7,6 +7,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The TDD gate refused executable Go and accepted a prose sentence** (#86)
+  Measured on 19 consumer plans, 8 blocked: `RED: test_xxx` passed the gate and
+  `RED: TestXxx` — the same claim in Go's spelling — did not, while "the tests should be
+  green after this" sailed through. Six more plans ran real commands and stated what each
+  must print, and were refused because the only shell oracle recognised was a backticked
+  command followed by the word "prints". The gate was matching one house style, not
+  executability. Four shapes now count, each of them greppable: a native test declaration
+  (Go, Rust, JUnit, testify), a RED that names its failing test in any casing, a command
+  paired with a stated expectation, and a task that declares why it asserts nothing while
+  still showing what it runs. Seven agents had hit this across five items and every one
+  refused to rewrite its TDD bodies to clear it. All 19 plans pass now, and all 19 still
+  block when their TDD sections are replaced with a promise.
+
+- **A CHANGELOG example inside a plan truncated the task quoting it** (#86)
+  A literal `## [Unreleased]` inside a fenced snippet was read as the next heading, so
+  the task ended there and its own `#### TDD` section was never seen — the plan failed
+  for a section it had. Headings are now located in a fence-blanked copy of the same
+  length while the body is still sliced from the original.
 - **Approved items never reached the scheduler, so the IMPLEMENT fix reached 4 of 92** (#93)
   `queue` is what SELECT hands to `/discover-plan`, and `cycle-maintenance.md § Chain`
   sends an approved item to `/plan-write` instead — so an approved item is correctly
