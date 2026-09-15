@@ -33,8 +33,16 @@ changed for them.
 **2. Move the item.**
 
 ```bash
-python3 $([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/backlog_status.py {REPO}/BACKLOG.md {ITEM} --to shipped
+KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
+python3 "$KIT/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to shipped
 ```
+
+**The kit is resolved at `{REPO}`, not relative to you.** You write inside the
+lane's worktree, and `.claude/` is gitignored in a consumer repository, so a
+worktree contains no kit: a relative probe resolves to the worktree root and the
+command fails with a missing file. This stage is the only writer that moves an
+item to `shipped`, so that failure is silent and total — measured on a consumer
+2026-09-15, where 9 implementations and 8 reviews sat behind **zero** releases.
 
 `backlog_status.py` is the only writer of a status line. Do not edit
 `BACKLOG.md` by hand — a second writer is how `planned` reached zero in every
