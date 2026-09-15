@@ -38,9 +38,15 @@ one's approval.
 IMPLEMENT reports two runs. Reproduce the first:
 
 ```bash
+LANE_TREE=$(git -C {REPO} worktree list --porcelain \
+    | grep -B2 "^branch refs/heads/pipeline/{LANE}$" | head -1 | cut -d" " -f2)
 git -C {REPO} worktree add "$HOME/.squad-worktrees/review-{LANE}-$(date +%s)" HEAD
 # run the new test in the PRE-change tree; it must FAIL
 ```
+
+`$LANE_TREE` is where IMPLEMENT worked and is where the post-change checks below
+run. The worktree you just cut is the PRE-change tree, and it exists only to show
+the test failing without the work.
 
 **Never `git stash` in it.** The worktree isolates your index, your HEAD and your
 checkout — not the stash. `refs/stash` lives in the common `.git`, every worktree
@@ -60,9 +66,21 @@ check.
 **3. Do the acceptance criteria discriminate NOW.**
 
 ```bash
-python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/check_criteria_discriminate.py \
-    <the item's alignment brief> --repo-root {REPO}
+KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
+python3 "$KIT/skills/plan-alignment/scripts/check_criteria_discriminate.py" \
+    {REPO}/.squad/records/alignment/{ITEM}-alignment.md \
+    --repo-root "$LANE_TREE"
 ```
+
+`$LANE_TREE` is the worktree IMPLEMENT built — the criteria are run against the
+tree the work produced, not against the pre-change one you cut above.
+
+**Both paths are absolute on purpose.** `.claude/` and `.squad/*` are gitignored
+in a consumer repository, so a worktree contains neither: a relative
+`$([ -d .claude/skills ] && ...)` resolves to the worktree root, where no kit and
+no brief exist, and the command fails with a missing file rather than a verdict.
+Measured on a consumer 2026-09-15: `.claude` has 0 tracked files and `.squad`
+tracks only `wiki/`, so a lane worktree carried 0 of the repository's 19 plans.
 
 Run it against the tree as it is at review time, not against a record from
 before the work. A verification does not survive the tree it measured: a

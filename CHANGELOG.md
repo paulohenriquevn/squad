@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Pipeline stages ran in a worktree that does not contain the records they are judged by** (#86)
+  `.claude/` and `.squad/*` are gitignored in a consumer repository, so a worktree carries
+  neither — measured on a consumer: 19 plans in the repository, 0 in the lane's worktree.
+  IMPLEMENT never named `.progress-{slug}.json` or `run_validation.py`, so five items
+  produced implementation records and zero checkpoints, and four gates answered SKIP with
+  "implement may not have run" about work with commits behind it; the stage also declared
+  its own completion, which `cycle-implement.md` reserves for the validation gate. REVIEW
+  resolved the kit relative to its own directory, which in a worktree holds no kit, so the
+  criteria check failed with a missing file rather than a verdict. Records are now
+  addressed at the repository in both briefs, the checkpoint is required in its canonical
+  shape, the promise is the gate's to give, and the criteria run against the lane's tree
+  rather than the pre-change one.
 - **Typecheck and lint answered a JavaScript question on every other language** (#86)
   The test half of the `/implement` gate was made language-aware in August; typecheck and
   lint were not, and skipped with `package.json absent — pre-code phase` on any repository
