@@ -234,6 +234,29 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
     # split item scores low BECAUSE it is two items, and "close these gaps" is advice
     # no rewrite can follow. The plan must not be built either way, so the cap is the
     # same — what changes is what the reader is told to do about it.
+    # Checked FIRST, and before the score: a reviewer who takes their sign-off back has
+    # said something no score can answer. Measured on a consumer 2026-09-15 — three items
+    # sat BLOCKED for two days while this gate reported `PASS — aligned at 100%`, because
+    # the withdrawal was written in prose above boxes that stayed ticked.
+    if report.sign_off_withdrawn:
+        because = f" ({report.withdrawal_reason})" if report.withdrawal_reason else ""
+        return AlignmentGateReport(
+            applies=True, verdict="WITHDRAWN",
+            reason=(f"the reviewer withdrew their sign-off{because}. The ticked boxes "
+                    f"below it record a review that no longer stands — re-review, do not "
+                    f"re-tick."),
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+
+    if report.unmarked_withdrawal_prose:
+        return AlignmentGateReport(
+            applies=True, verdict="AWAITING_REVIEW",
+            reason=(f"this brief reads as a withdrawal and carries no marker the gate can "
+                    f"read: \"{report.unmarked_withdrawal_prose}\". Mark it "
+                    f"`<!-- sign-off: WITHDRAWN: reason -->` if the warrant is withdrawn, "
+                    f"or reword the line if it is not. The gate declines to certify a "
+                    f"warrant whose state it cannot read — it does not guess either way."),
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+
     if report.needs_split:
         because = f" ({report.split_reason})" if report.split_reason else ""
         return AlignmentGateReport(

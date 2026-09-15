@@ -192,6 +192,33 @@ _SIGNED_BY_RE = re.compile(r"<!--\s*signed-by:\s*([^>]+?)\s*-->")
 #: actionable thing the reviewer knew was lost between the review and the caller.
 _NEEDS_SPLIT_RE = re.compile(r"<!--\s*verdict:\s*NEEDS_SPLIT\s*(?::\s*([^>]*?))?\s*-->", re.IGNORECASE)
 
+#: A reviewer taking their sign-off BACK. Same channel as `NEEDS_SPLIT` and for the same
+#: reason: the scorer transports a reviewer's decision rather than inferring one.
+#:
+#: Measured on a consumer 2026-09-15: three items sat BLOCKED for two days on a warrant
+#: that had been withdrawn in PROSE while the boxes above it stayed `[x]` with their
+#: `signed-by:` comments intact. The gate counted ticks, reported
+#: `alignment_gate PASS — aligned at 100%`, and every agent that opened the brief read the
+#: withdrawal and stopped. There was no way to say "signed, then withdrawn" that a machine
+#: could hear, so the strongest statement a reviewer can make was the one the mechanism
+#: could not represent.
+_WITHDRAWN_RE = re.compile(
+    r"<!--\s*sign-off:\s*WITHDRAWN\s*(?::\s*([^>]*?))?\s*-->", re.IGNORECASE)
+
+#: Prose that READS as a withdrawal without carrying the marker. This is deliberately not
+#: used to decide anything — it is used to stop the scorer from CLAIMING anything.
+#:
+#: The distinction is the whole design. Matching words to produce a verdict is what the
+#: `NEEDS_SPLIT` comment above refuses, and rightly: a regex over a brief would issue
+#: verdicts about language. Matching words to REFUSE to certify is the opposite move, and
+#: it is the one the doctrine requires — an inability to measure must never become a
+#: passing measurement. A brief whose warrant state is ambiguous gets `AWAITING_REVIEW`
+#: and a named reason, never `ALIGNED`.
+_WITHDRAWAL_PROSE_RE = re.compile(
+    r"\bsign-?off\s+(?:is\s+)?withdrawn\b|\bwithdraw(?:n|ing)\s+(?:the\s+)?sign-?off\b"
+    r"|\bwarrant\s+(?:is\s+)?withdrawn\b|\bwithdrew\s+(?:the\s+)?sign-?off\b",
+    re.IGNORECASE)
+
 
 @dataclass(frozen=True)
 class Criterion:
@@ -222,6 +249,13 @@ class AlignmentReport:
     #: Set when a reviewer marked the brief `<!-- verdict: NEEDS_SPLIT -->`.
     needs_split: bool = False
     split_reason: str = ""
+    #: Set when a reviewer marked the brief `<!-- sign-off: WITHDRAWN -->`.
+    sign_off_withdrawn: bool = False
+    withdrawal_reason: str = ""
+    #: The line whose prose reads as a withdrawal while no marker carries it. Not a
+    #: verdict about the prose — the reason the scorer declines to certify, quoted so the
+    #: reviewer knows exactly which line to mark.
+    unmarked_withdrawal_prose: str = ""
 
     @property
     def signed_by_is_human(self) -> bool:
@@ -263,10 +297,17 @@ class AlignmentReport:
 
     @property
     def aligned(self) -> bool:
-        return self.meets_machine_threshold and self.reviewer_signed_off
+        return (self.meets_machine_threshold and self.reviewer_signed_off
+                and not self.sign_off_withdrawn and not self.unmarked_withdrawal_prose)
 
     @property
     def verdict(self) -> str:
+        # Checked FIRST, before the split and before the score: a withdrawn warrant is a
+        # statement about whether the review still stands, and no score can answer it.
+        # Reporting ALIGNED over a withdrawal is the one outcome that sends an agent to
+        # build something a reviewer has said to stop building.
+        if self.sign_off_withdrawn:
+            return "WITHDRAWN"
         # Checked before the score, because a low score is a CONSEQUENCE of the item
         # being two items: neither half's flows, criteria or measurements converge
         # while they share one brief. Reporting `BLOCKED` here would send the reviewer
@@ -275,6 +316,10 @@ class AlignmentReport:
             return "NEEDS_SPLIT"
         if not self.meets_machine_threshold:
             return "BLOCKED"
+        if self.unmarked_withdrawal_prose:
+            # Not a verdict about the prose: a refusal to certify over something the
+            # scorer cannot read. The reviewer is told which line to mark.
+            return "AWAITING_REVIEW"
         return "ALIGNED" if self.reviewer_signed_off else "AWAITING_REVIEW"
 
     @property
@@ -328,6 +373,25 @@ def _bullets(text: str | None) -> list[str]:
 #: states. Stripped before looking for a marker that carries a verdict.
 _FENCED_RE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+
+
+def _unmarked_withdrawal(body: str) -> str:
+    """The first line whose prose says a sign-off was withdrawn, with no marker present.
+
+    Returned so the scorer can DECLINE to certify — never to decide a verdict from
+    language. Code spans and fences are stripped first so a brief explaining the syntax
+    to its reviewer is not mistaken for a reviewer using it, the same distinction
+    `_declarations_only` draws for the split marker.
+
+    A false positive costs the brief `AWAITING_REVIEW` and a named line to mark, which is
+    the direction that cannot hurt: the alternative is `ALIGNED` over a warrant somebody
+    took back, which is what sat on three consumer items for two days.
+    """
+    stripped = _INLINE_CODE_RE.sub("", _FENCED_RE.sub("", body))
+    for line in stripped.splitlines():
+        if _WITHDRAWAL_PROSE_RE.search(line):
+            return line.strip()[:200]
+    return ""
 
 
 def _declarations_only(body: str) -> str:
@@ -725,12 +789,17 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     # A declaration stands on its own line. A mention sits inside a sentence, a
     # list item or a code span. Same distinction kit#17 needed, and the same root:
     # a marker matched anywhere, with no notion of mentioned versus used.
-    split = _NEEDS_SPLIT_RE.search(_declarations_only(body))
+    declarations = _declarations_only(body)
+    split = _NEEDS_SPLIT_RE.search(declarations)
+    withdrawn = _WITHDRAWN_RE.search(declarations)
     return AlignmentReport(
         tuple(criteria), judgement, pending, len(boxes), signed_by,
         vacuous_criteria=_vacuous_criteria(ac),
         needs_split=bool(split),
         split_reason=(split.group(1) or "").strip() if split else "",
+        sign_off_withdrawn=bool(withdrawn),
+        withdrawal_reason=(withdrawn.group(1) or "").strip() if withdrawn else "",
+        unmarked_withdrawal_prose="" if withdrawn else _unmarked_withdrawal(body),
     )
 
 
