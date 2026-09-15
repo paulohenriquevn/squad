@@ -45,9 +45,11 @@ from coverage_gate import evaluate as coverage_evaluate
 from diff_symbols import added_symbols_from_shas, shas_from_progress
 from suite_runners import (
     check_go_tests,
+    check_lint,
     check_python_tests,
     check_rust_tests,
     check_test_execution,
+    check_typecheck,
     run_command,
 )
 from wiring_recheck import recheck_pillar_a
@@ -96,7 +98,7 @@ def _run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any
 
 def check_npm_test(project_root: Path) -> dict[str, Any]:
     if not _has_package_json(project_root):
-        return {"name": "npm test", "status": "SKIP", "reason": "package.json absent — pre-code phase"}
+        return {"name": "npm test", "status": "SKIP", "reason": "no package.json at the repo root — this check is for javascript"}
     if not _has_npm_script(project_root, "test"):
         return {"name": "npm test", "status": "SKIP", "reason": "no 'test' script in package.json"}
     result = _run_command(["npm", "test", "--silent"], project_root, timeout=600)
@@ -112,7 +114,7 @@ def check_npm_test(project_root: Path) -> dict[str, Any]:
 
 def check_npm_typecheck(project_root: Path) -> dict[str, Any]:
     if not _has_package_json(project_root):
-        return {"name": "npm run typecheck", "status": "SKIP", "reason": "package.json absent — pre-code phase"}
+        return {"name": "npm run typecheck", "status": "SKIP", "reason": "no package.json at the repo root — this check is for javascript"}
     if not _has_npm_script(project_root, "typecheck"):
         # Fallback: run tsc --noEmit
         if (project_root / "tsconfig.json").exists():
@@ -139,7 +141,7 @@ def check_npm_typecheck(project_root: Path) -> dict[str, Any]:
 
 def check_npm_lint(project_root: Path) -> dict[str, Any]:
     if not _has_package_json(project_root):
-        return {"name": "npm run lint", "status": "SKIP", "reason": "package.json absent — pre-code phase"}
+        return {"name": "npm run lint", "status": "SKIP", "reason": "no package.json at the repo root — this check is for javascript"}
     if not _has_npm_script(project_root, "lint"):
         return {"name": "npm run lint", "status": "SKIP", "reason": "no 'lint' script in package.json"}
     result = _run_command(["npm", "run", "lint", "--silent"], project_root, timeout=180)
@@ -173,7 +175,7 @@ def check_project_gates(project_root: Path) -> dict[str, Any]:
         return {
             "name": "project gates",
             "status": "SKIP",
-            "reason": "package.json absent — pre-code phase",
+            "reason": "no package.json at the repo root — this check is for javascript",
         }
     if not _has_npm_script(project_root, "gates"):
         return {
@@ -714,6 +716,22 @@ def check_phase_review_gate(project_root: Path, slug: str) -> dict[str, Any]:
     }
 
 
+def _files_touched_by_this_change(project_root: Path, slug: str) -> list[str]:
+    """The files this item's own commits wrote, or [] when that cannot be established.
+
+    Empty is the honest answer when the progress file carries no SHAs — and `check_lint`
+    reads it as "do not scope", reporting the whole failure rather than a guess at which
+    part of it belongs here.
+    """
+    from check_acceptance_criteria import _changed_files  # noqa: PLC0415 — path-loaded
+
+    progress = _read_progress(project_root, slug)
+    shas = shas_from_progress(progress) if isinstance(progress, dict) else []
+    if not shas:
+        return []
+    return _changed_files(project_root, shas)
+
+
 def check_acceptance_criteria_gate(project_root: Path, slug: str) -> dict[str, Any]:
     """Enforce the plan's AC/DoD obligations that run_validation does not otherwise
     cover (file-size budget, CHANGELOG-updated) and surface the non-mechanizable
@@ -786,7 +804,9 @@ def main() -> int:
         *suite_checks,
         check_test_execution(project_root, suite_checks),
         check_npm_typecheck(project_root),
+        *check_typecheck(project_root),
         check_npm_lint(project_root),
+        *check_lint(project_root, _files_touched_by_this_change(project_root, args.slug)),
         check_project_gates(project_root),
         check_coverage(project_root),
         wiring_summary(project_root, args.slug),

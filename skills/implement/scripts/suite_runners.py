@@ -60,6 +60,12 @@ def run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any]
             "exit_code": result.returncode,
             "stdout_tail": result.stdout[-500:] if result.stdout else "",
             "stderr_tail": result.stderr[-500:] if result.stderr else "",
+            # Additive, and only read by callers whose FINDING is the output itself.
+            # `gofmt -l` names one file per line and exits 0; a 500-character tail of
+            # 48 filenames reports 1 and looks like a complete answer, which is the
+            # shape this codebase exists to refuse. Capped so a runaway command cannot
+            # be held whole in memory.
+            "stdout_full": (result.stdout or "")[:200_000],
         }
     except subprocess.TimeoutExpired:
         return {"exit_code": -1, "error": f"timeout after {timeout}s"}
@@ -291,3 +297,163 @@ def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]])
             if c.get("status") == "SKIP"
         ],
     }
+
+# ── typecheck and lint, for the languages whose tests already run ──────────
+#
+# The test half of this module was made language-aware in August; the typecheck and
+# lint halves were not, and stayed in `run_validation.py` as npm-only checks. Measured
+# on a consumer 2026-09-15 — a Go workspace with 8 modules and 1918 lines of new Go:
+#
+#     npm run typecheck — SKIP  package.json absent — pre-code phase
+#     npm run lint      — SKIP  package.json absent — pre-code phase
+#     project gates     — SKIP  package.json absent — pre-code phase
+#
+# Four of seven reviews on that consumer carry that line. The repository is not in a
+# pre-code phase; it has no package.json, which is a different statement. The reason
+# named a conclusion about the project drawn from a probe for one ecosystem.
+
+#: Per language: the command that answers "does this compile / typecheck", and the
+#: manifest whose absence makes the question inapplicable rather than unanswered.
+TYPECHECK_COMMANDS: dict[str, tuple[list[str], int]] = {
+    "go": (["go", "build", "./..."], 900),
+    "rust": (["cargo", "check", "--quiet"], 1200),
+}
+
+#: Lint is per-language and OPTIONAL in a way typecheck is not: a repo may legitimately
+#: have no linter configured. An absent linter is reported as absent, never as clean.
+LINT_COMMANDS: dict[str, tuple[list[str], int]] = {
+    "go": (["gofmt", "-l", "."], 300),
+    "rust": (["cargo", "clippy", "--quiet", "--", "-D", "warnings"], 1200),
+    "python": (["ruff", "check", "."], 300),
+}
+
+
+def _skip(name: str, language: str) -> dict[str, Any]:
+    """The honest form of a skip: the probe that came back empty, not a verdict.
+
+    `package.json absent — pre-code phase` reads as a claim about the project. What was
+    actually observed is that one ecosystem's manifest is not at the root, which says
+    nothing about whether code exists.
+    """
+    manifests = " / ".join(LANGUAGE_MANIFESTS[language])
+    return {"name": name, "status": "SKIP",
+            "reason": f"no {manifests} at the repo root — this check is for {language}"}
+
+
+def check_typecheck(project_root: Path) -> list[dict[str, Any]]:
+    """One result per language present. A language with no manifest is not reported.
+
+    Returns a LIST because a repository can be more than one language, and collapsing
+    that to a single verdict is what let a Go module's failure hide behind a JS skip.
+    """
+    present = detect_languages(project_root)
+    results: list[dict[str, Any]] = []
+    for language, (command, timeout) in TYPECHECK_COMMANDS.items():
+        name = f"{language} typecheck"
+        if language not in present:
+            continue
+        results.append(_typed_outcome(name, command, project_root, timeout, language))
+    return results
+
+
+def check_lint(project_root: Path,
+               changed_files: list[str] | None = None) -> list[dict[str, Any]]:
+    """One result per language present, judged on what THIS change touched.
+
+    Lint is run over the whole tree but the verdict is scoped to the files the change
+    wrote, because a tree carries lint debt that predates the item and blocking on it
+    would stop every item for somebody else's file. Measured on a consumer 2026-09-15:
+    `gofmt -l .` names 48 tracked Go files, none of them in testdata, and none of them
+    touched by the item under validation.
+
+    The consumer had already reached this design by hand — its plan's DoD says
+    "`task lint` is red at HEAD on an unrelated tracked file, so it is run and DIFFED,
+    never asserted absolute." This encodes that rather than leaving each plan to
+    rediscover it.
+
+    Pre-existing findings are still REPORTED — as `pre_existing`, on a passing result.
+    Silence about them would be the other failure: a tree nobody may be told is dirty.
+    """
+    present = detect_languages(project_root)
+    results: list[dict[str, Any]] = []
+    for language, (command, timeout) in LINT_COMMANDS.items():
+        if language not in present:
+            continue
+        outcome = _typed_outcome(f"{language} lint", command, project_root,
+                                 timeout, language, tool_optional=True)
+        results.append(_scope_to_change(outcome, changed_files))
+    return results
+
+
+def _scope_to_change(outcome: dict[str, Any],
+                     changed_files: list[str] | None) -> dict[str, Any]:
+    """Turn a whole-tree lint failure into a verdict about the change that caused it.
+
+    With no changed-file list the outcome is returned untouched: guessing which half of
+    a failure belongs to the item is worse than reporting the whole of it.
+    """
+    if outcome.get("status") != "FAIL" or not changed_files:
+        return outcome
+    # `flagged_files` is the WHOLE list; `stderr_tail` is a 500-character tail and using
+    # it here would scope the verdict against a truncated view of the findings.
+    flagged = outcome.get("flagged_files") or [
+        f.strip() for f in (outcome.get("stderr_tail") or "").splitlines() if f.strip()]
+    changed = {c.lstrip("./") for c in changed_files}
+    mine = [f for f in flagged if f.lstrip("./") in changed]
+    if mine:
+        return {**outcome, "status": "FAIL", "flagged_by_this_change": mine,
+                "pre_existing": len(flagged) - len(mine)}
+    return {**outcome, "status": "PASS", "pre_existing": len(flagged),
+            "reason": f"{len(flagged)} file(s) already failed this linter before the "
+                      f"change and none of them was touched by it — reported, not charged"}
+
+
+def _typed_outcome(name: str, command: list[str], project_root: Path, timeout: int,
+                   language: str, tool_optional: bool = False) -> dict[str, Any]:
+    """Run one command and classify it, keeping "could not run" distinct from "passed".
+
+    A missing toolchain is a FAIL for typecheck — `rules/cycle-implement.md` treats an
+    unverified claim as unverified — and a SKIP for lint, where the tool is genuinely
+    optional. What neither may become is a silent pass.
+    """
+    # A go.work root is not a module; `go build ./...` there reports nothing useful.
+    roots = [project_root]
+    if language == "go" and not (project_root / "go.mod").is_file():
+        modules = go_workspace_modules(project_root)
+        if modules:
+            roots = [project_root / m for m in modules]
+
+    failures: list[dict[str, Any]] = []
+    flagged: list[str] = []
+    for root in roots:
+        result = run_command(command, root, timeout=timeout)
+        output = f"{result.get('stderr_tail', '')}{result.get('error', '')}"
+        if _unavailable(output):
+            if tool_optional:
+                return {"name": name, "status": "SKIP", "runner": command[0],
+                        "reason": f"{command[0]} is not installed — an absent linter is "
+                                  f"absent, never clean"}
+            return {"name": name, "status": "FAIL", "runner": command[0],
+                    "code": "toolchain_unavailable",
+                    "reason": f"{language} sources are present but {command[0]} is "
+                              f"unavailable — unverified is not verified"}
+        # `gofmt -l` exits 0 and PRINTS the offending files: an exit code alone would
+        # report a badly formatted tree as clean.
+        printed = (result.get("stdout_full") or "").strip()
+        listed = [line.strip() for line in printed.splitlines() if line.strip()]
+        if command[0] == "gofmt":
+            # Paths are printed relative to the directory the command ran in.
+            flagged.extend(str((root / line).relative_to(project_root))
+                           if (root / line).is_relative_to(project_root) else line
+                           for line in listed)
+        if result.get("exit_code") != 0 or (command[0] == "gofmt" and listed):
+            failures.append({"root": str(root), "exit_code": result.get("exit_code"),
+                             "stderr_tail": result.get("stderr_tail") or printed[:500]})
+    if failures:
+        return {"name": name, "status": "FAIL", "runner": command[0],
+                "roots_checked": [str(r) for r in roots],
+                "failed_roots": [f["root"] for f in failures],
+                "flagged_files": flagged,
+                "stderr_tail": failures[0]["stderr_tail"]}
+    return {"name": name, "status": "PASS", "runner": command[0],
+            "roots_checked": [str(r) for r in roots]}
