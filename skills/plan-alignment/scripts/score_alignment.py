@@ -205,6 +205,21 @@ _NEEDS_SPLIT_RE = re.compile(r"<!--\s*verdict:\s*NEEDS_SPLIT\s*(?::\s*([^>]*?))?
 _WITHDRAWN_RE = re.compile(
     r"<!--\s*sign-off:\s*WITHDRAWN\s*(?::\s*([^>]*?))?\s*-->", re.IGNORECASE)
 
+#: A reviewer putting their sign-off BACK after withdrawing it.
+#:
+#: `WITHDRAWN` without this is a state with no exit, and that is not hypothetical: this
+#: project's discipline is to correct forward and leave the superseded reading in place,
+#: so a brief that went withdrawal -> refusal -> repair -> signature carries the
+#: withdrawal prose forever. The honest record and the passing record end up in tension
+#: and the honest one loses — which is a reason to stop writing honest records.
+#:
+#: Honoured only AFTER the withdrawal it answers. Order is read here and nowhere else,
+#: because a restoration is a reply: "restored" above the withdrawal it restores is not a
+#: reply to it. A brief reorganised so the two swap places reads as withdrawn, which is
+#: the safe direction.
+_RESTORED_RE = re.compile(
+    r"<!--\s*sign-off:\s*RESTORED\s*(?::\s*([^>]*?))?\s*-->", re.IGNORECASE)
+
 #: Prose that READS as a withdrawal without carrying the marker. This is deliberately not
 #: used to decide anything — it is used to stop the scorer from CLAIMING anything.
 #:
@@ -249,9 +264,14 @@ class AlignmentReport:
     #: Set when a reviewer marked the brief `<!-- verdict: NEEDS_SPLIT -->`.
     needs_split: bool = False
     split_reason: str = ""
-    #: Set when a reviewer marked the brief `<!-- sign-off: WITHDRAWN -->`.
+    #: Set when a reviewer marked the brief `<!-- sign-off: WITHDRAWN -->` and did not
+    #: mark `<!-- sign-off: RESTORED -->` after it.
     sign_off_withdrawn: bool = False
     withdrawal_reason: str = ""
+    #: Set when a RESTORED marker answers a withdrawal. Reported so a reader can see the
+    #: warrant was taken back and given again, rather than never questioned.
+    sign_off_restored: bool = False
+    restoration_reason: str = ""
     #: The line whose prose reads as a withdrawal while no marker carries it. Not a
     #: verdict about the prose — the reason the scorer declines to certify, quoted so the
     #: reviewer knows exactly which line to mark.
@@ -792,14 +812,23 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     declarations = _declarations_only(body)
     split = _NEEDS_SPLIT_RE.search(declarations)
     withdrawn = _WITHDRAWN_RE.search(declarations)
+    # A restoration only counts where it REPLIES to a withdrawal — after it, in the
+    # document's own declarations.
+    restored = None
+    if withdrawn:
+        restored = _RESTORED_RE.search(declarations, withdrawn.end())
     return AlignmentReport(
         tuple(criteria), judgement, pending, len(boxes), signed_by,
         vacuous_criteria=_vacuous_criteria(ac),
         needs_split=bool(split),
         split_reason=(split.group(1) or "").strip() if split else "",
-        sign_off_withdrawn=bool(withdrawn),
+        sign_off_withdrawn=bool(withdrawn) and not restored,
         withdrawal_reason=(withdrawn.group(1) or "").strip() if withdrawn else "",
-        unmarked_withdrawal_prose="" if withdrawn else _unmarked_withdrawal(body),
+        sign_off_restored=bool(restored),
+        restoration_reason=(restored.group(1) or "").strip() if restored else "",
+        unmarked_withdrawal_prose=(
+            "" if withdrawn or _RESTORED_RE.search(declarations)
+            else _unmarked_withdrawal(body)),
     )
 
 

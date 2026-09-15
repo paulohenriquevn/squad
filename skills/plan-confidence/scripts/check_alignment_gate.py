@@ -284,9 +284,16 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
                     f"box — ask the reviewer."),
             hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
 
+    restored = ""
+    if report.sign_off_restored:
+        because = f" ({report.restoration_reason})" if report.restoration_reason else ""
+        # Said out loud on the passing result: a warrant taken back and given again is
+        # not the same history as one never questioned, and the record should show it.
+        restored = f", after a withdrawal the reviewer later restored{because}"
     return AlignmentGateReport(
         applies=True, verdict="ALIGNED",
-        reason=f"aligned at {ratio:.0%} with {report.reviewer_items_total} reviewer item(s) ticked",
+        reason=(f"aligned at {ratio:.0%} with {report.reviewer_items_total} "
+                f"reviewer item(s) ticked{restored}"),
         brief_path=str(brief), machine_ratio=ratio)
 
 

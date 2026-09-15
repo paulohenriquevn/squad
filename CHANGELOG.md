@@ -6,7 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **A withdrawn sign-off can be restored** (#86)
+  `<!-- sign-off: RESTORED: reason -->`, honoured only after the withdrawal it answers —
+  a restoration is a reply, and one written above the withdrawal it restores is not one.
+  Without it `WITHDRAWN` was a state with no exit for a project whose discipline is to
+  correct forward and leave the superseded reading in place. It also answers a withdrawal
+  written only in prose, so a brief predating the marker is cleared by one reviewer line
+  rather than by deleting a note the record is right to keep. A restored warrant is named
+  on the passing result, because a warrant taken back and given again is not the same
+  history as one never questioned.
+
 ### Fixed
+- **RELEASE could not reach the only writer of a status line** (#86)
+  `backlog_status.py` was invoked through a probe relative to the caller, from inside the
+  lane's worktree where `.claude/` does not exist — so it resolved to the worktree root
+  and failed with a missing file. That script is the only writer of a status line, making
+  the failure silent and total: a consumer had 9 implementations, 8 reviews, 87 items at
+  `approved` and zero at `shipped`. The guard added earlier the same day passed on it,
+  because it checked that the repository appeared somewhere on the line while the kit
+  probe stayed relative; it now checks the anchor itself.
 - **A sign-off could be withdrawn in prose the gate could not hear** (#86)
   Three consumer items sat BLOCKED for two days while the gate reported `PASS — aligned at
   100%`: the withdrawal was written above boxes that stayed ticked with their `signed-by:`

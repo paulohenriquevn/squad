@@ -556,7 +556,12 @@ def test_no_stage_reaches_the_kit_or_a_record_by_a_worktree_relative_path(
             # what an agent would actually run is checked.
             if not in_fence or "-d .claude/skills" not in line:
                 continue
-            assert repo in line, (
+            # The ANCHOR must be the repository, not merely the repository appearing
+            # somewhere on the line. The first version of this guard asserted `repo in
+            # line` and passed on `$([ -d .claude/skills ] && ...) ... {REPO}/BACKLOG.md`
+            # — where {REPO} is an argument and the kit probe is still relative. The
+            # RELEASE stage carried exactly that shape and the guard called it clean.
+            assert f"-d {repo}/.claude/skills" in line, (
                 f"{stage}: resolves the kit relative to the caller, which in a worktree "
                 f"is a tree with no kit in it — {line.strip()}")
 
