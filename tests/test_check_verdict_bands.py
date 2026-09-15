@@ -18,6 +18,7 @@ The sweep runs in two directions because both hide a different defect:
 from __future__ import annotations
 
 import sys
+import re
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "gates"))
@@ -134,3 +135,33 @@ def test_the_drift_checker_no_longer_carries_its_own_copy() -> None:
         "check_phase_drift declares its own clean-verdict set again"
     )
     assert "verdict_bands" in source, "it should read the registry instead"
+
+
+def test_every_verdict_run_validation_can_emit_has_a_declared_band() -> None:
+    """`PARTIAL` is the verdict `run_validation.py` emits on exit 0 with checks it could
+    not run, it is documented in SKILL.md and SOP.md — and it was in neither band.
+
+    This file's own comment already names the cost, measured 2026-09-08: an
+    unclassified verdict falls to the not-clean default, and the disorder check in
+    `check_phase_drift` switches itself off for the rest of that item with nothing in
+    the output to notice. Three SUCCESS verdicts were silently doing that.
+
+    `PARTIAL` sits in `caveats` rather than `clean` because the caveat is real and
+    travels with the result: the verdict covers what ran. The case the SOP warns about —
+    "PARTIAL over an unrun suite is not a pass" — is caught by `test_execution`, which
+    FAILS when a manifest exists and nothing executed.
+    """
+    source = (Path(__file__).resolve().parents[1] / "skills" / "implement" / "scripts"
+              / "run_validation.py").read_text(encoding="utf-8")
+    emitted = set(re.findall(r'overall = "(\w+)" if .* else \("(\w+)" if .* else "(\w+)"\)',
+                             source))
+    emitted = {v for triple in emitted for v in triple} or {"FAIL", "PARTIAL", "PASS"}
+    declared = {row.split("|")[0].strip()
+                for row in (Path(__file__).resolve().parents[1] / "rules"
+                            / "verdict-bands.txt").read_text(encoding="utf-8").splitlines()
+                if "|" in row and not row.lstrip().startswith("#")}
+    missing = sorted(emitted - declared)
+    assert not missing, (
+        f"run_validation can emit {missing} and verdict-bands.txt declares no band for "
+        f"them — an unclassified verdict reads as not-clean and silently disables the "
+        f"disorder check")
