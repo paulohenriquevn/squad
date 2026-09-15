@@ -161,6 +161,22 @@ diff shows it.
 
 ### Then write the checkpoint, and let the gate decide
 
+**0. Record that the item is being built.**
+
+```bash
+KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
+python3 "$KIT/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to planned
+```
+
+`approved -> planned` is the hop that says work started; `planned -> shipped` is the
+one RELEASE makes at the end. **`approved -> shipped` is not a legal transition**, so
+an item that reaches RELEASE without this step is refused there, after the work is
+done and with nothing about the work at fault. Measured on a consumer 2026-09-15: 87
+items at `approved`, 9 with implementations behind them, and **zero** at `shipped`.
+
+If it refuses because the item is already `planned`, that is a resumed lane and the
+refusal is information, not an error — carry on.
+
 **1. Write `{REPO}/.squad/records/implementations/.progress-{ITEM}.json`**, in
 the shape `skills/implement/templates/progress-schema.json` specifies: a
 `{{"tasks": [...]}}` envelope, each task carrying `id`, `phase`, `status` and
