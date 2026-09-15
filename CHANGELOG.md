@@ -7,6 +7,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Gates reported correct work as a defect, three ways** (#86)
+  A phase declared as running *inside* another was judged by its position in the chain, so
+  `code-quality` firing around `implement` — which `cycle-phases.txt` has always described
+  — produced all 19 divergences of a consumer run, none of them real. `PARTIAL`, the
+  verdict the validation gate emits on exit 0, had no declared band, and an unclassified
+  verdict silently disables the disorder check for the rest of that item. And an annotated
+  `#### Files to edit` bullet parsed as zero declared files, raising HIGH
+  `no_declared_scope` against plans that declare their scope precisely — as did an
+  explicit `None.`, a `None.` carrying its reason, and a phase whose only change was its
+  CHANGELOG entry.
+
+- **The allowlist refused commands nobody could have run another way** (#86)
+  `cd` was absent though it is a pure builtin, and the tokenizer split on `)` but not `(`,
+  so `(cd api && go test ./...)` — how a workspace repository says "in this module" — was
+  refused as the unknown command `(cd`. Operands left over from splitting were read as
+  commands, `git hash-object` was refused for a write only `-w` performs, and `mktemp`,
+  which builds the control that makes a criterion discriminate, was refused outright. One
+  consumer item went from 6 of 12 clauses unrunnable to 1. A hole that predated this is
+  closed with it: `env` was on the allowlist as a plain command, so `env FOO=1 git stash`
+  walked through — wrappers now have their payload read as its own command.
+
+- **A gate charged the item for a tree it did not write** (#86)
+  A red test in a package the change never touched blocked every item in a consumer
+  repository, verified pre-existing by building the tree at the commit before the item's
+  first. Test suites now have the three states lint already had, and scope drift gained
+  its other half: declaring a file and never touching it. The stage that writes also
+  records that work started and walks the status back when it halts — an item left at
+  `planned` by a stopped lane is invisible to every list the scheduler reads.
 - **Nothing wrote the status that makes shipping legal** (#86)
   `approved -> shipped` is not a transition the registry accepts; `approved -> planned ->
   shipped` is. RELEASE wrote the second hop and nothing wrote the first, so an item went

@@ -298,6 +298,11 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # `approved` and that `shipped` refuses the same move; the routing decision
         # they exercise belongs to `backlog_status.py`, which IS pinned.
         "skills/backlog-approve/tests/test_apply_approval.py",
+        # Asserts that the statuses the STAGE BRIEFS write are legal hops, and derives
+        # every one of them from `backlog_status.ALLOWED` at run time rather than from a
+        # list kept here. A sixth status therefore reaches it automatically — pinning it
+        # would pin a reader that has nothing to drift from.
+        "skills/pipeline/tests/test_spawn_stages.py",
         "skills/backlog-approve/tests/test_approval_brief.py",
         # `as-is-to-be` and its tests. The skill FILTERS by status (`--status triaged`)
         # and routes on none: every item it reads is rendered the same way whatever its

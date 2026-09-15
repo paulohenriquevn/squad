@@ -732,3 +732,161 @@ def test_no_skip_reason_states_a_project_phase_it_did_not_observe() -> None:
         if '"reason"' in line and "pre-code phase" in line
     ]
     assert not offenders, f"skip reasons still conclude a project phase: {offenders}"
+
+
+def test_an_annotated_files_to_edit_bullet_still_declares_its_file() -> None:
+    """`FILE_LINE_RE` anchored at `$`, so only a bare path on a line by itself matched.
+
+    Every plan in a real registry annotates its scope — `- \x60api/x.go\x60 — add the
+    error branch`, `(new)`, `: the discard` — and an annotated list parsed as ZERO
+    declared files, raising HIGH `no_declared_scope` against a plan that declares its
+    scope precisely. Measured on a consumer 2026-09-15: three phases of one plan, all
+    correct.
+
+    A gate that reports correct work as a defect spends the reviewer's attention and
+    returns nothing — the same shape as 19 false phase divergences the same day.
+    """
+    from check_diff_cohesion import FILE_LINE_RE  # noqa: PLC0415
+
+    for line, expected in (
+        ("- `api/internal/x.go`", "api/internal/x.go"),
+        ("- `api/internal/x.go` — add the error branch", "api/internal/x.go"),
+        ("- `api/internal/x.go` (new)", "api/internal/x.go"),
+        ("* `pkg/y.go`: the discard", "pkg/y.go"),
+        ("- api/internal/z.go", "api/internal/z.go"),
+    ):
+        match = FILE_LINE_RE.match(line)
+        assert match and match.group(1) == expected, line
+
+
+def test_a_sentence_mentioning_a_filename_declares_nothing() -> None:
+    """The path must be the FIRST thing on the bullet. Widening the tail must not turn
+    every prose line containing a filename into a declaration of scope."""
+    from check_diff_cohesion import FILE_LINE_RE  # noqa: PLC0415
+
+    assert FILE_LINE_RE.match("the plan touches `api/x.go` in passing") is None
+    assert FILE_LINE_RE.match("- see the note about main.go below and why") is None
+
+
+def test_a_failing_package_the_change_did_not_touch_is_reported_not_charged() -> None:
+    """A red test in a package the change never edited is debt, not a regression.
+
+    Measured on a consumer 2026-09-15: an item whose work sits entirely in
+    `api/internal/services/build` was blocked by a test in `api/tests/unit`, verified
+    failing at the commit BEFORE that item's first by building the pre-change tree. With
+    no way to say so, every item in that repository is blocked by the same unrelated
+    test until somebody fixes it.
+
+    This never turns a failure into a pass — a red suite stays visibly red. It turns a
+    charge into a WARN that names the packages and says the change did not touch them.
+    """
+    from suite_runners import scope_suite_to_change  # noqa: PLC0415
+
+    red = {"name": "go tests", "status": "FAIL", "runner": "go test",
+           "stderr_tail": ("--- FAIL: TestMigrationReferencesADR (0.00s)\n"
+                           "FAIL\nFAIL\tgithub.com/example/api/tests/unit\t6.1s\n")}
+    elsewhere = scope_suite_to_change(red, ["api/internal/services/build/x.go"])
+    assert elsewhere["status"] == "WARN"
+    assert "touched none of them" in elsewhere["reason"]
+
+    inside = scope_suite_to_change(red, ["api/tests/unit/migration_test.go"])
+    assert inside["status"] == "FAIL"
+    assert inside["failing_packages_this_change_touched"]
+
+    assert scope_suite_to_change(red, [])["status"] == "FAIL"
+
+
+def test_the_failing_package_is_not_swallowed_by_a_bare_FAIL_line() -> None:
+    """`^FAIL\\s+(\\S+)` let `\\s` cross the newline, so a bare `FAIL` line captured the
+    NEXT line's package name and the real one was never seen. The scoping then found no
+    packages and passed the failure through unchanged — a fix that silently did nothing,
+    which is the shape it exists to prevent."""
+    from suite_runners import _FAILING_PACKAGE_RE  # noqa: PLC0415
+
+    found = _FAILING_PACKAGE_RE.findall("FAIL\nFAIL\tgithub.com/example/api/tests/unit\t6s\n")
+    assert "github.com/example/api/tests/unit" in found
+
+
+def test_a_scoped_suite_still_counts_as_having_executed() -> None:
+    """Turning one FAIL into a WARN made `check_test_execution` report "no test suite
+    executed" about a suite whose failing test names it had just printed."""
+    from suite_runners import check_test_execution  # noqa: PLC0415
+    import suite_runners  # noqa: PLC0415
+
+    scoped = [{"name": "go tests", "status": "WARN", "runner": "go test"}]
+    original = suite_runners.detect_languages
+    suite_runners.detect_languages = lambda _root: ["go"]
+    try:
+        assert check_test_execution(Path("."), scoped)["status"] != "FAIL"
+    finally:
+        suite_runners.detect_languages = original
+
+
+def _git_repo(tmp_path: Path):
+    """A real repository. A temp directory is not one, and `diff_source` correctly
+    reports `none` there — a fixture that forgets this tests the failure path while
+    claiming to test the success path."""
+    import subprocess  # noqa: PLC0415
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"], check=True)
+    (tmp_path / "seed.txt").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "seed"], check=True)
+    return subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+
+
+def _cohesion(tmp_path: Path, files_block: str, sha: str):
+    import json as _json  # noqa: PLC0415
+    from check_diff_cohesion import check_diff_cohesion  # noqa: PLC0415
+
+    plan = tmp_path / "p.md"
+    plan.write_text(f"## Tasks\n\n### T1.1 — a task\n\n#### Files to edit\n\n"
+                    f"{files_block}\n\n#### TDD\n\nassert a == b\n", encoding="utf-8")
+    prog = tmp_path / ".progress-x.json"
+    prog.write_text(_json.dumps({"tasks": [
+        {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha}]}),
+        encoding="utf-8")
+    report = check_diff_cohesion(plan, prog, "1", repo_root=tmp_path)
+    return [f.code for f in report.findings if f.severity in ("HIGH", "MEDIUM")]
+
+
+def test_an_explicit_none_in_files_to_edit_is_a_declaration(tmp_path: Path) -> None:
+    """A task whose `#### Files to edit` reads `None.` DECLARES that it edits nothing.
+    The gate read that as an absent declaration and raised HIGH `no_declared_scope` —
+    the same defect as the deps-audit `(none)` that discarded a whole section, and the
+    same as `committed` with no SHA: an honest statement of nothing with no state to
+    hold it.
+
+    Three instances in one consumer item, on the same day.
+    """
+    sha = _git_repo(tmp_path)
+    assert "no_declared_scope" not in _cohesion(
+        tmp_path, "None. This task writes one scratch artifact and edits no tracked file.", sha)
+
+
+def test_declaring_nothing_and_touching_source_is_drift_not_absence() -> None:
+    """The declaration makes this the STRONGEST form of the check, not the weakest: the
+    plan said none and the diff says otherwise."""
+    from check_diff_cohesion import _EXPLICIT_NO_FILES_RE  # noqa: PLC0415
+
+    assert _EXPLICIT_NO_FILES_RE.search("None.")
+    assert _EXPLICIT_NO_FILES_RE.search("None. This task writes no tracked file.")
+    assert _EXPLICIT_NO_FILES_RE.search("(none)")
+    assert not _EXPLICIT_NO_FILES_RE.search("- `api/x.go` — the fix")
+
+
+def test_declaring_a_file_and_never_touching_it_is_also_drift(tmp_path: Path) -> None:
+    """The other half of scope drift. Five adversarial cases covered touching something
+    undeclared; none covered declaring something untouched — the consumer session found
+    it by mutating a plan and getting no finding at all.
+
+    A plan that declares five files and edits two has a scope claim that is wrong, and
+    today's lesson is that a wrong claim with a right conclusion is the hardest kind to
+    catch. MEDIUM, not HIGH: nothing unreviewed reached the tree.
+    """
+    sha = _git_repo(tmp_path)
+    codes = _cohesion(tmp_path, "- `api/never_touched.go` — planned but not written", sha)
+    assert "declared_but_untouched" in codes

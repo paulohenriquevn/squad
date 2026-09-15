@@ -284,6 +284,58 @@ def check_rust_tests(project_root: Path) -> dict[str, Any]:
     }
 
 
+#: `FAIL\tgithub.com/org/repo/api/tests/unit\t6.6s` — the package a Go failure belongs to.
+#: `[ \t]+` and not `\s+`: `\s` crosses the newline, so a bare `FAIL` line swallowed the
+#: next line's package name as its own capture and the real one was never seen. The
+#: scoping then found no packages and passed the failure through unchanged — a fix that
+#: silently did nothing, which is the shape it exists to prevent.
+_FAILING_PACKAGE_RE = re.compile(r"^FAIL[ \t]+(\S+)", re.MULTILINE)
+
+
+def scope_suite_to_change(outcome: dict[str, Any],
+                          changed_files: list[str] | None) -> dict[str, Any]:
+    """A red test in a package the change never touched is debt, not a regression.
+
+    Measured on a consumer 2026-09-15: an item whose work sits entirely in
+    `api/internal/services/build` was blocked by `TestMigration007ReferencesADRAndPlan`
+    in `api/tests/unit` — verified failing at the commit BEFORE that item's first, by
+    building the pre-change tree and running it there. With no way to say so, every item
+    in that repository is blocked by the same unrelated test until somebody fixes it.
+
+    The residual risk is real and narrower than the alternative: a change CAN break a
+    test in a package it did not edit, through a shared dependency. So this never turns
+    a failure into a pass — it turns a charge into a WARN that names the packages and
+    says the change did not touch them. A person still sees red; what they no longer see
+    is an item refused for somebody else's test.
+    """
+    if outcome.get("status") != "FAIL" or not changed_files:
+        return outcome
+    diagnostic = outcome.get("stderr_tail") or ""
+    failing = [pkg for pkg in _FAILING_PACKAGE_RE.findall(diagnostic) if "/" in pkg]
+    if not failing:
+        return outcome
+    touched = {c.lstrip("./") for c in changed_files}
+    #: A Go package path carries a module prefix of unknown length
+    #: (`github.com/org/repo/api/tests/unit`), and a changed file is repo-relative
+    #: (`api/tests/unit/x_test.go`). Guessing how many segments the prefix has was
+    #: wrong the first time — the match is that the package path ENDS WITH the file's
+    #: directory, which needs no guess.
+    directories = {str(Path(f).parent) for f in touched}
+
+    def was_touched(pkg: str) -> bool:
+        return any(d and (pkg == d or pkg.endswith("/" + d)) for d in directories)
+
+    mine = [pkg for pkg in failing if was_touched(pkg)]
+    if mine:
+        return {**outcome, "failing_packages_this_change_touched": mine,
+                "pre_existing_failing_packages": [p for p in failing if p not in mine]}
+    return {**outcome, "status": "WARN", "pre_existing_failing_packages": failing,
+            "reason": (f"{len(failing)} package(s) have failing tests and this change "
+                       f"touched none of them: {', '.join(failing)}. Reported, not "
+                       f"charged — a red suite is still red, and this item did not make "
+                       f"it so.")}
+
+
 def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]]) -> dict[str, Any]:
     """Did ANY test suite actually execute?
 
@@ -298,9 +350,13 @@ def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]])
     # A runner that started and found nothing, or that was not installed at all,
     # did not put the question to a suite — it only proved it could not.
     non_execution = {"no_tests_collected", "runner_unavailable", "toolchain_unavailable"}
+    # WARN belongs here: a suite whose failures were scoped to packages the change did
+    # not touch RAN — it ran and went red for somebody else's reason. Leaving it out
+    # made this gate report "no test suite executed" about a suite whose failing test
+    # names it had just printed, the moment scoping turned one FAIL into a WARN.
     executed = [
         c for c in suite_checks
-        if c.get("status") in ("PASS", "FAIL") and c.get("code") not in non_execution
+        if c.get("status") in ("PASS", "FAIL", "WARN") and c.get("code") not in non_execution
     ]
 
     if not languages:

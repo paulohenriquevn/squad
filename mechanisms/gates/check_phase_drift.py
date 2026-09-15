@@ -42,6 +42,7 @@ ignored — the failure mode this repository has recorded more than once.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -143,6 +144,11 @@ class DeclaredPhase:
     required: bool
     note: str
     position: int
+    #: The phase this one runs INSIDE, when it is not a sequential step of the chain.
+    #: `code-quality` is invoked by `run_validation.py` during `implement`, which the
+    #: declaration has always said in prose — and this gate, reading that same file,
+    #: judged it by position anyway.
+    nested_in: str = ""
 
 
 @dataclass(frozen=True)
@@ -161,6 +167,12 @@ class DriftReport:
     events_read: int = 0
     slugs_seen: list[str] = field(default_factory=list)
     findings: list[DriftFinding] = field(default_factory=list)
+
+
+#: `nested-in: implement` in the note column. A structured marker rather than a new
+#: value in the requirement column, because four other readers assume that column holds
+#: exactly `required` or `conditional` and a third word would change what they mean.
+_NESTED_IN_RE = re.compile(r"\bnested-in:\s*([\w-]+)")
 
 
 def load_declared_phases(project_root: Path) -> list[DeclaredPhase]:
@@ -198,7 +210,10 @@ def load_declared_phases(project_root: Path) -> list[DeclaredPhase]:
                 "Use `required` or `conditional` — a word nobody recognises would "
                 "silently downgrade the phase it labels."
             )
-        phases.append(DeclaredPhase(name, requirement == "required", note, len(phases)))
+        nested = _NESTED_IN_RE.search(note)
+        phases.append(DeclaredPhase(
+            name, requirement == "required", note, len(phases),
+            nested_in=nested.group(1) if nested else ""))
 
     if not phases:
         raise ValueError(f"{_PHASES_RULE} declares no phase at all")
@@ -273,6 +288,16 @@ def _judge_one(
             continue
 
         ran.add(cycle)
+
+        # A nested phase is not a step in the sequence, so neither ordering rule applies
+        # to it. Measured on a consumer 2026-09-15: `code-quality` fires many times per
+        # item around `implement`, which is `run_validation.py` invoking it exactly as
+        # the declaration describes — and produced all 19 of that run's divergences,
+        # 5 `phase_out_of_order` and 4 `phase_advanced_over_blocking_verdict`, none of
+        # them real. A gate reporting the chain working correctly as a defect is worse
+        # than no gate: it teaches its reader to skip the output.
+        if phase.nested_in or by_name.get(cycle, phase).nested_in:
+            continue
 
         if blocking is not None and phase.position > by_name[blocking[0]].position:
             findings.append(DriftFinding(

@@ -99,6 +99,7 @@ VALIDATED                     | clean      | the acceptance run established the 
 ACCEPTED_WITH_CAVEATS         | caveats    | accepted, and every caveat is a filed issue rather than a note
 ITEM_IN_FLIGHT                | caveats    | held on a material impediment; the work stands and the queue moves on
 PASS_WITH_CAVEATS             | caveats    | passed with soft caps recorded
+PARTIAL                       | caveats    | `run_validation.py` exits 0 with checks it could not run; the verdict covers what ran and says so
 PRE_RELEASED                  | caveats    | an -rc.N batch: installable, scope unfinished. The caveat is permanent for that tag — an rc never becomes a release, it is superseded by one
 READY_TO_MERGE_WITH_FOLLOWUPS | caveats    | zero BLOCKER and every HIGH is a registered followup, never a mention in prose
 SHIPPABLE_WITH_CAVEATS        | caveats    | complete, with stated open questions carried into the next phase
