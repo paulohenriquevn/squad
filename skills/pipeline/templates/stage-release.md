@@ -13,7 +13,7 @@ your job is to make it findable by the people who did not watch it happen.
 ## Where you write
 
 **Inside the lane's worktree, on its branch — never in the main tree.** IMPLEMENT
-created `pipeline/{ITEM_SLUG}`; your changelog entry belongs on it, beside the
+created `pipeline/{LANE}`; your changelog entry belongs on it, beside the
 change it describes. An entry written on the main branch describes work that is
 not there yet, and separates the record from the thing it records.
 
