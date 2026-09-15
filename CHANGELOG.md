@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **One `(none)` discarded every dependency in a plan's section, so CVE bumps went unaudited** (#86)
+  The explicit-none marker was searched across the whole `## Dependencies` body, so a
+  `(none)` anywhere in it returned no dependencies at all — the gate did not apply and no
+  audit was required. The shape that triggers it is the one `deps-audit/SKILL.md`
+  prescribes verbatim: an Existing table carrying real packages above a Removed table
+  whose single row reads `(none)`. A security-driven bump of an *existing* dependency is
+  the case where an audit matters most, and it was the one case the gate could not see. A
+  consumer plan raising a router past three fixed advisories documents having hit this and
+  routed around it in prose. The marker is now scoped to the subsection carrying it,
+  except in the preamble — a declaration made before any subsection exists still speaks
+  for the section. Reading rows also required tightening what counts as a declaration: a
+  package is named in the first cell of a table row or at the head of a bullet, not
+  mentioned in a sentence, and a token ending in a file suffix is a manifest rather than a
+  dependency. Measured across 19 consumer plans: 45 false entries removed, the router bump
+  now visible.
 - **The TDD gate refused executable Go and accepted a prose sentence** (#86)
   Measured on 19 consumer plans, 8 blocked: `RED: test_xxx` passed the gate and
   `RED: TestXxx` — the same claim in Go's spelling — did not, while "the tests should be

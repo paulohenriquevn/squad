@@ -68,6 +68,9 @@ _SECTION_RE = re.compile(
 _EXPLICIT_NONE_RE = re.compile(r"\(\s*(none|no new)\b|^_none_$", re.IGNORECASE | re.MULTILINE)
 #: A package cited in backticks on a table row or bullet.
 _PACKAGE_RE = re.compile(r"`([A-Za-z0-9@][\w.@/-]*)`")
+#: `### New`, `### Existing` — the subsections a Dependencies section is usually split
+#: into. The explicit-none marker is scoped to the one that carries it.
+_SUBSECTION_RE = re.compile(r"^###+\s+\S")
 
 _CLEAN = frozenset({"PASS", "PASS_WITH_CAVEATS"})
 _HARD = frozenset({"FAIL_INSECURE", "INVALID_PLAN_DEPS"})
@@ -89,20 +92,97 @@ class DepsAuditReport:
     reasons: tuple[str, ...] = field(default_factory=tuple)
 
 
+#: A backticked token ending in one of these is a FILE the plan edits, not a package it
+#: depends on. `api/go.mod`, `charts/web-api/values.yaml` and `render.go` all reached the
+#: package list once rows started being read, and each would have demanded a `/deps-audit`
+#: for something no ecosystem can resolve.
+_FILE_SUFFIXES = (
+    ".go", ".py", ".ts", ".js", ".rs", ".java", ".sh", ".md", ".yaml", ".yml", ".json",
+    ".toml", ".txt", ".lock", ".sum", ".mod", ".work", ".frozen", ".cfg", ".ini",
+)
+
+
+def _is_a_file_not_a_package(token: str) -> bool:
+    return token.lower().endswith(_FILE_SUFFIXES)
+
+
+def _declared_on_line(line: str) -> list[str]:
+    """The package a row or a bullet DECLARES — not every name a sentence mentions.
+
+    A dependency is declared in the first cell of a table row or at the head of a
+    bullet. Reading every backticked token instead pulled `serviceAccount.name`,
+    `charts/web-api/values.yaml` and `r.logger` out of prose and rationale columns: 45
+    false dependencies across 3 consumer plans, each of which would then have demanded
+    a `/deps-audit` for a package that does not exist.
+    """
+    stripped = line.strip()
+    # The table's header row and separator declare no package at all.
+    if not stripped or set(stripped) <= set("|- :"):
+        return []
+    if stripped.startswith("|"):
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        found = _PACKAGE_RE.findall(cells[0]) if cells else []
+    else:
+        bullet = re.match(r"[-*+]\s+(?P<head>.*)$", stripped)
+        found = _PACKAGE_RE.findall(bullet.group("head"))[:1] if bullet else []
+    return [t for t in found if not _is_a_file_not_a_package(t)]
+
+
+def _subsections(body: str) -> list[str]:
+    """Split a `## Dependencies` body at its `###` headings, heading line included.
+
+    Text before the first `###` is its own chunk, so a preamble saying there is nothing
+    new cannot speak for the subsections that follow it.
+    """
+    chunks: list[str] = []
+    current: list[str] = []
+    for line in body.splitlines():
+        if _SUBSECTION_RE.match(line) and current:
+            chunks.append("\n".join(current))
+            current = []
+        current.append(line)
+    if current:
+        chunks.append("\n".join(current))
+    return chunks
+
+
 def _declared_dependencies(plan_body: str) -> list[str]:
+    """Packages the plan says it touches, read subsection by subsection.
+
+    The explicit-none marker is scoped to the subsection carrying it. It used to be
+    searched across the whole section body, so the near-universal shape
+
+        ### New: (none)
+        ### Existing — bumped for CVE remediation
+        | `github.com/go-chi/chi/v5` | v5.2.5 | v5.2.6 | CVE-2026-72817 (HIGH) |
+
+    returned NO dependencies at all: one `(none)` about new packages discarded every
+    existing one, `applies` went false, and the gate required no audit. Measured on a
+    consumer 2026-09-15 with exactly that plan shape and two HIGH CVEs in it — a
+    security-driven bump is the case where an audit matters most, and it was the one
+    case the gate could not see.
+    """
     section = _SECTION_RE.search(plan_body)
     if section is None:
         return []
-    body = section.group("body")
-    if _EXPLICIT_NONE_RE.search(body):
+    chunks = _subsections(section.group("body"))
+    if not chunks:
         return []
-    # The table's header row and separator declare no package at all.
+    # A marker in the PREAMBLE — before any subsection exists — is a statement about the
+    # whole section, and two consumer plans make exactly that statement: "This change
+    # adds no dependency ... No package, module, library, tool or service is introduced,
+    # upgraded, pinned or removed." Scoping every marker to its own chunk without this
+    # would have made those two plans demand an audit for packages they only NAME while
+    # explaining why nothing changes.
+    preamble, rest = chunks[0], chunks[1:]
+    if not _SUBSECTION_RE.match(preamble) and _EXPLICIT_NONE_RE.search(preamble):
+        return []
     packages: list[str] = []
-    for line in body.splitlines():
-        stripped = line.strip()
-        if not stripped or set(stripped) <= set("|- :"):
+    for chunk in ([preamble] if not _SUBSECTION_RE.match(preamble) else chunks[:1]) + rest:
+        if _EXPLICIT_NONE_RE.search(chunk):
             continue
-        packages.extend(_PACKAGE_RE.findall(stripped))
+        for line in chunk.splitlines():
+            packages.extend(_declared_on_line(line))
     # dedup preserving order
     return list(dict.fromkeys(packages))
 
