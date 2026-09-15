@@ -121,8 +121,30 @@ These are absolute, and none has an urgency exception:
   Changing the measure to fit the result is the one failure this whole kit is
   built against.
 - **No touching `BACKLOG.md`.** An item's status is a person's to move.
-- **Nothing outside your worktree**, with one exception: reading `{REPO}` and the
-  kit is fine, and often necessary.
+- **Nothing outside your worktree**, with two exceptions, both narrow:
+  reading `{REPO}` and the kit is fine and often necessary; and the cycle's own
+  records are WRITTEN at `{REPO}/.squad/records/`, never inside your worktree.
+
+## Where the records live, and why not beside your code
+
+**The plan you are implementing is not in your worktree.** `.squad/*` is
+gitignored in a consumer repository — only `.squad/wiki/` is tracked — so a
+worktree, which carries tracked files, contains no plan, no brief and no
+checkpoint. Measured on a consumer 2026-09-15: 19 plans on disk in the
+repository, **0** in the lane's worktree.
+
+So every record you read or write is addressed at `{REPO}`:
+
+```bash
+{REPO}/.squad/records/plans/{ITEM}-plan.md                 # what you implement
+{REPO}/.squad/records/implementations/{ITEM}-implementation.md
+{REPO}/.squad/records/implementations/.progress-{ITEM}.json  # the checkpoint
+```
+
+Your CODE goes in the worktree. Your RECORDS go in the repository. Writing a
+checkpoint into the worktree instead puts it in a directory the validation gate
+does not read, and the gate then reports "implement may not have run" about work
+that exists.
 
 ## Before you say you are done
 
@@ -136,6 +158,36 @@ Run what the project runs. Find it rather than guessing — a `Taskfile.yml`, a
 
 A green suite you achieved by narrowing the suite is not a green suite, and the
 diff shows it.
+
+### Then write the checkpoint, and let the gate decide
+
+**1. Write `{REPO}/.squad/records/implementations/.progress-{ITEM}.json`**, in
+the shape `skills/implement/templates/progress-schema.json` specifies: a
+`{{"tasks": [...]}}` envelope, each task carrying `id`, `phase`, `status` and
+`commit_sha`. Six gate scripts read this file. A bare task object, `task_id`
+instead of `id`, or a missing `phase` makes each of them degrade silently.
+
+**2. Run the gate, from the repository:**
+
+```bash
+python3 $([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/implement/scripts/run_validation.py \
+    {ITEM} --project-root {REPO}
+```
+
+**3. The completion promise is the gate's to give, not yours.**
+`rules/cycle-implement.md` is explicit: the promise is emitted *"EXCLUSIVELY when
+`run_validation.py` exits 0. There is no graceful-exit path that emits the
+promise on a partial pass."* If it exits non-zero, you report what it said and
+what you could not satisfy. Honest BLOCKED beats false PASS, and a stage that
+declares itself complete without the gate has declared something nobody
+measured.
+
+Measured on a consumer 2026-09-15, before this section existed: five items
+produced implementation records and **zero** checkpoints, so four gates —
+progress schema, checkpoint consistency, wiring triad, phase review — answered
+SKIP with "implement may not have run" about work that was on disk with commits
+behind it. `/implement` had indeed not run; this stage had, and it is a
+different mechanism wearing the same name.
 
 ## What you return
 

@@ -498,3 +498,73 @@ def test_a_lane_holding_unmerged_commits_does_not_live_in_tmp(tmp_path: Path) ->
             assert "$HOME/.squad-worktrees" in joined, f"{stage}: {joined.strip()}"
             checked += 1
     assert checked >= 2, f"only {checked} worktree commands found across the chain"
+
+
+# ── the records a worktree does not carry ──────────────────────────────────
+
+
+def _briefs(tmp_path: Path) -> dict[str, str]:
+    assert _run(tmp_path).returncode == 0
+    return {s: (tmp_path / "agents" / f"{s}.md").read_text(encoding="utf-8")
+            for s in STAGES}
+
+
+def test_the_writing_stage_writes_the_checkpoint_every_gate_reads(tmp_path: Path) -> None:
+    """Measured on a consumer 2026-09-15: five items produced implementation records and
+    ZERO `.progress-{slug}.json` checkpoints, so four gates — progress schema, checkpoint
+    consistency, wiring triad, phase review — answered SKIP with "implement may not have
+    run" about work that was on disk with commits behind it.
+
+    `/implement` had indeed not run. This stage had, and it is a different mechanism
+    wearing the same name: its brief never mentioned the checkpoint at all.
+    """
+    brief = _briefs(tmp_path)["implement"]
+    assert ".progress-" in brief, "the brief never names the checkpoint six gates read"
+    assert "progress-schema.json" in brief, "nor the schema that makes it consumable"
+
+
+def test_the_completion_promise_belongs_to_the_gate(tmp_path: Path) -> None:
+    """`rules/cycle-implement.md`: the promise is emitted "EXCLUSIVELY when
+    run_validation.py exits 0. There is no graceful-exit path that emits the promise on a
+    partial pass." The pipeline's writing stage emitted its own completion without ever
+    invoking that gate."""
+    brief = _briefs(tmp_path)["implement"]
+    assert "run_validation.py" in brief
+    assert "EXCLUSIVELY" in brief or "exits 0" in brief
+
+
+def test_no_stage_reaches_the_kit_or_a_record_by_a_worktree_relative_path(
+        tmp_path: Path) -> None:
+    """`.claude/` and `.squad/*` are gitignored in a consumer repository, so a worktree —
+    which carries tracked files — contains neither. Measured on a consumer: `.claude` has
+    0 tracked files, `.squad` tracks only `wiki/`, and a lane worktree carried 0 of the
+    repository's 19 plans.
+
+    A brief that resolves the kit with `[ -d .claude/skills ] && echo .claude || echo .`
+    therefore resolves to the worktree root, where no kit exists, and the command fails
+    with a missing file instead of a verdict. Every such path must be anchored at the
+    repository.
+    """
+    repo = str(tmp_path / "repo")
+    for stage, brief in _briefs(tmp_path).items():
+        in_fence = False
+        for line in brief.splitlines():
+            if line.startswith("```"):
+                in_fence = not in_fence
+                continue
+            # Prose QUOTING the bad pattern to explain it is not the bad pattern; only
+            # what an agent would actually run is checked.
+            if not in_fence or "-d .claude/skills" not in line:
+                continue
+            assert repo in line, (
+                f"{stage}: resolves the kit relative to the caller, which in a worktree "
+                f"is a tree with no kit in it — {line.strip()}")
+
+
+def test_the_writing_stage_says_records_live_in_the_repository(tmp_path: Path) -> None:
+    """Code goes in the worktree; records go in the repository. Writing a checkpoint into
+    the worktree puts it in a directory the validation gate does not read, and the gate
+    then reports "implement may not have run" about work that exists."""
+    brief = _briefs(tmp_path)["implement"]
+    assert "gitignored" in brief, "the brief does not say WHY records are not beside the code"
+    assert f"{tmp_path / 'repo'}/.squad/records" in brief
