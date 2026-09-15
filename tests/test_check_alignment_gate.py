@@ -422,3 +422,46 @@ def test_every_verdict_the_scorer_produces_is_handled_here(tmp_path: Path) -> No
     assert not missing, (
         f"score_alignment can return {missing} and check_alignment_gate never names "
         f"them — an unnamed verdict falls through to ALIGNED")
+
+
+def test_a_withdrawal_the_reviewer_restores_stops_blocking(tmp_path: Path) -> None:
+    """WITHDRAWN without RESTORED is a state with no exit, and that is not hypothetical.
+
+    This project's discipline is to correct forward and leave the superseded reading in
+    place, so a brief that went withdrawal → refusal → repair → signature carries the
+    withdrawal prose forever. The honest record and the passing record end up in tension
+    and the honest one loses — which is a reason to stop writing honest records. The
+    consumer session raised exactly this, and it was right.
+    """
+    plan = _plan(tmp_path)
+    _brief(tmp_path, _signed(
+        "\n<!-- sign-off: WITHDRAWN: the coverage claim did not hold -->\n"
+        "\n<!-- sign-off: RESTORED: ground closed at the root, control verified -->\n"))
+    report = check_alignment_gate(plan)
+    assert report.verdict == "ALIGNED"
+    assert not report.hard_cap
+    assert "later restored" in report.reason, \
+        "a warrant taken back and given again is not a warrant never questioned"
+    assert "ground closed at the root" in report.reason
+
+
+def test_a_restoration_must_answer_the_withdrawal_not_precede_it(tmp_path: Path) -> None:
+    """A restoration is a REPLY. "Restored" above the withdrawal it restores is not one,
+    and a brief reorganised so the two swap places reads as withdrawn — the safe
+    direction, and the reason order is read here and nowhere else."""
+    plan = _plan(tmp_path)
+    _brief(tmp_path, _signed(
+        "\n<!-- sign-off: RESTORED: stale note from an earlier round -->\n"
+        "\n<!-- sign-off: WITHDRAWN: a new ground, found today -->\n"))
+    assert check_alignment_gate(plan).verdict == "WITHDRAWN"
+
+
+def test_the_marker_also_answers_a_withdrawal_written_only_in_prose(tmp_path: Path) -> None:
+    """The exit that matters in practice: three consumer briefs carry withdrawals that
+    predate the marker entirely. One RESTORED line from a reviewer clears them, without
+    anyone deleting the withdrawal the record is right to keep."""
+    plan = _plan(tmp_path)
+    _brief(tmp_path, _signed(
+        "\n**Sign-off withdrawn 2026-09-13, pending re-review.**\n"
+        "\n<!-- sign-off: RESTORED: re-verified by execution in both directions -->\n"))
+    assert check_alignment_gate(plan).verdict == "ALIGNED"
