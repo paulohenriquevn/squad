@@ -125,6 +125,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   Fixing it needs a session-start marker the hook does not have, so it stays open.
 
 ### Added
+- **Alignment depth is derived per item, so a small change stops costing a 40 KB document** (#96)
+  Measured on a consumer over three days: 93 items, 501 artefacts, 4 implementations,
+  **zero shipped**, 78 hours of cycle time per item — and 2,740 KB of alignment briefs
+  signed by a person **zero** times, each 40-50 KB, longer than the code it described
+  (40 to 250 lines across the four items that reached a branch). The walkthrough HTML
+  added 1,032 KB across 38 files nobody opened. `cycle-brainstorm` and `cycle-design`
+  were already conditional; this phase was not, so deleting an unreferenced package
+  crossed the same phases as redesigning the data plane.
+  `classify_alignment_depth.py` answers LOCAL or FULL from the item itself. LOCAL keeps
+  everything a later phase consumes — requirements with ids, acceptance criteria that
+  execute, out-of-scope, closed questions, the signature — and drops the prose and the
+  walkthrough. Any one of four signals forces FULL: evidence spanning modules, a blocked
+  item, a DoD naming no command, or mode `evolve`. FULL is the default, because
+  shallower is the irreversible direction: a brief nobody wrote cannot be consulted
+  later, and one nobody needed only cost time. Measured on that registry, 34 of 93 items
+  (37%) are LOCAL.
+
 - **`/as-is-to-be` — what this system is today, and what it becomes** (#89)
   A backlog is a list of tickets and nobody can hold twenty-three of them in their head
   to answer what the system will be when they are done. Both columns of a gap analysis
