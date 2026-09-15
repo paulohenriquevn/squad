@@ -77,8 +77,21 @@ def test_a_bullet_naming_no_command_is_reported_as_unrunnable(tmp_path):
 
 
 def test_a_hanging_criterion_is_stopped_and_named(tmp_path):
-    brief = _brief(tmp_path, "AC-001: `sleep 30` exits 0")
-    rep = cd.run(brief, tmp_path, timeout=1.0)
+    # The subprocess is mocked rather than a slow command chosen: every command slow
+    # enough to hang is either off the allowlist or arbitrary-code execution, so a real
+    # one would test the allowlist instead of the timeout.
+    import subprocess as _sp
+    brief = _brief(tmp_path, "AC-001: `grep -c x f` prints 1")
+
+    def _hang(*args, **kwargs):
+        raise _sp.TimeoutExpired("grep", 1.0)
+
+    monkeypatch_target = cd.subprocess.run
+    cd.subprocess.run = _hang
+    try:
+        rep = cd.run(brief, tmp_path, timeout=1.0)
+    finally:
+        cd.subprocess.run = monkeypatch_target
     assert rep.unrunnable
     # The note lives on the CLAUSE since decomposition: a conjunction can have one
     # clause that hangs and another that answered, and a single note could not say so.
@@ -275,3 +288,55 @@ def test_a_tool_named_in_prose_is_not_run_as_a_clause(tmp_path):
 def test_a_self_sufficient_command_still_counts_with_one_token(tmp_path):
     brief = _brief(tmp_path, "AC-001: `true` exits 0")
     assert cd.run(brief, tmp_path).results[0].clauses
+
+
+# ── this executes commands out of a document ────────────────────────────────
+
+def test_a_clause_that_moves_work_is_refused_before_it_runs(tmp_path):
+    """Measured on a consumer on 2026-09-15, before this existed.
+
+    A criterion carried `git stash push` in its backticks, this executor ran it, and it
+    pushed SEVEN entries onto a stash stack shared by six worktrees — one of them
+    carrying twenty uncommitted CHANGELOG lines, which left the tree.
+
+    This file's own docstring already said "running commands out of a document is the
+    risk it is". Saying it is not protecting against it.
+    """
+    for dangerous in ("git stash push -m x", "git reset --hard HEAD",
+                      "git checkout main", "git worktree remove /tmp/x",
+                      "rm -rf build", "curl -X POST https://api/deploy",
+                      "sudo systemctl stop x"):
+        assert cd._refused_command(dangerous), dangerous
+
+
+def test_a_dangerous_command_hidden_inside_bash_c_is_still_refused():
+    """`bash -c '<script>'` hides its real commands inside the quotes, and a split that
+    does not enter them lets exactly the measured case through."""
+    assert cd._refused_command("bash -c 'git stash && test 1 -eq 1'")
+    assert cd._refused_command('bash -c "rm -rf x"')
+
+
+def test_the_reading_commands_a_criterion_needs_still_run():
+    """An allowlist that refuses the legitimate case is a tool nobody uses."""
+    for safe in ("grep -c foo src/", "go test ./... -run X", "git log --oneline -1",
+                 "git diff HEAD", "bash -c 'test $(ls | wc -l) -eq 3'", "echo 1"):
+        assert not cd._refused_command(safe), safe
+
+
+def test_a_refused_clause_is_unverified_and_never_sound(tmp_path):
+    """The honest answer. "Ran something unknown against your tree" is not."""
+    brief = _brief(tmp_path, "AC-001: `git stash push` exits 0")
+    rep = cd.run(brief, tmp_path)
+    assert rep.refused
+    assert rep.already_passing == []
+    assert rep.results[0].clauses[0].passes_today is None
+
+
+def test_a_built_binary_is_refused_and_the_reason_says_run_it_yourself(tmp_path):
+    """The common legitimate case, refused deliberately.
+
+    `/tmp/theo-ops quality --list` appears throughout a real registry. That binary can
+    do anything, and "not verified" is an honest answer while "ran something unknown
+    against your tree" is not — so the reader is told precisely that, and can run it.
+    """
+    assert "run it" in cd._refused_command("/tmp/theo-ops quality --list")

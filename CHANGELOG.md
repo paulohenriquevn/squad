@@ -7,6 +7,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The criteria executor ran whatever a criterion's sentence contained** (#96)
+  It executed every runnable span in a bullet, and a consumer measured what that costs:
+  a criterion carrying `git stash push` was run, and it pushed SEVEN entries onto a
+  stash stack shared by six worktrees — one carrying twenty uncommitted CHANGELOG lines,
+  which left the tree. The file's own docstring already said *"running commands out of
+  a document is the risk it is"*, and saying it is not protecting against it. Commands
+  are now an ALLOWLIST, because a denylist of destructive things is never finished and
+  the cost of one gap is somebody else's work: reading tools plus the test runners a
+  criterion legitimately needs, and for `git` only the subcommands that read — `stash`,
+  `checkout`, `reset`, `clean`, `worktree`, `push`, `merge` and `restore` are absent on
+  purpose. `bash -c '<script>'` is unwrapped and inspected, because a split that does
+  not enter the quotes lets exactly the measured case through; `python3 -c` and `node
+  -e` are refused outright, since a shell script can be unwrapped and a Python one
+  cannot. A refused clause is reported as unverified and NEVER as sound, with the reason
+  and an invitation to run it by hand — including for the common legitimate case of a
+  binary the criterion built, which is refused deliberately because that binary can do
+  anything.
+
 - **The pipeline ran five stages and stopped, so an unattended run never landed work** (#93)
   `/pipeline` scheduled `discover → align → judge → plan → implement` and ended there.
   REVIEW and RELEASE did not exist, and the skill still claimed it did not run IMPLEMENT
