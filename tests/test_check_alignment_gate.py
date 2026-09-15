@@ -15,6 +15,7 @@ A gate whose execution depends on somebody remembering is a note.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -325,3 +326,99 @@ def test_needs_split_caps_the_plan_and_says_not_to_close_gaps(tmp_path):
     assert report.verdict == "NEEDS_SPLIT"
     assert report.hard_cap == HARD_CAP
     assert "ingest and query" in report.reason
+
+
+# ── a warrant somebody took back ───────────────────────────────────────────
+
+
+def _signed(extra: str = "") -> str:
+    """A brief that clears the machine threshold AND carries ticked reviewer boxes.
+
+    Both halves are needed: without the boxes the verdict is AWAITING_REVIEW for an
+    unrelated reason, and a withdrawal test that passes for the wrong reason proves
+    nothing about withdrawal.
+    """
+    return (_complete_brief()
+            + "\n## Reviewer sign-off\n"
+            + "- [x] CHK001 The stated problem is the one we actually have. [Judgement]\n"
+            + "- [x] CHK002 The flows drawn are the flows that matter. [Judgement]\n"
+            + "- [x] CHK003 The numbers in the NFRs are the right numbers. [Judgement]\n"
+            + extra)
+
+
+def test_a_withdrawn_sign_off_is_not_an_alignment(tmp_path: Path) -> None:
+    """Measured on a consumer 2026-09-15: three items sat BLOCKED for two days while this
+    gate reported `PASS — aligned at 100%`.
+
+    The withdrawal was written in PROSE — "Sign-off withdrawn 2026-09-13, pending
+    re-review" — above boxes that stayed `[x]` with their `signed-by:` comments intact.
+    Every agent that opened the brief read it and stopped; the gate counted ticks. There
+    was no way to say "signed, then withdrawn" that a machine could hear, so the
+    strongest statement a reviewer can make was the one the mechanism could not
+    represent.
+    """
+    plan = _plan(tmp_path)
+    _brief(tmp_path, _signed("\n<!-- sign-off: WITHDRAWN: the coverage claim did not hold -->\n"))
+    report = check_alignment_gate(plan)
+    assert report.verdict == "WITHDRAWN"
+    assert report.hard_cap
+    assert "the coverage claim did not hold" in report.reason
+    assert "re-review, do not re-tick" in report.reason
+
+
+def test_prose_that_reads_as_a_withdrawal_stops_the_gate_from_certifying(
+        tmp_path: Path) -> None:
+    """The distinction this rests on: matching words to DECIDE a verdict would issue
+    verdicts about language, which is what the NEEDS_SPLIT marker exists to avoid.
+    Matching words to REFUSE to certify is the opposite move, and the one the doctrine
+    requires — an inability to measure must never become a passing measurement.
+
+    A false positive costs the brief AWAITING_REVIEW and a named line to mark. The
+    alternative is ALIGNED over a warrant somebody took back.
+    """
+    plan = _plan(tmp_path)
+    _brief(tmp_path, _signed("\n**Sign-off withdrawn 2026-09-13, pending re-review.**\n"))
+    report = check_alignment_gate(plan)
+    assert report.verdict == "AWAITING_REVIEW"
+    assert report.hard_cap
+    assert "Sign-off withdrawn 2026-09-13" in report.reason
+    assert "sign-off: WITHDRAWN" in report.reason, "the reviewer is not told how to mark it"
+
+
+def test_a_brief_explaining_the_syntax_is_not_a_brief_using_it(tmp_path: Path) -> None:
+    """A brief that tells its reviewer how to withdraw contains the words. Code spans and
+    fences are stripped first, the same distinction `_declarations_only` draws for the
+    split marker — and the same root cause it names: a marker matched anywhere, with no
+    notion of mentioned versus used."""
+    plan = _plan(tmp_path)
+    _brief(tmp_path, _signed(
+        "\nIf the warrant no longer holds, write `Sign-off withdrawn` above and mark the "
+        "brief `<!-- sign-off: WITHDRAWN: reason -->`.\n"))
+    report = check_alignment_gate(plan)
+    assert report.verdict == "ALIGNED", report.reason
+
+
+def test_every_verdict_the_scorer_produces_is_handled_here(tmp_path: Path) -> None:
+    """The durable half of this fix.
+
+    `score_alignment.verdict` is the single place the decision is made, and this gate
+    re-derived it from the parts — `needs_split`, `meets_machine_threshold`,
+    `reviewer_signed_off` — so a verdict the scorer grew was invisible here and fell
+    through to ALIGNED. That is how WITHDRAWN would have been born broken, and it is the
+    same shape as every other seam in this kit: two mechanisms, each correct alone,
+    disagreeing where nobody looks.
+
+    This asserts the gate names every verdict the scorer can return.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]
+                          / "skills" / "plan-alignment" / "scripts"))
+    import score_alignment  # noqa: PLC0415
+
+    source = Path(score_alignment.__file__).read_text(encoding="utf-8")
+    verdicts = set(re.findall(r'return "([A-Z_]+)"', source))
+    gate = (Path(__file__).resolve().parents[1] / "skills" / "plan-confidence"
+            / "scripts" / "check_alignment_gate.py").read_text(encoding="utf-8")
+    missing = sorted(v for v in verdicts if f'"{v}"' not in gate)
+    assert not missing, (
+        f"score_alignment can return {missing} and check_alignment_gate never names "
+        f"them — an unnamed verdict falls through to ALIGNED")

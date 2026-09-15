@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A sign-off could be withdrawn in prose the gate could not hear** (#86)
+  Three consumer items sat BLOCKED for two days while the gate reported `PASS — aligned at
+  100%`: the withdrawal was written above boxes that stayed ticked with their `signed-by:`
+  comments intact, so every agent that opened a brief read it and stopped while the gate
+  counted ticks. `<!-- sign-off: WITHDRAWN: reason -->` now exists, in the same channel as
+  NEEDS_SPLIT. Because those three withdrawals predate the marker, prose that reads as a
+  withdrawal also stops the gate from *certifying* — it decides nothing, names the line,
+  and tells the reviewer how to mark it. The second half of the defect was that
+  `check_alignment_gate` re-derived its decision from the scorer's parts instead of reading
+  its verdict, so any verdict the scorer grew fell through to ALIGNED; a test now asserts
+  the gate names every verdict the scorer can return.
 - **Pipeline stages ran in a worktree that does not contain the records they are judged by** (#86)
   `.claude/` and `.squad/*` are gitignored in a consumer repository, so a worktree carries
   neither — measured on a consumer: 19 plans in the repository, 0 in the lane's worktree.
