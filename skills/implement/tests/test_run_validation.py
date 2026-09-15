@@ -635,12 +635,14 @@ def test_a_file_this_change_touched_is_still_charged(tmp_path: Path) -> None:
 
 
 def test_with_no_changed_file_list_the_whole_failure_is_reported(tmp_path: Path) -> None:
-    """Guessing which half of a failure belongs to the item is worse than reporting all
-    of it. An empty list means "cannot scope", never "nothing to scope"."""
+    """Every finding is surfaced. An empty list means "cannot scope", never "nothing to
+    scope" — what changed is that it surfaces as WARN rather than as a charge."""
     whole = {"name": "go lint", "status": "FAIL", "runner": "gofmt",
              "flagged_files": ["a/old.go"]}
-    assert _scope_to_change(whole, [])["status"] == "FAIL"
-    assert _scope_to_change(whole, None)["status"] == "FAIL"
+    # Superseded the same day: reporting everything was right, charging the item for it
+    # was not. See `test_a_changed_set_that_cannot_be_derived_is_neither_a_pass_nor_a_charge`.
+    assert _scope_to_change(whole, [])["status"] == "WARN"
+    assert _scope_to_change(whole, None)["status"] == "WARN"
 
 
 def test_the_finding_list_is_not_read_from_a_truncated_tail() -> None:
@@ -652,3 +654,81 @@ def test_the_finding_list_is_not_read_from_a_truncated_tail() -> None:
     outcome = {"name": "go lint", "status": "FAIL", "runner": "gofmt",
                "flagged_files": many, "stderr_tail": tail}
     assert _scope_to_change(outcome, ["CHANGELOG.md"])["pre_existing"] == 200
+
+
+def test_a_changed_set_that_cannot_be_derived_is_neither_a_pass_nor_a_charge(
+        tmp_path: Path) -> None:
+    """The first version had two states and returned the whole failure when it could not
+    scope, reasoning that reporting everything beats guessing.
+
+    Measured on a consumer 2026-09-15: an item whose work sits on a lane branch has no
+    checkpoint to read SHAs from, so the changed set came back empty and the gate FAILED
+    it over 48 files it never touched — the exact harm the scoping exists to prevent,
+    arriving through the fix for it. Reporting everything was right; charging the item
+    for it was not.
+
+    WARN is not folded into FAIL by `main`, so the findings are surfaced without being
+    attributed to an item that may not own them.
+    """
+    whole = {"name": "go lint", "status": "FAIL", "runner": "gofmt",
+             "flagged_files": ["a/old.go", "b/older.go"]}
+    for cannot_derive in ([], None):
+        scoped = _scope_to_change(whole, cannot_derive)
+        assert scoped["status"] == "WARN", cannot_derive
+        assert scoped["pre_existing"] == 2
+        assert "attributed to nobody" in scoped["reason"]
+        assert ".progress-" in scoped["reason"], \
+            "the reader is not told what would make this a real verdict"
+
+
+def test_a_failing_suite_reports_what_failed_not_the_tail_of_its_logs() -> None:
+    """`go test` prints failing test names to STDOUT and reserves stderr for build
+    errors, so a runner reading only `stderr_tail` reports FAIL with an empty
+    diagnostic. Measured on a consumer 2026-09-15: 5 of 8 Go modules failing and the
+    gate's report named none of them — the reader learned that something broke and
+    nothing else.
+
+    Falling back to the stdout TAIL is not enough either: a chatty suite fills 500
+    characters with INFO lines from tests that passed, and the failing names sit above
+    the cut. The finding is extracted, not tailed.
+    """
+    from suite_runners import _diagnostic  # noqa: PLC0415
+
+    noisy = (
+        "--- FAIL: TestAuditReadFailureIsObservable (0.00s)\n"
+        "--- FAIL: TestAuditWindowTruncationIsSignalled (0.01s)\n"
+        + "2026/09/15 INFO status_sse: client disconnected\n" * 40
+        + "FAIL\tgithub.com/example/api/internal/release\t6.2s\n")
+    out = _diagnostic({"exit_code": 1, "stderr_tail": "",
+                       "stdout_tail": noisy[-500:], "stdout_full": noisy})
+    assert "TestAuditReadFailureIsObservable" in out
+    assert "TestAuditWindowTruncationIsSignalled" in out
+    assert "INFO status_sse" not in out, "log noise crowded out the finding"
+
+
+def test_a_build_error_on_stderr_still_wins() -> None:
+    """When a build fails, stderr IS the finding — falling through to stdout would
+    report a suite that never ran as a suite with no failures."""
+    from suite_runners import _diagnostic  # noqa: PLC0415
+
+    out = _diagnostic({"exit_code": 2, "stderr_tail": "cannot find module for path x",
+                       "stdout_tail": "", "stdout_full": ""})
+    assert "cannot find module" in out
+
+
+def test_no_skip_reason_states_a_project_phase_it_did_not_observe() -> None:
+    """"pre-code phase" is a claim about the repository. What these checks observe is a
+    missing manifest, a missing coverage command, a missing report — none of which says
+    whether code exists. A Go workspace with 8 modules and 1918 lines of new Go read
+    "pre-code phase" on four separate gates.
+
+    A skip reason names what was looked for and not found. It does not conclude.
+    """
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    offenders = [
+        f"{path.name}:{n}"
+        for path in scripts.glob("*.py")
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if '"reason"' in line and "pre-code phase" in line
+    ]
+    assert not offenders, f"skip reasons still conclude a project phase: {offenders}"
