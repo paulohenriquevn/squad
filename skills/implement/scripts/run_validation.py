@@ -51,6 +51,7 @@ from suite_runners import (
     check_test_execution,
     check_typecheck,
     run_command,
+    scope_suite_to_change,
 )
 from wiring_recheck import recheck_pillar_a
 
@@ -791,11 +792,12 @@ def main() -> int:
     # Every language whose suite the gate knows how to run. The npm check stays
     # first for report stability; test_execution consolidates all of them and is
     # what turns "nothing ran" into a FAIL instead of a silent PARTIAL.
+    touched = _files_touched_by_this_change(project_root, args.slug)
     suite_checks = [
-        check_npm_test(project_root),
-        check_python_tests(project_root),
-        check_go_tests(project_root),
-        check_rust_tests(project_root),
+        scope_suite_to_change(check_npm_test(project_root), touched),
+        scope_suite_to_change(check_python_tests(project_root), touched),
+        scope_suite_to_change(check_go_tests(project_root), touched),
+        scope_suite_to_change(check_rust_tests(project_root), touched),
     ]
 
     checks = [
@@ -806,7 +808,7 @@ def main() -> int:
         check_npm_typecheck(project_root),
         *check_typecheck(project_root),
         check_npm_lint(project_root),
-        *check_lint(project_root, _files_touched_by_this_change(project_root, args.slug)),
+        *check_lint(project_root, touched),
         check_project_gates(project_root),
         check_coverage(project_root),
         wiring_summary(project_root, args.slug),

@@ -598,12 +598,50 @@ def test_every_status_a_stage_writes_is_a_legal_hop_from_the_one_before(
     import backlog_status  # noqa: PLC0415
 
     briefs = _briefs(tmp_path)
-    written = [s for stage in STAGES
-               for s in re.findall(r"--to\s+(\w+)", briefs[stage])]
-    assert written, "no stage writes a status at all"
+    per_stage = {stage: re.findall(r"--to\s+(\w+)", briefs[stage]) for stage in STAGES}
+    assert any(per_stage.values()), "no stage writes a status at all"
+
+    # A stage's FIRST write advances the chain; any further write is a recovery hop
+    # from the status that stage just set — `planned -> approved` when a lane halts.
+    # Modelling this as one linear sequence was wrong the moment a way back existed,
+    # and the test said so by failing, which is the outcome worth having.
     current = "approved"
-    for status in written:
-        assert status in backlog_status.ALLOWED[current], (
-            f"the chain writes {current} -> {status}, which the registry refuses; "
+    for stage in STAGES:
+        writes = per_stage[stage]
+        if not writes:
+            continue
+        forward, recoveries = writes[0], writes[1:]
+        assert forward in backlog_status.ALLOWED[current], (
+            f"{stage} advances {current} -> {forward}, which the registry refuses; "
             f"from {current} it accepts {sorted(backlog_status.ALLOWED[current])}")
-        current = status
+        for back in recoveries:
+            assert back in backlog_status.ALLOWED[forward], (
+                f"{stage} recovers {forward} -> {back}, which the registry refuses; "
+                f"from {forward} it accepts {sorted(backlog_status.ALLOWED[forward])}")
+        current = forward
+
+
+def test_a_status_a_stage_writes_mid_flight_has_a_way_back(tmp_path: Path) -> None:
+    """`planned` means work is in flight, and an item left there by a lane that stopped
+    is invisible to SELECT entirely — measured on a consumer 2026-09-15, it appears in
+    none of `queue`, `awaiting_plan` or `awaiting_human`. It is neither scheduled nor
+    shipped nor listed anywhere a person would look.
+
+    This was introduced the same afternoon the `planned` write was, by me, and found by
+    the consumer session reasoning about the shape rather than by anything failing. The
+    brief that writes a mid-flight status must also carry the way back.
+
+    `planned -> approved` is the only legal return: `triaged` is not reachable from
+    `planned`, so the obvious guess is refused by the registry.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
+    import backlog_status  # noqa: PLC0415
+
+    brief = _briefs(tmp_path)["implement"]
+    assert "--to approved" in brief, \
+        "the stage writes `planned` and never says how to leave it"
+    assert "invisible to SELECT" in brief, \
+        "the brief does not say what an abandoned `planned` costs"
+    assert "approved" in backlog_status.ALLOWED["planned"]
+    assert "triaged" not in backlog_status.ALLOWED["planned"], \
+        "if this changes, the brief's claim about the only legal return is stale"

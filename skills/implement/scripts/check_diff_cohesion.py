@@ -49,7 +49,20 @@ FILES_TO_EDIT_RE = re.compile(
     r"^####\s+Files\s+to\s+edit\s*$(.+?)(?=^####\s|\Z)",
     re.MULTILINE | re.DOTALL | re.IGNORECASE,
 )
-FILE_LINE_RE = re.compile(r"^[\-*\s]*`?([^\s`]+\.[a-zA-Z0-9]+)`?\s*$", re.MULTILINE)
+#: The path a `Files to edit` bullet DECLARES, annotation and all.
+#:
+#: The first version anchored at `$`, so only a bare path on a line by itself matched.
+#: Every plan in a real registry annotates — `- \`api/internal/x.go\` — add the error
+#: branch`, `(new)`, `: the discard` — and an annotated list parsed as ZERO declared
+#: files, which raised HIGH `no_declared_scope` against a plan that declares its scope
+#: precisely. Measured on a consumer 2026-09-15: three phases of one plan, all of them
+#: correct. A gate that reports correct work as a defect spends the reviewer's attention
+#: and returns nothing.
+#:
+#: The path must still be the FIRST thing on the bullet: a sentence that happens to
+#: mention a filename declares nothing.
+FILE_LINE_RE = re.compile(
+    r"^[\-*\s]*`?([^\s`]+\.[a-zA-Z0-9]+)`?(?:\s*[—\-:(].*)?\s*$", re.MULTILINE)
 
 # Files that are ALWAYS allowed to be touched (cross-cutting, low risk).
 NON_SOURCE_PATHS = (
@@ -98,6 +111,39 @@ def _phase_of(task_id: str) -> str:
     # T<N>.<M> → "<N>"
     match = re.match(r"T(\d+)\.\d+", task_id)
     return match.group(1) if match else ""
+
+
+#: A task DECLARING that it edits nothing. `None.`, `(none)`, `_none_` — the ways a plan
+#: says the section is empty on purpose.
+#:
+#: An explicit none and an absent section are different statements, and reading them
+#: alike is the same defect as the deps-audit `(none)` that discarded a whole section.
+#: Measured on a consumer 2026-09-15: a verification phase whose task says `None.` drew
+#: HIGH `no_declared_scope` — the gate demanding a declaration the task had already
+#: made. Failing a task for declaring the truth teaches the next author to list a file
+#: they did not touch, which is the workaround that kills gates.
+#: The declaration may carry its REASON on the same line — "None. This task writes one
+#: scratch artifact and no tracked file" — and a pattern anchored at `$` reads that as
+#: prose rather than as the declaration it is. The none must OPEN the section; what
+#: follows it is the author explaining, which is the behaviour to encourage.
+_EXPLICIT_NO_FILES_RE = re.compile(
+    r"^\s*(?:\(?\s*none\s*\)?|_none_|n/?a)\b[\s.,;:—-]*", re.IGNORECASE)
+
+
+def _phase_declares_no_files(plan_path: Path, phase: str) -> bool:
+    """True when every task in the phase has a `Files to edit` section saying "none"."""
+    content = plan_path.read_text(encoding="utf-8-sig")
+    saw_section = False
+    for tid, body in _extract_task_blocks(content):
+        if _phase_of(tid) != str(phase):
+            continue
+        block = FILES_TO_EDIT_RE.search(body)
+        if block is None:
+            return False
+        saw_section = True
+        if not _EXPLICIT_NO_FILES_RE.search(block.group(1) or ""):
+            return False
+    return saw_section
 
 
 def _declared_files_for_phase(plan_path: Path, phase: str) -> set[str]:
@@ -183,7 +229,30 @@ def check_diff_cohesion(
     # HIGH only when the phase actually MODIFIED something: a phase that declared nothing and changed
     # nothing is a documentation phase, there is nothing that could have drifted, and failing it
     # would teach people to declare a file they did not touch — the workaround that kills gates.
-    if not declared:
+    if not declared and _phase_declares_no_files(plan_path, phase):
+        # The phase SAID it edits nothing. If it then modified something, that is drift
+        # measured against a real declaration — the strongest form this check has, not
+        # the weakest. If it modified nothing, the declaration held.
+        # The cross-cutting exemption applies on THIS path too. A phase that declares no
+        # source file and writes only its CHANGELOG entry has not drifted — it has done
+        # what `Unbreakable Rule 6` requires of every phase. Measured on a consumer
+        # 2026-09-15: the sole modified file of the phase this fired on was
+        # `CHANGELOG.md`, already on the always-allowed list four lines below.
+        drift = {
+            f for f in modified
+            if Path(f).name not in NON_SOURCE_PATHS and f not in NON_SOURCE_PATHS
+        }
+        if drift:
+            findings.append(Finding(
+                severity="HIGH",
+                code="scope_drift",
+                message=(
+                    f"Phase {phase} declares `#### Files to edit: none` and modified "
+                    f"{len(drift)} source file(s): {', '.join(sorted(drift)[:5])}. The "
+                    f"declaration and the diff disagree."
+                ),
+            ))
+    elif not declared:
         sample = ", ".join(sorted(modified)[:5])
         findings.append(Finding(
             severity="HIGH" if modified else "MEDIUM",
@@ -214,7 +283,47 @@ def check_diff_cohesion(
                 ),
             ))
 
-    if diff_source == "none":
+    # The OTHER half of scope drift, and the half five adversarial cases missed: every
+    # one of them was about touching something undeclared, none about declaring
+    # something untouched. A plan that declares five files and edits two has a scope
+    # claim that is wrong, and a wrong claim with a right conclusion is the hardest kind
+    # to catch — the consumer session found this by mutating a plan to declare a file the
+    # phase never touched and getting no finding at all.
+    #
+    # MEDIUM rather than HIGH: nothing unreviewed reached the tree. What is wrong is the
+    # declaration, and a phase legitimately splits work across commits, so this is only
+    # judged where the diff was actually readable.
+    if declared and diff_source != "none":
+        undelivered = {
+            f for f in declared
+            if f not in modified
+            and Path(f).name not in NON_SOURCE_PATHS and f not in NON_SOURCE_PATHS
+        }
+        if undelivered:
+            findings.append(Finding(
+                severity="MEDIUM",
+                code="declared_but_untouched",
+                message=(
+                    f"Phase {phase} declares {len(undelivered)} file(s) it never modified: "
+                    f"{', '.join(sorted(undelivered)[:5])}. Either the work is unfinished "
+                    f"or the declaration is wider than the change."
+                ),
+            ))
+
+    # A phase that DECLARED it edits nothing and edited nothing is complete, not
+    # inconclusive. Reading it as inconclusive is the third instance in one consumer item
+    # of the same shape — `None.` in `Files to edit`, `committed` with no SHA, and this:
+    # an honest statement of nothing with no state to hold it.
+    if diff_source == "none" and _phase_declares_no_files(plan_path, phase) and not modified:
+        findings.append(Finding(
+            severity="INFO",
+            code="declared_and_delivered_no_files",
+            message=(
+                f"Phase {phase} declares it edits no tracked file and modified none. "
+                f"The declaration held; there is nothing to check and nothing missing."
+            ),
+        ))
+    elif diff_source == "none":
         findings.append(Finding(
             severity="MEDIUM",
             code="no_diff_source",

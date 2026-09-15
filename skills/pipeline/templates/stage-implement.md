@@ -177,6 +177,22 @@ items at `approved`, 9 with implementations behind them, and **zero** at `shippe
 If it refuses because the item is already `planned`, that is a resumed lane and the
 refusal is information, not an error — carry on.
 
+**If you halt, walk it back before you stop.**
+
+```bash
+python3 "$KIT/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to approved \
+    --because "IMPLEMENT halted: <the reason, in one line>"
+```
+
+`planned` means work is in flight. An item left `planned` by a lane that stopped is
+invisible to SELECT — measured 2026-09-15: it appears in none of `queue`,
+`awaiting_plan` or `awaiting_human`, so it is neither scheduled nor shipped nor
+listed anywhere a person would look. `planned -> approved` is the ONLY legal way
+back (`triaged` is not reachable from `planned`), and it restores visibility.
+
+This is the one registry write you make while failing, and it is not optional:
+halting without it is how an item disappears.
+
 **1. Write `{REPO}/.squad/records/implementations/.progress-{ITEM}.json`**, in
 the shape `skills/implement/templates/progress-schema.json` specifies: a
 `{{"tasks": [...]}}` envelope, each task carrying `id`, `phase`, `status` and
