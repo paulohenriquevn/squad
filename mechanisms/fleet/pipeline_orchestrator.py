@@ -386,6 +386,26 @@ def from_selection(selection: dict, lanes: int | None = None) -> Pipeline:
     """
     walls = selection.get("walls") or {}
     items = [Item(slug=slug) for slug in selection.get("queue") or []]
+
+    # Items at `approved` enter at PLAN, not at DISCOVER.
+    #
+    # `queue` is what SELECT hands to `/discover-plan`, and `cycle-maintenance.md §
+    # Chain` sends an approved item to `/plan-write` instead — so an approved item is
+    # correctly absent from it. Reading only `queue` meant a registry of 87 approved and
+    # 5 triaged items handed this scheduler FIVE, measured on a consumer 2026-09-15.
+    #
+    # The stage machine handled an approved item correctly the whole time; it was never
+    # given one through the documented path. Two mechanisms, each right alone,
+    # disagreeing at the seam nobody ran — the same shape as the demotion that made
+    # IMPLEMENT unreachable.
+    #
+    # They start at PLAN because DISCOVER already ran: that is what `approved` records,
+    # and re-measuring would discard the opportunity file the decision rests on.
+    for slug in selection.get("awaiting_plan") or []:
+        item = Item(slug=slug, status="approved")
+        item.stage = "PLAN"
+        items.append(item)
+
     items += [Item(slug=slug, parked=True, surfaced=True, blocked_by=list(blockers),
                    park_reason=("blocked by " + ", ".join(blockers)) if blockers
                                else "blocked by something with no item to point at")

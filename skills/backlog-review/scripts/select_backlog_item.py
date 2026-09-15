@@ -134,6 +134,20 @@ class Selection:
     #: Items a phase stopped on and wrote a BLOCKED report for. Held out of the queue
     #: and named, because they are neither free nor blocked by another item.
     halted: list[str] | None = None
+    #: Items at `approved`: decided, not yet planned. NOT in `queue`, and that is the
+    #: point — SELECT hands work to `/discover-plan`, and an approved item is past it.
+    #:
+    #: Emitted because of a seam measured on 2026-09-15. `pipeline_orchestrator.
+    #: from_selection` builds its lanes from `queue` alone, so a registry of 87 approved
+    #: items and 5 triaged ones handed the scheduler FIVE. The stage machine handles an
+    #: approved item correctly end to end — traced DISCOVER through `__done__` — and was
+    #: never given one through the documented path. Two mechanisms, each right alone,
+    #: disagreeing where nobody looked.
+    #:
+    #: A separate key rather than a wider `queue`: `queue` means "SELECT hands this out",
+    #: and widening it would send an approved item back to DISCOVER to re-measure what
+    #: 57 opportunity files already record.
+    awaiting_plan: list[str] | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -147,6 +161,9 @@ class Selection:
             # selector too old to report the field — and the whole point of this
             # verdict is that an item held by a person should leave a trace.
             "awaiting_human": self.awaiting_human or [],
+            # Always present, for the reason `awaiting_human` is: an absent key cannot
+            # be told from a selector too old to report it.
+            "awaiting_plan": self.awaiting_plan or [],
         }
 
 
@@ -269,10 +286,24 @@ def select(text: str, requested: str | None = None,
     # not emitting it is that "every reader sees an item that was never touched".
     awaiting = sorted(k for k, v in walls.items() if not v)
 
+    # Decided, not yet planned. Reported beside the queue and never inside it: SELECT
+    # hands work to `/discover-plan`, and `cycle-maintenance.md § Chain` sends an
+    # approved item to `/plan-write` instead. A scheduler reading only `queue` was
+    # therefore handed 5 items out of a registry of 92.
+    # `_number` takes an Item, so the sort happens before the ids are extracted.
+    awaiting_plan = [
+        i.item_id for i in sorted(
+            (i for i in items
+             if i.fields.get("status") == "approved"
+             and i.item_id not in halted
+             and live_blockers(i, statuses) is None),
+            key=_number)]
+
     if requested:
         if requested not in by_id:
             return Selection("BACKLOG_BLOCKED", reason=f"{requested} is not in this backlog",
-                             walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
+                             walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan)
         status = statuses.get(requested, "")
         if status not in SELECTABLE:
             entry = NOT_SELECTABLE.get(status)
@@ -280,19 +311,22 @@ def select(text: str, requested: str | None = None,
                 return Selection("BACKLOG_BLOCKED", item_id=requested,
                                  reason=f"{requested} carries no status this contract knows"
                                         f" ({status or 'the field is absent'})",
-                                 walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
+                                 walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan)
             verdict, next_step = entry
             return Selection(verdict, item_id=requested,
                              reason=f"{requested} is {status}, past the point where SELECT hands"
                                     f" out work.{next_step}",
-                             walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
+                             walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan)
         if requested in halted:
             return Selection(
                 "ITEM_HALTED", item_id=requested,
                 reason=(f"{requested} is {status}, but a phase stopped on it and wrote a "
                         f"BLOCKED report. Starting it again reruns what halted; read the "
                         f"report first."),
-                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
+                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan)
         blockers = live_blockers(by_id[requested], statuses)
         if blockers is not None:
             waiting = ", ".join(blockers) if blockers else "something with no item to point at"
@@ -300,10 +334,12 @@ def select(text: str, requested: str | None = None,
                 "BACKLOG_BLOCKED", item_id=requested,
                 reason=(f"{requested} waits on {waiting}. Starting it now would build "
                         f"against a dependency that does not exist yet."),
-                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
+                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan)
         return Selection("ITEM_SELECTED", item_id=requested,
                          reason=f"{requested} is {status} and nothing blocks it",
-                         walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
+                         walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan)
 
     if ordered:
         chosen = ordered[0]
@@ -317,7 +353,8 @@ def select(text: str, requested: str | None = None,
             reason = (f"{chosen.item_id} is {statuses[chosen.item_id]}, the oldest "
                       f"unblocked item of the highest-ranked status")
         return Selection("ITEM_SELECTED", item_id=chosen.item_id, reason=reason,
-                         walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
+                         walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan)
 
     if walls or stopped:
         held = len(walls) + len(stopped)
@@ -340,7 +377,8 @@ def select(text: str, requested: str | None = None,
     return Selection("BACKLOG_EMPTY",
                      reason=("nothing is raw or triaged. Not a finish line — "
                              "run /discover-execute --sweep {domain}."),
-                     walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting)
+                     walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan)
 
 
 def main() -> int:

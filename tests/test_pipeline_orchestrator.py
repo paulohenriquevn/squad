@@ -494,3 +494,56 @@ def test_ties_keep_registry_order():
     """
     p = Pipeline([Item(slug="b-001"), Item(slug="b-002"), Item(slug="b-003")], lanes=3)
     assert [i.slug for i in p.schedule()] == ["b-001", "b-002", "b-003"]
+
+
+def test_approved_items_reach_the_scheduler_and_enter_at_plan():
+    """The seam that made the IMPLEMENT fix reach 4 items out of 92.
+
+    `queue` is what SELECT hands to `/discover-plan`, and `cycle-maintenance.md § Chain`
+    sends an approved item to `/plan-write` instead — so an approved item is correctly
+    absent from it. `from_selection` read only `queue`, so a registry of 87 approved and
+    5 triaged items handed this scheduler FIVE.
+
+    Measured on a consumer 2026-09-15, and the shape is the one this session has been
+    chasing all week: two mechanisms, each right alone, disagreeing where nobody ran
+    them together. The stage machine handled an approved item correctly the whole time
+    and was never given one through the documented path — which is why tracing the
+    machine directly proved it worked and proved nothing about the system.
+    """
+    p = from_selection({"queue": ["b-001"], "awaiting_plan": ["b-002"], "walls": {}},
+                       lanes=3)
+    stages = {i.slug: i.stage for i in p.items}
+    assert stages["b-001"] == "DISCOVER"
+    assert stages["b-002"] == "PLAN", "an approved item enters where its status says"
+    assert p.item("b-002").status == "approved"
+
+
+def test_an_approved_item_is_not_sent_back_to_discover():
+    """Re-measuring would discard the opportunity file the decision rests on.
+
+    `approved` records that DISCOVER ran. The consumer holds 57 opportunity files
+    against 92 items; starting those at DISCOVER would re-derive evidence that exists.
+    """
+    p = from_selection({"queue": [], "awaiting_plan": ["b-002"], "walls": {}}, lanes=1)
+    assert p.items[0].stage != "DISCOVER"
+
+
+def test_an_approved_item_from_selection_runs_the_whole_chain():
+    """End to end through the documented path, not through the machine directly."""
+    p = from_selection({"queue": [], "awaiting_plan": ["b-002"], "walls": {}}, lanes=1)
+    for _ in range(12):
+        p.schedule()
+        if not p.running:
+            break
+        p.complete(p.running[0].slug)
+        for w in p.drain_writes():
+            if w.status:
+                p.item(w.slug).status = w.status
+    assert p.items[0].stage == "__done__", f"stalled at {p.items[0].stage}"
+    assert not p.items[0].parked
+
+
+def test_a_selector_without_the_field_still_builds_a_pipeline():
+    """An older selector emits no `awaiting_plan`; that must degrade, not crash."""
+    p = from_selection({"queue": ["b-001"], "walls": {}}, lanes=1)
+    assert [i.slug for i in p.items] == ["b-001"]
