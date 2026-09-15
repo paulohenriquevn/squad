@@ -383,3 +383,68 @@ def test_a_return_after_implementation_complete_is_out_of_order(tmp_path: Path) 
     _ran(project, "discover", verdict="SHIPPABLE")
     findings = check_phase_drift(project).findings
     assert [f.kind for f in findings] == ["phase_out_of_order"]
+
+
+# ── a phase that runs INSIDE another is not a step out of sequence ──────────
+
+
+_PLAN_NESTED = _PLAN.replace(
+    "code-quality  | conditional | absent when implement never ran",
+    "code-quality  | conditional | nested-in: implement — invoked by run_validation.py")
+
+
+def test_a_nested_phase_is_not_judged_by_its_position(tmp_path: Path) -> None:
+    """`cycle-phases.txt` has always said `code-quality` is "invoked internally by
+    run_validation.py", and this gate — reading that same file — judged it by position
+    anyway.
+
+    Measured on a consumer 2026-09-15: `code-quality` fires many times per item around
+    `implement`, which is `run_validation.py` doing exactly what the declaration
+    describes. It produced ALL 19 of that run's divergences — 5 `phase_out_of_order`
+    and 4 `phase_advanced_over_blocking_verdict` — and not one was real. A gate that
+    reports the chain working correctly as a defect is worse than no gate: it teaches
+    its reader to skip the output.
+    """
+    root = _project(tmp_path, plan=_PLAN_NESTED)
+    _ran(root, "code-quality", verdict="INVALID")
+    _ran(root, "implement", verdict="FAIL")
+    _ran(root, "code-quality", verdict="FAIL_SOFT")
+    _ran(root, "implement", verdict="PASS")
+    assert _kinds(check_phase_drift(root)) == []
+
+
+def test_the_nesting_marker_does_not_switch_the_ordering_check_off(tmp_path: Path) -> None:
+    """Widening is only safe if what the gate exists for is still caught. `review`
+    before `implement`, with nothing sent back, is the shape it was built to find."""
+    root = _project(tmp_path, plan=_PLAN_NESTED)
+    _ran(root, "discover")
+    _ran(root, "review")
+    _ran(root, "implement")
+    assert "phase_out_of_order" in _kinds(check_phase_drift(root))
+
+
+def test_a_blocking_verdict_still_stops_a_sequential_phase(tmp_path: Path) -> None:
+    """The exemption is for nested phases only. A phase that IS a step in the sequence,
+    running after a verdict that forbids advancing, is still reported."""
+    root = _project(tmp_path, plan=_PLAN_NESTED)
+    _ran(root, "discover", verdict="FAIL")
+    _ran(root, "review")
+    assert "phase_advanced_over_blocking_verdict" in _kinds(check_phase_drift(root))
+
+
+def test_a_nested_phase_after_a_blocking_verdict_is_not_reported(tmp_path: Path) -> None:
+    """The other side of the same line: `code-quality` running after `implement` failed
+    is `run_validation.py` finishing its work, not the chain advancing past a gate."""
+    root = _project(tmp_path, plan=_PLAN_NESTED)
+    _ran(root, "implement", verdict="FAIL")
+    _ran(root, "code-quality", verdict="FAIL_SOFT")
+    assert "phase_advanced_over_blocking_verdict" not in _kinds(check_phase_drift(root))
+
+
+def test_the_shipped_plan_marks_the_phase_run_validation_invokes() -> None:
+    """The marker is only worth anything if the shipped declaration carries it."""
+    phases = load_declared_phases(Path(__file__).resolve().parents[1])
+    by_name = {p.name: p for p in phases}
+    assert by_name["code-quality"].nested_in == "implement"
+    assert not by_name["implement"].nested_in
+    assert not by_name["review"].nested_in
