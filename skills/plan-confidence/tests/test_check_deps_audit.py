@@ -299,3 +299,24 @@ def test_a_file_the_plan_edits_is_not_a_package_it_depends_on():
         "| `render.go` | n/a |\n"
     )
     assert _declared_dependencies(body) == ["github.com/go-chi/chi/v5"]
+
+
+def test_a_bullet_declares_a_package_only_when_the_package_opens_it():
+    """The row rule said "at the head of a bullet" and the code scanned the whole head.
+
+    A consumer plan carried `- **B-057** — blocking DoD (d): \x60task quality:gates\x60
+    exits 5 on \x60unhomed-logic\x60` — a blocking backlog item naming a GATE, from which
+    the checker took `unhomed-logic` as a dependency. It cost nothing there only because
+    that plan happened to have an audit on disk; on a plan where the phantom is the only
+    entry, an audit would be demanded for something no scanner can resolve.
+
+    Emphasis may still wrap a real declaration.
+    """
+    sec = "## Dependencies\n\n### Existing\n\n"
+    assert _declared_dependencies(
+        sec + "- **B-057** — blocking DoD (d): `task quality:gates` exits 5 on "
+              "`unhomed-logic`, the first of 19 abort points.\n") == []
+    assert _declared_dependencies(
+        sec + "- `golang.org/x/net` v0.33.0 — for `http2` fixes\n") == ["golang.org/x/net"]
+    assert _declared_dependencies(
+        sec + "- **`gopkg.in/yaml.v3`** — already required\n") == ["gopkg.in/yaml.v3"]

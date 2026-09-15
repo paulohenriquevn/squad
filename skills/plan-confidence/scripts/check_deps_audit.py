@@ -106,6 +106,15 @@ def _is_a_file_not_a_package(token: str) -> bool:
     return token.lower().endswith(_FILE_SUFFIXES)
 
 
+#: A bullet declares a package only when the package OPENS it. Emphasis markers may wrap
+#: it (`- **`pkg`** v1.2`), but a sentence that happens to contain a backtick does not
+#: declare anything: `- **B-057** — blocking DoD (d): `task quality:gates` exits 5 on
+#: `unhomed-logic`` named a GATE, and scanning the whole head took it for a package.
+#: Found by a consumer session on the first pass after this rule shipped, in a plan where
+#: it cost nothing only because an audit happened to exist.
+_BULLET_HEAD_RE = re.compile(r"[-*+]\s+[*_]{0,2}`(?P<pkg>[A-Za-z0-9@][\w.@/-]*)`")
+
+
 def _declared_on_line(line: str) -> list[str]:
     """The package a row or a bullet DECLARES — not every name a sentence mentions.
 
@@ -123,8 +132,8 @@ def _declared_on_line(line: str) -> list[str]:
         cells = [c.strip() for c in stripped.strip("|").split("|")]
         found = _PACKAGE_RE.findall(cells[0]) if cells else []
     else:
-        bullet = re.match(r"[-*+]\s+(?P<head>.*)$", stripped)
-        found = _PACKAGE_RE.findall(bullet.group("head"))[:1] if bullet else []
+        bullet = _BULLET_HEAD_RE.match(stripped)
+        found = [bullet.group("pkg")] if bullet else []
     return [t for t in found if not _is_a_file_not_a_package(t)]
 
 
