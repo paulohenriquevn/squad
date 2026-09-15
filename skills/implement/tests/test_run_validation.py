@@ -549,3 +549,106 @@ def test_go_workspace_runs_each_module_not_the_root(fake_project: Path) -> None:
     (fake_project / "tools").mkdir()
     modules = go_workspace_modules(fake_project)
     assert modules == ["svc", "tools"], modules  # '../sibling-repo' is another repo's problem
+
+
+# ── a JS probe was answering a question about the project ───────────────────
+
+from suite_runners import (  # noqa: E402
+    TYPECHECK_COMMANDS,
+    _scope_to_change,
+    check_lint,
+    check_typecheck,
+)
+
+
+def _go_repo(root: Path, *, tidy: bool = True) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "go.mod").write_text("module example.com/x\n\ngo 1.22\n", encoding="utf-8")
+    body = "package x\n\nfunc F() int { return 1 }\n" if tidy else \
+        "package x\n\nfunc  F()  int  {return 1}\n"
+    (root / "x.go").write_text(body, encoding="utf-8")
+    return root
+
+
+def test_a_missing_package_json_is_not_a_statement_about_the_project(tmp_path: Path) -> None:
+    """`package.json absent — pre-code phase` reads as a claim about the repository.
+
+    What was observed is that one ecosystem's manifest is not at the root, which says
+    nothing about whether code exists. Measured on a consumer 2026-09-15: a Go workspace
+    with 8 modules and 1918 lines of new Go carried that line on four of seven reviews
+    — for typecheck, lint and project gates at once.
+    """
+    source = (Path(__file__).resolve().parents[1] / "scripts" / "run_validation.py"
+              ).read_text(encoding="utf-8")
+    assert "pre-code phase" not in source.split("def main")[0] or \
+        "package.json absent — pre-code phase" not in source, \
+        "the skip reason still states a project phase derived from a JS probe"
+    assert "no package.json at the repo root — this check is for javascript" in source
+
+
+def test_typecheck_runs_for_the_languages_whose_tests_already_run(tmp_path: Path) -> None:
+    """The test half of the gate was made language-aware in August; typecheck and lint
+    stayed npm-only, so on a Go repo the whole non-test half of the gate went quiet."""
+    assert "go" in TYPECHECK_COMMANDS and "rust" in TYPECHECK_COMMANDS
+    results = check_typecheck(_go_repo(tmp_path / "repo"))
+    assert [r["name"] for r in results] == ["go typecheck"]
+    assert results[0]["status"] in {"PASS", "FAIL"}, results[0]
+
+
+def test_a_language_that_is_absent_is_not_reported_at_all(tmp_path: Path) -> None:
+    """A Rust result on a repo with no Cargo.toml is noise, not coverage."""
+    assert [r["name"] for r in check_typecheck(_go_repo(tmp_path / "repo"))] == \
+        ["go typecheck"]
+
+
+def test_lint_debt_that_predates_the_change_does_not_block_the_change(tmp_path: Path) -> None:
+    """A tree carries lint debt older than the item, and blocking on it stops every item
+    for somebody else's file. The consumer had already reached this by hand: "`task lint`
+    is red at HEAD on an unrelated tracked file, so it is run and DIFFED, never asserted
+    absolute." Measured there: 48 tracked Go files fail `gofmt -l`, none touched by the
+    item under validation.
+    """
+    dirty = {"name": "go lint", "status": "FAIL", "runner": "gofmt",
+             "flagged_files": ["a/old.go", "b/older.go"]}
+    scoped = _scope_to_change(dirty, ["CHANGELOG.md"])
+    assert scoped["status"] == "PASS"
+    assert scoped["pre_existing"] == 2
+
+
+def test_pre_existing_lint_debt_is_reported_rather_than_hidden(tmp_path: Path) -> None:
+    """Not charging for it is not the same as not saying it. Silence about a dirty tree
+    is the other way this gate could lie."""
+    scoped = _scope_to_change(
+        {"name": "go lint", "status": "FAIL", "runner": "gofmt",
+         "flagged_files": ["a/old.go"]}, ["CHANGELOG.md"])
+    assert scoped["pre_existing"] == 1
+    assert "reported, not charged" in scoped["reason"]
+
+
+def test_a_file_this_change_touched_is_still_charged(tmp_path: Path) -> None:
+    scoped = _scope_to_change(
+        {"name": "go lint", "status": "FAIL", "runner": "gofmt",
+         "flagged_files": ["a/old.go", "mine.go"]}, ["mine.go"])
+    assert scoped["status"] == "FAIL"
+    assert scoped["flagged_by_this_change"] == ["mine.go"]
+    assert scoped["pre_existing"] == 1
+
+
+def test_with_no_changed_file_list_the_whole_failure_is_reported(tmp_path: Path) -> None:
+    """Guessing which half of a failure belongs to the item is worse than reporting all
+    of it. An empty list means "cannot scope", never "nothing to scope"."""
+    whole = {"name": "go lint", "status": "FAIL", "runner": "gofmt",
+             "flagged_files": ["a/old.go"]}
+    assert _scope_to_change(whole, [])["status"] == "FAIL"
+    assert _scope_to_change(whole, None)["status"] == "FAIL"
+
+
+def test_the_finding_list_is_not_read_from_a_truncated_tail() -> None:
+    """`run_command` keeps a 500-character tail, and `gofmt -l` names one file per line.
+    Scoping against the tail would compare the change against the last few findings and
+    silently pass on the rest — 48 findings would have been read as 1."""
+    many = [f"pkg/file{i:03d}.go" for i in range(200)]
+    tail = "\n".join(many)[-500:]
+    outcome = {"name": "go lint", "status": "FAIL", "runner": "gofmt",
+               "flagged_files": many, "stderr_tail": tail}
+    assert _scope_to_change(outcome, ["CHANGELOG.md"])["pre_existing"] == 200

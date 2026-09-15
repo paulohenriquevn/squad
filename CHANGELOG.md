@@ -7,6 +7,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Typecheck and lint answered a JavaScript question on every other language** (#86)
+  The test half of the `/implement` gate was made language-aware in August; typecheck and
+  lint were not, and skipped with `package.json absent — pre-code phase` on any repository
+  without a `package.json`. Measured on a consumer: a Go workspace with 8 modules and 1918
+  lines of new Go carried that line on four of seven reviews, for typecheck, lint and
+  project gates at once. The repository is not in a pre-code phase; it has no
+  `package.json`, which is a different statement. `go build` / `cargo check` now run for
+  typecheck and `gofmt` / `cargo clippy` / `ruff` for lint, per language present, with
+  `go.work` modules walked individually. A missing toolchain fails typecheck and skips
+  lint; neither becomes a silent pass. Lint is judged against the files the change wrote —
+  that consumer's tree carries 48 pre-existing `gofmt` findings, none touched by the item
+  under validation — and those findings are still reported on the passing result rather
+  than hidden.
 - **The pipeline named branches after ticket numbers and cut worktrees in `/tmp`** (#86)
   A lane was `pipeline/b-018` at `/tmp/squad-worktrees/b-018-<epoch>`. `§ 5.1` of the
   engineering rules bans a ticket number in a branch or directory name — the number dies
