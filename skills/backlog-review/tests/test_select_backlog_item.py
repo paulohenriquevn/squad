@@ -501,3 +501,39 @@ def test_checking_an_item_with_no_status_is_still_refused_by_the_contract() -> N
 
     assert result.verdict == "BACKLOG_BLOCKED"
     assert "wat" in result.reason
+
+
+def test_approved_items_are_reported_beside_the_queue_never_inside_it():
+    """`queue` means "SELECT hands this out", and an approved item is past that point.
+
+    Widening `queue` would send it back to `/discover-plan` to re-measure what its
+    opportunity file already records. A separate key keeps both truths: the item is not
+    SELECT's to hand out, and a scheduler still has to be able to see it.
+
+    Without this key, `pipeline_orchestrator.from_selection` built its lanes from
+    `queue` alone — so a consumer's registry of 87 approved and 5 triaged items handed
+    the scheduler five.
+    """
+    text = ("# Backlog\n\n## Items\n\n"
+            + item_block("B-001", status="triaged")
+            + item_block("B-002", status="approved")
+            + item_block("B-003", status="shipped"))
+    result = select(text)
+    assert "B-002" not in (result.queue or [])
+    assert result.awaiting_plan == ["B-002"]
+    assert "B-003" not in (result.awaiting_plan or []), "shipped is not awaiting a plan"
+
+
+def test_the_awaiting_plan_key_is_always_present():
+    """An absent key cannot be told from a selector too old to report it — the same
+    reason `awaiting_human` is emitted when empty."""
+    text = "# Backlog\n\n## Items\n\n" + item_block("B-001", status="triaged")
+    assert select(text).as_dict()["awaiting_plan"] == []
+
+
+def test_a_blocked_approved_item_is_not_offered_for_planning():
+    """It reads `approved` on disk and cannot be worked; the queue already drops those."""
+    text = ("# Backlog\n\n## Items\n\n"
+            + item_block("B-001", status="approved", extra="blocked_by: B-002\n")
+            + item_block("B-002", status="triaged"))
+    assert select(text).awaiting_plan == []

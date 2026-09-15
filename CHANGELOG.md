@@ -7,6 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Approved items never reached the scheduler, so the IMPLEMENT fix reached 4 of 92** (#93)
+  `queue` is what SELECT hands to `/discover-plan`, and `cycle-maintenance.md § Chain`
+  sends an approved item to `/plan-write` instead — so an approved item is correctly
+  absent from it. `pipeline_orchestrator.from_selection` built its lanes from `queue`
+  alone, so a consumer's registry of 87 approved and 5 triaged items handed the
+  scheduler FIVE. The stage machine handled an approved item correctly the whole time
+  and was never given one through the documented path, which is why tracing the machine
+  directly proved it worked and proved nothing about the system — the same shape as the
+  demotion that made IMPLEMENT unreachable, one seam further out. `select_backlog_item`
+  now reports `awaiting_plan` beside the queue and never inside it, and the scheduler
+  enters those items at PLAN rather than DISCOVER: `approved` records that DISCOVER ran,
+  and re-measuring would discard the opportunity file the decision rests on. Measured on
+  that registry: 5 items visible before, 62 after.
+
 - **The pipeline could not reach the stage that writes code** (#93)
   `STATUS_ON_ENTERING` wrote `triaged` when an item entered PLAN — reading "DISCOVER
   finished, so the item is measured", which is true and was already recorded.
