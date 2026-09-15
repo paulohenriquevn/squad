@@ -230,6 +230,18 @@ _ALLOWED_COMMANDS = frozenset({
     "node", "go", "cargo", "pytest", "npm", "npx", "make", "task", "bash", "sh",
     "xargs", "tee", "date", "pwd", "env", "which", "command", "yq", "helm",
     "kubectl", "docker", "gofmt", "ruff", "shellcheck",
+    # A pure builtin: it changes this shell's working directory and touches nothing
+    # else. Refusing it made every criterion scoped to a module unrunnable — measured
+    # on a consumer 2026-09-15, 5 of one item's 8 criteria, on the item chosen BECAUSE
+    # the chain had never been its obstacle. `(cd api && go test ./...)` is how a
+    # workspace repository says "in this module", and there is no other way to say it.
+    "cd",
+    # Creates a scratch path under the system temp directory and touches nothing else.
+    # It is how a criterion builds the negative control that makes it discriminate, and
+    # refusing it cost 7 clauses on one consumer item.
+    "mktemp",
+    # A builtin that ends the subprocess we spawned. It has no reach beyond it.
+    "exit",
 })
 
 #: `git` subcommands that only read. `stash`, `checkout`, `reset`, `clean`, `worktree`,
@@ -246,6 +258,16 @@ _WRITING_FLAGS = ("-i", "--in-place", "-X POST", "-X PUT", "-X DELETE", "--delet
                   "-d ", "--force", "--hard", "-o ", "--output")
 
 
+#: What a command name can look like. Deliberately narrow: a leading letter, underscore,
+#: dot or slash, then the characters a path or a binary name may carry. A bare number, a
+#: word with a comma in it, or a quoted fragment is an operand, not a command.
+_COMMAND_NAME_RE = re.compile(r"[A-Za-z_./][\w.@/+-]*")
+
+#: Commands whose ARGUMENT is another command. Each is harmless alone and transparent to
+#: whatever it runs, so the payload has to be read rather than inherited.
+_WRAPPERS = frozenset({"timeout", "env", "nice", "nohup", "stdbuf", "xargs", "command"})
+
+
 def _refused_command(span: str) -> str:
     """"" when the span is safe to run, else the reason it is not.
 
@@ -258,7 +280,12 @@ def _refused_command(span: str) -> str:
     # command that emptied a consumer's stash stack. Unwrap first, recursively.
     unwrapped = re.sub(r"\b(?:bash|sh)\s+-c\s+(['\"])(.*?)\1", r" ; \2 ; ", span,
                        flags=re.DOTALL)
-    tokens = re.split(r"[|;&\n]|\$\(|\)|`|\{|\}", unwrapped)
+    # `(` opens a subshell and therefore a new command. Splitting only on `)` left the
+    # opening paren glued to the word after it, so `(cd api && …)` was refused as the
+    # unknown command `(cd` — a parsing miss reported as a policy decision, which is
+    # the worst way to be wrong: the reader is told the command is forbidden when it
+    # was never read.
+    tokens = re.split(r"[|;&\n(]|\$\(|\)|`|\{|\}", unwrapped)
     for part in tokens:
         words = part.strip().split()
         if not words:
@@ -268,8 +295,32 @@ def _refused_command(span: str) -> str:
         # command already checked — `-eq 3` after `$(…)` closed. Not a command.
         if head.startswith("-") or head in ("then", "else", "fi", "do", "done", "!"):
             continue
+        # A token the shell could not execute as a command is not one. After a split on
+        # `$(`, `)` and `&&`, the leftovers are operands — `1` from `-eq 1`, `ctx,` from
+        # inside a grep pattern, `e-s` from a broken word. Refusing them reported a
+        # policy decision about something that was never a command, and on a consumer
+        # 2026-09-15 that was the whole remaining refusal set for an item: 6 of 12
+        # clauses, none of them a command at all.
+        #
+        # Skipping is safe in the direction that matters: bash would not run these
+        # either, and every REAL command on the line is still checked.
+        if not _COMMAND_NAME_RE.fullmatch(head):
+            continue
         if head in ("sudo", "eval", "exec", "source", "."):
             return f"{head!r} is not run from a document"
+        # A wrapper runs ANOTHER command, so allowing the wrapper without reading its
+        # payload is how `timeout 60 rm -rf /` would have walked through the allowlist.
+        # `env` was already on the list and carried exactly that hole. The payload is
+        # re-checked as its own command; the wrapper's own flags are skipped.
+        if head in _WRAPPERS:
+            payload = [w for w in words[1:]
+                       if not w.startswith("-") and not w.replace(".", "").isdigit()
+                       and "=" not in w]
+            if payload:
+                refused = _refused_command(" ".join(payload))
+                if refused:
+                    return refused
+            continue
         # `python3 -c` and `node -e` execute arbitrary code, exactly as `bash -c` does.
         # The difference is that a shell script can be unwrapped and inspected while a
         # Python one cannot, so the only honest answer for it is no.
@@ -278,6 +329,12 @@ def _refused_command(span: str) -> str:
             return f"`{head} -c` executes arbitrary code; this will not run it"
         if head == "git":
             sub = next((w for w in words[1:] if not w.startswith("-")), "")
+            # `git hash-object` computes a hash and writes nothing UNLESS `-w` is given,
+            # which is what stores the object. The blanket refusal charged the safe form
+            # for the dangerous one, and a criterion pinning a file by its hash is a
+            # common and entirely read-only shape.
+            if sub == "hash-object" and "-w" not in words[1:]:
+                continue
             if sub and sub not in _ALLOWED_GIT:
                 return f"`git {sub}` moves work; this runs only reading subcommands"
             continue

@@ -340,3 +340,83 @@ def test_a_built_binary_is_refused_and_the_reason_says_run_it_yourself(tmp_path)
     against your tree" is not — so the reader is told precisely that, and can run it.
     """
     assert "run it" in cd._refused_command("/tmp/project-cli quality --list")
+
+
+# ── the allowlist refused commands nobody could have run any other way ──────
+
+
+def test_a_subshell_scoping_a_command_to_a_module_is_readable():
+    """`(cd api && go test ./...)` is how a workspace repository says "in this module",
+    and there is no other way to say it.
+
+    Two faults met here. `cd` was not on the allowlist though it is a pure builtin that
+    changes this shell's directory and touches nothing else; and the tokenizer split on
+    `)` but not `(`, so the opening paren stayed glued to the word after it and the
+    command was refused as the unknown `(cd`. A parsing miss reported as a policy
+    decision is the worst way to be wrong — the reader is told the command is forbidden
+    when it was never read.
+
+    Measured on a consumer 2026-09-15: 6 of one item's 12 clauses, on the item chosen
+    BECAUSE the chain had never been its obstacle.
+    """
+    assert cd._refused_command("(cd api && go test ./...)") == ""
+    assert cd._refused_command("cd api && grep -c 'x' f.go") == ""
+
+
+def test_the_subshell_fix_did_not_stop_the_allowlist_reading_inside_it():
+    """Splitting on `(` means what is inside the subshell is now READ. Before, it was
+    refused for the wrong reason — which happened to be safe, and would have stopped
+    being safe the moment `cd` was allowed without the split."""
+    assert cd._refused_command("(cd api && rm -rf build)") != ""
+    assert cd._refused_command("(cd api && git reset --hard)") != ""
+    assert cd._refused_command("(cd api && git checkout main)") != ""
+
+
+def test_a_wrapper_does_not_launder_the_command_it_runs():
+    """`env` was already on the allowlist, and a wrapper allowed without reading its
+    payload is how `timeout 60 rm -rf /` walks through. Each wrapper is transparent to
+    whatever it runs, so the payload is re-checked as its own command."""
+    assert cd._refused_command("timeout 60 go test ./...") == ""
+    assert cd._refused_command("env GOFLAGS=-mod=mod go build ./...") == ""
+    assert cd._refused_command("timeout 60 rm -rf /") != ""
+    assert cd._refused_command("env FOO=1 git stash") != ""
+    assert cd._refused_command("xargs rm") != ""
+    assert cd._refused_command("timeout 5 sudo reboot") != ""
+
+
+def test_git_hash_object_writes_nothing_without_the_flag_that_writes():
+    """`git hash-object` computes a hash; `-w` is what stores the object. The blanket
+    refusal charged the safe form for the dangerous one, and pinning a file by its hash
+    is a common and entirely read-only shape."""
+    assert cd._refused_command("git hash-object api/go.mod") == ""
+    assert cd._refused_command("git hash-object -w api/go.mod") != ""
+
+
+def test_an_operand_is_not_refused_as_an_unknown_command():
+    """After splitting on `$(`, `)` and `&&`, the leftovers are operands — `1` from
+    `-eq 1`, `ctx,` from inside a grep pattern. Refusing them announced a policy
+    decision about something that was never a command; on a consumer that was the
+    entire remaining refusal set for one item.
+
+    Safe in the direction that matters: bash would not run these either, and every real
+    command on the line is still checked.
+    """
+    assert cd._refused_command("test $(grep -c 'x' f.go) -eq 1") == ""
+    assert cd._refused_command("grep -c 'ctx, err' f.go") == ""
+    # The real command on a line full of operands is still read.
+    assert cd._refused_command("test $(ls) -eq 1 && sudo reboot") != ""
+    assert cd._refused_command("echo hi; git checkout main") != ""
+
+
+def test_mktemp_builds_the_control_that_makes_a_criterion_discriminate():
+    """It creates a scratch path under the system temp directory and touches nothing
+    else; refusing it cost 7 clauses on one consumer item, all of them building the
+    negative control the criterion needs to mean anything."""
+    assert cd._refused_command("mktemp -d") == ""
+    assert cd._refused_command("(cd api && go test ./...) ; exit 0") == ""
+
+
+def test_a_binary_the_criterion_built_is_still_refused():
+    """The deliberate trade, unchanged: that binary can do anything, and "not verified"
+    is an honest answer while "ran something unknown against your tree" is not."""
+    assert cd._refused_command("/tmp/project-cli quality --list") != ""
