@@ -38,10 +38,20 @@ one's approval.
 IMPLEMENT reports two runs. Reproduce the first:
 
 ```bash
-git -C {REPO} stash list   # confirm nothing is hiding
 git -C {REPO} worktree add /tmp/squad-review-{ITEM_SLUG}-$(date +%s) HEAD
-# run the new test in the PRE-change tree; it must fail
+# run the new test in the PRE-change tree; it must FAIL
 ```
+
+**Never `git stash` in it.** The worktree isolates your index, your HEAD and your
+checkout — not the stash. `refs/stash` lives in the common `.git`, every worktree
+pushes and pops the SAME stack, and `git stash pop` returns the top entry
+whichever agent pushed it. Measured 2026-09-04: two agents stashed concurrently
+in their own worktrees and each popped the other's uncommitted work. To reach a
+clean tree, copy the files aside with `cp` or commit them on a scratch branch,
+then `git restore`.
+
+You have no `Edit` and no `Write`, so this should not arise — but a `bash` call
+can stash, and the rule is about the tree rather than about your tool list.
 
 A test that passes in the pre-change tree proves nothing about the change. This
 is the single most common way a green suite means nothing, and it is cheap to
