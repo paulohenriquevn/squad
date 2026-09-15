@@ -189,6 +189,18 @@ class Report:
     def unrunnable(self) -> list:
         return [r for r in self.results if not r.ran]
 
+    @property
+    def refused(self) -> list:
+        """Criteria carrying a clause this declined to execute.
+
+        Separate from `unrunnable` because the cause is different and so is the action:
+        a clause that did not run because it timed out is a slow command, and one that
+        did not run because it moves work is a command nobody should execute out of a
+        document.
+        """
+        return [r for r in self.results
+                if any(c.note.startswith("NOT RUN") for c in r.clauses)]
+
 
 def _bullets(text: str) -> list[str]:
     section = re.search(r"^##+\s*.*Acceptance.*$([\s\S]*?)(?=^##|\Z)", text, re.M | re.I)
@@ -196,6 +208,98 @@ def _bullets(text: str) -> list[str]:
         return []
     return [ln.strip() for ln in section.group(1).splitlines()
             if re.match(r"^\s*[-*]\s+\S", ln)]
+
+
+#: Commands this may run. An ALLOWLIST, because a denylist of destructive things is
+#: never finished and the cost of one gap is somebody else's uncommitted work.
+#:
+#: Measured on a consumer on 2026-09-15, before this existed: a criterion carried
+#: `git stash push` in its backticks, this executor ran it, and it pushed SEVEN entries
+#: onto a stash stack shared by six worktrees — one of them carrying twenty uncommitted
+#: CHANGELOG lines, which left the tree. The docstring of this file already said
+#: "running commands out of a document is the risk it is", and saying it is not
+#: protecting against it.
+#:
+#: Read-only tools, plus the test runners a criterion legitimately needs. `go test`
+#: writes a build cache and `pytest` writes `__pycache__`; that is the cost of asking
+#: whether a test passes, and it is contained.
+_ALLOWED_COMMANDS = frozenset({
+    "grep", "rg", "cat", "ls", "find", "wc", "test", "head", "tail", "awk", "sort",
+    "uniq", "cut", "tr", "diff", "echo", "printf", "true", "false", "jq", "stat",
+    "basename", "dirname", "realpath", "readlink", "sed", "python3", "python",
+    "node", "go", "cargo", "pytest", "npm", "npx", "make", "task", "bash", "sh",
+    "xargs", "tee", "date", "pwd", "env", "which", "command", "yq", "helm",
+    "kubectl", "docker", "gofmt", "ruff", "shellcheck",
+})
+
+#: `git` subcommands that only read. `stash`, `checkout`, `reset`, `clean`, `worktree`,
+#: `push`, `commit`, `merge`, `rebase`, `restore` and `switch` are absent on purpose —
+#: every one of them moves somebody's work.
+_ALLOWED_GIT = frozenset({
+    "log", "show", "diff", "status", "rev-parse", "rev-list", "ls-files", "ls-tree",
+    "cat-file", "describe", "blame", "shortlog", "grep", "config", "branch", "tag",
+    "remote", "count-objects", "archive", "for-each-ref", "symbolic-ref",
+})
+
+#: A flag that turns a reading command into a writing one.
+_WRITING_FLAGS = ("-i", "--in-place", "-X POST", "-X PUT", "-X DELETE", "--delete",
+                  "-d ", "--force", "--hard", "-o ", "--output")
+
+
+def _refused_command(span: str) -> str:
+    """"" when the span is safe to run, else the reason it is not.
+
+    Every token that looks like a command is checked, not only the first: a criterion
+    writes `bash -c 'test $(...) -eq 1'` and the interesting command is inside. Pipes,
+    `&&`, `;` and `$( )` all introduce another one.
+    """
+    # `bash -c '<script>'` hides its real commands inside the quotes, and a split that
+    # does not enter them lets `bash -c 'git stash && …'` through — which is the exact
+    # command that emptied a consumer's stash stack. Unwrap first, recursively.
+    unwrapped = re.sub(r"\b(?:bash|sh)\s+-c\s+(['\"])(.*?)\1", r" ; \2 ; ", span,
+                       flags=re.DOTALL)
+    tokens = re.split(r"[|;&\n]|\$\(|\)|`|\{|\}", unwrapped)
+    for part in tokens:
+        words = part.strip().split()
+        if not words:
+            continue
+        head = words[0].strip("'\"")
+        # A fragment starting with a flag or a comparison operator is the tail of a
+        # command already checked — `-eq 3` after `$(…)` closed. Not a command.
+        if head.startswith("-") or head in ("then", "else", "fi", "do", "done", "!"):
+            continue
+        if head in ("sudo", "eval", "exec", "source", "."):
+            return f"{head!r} is not run from a document"
+        # `python3 -c` and `node -e` execute arbitrary code, exactly as `bash -c` does.
+        # The difference is that a shell script can be unwrapped and inspected while a
+        # Python one cannot, so the only honest answer for it is no.
+        if head in ("python3", "python", "node", "ruby", "perl") and any(
+                w in ("-c", "-e", "--eval", "--command") for w in words[1:]):
+            return f"`{head} -c` executes arbitrary code; this will not run it"
+        if head == "git":
+            sub = next((w for w in words[1:] if not w.startswith("-")), "")
+            if sub and sub not in _ALLOWED_GIT:
+                return f"`git {sub}` moves work; this runs only reading subcommands"
+            continue
+        if head in ("rm", "mv", "cp", "chmod", "chown", "kill", "curl", "wget", "ssh",
+                    "scp", "dd", "mkfs", "shutdown", "reboot"):
+            return f"{head!r} is not run from a document"
+        if head and head not in _ALLOWED_COMMANDS and "=" not in head:
+            # A path to a binary the criterion built is the common legitimate case —
+            # `/tmp/theo-ops quality --list` appears throughout a real registry. It is
+            # still refused, and the trade is deliberate: that binary can do anything,
+            # and "not verified" is an honest answer while "ran something unknown
+            # against your tree" is not. The reader is told precisely this, so they can
+            # run it themselves if they choose.
+            if head.startswith("/") or head.startswith("./"):
+                return (f"{head!r} is a binary this will not run unattended — run it "
+                        "yourself if you trust it")
+            return f"{head!r} is not on the allowlist of readable commands"
+    lowered = span.lower()
+    for flag in _WRITING_FLAGS:
+        if flag.strip() and flag.lower() in lowered:
+            return f"carries {flag.strip()!r}, which writes"
+    return ""
 
 
 #: A criterion that declares itself a GUARD. These must pass today and after the work —
@@ -333,6 +437,14 @@ def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:
         for command, clause_expected in clauses:
             expected = clause_expected or _bullet_expectation(bullet)
             c = Clause(command=command)
+            # Refused BEFORE the subprocess, and never counted as sound. A clause this
+            # will not run is a clause nobody verified — which is the honest answer, and
+            # it is the one that keeps a read-only REVIEW stage actually read-only.
+            refusal = _refused_command(command)
+            if refusal:
+                c.note = f"NOT RUN — {refusal}"
+                r.clauses.append(c)
+                continue
             try:
                 proc = subprocess.run(["bash", "-c", command], cwd=str(repo_root),
                                       capture_output=True, text=True, timeout=timeout,
@@ -414,6 +526,23 @@ def render(rep: Report, brief: Path) -> str:
                 "  failing half is built, the whole thing passes with the vacuous half",
                 "  measuring nothing.",
             ]
+    if rep.refused:
+        lines += ["", f"{len(rep.refused)} criterion(s) carry a clause this REFUSED to "
+                  "run:", ""]
+        for r in rep.refused:
+            for c in r.clauses:
+                if c.note.startswith("NOT RUN"):
+                    lines.append(f"  · {c.command[:60]}")
+                    lines.append(f"      {c.note[9:]}")
+        lines += ["",
+                  "  These are unverified, not sound. This executes commands out of a",
+                  "  document, and a criterion carrying `git stash` once pushed seven",
+                  "  entries onto a stack shared by six worktrees — one carrying twenty",
+                  "  uncommitted lines, which left the tree. Read them and run them",
+                  "  yourself if you trust them.",
+                  ""]
+    if rep.already_passing:
+        pass
     elif rep.unrunnable or rep.undecidable:
         lines += [f"{len(rep.unrunnable)} could not run, {len(rep.undecidable)} could not "
                   "be decided. Neither is a pass."]

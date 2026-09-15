@@ -46,6 +46,11 @@ def _briefs() -> dict[str, str]:
         "fleet_dispatch_workflow.js": _FLEET / "fleet_dispatch_workflow.js",
         "stage-implement.md": (REPO / "skills" / "pipeline" / "templates"
                                / "stage-implement.md"),
+        # REVIEW cuts a worktree to reproduce the pre-change test failure, so it
+        # carries the same hazard even though it holds no Edit or Write: a `bash`
+        # call can stash, and the rule is about the tree rather than the tool list.
+        "stage-review.md": (REPO / "skills" / "pipeline" / "templates"
+                            / "stage-review.md"),
     }
     briefs = {name: path.read_text(encoding="utf-8") for name, path in files.items()}
     briefs["fleet_router:kit"] = fleet_router.brief(
@@ -63,7 +68,9 @@ def test_the_sources_are_all_still_there() -> None:
     and a parametrisation over four sources passes exactly as green as one over
     five. The count is asserted so a disappearance is a failure rather than a
     smaller test run."""
-    assert len(NAMES) == 5, NAMES
+    # Six since 2026-09-15: REVIEW joined the pipeline and cuts a worktree to
+    # reproduce the pre-change test failure.
+    assert len(NAMES) == 6, NAMES
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -158,6 +165,7 @@ def test_no_unenumerated_site_hands_out_a_worktree() -> None:
         "mechanisms/fleet/fleet_dispatch_workflow.js",
         "mechanisms/fleet/fleet_router.py",
         "skills/pipeline/templates/stage-implement.md",
+        "skills/pipeline/templates/stage-review.md",
     }
 
     unenumerated = sorted(sweep - covered - EXEMPT)
