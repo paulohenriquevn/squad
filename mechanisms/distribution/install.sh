@@ -23,8 +23,16 @@
 #   5. Creates empty scaffold under target/.claude/records/
 #      (plans, implementations, reviews, audits, discoveries/{plans,opportunities,snapshots},
 #      adrs, grills, honesty-gate, judge-codex, backlog, maintenance-runs, tools).
-#      agents/ receives ONLY README.md (the routing mechanism). Specialists are
-#      derived per project — the kit ships none. agents/ is never deleted.
+#      agents/ receives README.md (the routing mechanism) AND the kit's 14 generic
+#      specialists — nemesis-claim-auditor, vera-technical-arbiter and the rest, which
+#      the review panel and the judge stages name by id. agents/ is never deleted, so a
+#      project's own specialists survive beside them.
+#
+#      This line said "the kit ships none" until 2026-09-15, which was true when it was
+#      written and false for every install since the specialists landed. Measured while
+#      installing a consumer: agents/ went from 1 file to 15, and the comment said that
+#      could not happen. Same failure this file already records one paragraph above —
+#      a reader trusting a stale line about what the installer does.
 #   6. Skips the source repo's history: caches, artifact dirs, audit trails,
 #      CHANGELOG.md, .git/, .compaction-snapshots/, .attestations/.
 #   7. Prints next steps.

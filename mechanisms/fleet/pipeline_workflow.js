@@ -35,10 +35,33 @@ export const meta = {
 // The literal that used to sit here was ['B-001', 'B-022', 'B-033'], and B-001 is
 // blocked on a sponsor decision in the very registry it was pointed at. A hand-kept
 // list cannot know that, and it went unnoticed for a whole run.
-const ITEMS = args?.items ?? args?.queue
+// `queue` ALONE is not the work. SELECT emits three keys that carry items a stage can
+// act on, and each was added because a scheduler reading only the previous ones could
+// not see most of the registry:
+//
+//   queue          triaged and raw — DISCOVER has not run
+//   awaiting_plan  approved — DISCOVER ran, PLAN has not
+//   in_flight      planned — work started
+//
+// Measured on a consumer 2026-09-15, 102 items: passing the whole selection builds 71
+// items, of which 56 approved enter at PLAN; passing the `queue` array this file used to
+// demand builds 13, none of them approved. So an operator following the documented
+// procedure exactly reproduced a bug the Python side no longer had — the code fix landed
+// and the procedure that invokes it still prescribed the defect.
+//
+// `args.selection` is the whole object from `--json`. `args.queue` still works and is
+// what every existing caller passes, but it schedules only a third of the registry.
+const SELECTION = args?.selection
+const ITEMS = Array.isArray(args?.items) ? args.items
+  : SELECTION ? [...(SELECTION.queue ?? []),
+                 ...(SELECTION.awaiting_plan ?? []),
+                 ...(SELECTION.in_flight ?? [])]
+  : args?.queue
 if (!Array.isArray(ITEMS) || ITEMS.length === 0) {
   throw new Error(
-    'no queue: pass args.queue from `select_backlog_item.py --json`. ' +
+    'no items: pass args.selection — the whole object from ' +
+    '`select_backlog_item.py --json`. Passing args.queue alone schedules only the ' +
+    'items DISCOVER has not reached, which on a real registry is a fraction of it. ' +
     'A literal list cannot know which items the registry says are blocked.')
 }
 // No default. A hardcoded path is one machine's, and this file is versioned and

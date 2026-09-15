@@ -156,3 +156,29 @@ def test_python_setup_caches_dependencies():
                 if not (step.get("with") or {}).get("cache"):
                     missing.append(name)
     assert not missing, f"setup-python without dependency cache in jobs: {missing}"
+
+
+def test_the_documented_dispatch_passes_what_the_scheduler_can_use() -> None:
+    """A fix that lands in code and not in the procedure that invokes it is half a fix,
+    and the missing half is the one a new reader follows.
+
+    `skills/pipeline/SKILL.md` Step 2 said to pass `args: {queue: <the "queue" array>}`
+    until 2026-09-15, while SELECT had grown two more keys carrying items a stage can act
+    on. Measured on a consumer registry of 102 items: the whole selection builds 71 items
+    with 56 approved entering at PLAN; the `queue` array alone builds 13, none approved.
+
+    An operator following the documented procedure exactly reproduced a defect the code
+    no longer had. Found by a consumer session which noticed it had been unable to
+    reproduce the documented path all day, because every dispatch it made passed the full
+    object rather than the array the skill named.
+    """
+    skill = (Path(__file__).resolve().parents[1] / "skills" / "pipeline"
+             / "SKILL.md").read_text(encoding="utf-8")
+    workflow = (Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"
+                / "pipeline_workflow.js").read_text(encoding="utf-8")
+
+    assert "args: {selection:" in skill, \
+        "the documented dispatch still names a single key of the selection"
+    for key in ("awaiting_plan", "in_flight"):
+        assert key in workflow, f"the workflow cannot read {key}, so nothing can pass it"
+        assert key in skill, f"the procedure does not mention {key}"
