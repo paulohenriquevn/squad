@@ -601,24 +601,24 @@ def test_every_status_a_stage_writes_is_a_legal_hop_from_the_one_before(
     per_stage = {stage: re.findall(r"--to\s+(\w+)", briefs[stage]) for stage in STAGES}
     assert any(per_stage.values()), "no stage writes a status at all"
 
-    # A stage's FIRST write advances the chain; any further write is a recovery hop
-    # from the status that stage just set — `planned -> approved` when a lane halts.
-    # Modelling this as one linear sequence was wrong the moment a way back existed,
-    # and the test said so by failing, which is the outcome worth having.
+    # A stage's writes are a WALK, not a forward hop plus a list of returns to it. The
+    # first advances the chain; each later one starts from wherever the previous write
+    # left the item. Modelling recoveries as all departing from the forward status was
+    # right while a stage had at most one way back, and wrong the moment IMPLEMENT
+    # gained a third write: halt walks `planned -> approved`, and a WITHDRAWN halt walks
+    # `approved -> planned` again. Under the old model that read as `planned -> planned`
+    # and the test refused it — correctly refusing a hop the brief never asks for.
+    #
+    # The walk is also what the reader of the brief performs, so checking it this way
+    # checks the document rather than a paraphrase of it.
     current = "approved"
     for stage in STAGES:
-        writes = per_stage[stage]
-        if not writes:
-            continue
-        forward, recoveries = writes[0], writes[1:]
-        assert forward in backlog_status.ALLOWED[current], (
-            f"{stage} advances {current} -> {forward}, which the registry refuses; "
-            f"from {current} it accepts {sorted(backlog_status.ALLOWED[current])}")
-        for back in recoveries:
-            assert back in backlog_status.ALLOWED[forward], (
-                f"{stage} recovers {forward} -> {back}, which the registry refuses; "
-                f"from {forward} it accepts {sorted(backlog_status.ALLOWED[forward])}")
-        current = forward
+        for i, target in enumerate(per_stage[stage]):
+            assert target in backlog_status.ALLOWED[current], (
+                f"{stage} write #{i + 1} moves {current} -> {target}, which the registry "
+                f"refuses; from {current} it accepts "
+                f"{sorted(backlog_status.ALLOWED[current])}")
+            current = target
 
 
 def test_a_status_a_stage_writes_mid_flight_has_a_way_back(tmp_path: Path) -> None:
@@ -1039,3 +1039,35 @@ def test_the_dispatch_names_every_key_select_emits() -> None:
         f"SELECT emits {sorted(actionable)}; the dispatch procedure never names "
         f"{missing}, so an operator following it cannot reach those items"
     )
+
+
+def test_the_halt_is_symmetric_in_the_status_not_only_in_the_record() -> None:
+    """A walk-back with no walk-forward is a one-way door.
+
+    IMPLEMENT's brief told a halting lane to walk `planned -> approved`, and said
+    nothing about what to do when the halt is later withdrawn. Measured on a consumer
+    2026-09-16: B-022 halted, walked back, had its halt WITHDRAWN two days later with
+    `IMPLEMENTATION_COMPLETE` emitted — and stayed `approved` holding a 9945-byte
+    implementation record, because nothing told anyone to walk it forward.
+
+    `approved -> shipped` is not a legal transition. The finished work could not be
+    released without re-running IMPLEMENT over it or issuing the hop by hand from
+    knowledge no document carried.
+
+    The kit already models withdrawal for sign-offs — `score_alignment.py` reads
+    WITHDRAWN and RESTORED markers — for the same reason: a retraction that cannot be
+    retracted is a trap.
+    """
+    brief = (Path(__file__).resolve().parents[1] / "templates"
+             / "stage-implement.md").read_text(encoding="utf-8")
+    flat = " ".join(brief.split())
+
+    assert "--to approved" in brief, "the walk-back disappeared"
+    assert "WITHDRAWN, walk it forward" in flat, \
+        "the brief tells a lane how to halt and not how to un-halt"
+    # The forward hop must be a runnable command, not advice.
+    forward = [ln for ln in brief.splitlines()
+               if "--to planned" in ln and "backlog_status.py" in ln]
+    assert len(forward) == 2, (
+        "expected two `--to planned` invocations — the one that starts work and the one "
+        f"that resumes it after a withdrawn halt; found {len(forward)}")
