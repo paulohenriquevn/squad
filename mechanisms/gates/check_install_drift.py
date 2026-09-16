@@ -66,6 +66,18 @@ class Drift(enum.Enum):
     #: The install carries content the kit ONCE HAD. It is behind, not modified —
     #: and a `git checkout` of the kit resolves it without losing anything.
     STALE = "stale"
+    #: The consumer's own file, which the kit ships a starting point for and the
+    #: project then tunes. A difference here is the SYSTEM WORKING, not drift.
+    #:
+    #: `squad/boundaries.py` declares these — `rules/*.txt`, `agents/`, `settings.json`
+    #: — and says why: "a consumer tunes these and the installer preserves them across
+    #: an update." This gate did not ask, and reported all six of a real consumer's
+    #: configured files as needing a human: its language table, its allowlist, its
+    #: domain routing, its acceptance target. Measured 2026-09-16.
+    #:
+    #: An alarm that fires on the normal case is an alarm people scroll past — which is
+    #: this kit's own sentence, about a different gate, in `verify_ecosystem`.
+    YOURS = "yours"
 
 
 def _lines(path: Path) -> set[str]:
@@ -101,6 +113,35 @@ def _historical_contents(kit_root: Path, rel: str) -> set[str]:
     return contents
 
 
+def _is_project_owned(rel: str) -> bool:
+    """Through `squad.boundaries`, which is where ownership is declared.
+
+    A local copy of that list is what `check_write_containment` refuses for data roots
+    and what this kit has removed from three readers today. False on ImportError rather
+    than a second implementation: reporting a tuned file as drift is noise, and guessing
+    ownership without the declaration is worse.
+    """
+    try:
+        from squad.boundaries import PROJECT_OWNED  # noqa: PLC0415
+    except ImportError:
+        return False
+    if not any(pattern.search(rel) for pattern in PROJECT_OWNED):
+        return False
+    # `agents/` is EXCLUDED here, and that exclusion is a finding rather than a
+    # preference. `boundaries.PROJECT_OWNED` calls the whole directory the consumer's;
+    # `tests/test_install_drift_scope.py` asserts `agents/README.md` belongs to the kit
+    # because it describes the routing mechanism; and `install.sh` says why both are
+    # right — "`agents/` carries BOTH: the kit's four roles and the project's domain
+    # specialists", with the MANIFEST as the discriminator.
+    #
+    # `is_project_owned` uses the manifest for `skills/` and not for `agents/`. Which
+    # reader should change is a decision about the ownership contract, and resolving it
+    # from inside a drift gate would be the fourth reader of that question inventing an
+    # answer. So this narrows to what was measured — the six `rules/*.txt` files a real
+    # consumer had tuned — and leaves `agents/` reported exactly as before.
+    return not rel.startswith("agents/")
+
+
 def classify_file(install_file: Path, kit_file: Path,
                   kit_root: Path | None = None, rel: str | None = None) -> Drift:
     """Which side, if either, holds lines the other lacks."""
@@ -108,6 +149,11 @@ def classify_file(install_file: Path, kit_file: Path,
     install_only, kit_only = a - b, b - a
     if not install_only and not kit_only:
         return Drift.IDENTICAL
+    # Ask the one declaration of ownership before calling a difference drift. Two
+    # mechanisms answering "whose file is this" is how they come to disagree, and this
+    # one was not asking at all.
+    if rel and _is_project_owned(rel):
+        return Drift.YOURS
     verdict = Drift.DIVERGED if (install_only and kit_only) else (
         Drift.INSTALL_AHEAD if install_only else Drift.KIT_AHEAD)
     if verdict in (Drift.DIVERGED, Drift.INSTALL_AHEAD) and kit_root is not None and rel:
@@ -330,11 +376,23 @@ def main(argv: list[str] | None = None) -> int:
           f"   consumer-local: {consumer_local}")
 
     if report.needs_attention:
-        print(
-            "\ncheck-install-drift: the install holds work this repository does not. "
-            "DIVERGED files need a human — a copy in either direction deletes the other side's fix.",
-            file=sys.stderr,
-        )
+        # Name the class that actually fired. This said "DIVERGED files need a human"
+        # whenever ANY of three conditions held, including runs with zero diverged
+        # files — a message about an empty class, which sends a reader looking for a
+        # conflict that is not there. Measured 2026-09-16 on a consumer: 0 diverged,
+        # 0 install-ahead, 2 unharvested, and the line still named DIVERGED.
+        why = []
+        if report.counts.get(Drift.DIVERGED):
+            why.append(f"{report.counts[Drift.DIVERGED]} DIVERGED — both sides hold "
+                       "unique lines, and a copy in either direction deletes the "
+                       "other's fix")
+        if report.counts.get(Drift.INSTALL_AHEAD):
+            why.append(f"{report.counts[Drift.INSTALL_AHEAD]} INSTALL_AHEAD — the "
+                       "install holds lines the kit does not")
+        if report.unharvested_files:
+            why.append(f"{len(report.unharvested_files)} install-only file(s) in a "
+                       "directory the kit has — yours, or work to harvest")
+        print("\ncheck-install-drift: " + "; ".join(why) + ".", file=sys.stderr)
         return 1
     return 0
 
