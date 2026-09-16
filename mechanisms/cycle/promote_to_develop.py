@@ -256,7 +256,7 @@ def promote(
     # identities on one machine ends up with — defeats every unaided `gh` call with "none
     # of the git remotes point to a known GitHub host". Measured on a consumer 2026-09-16,
     # holding the first item ever to cross the whole chain, one flag from `develop`:
-    # `gh pr list -R usetheoai/theo` answered correctly in the same minute the unaided
+    # `gh pr list -R <owner>/<repo>` answered correctly in the same minute the unaided
     # call refused.
     #
     # The kit already solved this once. `board_issues.py` takes `--issues-repo OWNER/NAME`

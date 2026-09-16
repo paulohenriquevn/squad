@@ -68,7 +68,7 @@ _DEMAND_CONTEXT = re.compile(
 #: file's mtime belonged to the OTHER lane — 82 seconds before its first commit.
 #:
 #: `mktemp` is exempt: it is the answer, not the problem.
-#: An EVIDENCE file, which carries an extension. `/tmp/theo-ops` is a binary the criterion
+#: An EVIDENCE file, which carries an extension. `/tmp/<project-cli>` is a binary the criterion
 #: invokes, not a file it writes — and `check_criteria_discriminate` already refuses that
 #: separately, by name, as "a binary this will not run unattended". Flagging it here said
 #: a shared evidence path was at risk of collision when nothing was being written at all.

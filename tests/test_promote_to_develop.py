@@ -187,7 +187,7 @@ def test_the_repository_is_named_rather_than_inferred_by_gh() -> None:
     remotes point to a known GitHub host".
 
     Measured on a consumer 2026-09-16, holding the first item ever to cross the whole
-    chain, one flag from `develop`: `gh pr list -R usetheoai/theo` answered correctly in
+    chain, one flag from `develop`: `gh pr list -R <owner>/<repo>` answered correctly in
     the same minute the unaided call refused. And the remediation compounded it, telling
     a reader to run `gh auth login` while `gh auth status` reported them logged in — the
     third gate that day whose remedy could not work for the case it fired on.
@@ -206,12 +206,12 @@ def test_the_repository_is_named_rather_than_inferred_by_gh() -> None:
 def test_every_remote_shape_yields_the_slug() -> None:
     """The host part is everything before the first `/`; a `:` in it means the slug starts
     after it. The first version keyed on `@`, and the consumer's remote has the user in
-    ssh config — `github-usetheo:usetheoai/theo.git` — so it parsed the alias as the slug.
+    ssh config — `alias-host:owner/repo.git` — so it parsed the alias as the slug.
     """
     from promote_to_develop import _owner_repo  # noqa: PLC0415
 
     for url, expected in (
-        ("github-usetheo:usetheoai/theo.git", "usetheoai/theo"),
+        ("alias-host:owner/repo.git", "owner/repo"),
         ("git@github.com:owner/repo.git", "owner/repo"),
         ("https://github.com/owner/repo.git", "owner/repo"),
         ("ssh://git@github.com:22/owner/repo.git", "owner/repo"),
