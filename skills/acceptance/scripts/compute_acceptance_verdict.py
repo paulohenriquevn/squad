@@ -169,6 +169,21 @@ def main() -> int:
         print(f"malformed JSON: {exc}", file=sys.stderr)
         return 2
 
+    # A JSON document of the wrong SHAPE is not malformed JSON, and it used to raise
+    # `AttributeError: 'list' object has no attribute 'get'` — a traceback, which reads
+    # as "this tool is broken" when the honest answer is "your file is a list and this
+    # expects an object". The two need different actions from whoever runs the phase.
+    #
+    # This kit has met the same failure before: `select_backlog_item` answered every
+    # `--check` against an approved item with a KeyError, and the comment there says it
+    # exactly — a traceback is the wrong silence.
+    for name, doc, key in (("--criteria", criteria_doc, "criteria"),
+                           ("--evidence", evidence_doc, "results")):
+        if not isinstance(doc, dict):
+            print(f"malformed {name} document: expected a JSON object with a"
+                  f" {key!r} key, got {type(doc).__name__}", file=sys.stderr)
+            return 2
+
     criteria = criteria_doc.get("criteria", [])
     if not criteria:
         print("NOT_VALIDATED cycle-acceptance: no criteria to validate.", file=sys.stderr)
