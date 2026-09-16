@@ -134,9 +134,18 @@ WITHDRAWN_MARKER = ".withdrawn"
 def halt_reports(project_root: Path) -> dict[str, Path]:
     """Item id -> the BLOCKED report a phase left for it.
 
-    The single reader of these files. `board_state.halted_items` and the selector both
-    come through here, because two scans of the same directory drift the way two copies
-    of a blocking-verdict list already did in this repository.
+    The single reader of these files. `board_state.halted_items`, the selector and
+    `mechanisms/fleet/squad_lead.py` all come through here, because two scans of the same
+    directory drift the way two copies of a blocking-verdict list already did in this
+    repository.
+
+    That was a claim before it was a fact. `squad_lead` carried its own glob until
+    2026-09-16 — `*{item[2:]}*-BLOCKED.md`, anchoring BLOCKED to the end, which is the
+    exact form the comment below records as wrong. It told a lane "not blocked" for an
+    item whose halt report was a lane's second, while the board and the selector said
+    blocked: one registry answering two ways depending on which mechanism asked.
+
+    A claim of singleness is a claim nothing checks. The test beside this one now does.
     """
     records = _records_dir(project_root)
     if records is None:

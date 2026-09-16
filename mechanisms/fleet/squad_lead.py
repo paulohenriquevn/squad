@@ -100,6 +100,42 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
         break
 from squad.paths import records_dir  # noqa: E402
 
+def _halted_items(project: Path) -> set[str]:
+    """Items a phase stopped on, from the ONE reader of those files.
+
+    This globbed `*{item[2:]}*-BLOCKED.md` itself, and that glob is the one
+    `squad_boss.halt_reports` documents as wrong: "anchoring BLOCKED to the end of the
+    name dropped those files silently, and a dropped halt is re-offered forever —
+    measured 2026-09-04, B-079 had two halt reports on disk and this function returned
+    neither." A lane writing a second report for one item adds a descriptive suffix, and
+    the end-anchor misses it.
+
+    So this told a lane "not blocked" for an item whose halt report was the second one,
+    while the board and the selector said blocked — the same registry answering two ways
+    depending on which mechanism asked.
+
+    `halt_reports` also called itself "the single reader of these files", which was true
+    of the two it named and false of this one. A claim of singleness is a claim nothing
+    checks; calling through is what makes it true.
+
+    Empty on ImportError rather than falling back to a glob: a second implementation
+    appearing whenever an import fails is how the two diverged in the first place, and a
+    missing "blocked" note costs a redundant sentence in a prompt.
+    """
+    here = _Path_bootstrap(__file__).resolve()
+    for up in here.parents:
+        scripts = up / "skills" / "backlog-review" / "scripts"
+        if (scripts / "squad_boss.py").is_file():
+            if str(scripts) not in _sys_bootstrap.path:
+                _sys_bootstrap.path.insert(0, str(scripts))
+            break
+    try:
+        from squad_boss import halt_reports  # noqa: PLC0415
+    except ImportError:
+        return set()
+    return set(halt_reports(project))
+
+
 #: A menu option the lead may confirm: its effect is a registry write the contract
 #: already prescribes. Matched against the option's own text, which the session wrote.
 FLOW_MARKERS = (
@@ -683,11 +719,8 @@ class Lead:
         else:
             ended = phrases["ended"].format(verdict=verdict) if verdict else ""
             history = phrases["some"].format(count=count, item=item, ended=ended)
-        if self.project is not None:
-            directory = records_dir(self.project, "implementations")
-            if directory is not None and any(
-                    directory.glob(f"*{item[2:]}*-BLOCKED.md")):
-                history += phrases["blocked"]
+        if self.project is not None and item in _halted_items(self.project):
+            history += phrases["blocked"]
         template = _START_TEMPLATES.get(self.language, _START_TEMPLATES[DEFAULT_LANGUAGE])
         return template.format(item=item, why=why.rstrip(". "), history=history)
 
