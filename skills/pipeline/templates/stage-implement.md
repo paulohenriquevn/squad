@@ -225,6 +225,27 @@ python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/m
     --because "IMPLEMENT halted: <the reason, in one line>"
 ```
 
+**If a halt is later WITHDRAWN, walk it forward before you continue.**
+
+```bash
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to planned \
+    --because "IMPLEMENT halt withdrawn: <why it no longer stands, in one line>"
+```
+
+The walk-back above is the only half this file carried until 2026-09-16, and the
+asymmetry cost an item its release. Measured on a consumer: B-022 halted, walked back
+to `approved`, had its halt withdrawn two days later with `IMPLEMENTATION_COMPLETE`
+emitted — and nothing walked the status forward, because nothing told anyone to.
+
+It stayed `approved` holding a 9945-byte implementation record. **`approved -> shipped`
+is not a legal transition**, so the finished work could not be released without either
+re-running IMPLEMENT over it or issuing this hop by hand from knowledge no document
+carried.
+
+Withdrawal is not rare and the kit already models it elsewhere: `score_alignment.py`
+reads `WITHDRAWN` and `RESTORED` markers on a sign-off precisely because a retraction
+that cannot be retracted is a one-way door. A halt deserves the same, and this is it.
+
 `planned` means work is in flight. An item left `planned` by a lane that stopped is
 invisible to SELECT — measured 2026-09-15: it appears in none of `queue`,
 `awaiting_plan` or `awaiting_human`, so it is neither scheduled nor shipped nor
