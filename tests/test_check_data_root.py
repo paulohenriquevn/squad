@@ -92,3 +92,38 @@ def test_this_repository_follows_the_rule_it_enforces(tmp_path: Path) -> None:
     stale = [r for r in check_project(_REPO) if r.state in ("UNMIGRATED", "SPLIT")]
 
     assert not stale, [f"{r.state} {r.relative} ({r.files} files)" for r in stale]
+
+
+def test_data_written_inside_the_installed_kit_is_seen(tmp_path: Path) -> None:
+    """The one path a kit script was actively writing to was the one this gate could not
+    see.
+
+    Measured on a consumer 2026-09-16: `convene_panel.py` resolved its project as
+    `parents[2]`, which is `.claude/` in a plugin install, and `write_records_dir`
+    produced `.claude/.squad/records/panels/` — six files, two of them discover
+    assignments no later run regenerates. This gate reported SPLIT for two other paths and
+    said nothing about that one.
+
+    It gets its own state because it is worse than SPLIT: `.claude/` is gitignored AND
+    replaced wholesale by the installer, so the records reach nobody and are scheduled for
+    deletion, while a reader resolving the write root reports absence.
+    """
+    (tmp_path / ".squad" / "records").mkdir(parents=True)
+    (tmp_path / ".squad" / "records" / "live.md").write_text("here\n", encoding="utf-8")
+    stranded = tmp_path / ".claude" / ".squad" / "records" / "panels"
+    stranded.mkdir(parents=True)
+    (stranded / "B-001-plan.md").write_text("stranded\n", encoding="utf-8")
+
+    states = {r.relative: r.state for r in check_project(tmp_path)}
+    assert states.get(".claude/.squad") == "INSIDE_KIT", states
+
+
+def test_a_clean_project_does_not_gain_the_new_state(tmp_path: Path) -> None:
+    """Widening a scan must not invent findings. A kit tree with no data under it is the
+    normal case and stays silent."""
+    (tmp_path / ".squad" / "records").mkdir(parents=True)
+    (tmp_path / ".squad" / "records" / "live.md").write_text("here\n", encoding="utf-8")
+    (tmp_path / ".claude" / "skills").mkdir(parents=True)
+    (tmp_path / ".claude" / "skills" / "x.md").write_text("a skill\n", encoding="utf-8")
+
+    assert not any(r.state == "INSIDE_KIT" for r in check_project(tmp_path))

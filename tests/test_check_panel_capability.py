@@ -255,3 +255,47 @@ def test_an_unparseable_declaration_is_unchecked(tmp_path: Path) -> None:
 def test_comments_and_blank_lines_are_not_reviewers(tmp_path: Path) -> None:
     body = "# reviewer = ghost | x | claude-opus-5 | builtin\n\n\n" + VALID
     assert _check(tmp_path, body, on_path=("codex",)) is PanelCapability.HOLDS
+
+
+def test_the_success_line_names_the_fact_it_measured() -> None:
+    """This gate runs nothing — `grep -cE 'subprocess|Popen|run\\('` over it returns 0 —
+    and `shutil.which` is its only probe. So it measures whether a BINARY is on PATH and
+    said "all reachable", which is a claim about the model behind it.
+
+    Measured on a consumer 2026-09-16: it printed `all reachable` in the same minute a
+    `gpt-5-codex` seat terminated with "the selected model may not exist or you may not
+    have access" — after two sibling seats had already been dispatched and spent. Every
+    gated phase in that project routes an orthogonal seat to that model, so no panel could
+    reach 2-of-3, and the premise gate announced HOLDS.
+
+    `cycle-plan.md` gives this gate's purpose as "a violated premise, reported before the
+    first item is selected". An overclaim here costs the whole run rather than one seat,
+    which is why the wording is load-bearing and not cosmetic.
+
+    The failure message was already honest — "no such agent, or no such binary on PATH".
+    Only the success message overclaimed.
+    """
+    source = (Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
+              / "check_panel_capability.py").read_text(encoding="utf-8")
+    holds = source.split("PanelCapability.HOLDS: (")[1].split("),")[0]
+    # The CLAIM is the first line; the rest explains why the old wording was wrong and
+    # necessarily quotes it. Fourth time today a guard of mine tripped on its own
+    # explanation — the same shape as reading a fenced heading as document structure.
+    claim = next(l for l in holds.splitlines() if l.strip().startswith('"'))
+    assert "all reachable" not in claim, \
+        "the success line still claims reachability it did not measure"
+    assert "PATH" in holds and "not the model" in holds, \
+        "the success line does not say which of the two facts it checked"
+
+
+def test_the_gate_still_runs_nothing_which_is_why_the_wording_matters() -> None:
+    """If this gate ever gains a real probe, the wording above becomes understated rather
+    than wrong — and this test is the reminder to revisit it deliberately."""
+    import re  # noqa: PLC0415
+
+    source = (Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
+              / "check_panel_capability.py").read_text(encoding="utf-8")
+    code = "\n".join(line for line in source.splitlines()
+                     if not line.lstrip().startswith(("#", '"', "'")))
+    assert not re.search(r"\bsubprocess\b|\bPopen\b", code), \
+        "this gate now executes something — revisit the success wording"

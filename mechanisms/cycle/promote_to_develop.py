@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -112,6 +113,36 @@ def _reviews_that_drifted(project: Path) -> list[str]:
     return drifted
 
 
+
+def _owner_repo(call, git) -> str | None:
+    """`owner/name` from the push remote, for `gh -R`.
+
+    Reads the URL rather than asking `gh`, because asking `gh` is the thing that fails:
+    it cannot resolve an SSH host alias, and the alias is exactly the case this exists
+    for. Both URL shapes carry the slug in the same place —
+    `git@host:owner/repo.git` and `https://host/owner/repo.git` — so the parse is the
+    tail, not the host.
+
+    None when the remote is absent or shaped like neither, which leaves the call unscoped
+    and the behaviour exactly as it was.
+    """
+    result = call(git, ["remote", "get-url", "origin"])
+    if result is None or result[0] != 0:
+        return None
+    url = result[1].strip()
+    # The host part is everything before the first `/`. If it carries a `:`, the slug
+    # starts after it — that covers `git@host:owner/repo`, `host:owner/repo` (an alias
+    # with the user in ssh config, which is the shape measured on the consumer) and
+    # `ssh://host:22/owner/repo`. An `https://` URL has `:` in the scheme, so the scheme
+    # is stripped first or the parse would start after `//`.
+    stripped = re.sub(r"^[a-z][a-z0-9+.-]*://", "", url, flags=re.IGNORECASE)
+    head, _, rest = stripped.partition("/")
+    tail = (head.split(":", 1)[1] + "/" + rest) if ":" in head else stripped
+    tail = tail.rstrip("/").removesuffix(".git")
+    parts = [p for p in tail.split("/") if p]
+    return "/".join(parts[-2:]) if len(parts) >= 2 else None
+
+
 def promote(
     root: Path,
     *,
@@ -147,7 +178,20 @@ def promote(
         )
         return report
 
-    status = call(git, ["status", "--porcelain"])
+    # `--untracked-files=no`. A promotion is a MERGE OF COMMITS, and an untracked file is
+    # in no commit — so it cannot affect what this gate guards, and counting it refuses on
+    # a condition that cannot occur.
+    #
+    # Measured on a consumer 2026-09-16, holding the first item ever to cross the whole
+    # chain: 12 entries from `git status --porcelain`, ALL of them `??`, and
+    # `--untracked-files=no` returning nothing. Among the twelve was
+    # `.squad/wiki/decisions/...` — and `.gitignore` un-ignores `.squad/wiki/` ON PURPOSE,
+    # because `records-location.md` calls it durable knowledge that should be versioned.
+    #
+    # So the kit's own designed output directory made the kit's own promotion gate refuse,
+    # and every consumer that has written one wiki document hits it on its first
+    # promotion, forever, told that their tree "promotes a state nobody reviewed".
+    status = call(git, ["status", "--porcelain", "--untracked-files=no"])
     if status is None or status[0] != 0:
         report.exit_code = UNMEASURED
         report.lines.append("git could not report the working tree state")
@@ -156,9 +200,23 @@ def promote(
         n = len(status[1].strip().splitlines())
         report.exit_code = REFUSED
         report.lines.append(
-            f"{n} uncommitted change(s): a dirty tree promotes a state nobody reviewed"
+            f"{n} uncommitted change(s) to TRACKED files: a dirty tree promotes a state "
+            f"nobody reviewed"
         )
         return report
+
+    # Untracked files are still worth SAYING — one may be work somebody forgot to add —
+    # but a warning is what that is, not a refusal. The caution and the trigger are
+    # separate facts and the old message merged them.
+    untracked = call(git, ["ls-files", "--others", "--exclude-standard"])
+    if untracked is not None and untracked[0] == 0 and untracked[1].strip():
+        paths = untracked[1].strip().splitlines()
+        shown = ", ".join(paths[:4]) + ("…" if len(paths) > 4 else "")
+        report.lines.append(
+            f"WARNING: {len(paths)} untracked file(s) will not travel with this "
+            f"promotion — {shown}. Not a refusal: a merge carries commits, and these are "
+            f"in none. Check whether any is work you meant to add."
+        )
 
     ahead = call(git, ["rev-list", "--count", f"origin/{TARGET}..HEAD"])
     if ahead is None or ahead[0] != 0:
@@ -192,7 +250,23 @@ def promote(
         )
         return report
 
-    existing = call(gh, ["pr", "list", "--base", TARGET, "--head", SOURCE,
+    # `-R OWNER/NAME`, derived from the remote rather than inferred by `gh`.
+    #
+    # An SSH host alias — `git@<alias>:<owner>/<repo>.git`, what anyone with two GitHub
+    # identities on one machine ends up with — defeats every unaided `gh` call with "none
+    # of the git remotes point to a known GitHub host". Measured on a consumer 2026-09-16,
+    # holding the first item ever to cross the whole chain, one flag from `develop`:
+    # `gh pr list -R <owner>/<repo>` answered correctly in the same minute the unaided
+    # call refused.
+    #
+    # The kit already solved this once. `board_issues.py` takes `--issues-repo OWNER/NAME`
+    # for exactly this cause and says so in its own words — "it is produced by an SSH host
+    # alias, and the fix is one flag away". The promotion inferred where the board
+    # declares, and the two are the same repository.
+    repo_slug = _owner_repo(call, git)
+    scoped = ["-R", repo_slug] if repo_slug else []
+
+    existing = call(gh, ["pr", "list", *scoped, "--base", TARGET, "--head", SOURCE,
                          "--state", "open", "--json", "number,url"])
     if existing is None:
         report.exit_code = UNMEASURED
@@ -220,7 +294,7 @@ def promote(
         number = open_prs[0]["number"]
         report.lines.append(f"reusing open PR #{number} — a second one would split the review")
     else:
-        created = call(gh, ["pr", "create", "--base", TARGET, "--head", SOURCE,
+        created = call(gh, ["pr", "create", *scoped, "--base", TARGET, "--head", SOURCE,
                             "--title", f"promote: {SOURCE} → {TARGET}",
                             "--body", f"Promotion of {count} commit(s). No version is cut "
                                       f"here — see rules/cycle-release.md § Two cuts."])

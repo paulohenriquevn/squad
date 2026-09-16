@@ -64,6 +64,31 @@ _UNPROTECTED_MARKERS = ("branch not protected", "http 404", "not found")
 #: And these when it could not answer at all.
 _UNAUTHENTICATED_MARKERS = ("auth login", "authentication", "not logged", "http 401", "bad credentials")
 
+#: Causes that NEVER resolve on their own, and were absent from this gate's stated three.
+#:
+#: Measured on a consumer 2026-09-16: `gh auth status` logged in, and the endpoint still
+#: refused —
+#:
+#:   HTTP 403  "Upgrade to GitHub Pro or make this repository public"
+#:   gh        "none of the git remotes point to a known GitHub host"   (SSH host alias)
+#:
+#: The stated remediations were "install gh" and "log in", and both were already true. An
+#: absent `gh` gets installed and an unauthenticated one logs in; a PRIVATE repository on
+#: a plan that does not expose branch protection stays UNCHECKED forever, and so does one
+#: reached through an SSH host alias `gh` cannot resolve.
+#:
+#: It matters beyond the wording. `git-safety.md` says the PR requirement is enforced
+#: "server-side, unbypassable" BY branch protection. A 403 on that endpoint is strong
+#: evidence the protection is not configured at all — so the repository has the ORIGIN
+#: guarantee (the local hook: work was born on `workspace`) and NOT the REVIEW guarantee.
+#: That file already names both states as possible; nothing had ever measured which one a
+#: given repository is in.
+_PERMANENT_MARKERS = (
+    ("upgrade to github pro", "this repository's plan does not expose branch protection"),
+    ("http 403", "the API refused the protection endpoint (403)"),
+    ("known github host", "the git remote is an SSH host alias `gh` cannot resolve"),
+)
+
 
 def _default_runner(args: list[str]) -> tuple[int, str, str]:
     done = subprocess.run(args, capture_output=True, text=True, check=False)
@@ -101,6 +126,13 @@ def check_merge_autonomy(*, trunk: str, gh: GhRunner | None = None) -> PremiseRe
     if code != 0:
         if any(marker in haystack for marker in _UNPROTECTED_MARKERS):
             return PremiseResult.HOLDS
+        for marker, _ in _PERMANENT_MARKERS:
+            if marker in haystack:
+                # Still UNCHECKED — the enum stays stable because six readers compute
+                # from it, the same reason `no_commit_reason` is a field and not a
+                # status. What changes is what the reader is told: `permanent_cause`
+                # carries the case, and `main` prints it.
+                return PremiseResult.UNCHECKED
         return PremiseResult.UNCHECKED
 
     try:
@@ -149,6 +181,19 @@ _MESSAGES = {
         "\n"
         "This is not a pass. The premise may hold or may not; nothing here tested it. "
         "`gh`, authenticated, is a declared requirement of the kit (README § Quick start)."
+        "\n"
+        "\nSome causes NEVER resolve, and the two remediations above do not reach them: a "
+        "PRIVATE repository on a plan that does not expose branch protection (HTTP 403, "
+        "\"Upgrade to GitHub Pro\"), and a remote reached through an SSH host alias `gh` "
+        "cannot resolve. Both were measured on a consumer whose `gh auth status` was "
+        "already logged in."
+        "\n"
+        "\nWhen the cause is the 403: `git-safety.md` enforces the PR requirement "
+        "\"server-side, unbypassable\" BY branch protection, so an API that forbids "
+        "reading it is strong evidence the protection is not configured. That repository "
+        "has the ORIGIN guarantee — the local hook, work born on `workspace` — and not "
+        "the REVIEW guarantee. Both states are named in that file as possible; this is "
+        "the first thing that measures which one you are in."
     ),
 }
 

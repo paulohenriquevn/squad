@@ -12,10 +12,70 @@ your job is to make it findable by the people who did not watch it happen.
 
 ## Where you write
 
+> **Run each fenced block as ONE bash invocation.** The lines share shell state —
+> a variable set on the first is used on the third — and a harness that runs each
+> line as its own call gives the later ones an empty variable and a path like
+> `/skills/...`. Measured 2026-09-16 by executing every read-only command in all
+> seven generated briefs one at a time: 3 of 19 failed exactly that way.
+
+
 **Inside the lane's worktree, on its branch — never in the main tree.** IMPLEMENT
-created `pipeline/{LANE}`; your changelog entry belongs on it, beside the
+created the lane; your changelog entry belongs on it, beside the
 change it describes. An entry written on the main branch describes work that is
 not there yet, and separates the record from the thing it records.
+
+**Find the lane before you write to it.**
+
+```bash
+# The record DECLARES the lane in its frontmatter. Read it; do not reconstruct it.
+RECORD={REPO}/.squad/records/implementations/{ITEM}-implementation.md
+LANE_BRANCH=$(sed -n '1,20p' "$RECORD" | grep -oE '^branch:[[:space:]]*\S+' | head -1 | awk '{print $2}')
+```
+
+**Frontmatter first, discovery only when it is absent.** 5 of 6 implementation records on
+a consumer 2026-09-15 carry `branch:`. The first version of this block skipped it and
+inferred the lane from `git branch --contains` over SHAs in the body — reconstructing a
+fact the document states, and getting it wrong, because the body correctly documents BOTH
+dispatch attempts and the SHA it happened to reach belonged to the discarded one. A rule
+that picks one SHA out of fifteen picked against the section that answers the question.
+
+When `branch:` is absent, and only then:
+
+```bash
+# Discovery is the FALLBACK. Work reaches an item by more than one path — this pipeline
+# creates `pipeline/<subject>`, a direct dispatch creates `impl/<subject>` — so no prefix
+# may be assumed. Work reaches an item by more than one path —
+# this pipeline creates `pipeline/<subject>`, a direct dispatch creates `impl/<subject>`,
+# and a template that hardcodes one prefix looks for a branch that does not exist.
+CHECKPOINT={REPO}/.squad/records/implementations/.progress-{ITEM}.json
+# One SHA per LINE, read with `while read`: `for sha in $SHAS` does not word-split in
+# zsh, and the whole list arrives as a single malformed object name. Measured here.
+python3 -c "import json,sys;[print(t['commit_sha']) for t in json.load(open(sys.argv[1]))['tasks'] if t.get('commit_sha')]" "$CHECKPOINT" \
+  | while read -r sha; do git -C {REPO} branch --contains "$sha" --format='%(refname:short)'; done | sort -u
+grep -oE '\b[0-9a-f]{7,40}\b' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | sort -u | head
+```
+
+**When `branch:` is present it DECIDES, and the discovery above does not run.** The field
+is a person's declaration of which lane survived; re-deriving it is how a stage reaches an
+answer that disagrees with the document while looking derived.
+
+Run the discovery only to REPORT, never to choose — and report it when it disagrees, as a
+line in your result rather than a refusal:
+
+> `branch:` names `<declared>`; the checkpoint's SHAs are on `<other>`. Released the
+> declared lane. The checkpoint describes a different one and somebody should look.
+
+Measured on a consumer 2026-09-16: exactly that disagreement, on the first item ever to
+cross the whole chain. Two lanes implemented it thirty minutes apart, the checkpoint kept
+the first lane's SHAs and the record's frontmatter kept the one a person adjudicated the
+keeper.
+
+An earlier version of this brief said to STOP when the two disagree. That was wrong in a
+way worth recording: it contradicted the line above it — if the frontmatter decides, there
+are not two sources to disagree — and it would have deadlocked the item, because the
+checkpoint cannot be rewritten without erasing the other lane's record of its own work.
+A stage that refuses on a question its own contract already answered is a stage that
+cannot finish.
 
 ## What you do
 
@@ -33,8 +93,12 @@ changed for them.
 **2. Move the item.**
 
 ```bash
-KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
-python3 "$KIT/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to shipped
+# The kit path is resolved INSIDE the command. A `KIT=` assignment on its own line
+# assumes shell state survives between commands, and in a harness whose Bash runs
+# each call in a fresh process it does not — `$KIT` arrives empty and the command
+# opens `/skills/...`. Measured 2026-09-16 by running every read-only command in
+# all seven generated briefs: 3 of 19 failed this way.
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to shipped
 ```
 
 **The kit is resolved at `{REPO}`, not relative to you.** You write inside the

@@ -146,7 +146,20 @@ def check_panel_capability(
 
 _MESSAGES = {
     PanelCapability.HOLDS: (
-        "A panel can be formed for {phases}: {n} seats across {fams}, all reachable."
+        "A panel is DECLARED for {phases}: {n} seats across {fams}, every non-builtin "
+        "binary present on PATH.\n"
+        "  This checks the BINARY, not the model behind it. `shutil.which` was the only "
+        "probe — this gate runs nothing — so a seat whose CLI resolves and whose model "
+        "is unavailable reads as reachable here and terminates when dispatched.\n"
+        "  Measured on a consumer 2026-09-16: this line printed `all reachable` in the "
+        "same minute a `gpt-5-codex` seat terminated with \"the selected model may not "
+        "exist or you may not have access\" — after two sibling seats had already been "
+        "dispatched and spent. Every gated phase in that project routes an orthogonal "
+        "seat to that model, so no panel could reach 2-of-3, and it was announced as "
+        "HOLDS.\n"
+        "  This is the PREMISE gate. `cycle-plan.md` gives its purpose as \"a violated "
+        "premise, reported before the first item is selected\" — so an overclaim here "
+        "costs the whole run, not one seat."
     ),
     PanelCapability.VIOLATED: (
         "PREMISE VIOLATED — no valid review panel can be formed from "

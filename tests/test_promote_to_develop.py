@@ -136,3 +136,94 @@ def test_it_never_touches_a_version() -> None:
     )
     for forbidden in ("bump_version", "compute_next_version", "promote_unreleased", "git tag"):
         assert forbidden not in code, f"promotion must not reach for {forbidden}"
+
+
+def test_an_untracked_file_does_not_refuse_a_promotion(tmp_path: Path) -> None:
+    """A promotion is a MERGE OF COMMITS. An untracked file is in no commit, so it cannot
+    affect what this gate guards — and counting it refuses on a condition that cannot
+    occur.
+
+    Measured on a consumer 2026-09-16, holding the first item ever to cross the whole
+    chain: twelve entries from `git status --porcelain`, ALL of them `??`, and
+    `--untracked-files=no` returning nothing.
+
+    Among the twelve was `.squad/wiki/decisions/...`, and `.gitignore` un-ignores
+    `.squad/wiki/` ON PURPOSE — `records-location.md` calls it durable knowledge that
+    should be versioned. So the kit's own designed output directory made the kit's own
+    promotion gate refuse, and every consumer that has written one wiki document hits it
+    on its first promotion, forever, told their tree "promotes a state nobody reviewed".
+
+    The caution is not worthless and is kept as a WARNING: an untracked file may be work
+    somebody forgot to add. What was wrong is that the reason did not describe the
+    trigger.
+    """
+    source = (Path(__file__).resolve().parents[1] / "mechanisms" / "cycle"
+              / "promote_to_develop.py").read_text(encoding="utf-8")
+    # Every `git status --porcelain` in this file must carry the flag. Slicing at the
+    # first `REFUSED` was the first version of this assertion and it cut before the call,
+    # because an earlier refusal (the branch check) comes first — the test reading a
+    # region that did not contain what it was asserting about.
+    calls = [line for line in source.splitlines()
+             if '"status", "--porcelain"' in line and not line.lstrip().startswith("#")]
+    assert calls, "no `git status --porcelain` call found at all"
+    for line in calls:
+        assert "--untracked-files=no" in line, \
+            f"this call still counts untracked files as uncommitted changes: {line.strip()}"
+    assert "WARNING:" in source and "ls-files" in source, \
+        "untracked files are no longer reported at all — the caution was lost with the bug"
+
+
+def test_the_refusal_says_it_means_tracked_files() -> None:
+    """`12 uncommitted change(s)` over twelve untracked files was true of nothing. The
+    message now says which set it counted."""
+    source = (Path(__file__).resolve().parents[1] / "mechanisms" / "cycle"
+              / "promote_to_develop.py").read_text(encoding="utf-8")
+    assert "to TRACKED files" in source
+
+
+def test_the_repository_is_named_rather_than_inferred_by_gh() -> None:
+    """An SSH host alias — `host:owner/repo.git`, what anyone with two GitHub identities
+    on one machine ends up with — defeats every unaided `gh` call with "none of the git
+    remotes point to a known GitHub host".
+
+    Measured on a consumer 2026-09-16, holding the first item ever to cross the whole
+    chain, one flag from `develop`: `gh pr list -R <owner>/<repo>` answered correctly in
+    the same minute the unaided call refused. And the remediation compounded it, telling
+    a reader to run `gh auth login` while `gh auth status` reported them logged in — the
+    third gate that day whose remedy could not work for the case it fired on.
+
+    The kit had already solved this once: `board_issues.py` takes `--issues-repo
+    OWNER/NAME` for exactly this cause, in exactly these words. The promotion inferred
+    where the board declares, and they are the same repository.
+    """
+    source = (Path(__file__).resolve().parents[1] / "mechanisms" / "cycle"
+              / "promote_to_develop.py").read_text(encoding="utf-8")
+    for call in ('"pr", "list"', '"pr", "create"'):
+        line = next(l for l in source.splitlines() if call in l)
+        assert "*scoped" in line, f"this gh call is still unscoped: {line.strip()}"
+
+
+def test_every_remote_shape_yields_the_slug() -> None:
+    """The host part is everything before the first `/`; a `:` in it means the slug starts
+    after it. The first version keyed on `@`, and the consumer's remote has the user in
+    ssh config — `alias-host:owner/repo.git` — so it parsed the alias as the slug.
+    """
+    from promote_to_develop import _owner_repo  # noqa: PLC0415
+
+    for url, expected in (
+        ("alias-host:owner/repo.git", "owner/repo"),
+        ("git@github.com:owner/repo.git", "owner/repo"),
+        ("https://github.com/owner/repo.git", "owner/repo"),
+        ("ssh://git@github.com:22/owner/repo.git", "owner/repo"),
+        ("git@github.com:owner/repo", "owner/repo"),
+    ):
+        assert _owner_repo(lambda _b, _a, u=url: (0, u, ""), "git") == expected, url
+
+
+def test_an_unparseable_remote_leaves_the_call_unscoped() -> None:
+    """None rather than a guess: the call stays exactly as it was, which is the behaviour
+    before this existed."""
+    from promote_to_develop import _owner_repo  # noqa: PLC0415
+
+    assert _owner_repo(lambda _b, _a: (1, "", "no such remote"), "git") is None
+    assert _owner_repo(lambda _b, _a: (0, "not-a-url", ""), "git") is None

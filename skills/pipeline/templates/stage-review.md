@@ -17,7 +17,60 @@ a task for you.
 
 ## What you are given
 
-- the branch `pipeline/{LANE}` and the worktree IMPLEMENT created
+> **Run each fenced block as ONE bash invocation.** The lines share shell state —
+> a variable set on the first is used on the third — and a harness that runs each
+> line as its own call gives the later ones an empty variable and a path like
+> `/skills/...`. Measured 2026-09-16 by executing every read-only command in all
+> seven generated briefs one at a time: 3 of 19 failed exactly that way.
+
+
+- the lane branch and the worktree IMPLEMENT created — discovered, not assumed:
+
+```bash
+# The record DECLARES the lane in its frontmatter. Read it; do not reconstruct it.
+RECORD={REPO}/.squad/records/implementations/{ITEM}-implementation.md
+LANE_BRANCH=$(sed -n '1,20p' "$RECORD" | grep -oE '^branch:[[:space:]]*\S+' | head -1 | awk '{print $2}')
+```
+
+**Frontmatter first, discovery only when it is absent.** 5 of 6 implementation records on
+a consumer 2026-09-15 carry `branch:`. The first version of this block skipped it and
+inferred the lane from `git branch --contains` over SHAs in the body — reconstructing a
+fact the document states, and getting it wrong, because the body correctly documents BOTH
+dispatch attempts and the SHA it happened to reach belonged to the discarded one. A rule
+that picks one SHA out of fifteen picked against the section that answers the question.
+
+When `branch:` is absent, and only then:
+
+```bash
+# Discovery is the FALLBACK. Work reaches an item by more than one path — this pipeline
+# creates `pipeline/<subject>`, a direct dispatch creates `impl/<subject>` — so no prefix
+# may be assumed. Work reaches an item by more than one path —
+# this pipeline creates `pipeline/<subject>`, a direct dispatch creates `impl/<subject>`,
+# and a template that hardcodes one prefix looks for a branch that does not exist.
+CHECKPOINT={REPO}/.squad/records/implementations/.progress-{ITEM}.json
+# One SHA per LINE, read with `while read`: `for sha in $SHAS` does not word-split in
+# zsh, and the whole list arrives as a single malformed object name. Measured here.
+python3 -c "import json,sys;[print(t['commit_sha']) for t in json.load(open(sys.argv[1]))['tasks'] if t.get('commit_sha')]" "$CHECKPOINT" \
+  | while read -r sha; do git -C {REPO} branch --contains "$sha" --format='%(refname:short)'; done | sort -u
+grep -oE '\b[0-9a-f]{7,40}\b' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | sort -u | head
+```
+
+**When `branch:` is present it DECIDES, and the discovery above does not run.** The field
+is a person's declaration of which lane survived; re-deriving it is how a stage reaches an
+answer that disagrees with the document while looking derived.
+
+Run the discovery only to REPORT, never to choose — and report a disagreement as a line in
+your result rather than a halt:
+
+> `branch:` names `<declared>`; the checkpoint's SHAs are on `<other>`. Reviewed the
+> declared lane. The checkpoint describes a different one and somebody should look.
+
+An earlier version said to STOP when the two disagree. It contradicted the line above it —
+if the frontmatter decides, there are not two sources — and it would have deadlocked the
+first item ever to cross the whole chain, whose checkpoint names the discarded lane and
+cannot be rewritten without erasing that lane's record of its own work.
+
+
 - the plan at `the plan the orchestrator handed you`
 - the alignment brief the plan traces to
 
@@ -26,7 +79,7 @@ a task for you.
 **1. Does the diff do what the plan said, and only that.**
 
 ```bash
-git -C {REPO} diff HEAD...pipeline/{LANE}
+git -C {REPO} diff HEAD..."$(sed -n '1,20p' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | grep -oE '^branch:[[:space:]]*\S+' | head -1 | awk '{print $2}')"   # the branch discovered above
 ```
 
 A change that also fixes something unrelated is not a bonus. It is a second
@@ -39,7 +92,7 @@ IMPLEMENT reports two runs. Reproduce the first:
 
 ```bash
 LANE_TREE=$(git -C {REPO} worktree list --porcelain \
-    | grep -B2 "^branch refs/heads/pipeline/{LANE}$" | head -1 | cut -d" " -f2)
+    | grep -B2 "^branch refs/heads/$(sed -n '1,20p' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | grep -oE '^branch:[[:space:]]*\S+' | head -1 | awk '{print $2}')$" | head -1 | cut -d" " -f2)
 git -C {REPO} worktree add "$HOME/.squad-worktrees/review-{LANE}-$(date +%s)" HEAD
 # run the new test in the PRE-change tree; it must FAIL
 ```
@@ -66,8 +119,12 @@ check.
 **3. Do the acceptance criteria discriminate NOW.**
 
 ```bash
-KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
-python3 "$KIT/skills/plan-alignment/scripts/check_criteria_discriminate.py" \
+# The kit path is resolved INSIDE the command. A `KIT=` assignment on its own line
+# assumes shell state survives between commands, and in a harness whose Bash runs
+# each call in a fresh process it does not — `$KIT` arrives empty and the command
+# opens `/skills/...`. Measured 2026-09-16 by running every read-only command in
+# all seven generated briefs: 3 of 19 failed this way.
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/plan-alignment/scripts/check_criteria_discriminate.py" \
     {REPO}/.squad/records/alignment/{ITEM}-alignment.md \
     --repo-root "$LANE_TREE"
 ```

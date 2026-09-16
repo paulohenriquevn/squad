@@ -687,3 +687,327 @@ def test_the_judge_reads_the_brief_at_its_path_in_the_repository(tmp_path: Path)
     repo = str(tmp_path / "repo")
     assert f"{repo}/.squad/records/alignment/" in brief
     assert "scratchpad" in brief, "the brief does not name the failure it is preventing"
+
+
+def test_the_lane_is_discovered_not_assumed(tmp_path: Path) -> None:
+    """Work reaches an item by more than one path. This pipeline creates
+    `pipeline/<subject>`; a direct dispatch creates `impl/<subject>`; and a template that
+    hardcodes one prefix looks for a branch that does not exist.
+
+    Measured on a consumer 2026-09-15: the item furthest along had its keeper lane at
+    `impl/audit-read-failure-is-observable` while REVIEW and RELEASE both named
+    `pipeline/{LANE}`. RELEASE would have written its changelog entry to a branch that was
+    not there.
+    """
+    for stage in ("review", "release"):
+        brief = _briefs(tmp_path)[stage]
+        assert "pipeline/" not in brief.split("## What you return")[0] or \
+            "branch --contains" in brief, f"{stage} assumes a branch prefix"
+        assert "branch --contains" in brief, f"{stage} does not discover the lane"
+
+
+def test_the_declared_lane_decides_and_the_discovery_only_reports(tmp_path: Path) -> None:
+    """The first version of this test demanded the stage STOP when the two sources
+    disagree, and the refusal was the defect.
+
+    It contradicted the line above it — if `branch:` in the frontmatter decides, there are
+    not two sources to disagree — and it would have deadlocked the first item ever to
+    cross the whole chain: the checkpoint names the discarded lane and cannot be rewritten
+    without erasing that lane's record of its own work. A stage that refuses on a question
+    its own contract already answered is a stage that cannot finish.
+
+    So the frontmatter decides, the discovery runs to REPORT, and the disagreement is a
+    line in the result rather than a halt. Found by executing every command in the
+    generated RELEASE brief against a real tree rather than by reading the template.
+    """
+    for stage in ("review", "release"):
+        brief = _briefs(tmp_path)[stage]
+        assert "does not run" in brief or "DECIDES" in brief, \
+            f"{stage} does not say the declared lane wins"
+        assert "never to choose" in brief, \
+            f"{stage} does not say what the discovery is for"
+        assert "STOP and report both" not in brief, \
+            f"{stage} still halts on a question its contract answers"
+
+
+def test_the_discovery_command_does_not_depend_on_the_shell(tmp_path: Path) -> None:
+    """`for sha in $SHAS` does not word-split in zsh: the whole list arrives as one
+    malformed object name. Found by running the generated command in the shell this
+    machine actually uses, rather than the one the snippet was written in."""
+    for stage in ("review", "release"):
+        brief = _briefs(tmp_path)[stage]
+        assert "while read -r sha" in brief, f"{stage} relies on word-splitting"
+        # The COMMENT names the broken form to explain why it went. A line that starts
+        # with `#` is documentation, not a command — third time today a guard of mine
+        # failed on its own explanation, which is the same shape as reading a fenced
+        # heading as document structure.
+        commands = [line for line in brief.splitlines()
+                    if not line.lstrip().startswith("#")]
+        assert not any("for sha in $SHAS" in line for line in commands), \
+            f"{stage} still runs the word-splitting form"
+
+
+def test_the_lane_is_read_from_the_record_before_it_is_inferred(tmp_path: Path) -> None:
+    """The implementation record DECLARES the lane in its frontmatter — 5 of 6 records on
+    a consumer carry `branch:`. The first version of this block skipped it and inferred
+    the lane from `git branch --contains` over SHAs in the body.
+
+    It got the wrong answer, and the way it got it is the lesson: the body correctly
+    documents BOTH dispatch attempts, 15 SHAs split 5 keeper / 5 discarded / 5 shared, and
+    the one the rule happened to reach was discarded-only. A rule that picks one SHA out
+    of fifteen picked against the `## Commits` table, which is the section that answers
+    the question.
+
+    Reconstructing a fact a document states is how you get an answer that disagrees with
+    the document while looking derived.
+    """
+    for stage in ("review", "release"):
+        brief = _briefs(tmp_path)[stage]
+        head = brief.split("branch --contains")[0]
+        assert "^branch:" in head, \
+            f"{stage} infers the lane before reading the field that declares it"
+        assert "Frontmatter first" in brief
+
+
+def test_the_writing_stage_produces_the_audit_the_next_phase_reads(tmp_path: Path) -> None:
+    """Three files, each correct alone, meeting where nothing ran:
+
+        cycle-phases.txt     code-quality | nested-in: implement
+        cq_invoke.py:62      passes --no-audit-write
+        check_upstream_gate  requires {slug}-code-quality-*.md, BLOCKER when absent
+
+    The nested run executes and returns a verdict; it is told not to write the one file
+    the next phase reads. Measured on a consumer 2026-09-15: 8 audit files in the whole
+    registry, every one a `deps-audit`, ZERO `code-quality`. Five of six implemented items
+    were refused at REVIEW for an artifact the nested run was instructed not to produce,
+    nothing had ever reached `shipped`, and the items were being blamed for it.
+
+    Suppressing the write inside validate is right — validate runs many times per item.
+    What was missing is the standalone run, and without it the chain needs a person per
+    item, which is not a chain.
+    """
+    brief = _briefs(tmp_path)["implement"]
+    assert "run_code_quality.py" in brief, \
+        "the writing stage never produces the audit /review requires"
+    assert "--no-audit-write" in brief, \
+        "the brief does not say why the nested run left no file"
+
+
+def test_the_declaration_does_not_read_as_already_done() -> None:
+    """`nested-in: implement` alone reads as "already handled" — which is how the marker
+    added this same afternoon made the gap harder to see, not easier. The declaration has
+    to say which HALF is nested."""
+    phases = (Path(__file__).resolve().parents[3] / "rules" / "cycle-phases.txt"
+              ).read_text(encoding="utf-8")
+    line = next(l for l in phases.splitlines() if l.startswith("code-quality"))
+    assert "VERDICT" in line and "AUDIT FILE" in line, \
+        f"the declaration does not separate the nested verdict from the written file: {line}"
+
+
+def test_the_plan_stage_writes_a_plan_and_scores_it(tmp_path: Path) -> None:
+    """`rules/cycle-plan.md` puts `/plan-confidence` between PLAN and IMPLEMENT: INVALID
+    returns to rewrite, a low band goes to `/plan-improve`, and only
+    SHIPPABLE_WITH_CAVEATS or better is ready.
+
+    The pipeline's PLAN stage was 24 lines of prose carrying no command at all — while
+    the stage after it carries 276 — so it wrote no plan and ran no gate. Measured on a
+    consumer 2026-09-16: 27 substantive plans on disk, 773 to 2025 lines and 8 to 15
+    tasks each, and ZERO plan-confidence artifacts. The first one scored afterwards came
+    back INVALID at 51.4 with two hard caps.
+
+    A gate nobody runs is indistinguishable from a gate that passed. Same shape as the
+    code-quality audit the nested run was told not to write, one phase earlier.
+    """
+    brief = _briefs(tmp_path)["plan"]
+    assert "run_structural.py" in brief, "the PLAN stage runs no confidence gate"
+    assert "records/plans/" in brief, "the PLAN stage names no path for the plan"
+    assert "INVALID" in brief, "the brief does not say what a failing score means"
+
+
+def test_discover_answers_the_four_questions(tmp_path: Path) -> None:
+    """DISCOVER's contract, set by the owner 2026-09-16: is it possible, what is the
+    technique, what is the pattern, where in the system — implemented, modified or
+    removed.
+
+    Measured before the change: 57 opportunity documents, 503 lines median, 31,281 lines
+    in total, for 6 items that reached implementation. The four questions are what the
+    later phases actually consume; the rest was written and not read.
+    """
+    brief = _briefs(tmp_path)["discover"]
+    for question in ("Is it possible", "What is the technique", "What is the pattern",
+                     "Where in the system"):
+        assert question in brief, f"DISCOVER does not answer: {question}"
+    assert "`NEW`, `MODIFY` or `DELETE`" in brief, \
+        "a path with no verb leaves the next phase guessing"
+
+
+def test_plan_is_executable_by_someone_who_does_not_know_the_project(tmp_path: Path) -> None:
+    """PLAN's contract, set by the owner 2026-09-16: a developer who has never seen this
+    project must be able to follow it and finish.
+
+    That justifies length the earlier measurement made look wasteful — 1,276 lines median
+    — and it also sets the limit. The plan carries what the reader lacks, which is
+    knowledge of THIS codebase, and not what a competent developer brings.
+    """
+    brief = _briefs(tmp_path)["plan"]
+    assert "never seen this project" in brief
+    # The prose is wrapped, so the sentence spans two lines. Asserting on a phrase that
+    # crosses a wrap point tests the line width, not the content — fourth time in two days
+    # a check of mine read the rendering instead of the text.
+    flat = " ".join(brief.split())
+    assert "does NOT carry what a competent developer brings" in flat, \
+        "the contract has no upper bound, and length is not rigour"
+
+
+def test_every_path_in_every_generated_brief_resolves(tmp_path: Path) -> None:
+    """Generate all seven briefs and check that every script path inside a fenced block
+    exists. This is the check that would have caught five separate template defects across
+    two days, each found one at a time when a stage failed on a consumer:
+
+      IMPLEMENT  resolved the kit relative to the caller
+      REVIEW     same, plus a brief path under `.squad/` a worktree does not carry
+      RELEASE    same, on the only writer of a status line
+      JUDGE      read the brief "under the cycle's alignment records" — no path at all
+      IMPLEMENT  `python3 .claude/skills/.../check_tdd_shape.py`, the last one left
+
+    Every one was invisible to a test of the template's prose and visible in two seconds
+    to a test of its OUTPUT. A brief is a program whose paths are only checked when an
+    agent runs it, unless something like this runs first.
+    """
+    import re  # noqa: PLC0415
+
+    assert _run(tmp_path).returncode == 0
+    repo = tmp_path / "repo"
+    (repo / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
+    unresolved: list[str] = []
+    for stage in STAGES:
+        brief = (tmp_path / "agents" / f"{stage}.md").read_text(encoding="utf-8")
+        inside = False
+        for line in brief.splitlines():
+            if line.startswith("```"):
+                inside = not inside
+                continue
+            if not inside:
+                continue
+            # A path that names the kit must be anchored at the repository, whatever
+            # spelling it uses — `$KIT/...` or the absolute form substituted in.
+            for match in re.finditer(r"(?<![\w$/])(\.claude|\.squad)/[\w./-]+", line):
+                unresolved.append(f"{stage}: {match.group(0)} (relative to the caller)")
+    assert not unresolved, (
+        f"these resolve against whatever tree the stage runs in, and a worktree carries "
+        f"neither `.claude/` nor `.squad/`: {unresolved}")
+
+
+def test_no_command_depends_on_shell_state_from_a_previous_line(tmp_path: Path) -> None:
+    """A `KIT=` assignment on its own line assumes shell state survives between commands.
+
+    In a harness whose Bash runs each call in a fresh process — which is what the agent
+    executing these briefs has, and it says so — `$KIT` arrives empty and the command
+    opens `/skills/...`. Measured 2026-09-16 by RUNNING every read-only command in all
+    seven generated briefs: 3 of 19 failed exactly this way, in five templates.
+
+    Every command carries its own resolution now. The fix is uglier to read and it is the
+    difference between a brief that works and one that works only if the reader happens to
+    paste the whole block.
+    """
+    import re  # noqa: PLC0415
+
+    for stage in STAGES:
+        brief = (tmp_path / "agents" / f"{stage}.md").read_text(encoding="utf-8") \
+            if (tmp_path / "agents" / f"{stage}.md").exists() else _briefs(tmp_path)[stage]
+        inside, assigned = False, set()
+        for line in brief.splitlines():
+            if line.startswith("```"):
+                inside, assigned = not inside, set()
+                continue
+            if not inside or not line.strip() or line.lstrip().startswith("#"):
+                continue
+            match = re.match(r"^(\w+)=", line.strip())
+            if match:
+                assigned.add(match.group(1))
+                continue
+            for used in re.findall(r"\$(\w+)|\$\{(\w+)\}", line):
+                name = used[0] or used[1]
+                # `$1`, `$2` … belong to awk/sed inside the command, not to the shell,
+                # and `$sha` / `$f` are bound by a `while read` or `for` on the SAME line.
+                # A guard that cannot tell those from a shell variable reports the command
+                # it was inserted by — which is what this one did first.
+                if name.isdigit() or name in ("HOME", "PATH", "PWD", "sha", "D", "f"):
+                    continue
+                if "ONE bash invocation" in brief:
+                    # The brief states the block is run as one call, which makes shell
+                    # state between its lines legitimate. Inlining every resolution
+                    # instead would put a `git worktree list | grep | head | cut` in
+                    # three places, and three copies of one derivation drift.
+                    continue
+                assert name in assigned, (
+                    f"{stage}: `${name}` is set on an earlier LINE, and shell state does "
+                    f"not survive between commands in the harness that runs this: "
+                    f"{line.strip()[:70]}")
+
+
+def test_a_gate_is_invoked_with_the_flags_it_requires(tmp_path: Path) -> None:
+    """`check_tdd_shape.py` takes `--plan PLAN` and the brief passed the path positionally,
+    so it exited 2 on its own usage message. Introduced by me while anchoring the path, and
+    found by running the command rather than reading it.
+
+    A path that resolves is not a command that runs.
+    """
+    brief = _briefs(tmp_path)["implement"]
+    lines = brief.splitlines()
+    i = next(n for n, l in enumerate(lines)
+             if "check_tdd_shape.py" in l and "python3" in l)
+    # The command wraps, so the flag may sit on the continuation. Reading only the line
+    # with the script name tests where the wrap fell.
+    whole = " ".join(l.strip().rstrip("\\") for l in lines[i:i + 3])
+    assert "--plan" in whole, \
+        f"check_tdd_shape is invoked without --plan: {whole[:90]}"
+
+
+def test_every_flag_a_brief_passes_exists_in_the_script_it_calls(tmp_path: Path) -> None:
+    """A path that resolves is not a command that runs, and a command that runs is not one
+    whose arguments the script accepts.
+
+    Measured 2026-09-16 by asking each invoked script for its `--help` and comparing:
+    `run_code_quality.py` takes `--repo-root` and the brief passed `--project-root`, so the
+    step that produces the audit `/review` requires would have exited 2 on its own usage
+    message. `run_structural.py` takes the plan PATH positionally and the brief passed
+    `--project-root` too — that one would have stopped all 55 items sitting at PLAN.
+
+    Both were mine, written within two hours of each other while anchoring paths. Anchoring
+    a path and checking a flag are different verifications and I did only the first.
+    """
+    import re  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    briefs = _briefs(tmp_path)
+    repo = tmp_path / "repo"
+    kit = Path(__file__).resolve().parents[3]
+    offenders: list[str] = []
+    for stage, brief in briefs.items():
+        for line in brief.splitlines():
+            if "python3" not in line or ".py" not in line:
+                continue
+            # The path is the LAST `.py` token on the line — a command substitution
+            # resolving the kit root contains quotes and parentheses of its own, and a
+            # regex anchored on the first quote captures a fragment of it. That is the
+            # mistake this test was written after making.
+            script = re.findall(r"([\w./-]+\.py)", line)
+            if not script:
+                continue
+            local = kit / script[-1].split("/skills/", 1)[-1] if "/skills/" in script[-1] else None
+            candidates = list(kit.rglob(Path(script[-1]).name))
+            if not candidates:
+                continue
+            following = brief.split(line, 1)[1].splitlines()[:2]
+            flags = re.findall(r"(--[a-z][a-z-]+)", line + " " + " ".join(following))
+            if not flags:
+                continue
+            helped = subprocess.run(
+                ["python3", str(candidates[0]), "--help"],
+                capture_output=True, text=True, timeout=60)
+            usage = helped.stdout + helped.stderr
+            for flag in flags:
+                if flag not in usage:
+                    offenders.append(f"{stage}: {candidates[0].name} has no {flag}")
+    assert not offenders, offenders

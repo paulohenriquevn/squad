@@ -78,10 +78,28 @@ if (!REPO) {
 const AGENTS = args?.agentsDir ?? 'records/pipeline-agents'
 
 // The generated file IS the system prompt; the task line is all this script adds.
+//
+// Two claims were removed from this string on 2026-09-15 because neither was true.
+//
+// "written to disk before this run" — nothing enforces it. Materialising is the CALLER's
+// Step 1 (`spawn_stages.py`), a workflow script has no filesystem access and cannot
+// check, and on a consumer 8 of 99 items had been materialised: four dispatched items ran
+// with no instruction file at all. Two of the agents said so plainly and reconstructed
+// their contract by diffing sibling stage files rather than implying they had read theirs
+// — which is the honest response and is not a substitute for the file.
+//
+// "versioned so a wrong finding can be traced to the prompt that produced it" — `.squad/*`
+// is gitignored in a consumer repository and `git ls-files .squad` returns 0. The prompt
+// is on one disk. The traceability this sentence promised does not exist, and promising
+// it is worse than its absence: a reader stops looking for the guarantee.
+//
+// What replaces them is an instruction the agent can act on, since the script cannot.
 const stagePrompt = (item, stage, task) =>
-  `Read and obey ${AGENTS}/${item.toLowerCase()}/${stage}.md — it is your ` +
-  `instruction, written to disk before this run and versioned so a wrong ` +
-  `finding can be traced to the prompt that produced it.\n\n${task}`
+  `Read and obey ${AGENTS}/${item.toLowerCase()}/${stage}.md — it is your instruction.\n` +
+  `If that file does not exist, STOP and report it: it should have been written by ` +
+  `\`spawn_stages.py\` before this run, and an agent improvising the contract it was ` +
+  `meant to be handed produces a finding nobody can trace. Do not reconstruct it from ` +
+  `sibling stages and proceed.\n\n${task}`
 
 const BRIEF = {
   type: 'object',

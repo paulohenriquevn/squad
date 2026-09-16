@@ -91,6 +91,44 @@ def check_project(root: Path) -> list[RootReport]:
                       "nothing else says so")
         reports.append(RootReport(relative, files, state, detail))
 
+    # Data written INSIDE the installed kit, which this gate could not see.
+    #
+    # Measured on a consumer 2026-09-16: `convene_panel.py` resolved its project as
+    # `parents[2]`, which is `.claude/` in a plugin install, and `write_records_dir`
+    # produced `.claude/.squad/records/panels/` — six files, two of them discover
+    # assignments no later run regenerates. This gate reported SPLIT for two other paths
+    # and said nothing about the one a kit script was actively writing to.
+    #
+    # It is worse than SPLIT and gets its own state. `.claude/` is gitignored AND replaced
+    # wholesale by the installer: the records reach nobody and are scheduled for deletion,
+    # while a reader resolving the write root reports absence. `records-location.md` names
+    # this blind spot in its own words — "a writer whose destination never passes through
+    # `squad.paths` — taken from argv, joined onto the installed kit, handed down by a
+    # caller."
+    # `DATA_DIRNAME`, not the literal. `squad.paths` owns every data-root spelling and
+    # this is the third time in two days I have written one outside it — the gate that
+    # refuses the literal caught all three, which is the only reason the count is three
+    # rather than unknown.
+    for kit in (root / ".claude", root / DATA_DIRNAME / "kit"):
+        if not kit.is_dir():
+            continue
+        # `DATA_DIRNAME` only. `.claude/records` is the DOCUMENTED legacy plugin layout
+        # and is already classified above as UNMIGRATED or SPLIT; sweeping it here too
+        # reclassified correct findings and broke two existing tests — the scan deciding
+        # what it was looking at instead of measuring, third time today in this session.
+        for inner in (DATA_DIRNAME,):
+            stranded = kit / inner
+            files = len(_documents(stranded))
+            if not files:
+                continue
+            reports.append(RootReport(
+                str(stranded.relative_to(root)), files, "INSIDE_KIT",
+                f"{files} file(s) written into the installed kit. The kit tree is "
+                f"gitignored and replaced wholesale on the next install, so these reach "
+                f"nobody and are scheduled for deletion — while a reader resolving the "
+                f"write root reports absence. A writer resolved the project as the kit "
+                f"directory it lives in."))
+
     if not reports:
         state = "CENTRALISED" if current_has else "EMPTY"
         detail = ("nothing outside the write root" if current_has
@@ -112,7 +150,8 @@ def main(argv: list[str] | None = None) -> int:
         return UNCHECKED
 
     reports = check_project(root)
-    worst = "SPLIT" if any(r.state == "SPLIT" for r in reports) else (
+    worst = ("INSIDE_KIT" if any(r.state == "INSIDE_KIT" for r in reports)
+             else "SPLIT") if any(r.state in ("SPLIT", "INSIDE_KIT") for r in reports) else (
         "UNMIGRATED" if any(r.state == "UNMIGRATED" for r in reports)
         else reports[0].state)
 

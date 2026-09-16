@@ -29,9 +29,42 @@ buys precautions against a hazard that is gone, or withholds one that is not.
 
 ## What you do
 
-1. Read the `{ITEM}` block in `{REPO}/BACKLOG.md` — statement, evidence, DoD.
-2. Read the code it points at.
-3. Decide whether the claimed problem is VISIBLE in the code **today**.
+Read the `{ITEM}` block in `{REPO}/BACKLOG.md` — statement, evidence, DoD — then
+read the code it points at, and **answer four questions**. Everything you write
+serves one of them; anything that serves none of them belongs to another phase.
+
+**1. Is it possible?**
+Does the claimed problem exist in the code TODAY, and can it be solved here?
+`evidence_found: false` is a legitimate and useful answer — an item whose claim
+the code does not support should be killed, and finding that out is worth as much
+as confirming it.
+
+**2. What is the technique?**
+Name it. If the project already solves this shape somewhere, cite the file and
+line and say to follow it. If a known technique applies, name the technique — not
+a paragraph describing one. If a reference project does it, cite it.
+
+**3. What is the pattern?**
+The shape the solution takes in THIS codebase, named the way this codebase names
+it. A pattern nobody here uses is a proposal, and a proposal belongs in the
+alternatives an ADR rejects.
+
+**4. Where in the system — implemented, modified, or removed?**
+Paths. Each one marked `NEW`, `MODIFY` or `DELETE`. A finding with no path is a
+claim, and a path with no verb leaves the next phase guessing which of the three
+you meant.
+
+### What this is not
+
+It is not the plan, and it is not the plan's evidence section rehearsed. PLAN
+reads what you write and builds an executable sequence from it; if you write the
+sequence, two documents describe the work and the next reader has to decide which
+one is current.
+
+Measured on a consumer 2026-09-16: 57 opportunity documents, 503 lines median,
+31,281 lines in total — for 6 items that reached implementation. The four
+questions above are what the later phases actually consume; the rest was written
+and not read.
 
 ## Does Not Own
 

@@ -50,6 +50,14 @@ import shutil
 import sys
 from pathlib import Path
 
+import sys as _sys_bootstrap
+from pathlib import Path as _Path_bootstrap
+
+for _up in _Path_bootstrap(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        _sys_bootstrap.path.insert(0, str(_up))
+        break
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "conventions"))
 
@@ -70,6 +78,30 @@ OK, INVALID, UNREADABLE, UNFILLABLE = 0, 1, 2, 3
 
 
 def repo_root() -> Path:
+    """The PROJECT whose records this writes, not the kit this file lives in.
+
+    `parents[2]` is correct for the standalone repository and wrong for every plugin
+    install: this file sits at `.claude/mechanisms/cycle/`, so two levels up is
+    `.claude/` — the installed kit. `write_records_dir` then produced
+    `.claude/.squad/records/panels/` on a consumer 2026-09-16, six files deep.
+
+    That is the LOUDEST form of a split write root, not a lesser one: `.claude/` is
+    gitignored AND replaced wholesale by the installer, so those records reach nobody and
+    are scheduled for deletion, while a reader resolving the write root reports absence.
+    Two of the six were discover assignments no later run regenerates, and they are gone.
+
+    `records-location.md` names this exact blind spot in its own words — "a writer whose
+    destination never passes through `squad.paths` — taken from argv, JOINED ONTO THE
+    INSTALLED KIT, handed down by a caller" — and it arrived here through a correct call
+    to a correct function with the wrong project.
+    """
+    from squad.layout import resolve
+
+    layout = resolve(warn=False)
+    if layout is not None:
+        return layout.project_dir
+    # No kit found: the standalone repository is the only shape left, and there
+    # `parents[2]` IS the project root.
     return Path(__file__).resolve().parents[2]
 
 

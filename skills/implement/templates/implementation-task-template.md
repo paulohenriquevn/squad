@@ -13,7 +13,9 @@
 - [ ] Plan verdict ≥ SHIPPABLE_WITH_CAVEATS
 - [ ] On `workspace` (current branch: `{branch}`)
 - [ ] No uncommitted changes at start
-- [ ] `npm install` complete (or N/A for pre-code phase)
+- [ ] Dependencies installed for every language this item touches — `npm install`,
+      `go mod download`, `pip install -e .`, `cargo fetch`. N/A only where the
+      language is absent from the repository, which is a fact about the manifest.
 - [ ] External dependencies up (Postgres if integration tests need it)
 
 ## Task list (derived from plan; ordered by dependency)
@@ -85,9 +87,12 @@ Recommended human action: {specific next step}
 
 - [ ] All non-blocked tasks have status=`committed` with valid SHA
 - [ ] Wiring triad: 100% of pillar (a) passes (non-negotiable); pillar (b) ≥ 90% OR explicit ADR for deferred; pillar (c) ≥ 100% of declared metrics observed
-- [ ] `npm test` exit 0 (or N/A for pre-code phase)
-- [ ] `npm run typecheck` exit 0
-- [ ] `npm run lint` exit 0
+- [ ] The project's own suite exits 0, per language present. The validation gate runs
+      `go test`, `pytest`, `cargo test` and `npm test` — naming only npm here read a
+      Go workspace as having nothing to run.
+- [ ] Typecheck exits 0 — `go build ./...`, `cargo check`, `tsc --noEmit`
+- [ ] Lint exits 0 on the files THIS change wrote. A tree carries lint debt older than
+      the item, and the gate reports it without charging the item for it.
 - [ ] Coverage ≥ 90% on changed files (100% on critical paths declared in plan)
 - [ ] CHANGELOG.md `[Unreleased]` updated with each task that introduces user-facing change (per Unbreakable Rule 6)
 

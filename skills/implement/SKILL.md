@@ -121,7 +121,9 @@ test -f .squad/records/plans/{slug}-plan.md
 [ -z "$(git status --porcelain)" ]
 # Check 4: project bootstrapped (language toolchain ready)
 # Detect by manifest: go.mod, package.json, pyproject.toml, Cargo.toml, etc.
-# If absent, surface "pre-code phase — validate gate will skip toolchain-based checks"
+# If absent, surface "no manifest for any suite this gate runs — toolchain checks
+# will skip". NOT "pre-code phase": that is a conclusion about the project, and a
+# Go workspace with 1918 lines of new code read it on four gates at once.
 # Check 5: language runtime version satisfies project lock (if a lockfile declares one)
 # E.g., .nvmrc / .python-version / rust-toolchain.toml — compare to active runtime
 ```
@@ -296,9 +298,11 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/implement/scr
 
 This script consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-implementation gate into one report:
 
-- **Progress-schema gate (`check_progress_schema.py`)** — validates the checkpoint itself FIRST (fail-fast). A malformed `.progress-{slug}.json` (missing `tasks` envelope, `task_id` instead of `id`, missing `phase`/`commit_sha`) makes every phase-scoped gate degrade silently — this gate turns that into a loud `FAIL`. Canonical shape: `templates/progress-schema.json`. SKIP when no checkpoint exists (pre-code phase).
+- **Progress-schema gate (`check_progress_schema.py`)** — validates the checkpoint itself FIRST (fail-fast). A malformed `.progress-{slug}.json` (missing `tasks` envelope, `task_id` instead of `id`, missing `phase`/`commit_sha`) makes every phase-scoped gate degrade silently — this gate turns that into a loud `FAIL`. Canonical shape: `templates/progress-schema.json`. SKIP when no checkpoint exists — which says implement has not written one, not what phase the project is in. A task that correctly produced no commit says so in `no_commit_reason` rather than carrying a SHA it does not have.
 - **Checkpoint-consistency gate (`check_checkpoint_consistency.py`)** — cross-checks the checkpoint against git in both directions: every `committed` task points at a SHA that EXISTS, and every plan task referenced by a real commit (`T{N.M}` in the message) is recorded `committed`. This is the deterministic answer to "is the checkpoint forced to be updated per task?": no write-time hook forces it, but a task finished + committed without a matching `.progress` entry FAILs here, so the omission cannot reach handoff. The same check runs on each phase boundary (Step 4.7) for earlier detection. Heuristic limit: relies on the `T{N.M}` commit convention.
-- Project test runner — exit 0 (skip if no manifest detected — pre-code phase)
+- Project test runner — exit 0, per language present (Go, Rust, Python and npm all
+  run). Skips only where no manifest for that language sits at the root, which is a
+  statement about the manifest and not about the project.
 - Project type-checker / strict linter — exit 0
 - Coverage gate — ≥ 90% on changed files; 100% on critical paths declared in plan
 - **Wiring summary — INDEPENDENT re-verification, not self-report.** The gate derives the public symbols actually added in the committed diffs (`diff_symbols.py`) and RE-RUNS `check_wiring.py` per symbol (`wiring_recheck.py`). The `wiring` field of the progress file is treated as a CLAIM to be audited: a task self-reporting `wiring.a == "pass"` while the recheck finds an uncalled symbol is flagged `fabricated_wiring_evidence` → check `FAIL`. If no symbol can be re-verified (no SHAs, git unavailable), the check is `N/A` — never a PASS laundered from a claim.

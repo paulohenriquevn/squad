@@ -39,6 +39,8 @@ from check_concurrency_tests import check_concurrency_tests
 from check_coverage_matrix import CoverageReport, check_coverage_matrix
 from check_criterion_executability import ExecutabilityReport, check_criterion_executability
 from check_deps_audit import check_deps_audit
+from check_impediment_agrees import check_impediment_agrees
+from check_symbol_naming import check_symbol_naming
 from check_drawbacks_section import check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
 from check_failure_scenarios import check_failure_scenarios
@@ -441,6 +443,36 @@ def run_structural(
         final_score = min(final_score, 49.0)
     elif deps_audit.applies and deps_audit.soft_floor:
         hard_cap_ids.append(deps_audit.stable_id)
+        final_score = min(final_score, 89.0)
+
+    # A plan may not DEMAND a symbol whose name the project's own rule forbids.
+    #
+    # Measured on a consumer 2026-09-16: seven plans demanded test names carrying a ticket
+    # id — 101 occurrences — while the string appeared in zero `.go` files, because the
+    # tests exist under behaviour-shaped names an implementer chose for exactly that
+    # reason. The plans also contradicted their own alignment briefs, which already
+    # carried the correct names.
+    #
+    # It is scored HERE and not at implement because by then the contradiction is
+    # inherited: a criterion demanding a string that does not exist reads identically to
+    # one nobody has satisfied yet, which is what a RED criterion looks like. The name
+    # being forbidden is decidable from the plan alone.
+    # The plan's declared impediment and the registry's must be the same edge. Nothing
+    # compared them: every scheduler resolves `blocked_by` from the REGISTRY, so an item
+    # whose plan says it is held reads as free to start. Measured on a consumer
+    # 2026-09-16: seven plans declared an impediment their registry block did not carry,
+    # all naming the same blocker.
+    #
+    # Only the missing-in-registry direction caps. The reverse is reported and not
+    # charged: the registry is authoritative and a plan may predate an impediment.
+    # Reported, never capped. See `check_impediment_agrees.soft_floor` for why: the first
+    # version capped this and would have held five structurally perfect plans on an
+    # impediment that had already been cured.
+    impediment = check_impediment_agrees(plan_path)
+
+    symbol_naming = check_symbol_naming(plan_path)
+    if symbol_naming.soft_floor:
+        hard_cap_ids.append(symbol_naming.stable_id)
         final_score = min(final_score, 89.0)
 
     # The 90% alignment threshold, mechanised. Until this line existed the rule
