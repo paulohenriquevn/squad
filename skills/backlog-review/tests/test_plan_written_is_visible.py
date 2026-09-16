@@ -76,3 +76,35 @@ def test_an_item_with_no_plan_still_awaits_one(tmp_path: Path) -> None:
     result = _run(_registry(tmp_path, with_plan=False), "--check", "B-002")
     assert result["verdict"] == "ITEM_AWAITING_PLAN"
     assert "/plan-write" in result["reason"]
+
+
+def _registry_implemented(tmp_path: Path) -> Path:
+    backlog = _registry(tmp_path, with_plan=True)
+    impl = tmp_path / ".squad" / "records" / "implementations"
+    impl.mkdir(parents=True)
+    (impl / "B-002-implementation.md").write_text("# done\n", encoding="utf-8")
+    return backlog
+
+
+def test_an_implemented_item_is_not_sent_back_through_implement(tmp_path: Path) -> None:
+    """The fifth instance, authored by the fix for the fourth three hours earlier.
+
+    ITEM_PLAN_WRITTEN named IMPLEMENT without asking whether IMPLEMENT had already run.
+    On a consumer 2026-09-16 it said so about B-022, which carried a 9945-byte
+    implementation record, a halt withdrawn two days earlier, and an emitted
+    IMPLEMENTATION_COMPLETE. Every fix in this family moved the blind spot one stage
+    forward; the ladder asks the records, in order, how far the item actually got.
+    """
+    result = _run(_registry_implemented(tmp_path), "--check", "B-002")
+    assert result["verdict"] == "ITEM_IMPLEMENTED"
+    assert "IMPLEMENT, which writes" not in result["reason"], \
+        "a finished implementation was sent back through the stage that produced it"
+    assert "REVIEW" in result["reason"]
+
+
+def test_the_two_keys_never_name_the_same_item(tmp_path: Path) -> None:
+    """Dispatching both keys to the same stage is what reran finished work."""
+    result = _run(_registry_implemented(tmp_path))
+    assert result["plan_written"] == []
+    assert result["approved_implemented"] == ["B-002"]
+    assert not set(result["plan_written"]) & set(result["approved_implemented"])
