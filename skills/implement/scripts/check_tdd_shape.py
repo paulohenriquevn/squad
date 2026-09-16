@@ -46,7 +46,13 @@ SHAPE_ASSERTION_PATTERNS = (
     r"\bassert\s+[\w.\[\]]+\s*(?:==|!=|<=|>=|<|>|\bin\b|\bis\b)",
     # `assert f(args) (op) Y` — a call expression is as executable as a name, and
     # rejecting it made a valid plan look like prose once this gate became blocking.
-    r"\bassert\s+[\w.]+\([^)\n]*\)\s*(?:==|!=|<=|>=|<|>)",
+    # `assert f(x).attr == y` and `assert f(x)[k] == y` — a call whose RESULT is then
+    # navigated. The operator is not adjacent to the `)`, and `[\w.\[\]]+` above cannot
+    # cross a parenthesis, so the most ordinary Python assertion there is matched
+    # nothing. Measured on a consumer 2026-09-16: `assert score_alignment(b).verdict ==
+    # "AWAITING_REVIEW"` sat inside a TDD block the gate reported as having no
+    # executable shape, beside two named `def test_` functions.
+    r"\bassert\s+[\w.]+\([^)\n]*\)(?:\.[\w.]+|\[[^\]\n]*\])*\s*(?:==|!=|<=|>=|<|>)",
     r"\bexpect\s*\([^)]+\)\s*\.\s*(?:to|toBe|toEqual|toMatch|toHaveBeenCalled)",
     # "X should equal/raise/throw Y" — RSpec/Chai style — must name the expected value
     # (excludes vibe phrases like "tests should be green" by requiring object after verb)
@@ -99,6 +105,13 @@ SHAPE_NATIVE_PATTERNS = (
 SHAPE_TEST_FN_PATTERNS = (
     r"\btest_\w+\s*\([^)]*\)\s*(?:->|=>|returns?|expects?)",
     r"\bRED:\s*test_\w+",  # plans commonly write "RED: test_xxx_yyy" — that's a shape
+    # A test function DECLARED is stronger evidence than a test function NAMED, and
+    # `_has_named_test_shape` already credits the name. The patterns above require an
+    # arrow or a verb after the parentheses, so `def test_foo(tmp_path):` — which is how
+    # a Python test is actually written — matched none of them. Measured on a consumer
+    # 2026-09-16: 5 of 29 blocked tasks carried a real declaration and were reported as
+    # prose.
+    r"^\s*(?:def\s+test_\w+\s*\(|func\s+Test[A-Z]\w*\s*\()",
 )
 
 #: A RED that NAMES the failing test is executable whatever the language spells its
@@ -233,7 +246,10 @@ def _has_native_shape(text: str) -> bool:
 
 
 def _has_test_fn_shape(text: str) -> bool:
-    return any(re.search(p, text) for p in SHAPE_TEST_FN_PATTERNS)
+    # MULTILINE, because one of the patterns anchors at line start and a TDD block
+    # always has prose above its fence. Without it the anchor matched only when the
+    # declaration was the first thing in the section, which is never.
+    return any(re.search(p, text, re.MULTILINE) for p in SHAPE_TEST_FN_PATTERNS)
 
 
 #: A command line that a reader could paste. Deliberately not a general shell grammar —
