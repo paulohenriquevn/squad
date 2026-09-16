@@ -94,10 +94,19 @@ Workflow({scriptPath: "mechanisms/fleet/pipeline_workflow.js",
           args: {selection: <the WHOLE object from Step 0>, repo: "<consumer-path>"}})
 ```
 
-**The whole object, not the `queue` array.** SELECT emits three keys carrying
-items a stage can act on — `queue` (triaged and raw), `awaiting_plan` (approved,
-DISCOVER done) and `in_flight` (planned, work started) — and each exists because
-a scheduler reading only the earlier ones could not see most of the registry.
+**The whole object, not the `queue` array.** SELECT emits five keys carrying
+items a stage can act on, and each enters the chain at a DIFFERENT stage:
+
+| key | what the item is | enters at |
+|---|---|---|
+| `queue` | triaged and raw | DISCOVER |
+| `awaiting_plan` | approved, no plan on disk | PLAN |
+| `plan_written` | approved, plan on disk, status never advanced | IMPLEMENT |
+| `approved_implemented` | approved, implementation record on disk | CODE-QUALITY |
+| `in_flight` | planned, work started | wherever its records say it reached |
+
+Each exists because a scheduler reading only the earlier ones could not see most
+of the registry.
 Measured on a consumer 2026-09-15 with 102 items: the whole selection builds 71,
 of which 56 approved enter at PLAN; the `queue` array alone builds 13, none of
 them approved.
@@ -106,6 +115,13 @@ This line said `queue` until 2026-09-15, so an operator following it exactly
 reproduced a defect the code no longer had. A fix that lands in code and not in
 the procedure that invokes it is half a fix, and the missing half is the one a
 new reader follows.
+
+It listed three keys until 2026-09-16, and the same day the code stopped counting
+a written plan as awaiting one — which moved 25 items out of `awaiting_plan` and
+into a key this table did not name. **An operator following the three-key line
+would have seen them nowhere at all**, a worse state than the one the code fix
+corrected. Two keys and one procedure, changed together, because separating them
+is how the defect above happened the first time.
 
 `pipeline()`, never `parallel()` — there is no barrier between stages, so one
 item may be aligning while another is still discovering. A barrier rebuilds the

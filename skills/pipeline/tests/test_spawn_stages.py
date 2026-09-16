@@ -1011,3 +1011,31 @@ def test_every_flag_a_brief_passes_exists_in_the_script_it_calls(tmp_path: Path)
                 if flag not in usage:
                     offenders.append(f"{stage}: {candidates[0].name} has no {flag}")
     assert not offenders, offenders
+
+
+def test_the_dispatch_names_every_key_select_emits() -> None:
+    """A key the code emits and the procedure does not name is a key nobody reads.
+
+    The SKILL listed three keys until 2026-09-16. That same day SELECT stopped counting
+    a written plan as awaiting one, which moved 25 items on a consumer out of
+    `awaiting_plan` and into `plan_written` — a key the three-key line did not name. An
+    operator following the procedure exactly would have seen those items NOWHERE, which
+    is worse than the state the code fix corrected.
+
+    The procedure and the emitter are one piece of knowledge. This test is what keeps
+    them one.
+    """
+    import re
+
+    select = (Path(__file__).resolve().parents[2] / "backlog-review" / "scripts"
+              / "select_backlog_item.py").read_text(encoding="utf-8")
+    emitted = set(re.findall(r'^\s+"(\w+)": self\.\w+ or \[\],', select, re.M))
+    # Keys that carry items a stage acts on; the rest are diagnostics.
+    actionable = emitted & {"queue", "awaiting_plan", "plan_written",
+                            "approved_implemented", "in_flight"}
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+    missing = sorted(k for k in actionable if f"`{k}`" not in skill)
+    assert not missing, (
+        f"SELECT emits {sorted(actionable)}; the dispatch procedure never names "
+        f"{missing}, so an operator following it cannot reach those items"
+    )
