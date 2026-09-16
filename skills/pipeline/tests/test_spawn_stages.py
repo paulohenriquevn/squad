@@ -962,3 +962,52 @@ def test_a_gate_is_invoked_with_the_flags_it_requires(tmp_path: Path) -> None:
     whole = " ".join(l.strip().rstrip("\\") for l in lines[i:i + 3])
     assert "--plan" in whole, \
         f"check_tdd_shape is invoked without --plan: {whole[:90]}"
+
+
+def test_every_flag_a_brief_passes_exists_in_the_script_it_calls(tmp_path: Path) -> None:
+    """A path that resolves is not a command that runs, and a command that runs is not one
+    whose arguments the script accepts.
+
+    Measured 2026-09-16 by asking each invoked script for its `--help` and comparing:
+    `run_code_quality.py` takes `--repo-root` and the brief passed `--project-root`, so the
+    step that produces the audit `/review` requires would have exited 2 on its own usage
+    message. `run_structural.py` takes the plan PATH positionally and the brief passed
+    `--project-root` too — that one would have stopped all 55 items sitting at PLAN.
+
+    Both were mine, written within two hours of each other while anchoring paths. Anchoring
+    a path and checking a flag are different verifications and I did only the first.
+    """
+    import re  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    briefs = _briefs(tmp_path)
+    repo = tmp_path / "repo"
+    kit = Path(__file__).resolve().parents[3]
+    offenders: list[str] = []
+    for stage, brief in briefs.items():
+        for line in brief.splitlines():
+            if "python3" not in line or ".py" not in line:
+                continue
+            # The path is the LAST `.py` token on the line — a command substitution
+            # resolving the kit root contains quotes and parentheses of its own, and a
+            # regex anchored on the first quote captures a fragment of it. That is the
+            # mistake this test was written after making.
+            script = re.findall(r"([\w./-]+\.py)", line)
+            if not script:
+                continue
+            local = kit / script[-1].split("/skills/", 1)[-1] if "/skills/" in script[-1] else None
+            candidates = list(kit.rglob(Path(script[-1]).name))
+            if not candidates:
+                continue
+            following = brief.split(line, 1)[1].splitlines()[:2]
+            flags = re.findall(r"(--[a-z][a-z-]+)", line + " " + " ".join(following))
+            if not flags:
+                continue
+            helped = subprocess.run(
+                ["python3", str(candidates[0]), "--help"],
+                capture_output=True, text=True, timeout=60)
+            usage = helped.stdout + helped.stderr
+            for flag in flags:
+                if flag not in usage:
+                    offenders.append(f"{stage}: {candidates[0].name} has no {flag}")
+    assert not offenders, offenders

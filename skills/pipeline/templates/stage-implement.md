@@ -251,7 +251,7 @@ python3 $([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/sk
 
 ```bash
 python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/code-quality/scripts/run_code_quality.py" {ITEM} \
-    --project-root {REPO}
+    --repo-root {REPO}
 ```
 
 `run_validation.py` already ran this phase nested and passed it `--no-audit-write`, so

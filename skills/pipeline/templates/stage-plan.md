@@ -47,7 +47,7 @@ need to know that the brief does not answer.
 # opens `/skills/...`. Measured 2026-09-16 by running every read-only command in
 # all seven generated briefs: 3 of 19 failed this way.
 python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/plan-confidence/scripts/run_structural.py" {ITEM} \
-    --project-root {REPO}
+    {REPO}/.squad/records/plans/{ITEM}-plan.md
 ```
 
 `rules/cycle-plan.md` puts this between PLAN and IMPLEMENT: `INVALID` returns to
