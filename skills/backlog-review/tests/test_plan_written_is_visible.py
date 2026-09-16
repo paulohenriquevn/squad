@@ -22,6 +22,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+_KIT = Path(__file__).resolve().parents[3]
+if str(_KIT) not in sys.path:
+    sys.path.insert(0, str(_KIT))
+from squad.paths import write_records_dir  # noqa: E402
+
 _SCRIPT = (Path(__file__).resolve().parents[1] / "scripts"
            / "select_backlog_item.py")
 
@@ -39,7 +44,7 @@ def _registry(tmp_path: Path, with_plan: bool) -> Path:
     (tmp_path / ".git").mkdir()
     backlog = tmp_path / "BACKLOG.md"
     backlog.write_text(_BACKLOG, encoding="utf-8")
-    plans = tmp_path / ".squad" / "records" / "plans"
+    plans = write_records_dir(tmp_path, "plans")
     plans.mkdir(parents=True)
     if with_plan:
         (plans / "B-002-plan.md").write_text("# a real plan\n", encoding="utf-8")
@@ -80,7 +85,7 @@ def test_an_item_with_no_plan_still_awaits_one(tmp_path: Path) -> None:
 
 def _registry_implemented(tmp_path: Path) -> Path:
     backlog = _registry(tmp_path, with_plan=True)
-    impl = tmp_path / ".squad" / "records" / "implementations"
+    impl = write_records_dir(tmp_path, "implementations")
     impl.mkdir(parents=True)
     (impl / "B-002-implementation.md").write_text("# done\n", encoding="utf-8")
     return backlog
