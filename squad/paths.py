@@ -126,6 +126,25 @@ def write_state_dir(project_root: Path | str, leaf: str) -> Path:
     return data_root(project_root) / leaf
 
 
+def lead_log_path(project_root: Path | str) -> Path:
+    """Where a fleet's lead writes its decisions, scoped to the PROJECT it leads.
+
+    The default was `/tmp/squad-lead.jsonl`, spelled identically in three places, so two
+    fleets on one machine wrote their decisions into ONE file and every reader — the
+    board's lead panel, `fleet_idle`, `fleet_status` — saw them interleaved.
+
+    Not hypothetical. Measured on this machine 2026-09-16: two sessions writing one
+    `/tmp/<short-name>.log` from their push wrappers, and one of them read the OTHER's
+    push output — different repository, different SHAs, same filename — and reported it
+    as its own for a turn. What caught it was checking the claim against the repository
+    instead of against the log.
+
+    A lead log belongs to a project the way records do, so it lives beside them. `LOG=`
+    still overrides for anyone who wants it elsewhere.
+    """
+    return data_root(project_root) / "lead.jsonl"
+
+
 def active_plan_pointer(project_root: Path | str) -> Path:
     """The file naming which plan is active. One name, one place."""
     return data_root(project_root) / ACTIVE_PLAN

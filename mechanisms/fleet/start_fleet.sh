@@ -55,7 +55,20 @@ MARKERS="${MARKERS:-/tmp/squad-markers}"
 # holds for a copy install — under the plugin layout the kit lives outside the
 # project entirely.
 _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG="${LOG:-/tmp/squad-lead.jsonl}"
+# The lead log belongs to the PROJECT, not to the machine. `/tmp/squad-lead.jsonl` was
+# spelled here, in `fleet_status.sh` and in `fleet_idle.py`, so two fleets on one machine
+# wrote into ONE file and every reader saw them interleaved. Derived from the single
+# owner rather than repeated a fourth time. `LOG=` still overrides.
+LOG="${LOG:-$(python3 -c 'import sys; from pathlib import Path
+for up in Path(sys.argv[1]).resolve().parents:
+    if (up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(up)); break
+from squad.paths import lead_log_path
+print(lead_log_path(sys.argv[2]))' "$_here" "${PROJECT:-.}")}"
+# The lead's stdout, beside its decisions. `/tmp/squad-lead-run.log` was shared by every
+# fleet on the machine exactly as the decision log was — same defect, one line down, and
+# it survived the first fix because that fix was written for the other filename.
+RUN_LOG="${RUN_LOG:-${LOG%.jsonl}-run.log}"
 # The per-consultation ceiling the lead passes to `--max-budget-usd`. The default
 # lives in `squad_lead.py` and its comment says 6.00 was measured "with room for a
 # larger project" — a real one exceeded it on 2026-08-31 and the lead exited 1,
@@ -142,7 +155,7 @@ tmux new-session -d -s lead -c "$PROJECT" \
      --marker-dir $MARKERS --log $LOG \
      --idle 120 --poll 20 --agents-when-stuck \
      ${AGENT_BUDGET_USD:+--agent-budget-usd $AGENT_BUDGET_USD} \
-     2>&1 | tee -a /tmp/squad-lead-run.log"
+     2>&1 | tee -a \"$RUN_LOG\""
 
 sleep 2
 echo "==> Watching: $joined"
