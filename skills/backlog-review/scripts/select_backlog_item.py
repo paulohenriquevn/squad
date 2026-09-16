@@ -166,6 +166,21 @@ class Selection:
     in_flight: list[str] | None = None
     #: The subset of `in_flight` whose IMPLEMENT wrote a record.
     in_flight_implemented: list[str] | None = None
+    #: Approved items whose PLAN record already exists on disk. The FOURTH instance of
+    #: the seam this file's other comments walk: `approved` was absent from `queue`,
+    #: then nobody wrote `planned`, then writing it removed the item from every key —
+    #: and here the item has a finished plan while the registry still says it has none.
+    #:
+    #: Measured on a consumer 2026-09-16: 35 plans written, 34 of them belonging to
+    #: items still `approved`. `--check B-022` answered "no plan exists yet; run
+    #: /plan-write to produce it" against a 79361-byte plan scoring 34/34 aligned.
+    #: Following that instruction re-plans two days of finished work.
+    #:
+    #: The status is written by the stage that STARTS work, and PLAN is not that stage
+    #: — `stage-implement.md` issues `--to planned`. So between PLAN and IMPLEMENT the
+    #: registry is silent about every plan that exists, and a scheduler reading status
+    #: alone cannot dispatch any of them. This key is what it reads instead.
+    plan_written: list[str] | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -187,6 +202,7 @@ class Selection:
             # Which of those have an implementation record on disk. The scheduler enters
             # these AFTER implement; the rest enter at it.
             "in_flight_implemented": self.in_flight_implemented or [],
+            "plan_written": self.plan_written or [],
         }
 
 
@@ -315,13 +331,24 @@ def select(text: str, requested: str | None = None,
     # approved item to `/plan-write` instead. A scheduler reading only `queue` was
     # therefore handed 5 items out of a registry of 92.
     # `_number` takes an Item, so the sort happens before the ids are extracted.
-    awaiting_plan = [
-        i.item_id for i in sorted(
-            (i for i in items
-             if i.fields.get("status") == "approved"
-             and i.item_id not in halted
-             and live_blockers(i, statuses) is None),
-            key=_number)]
+    #: Same cross-check as `implemented`, one stage earlier. `squad.paths` owns the
+    #: data-root literal; spelling one here is what `test_write_containment` refuses.
+    plans_on_disk: set[str] = set()
+    if root is not None:
+        plans_dir = records_dir(root, "plans")
+        if plans_dir is not None and plans_dir.is_dir():
+            plans_on_disk = {f.name.split("-plan")[0] for f in plans_dir.glob("*-plan.md")}
+
+    approved_open = sorted(
+        (i for i in items
+         if i.fields.get("status") == "approved"
+         and i.item_id not in halted
+         and live_blockers(i, statuses) is None),
+        key=_number)
+    # An approved item whose plan is already written is not awaiting a plan. Saying so
+    # sent a reader to /plan-write against 34 finished plans on a consumer 2026-09-16.
+    awaiting_plan = [i.item_id for i in approved_open if i.item_id not in plans_on_disk]
+    plan_written = [i.item_id for i in approved_open if i.item_id in plans_on_disk]
 
     # In flight: work started and the item is not finished. Reported for the same reason
     # `awaiting_plan` is, and it is the THIRD instance of one seam walking forward —
@@ -371,7 +398,8 @@ def select(text: str, requested: str | None = None,
             return Selection("BACKLOG_BLOCKED", reason=f"{requested} is not in this backlog",
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented])
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written)
         status = statuses.get(requested, "")
         if status not in SELECTABLE:
             entry = NOT_SELECTABLE.get(status)
@@ -381,14 +409,26 @@ def select(text: str, requested: str | None = None,
                                         f" ({status or 'the field is absent'})",
                                  walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented])
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written)
             verdict, next_step = entry
+            # `approved` carries two states the status alone cannot separate: the plan
+            # was never written, and the plan exists but nothing advanced the status.
+            # The static text claimed the first for both, and on a consumer 2026-09-16
+            # it said "no plan exists yet" to 34 items holding finished plans — the
+            # largest of them 79361 bytes, scoring 34/34 aligned. A reader following
+            # that instruction re-plans work that is done.
+            if verdict == "ITEM_AWAITING_PLAN" and requested in plans_on_disk:
+                verdict = "ITEM_PLAN_WRITTEN"
+                next_step = (" The plan exists and nothing advanced the status;"
+                             " continue with IMPLEMENT, which writes `planned` itself.")
             return Selection(verdict, item_id=requested,
                              reason=f"{requested} is {status}, past the point where SELECT hands"
                                     f" out work.{next_step}",
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented])
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written)
         if requested in halted:
             return Selection(
                 "ITEM_HALTED", item_id=requested,
@@ -397,7 +437,8 @@ def select(text: str, requested: str | None = None,
                         f"report first."),
                 walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented])
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written)
         blockers = live_blockers(by_id[requested], statuses)
         if blockers is not None:
             waiting = ", ".join(blockers) if blockers else "something with no item to point at"
@@ -407,12 +448,14 @@ def select(text: str, requested: str | None = None,
                         f"against a dependency that does not exist yet."),
                 walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented])
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written)
         return Selection("ITEM_SELECTED", item_id=requested,
                          reason=f"{requested} is {status} and nothing blocks it",
                          walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented])
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written)
 
     if ordered:
         chosen = ordered[0]
@@ -428,7 +471,8 @@ def select(text: str, requested: str | None = None,
         return Selection("ITEM_SELECTED", item_id=chosen.item_id, reason=reason,
                          walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented])
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written)
 
     if walls or stopped:
         held = len(walls) + len(stopped)
@@ -453,7 +497,8 @@ def select(text: str, requested: str | None = None,
                              "run /discover-execute --sweep {domain}."),
                      walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented])
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written)
 
 
 def main() -> int:
