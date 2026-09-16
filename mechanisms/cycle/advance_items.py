@@ -83,6 +83,41 @@ class Advance:
 
 
 
+def _statuses_behind_their_records(project_root: Path) -> list[tuple[str, str]]:
+    """Items whose artefacts on disk are further along than their status line.
+
+    Through SELECT, which already computes this: `approved_implemented` is an item whose
+    IMPLEMENT record exists while its status says the decision was only taken. Reading
+    it here rather than scanning again keeps one reader of that question, which is the
+    shape this kit keeps restoring.
+
+    Empty on any failure: this is a report beside a verdict, and a report that cannot be
+    produced must not turn a clean run into a failed one.
+    """
+    import json as _json  # noqa: PLC0415
+    import subprocess as _sp  # noqa: PLC0415
+    selector = None
+    for up in Path(__file__).resolve().parents:
+        candidate = up / "skills" / "backlog-review" / "scripts" / "select_backlog_item.py"
+        if candidate.is_file():
+            selector = candidate
+            break
+    backlog = project_root / "BACKLOG.md"
+    if selector is None or not backlog.is_file():
+        return []
+    try:
+        out = _sp.run([sys.executable, str(selector), str(backlog), "--json"],
+                      capture_output=True, text=True, timeout=300).stdout
+        data = _json.loads(out[out.index("{"):])
+    except Exception:  # noqa: BLE001 - a report must never fail the verdict
+        return []
+    behind = [(i, "an IMPLEMENT record exists; status is still `approved`")
+              for i in (data.get("approved_implemented") or [])]
+    behind += [(i, "a plan exists on disk; status is still `approved`")
+               for i in (data.get("plan_written") or [])]
+    return behind
+
+
 def all_changes_are_untracked(project_root: Path, files: list[str]) -> bool:
     """The mechanical test `cycle-maintenance.md` defines for `ITEM_VERIFIED_LOCAL`.
 
@@ -217,6 +252,35 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  REFUSED {line}", file=sys.stderr)
         if not (result.shipped or result.already or result.unknown or result.refused):
             print("NOTHING_TO_ADVANCE: no RELEASED event in the stream")
+            # And say what this did NOT look at, because "nothing to advance" reads as
+            # "the registry agrees with its records" and this examined ONE transition.
+            #
+            # `planned -> shipped` is the only hop here. The registry can also be behind
+            # in the middle — an item whose IMPLEMENT record exists while its status is
+            # still `approved`, because `planned` is written by the stage that STARTS
+            # work and a lane that halted walked it back without walking it forward.
+            #
+            # Measured on a consumer 2026-09-16: this printed NOTHING_TO_ADVANCE while
+            # SELECT reported an item under `approved_implemented` and twenty-five under
+            # `plan_written`. A mechanism that examined one direction must not report on
+            # all of them.
+            #
+            # REPORTED, never advanced. Inferring "work started" from an artefact on disk
+            # is a guess, and the hop it would write is the one that says a lane owns the
+            # item. `backlog_status.py --to planned` is the writer, and the lane that
+            # knows why is the one that should run it.
+            behind = _statuses_behind_their_records(root)
+            if behind:
+                print(f"\nNOT EXAMINED HERE: {len(behind)} item(s) whose records are "
+                      f"ahead of their status:")
+                for item, why in behind[:10]:
+                    print(f"  {item}: {why}")
+                if len(behind) > 10:
+                    print(f"  ... and {len(behind) - 10} more")
+                print("  This tool advances `planned -> shipped` only. Those are"
+                      " `approved -> planned`, written by"
+                      " `backlog_status.py <ITEM> --to planned --because ...` —"
+                      " and the lane that knows why is the one that should run it.")
         elif not args.apply and result.shipped:
             print("\n(dry run — pass --apply to write)")
 

@@ -70,7 +70,15 @@ def check(slug: str, *, project: Path, tip: str = "HEAD") -> tuple[int, dict]:
             "status": "no_record", "slug": slug,
             "detail": "no machine-readable review record, so nothing states which "
                       "revision was reviewed. An approval that names no commit cannot "
-                      "be bound to one",
+                      "be bound to one. NOTE: this reads "
+                      "`{slug}-review-*.json` with a `reviewed_sha` field, and NOTHING "
+                      "in this kit writes that file — `cycle-release.md` declares the "
+                      "audit as `{slug}-review-{date}.md`, the review stage writes "
+                      "markdown, and `reviewed_sha` appears nowhere outside this gate. "
+                      "So this is not a record somebody forgot to produce: the input "
+                      "format is declared only here, and this binding has never held "
+                      "for any project. Measured on a consumer 2026-09-16: zero JSON "
+                      "review records, a markdown one on disk for the same slug",
         }
     try:
         data = json.loads(record.read_text(encoding="utf-8"))
