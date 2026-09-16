@@ -846,6 +846,22 @@ def main(argv: list[str] | None = None) -> int:
     requested: str | None = None
     while argv:
         arg = argv.pop(0)
+        if arg in ("-h", "--help"):
+            # A gate that refuses `--help` cannot be introspected, and
+            # `tests/test_gates_say_what_they_examined.py` selects its roster by asking
+            # each gate what flags it takes. This one aggregates ELEVEN checks and
+            # answered `ERROR: unrecognised argument '--help'`, so it sat outside the
+            # empty-sweep protection — silently, which reads as coverage.
+            print("usage: verify_ecosystem.py [-h] [--ecosystem-dir ECOSYSTEM_DIR]")
+            print()
+            print("Run every ecosystem check over one tree. Without --ecosystem-dir the")
+            print("tree is located; the header names whichever tree was verified.")
+            print()
+            print("options:")
+            print("  -h, --help            show this help message and exit")
+            print("  --ecosystem-dir ECOSYSTEM_DIR")
+            print("                        the tree to verify")
+            return 0
         if arg == "--ecosystem-dir":
             if not argv:
                 print("ERROR: --ecosystem-dir needs a path", file=sys.stderr)

@@ -28,6 +28,19 @@ _GATES = Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
 #: The flag each gate takes for the tree it should look at. A gate absent here
 #: takes no root and is skipped — see `test_the_roster_covers_every_gate_that_takes_a_root`.
 ROOT_FLAG = {
+    # Both joined 2026-09-16, when the roster stopped selecting by filename prefix and
+    # by a three-name flag list. `check_xrefs` had been `check_*` all along and was
+    # missed only because it spells its flag `--ecosystem-dir`; it had been run by hand
+    # dozens of times that week while sitting outside the empty-sweep protection.
+    # `validate_skill_frontmatter` was missed twice over — wrong prefix AND wrong flag —
+    # and exits 0 on an ecosystem whose `skills/` is present and empty.
+    # Joined 2026-09-16, the day it learned to answer `--help`. It aggregates ELEVEN
+    # checks, so it was the single largest hole in this roster and the hardest to see:
+    # it refused introspection, and a test that skips what it cannot read reports the
+    # skip as nothing at all.
+    "verify_ecosystem": "--ecosystem-dir",
+    "check_xrefs": "--ecosystem-dir",
+    "validate_skill_frontmatter": "--ecosystem-dir",
     "check_english_only": "--root",
     "check_install_drift": "--install",
     # Joined 2026-09-11 with `rules/contribution-conventions.md`. It reads the project's
@@ -108,17 +121,48 @@ def test_no_gate_claims_a_universal_property_over_an_empty_sweep(
                 f"on an empty tree:\n  {line}")
 
 
+#: Flags by which a gate accepts a tree to sweep. A LIST, and that is the point: it is
+#: checked against every file in `gates/`, so a gate using a spelling absent from this
+#: tuple appears in the failure message rather than escaping the roster in silence.
+_ROOT_FLAGS = ("root", "repo", "install", "ecosystem-dir", "dir", "path", "target")
+
+
 def test_the_roster_covers_every_gate_that_takes_a_root() -> None:
-    """A gate added later must not opt out of this by being forgotten."""
-    missing = []
-    for path in sorted(_GATES.glob("check_*.py")):
+    """A gate added later must not opt out of this by being forgotten.
+
+    This globbed `check_*.py` and matched three flag spellings. Both are rules written
+    as a list where the thing meant is a property — "it is a gate" — and both leaked:
+
+      `verify_ecosystem.py`          not `check_*`, and aggregates ELEVEN other checks
+      `validate_skill_frontmatter.py` not `check_*`, and takes `--ecosystem-dir`
+
+    Measured 2026-09-16: the second exits 0 on an ecosystem whose `skills/` is present
+    and empty, printing "Validated 0 skills: 0 errors" — a sweep that found nothing,
+    reported as conformance. It sat outside this roster by two independent list-shaped
+    rules, which is exactly what this test exists to prevent elsewhere.
+
+    The glob is now every `*.py` in `gates/`, and a gate that cannot answer `--help` is
+    named rather than skipped — an uninstrospectable gate is one this roster cannot
+    protect, and silence about it reads as coverage.
+    """
+    missing, opaque = [], []
+    for path in sorted(_GATES.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
         helped = subprocess.run([sys.executable, str(path), "--help"],
                                 capture_output=True, text=True, timeout=60, check=False)
-        flags = set(re.findall(r"--(root|repo|install)\b", helped.stdout))
+        if helped.returncode != 0 or "usage:" not in helped.stdout:
+            opaque.append(path.stem)
+            continue
+        flags = {f for f in _ROOT_FLAGS if f"--{f}" in helped.stdout}
         if flags and path.stem not in ROOT_FLAG:
             missing.append(f"{path.stem} (takes --{sorted(flags)[0]})")
 
     assert not missing, f"gates taking a root but absent from the roster: {missing}"
+    assert not opaque, (
+        "gates this roster cannot introspect because they refuse `--help`: "
+        f"{opaque} — an unintrospectable gate is one this test cannot protect, and "
+        "passing over it in silence reads as coverage")
 
 
 def test_phase_numbering_finds_the_kit_when_given_a_project_root(tmp_path: Path) -> None:

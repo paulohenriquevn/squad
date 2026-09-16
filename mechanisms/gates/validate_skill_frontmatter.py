@@ -75,7 +75,10 @@ def validate_all(ecosystem_dir: Path, strict: bool = False) -> int:
     """Validate all SKILL.md files. Returns exit code."""
     skills_dir = ecosystem_dir / "skills"
     if not skills_dir.is_dir():
-        print(f"ERROR: {skills_dir} not found", file=sys.stderr)
+        # Phrased so a reader — and the empty-sweep roster — can tell this apart
+        # from a clean run. "not found" alone described the path, never the sweep.
+        print(f"ERROR: no skills were validated — {skills_dir} is absent, so this"
+              f" run examined nothing", file=sys.stderr)
         return 1
 
     errors: list[str] = []
@@ -136,6 +139,19 @@ def validate_all(ecosystem_dir: Path, strict: bool = False) -> int:
     if errors:
         return 1
     if strict and warnings:
+        return 1
+    if total_skills == 0:
+        # `skills/` present and empty is not a clean ecosystem; it is a sweep that found
+        # nothing. The line above already said "Validated 0 skills", and the exit code
+        # said PASS anyway — so a consumer whose skills directory emptied, or whose glob
+        # lost its reach, got a green gate with the evidence printed right above it.
+        #
+        # Measured 2026-09-16: `--ecosystem-dir <dir with an empty skills/>` exited 0.
+        # The `skills/` MISSING case already returned 1 (line 79); present-and-empty
+        # slipped between the two.
+        print("ERROR: no skills were validated — `skills/` is present and empty, so"
+              " this run examined nothing and cannot report that everything conforms.",
+              file=sys.stderr)
         return 1
     return 0
 
