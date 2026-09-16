@@ -156,6 +156,25 @@ def test_walk_up_picks_closest_claude() -> None:
         for md in src_defaults.glob("*.md"):
             (defaults / md.name).write_bytes(md.read_bytes())
 
+        # And `squad/`, because a real install has it: `.claude/squad/` sits beside
+        # `.claude/skills/`, and every script here imports `squad.paths`.
+        #
+        # Without it this passed UPSTREAM and failed in an install — not because the
+        # fixture was complete, but because of WHERE it ran. Pytest runs from the kit
+        # root there, so the kit root is on `sys.path` and `import squad` resolved to the
+        # real module; the missing copy was never noticed. In an install the working
+        # directory is the skill's own and there is nothing to fall back to.
+        #
+        # Measured on a consumer 2026-09-16: `ModuleNotFoundError: No module named
+        # 'squad'`. The fourth test that day passing for its location rather than for its
+        # fixture, and the only thing that distinguished the four was the tree.
+        src_squad = SKILL_ROOT.parents[1] / "squad"
+        if src_squad.is_dir():
+            dst_squad = inner_claude / "squad"
+            dst_squad.mkdir(parents=True, exist_ok=True)
+            for py in src_squad.glob("*.py"):
+                (dst_squad / py.name).write_bytes(py.read_bytes())
+
         # Now import run_structural from the INNER skill and verify PROJECT_ROOT == inner
         result = subprocess.run(
             [
