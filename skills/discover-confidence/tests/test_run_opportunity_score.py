@@ -141,12 +141,14 @@ def test_a_structurally_perfect_opportunity_is_held_until_the_panel_sits(
 
 
 def test_the_panel_carries_a_good_opportunity_to_shippable(
-    good_opportunity: Path, project_root: Path, tmp_path: Path
+    good_opportunity: Path, project_root: Path, records_root: Path, tmp_path: Path
 ) -> None:
     """The other side: convened, approved, and the structural verdict stands."""
     slug = good_opportunity.stem.replace("-opportunity", "")
-    # Resolve exactly as the gate does: `.claude/records` wins where it exists.
-    base = write_records_dir(project_root)
+    # `records_root`, not the kit root: the panel MACHINERY is the kit's and the panel
+    # RECORD is the project's. The same directory when developing, two directories when
+    # installed — and writing to the kit's side reports `no_record` forever.
+    base = write_records_dir(records_root)
     panels = base / "panels"
     panels.mkdir(parents=True, exist_ok=True)
     assignment = panels / f"{slug}-discover.assignment.json"
