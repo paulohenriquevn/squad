@@ -239,3 +239,47 @@ def test_no_evidence_answers_null(tmp_path: Path) -> None:
     root = _checkout(tmp_path)
     _commit(root, "fix(quality): scan the CLI for exit codes")
     assert build_state(root)["working"] is None
+
+
+def test_a_trailer_names_the_item_when_the_scope_names_the_area(tmp_path: Path) -> None:
+    """The scope slot is about to stop carrying ids, and the badge must survive it.
+
+    A consumer's `contribution-overrides.txt` records that the scope is the AREA, not the
+    item — so `merge(B-069)` is a violation of that convention, not an instance of it.
+    Measured 2026-09-16: of that session's sixteen commits, ZERO put an id in the scope.
+    A reader tied to that slot alone would report a quieter registry the better the
+    convention took hold.
+
+    The trailer is the slot that survives: unbounded, structured, and not competing with
+    the scope for meaning.
+    """
+    root = _checkout(tmp_path)
+    _commit(root, "fix(quality): the thing", "Refs B-001")
+    working = build_state(root)["working"]
+    assert working["item"] == "B-001"
+    assert "trailer" in working["detail"]
+
+
+def test_a_trailer_must_open_its_line(tmp_path: Path) -> None:
+    """Anchoring to the line start is what keeps it a position rather than prose. The
+    same id mentioned mid-sentence is a mention, which is the mistake three earlier
+    narrowings of this reader each made."""
+    root = _checkout(tmp_path)
+    _commit(root, "fix(quality): the thing",
+            "This closes B-001 eventually, but not in this commit.")
+    assert build_state(root)["working"] is None
+
+
+def test_several_trailers_claim_none(tmp_path: Path) -> None:
+    """A body listing several items is discussing them, and that is as true of trailers
+    as it was of prose."""
+    root = _checkout(tmp_path)
+    _commit(root, "fix(quality): the thing", "Refs B-001\nRefs B-048")
+    assert build_state(root)["working"] is None
+
+
+def test_the_scope_still_wins_when_it_carries_an_id(tmp_path: Path) -> None:
+    """Reading the trailer must not stop reading the slot that still holds ids today."""
+    root = _checkout(tmp_path)
+    _commit(root, "merge(B-001): the thing")
+    assert build_state(root)["working"]["detail"].endswith("in its scope")

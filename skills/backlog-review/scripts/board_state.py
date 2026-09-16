@@ -657,9 +657,26 @@ def _closes(open_phase: dict | None, ended: str) -> bool:
 #: backlog work. A board that guessed one from the busiest column would have invented
 #: the one fact the owner was asking for.
 _ITEM_IN_TEXT = re.compile(r"\b([A-Z]-\d{2,})\b")
-#: `type(B-069): subject` — the scope slot of a conventional commit, which is an author
-#: saying which item this commit belongs to. Prose is not that, however few ids it holds.
+#: `type(B-069): subject` — the scope slot of a conventional commit.
+#:
+#: Read, but not relied on. A consumer's own `contribution-overrides.txt` records that
+#: **the scope is the AREA, not the item**, so a commit spelling an id there is a
+#: violation of the convention rather than an instance of it. Measured 2026-09-16: of
+#: that session's sixteen commits, ZERO put an id in the scope — they are `fix(quality)`,
+#: `fix(security)`, `style(theo-ops)`. A reader tied to this slot alone would report a
+#: quieter registry the better the convention took hold, which is this kit's own finding
+#: about lists-instead-of-properties arriving at its own mechanism.
 _COMMIT_SCOPE = re.compile(r"^[a-z]+\(([A-Z]-\d{2,})\)!?:")
+
+#: `Refs B-069` / `Closes B-069` on its own line in the body — a TRAILER.
+#:
+#: The slot that survives the convention above: unbounded, structured, and not competing
+#: with the scope for meaning. Anchored to the start of a line and to a small set of
+#: verbs, which is what keeps it a position rather than prose — the same sentence
+#: mentioning the id mid-paragraph does not match.
+_COMMIT_TRAILER = re.compile(
+    r"^\s*(?:refs?|closes?|fixes|item|part-of)\s*[: ]\s*([A-Z]-\d{2,})\b",
+    re.IGNORECASE | re.MULTILINE)
 
 
 def _working_item(items: list[dict], project_root: Path) -> dict | None:
@@ -710,6 +727,19 @@ def _working_item(items: list[dict], project_root: Path) -> dict | None:
         # WHERE the id sits rather than how many there are.
         scope = _COMMIT_SCOPE.match(subject)
         named = {scope.group(1)} & known if scope else set()
+        if not named:
+            # The trailer, which is where the link belongs once the scope names the area.
+            # Still exactly one: a body listing several items is discussing them, and
+            # that is as true of trailers as it was of prose.
+            # COUNT first, filter second. Intersecting with the registry before
+            # counting let a commit trailing two items pass whenever only one of them
+            # was filed here — the commit is discussing two either way, and what this
+            # registry happens to know does not change what its author was doing.
+            trailers = {m.group(1) for m in _COMMIT_TRAILER.finditer(message)}
+            if len(trailers) == 1 and trailers <= known:
+                return {"item": trailers.pop(), "why": "commit",
+                        "detail": f"commit {sha} refers to it in a trailer",
+                        "since": int(when) if when.isdigit() else None}
         # EXACTLY one, or the commit is discussing items rather than working on one.
         #
         # The first draft took the first id it found anywhere in the message and would
