@@ -141,7 +141,7 @@ cannot be worked on, so eligibility uses the derived state), and **`BACKLOG_BLOC
 not `BACKLOG_EMPTY`** — when items remain and every one is blocked, the sweep the
 latter prescribes would add items beside a wall instead of clearing it.
 
-An item that is `approved` comes back `ITEM_AWAITING_PLAN` — the decision was taken and the plan does not exist yet, which is not a wall and not work in flight; the next step is `/plan-write`. An item that is `planned`, `shipped` or `killed` comes back `ITEM_IN_FLIGHT`,
+An item that is `approved` comes back `ITEM_AWAITING_PLAN` — the decision was taken and the plan does not exist yet, which is not a wall and not work in flight; the next step is `/plan-write`. **Unless the plan is already on disk**, in which case it comes back `ITEM_PLAN_WRITTEN` and the next step is IMPLEMENT, which writes `planned` itself. `approved` carries those two states and the status cannot separate them, so SELECT reads the registry: measured on a consumer 2026-09-16, 34 items holding finished plans — the largest 79361 bytes, scoring 34/34 aligned — were told no plan existed and to go write one. An item that is `planned`, `shipped` or `killed` comes back `ITEM_IN_FLIGHT`,
 `ITEM_SHIPPED` or `ITEM_KILLED` — not blocked. It is past the point where SELECT hands
 out work, which is a different fact from being held back, and reporting both as one
 verdict told a reader the opposite of the truth.
