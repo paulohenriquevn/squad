@@ -73,8 +73,17 @@ actually pointed at, made by you, named after the item.
 not something you take on report from the stage before you:
 
 ```bash
-python3 .claude/skills/implement/scripts/check_tdd_shape.py <the plan>
+KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
+python3 "$KIT/skills/implement/scripts/check_tdd_shape.py" \
+    {REPO}/.squad/records/plans/{ITEM}-plan.md
 ```
+
+Anchored at `{REPO}` like every other path in this brief: you work in a worktree
+and `.claude/` is gitignored, so a relative probe resolves to a tree that has
+neither the kit nor the plan. This line was the last one in the chain still
+written the old way — found by generating all seven briefs and checking that
+every path inside a fenced block resolves, which is a thing worth doing after
+any template edit.
 
 It asks whether each task carries an **executable** RED shape: an assertion, a
 Given/When/Then, or a `test_<behavior>` literal. A task whose `#### TDD` body is

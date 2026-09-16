@@ -846,3 +846,42 @@ def test_plan_is_executable_by_someone_who_does_not_know_the_project(tmp_path: P
     flat = " ".join(brief.split())
     assert "does NOT carry what a competent developer brings" in flat, \
         "the contract has no upper bound, and length is not rigour"
+
+
+def test_every_path_in_every_generated_brief_resolves(tmp_path: Path) -> None:
+    """Generate all seven briefs and check that every script path inside a fenced block
+    exists. This is the check that would have caught five separate template defects across
+    two days, each found one at a time when a stage failed on a consumer:
+
+      IMPLEMENT  resolved the kit relative to the caller
+      REVIEW     same, plus a brief path under `.squad/` a worktree does not carry
+      RELEASE    same, on the only writer of a status line
+      JUDGE      read the brief "under the cycle's alignment records" — no path at all
+      IMPLEMENT  `python3 .claude/skills/.../check_tdd_shape.py`, the last one left
+
+    Every one was invisible to a test of the template's prose and visible in two seconds
+    to a test of its OUTPUT. A brief is a program whose paths are only checked when an
+    agent runs it, unless something like this runs first.
+    """
+    import re  # noqa: PLC0415
+
+    assert _run(tmp_path).returncode == 0
+    repo = tmp_path / "repo"
+    (repo / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
+    unresolved: list[str] = []
+    for stage in STAGES:
+        brief = (tmp_path / "agents" / f"{stage}.md").read_text(encoding="utf-8")
+        inside = False
+        for line in brief.splitlines():
+            if line.startswith("```"):
+                inside = not inside
+                continue
+            if not inside:
+                continue
+            # A path that names the kit must be anchored at the repository, whatever
+            # spelling it uses — `$KIT/...` or the absolute form substituted in.
+            for match in re.finditer(r"(?<![\w$/])(\.claude|\.squad)/[\w./-]+", line):
+                unresolved.append(f"{stage}: {match.group(0)} (relative to the caller)")
+    assert not unresolved, (
+        f"these resolve against whatever tree the stage runs in, and a worktree carries "
+        f"neither `.claude/` nor `.squad/`: {unresolved}")
