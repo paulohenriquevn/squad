@@ -51,7 +51,7 @@ You are what makes it a state that ends.
 
    ```bash
    KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
-   python3 "$KIT/skills/plan-alignment/scripts/score_alignment.py" "$BRIEF"
+   python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/plan-alignment/scripts/score_alignment.py" "$BRIEF"
    ```
 
    Both paths are absolute because `.claude/` and `.squad/*` are gitignored in a

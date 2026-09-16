@@ -14,6 +14,13 @@ them.
 
 ## Where you work, and why it is not the repository
 
+> **Run each fenced block as ONE bash invocation.** The lines share shell state —
+> a variable set on the first is used on the third — and a harness that runs each
+> line as its own call gives the later ones an empty variable and a path like
+> `/skills/...`. Measured 2026-09-16 by executing every read-only command in all
+> seven generated briefs one at a time: 3 of 19 failed exactly that way.
+
+
 **Your first action is to create your own worktree, and every edit goes inside
 it:**
 
@@ -73,9 +80,13 @@ actually pointed at, made by you, named after the item.
 not something you take on report from the stage before you:
 
 ```bash
-KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
-python3 "$KIT/skills/implement/scripts/check_tdd_shape.py" \
-    {REPO}/.squad/records/plans/{ITEM}-plan.md
+# The kit path is resolved INSIDE the command. A `KIT=` assignment on its own line
+# assumes shell state survives between commands, and in a harness whose Bash runs
+# each call in a fresh process it does not — `$KIT` arrives empty and the command
+# opens `/skills/...`. Measured 2026-09-16 by running every read-only command in
+# all seven generated briefs: 3 of 19 failed this way.
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/implement/scripts/check_tdd_shape.py" \
+    --plan {REPO}/.squad/records/plans/{ITEM}-plan.md
 ```
 
 Anchored at `{REPO}` like every other path in this brief: you work in a worktree
@@ -173,8 +184,12 @@ diff shows it.
 **0. Record that the item is being built.**
 
 ```bash
-KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
-python3 "$KIT/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to planned
+# The kit path is resolved INSIDE the command. A `KIT=` assignment on its own line
+# assumes shell state survives between commands, and in a harness whose Bash runs
+# each call in a fresh process it does not — `$KIT` arrives empty and the command
+# opens `/skills/...`. Measured 2026-09-16 by running every read-only command in
+# all seven generated briefs: 3 of 19 failed this way.
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to planned
 ```
 
 `approved -> planned` is the hop that says work started; `planned -> shipped` is the
@@ -206,7 +221,7 @@ and the refusal is information — carry on.
 **If you halt, walk it back before you stop.**
 
 ```bash
-python3 "$KIT/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to approved \
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to approved \
     --because "IMPLEMENT halted: <the reason, in one line>"
 ```
 
@@ -235,7 +250,7 @@ python3 $([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/sk
 **3. Run `/code-quality` standalone, so the next phase has the file it reads.**
 
 ```bash
-python3 "$KIT/skills/code-quality/scripts/run_code_quality.py" {ITEM} \
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/code-quality/scripts/run_code_quality.py" {ITEM} \
     --project-root {REPO}
 ```
 

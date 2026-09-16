@@ -41,8 +41,12 @@ need to know that the brief does not answer.
 **2. Score it, and do not hand on an unscored plan.**
 
 ```bash
-KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
-python3 "$KIT/skills/plan-confidence/scripts/run_structural.py" {ITEM} \
+# The kit path is resolved INSIDE the command. A `KIT=` assignment on its own line
+# assumes shell state survives between commands, and in a harness whose Bash runs
+# each call in a fresh process it does not — `$KIT` arrives empty and the command
+# opens `/skills/...`. Measured 2026-09-16 by running every read-only command in
+# all seven generated briefs: 3 of 19 failed this way.
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/plan-confidence/scripts/run_structural.py" {ITEM} \
     --project-root {REPO}
 ```
 

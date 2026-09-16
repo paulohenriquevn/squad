@@ -17,6 +17,13 @@ a task for you.
 
 ## What you are given
 
+> **Run each fenced block as ONE bash invocation.** The lines share shell state —
+> a variable set on the first is used on the third — and a harness that runs each
+> line as its own call gives the later ones an empty variable and a path like
+> `/skills/...`. Measured 2026-09-16 by executing every read-only command in all
+> seven generated briefs one at a time: 3 of 19 failed exactly that way.
+
+
 - the lane branch and the worktree IMPLEMENT created — discovered, not assumed:
 
 ```bash
@@ -48,12 +55,20 @@ python3 -c "import json,sys;[print(t['commit_sha']) for t in json.load(open(sys.
 grep -oE '\b[0-9a-f]{7,40}\b' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | sort -u | head
 ```
 
-**If the two sources name different branches, STOP and report both.** The checkpoint and
-the implementation record are written by different steps, and on a consumer 2026-09-15
-they disagreed: two lanes implemented one item thirty minutes apart, the checkpoint kept
-the first lane's SHAs and the record kept the one that was adjudicated the keeper. Picking
-either would be this stage deciding an adjudication that is not its to make — and picking
-the checkpoint's would have released the discarded lane.
+**When `branch:` is present it DECIDES, and the discovery above does not run.** The field
+is a person's declaration of which lane survived; re-deriving it is how a stage reaches an
+answer that disagrees with the document while looking derived.
+
+Run the discovery only to REPORT, never to choose — and report a disagreement as a line in
+your result rather than a halt:
+
+> `branch:` names `<declared>`; the checkpoint's SHAs are on `<other>`. Reviewed the
+> declared lane. The checkpoint describes a different one and somebody should look.
+
+An earlier version said to STOP when the two disagree. It contradicted the line above it —
+if the frontmatter decides, there are not two sources — and it would have deadlocked the
+first item ever to cross the whole chain, whose checkpoint names the discarded lane and
+cannot be rewritten without erasing that lane's record of its own work.
 
 
 - the plan at `the plan the orchestrator handed you`
@@ -64,7 +79,7 @@ the checkpoint's would have released the discarded lane.
 **1. Does the diff do what the plan said, and only that.**
 
 ```bash
-git -C {REPO} diff HEAD..."$LANE_BRANCH"   # the branch discovered above
+git -C {REPO} diff HEAD..."$(sed -n '1,20p' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | grep -oE '^branch:[[:space:]]*\S+' | head -1 | awk '{print $2}')"   # the branch discovered above
 ```
 
 A change that also fixes something unrelated is not a bonus. It is a second
@@ -77,7 +92,7 @@ IMPLEMENT reports two runs. Reproduce the first:
 
 ```bash
 LANE_TREE=$(git -C {REPO} worktree list --porcelain \
-    | grep -B2 "^branch refs/heads/$LANE_BRANCH$" | head -1 | cut -d" " -f2)
+    | grep -B2 "^branch refs/heads/$(sed -n '1,20p' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | grep -oE '^branch:[[:space:]]*\S+' | head -1 | awk '{print $2}')$" | head -1 | cut -d" " -f2)
 git -C {REPO} worktree add "$HOME/.squad-worktrees/review-{LANE}-$(date +%s)" HEAD
 # run the new test in the PRE-change tree; it must FAIL
 ```
@@ -104,8 +119,12 @@ check.
 **3. Do the acceptance criteria discriminate NOW.**
 
 ```bash
-KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
-python3 "$KIT/skills/plan-alignment/scripts/check_criteria_discriminate.py" \
+# The kit path is resolved INSIDE the command. A `KIT=` assignment on its own line
+# assumes shell state survives between commands, and in a harness whose Bash runs
+# each call in a fresh process it does not — `$KIT` arrives empty and the command
+# opens `/skills/...`. Measured 2026-09-16 by running every read-only command in
+# all seven generated briefs: 3 of 19 failed this way.
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/skills/plan-alignment/scripts/check_criteria_discriminate.py" \
     {REPO}/.squad/records/alignment/{ITEM}-alignment.md \
     --repo-root "$LANE_TREE"
 ```

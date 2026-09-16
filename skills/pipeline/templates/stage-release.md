@@ -12,6 +12,13 @@ your job is to make it findable by the people who did not watch it happen.
 
 ## Where you write
 
+> **Run each fenced block as ONE bash invocation.** The lines share shell state —
+> a variable set on the first is used on the third — and a harness that runs each
+> line as its own call gives the later ones an empty variable and a path like
+> `/skills/...`. Measured 2026-09-16 by executing every read-only command in all
+> seven generated briefs one at a time: 3 of 19 failed exactly that way.
+
+
 **Inside the lane's worktree, on its branch — never in the main tree.** IMPLEMENT
 created the lane; your changelog entry belongs on it, beside the
 change it describes. An entry written on the main branch describes work that is
@@ -48,12 +55,27 @@ python3 -c "import json,sys;[print(t['commit_sha']) for t in json.load(open(sys.
 grep -oE '\b[0-9a-f]{7,40}\b' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | sort -u | head
 ```
 
-**If the two sources name different branches, STOP and report both.** The checkpoint and
-the implementation record are written by different steps, and on a consumer 2026-09-15
-they disagreed: two lanes implemented one item thirty minutes apart, the checkpoint kept
-the first lane's SHAs and the record kept the one adjudicated the keeper. Picking either
-would be this stage deciding an adjudication that is not its to make — and picking the
-checkpoint's would have released the discarded lane.
+**When `branch:` is present it DECIDES, and the discovery above does not run.** The field
+is a person's declaration of which lane survived; re-deriving it is how a stage reaches an
+answer that disagrees with the document while looking derived.
+
+Run the discovery only to REPORT, never to choose — and report it when it disagrees, as a
+line in your result rather than a refusal:
+
+> `branch:` names `<declared>`; the checkpoint's SHAs are on `<other>`. Released the
+> declared lane. The checkpoint describes a different one and somebody should look.
+
+Measured on a consumer 2026-09-16: exactly that disagreement, on the first item ever to
+cross the whole chain. Two lanes implemented it thirty minutes apart, the checkpoint kept
+the first lane's SHAs and the record's frontmatter kept the one a person adjudicated the
+keeper.
+
+An earlier version of this brief said to STOP when the two disagree. That was wrong in a
+way worth recording: it contradicted the line above it — if the frontmatter decides, there
+are not two sources to disagree — and it would have deadlocked the item, because the
+checkpoint cannot be rewritten without erasing the other lane's record of its own work.
+A stage that refuses on a question its own contract already answered is a stage that
+cannot finish.
 
 ## What you do
 
@@ -71,8 +93,12 @@ changed for them.
 **2. Move the item.**
 
 ```bash
-KIT=$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})
-python3 "$KIT/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to shipped
+# The kit path is resolved INSIDE the command. A `KIT=` assignment on its own line
+# assumes shell state survives between commands, and in a harness whose Bash runs
+# each call in a fresh process it does not — `$KIT` arrives empty and the command
+# opens `/skills/...`. Measured 2026-09-16 by running every read-only command in
+# all seven generated briefs: 3 of 19 failed this way.
+python3 "$([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/mechanisms/cycle/backlog_status.py" {REPO}/BACKLOG.md {ITEM} --to shipped
 ```
 
 **The kit is resolved at `{REPO}`, not relative to you.** You write inside the

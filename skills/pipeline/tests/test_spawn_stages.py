@@ -706,17 +706,28 @@ def test_the_lane_is_discovered_not_assumed(tmp_path: Path) -> None:
         assert "branch --contains" in brief, f"{stage} does not discover the lane"
 
 
-def test_the_stage_refuses_to_pick_when_the_two_sources_disagree(tmp_path: Path) -> None:
-    """The checkpoint and the implementation record are written by different steps, and on
-    that consumer they disagreed — two lanes implemented one item thirty minutes apart, and
-    the adjudication of which one survives was made by a person.
+def test_the_declared_lane_decides_and_the_discovery_only_reports(tmp_path: Path) -> None:
+    """The first version of this test demanded the stage STOP when the two sources
+    disagree, and the refusal was the defect.
 
-    A stage that picks is deciding an adjudication that is not its to make. Picking the
-    checkpoint's answer would have released the discarded lane.
+    It contradicted the line above it — if `branch:` in the frontmatter decides, there are
+    not two sources to disagree — and it would have deadlocked the first item ever to
+    cross the whole chain: the checkpoint names the discarded lane and cannot be rewritten
+    without erasing that lane's record of its own work. A stage that refuses on a question
+    its own contract already answered is a stage that cannot finish.
+
+    So the frontmatter decides, the discovery runs to REPORT, and the disagreement is a
+    line in the result rather than a halt. Found by executing every command in the
+    generated RELEASE brief against a real tree rather than by reading the template.
     """
     for stage in ("review", "release"):
         brief = _briefs(tmp_path)[stage]
-        assert "STOP and report both" in brief, f"{stage} does not refuse the collision"
+        assert "does not run" in brief or "DECIDES" in brief, \
+            f"{stage} does not say the declared lane wins"
+        assert "never to choose" in brief, \
+            f"{stage} does not say what the discovery is for"
+        assert "STOP and report both" not in brief, \
+            f"{stage} still halts on a question its contract answers"
 
 
 def test_the_discovery_command_does_not_depend_on_the_shell(tmp_path: Path) -> None:
@@ -885,3 +896,69 @@ def test_every_path_in_every_generated_brief_resolves(tmp_path: Path) -> None:
     assert not unresolved, (
         f"these resolve against whatever tree the stage runs in, and a worktree carries "
         f"neither `.claude/` nor `.squad/`: {unresolved}")
+
+
+def test_no_command_depends_on_shell_state_from_a_previous_line(tmp_path: Path) -> None:
+    """A `KIT=` assignment on its own line assumes shell state survives between commands.
+
+    In a harness whose Bash runs each call in a fresh process — which is what the agent
+    executing these briefs has, and it says so — `$KIT` arrives empty and the command
+    opens `/skills/...`. Measured 2026-09-16 by RUNNING every read-only command in all
+    seven generated briefs: 3 of 19 failed exactly this way, in five templates.
+
+    Every command carries its own resolution now. The fix is uglier to read and it is the
+    difference between a brief that works and one that works only if the reader happens to
+    paste the whole block.
+    """
+    import re  # noqa: PLC0415
+
+    for stage in STAGES:
+        brief = (tmp_path / "agents" / f"{stage}.md").read_text(encoding="utf-8") \
+            if (tmp_path / "agents" / f"{stage}.md").exists() else _briefs(tmp_path)[stage]
+        inside, assigned = False, set()
+        for line in brief.splitlines():
+            if line.startswith("```"):
+                inside, assigned = not inside, set()
+                continue
+            if not inside or not line.strip() or line.lstrip().startswith("#"):
+                continue
+            match = re.match(r"^(\w+)=", line.strip())
+            if match:
+                assigned.add(match.group(1))
+                continue
+            for used in re.findall(r"\$(\w+)|\$\{(\w+)\}", line):
+                name = used[0] or used[1]
+                # `$1`, `$2` … belong to awk/sed inside the command, not to the shell,
+                # and `$sha` / `$f` are bound by a `while read` or `for` on the SAME line.
+                # A guard that cannot tell those from a shell variable reports the command
+                # it was inserted by — which is what this one did first.
+                if name.isdigit() or name in ("HOME", "PATH", "PWD", "sha", "D", "f"):
+                    continue
+                if "ONE bash invocation" in brief:
+                    # The brief states the block is run as one call, which makes shell
+                    # state between its lines legitimate. Inlining every resolution
+                    # instead would put a `git worktree list | grep | head | cut` in
+                    # three places, and three copies of one derivation drift.
+                    continue
+                assert name in assigned, (
+                    f"{stage}: `${name}` is set on an earlier LINE, and shell state does "
+                    f"not survive between commands in the harness that runs this: "
+                    f"{line.strip()[:70]}")
+
+
+def test_a_gate_is_invoked_with_the_flags_it_requires(tmp_path: Path) -> None:
+    """`check_tdd_shape.py` takes `--plan PLAN` and the brief passed the path positionally,
+    so it exited 2 on its own usage message. Introduced by me while anchoring the path, and
+    found by running the command rather than reading it.
+
+    A path that resolves is not a command that runs.
+    """
+    brief = _briefs(tmp_path)["implement"]
+    lines = brief.splitlines()
+    i = next(n for n, l in enumerate(lines)
+             if "check_tdd_shape.py" in l and "python3" in l)
+    # The command wraps, so the flag may sit on the continuation. Reading only the line
+    # with the script name tests where the wrap fell.
+    whole = " ".join(l.strip().rstrip("\\") for l in lines[i:i + 3])
+    assert "--plan" in whole, \
+        f"check_tdd_shape is invoked without --plan: {whole[:90]}"
