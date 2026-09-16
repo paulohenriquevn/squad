@@ -442,6 +442,15 @@ def select(text: str, requested: str | None = None,
                 verdict = "ITEM_IMPLEMENTED"
                 next_step = (" The implementation record exists and nothing advanced the"
                              " status; continue with CODE-QUALITY and REVIEW.")
+            # The ladder stops at the implementation record, and that is a declared
+            # limit rather than an oversight. `plans/` and `implementations/` hold ONE
+            # file per item with an unambiguous suffix, so their presence is a fact.
+            # `reviews/` holds `{ITEM}-{phase}-{date}.md` — on a consumer 2026-09-16,
+            # `B-013-edge-cases-2026-09-13.md` sits beside
+            # `B-002-implement-validate-2026-09-15.md` — and reading either as "REVIEW
+            # finished" would assign a meaning the filename does not carry. A ladder
+            # that guessed the last two rungs would report progress nobody made, which
+            # is the failure this whole family keeps producing in the other direction.
             elif verdict == "ITEM_AWAITING_PLAN" and requested in plans_on_disk:
                 verdict = "ITEM_PLAN_WRITTEN"
                 next_step = (" The plan exists and nothing advanced the status;"
