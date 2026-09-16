@@ -153,7 +153,17 @@ class ShapeReport:
 
     @property
     def all_pass(self) -> bool:
-        return len(self.blocked_tasks) == 0
+        # Zero tasks is NOT a pass. With no tasks there are no blocked tasks, so this
+        # returned True and the gate exited 0 on a plan it could not read.
+        #
+        # Measured on a consumer 2026-09-16: 6 of 25 dispatchable plans reported
+        # `Total tasks: 0` and exited 0. The largest was 1239 lines with a `## Tasks`
+        # section 354 lines in — organised as `#### T1.1` under `### Phase 1`, one
+        # heading level below what the parser matches. IMPLEMENT would have proceeded
+        # on all six with no TDD verification whatsoever.
+        #
+        # An inability to read the plan must not become a verdict about the plan.
+        return bool(self.tasks) and len(self.blocked_tasks) == 0
 
 
 #: A fenced block, whatever fence it uses. Its CONTENTS are data, not document
@@ -354,6 +364,17 @@ def main() -> int:
     else:
         print(f"Total tasks: {report.total_tasks}")
         print(f"With executable TDD shape: {report.tasks_with_shape}")
+        if not report.tasks:
+            body = args.plan.read_text(encoding="utf-8-sig")
+            has_section = re.search(r"^##\s+Tasks\s*$", body, re.MULTILINE) is not None
+            where = ("a `## Tasks` section is present and no task heading inside it"
+                     " matched" if has_section else "no `## Tasks` section was found")
+            print(f"  UNREADABLE: {where}.")
+            print("  This checker matches `### T1.1 — title`. A plan that nests tasks"
+                  " one level deeper (`#### T1.1` under `### Phase 1`) is invisible"
+                  " to it.")
+            print("  Reported as a failure rather than as zero tasks: a plan this"
+                  " checker cannot read has not been checked.")
         for t in report.blocked_tasks:
             reason = (
                 "no #### TDD section"

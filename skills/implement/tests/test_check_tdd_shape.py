@@ -143,12 +143,23 @@ def test_multiple_tasks_one_blocked(tmp_path: Path) -> None:
     assert [b.task_id for b in report.blocked_tasks] == ["T1.2"]
 
 
-def test_plan_without_tasks_returns_empty_report(tmp_path: Path) -> None:
+def test_a_plan_with_no_tasks_does_not_pass(tmp_path: Path) -> None:
+    """This asserted `all_pass is True` until 2026-09-16, which encoded the defect.
+
+    With zero tasks there are no BLOCKED tasks, so `all_pass` was vacuously true and the
+    gate exited 0. Measured on a consumer that day: 6 of 25 dispatchable plans parsed to
+    zero tasks and passed — the largest 1239 lines, its `## Tasks` section organised one
+    heading level below what the parser matches. IMPLEMENT would have run on all six
+    with no TDD verification.
+
+    A plan with no tasks cannot be implemented, and a plan the checker cannot read has
+    not been checked. Neither is a pass.
+    """
     body = "# Plan\n\n## Context\nNo tasks here.\n"
     plan = _write_plan(tmp_path, body)
     report = check_tdd_shape(plan)
     assert report.total_tasks == 0
-    assert report.all_pass is True
+    assert report.all_pass is False
 
 
 def test_cli_exit_code_0_when_all_pass(tmp_path: Path) -> None:
