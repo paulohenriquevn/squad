@@ -241,13 +241,31 @@ def _slug_for(item_id: str, records: Path) -> str | None:
     Derived from what exists rather than constructed, because only the phase that
     wrote the artefact knows the words after the number.
     """
-    number = item_id.replace("-", "").lower()          # B-033 -> b033
+    #: Two spellings are in use for one thing, and a reader that knows only one finds
+    #: nothing. `b033-prometheus-url-dev-public` is the form this docstring was written
+    #: for; `B-022-plan.md` — the bare id — is what a consumer's own PLAN stage writes.
+    #:
+    #: The old match lowercased and stripped the hyphen (`B-022` -> `b022`) and globbed
+    #: `*b022*`. On a case-sensitive filesystem that never matches `B-022-plan.md`.
+    #: Measured on a consumer 2026-09-16: `slug` was None for ALL 35 items holding a
+    #: plan, so `item_detail` never opened one — `phases: []`, `tasks: []`,
+    #: `done_ratio: None` — and the implementation view drew 35 blocks whose only
+    #: content was the fallback sentence. A list of empty items, which is exactly what
+    #: it looked like.
+    #:
+    #: Matched on the FILENAME rather than by constructing a slug, because only the
+    #: phase that wrote the artefact knows the words after the number — that part of the
+    #: original reasoning was right and is kept.
+    candidates = (item_id.lower(), item_id.replace("-", "").lower())
     for base in ("plans", "implementations", "alignment"):
         directory = records / base
         if not directory.is_dir():
             continue
-        for entry in sorted(directory.glob(f"*{number}*")):
+        for entry in sorted(directory.iterdir()):
             name = entry.name.lstrip(".")
+            lowered = name.lower()
+            if not any(c in lowered for c in candidates):
+                continue
             for suffix in ("-plan.md", "-implementation.md", "-alignment.md", ".json"):
                 if name.endswith(suffix):
                     return _slug_from_filename(entry.name, suffix)
