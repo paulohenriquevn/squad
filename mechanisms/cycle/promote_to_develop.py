@@ -85,7 +85,7 @@ def _runner(root: Path, program: str) -> Runner:
     return run
 
 
-def _reviews_that_drifted(project: Path) -> list[str]:
+def _reviews_that_drifted(project: Path) -> tuple[list[str], int]:
     """Slugs whose review examined files that changed after it ran.
 
     Empty when nothing drifted AND when nothing can be checked — an absent review
@@ -97,20 +97,21 @@ def _reviews_that_drifted(project: Path) -> list[str]:
     try:
         from check_review_binding import DRIFTED, check
     except ImportError:  # pragma: no cover - environment, not logic
-        return []
+        return [], 0
 
     directory = records_dir(project, "reviews")
     if directory is None:
-        return []
+        return [], 0
     drifted: list[str] = []
-    for record in sorted(directory.glob("*-review-*.json")):
+    records = sorted(directory.glob("*-review-*.json"))
+    for record in records:
         slug = record.name.split("-review-")[0]
         if slug in drifted:
             continue
         code, _ = check(slug, project=project)
         if code == DRIFTED:
             drifted.append(slug)
-    return drifted
+    return drifted, len(records)
 
 
 
@@ -237,7 +238,13 @@ def promote(
     # no longer describes the branch has to be caught. A commit landing after
     # consolidation would otherwise travel to `develop` on an approval that never saw
     # it — the approval was bound to a NAME, not to a CONTENT.
-    drifted = _reviews_that_drifted(Path.cwd())
+    drifted, reviews_examined = _reviews_that_drifted(Path.cwd())
+    if not reviews_examined:
+        # Say it rather than let silence read as "the reviews were fine".
+        report.lines.append(
+            "review drift: 0 record(s) examined — no `*-review-*.json` on disk, so no "
+            "review was bound to a commit. Not a refusal; the cycle does not require "
+            "one here. It is also not a check that passed.")
     if drifted:
         report.exit_code = REFUSED
         report.lines.append(
