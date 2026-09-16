@@ -176,11 +176,20 @@ done
 # A fixed `/..` was wrong on the first attempt — this file is at `mechanisms/cycle/`, so
 # one level up is `mechanisms/`, and the `*/.claude` test could never match. Counting
 # levels breaks the moment a file moves; asking what a directory CONTAINS does not.
-_kit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-while [ "$_kit_dir" != "/" ]; do
-    if [ -d "$_kit_dir/skills" ] && [ -d "$_kit_dir/mechanisms" ]; then break; fi
-    _kit_dir="$(dirname "$_kit_dir")"
-done
+# `REPO_ROOT`, which line 29 already computed and line 30 already `cd`-ed into. This
+# re-resolved `BASH_SOURCE[0]` here instead, and that path is RELATIVE when the script is
+# invoked by a relative path — so after the `cd` it resolved against the wrong directory,
+# the subshell `cd` failed, `pwd` never ran, and `_kit_dir` came out empty. `dirname ""`
+# is `.`, which is how the banner printed "the kit's own repository at ." from inside an
+# install: the one thing the banner exists to distinguish, reported backwards.
+#
+# Shipped 2026-09-16 and caught the same day by running it from a consumer with a
+# relative path. Both invocations resolve correctly in isolation; only the ORDER breaks
+# it, which is why it survived the test that checks the resolution.
+#
+# A second resolution of a question the script had already answered — today's class,
+# from this hand, in the fix for today's class.
+_kit_dir="$REPO_ROOT"
 case "$_kit_dir" in
     */.claude) _tree="INSTALLED at $_kit_dir — these suites are running against a
   consumer tree. A failure here that passes upstream is a defect in the kit's TESTS,
