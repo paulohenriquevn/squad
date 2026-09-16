@@ -331,13 +331,17 @@ def stage_on_disk(project_root: Path) -> dict[str, str]:
     records = _records_dir(project_root)
     if records is None:
         return {}
+    # Through `squad_boss.records_by_item`, the one reader that knows both filename
+    # spellings. This carried its own prefix glob — `entry.name[: -len(suffix)]` — which
+    # matched `B-022-plan.md` and missed `b022-descriptive-words-plan.md`, so this MODULE
+    # held two readers of one question and only `_slug_for` had been corrected.
+    try:
+        from squad_boss import records_by_item  # noqa: PLC0415
+    except ImportError:
+        return {}
     reached: dict[str, str] = {}
     for base, suffix, stage in _RECORD_STAGE:
-        directory = records / base
-        if not directory.is_dir():
-            continue
-        for entry in sorted(directory.glob(f"*{suffix}")):
-            item_id = entry.name[: -len(suffix)]
+        for item_id in records_by_item(records, base, suffix):
             # First writer wins: the tuple is ordered furthest-stage-first, so an item
             # with both records is reported at the later one.
             reached.setdefault(item_id, stage)

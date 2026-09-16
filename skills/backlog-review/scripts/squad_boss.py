@@ -131,6 +131,39 @@ def _item_of(name: str) -> str:
 WITHDRAWN_MARKER = ".withdrawn"
 
 
+#: Item id -> the record of `kind` on disk, for every item that has one.
+#:
+#: THE reader of "does this item have a record", for the same reason `halt_reports` is
+#: the reader of halt files: two scans of one directory drift, and these two already had.
+#:
+#: Two spellings are in use and each reader knew one. `board_state._slug_for` matched
+#: `b022-descriptive-words-plan.md` and missed `B-022-plan.md`; `select_backlog_item`
+#: took the filename prefix and matched `B-022-plan.md` while missing the descriptive
+#: form. Measured 2026-09-16: the first reported `phases: []` for all 35 items holding a
+#: plan and drew a list of empty blocks; the second reported an item with a plan on disk
+#: as `awaiting_plan`, which sends a reader to write one that exists.
+#:
+#: Matching on the FILENAME rather than constructing a slug, because only the phase that
+#: wrote the artefact knows the words after the number.
+def records_by_item(records: Path, sub: str, suffix: str) -> dict[str, Path]:
+    """`{item_id: path}` for every `*{suffix}` in `records/{sub}`, both spellings."""
+    directory = records / sub
+    if not directory.is_dir():
+        return {}
+    found: dict[str, Path] = {}
+    for entry in sorted(directory.iterdir()):
+        name = entry.name.lstrip(".")
+        if not name.endswith(suffix):
+            continue
+        stem = name[: -len(suffix)]
+        item = _item_of(name)
+        if item:
+            found.setdefault(item, entry)
+        elif stem:
+            found.setdefault(stem, entry)
+    return found
+
+
 def halt_reports(project_root: Path) -> dict[str, Path]:
     """Item id -> the BLOCKED report a phase left for it.
 
