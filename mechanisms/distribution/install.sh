@@ -816,6 +816,27 @@ MANIFEST="$ECO/.kit-manifest.txt"
   # to learn a variable existed (#23). A `#`-prefixed line, so every existing
   # reader — which all skip comments — is unaffected.
   echo "# kit-source: $SRC_DIR"
+  # WHICH version, not only which directory. The path answered "where did this
+  # come from" and nothing answered "what is this" — so an installed kit could not
+  # say which version it was, and `sync_consumers.py` needs exactly that as its
+  # `--base`. Measured 2026-09-16 across 55 consumers: three distinct contents, and
+  # NONE of them matched any commit in the kit's history. Every one was installed
+  # from a dirty working tree, so the only classification the sync tool could reach
+  # was LOCAL_CHANGE — it refused all 55, correctly and uselessly.
+  #
+  # The dirty flag is recorded rather than refused. An install from a working tree
+  # is how this kit is developed, and forbidding it would stop the loop that finds
+  # the defects; saying so lets the sync tool tell a fossil from a release.
+  if command -v git >/dev/null 2>&1 && git -C "$SRC_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    _sha="$(git -C "$SRC_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
+    if [ -n "$(git -C "$SRC_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+      echo "# kit-commit: $_sha (dirty — this install does not match that commit)"
+    else
+      echo "# kit-commit: $_sha"
+    fi
+  else
+    echo "# kit-commit: unknown (source is not a git checkout)"
+  fi
   # `skills/` stays one entry per SKILL and `rules/` one per file — that is the
   # granularity every existing reader expects, and changing it broke three tests
   # that had nothing to do with the gap being closed.

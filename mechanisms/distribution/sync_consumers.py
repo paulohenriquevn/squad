@@ -220,10 +220,38 @@ def sync_target(kit: Path, target_root: Path, files: list[str], base: str,
     return outcome
 
 
+
+#: The version a consumer was installed from, read from its own manifest.
+#:
+#: `--base` is ONE sha for every target, and that is wrong whenever the fleet is not
+#: uniform. Measured 2026-09-16 across 55 consumers: three distinct contents of one
+#: file, and NONE matched any commit in the kit's history — every install came from a
+#: dirty working tree. With one `--base` for all of them the only reachable verdict was
+#: LOCAL_CHANGE, so this tool refused all 55: correct, and useless.
+#:
+#: `install.sh` now records `# kit-commit: <sha>` (with `(dirty ...)` when the source
+#: tree had uncommitted changes). A dirty install has no commit that describes it, so
+#: it is reported as unknown rather than compared against a sha it never matched.
+def base_from_manifest(root: Path) -> str | None:
+    manifest = root / ".claude" / ".kit-manifest.txt"
+    if not manifest.is_file():
+        return None
+    for line in manifest.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("# kit-commit:"):
+            value = line.split(":", 1)[1].strip()
+            if not value or value.startswith("unknown") or "(dirty" in value:
+                return None
+            return value.split()[0]
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True,
                         help="first commit of the delta (the base is its PARENT)")
+    parser.add_argument("--base-from-manifest", action="store_true",
+                        help="compare each target against the commit ITS manifest "
+                             "records, falling back to --base when it records none")
     parser.add_argument("--targets", type=Path, required=True,
                         help="file with one consumer path per line")
     parser.add_argument("--kit", type=Path, default=Path(__file__).resolve().parents[2])
@@ -255,7 +283,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {target}: no .claude/ — skipped")
             continue
 
-        outcome = sync_target(args.kit, root, files, args.base, apply=args.apply)
+        target_base = args.base
+        if args.base_from_manifest:
+            recorded = base_from_manifest(root)
+            if recorded is None:
+                print(f"  {target}: manifest records no clean kit-commit"
+                      f" — compared against --base instead")
+            else:
+                target_base = recorded
+        outcome = sync_target(args.kit, root, files, target_base, apply=args.apply)
         for key, items in outcome.items():
             totals[key] += len(items)
         if outcome[Action.LOCAL_CHANGE.value]:
