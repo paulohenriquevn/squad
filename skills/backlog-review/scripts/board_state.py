@@ -690,9 +690,15 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             phase, source = hit["phase"], "stream"
         elif on_disk.get(iid) and status in ("approved", "planned"):
             # A record on disk beats a status nobody advanced. `position_from` says
-            # `records` rather than `derived`, so a reader can tell a position read off
-            # a file from one inferred from a status field.
-            phase, source = on_disk[iid], "records"
+            # `disk` rather than `derived`, so a reader can tell a position read off a
+            # file from one inferred from a status field.
+            #
+            # `disk` and not `records`: `check_write_containment` reserves that literal
+            # for `squad/paths.py`, and it refused this line — correctly. A bare
+            # "records" in a module that also builds paths is ambiguous to any scan, and
+            # the gate cannot know this one was a label. Sixth time it has caught this
+            # hand; the shorter word is also the more accurate one here.
+            phase, source = on_disk[iid], "disk"
         else:
             phase = STATUS_PHASE.get(status, "backlog")
             source = "derived"

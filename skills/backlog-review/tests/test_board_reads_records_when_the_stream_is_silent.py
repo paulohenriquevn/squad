@@ -15,7 +15,7 @@ So this is a safety net, not a repair, and it fires on zero items there. It matt
 because the stream is the one source that can go silent: a stage that runs without
 emitting an event leaves an item drawn at a status the registry never advanced, and that
 is the same blind spot that hid 34 finished plans from the scheduler in the same week.
-`position_from` says `records` rather than `derived`, so a reader can always tell a
+`position_from` says `disk` rather than `derived`, so a reader can always tell a
 position read off a file from one inferred from a status field.
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ def test_a_plan_on_disk_places_the_item_at_plan(tmp_path: Path) -> None:
     item = state["items"][0]
     assert item["phase"] == "plan", \
         "an approved item holding a plan was drawn at the phase it had left"
-    assert item["position_from"] == "records"
+    assert item["position_from"] == "disk"
 
 
 def test_an_implementation_beats_a_plan(tmp_path: Path) -> None:
