@@ -84,3 +84,27 @@ deviations:
 - Aging evidence (honesty-gate worked 6 months ago; nothing since).
 - Single-operator knowledge (only one person can actually run the anchor).
 - Dogfood theatre — checking the box without using the product.
+- **Confirming a claim against the REPORT of a thing rather than against the thing.**
+  A log line, a tool's summary, a cached number: each is a claim about the subject and
+  none is the subject. When they disagree, the report is what moves.
+
+  Measured on 2026-09-16, across two sessions working one machine, five times in a day:
+
+  | what was read | what it said | what was true |
+  |---|---|---|
+  | `/tmp/<name>.log` written by two sessions | a push landed | it was the OTHER session's push |
+  | `$?` after a pipe | the script exited 0 | that was `head`'s exit |
+  | `git show <sha>:<path> > /tmp/…` | the file was empty | the redirect was refused |
+  | `git describe` on a branch with no tag | "0 commits since the tag" | 4710 |
+  | a domain name passed where a repo path belongs | "26 items unroutable" | 1 |
+
+  Four of the five had the tool answering correctly and the reader constructing the
+  error. That is the shape: **the instrument is usually right and the invocation is
+  usually the thing that lied.** The rule is not "distrust tools" — it is that a claim
+  is worth what its confirmation is worth, and a confirmation that reads a summary has
+  confirmed the summary.
+
+  What ends it is cheap and specific: re-ask the authority. `git rev-list --count` for a
+  push, the exit code of the process itself and not of a pipeline, the file rather than
+  the redirect that was supposed to fill it. A second reading from the same report is
+  not a second measurement.
