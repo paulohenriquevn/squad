@@ -438,6 +438,8 @@ h1 {
 .pulse .stale { color: var(--warn, #b07020); }
 .pulse .what { font-family: var(--mono, ui-monospace, monospace); opacity: .85; }
 .pulse .why { opacity: .7; flex-basis: 100%; }
+.pulse .warnish { color: var(--warn, #b07020); }
+.pulse.repo { margin-top: -.55rem; opacity: .92; }
 
 /* The ordinal is information here: these are the cycle's phases, and the order
    is the order work moves through them. */
@@ -981,6 +983,7 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
   </div>
   <div class="tallies" id="tallies"></div>
   <div class="pulse" id="pulse"></div>
+  <div class="pulse repo" id="repopulse"></div>
   <div class="filters">
     <input type="search" id="q" placeholder="filter by id or title" aria-label="Filter items">
     <div class="seg" role="group" aria-label="Scope">
@@ -1374,9 +1377,41 @@ function render(state) {
           last touched an item <b>${ago(secs)}</b></span>
         <span class="what"><b>${escapeHtml(act.item)}</b> ·
           ${escapeHtml(act.cycle || "")}${act.verdict ? " → " + escapeHtml(act.verdict) : ""}</span>
-        ${stale ? `<span class="why">Older than an hour. Work may still be happening —
-          a commit, a gate run, a session thinking — but nothing has reached this
-          registry since.</span>` : ""}`;
+        ${stale ? `<span class="why">Older than an hour. Nothing has reached this
+          registry since — see the repository line for whether anyone is working.</span>`
+          : ""}`;
+    }
+  }
+
+  // The repository's own pulse, beside the cycle's. Two different questions: "has the
+  // cycle moved an item" and "is anyone working in this tree at all". Measured on a
+  // consumer 2026-09-16: the stream had been silent two hours while the session had
+  // sixteen unpushed commits, the newest from minutes earlier. The board reported a
+  // quiet registry and the owner read it as a quiet session.
+  //
+  // A commit is NOT a phase, and this line never merges into the one above. Conflating
+  // them would let a busy repository make an untouched backlog look like progress.
+  const repo = state.repo;
+  const rp = el("repopulse");
+  if (rp) {
+    if (!repo || !repo.head) {
+      rp.innerHTML = `<span class="why">This project is not a git checkout, or git could
+        not be read, so the board cannot say whether anyone is working in it.</span>`;
+    } else {
+      const csecs = repo.committed_at ? (Date.now() / 1000) - repo.committed_at : null;
+      const live = csecs !== null && csecs < 1800;
+      const bits = [
+        `<span class="${live ? "fresh" : ""}">last commit <b>${ago(csecs)}</b></span>`,
+        `<span class="what">${escapeHtml(repo.branch || "?")} ·
+           <b>${escapeHtml(repo.head)}</b> ${escapeHtml(repo.subject || "")}</span>`,
+      ];
+      if (repo.unpushed) {
+        bits.push(`<span class="warnish"><b>${repo.unpushed}</b> unpushed</span>`);
+      }
+      if (repo.dirty_files) {
+        bits.push(`<span class="warnish"><b>${repo.dirty_files}</b> file(s) modified</span>`);
+      }
+      rp.innerHTML = bits.join("");
     }
   }
 

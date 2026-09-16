@@ -118,3 +118,59 @@ def test_an_unknown_cycle_closes_nothing(tmp_path: Path) -> None:
         _end("something-else", "2026-09-16T18:05:00Z"),
     ))
     assert state["running"] == ["B-001"]
+
+
+# ── the repository's own pulse ───────────────────────────────────────────────
+
+def _checkout(tmp_path: Path) -> Path:
+    import subprocess
+    root = _registry(tmp_path)
+    for args in (["init", "-q", "-b", "workspace"],
+                 ["config", "user.email", "t@example.com"],
+                 ["config", "user.name", "t"]):
+        subprocess.run(["git", *args], cwd=root, check=True, timeout=120,
+                       capture_output=True)
+    (root / "a.txt").write_text("a\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, timeout=120,
+                   capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "feat(x): the first commit"], cwd=root,
+                   check=True, timeout=120, capture_output=True)
+    return root
+
+
+def test_the_board_reads_the_repository_it_is_pointed_at(tmp_path: Path) -> None:
+    """`read_lead` answers this question and needs a supervisor writing a marker. A
+    board pointed at a repository nobody supervises answered `watching: false` and
+    nothing else — while the session had sixteen unpushed commits, the newest from
+    minutes earlier. The work was real, visible in git, and invisible on the board."""
+    repo = build_state(_checkout(tmp_path))["repo"]
+    assert repo["head"], "the board cannot say whether anyone is working in this tree"
+    assert repo["subject"] == "feat(x): the first commit"
+    assert repo["branch"] == "workspace"
+    assert isinstance(repo["committed_at"], int)
+
+
+def test_a_modified_tracked_file_counts_and_an_untracked_one_does_not(
+        tmp_path: Path) -> None:
+    """Counting build output as activity would report every repository as busy
+    forever."""
+    root = _checkout(tmp_path)
+    (root / "a.txt").write_text("changed\n", encoding="utf-8")
+    (root / "build.log").write_text("noise\n", encoding="utf-8")
+    assert build_state(root)["repo"]["dirty_files"] == 1
+
+
+def test_a_project_that_is_not_a_checkout_says_so(tmp_path: Path) -> None:
+    """None rather than zero: "no commits" and "not a repository" are different
+    answers, and a zero would read as a clean tree."""
+    repo = build_state(_registry(tmp_path))["repo"]
+    assert repo["head"] is None
+
+
+def test_the_two_pulses_stay_separate(tmp_path: Path) -> None:
+    """A commit is NOT a phase. Merging them would let a busy repository make an
+    untouched backlog look like progress, which is the error this board refuses."""
+    state = build_state(_checkout(tmp_path))
+    assert state["last_activity"] is None, \
+        "a commit was counted as the cycle touching an item"
+    assert state["repo"]["head"] is not None

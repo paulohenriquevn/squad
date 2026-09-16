@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -642,6 +643,59 @@ def _closes(open_phase: dict | None, ended: str) -> bool:
     return order.index(ended) >= order.index(started)
 
 
+#: What the repository itself says about whether anyone is working, right now.
+#:
+#: `read_lead` was written for this question — "the session had handed its turn back and
+#: sat still for two hours, and the only way to find out was to attach to a tmux pane" —
+#: and it needs a supervisor writing a marker. A board pointed at a repository nobody
+#: supervises answers `watching: false` and nothing else.
+#:
+#: The repository answers it with no infrastructure at all. Measured on a consumer
+#: 2026-09-16: the cycle stream had been silent for two hours while the session had
+#: fifteen unpushed commits, the newest from minutes earlier. The work was real, visible
+#: in git, and invisible on the board — so the page reported a quiet registry and the
+#: owner read it as a quiet session.
+#:
+#: A commit is NOT a phase, and this is reported beside cycle activity rather than mixed
+#: into it. Conflating them would let a busy repository make an untouched backlog look
+#: like progress, which is the error this board exists to refuse.
+#:
+#: All three reads together cost ~130ms on a 3000-file repository, which is affordable
+#: at the poll interval. Each degrades to None on its own rather than failing the state.
+def _repo_activity(project_root: Path) -> dict:
+    def git(*args: str) -> str | None:
+        try:
+            out = subprocess.run(["git", *args], cwd=str(project_root),
+                                 capture_output=True, text=True, timeout=10, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return out.stdout.strip() if out.returncode == 0 else None
+
+    head = git("log", "-1", "--format=%h\x1f%s\x1f%ct")
+    out: dict = {"head": None, "subject": None, "committed_at": None,
+                 "dirty_files": None, "unpushed": None, "branch": git("rev-parse",
+                                                                      "--abbrev-ref",
+                                                                      "HEAD")}
+    if head and "\x1f" in head:
+        sha, _, rest = head.partition("\x1f")
+        subject, _, when = rest.rpartition("\x1f")
+        out["head"] = sha
+        out["subject"] = subject
+        out["committed_at"] = int(when) if when.isdigit() else None
+
+    # `--untracked-files=no`: an untracked file is not work in progress the way a
+    # modified tracked one is, and counting build output as activity would report every
+    # repository as busy forever.
+    status = git("status", "--porcelain", "--untracked-files=no")
+    if status is not None:
+        out["dirty_files"] = len([ln for ln in status.splitlines() if ln.strip()])
+
+    ahead = git("rev-list", "--count", "@{upstream}..HEAD")
+    if ahead is not None and ahead.isdigit():
+        out["unpushed"] = int(ahead)
+    return out
+
+
 def _last_activity(events: list[dict]) -> dict | None:
     """The newest event that names an item, or None when the stream names none.
 
@@ -852,6 +906,9 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         #: touched nothing report the cycle as busy, which is the same error as a gate
         #: passing on a sweep that examined nothing.
         "last_activity": _last_activity(events),
+        #: The repository's own pulse, beside the cycle's. Two different questions:
+        #: "has the cycle moved an item" and "is anyone working in this tree at all".
+        "repo": _repo_activity(project_root),
         "unplaced": {
             "without_item": unplaced_no_item,
             "off_chain": dict(sorted(unplaced_off_chain.items())),
