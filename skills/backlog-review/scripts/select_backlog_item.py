@@ -614,8 +614,28 @@ def main() -> int:
             for item_id in result.halted:
                 print(f"    {item_id}")
         if result.walls:
-            print("  blocked:")
+            # The walls are the WHOLE registry's, and the label said `blocked:` directly
+            # under one item's verdict. A reader takes that as this item's blockers, and
+            # that reading is wrong whenever the checked item is not in the map.
+            #
+            # Measured 2026-09-16, and the reader was this kit's own maintainer: `--check
+            # B-022` printed `blocked: B-088 <- a decision` under the verdict, and B-022's
+            # actual `blocked_by` was B-034. The wrong chain was then reported to a
+            # consumer session as fact.
+            #
+            # `walls` is global ON PURPOSE — its docstring says so, because "what else is
+            # waiting, and on what" is the next question. The defect was never the data;
+            # it was a label that did not say whose.
+            mine = result.walls.get(result.item_id or "")
+            if mine is not None:
+                waiting = ", ".join(mine) if mine else "a decision, no item named"
+                print(f"  this item is blocked by: {waiting}")
+            elif result.item_id:
+                print("  this item is blocked by: nothing — it declares no impediment")
+            print("  elsewhere in the registry, held items and what holds them:")
             for iid, blockers in sorted(result.walls.items()):
+                if iid == result.item_id:
+                    continue
                 waiting = ", ".join(blockers) if blockers else "a decision, no item named"
                 print(f"    {iid} <- {waiting}")
 
