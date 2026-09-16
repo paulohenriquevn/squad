@@ -622,6 +622,26 @@ def read_lead(log_path: Path | None, marker_path: Path | None) -> dict:
     return out
 
 
+def _closes(open_phase: dict | None, ended: str) -> bool:
+    """Does an end for `ended` close this open start?
+
+    Same phase, or one further along `PHASES`. An end for an earlier phase is a trailing
+    event; an item whose LATER phase finished has demonstrably left the one it opened,
+    whatever the stream failed to say about leaving it.
+
+    A phase outside `PHASES` closes nothing: an unknown cycle is not evidence of order.
+    """
+    if not open_phase:
+        return False
+    started = open_phase.get("phase") or ""
+    if started == ended:
+        return True
+    order = list(PHASES)
+    if started not in order or ended not in order:
+        return False
+    return order.index(ended) >= order.index(started)
+
+
 def _last_activity(events: list[dict]) -> dict | None:
     """The newest event that names an item, or None when the stream names none.
 
@@ -668,8 +688,9 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             continue
         if event.get("type") == "cycle:phase:start":
             running[slug] = {"phase": cycle, "since": event.get("timestamp")}
-        elif event.get("type") == "cycle:phase:end":
-            # ANY later end closes an open start, not only one naming the same cycle.
+        elif event.get("type") == "cycle:phase:end" and _closes(running.get(slug), cycle):
+            # An end closes an open start when it names the SAME phase or one FURTHER
+            # ALONG the chain, and not when it names an earlier one.
             #
             # A lane that stops without emitting its own end leaves a start hanging, and
             # the item then goes on to finish LATER phases — which is proof it moved on,
@@ -684,6 +705,12 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             #
             # A start with no end is a fact about the STREAM. Drawing it as running is a
             # claim about the WORK, and the two stop agreeing the moment a lane dies.
+            #
+            # The first attempt closed on ANY later end, and a sibling test refused it
+            # for a case that is genuinely different: `implement` starts, then a trailing
+            # `plan` end arrives. An end for an EARLIER phase is an event catching up,
+            # not evidence the item moved on, and clearing on it would hide work actually
+            # in flight. Later-or-equal is the line, and the chain order is what decides.
             running.pop(slug, None)
 
     # Last finished phase per item, from the stream.

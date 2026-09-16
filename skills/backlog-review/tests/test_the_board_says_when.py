@@ -92,3 +92,29 @@ def test_a_stream_naming_no_item_at_all_says_nothing(tmp_path: Path) -> None:
     went quiet, and the page must tell those apart."""
     state = build_state(_registry(tmp_path))
     assert state["last_activity"] is None
+
+
+def test_a_trailing_end_for_an_earlier_phase_does_not_clear_it(tmp_path: Path) -> None:
+    """The first fix closed on ANY later end, and a sibling test refused it.
+
+    `implement` starts, then a trailing `plan` end arrives. An end for an EARLIER phase
+    is an event catching up, not evidence the item moved on — clearing on it would hide
+    work actually in flight, which is the opposite of the defect being fixed.
+    """
+    state = build_state(_registry(
+        tmp_path,
+        _start("implement", "2026-09-16T18:00:00Z"),
+        _end("plan", "2026-09-16T18:05:00Z"),
+    ))
+    assert state["running"] == ["B-001"]
+    assert state["items"][0]["running_phase"] == "implement"
+
+
+def test_an_unknown_cycle_closes_nothing(tmp_path: Path) -> None:
+    """A phase outside the chain carries no position, so it is not evidence of order."""
+    state = build_state(_registry(
+        tmp_path,
+        _start("implement", "2026-09-16T18:00:00Z"),
+        _end("something-else", "2026-09-16T18:05:00Z"),
+    ))
+    assert state["running"] == ["B-001"]
