@@ -663,7 +663,7 @@ _ITEM_IN_TEXT = re.compile(r"\b([A-Z]-\d{2,})\b")
 #: **the scope is the AREA, not the item**, so a commit spelling an id there is a
 #: violation of the convention rather than an instance of it. Measured 2026-09-16: of
 #: that session's sixteen commits, ZERO put an id in the scope — they are `fix(quality)`,
-#: `fix(security)`, `style(theo-ops)`. A reader tied to this slot alone would report a
+#: `fix(security)`, `style(<a package>)`. A reader tied to this slot alone would report
 #: quieter registry the better the convention took hold, which is this kit's own finding
 #: about lists-instead-of-properties arriving at its own mechanism.
 _COMMIT_SCOPE = re.compile(r"^[a-z]+\(([A-Z]-\d{2,})\)!?:")

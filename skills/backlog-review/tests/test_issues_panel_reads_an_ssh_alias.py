@@ -1,6 +1,6 @@
 """`gh` refuses an SSH host alias, and a GitHub repository is still a GitHub repository.
 
-A remote spelled `github-usetheo:usetheoai/theo.git` — a `Host` entry in
+A remote spelled `github-alias:acme/product.git` — a `Host` entry in
 `~/.ssh/config` — makes `gh repo view` answer *"none of the git remotes point to a known
 GitHub host"*. Measured on a consumer 2026-09-16: the board's entire issues panel was
 dark for that reason, and the tracker held **124 issues** the whole time.
@@ -34,8 +34,8 @@ def _repo_with_remote(tmp_path: Path, url: str) -> Path:
 
 
 def test_an_ssh_host_alias_resolves(tmp_path: Path) -> None:
-    repo = _repo_with_remote(tmp_path, "github-usetheo:usetheoai/theo.git")
-    assert _owner_repo_from_remote(repo) == "usetheoai/theo"
+    repo = _repo_with_remote(tmp_path, "github-alias:acme/product.git")
+    assert _owner_repo_from_remote(repo) == "acme/product"
 
 
 def test_the_ordinary_ssh_form_resolves(tmp_path: Path) -> None:

@@ -193,7 +193,7 @@ def _failed(repo: str | None, reason: str, remedy: str) -> dict:
 def _owner_repo_from_remote(project: Path) -> str:
     """`owner/name` read from the push remote URL, when `gh` cannot resolve it.
 
-    `gh` refuses an SSH host alias: a remote spelled `github-usetheo:usetheoai/theo.git`
+    `gh` refuses an SSH host alias: a remote spelled `github-alias:acme/product.git`
     — a `Host` entry in `~/.ssh/config` — is a GitHub repository that `gh repo view`
     reports as *"none of the git remotes point to a known GitHub host"*. Measured on a
     consumer 2026-09-16, where the board's whole issues panel was dark for that reason
