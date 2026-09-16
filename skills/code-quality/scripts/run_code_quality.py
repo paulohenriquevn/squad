@@ -636,14 +636,32 @@ def _emit_and_exit(
 
     # The phase leaves an event, not only a file. A missing audit cannot say
     # whether the gate was skipped or ran and wrote nothing; an absent event can.
-    _emit_phase_end(
-        repo_root,
-        cycle="code-quality",
-        slug=args.slug or "",
-        verdict=verdict,
-        languages=languages_audited or [],
-        findings=len(findings),
-    )
+    # An event with no slug names no item: it cannot be placed on a board, cannot be
+    # attributed to a cycle, and cannot be acted on. Writing one adds a row to a shared
+    # registry that every reader has to skip.
+    #
+    # Measured on a consumer 2026-09-16: 369 events in the stream and 121 of them —
+    # ONE THIRD — were `code-quality` phase:end with an empty slug, accumulated since
+    # 09-12. Every ad-hoc run of this gate had left one. The board counts them under
+    # `unplaced.without_item`, which is the honest place for them and still a number
+    # nobody can reduce by working.
+    #
+    # A measurement must not mutate the registry it is measuring. So an unattributed run
+    # says on stderr that it was not recorded, rather than recording something nobody
+    # can use — and `--slug` remains the way to have the run belong to an item.
+    if args.slug:
+        _emit_phase_end(
+            repo_root,
+            cycle="code-quality",
+            slug=args.slug,
+            verdict=verdict,
+            languages=languages_audited or [],
+            findings=len(findings),
+        )
+    else:
+        print("cycle-events: not recorded — this run names no item (`--slug`), and an"
+              " event with no slug cannot be placed, attributed or acted on.",
+              file=sys.stderr)
 
     # Exit code
     if verdict in ("FAIL_HARD", "INVALID"):
