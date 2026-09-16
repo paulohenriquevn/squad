@@ -45,7 +45,7 @@ review becomes a batch instead of an interruption.
 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/select_backlog_item.py" \
-    BACKLOG.md --json > /tmp/queue.json
+    BACKLOG.md --json > "$(mktemp -t squad-queue-XXXXXX.json)"
 ```
 
 This applies `cycle-maintenance.md`'s ranking — triaged before raw, then oldest

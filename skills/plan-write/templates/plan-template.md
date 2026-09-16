@@ -281,6 +281,33 @@ Bulleted list of observable, verifiable conditions:
 
 ---
 
+## Where a criterion writes its evidence
+
+**Never a fixed path under `/tmp`.** A criterion that writes `/tmp/{ITEM}-before.txt` is
+using a shared mutable global: two lanes of this pipeline run concurrently, and the second
+one overwrites the first's evidence while both commands still exit 0.
+
+Measured on a consumer 2026-09-16: that exact collision. Two lanes implemented one item
+thirty minutes apart, `/tmp/<item>-baseline.txt` and `/tmp/<item>-after.txt` both ended
+**zero bytes**, and the `comm -13` criterion over them printed `0` and PASSED — proving
+nothing, for a change whose substance was sound. The file's mtime belonged to the other
+lane. A criterion that cannot fail is indistinguishable from one that is satisfied.
+
+Re-scored across that registry afterwards: **16 of 35 plans carry the same instrument.**
+The convention was invented in the absence of one, which is what a template's silence
+produces.
+
+Two paths that work:
+
+```bash
+D=$(mktemp -d); go test ./... > "$D/after.txt"      # unique per process
+… or a path inside the lane's own worktree, which no other lane can reach
+```
+
+`/tmp/review-$$` is also sound — `$$` is the PID — and it is what the review templates use.
+What fails is a name derived from the ITEM, because both lanes of one item derive the same
+one.
+
 ## Coverage Matrix
 
 Table mapping original gaps/requirements to tasks:

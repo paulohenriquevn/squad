@@ -56,3 +56,28 @@ def test_the_baseline_is_cited_rather_than_restated() -> None:
     assert "Cite the discovery, do not restate it" in section
     assert "opportunity.md" in section, \
         "the template does not name the document that already holds the baseline"
+
+
+def test_the_template_says_where_a_criterion_writes_its_evidence() -> None:
+    """16 of 35 plans on a consumer wrote evidence to a fixed `/tmp/<item>-*.txt`, and one
+    of them collided: two lanes of the same item derive the SAME name, both files ended
+    zero bytes, and the `comm -13` over them printed 0 and PASSED while proving nothing.
+
+    The convention was invented in the absence of one. The kit never taught it and never
+    warned against it, and its own pipeline SKILL modelled the shape with a fixed
+    `/tmp/queue.json`.
+
+    A criterion that cannot fail is indistinguishable from one that is satisfied.
+    """
+    section = " ".join(_section("Where a criterion writes its evidence").split())
+    assert "Never a fixed path under `/tmp`" in section
+    assert "mktemp" in section, "the template names no working alternative"
+    assert "$$" in section, \
+        "the template does not credit the form the review templates already use"
+
+
+def test_the_pipeline_skill_does_not_model_the_shape_it_warns_about() -> None:
+    skill = (Path(__file__).resolve().parents[1] / "skills" / "pipeline"
+             / "SKILL.md").read_text(encoding="utf-8")
+    assert "/tmp/queue.json" not in skill, \
+        "the dispatch still writes a fixed path two concurrent runs would share"
