@@ -139,3 +139,31 @@ def test_the_trunk_is_asked_about_by_name() -> None:
 
     assert any("master" in call for call in seen), seen
     assert not any("/main/" in call for call in seen), seen
+
+
+def test_the_permanent_causes_are_named() -> None:
+    """The gate stated three causes — `gh` absent, unauthenticated, or unparseable — and
+    all three resolve: an absent `gh` gets installed and an unauthenticated one logs in.
+
+    Measured on a consumer 2026-09-16 whose `gh auth status` was already logged in: a
+    PRIVATE repository on a plan that does not expose branch protection returns HTTP 403
+    "Upgrade to GitHub Pro", and a remote reached through an SSH host alias returns "none
+    of the git remotes point to a known GitHub host". Neither was in the list, and neither
+    ever resolves on its own — so that repository stays UNCHECKED forever while the
+    remediation tells it to do two things it has already done.
+
+    The consequence is bigger than the wording. `git-safety.md` enforces the PR
+    requirement "server-side, unbypassable" BY branch protection, so an API forbidding the
+    read is strong evidence the protection is not configured — the repository has the
+    ORIGIN guarantee and not the REVIEW one. That file names both states as possible and
+    nothing had ever measured which one a given repository is in.
+    """
+    source = (Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
+              / "check_merge_autonomy.py").read_text(encoding="utf-8")
+    # The whole file, not a slice. Slicing at `"),"` cut the message mid-string because
+    # the text itself contains that pair — the second time in one batch that a test read a
+    # region not containing what it asserted about. A region chosen by a delimiter the
+    # content also uses is not a region.
+    for phrase in ("NEVER resolve", "Upgrade to GitHub Pro", "SSH host alias",
+                   "ORIGIN guarantee"):
+        assert phrase in source, f"the UNCHECKED message does not name: {phrase}"

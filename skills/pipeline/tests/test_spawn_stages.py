@@ -791,3 +791,23 @@ def test_the_declaration_does_not_read_as_already_done() -> None:
     line = next(l for l in phases.splitlines() if l.startswith("code-quality"))
     assert "VERDICT" in line and "AUDIT FILE" in line, \
         f"the declaration does not separate the nested verdict from the written file: {line}"
+
+
+def test_the_plan_stage_writes_a_plan_and_scores_it(tmp_path: Path) -> None:
+    """`rules/cycle-plan.md` puts `/plan-confidence` between PLAN and IMPLEMENT: INVALID
+    returns to rewrite, a low band goes to `/plan-improve`, and only
+    SHIPPABLE_WITH_CAVEATS or better is ready.
+
+    The pipeline's PLAN stage was 24 lines of prose carrying no command at all — while
+    the stage after it carries 276 — so it wrote no plan and ran no gate. Measured on a
+    consumer 2026-09-16: 27 substantive plans on disk, 773 to 2025 lines and 8 to 15
+    tasks each, and ZERO plan-confidence artifacts. The first one scored afterwards came
+    back INVALID at 51.4 with two hard caps.
+
+    A gate nobody runs is indistinguishable from a gate that passed. Same shape as the
+    code-quality audit the nested run was told not to write, one phase earlier.
+    """
+    brief = _briefs(tmp_path)["plan"]
+    assert "run_structural.py" in brief, "the PLAN stage runs no confidence gate"
+    assert "records/plans/" in brief, "the PLAN stage names no path for the plan"
+    assert "INVALID" in brief, "the brief does not say what a failing score means"
