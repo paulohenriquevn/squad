@@ -811,3 +811,38 @@ def test_the_plan_stage_writes_a_plan_and_scores_it(tmp_path: Path) -> None:
     assert "run_structural.py" in brief, "the PLAN stage runs no confidence gate"
     assert "records/plans/" in brief, "the PLAN stage names no path for the plan"
     assert "INVALID" in brief, "the brief does not say what a failing score means"
+
+
+def test_discover_answers_the_four_questions(tmp_path: Path) -> None:
+    """DISCOVER's contract, set by the owner 2026-09-16: is it possible, what is the
+    technique, what is the pattern, where in the system — implemented, modified or
+    removed.
+
+    Measured before the change: 57 opportunity documents, 503 lines median, 31,281 lines
+    in total, for 6 items that reached implementation. The four questions are what the
+    later phases actually consume; the rest was written and not read.
+    """
+    brief = _briefs(tmp_path)["discover"]
+    for question in ("Is it possible", "What is the technique", "What is the pattern",
+                     "Where in the system"):
+        assert question in brief, f"DISCOVER does not answer: {question}"
+    assert "`NEW`, `MODIFY` or `DELETE`" in brief, \
+        "a path with no verb leaves the next phase guessing"
+
+
+def test_plan_is_executable_by_someone_who_does_not_know_the_project(tmp_path: Path) -> None:
+    """PLAN's contract, set by the owner 2026-09-16: a developer who has never seen this
+    project must be able to follow it and finish.
+
+    That justifies length the earlier measurement made look wasteful — 1,276 lines median
+    — and it also sets the limit. The plan carries what the reader lacks, which is
+    knowledge of THIS codebase, and not what a competent developer brings.
+    """
+    brief = _briefs(tmp_path)["plan"]
+    assert "never seen this project" in brief
+    # The prose is wrapped, so the sentence spans two lines. Asserting on a phrase that
+    # crosses a wrap point tests the line width, not the content — fourth time in two days
+    # a check of mine read the rendering instead of the text.
+    flat = " ".join(brief.split())
+    assert "does NOT carry what a competent developer brings" in flat, \
+        "the contract has no upper bound, and length is not rigour"

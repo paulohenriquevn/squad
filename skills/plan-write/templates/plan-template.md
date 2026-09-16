@@ -38,44 +38,28 @@ Example:
 
 What problem motivates this plan? Cite issues, PRs, ADRs, customer reports, benchmark results, or recent incidents. **No more than 5 paragraphs.** Long forensic detail belongs in the next section.
 
-## Baseline Context (deep review of current state)
+## Baseline Context
 
-> This section is the **"what exists today"** snapshot that lets a junior implementer reason about the change without spelunking the codebase. It is generated from real `git log` + `grep` evidence, not invented. `/plan-confidence` verifies the table cells resolve.
+**Cite the discovery, do not restate it.** `/discover-execute` already established the
+current state and wrote it to the cycle's `discoveries/opportunities/` directory
+under the project's write root, which `squad.paths.records_dir` resolves — naming
+a root here is how a template outlives the layout it was written against.
+Link that file and name the sections this plan depends on; write here only what the
+discovery did NOT establish and this plan needs.
 
-### Files that will be touched
+```markdown
+Baseline established by `{ITEM}-opportunity.md` § Current state, § Evidence.
+Additional measurement this plan required and the discovery did not carry:
+  - <what, with the command that produced it>
+```
 
-| File | LoC today | Last commit (sha + date) | Why it exists today | Invariants to preserve |
-|---|---|---|---|---|
-| `src/path/to/file.ext` | 142 | `abc1234` (2026-03-12) | Holds the domain rule X | Must keep public function `foo()` callable; downstream `bar.py` imports it |
-| `src/path/to/other.ext` | 87 | `def5678` (2026-04-02) | Adapter for external service Y | Error type hierarchy MUST stay backward-compatible |
-| `tests/path/file.test.ext` (NEW) | 0 | — | (file to be created) | — |
+Measured on a consumer 2026-09-16: 135 lines median here against 503 in the opportunity
+that precedes it — the same state written twice, by two agents, in two documents. Half
+the defects found across two days of running this chain were two documents of one item
+contradicting each other, and a section that re-derives what another already holds is
+where that class is manufactured.
 
-Every file listed in any `#### Files to edit` block of any task below MUST appear in this table. Rows for `(NEW)` files are allowed and expected.
-
-### Current callers / dependents
-
-For every public symbol (function, class, type, exported constant) the plan will modify or replace:
-
-- **Symbol:** `foo()` in `src/path/to/file.ext`
-- **Callers (production):** `src/feature/a.ext:42`, `src/feature/b.ext:18`
-- **Callers (tests):** `tests/a.test.ext`, `tests/b.test.ext`
-- **External (public API consumed by other repos):** yes / no — if yes, which contract?
-
-Use `grep -rln 'symbolName' --include='*.<ext>'` to enumerate. Citations MUST resolve.
-
-### Domain glossary
-
-Terms specific to this codebase's domain that the plan uses. Short definitions (1 line each) so a junior does not need to ask.
-
-- **<term-1>** — what it means in this codebase
-- **<term-2>** — what it means in this codebase
-- **<term-3>** — what it means in this codebase
-
-If the plan uses no domain-specific term, write "(none)" — do not omit the section.
-
-### Architecture boundaries affected
-
-List the layering / DIP boundaries from `rules/architecture.md` that this plan crosses, narrows, or extends. Identify the direction of each crossing.
+A restatement is not more rigorous than a citation. It is one more thing that can drift.
 
 ## Prior Art & Related Work
 
@@ -100,7 +84,20 @@ If the list of sub-goals has more than ~7 entries, the Goal is likely too broad 
 
 ## ADRs
 
-Architecture Decision Records for this plan. Each decision gets:
+**Only when a decision was actually made — that is, when an alternative was considered
+and rejected.** A change with one way to do it has no decision to record, and an ADR
+written for it is ceremony that costs the plan a cap.
+
+`/plan-confidence` accepts a plan with NO `## ADRs` section: `check_adr_completeness`
+returns complete for zero ADRs, deliberately. What it caps at 70 is an ADR that names no
+rejected alternative — which is the shape an obligatory-section habit produces.
+
+Measured on a consumer 2026-09-16: an ADR section in 35 of 35 plans, 149 lines median,
+5,752 lines in total — and `adr_without_alternatives` firing on 8 of them. A quarter of
+the ADRs written had nothing to decide, and the section was carried because the template
+read as mandatory.
+
+Each decision that IS recorded gets:
 - **ID** (D1, D2, ...) for cross-referencing in tasks
 - **Decision** — what was decided
 - **Rationale** — why this approach over alternatives
