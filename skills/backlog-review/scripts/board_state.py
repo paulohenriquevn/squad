@@ -286,6 +286,45 @@ def halted_items(project_root: Path) -> set[str]:
     return set(halt_reports(project_root))
 
 
+#: Item id -> the furthest stage whose RECORD exists on disk.
+#:
+#: `STATUS_PHASE` maps `approved` to `discover`, which is where an approved item is
+#: until something writes a plan for it. Nothing writes the status when that happens:
+#: `planned` is issued by the stage that STARTS work, so between PLAN and IMPLEMENT the
+#: registry says nothing at all about a plan that exists.
+#:
+#: Measured on a consumer 2026-09-16: 35 plans written, 34 belonging to items still
+#: `approved` — every one of them drawn in `discover`, a phase they had left. The board
+#: showed 82 items in `discover` and the true figure was 57. An operator reading that
+#: column saw work nobody had started sitting where finished plans were.
+#:
+#: Records, not status, for the same reason `select_backlog_item` reads them: a file on
+#: disk is a fact about what happened, and the status is a claim somebody has to
+#: remember to write. The ladder stops at implementations — `reviews/` names files
+#: `{ITEM}-{phase}-{date}.md`, and reading one as "REVIEW finished" would assign a
+#: meaning the filename does not carry.
+_RECORD_STAGE = (("implementations", "-implementation.md", "implement"),
+                 ("plans", "-plan.md", "plan"))
+
+
+def stage_on_disk(project_root: Path) -> dict[str, str]:
+    """Item id -> `implement` or `plan`, whichever record exists. One listing each."""
+    records = _records_dir(project_root)
+    if records is None:
+        return {}
+    reached: dict[str, str] = {}
+    for base, suffix, stage in _RECORD_STAGE:
+        directory = records / base
+        if not directory.is_dir():
+            continue
+        for entry in sorted(directory.glob(f"*{suffix}")):
+            item_id = entry.name[: -len(suffix)]
+            # First writer wins: the tuple is ordered furthest-stage-first, so an item
+            # with both records is reported at the later one.
+            reached.setdefault(item_id, stage)
+    return reached
+
+
 def planned_items(project_root: Path) -> dict[str, str]:
     """Item id -> plan slug, for every item the cycle has actually planned on disk.
 
@@ -577,6 +616,7 @@ def build_state(project_root: Path, lead_log: Path | None = None,
     events = read_events(project_root)
     plans = planned_items(project_root)
     halted = halted_items(project_root)
+    on_disk = stage_on_disk(project_root)
 
     # A phase that STARTED and has not ended is work happening right now. Without it
     # the board can only draw what finished, which is a picture of the past: an item
@@ -648,6 +688,11 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             # Ending a phase is a fact; entering the next one is a guess, and a board
             # that guesses is a board nobody can check against reality.
             phase, source = hit["phase"], "stream"
+        elif on_disk.get(iid) and status in ("approved", "planned"):
+            # A record on disk beats a status nobody advanced. `position_from` says
+            # `records` rather than `derived`, so a reader can tell a position read off
+            # a file from one inferred from a status field.
+            phase, source = on_disk[iid], "records"
         else:
             phase = STATUS_PHASE.get(status, "backlog")
             source = "derived"

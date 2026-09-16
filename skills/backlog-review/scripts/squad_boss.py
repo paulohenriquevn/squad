@@ -114,6 +114,23 @@ def _item_of(name: str) -> str:
     return f"B-{match.group(1)}" if match else ""
 
 
+#: A halt whose report carries this in its FILENAME is over.
+#:
+#: Adopted from a consumer 2026-09-16, where it had been in use and inert. A lane had
+#: renamed `B-069-BLOCKED.md` to `B-069-BLOCKED.withdrawn.md` to record that the halt no
+#: longer stood — and nothing in this kit read the marker, so the glob below matched it
+#: anyway and the item stayed halted on every board and in every selection. A convention
+#: a tool does not know is a convention that does nothing, and the person using it has
+#: no way to tell.
+#:
+#: The FILENAME rather than a line inside the file, deliberately. It shows in `ls`,
+#: survives a grep, needs no parse, and cannot disagree with itself — a marker in the
+#: body would be a second mechanism for one fact, which is the shape this kit keeps
+#: removing. A report declaring its own withdrawal in prose is therefore still a live
+#: halt here: the fix is to rename the file, and that is one command.
+WITHDRAWN_MARKER = ".withdrawn"
+
+
 def halt_reports(project_root: Path) -> dict[str, Path]:
     """Item id -> the BLOCKED report a phase left for it.
 
@@ -137,6 +154,8 @@ def halt_reports(project_root: Path) -> dict[str, Path]:
         # `_item_of` decides whether a name carries an id; that is its job, and it
         # already handles both the `B-079-...` and `b165-...` forms.
         for entry in sorted(directory.glob("*BLOCKED*.md")):
+            if WITHDRAWN_MARKER in entry.name:
+                continue
             item = _item_of(entry.name)
             if item:
                 found.setdefault(item, entry)
