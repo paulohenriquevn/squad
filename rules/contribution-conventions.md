@@ -56,6 +56,43 @@ misattributes the accountability that authorship carries.
 This paragraph replaces the instruction `CONTRIBUTING.md` carried until 2026-09-11,
 which told contributors to add one.
 
+## Where this is checked, and when
+
+Three call sites, three different questions. They are separate on purpose: a gate that
+refuses work nobody can still fix is a gate that gets disabled.
+
+| when | command | question |
+|---|---|---|
+| writing the message | `check_contribution_conventions.py --message-file "$1"` | is THIS message right? |
+| before a push | `verify_ecosystem.py --introduced` | may this push land? |
+| auditing the repo | `check_contribution_conventions.py` | does this history conform? |
+
+**The first is the one that costs nothing and was reachable by nobody.** `--message-file`
+has existed as long as the gate and this kit shipped no way to reach it — no git hook,
+no documentation, no example. A convention only checked after the fact is a convention
+enforced at the worst possible moment.
+
+Wire it as a `commit-msg` hook, which git passes the message path as `$1`:
+
+```bash
+#!/bin/sh
+# .git/hooks/commit-msg — refuse a message before it becomes a commit
+exec python3 "$([ -d .claude/mechanisms ] && echo .claude || echo .)/mechanisms/gates/check_contribution_conventions.py" --message-file "$1"
+```
+
+The kit does not install this. `.git/hooks/` is per-clone, unversioned, and writing into
+it silently is how a tool surprises the person who cloned. It is two lines and a `chmod
++x`, and this is where they are written down.
+
+**Why catching it here matters, measured.** On a consumer 2026-09-16 four commits broke
+the conventions, and nothing said so until a push was attempted. By then **three were
+already on the remote**: an amend could not reach them, only a force-push would, and the
+gate that refused the push was refusing the only remedy — more commits — that would have
+moved them out of the window. Nine verified commits sat behind that wall.
+
+Every one of those four would have been refused at `commit-msg` time, when the fix was
+retyping a subject line.
+
 ## Pull requests
 
 | Rule | Computed? |
