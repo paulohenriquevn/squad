@@ -187,7 +187,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--write-baseline", action="store_true",
                         help="record every finding of this run as pre-existing and exit. "
                              "An explicit act: the baseline never grows by itself.")
-    parser.add_argument("--no-network", action="store_true")
+    parser.add_argument("--no-network", action="store_true",
+                        help="the default; kept so existing callers keep working")
+    parser.add_argument("--network", action="store_true",
+                        help="opt back into the networked D2 path, whose answer is not"
+                             " reproducible — see the comment below")
     parser.add_argument("--repo-root", default=None)
     args = parser.parse_args(argv)
 
@@ -203,6 +207,25 @@ def main(argv: list[str] | None = None) -> int:
     # because the next run produces a slightly different set that the baseline does
     # not cover. The honest baseline is the deterministic one.
     if getattr(args, "write_baseline", False):
+        args.no_network = True
+
+    # Offline is the default for a VERDICT too, not only for a baseline. The reasoning
+    # above was applied to `cq_invoke.py` on 2026-09-13 and not to the thing it wraps,
+    # so anyone typing this command by hand still got the networked path — and its
+    # answer changes between two consecutive runs of the same tree.
+    #
+    # Measured on a consumer 2026-09-16, one repository, minutes apart:
+    #
+    #     with network      PASS_WITH_CAVEATS   hard_caps: ['symbol_fab_unverifiable_go']
+    #     --no-network      PASS_WITH_CAVEATS   hard_caps: none
+    #
+    # That cap is neither baselinable (its `file_path` is `.`) nor dismissible by ADR,
+    # so a run that happened to reach the proxy held the work and a run that did not
+    # released it. A gate whose answer depends on what a proxy said that second is not
+    # a gate, and which ENTRY POINT you used is not a property of the code under test.
+    #
+    # `--network` is the explicit opt-in for someone who wants that path knowingly.
+    if not args.network:
         args.no_network = True
 
     repo_root = Path(args.repo_root) if args.repo_root else _find_repo_root(Path.cwd())
