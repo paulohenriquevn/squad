@@ -21,6 +21,14 @@ import pytest
 
 KIT_ROOT = Path(__file__).resolve().parents[2]
 
+#: Tests that ask git what changed. Derived from the call, not from memory: every one of
+#: these passes `ROOT` to `run_suites._changed_paths`.
+_GIT_DEPENDENT = frozenset({
+    "test_the_working_tree_is_the_default_base",
+    "test_a_resolvable_ref_reports_the_base_sha",
+    "test_an_unresolvable_ref_widens_instead_of_selecting_nothing",
+})
+
 
 def _is_install(root: Path) -> bool:
     """A kit copied into a project, rather than the repository it is developed in."""
@@ -47,3 +55,17 @@ def _skip_when_the_subject_does_not_ship(request: pytest.FixtureRequest) -> None
     reason = absent.get(request.node.name)
     if reason and _is_install(KIT_ROOT):
         pytest.skip(f"no subject in an install: {reason}")
+
+    # A different absence, and it deserves its own reason rather than the list above.
+    # These ask GIT what changed. An installed kit is a copied directory and a bare
+    # install is not a checkout at all, so there is no working tree to report a base
+    # against — `_changed_paths` answers "git could not be read", which is correct and
+    # is not what these assert.
+    #
+    # Named as a SET rather than one at a time: the install-and-run check found the
+    # first, and fixing only that one surfaced the second on the very next run. Three
+    # call `_changed_paths`, and treating the class is what stops a fourth arriving by
+    # the same route.
+    if request.node.name in _GIT_DEPENDENT and not (KIT_ROOT / ".git").exists():
+        pytest.skip("no subject here: this tree is not a git checkout, so there is no"
+                    " working tree for git to report a base against")
