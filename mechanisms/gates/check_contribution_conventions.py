@@ -109,6 +109,13 @@ class Report:
     commits_checked: int = 0
     findings: list[Finding] = field(default_factory=list)
     unmeasured_because: str = ""
+    #: Shas in the checked range that are already reachable from the upstream. A finding
+    #: on one of these cannot be fixed by the author who is pushing: amending it would
+    #: rewrite shared history. Empty when there is no upstream to compare against.
+    already_pushed: set[str] = field(default_factory=set)
+    #: The range as RESOLVED, so a report never claims to have graded a range the caller
+    #: only asked for.
+    resolved_range: str = ""
 
 
 def load_conventions(overrides: Path) -> Conventions:
@@ -202,6 +209,54 @@ def check_message(sha: str, message: str, conv: Conventions) -> list[Finding]:
     return out
 
 
+#: The range a PRE-PUSH caller means: what this push would introduce, and nothing else.
+#:
+#: The default `-40` grades the last forty commits, which is right for a standalone
+#: audit — there, grading history IS the question. It is wrong for a hook, and the
+#: wrongness is a deadlock rather than a nuisance. Measured on a consumer 2026-09-16:
+#: four violations in the window, THREE of them already on `origin/workspace`. No amend
+#: reaches a pushed commit and only a force-push would; the two nearest left the window
+#: in eleven and thirteen commits, which could not happen, because the gate refused the
+#: commits that would have moved it. Nine verified commits sat behind that wall.
+#:
+#: Every part was individually right — the gate reported a true fact, the hook correctly
+#: refused, and the floor forbids switching either off. What was wrong is that two
+#: callers shared one range. A convention check that grades history it cannot change is
+#: grading the wrong thing; graded over the introduced range, every violation is fixable
+#: by the author who is pushing, which is what makes refusing it legitimate.
+INTRODUCED = "@introduced"
+
+
+def _resolve_range(repo: Path, rev_range: str) -> str:
+    """`@introduced` -> `<upstream>..HEAD`. Anything else is returned unchanged."""
+    if rev_range != INTRODUCED:
+        return rev_range
+    out = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+        cwd=repo, capture_output=True, text=True, check=False)
+    upstream = out.stdout.strip()
+    if out.returncode != 0 or not upstream:
+        # A branch with no upstream introduces everything it has. Grading its whole
+        # history is the honest reading, and it is also fixable: nothing is pushed.
+        return "HEAD"
+    return f"{upstream}..HEAD"
+
+
+def _pushed_shas(repo: Path) -> set[str]:
+    """Short shas reachable from the upstream — the commits an amend cannot reach."""
+    out = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+        cwd=repo, capture_output=True, text=True, check=False)
+    upstream = out.stdout.strip()
+    if out.returncode != 0 or not upstream:
+        return set()
+    log = subprocess.run(["git", "log", "--format=%H", upstream],
+                         cwd=repo, capture_output=True, text=True, check=False)
+    if log.returncode != 0:
+        return set()
+    return {line[:9] for line in log.stdout.split() if line}
+
+
 def _commits(repo: Path, rev_range: str) -> list[tuple[str, str]]:
     sep = "\x1e"
     out = subprocess.run(
@@ -236,8 +291,10 @@ def check(repo: Path, rev_range: str, message_file: Path | None = None) -> Repor
             rep.unmeasured_because = f"could not read {message_file}: {exc}"
         return rep
 
+    resolved = _resolve_range(repo, rev_range)
+    rep.resolved_range = resolved
     try:
-        commits = _commits(repo, rev_range)
+        commits = _commits(repo, resolved)
     except ValueError as exc:
         rep.unmeasured_because = (
             f"{exc}. Nothing was checked, and a range that does not resolve is not a "
@@ -247,6 +304,8 @@ def check(repo: Path, rev_range: str, message_file: Path | None = None) -> Repor
     rep.commits_checked = len(commits)
     for sha, message in commits:
         rep.findings.extend(check_message(sha, message, rep.conventions))
+    pushed = _pushed_shas(repo)
+    rep.already_pushed = {sha for sha, _ in commits if sha in pushed}
     return rep
 
 
@@ -265,15 +324,30 @@ def render(rep: Report) -> str:
 
     out = ["contribution conventions",
            f"  conventions from: {rep.conventions.source}",
-           f"  checked: {rep.commits_checked} commit(s)"]
+           f"  checked: {rep.commits_checked} commit(s) over {rep.resolved_range}"]
     if rep.findings:
         out.append("")
         for f in rep.findings:
-            out.append(f"  [{f.code}] {f.sha}")
+            # A finding on a pushed commit cannot be amended — only force-pushed over.
+            # Printing them identically is what made a deadlock look like a to-do list.
+            mark = "  [already pushed]" if f.sha in rep.already_pushed else ""
+            out.append(f"  [{f.code}] {f.sha}{mark}")
             out.append(f"      {f.detail}")
     out.append("")
     out.append(f"  {'CLEAN' if not rep.findings else 'VIOLATIONS'} — "
                f"{len(rep.findings)} finding(s) over {rep.commits_checked} commit(s)")
+
+    stuck = sorted({f.sha for f in rep.findings} & rep.already_pushed)
+    if stuck:
+        out.append("")
+        out.append(f"  {len(stuck)} of these sit on commits already reachable from the"
+                   f" upstream: {', '.join(stuck)}")
+        out.append("  An amend cannot reach them and only a force-push would, so no"
+                   " author can clear them by writing a better commit.")
+        out.append("  If this ran as a PRE-PUSH gate, re-run it with --introduced:"
+                   " grading history that cannot change refuses work for a fact about")
+        out.append("  the past, and the only remedy the arithmetic allows is more"
+                   " commits — which is what the refusal prevents.")
     out.append("  NOT CHECKED:")
     for line in NOT_CHECKED:
         out.append(f"    · {line}")
@@ -285,6 +359,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo", type=Path, default=Path("."))
     ap.add_argument("--range", dest="rev_range", default="-40",
                     help="a git range, or -N for the last N commits (default: -40)")
+    # Registered AFTER `--range` on purpose: argparse applies a default only when the
+    # dest is not already set, so the FIRST registration wins. With this one first its
+    # implicit `None` stuck and the default range became None, which crashed inside
+    # `git log` with `TypeError: expected str, bytes or os.PathLike object, not NoneType`
+    # — a stack trace where the honest answer was "the last forty commits".
+    ap.add_argument("--introduced", dest="rev_range", action="store_const",
+                    const=INTRODUCED,
+                    help="grade only what this push would introduce"
+                         " (`<upstream>..HEAD`) — the range a pre-push hook means")
     ap.add_argument("--message-file", type=Path, default=None,
                     help="check one pending message instead of history")
     ap.add_argument("--json", action="store_true")

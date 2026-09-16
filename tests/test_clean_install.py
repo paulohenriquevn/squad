@@ -458,3 +458,52 @@ def test_a_project_specialist_survives_a_reinstall(versioned_kit, tmp_path):
     subprocess.run(["bash", str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target),
                     "--force"], check=True, capture_output=True, text=True)
     assert mine.read_text(encoding="utf-8") == "# my specialist\n"
+
+
+#: Suites run FROM the install. Not all of them — the point is the class, not coverage,
+#: and every one of these is cheap enough to pay on every run.
+#:
+#: `squad/tests` because four of the five defects of 2026-09-16 lived there, and
+#: `discover-confidence` because the other two did: a conftest resolving the project by
+#: walking up to `.git` (the kit here, the CONSUMER'S project there) and a fixture
+#: writing panel records under that root, into a live registry.
+_SUITES_FROM_THE_INSTALL = ("squad/tests", "skills/discover-confidence/tests")
+
+
+def test_the_suite_passes_from_the_install_too(installed):
+    """Five tests passed here and failed in an install on 2026-09-16, same code.
+
+    Every one asserted something about the tree it SAT IN rather than about the kit: a
+    conftest walking up to `.git`, a template path the installer overwrites with live
+    configuration, a records root that is one directory here and two once installed, a
+    fixture missing the `squad/` its scripts import, four tests reading files
+    (`pyproject.toml`, `.github/workflows/`) that deliberately do not ship.
+
+    They were found by a consumer whose push gate runs the installed suite — nineteen
+    verified commits held behind failures in a dependency. Nothing here could see them:
+    this suite had never run a single test from an install, only inspected one.
+
+    Knowing the class does not protect against the next instance. Only something that
+    runs does, and this is that thing.
+    """
+    target, proc = installed
+    assert proc.returncode == 0, proc.stderr
+    kit = target / ".claude"
+
+    failures = []
+    for suite in _SUITES_FROM_THE_INSTALL:
+        if not (kit / suite).is_dir():
+            failures.append(f"{suite}: absent from the install")
+            continue
+        run = subprocess.run(  # noqa: PLW1510
+            [sys.executable, "-m", "pytest", suite, "-q", "-p", "no:randomly"],
+            cwd=str(kit), capture_output=True, text=True, timeout=900,
+        )
+        if run.returncode != 0:
+            tail = "\n".join(run.stdout.strip().splitlines()[-12:])
+            failures.append(f"{suite}:\n{tail}")
+
+    assert not failures, (
+        "these pass in the kit's repository and fail from an install, which means they "
+        "are asking about the tree they sit in rather than about the kit:\n\n"
+        + "\n\n".join(failures))

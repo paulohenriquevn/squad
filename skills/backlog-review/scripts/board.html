@@ -429,6 +429,22 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The pulse: when the cycle last touched an ITEM. Above the columns because it
+   qualifies every one of them — a position four days old and one from this minute
+   are drawn the same way, and only this line separates them. */
+.pulse { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: baseline;
+         margin: .35rem 0 .9rem; font-size: .84rem; }
+.pulse .fresh { color: var(--good, #1f8a54); }
+.pulse .stale { color: var(--warn, #b07020); }
+.pulse .what { font-family: var(--mono, ui-monospace, monospace); opacity: .85; }
+.pulse .why { opacity: .7; flex-basis: 100%; }
+.pulse .warnish { color: var(--warn, #b07020); }
+.pulse.repo { margin-top: -.55rem; opacity: .92; }
+.pulse.working { margin-top: -.55rem; }
+.pulse .badge, .chip.working {
+  background: var(--accent, #4a4ee0); color: #fff; border-radius: 3px;
+  padding: .05rem .4rem; font-size: .68rem; font-weight: 700; letter-spacing: .06em; }
+
 /* The ordinal is information here: these are the cycle's phases, and the order
    is the order work moves through them. */
 .col-head .ord {
@@ -970,6 +986,9 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
     <span class="live"><span class="dot" id="dot"></span><span id="conn">connecting</span></span>
   </div>
   <div class="tallies" id="tallies"></div>
+  <div class="pulse" id="pulse"></div>
+  <div class="pulse repo" id="repopulse"></div>
+  <div class="pulse working" id="working"></div>
   <div class="filters">
     <input type="search" id="q" placeholder="filter by id or title" aria-label="Filter items">
     <div class="seg" role="group" aria-label="Scope">
@@ -1013,6 +1032,8 @@ const PHASE_LABEL = {
   "implement": "Implement", "code-quality": "Code quality", "review": "Review",
   "release": "Release", "acceptance": "Acceptance", "done": "Done", "killed": "Killed"
 };
+
+let WORKING_ITEM = null;
 
 const el = (id) => document.getElementById(id);
 
@@ -1163,6 +1184,12 @@ function cardHtml(it) {
   // and `derived` on 165 of 170, so the two loudest marks carried no information.
   // What is left is what actually varies.
   const chips = [];
+  // WORKING, and only where evidence says so. `WORKING_ITEM` is set from `state.working`,
+  // which carries the reason with the answer — a highlight a reader cannot check is
+  // worse than none, because it looks like the board knows something it inferred.
+  if (WORKING_ITEM && it.id === WORKING_ITEM.item) {
+    chips.push(`<span class="chip working" title="${escapeHtml(WORKING_ITEM.detail || "")}">WORKING</span>`);
+  }
   if (it.running_phase) {
     chips.push(`<span class="chip running">running</span>`);
   } else if (it.position_from === "stream" && !it.last_verdict) {
@@ -1246,7 +1273,11 @@ function ago(seconds) {
   if (seconds === null || seconds === undefined) return "—";
   if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s ago`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-  return `${Math.round(seconds / 3600)}h ago`;
+  // Days, because "101h ago" is a number a reader has to divide before it means
+  // anything — and the case that matters most here is the registry nobody touched
+  // since Friday.
+  if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
+  return `${Math.round(seconds / 86400)}d ago`;
 }
 
 function issueCard(it) {
@@ -1318,6 +1349,7 @@ function renderIssues(state) {
 
 function render(state) {
   LAST_STATE = state;
+  WORKING_ITEM = state.working || null;
   if (TAB === "issues" && !state.issues) TAB = "cycle";
   el("path").textContent = state.project_path || "";
 
@@ -1339,6 +1371,84 @@ function render(state) {
   ].map(([cls, n, label]) =>
     `<div class="tally ${cls}"><b>${n}</b><span>${label}</span></div>`
   ).join("");
+
+  // WHEN the cycle last touched an item, above the columns.
+  //
+  // The board drew positions and never said when. A registry four days idle and one
+  // working this minute rendered identically, so "where is each item" was answerable
+  // and "is anything happening" was not — and the second is why someone opens a live
+  // board. Item-attributed only: a run that touched nothing must not read as busy.
+  const act = state.last_activity;
+  const pulse = el("pulse");
+  if (pulse) {
+    if (!act || !act.at) {
+      pulse.innerHTML = `<span class="why">No event in this stream names an item, so
+        this board can place work and cannot say when any of it happened.</span>`;
+    } else {
+      const secs = (Date.now() - Date.parse(act.at)) / 1000;
+      const stale = secs > 3600;
+      pulse.innerHTML = `<span class="${stale ? "stale" : "fresh"}">
+          last touched an item <b>${ago(secs)}</b></span>
+        <span class="what"><b>${escapeHtml(act.item)}</b> ·
+          ${escapeHtml(act.cycle || "")}${act.verdict ? " → " + escapeHtml(act.verdict) : ""}</span>
+        ${stale ? `<span class="why">Older than an hour. Nothing has reached this
+          registry since — see the repository line for whether anyone is working.</span>`
+          : ""}`;
+    }
+  }
+
+  // The repository's own pulse, beside the cycle's. Two different questions: "has the
+  // cycle moved an item" and "is anyone working in this tree at all". Measured on a
+  // consumer 2026-09-16: the stream had been silent two hours while the session had
+  // sixteen unpushed commits, the newest from minutes earlier. The board reported a
+  // quiet registry and the owner read it as a quiet session.
+  //
+  // A commit is NOT a phase, and this line never merges into the one above. Conflating
+  // them would let a busy repository make an untouched backlog look like progress.
+  const repo = state.repo;
+  const rp = el("repopulse");
+  if (rp) {
+    if (!repo || !repo.head) {
+      rp.innerHTML = `<span class="why">This project is not a git checkout, or git could
+        not be read, so the board cannot say whether anyone is working in it.</span>`;
+    } else {
+      const csecs = repo.committed_at ? (Date.now() / 1000) - repo.committed_at : null;
+      const live = csecs !== null && csecs < 1800;
+      const bits = [
+        `<span class="${live ? "fresh" : ""}">last commit <b>${ago(csecs)}</b></span>`,
+        `<span class="what">${escapeHtml(repo.branch || "?")} ·
+           <b>${escapeHtml(repo.head)}</b> ${escapeHtml(repo.subject || "")}</span>`,
+      ];
+      if (repo.unpushed) {
+        bits.push(`<span class="warnish"><b>${repo.unpushed}</b> unpushed</span>`);
+      }
+      if (repo.dirty_files) {
+        bits.push(`<span class="warnish"><b>${repo.dirty_files}</b> file(s) modified</span>`);
+      }
+      rp.innerHTML = bits.join("");
+    }
+  }
+
+  // WHICH item, with the evidence. Null is a real answer and says so: on a consumer
+  // 2026-09-16 the session had sixteen unpushed commits and none of their SUBJECTS
+  // named an item — work that was real and was not backlog work. A board that guessed
+  // one from the busiest column would have invented the single fact being asked for.
+  const wk = el("working");
+  if (wk) {
+    if (!WORKING_ITEM) {
+      wk.innerHTML = `<span class="why">No evidence names an item under way — no phase
+        is open, and no recent commit subject names one. Work may still be happening;
+        none of it is attributed to a backlog item.</span>`;
+    } else {
+      const secs = WORKING_ITEM.since ? (Date.now() / 1000) -
+        (typeof WORKING_ITEM.since === "number" ? WORKING_ITEM.since
+          : Date.parse(WORKING_ITEM.since) / 1000) : null;
+      wk.innerHTML = `<span class="badge">WORKING</span>
+        <span class="what"><b>${escapeHtml(WORKING_ITEM.item)}</b></span>
+        <span class="why">${escapeHtml(WORKING_ITEM.detail || "")}${
+          secs === null ? "" : " · " + ago(secs)}</span>`;
+    }
+  }
 
   // The domain list comes from the data, so a registry that grows a domain gains the
   // option without anyone editing this page.

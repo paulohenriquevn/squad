@@ -342,7 +342,25 @@ def test_the_shipped_template_parses_when_you_follow_its_own_instructions(tmp_pa
     The code was right and the doc was wrong, which is the worse direction. A test that asserts
     the parser's behaviour cannot catch that; only one that READS THE DOC can.
     """
-    template = Path(__file__).resolve().parents[3] / "rules" / "code-quality-languages.txt"
+    # `rules/templates/`, not `rules/`. The kit SHIPS the template at the first and the
+    # installer copies it to the second, where the consumer then configures it — so the
+    # same path holds the template in this repository and somebody's live configuration
+    # in an install. This test is about the SHIPPED template, which is what its docstring
+    # says, and it was reading whichever file happened to sit at that path.
+    #
+    # Measured on a consumer 2026-09-16: green here, `ValueError: invalid STATUS
+    # 'STATUS'` there — from the line `# language | manifest | STATUS | notes`, a header
+    # that consumer added to document the columns. Prose about the format, matched as an
+    # example OF the format, in a file this test was never meant to read.
+    template = (Path(__file__).resolve().parents[3] / "rules" / "templates"
+                / "code-quality-languages.txt")
+    if not template.is_file():
+        # `rules/templates/` is installer INPUT and is deliberately not installed —
+        # `install.sh` says so where it copies from it. So this test has no subject in an
+        # install, and a skip naming the reason is the honest answer: not a failure, and
+        # not a silent pass either.
+        pytest.skip(f"{template} is absent: `rules/templates/` is installer input and"
+                    " does not ship, so there is no shipped template here to parse")
     # A commented example is a `#` line whose FIRST pipe-field is a bare lowercase identifier.
     # Matching on "has a pipe and says ENABLED" also catches the line documenting the STATUS
     # column itself (`STATUS  ENABLED | DISABLED | DEFER`), which is prose, not an example.

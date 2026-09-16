@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Where a fleet's time actually goes, from the watchdog's own log.
 
-    python3 mechanisms/fleet/fleet_idle.py [--log /tmp/squad-lead.jsonl] [--json]
+    python3 mechanisms/fleet/fleet_idle.py [--project PATH] [--json]
 
 The lead writes one JSON line per decision. That log answers "what happened"; it
 does not answer "how much of the window was spent producing nothing", and that is
@@ -32,6 +32,13 @@ import json
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+
+# `squad.paths` owns every data-root literal, and now the lead-log path with them.
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+from squad.paths import lead_log_path  # noqa: E402
 
 #: Decisions that handed work to a session. Everything else is the queue not moving.
 PRODUCTIVE = ("start",)
@@ -147,12 +154,21 @@ def render(report: IdleReport) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--log", type=Path, default=Path("/tmp/squad-lead.jsonl"))
+    # No literal default. `/tmp/squad-lead.jsonl` was spelled here and in two shell
+    # scripts, so two fleets on one machine wrote into ONE file and every reader saw
+    # them interleaved. `squad.paths` owns the path for the same reason it owns the
+    # data roots — three copies is how they come to disagree.
+    parser.add_argument("--log", type=Path, default=None,
+                        help="default: the lead log of the project at --project")
+    parser.add_argument("--project", type=Path, default=Path("."),
+                        help="the project whose fleet this reads")
     parser.add_argument("--session", default="",
                         help="comma-separated sessions the lead watches, so a "
                              "starved one can be named")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+    if args.log is None:
+        args.log = lead_log_path(args.project)
 
     if not args.log.is_file():
         print(f"fleet-idle: no log at {args.log} — nothing was measured, which is "

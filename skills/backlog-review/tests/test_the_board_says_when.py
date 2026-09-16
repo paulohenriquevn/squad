@@ -1,0 +1,285 @@
+"""A registry four days idle and one working this minute rendered identically.
+
+The board drew positions and never said WHEN, so "where is each item" was answerable and
+"is anything happening" was not — and the second is why someone opens a live board.
+
+And one position it drew was false. A `phase:start` was only closed by an end naming the
+SAME cycle, so a lane that stopped without emitting its own end left the start hanging
+forever. Measured on a consumer 2026-09-16: B-001 opened `plan` on 09-12, never closed
+it, then ended `code-quality` on 09-14, 09-15 and again that morning — and four days
+later the board still reported `running plan`. Seventeen events for that item, and the
+page named the one phase none of them had finished.
+
+A start with no end is a fact about the STREAM. Drawing it as running is a claim about
+the WORK, and the two stop agreeing the moment a lane dies.
+"""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+from board_state import build_state  # noqa: E402
+
+
+def _registry(tmp_path: Path, *events: dict) -> Path:
+    (tmp_path / "BACKLOG.md").write_text(
+        "# Backlog\n\n## B-001 — an item\nstatus: approved\n", encoding="utf-8")
+    records = tmp_path / ".squad" / "records"
+    records.mkdir(parents=True)
+    (records / "cycle-events.jsonl").write_text(
+        "".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
+    return tmp_path
+
+
+def _start(cycle: str, at: str) -> dict:
+    return {"type": "cycle:phase:start", "cycle": cycle, "slug": "B-001", "timestamp": at}
+
+
+def _end(cycle: str, at: str, verdict: str = "PASS") -> dict:
+    return {"type": "cycle:phase:end", "cycle": cycle, "slug": "B-001",
+            "timestamp": at, "verdict": verdict}
+
+
+def test_a_later_end_closes_an_abandoned_start(tmp_path: Path) -> None:
+    state = build_state(_registry(
+        tmp_path,
+        _start("plan", "2026-09-12T11:12:13Z"),
+        _end("code-quality", "2026-09-16T14:24:31Z", "PASS_WITH_CAVEATS"),
+    ))
+    assert state["running"] == [], \
+        "a phase abandoned four days ago is still drawn as work in flight"
+    assert state["items"][0]["phase"] == "code-quality"
+
+
+def test_a_genuinely_open_phase_is_still_running(tmp_path: Path) -> None:
+    """The fix must not silence the case the field exists for."""
+    state = build_state(_registry(tmp_path, _start("implement", "2026-09-16T18:00:00Z")))
+    assert state["running"] == ["B-001"]
+    assert state["items"][0]["running_phase"] == "implement"
+
+
+def test_the_state_says_when_the_cycle_last_touched_an_item(tmp_path: Path) -> None:
+    state = build_state(_registry(
+        tmp_path,
+        _end("plan", "2026-09-12T11:00:00Z"),
+        _end("code-quality", "2026-09-16T16:52:49Z", "PASS_WITH_CAVEATS"),
+    ))
+    act = state["last_activity"]
+    assert act["item"] == "B-001"
+    assert act["at"].startswith("2026-09-16T16:52:49")
+    assert act["verdict"] == "PASS_WITH_CAVEATS"
+
+
+def test_an_event_naming_no_item_is_not_activity(tmp_path: Path) -> None:
+    """223 of 369 events on a consumer named no item. Counting those as activity lets a
+    run that touched nothing report the cycle as busy — the same error as a gate passing
+    on a sweep that examined nothing."""
+    state = build_state(_registry(
+        tmp_path,
+        _end("code-quality", "2026-09-12T11:00:00Z"),
+        {"type": "cycle:phase:end", "cycle": "code-quality", "slug": None,
+         "timestamp": "2026-09-16T17:54:51Z", "verdict": "PASS_WITH_CAVEATS"},
+    ))
+    assert state["last_activity"]["at"].startswith("2026-09-12"), \
+        "an unattributed event was reported as the cycle touching an item"
+
+
+def test_a_stream_naming_no_item_at_all_says_nothing(tmp_path: Path) -> None:
+    """None, not a zero: a stream with no item-attributed event is not a cycle that just
+    went quiet, and the page must tell those apart."""
+    state = build_state(_registry(tmp_path))
+    assert state["last_activity"] is None
+
+
+def test_a_trailing_end_for_an_earlier_phase_does_not_clear_it(tmp_path: Path) -> None:
+    """The first fix closed on ANY later end, and a sibling test refused it.
+
+    `implement` starts, then a trailing `plan` end arrives. An end for an EARLIER phase
+    is an event catching up, not evidence the item moved on — clearing on it would hide
+    work actually in flight, which is the opposite of the defect being fixed.
+    """
+    state = build_state(_registry(
+        tmp_path,
+        _start("implement", "2026-09-16T18:00:00Z"),
+        _end("plan", "2026-09-16T18:05:00Z"),
+    ))
+    assert state["running"] == ["B-001"]
+    assert state["items"][0]["running_phase"] == "implement"
+
+
+def test_an_unknown_cycle_closes_nothing(tmp_path: Path) -> None:
+    """A phase outside the chain carries no position, so it is not evidence of order."""
+    state = build_state(_registry(
+        tmp_path,
+        _start("implement", "2026-09-16T18:00:00Z"),
+        _end("something-else", "2026-09-16T18:05:00Z"),
+    ))
+    assert state["running"] == ["B-001"]
+
+
+# ── the repository's own pulse ───────────────────────────────────────────────
+
+def _checkout(tmp_path: Path) -> Path:
+    import subprocess
+    root = _registry(tmp_path)
+    for args in (["init", "-q", "-b", "workspace"],
+                 ["config", "user.email", "t@example.com"],
+                 ["config", "user.name", "t"]):
+        subprocess.run(["git", *args], cwd=root, check=True, timeout=120,
+                       capture_output=True)
+    (root / "a.txt").write_text("a\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, timeout=120,
+                   capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "feat(x): the first commit"], cwd=root,
+                   check=True, timeout=120, capture_output=True)
+    return root
+
+
+def test_the_board_reads_the_repository_it_is_pointed_at(tmp_path: Path) -> None:
+    """`read_lead` answers this question and needs a supervisor writing a marker. A
+    board pointed at a repository nobody supervises answered `watching: false` and
+    nothing else — while the session had sixteen unpushed commits, the newest from
+    minutes earlier. The work was real, visible in git, and invisible on the board."""
+    repo = build_state(_checkout(tmp_path))["repo"]
+    assert repo["head"], "the board cannot say whether anyone is working in this tree"
+    assert repo["subject"] == "feat(x): the first commit"
+    assert repo["branch"] == "workspace"
+    assert isinstance(repo["committed_at"], int)
+
+
+def test_a_modified_tracked_file_counts_and_an_untracked_one_does_not(
+        tmp_path: Path) -> None:
+    """Counting build output as activity would report every repository as busy
+    forever."""
+    root = _checkout(tmp_path)
+    (root / "a.txt").write_text("changed\n", encoding="utf-8")
+    (root / "build.log").write_text("noise\n", encoding="utf-8")
+    assert build_state(root)["repo"]["dirty_files"] == 1
+
+
+def test_a_project_that_is_not_a_checkout_says_so(tmp_path: Path) -> None:
+    """None rather than zero: "no commits" and "not a repository" are different
+    answers, and a zero would read as a clean tree."""
+    repo = build_state(_registry(tmp_path))["repo"]
+    assert repo["head"] is None
+
+
+def test_the_two_pulses_stay_separate(tmp_path: Path) -> None:
+    """A commit is NOT a phase. Merging them would let a busy repository make an
+    untouched backlog look like progress, which is the error this board refuses."""
+    state = build_state(_checkout(tmp_path))
+    assert state["last_activity"] is None, \
+        "a commit was counted as the cycle touching an item"
+    assert state["repo"]["head"] is not None
+
+
+# ── which item is under way ──────────────────────────────────────────────────
+
+def _commit(root: Path, subject: str, body: str = "") -> None:
+    import subprocess
+    (root / "a.txt").write_text(subject, encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, timeout=120,
+                   capture_output=True)
+    message = subject if not body else f"{subject}\n\n{body}"
+    subprocess.run(["git", "commit", "-qm", message], cwd=root, check=True,
+                   timeout=120, capture_output=True)
+
+
+def test_an_open_phase_is_the_strongest_evidence(tmp_path: Path) -> None:
+    state = build_state(_registry(tmp_path, _start("implement", "2026-09-16T18:00:00Z")))
+    assert state["working"]["item"] == "B-001"
+    assert state["working"]["why"] == "phase_started"
+
+
+def test_a_commit_subject_naming_the_item_counts(tmp_path: Path) -> None:
+    root = _checkout(tmp_path)
+    _commit(root, "fix(B-001): the thing")
+    assert build_state(root)["working"]["item"] == "B-001"
+
+
+def test_prose_in_a_body_is_not_a_claim_of_work(tmp_path: Path) -> None:
+    """Two drafts failed here, each narrower than the last and both wrong.
+
+    The first took any id anywhere and picked B-001 out of "four debts that pointed at a
+    registry nobody gets" — four items mentioned, none of them the subject. The second
+    required exactly one and picked B-069 out of a sentence explaining that
+    `merge(B-069):` had been REFUSED as a commit scope: an example of a rejected message
+    read as a claim of work on the item it named.
+
+    A body cannot tell you what is being worked on, because any prose mention looks
+    exactly like work. No amount of narrowing makes prose a structured position.
+    """
+    root = _checkout(tmp_path)
+    _commit(root, "chore(records): centralise the write root",
+            "`merge(B-001):` was refused, and not for the type.")
+    assert build_state(root)["working"] is None
+
+
+def test_several_items_in_one_subject_claim_none(tmp_path: Path) -> None:
+    """A commit naming four items is discussing them."""
+    root = _checkout(tmp_path)
+    _commit(root, "docs(debt): B-001 and B-048 both point at a registry nobody gets")
+    assert build_state(root)["working"] is None
+
+
+def test_an_unknown_id_is_not_adopted(tmp_path: Path) -> None:
+    """An id the registry does not carry would put a badge on nothing."""
+    root = _checkout(tmp_path)
+    _commit(root, "fix(B-999): an item this backlog never filed")
+    assert build_state(root)["working"] is None
+
+
+def test_no_evidence_answers_null(tmp_path: Path) -> None:
+    """Null is a real answer. On a consumer the session had sixteen unpushed commits and
+    none of their subjects named an item — work that was real and was not backlog work.
+    Guessing one from the busiest column would invent the single fact being asked for."""
+    root = _checkout(tmp_path)
+    _commit(root, "fix(quality): scan the CLI for exit codes")
+    assert build_state(root)["working"] is None
+
+
+def test_a_trailer_names_the_item_when_the_scope_names_the_area(tmp_path: Path) -> None:
+    """The scope slot is about to stop carrying ids, and the badge must survive it.
+
+    A consumer's `contribution-overrides.txt` records that the scope is the AREA, not the
+    item — so `merge(B-069)` is a violation of that convention, not an instance of it.
+    Measured 2026-09-16: of that session's sixteen commits, ZERO put an id in the scope.
+    A reader tied to that slot alone would report a quieter registry the better the
+    convention took hold.
+
+    The trailer is the slot that survives: unbounded, structured, and not competing with
+    the scope for meaning.
+    """
+    root = _checkout(tmp_path)
+    _commit(root, "fix(quality): the thing", "Refs B-001")
+    working = build_state(root)["working"]
+    assert working["item"] == "B-001"
+    assert "trailer" in working["detail"]
+
+
+def test_a_trailer_must_open_its_line(tmp_path: Path) -> None:
+    """Anchoring to the line start is what keeps it a position rather than prose. The
+    same id mentioned mid-sentence is a mention, which is the mistake three earlier
+    narrowings of this reader each made."""
+    root = _checkout(tmp_path)
+    _commit(root, "fix(quality): the thing",
+            "This closes B-001 eventually, but not in this commit.")
+    assert build_state(root)["working"] is None
+
+
+def test_several_trailers_claim_none(tmp_path: Path) -> None:
+    """A body listing several items is discussing them, and that is as true of trailers
+    as it was of prose."""
+    root = _checkout(tmp_path)
+    _commit(root, "fix(quality): the thing", "Refs B-001\nRefs B-048")
+    assert build_state(root)["working"] is None
+
+
+def test_the_scope_still_wins_when_it_carries_an_id(tmp_path: Path) -> None:
+    """Reading the trailer must not stop reading the slot that still holds ids today."""
+    root = _checkout(tmp_path)
+    _commit(root, "merge(B-001): the thing")
+    assert build_state(root)["working"]["detail"].endswith("in its scope")

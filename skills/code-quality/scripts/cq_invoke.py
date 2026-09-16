@@ -66,6 +66,11 @@ def invoke(plan_slug: str, repo_root: Path, *, timeout_s: int = 600) -> dict | N
     # itself.
     if not os.environ.get("CODE_QUALITY_NETWORK") or os.environ.get("CODE_QUALITY_NO_NETWORK"):
         cmd.append("--no-network")
+    else:
+        # Explicit, because `run_code_quality.py` now defaults to offline for a verdict
+        # as well. Passing nothing used to mean "networked"; it now means "offline", and
+        # an opt-in that silently stopped opting in is worse than one that never existed.
+        cmd.append("--network")
 
     try:
         result = subprocess.run(

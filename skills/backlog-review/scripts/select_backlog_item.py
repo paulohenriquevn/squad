@@ -70,6 +70,29 @@ from check_backlog_structure import (
     parse_blocked_by,
 )
 
+def _records_by_item(root: Path, sub: str, suffix: str) -> dict:
+    """Through `squad_boss.records_by_item`, which knows BOTH filename spellings.
+
+    This took the filename prefix — `B-022-plan.md` -> `B-022` — and so matched the bare
+    id and missed `b022-descriptive-words-plan.md`. `board_state` had the mirror of it,
+    matching the descriptive form and missing the bare one. Measured 2026-09-16: an item
+    whose plan was on disk under the other spelling came back `awaiting_plan`, which
+    sends a reader to write a plan that exists.
+
+    Empty on ImportError rather than falling back to a local glob: a second
+    implementation appearing whenever an import fails is exactly how these two diverged.
+    """
+    from squad.paths import records_dir  # noqa: PLC0415
+    records = records_dir(root, "") if root is not None else None
+    if records is None or not records.is_dir():
+        return {}
+    try:
+        from squad_boss import records_by_item  # noqa: PLC0415
+    except ImportError:
+        return {}
+    return records_by_item(records, sub, suffix)
+
+
 #: The chain's filter. `planned` is open but already has a plan — SELECT hands work
 #: to `/discover-plan` or `/idea-to-release`, and an item that has one is in flight.
 SELECTABLE = ("triaged", "raw")
@@ -350,14 +373,14 @@ def select(text: str, requested: str | None = None,
         # time today, from the same hand.
         directory = records_dir(root, "implementations")
         if directory is not None and directory.is_dir():
-            implemented = {f.name.split("-implementation")[0]
-                           for f in directory.glob("*-implementation.md")}
+            implemented = set(
+                _records_by_item(root, "implementations", "-implementation.md"))
 
     plans_on_disk: set[str] = set()
     if root is not None:
         plans_dir = records_dir(root, "plans")
         if plans_dir is not None and plans_dir.is_dir():
-            plans_on_disk = {f.name.split("-plan")[0] for f in plans_dir.glob("*-plan.md")}
+            plans_on_disk = set(_records_by_item(root, "plans", "-plan.md"))
 
     approved_open = sorted(
         (i for i in items

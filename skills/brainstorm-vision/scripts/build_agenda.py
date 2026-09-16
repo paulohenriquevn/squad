@@ -150,16 +150,48 @@ def _known_domains(root: Path) -> set[str]:
         return set()
 
 
+def _halt_reports(root: Path) -> dict:
+    """Items a phase stopped on -> the report, from the one reader of those files.
+
+    Empty on ImportError rather than falling back to a glob: a second implementation
+    appearing whenever an import fails is how readers diverge, and a missing halt in an
+    agenda is a line the reader adds by hand.
+    """
+    here = Path(__file__).resolve()
+    for up in here.parents:
+        scripts = up / "skills" / "backlog-review" / "scripts"
+        if (scripts / "squad_boss.py").is_file():
+            if str(scripts) not in sys.path:
+                sys.path.insert(0, str(scripts))
+            break
+    try:
+        from squad_boss import halt_reports  # noqa: PLC0415
+    except ImportError:
+        return {}
+    return halt_reports(root)
+
+
 def build(root: Path) -> Agenda:
     ag = Agenda()
 
     # --- halts: a BLOCKED report on disk holds its item out of the queue --------
     records = _records_root(root)
     if records.is_dir():
-        for report in sorted(records.rglob("*-BLOCKED.md")):
+        # Through `squad_boss.halt_reports`, not a glob of our own. This listed
+        # `*-BLOCKED.md` itself until 2026-09-16, which anchors BLOCKED to the end of
+        # the name — the form that reader documents as wrong, because a lane writing a
+        # second report for one item adds a descriptive suffix and the anchor misses it
+        # (measured 2026-09-04: B-079 had two reports on disk and the anchored glob
+        # returned neither). It also counted a halt marked `.withdrawn` in its filename,
+        # which that reader now skips.
+        #
+        # Third reader of these files found in one sweep. The first called itself "the
+        # single reader", and a claim of singleness is a claim nothing checks — so a
+        # test checks it now.
+        for item, report in sorted(_halt_reports(root).items()):
             ag.halts.append({
                 "report": str(report.relative_to(root)),
-                "item": report.name.split("-BLOCKED")[0],
+                "item": item,
             })
     else:
         ag.notes.append(f"no records directory at {records.relative_to(root)} — halt signals skipped")

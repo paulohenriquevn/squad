@@ -11,7 +11,16 @@
 # attaches to one — reading a pane does not steal it from whoever is watching.
 set -uo pipefail
 
-LOG="${LOG:-/tmp/squad-lead.jsonl}"
+# The lead log belongs to the PROJECT, not to the machine. `/tmp/squad-lead.jsonl` was
+# spelled here, in `fleet_status.sh` and in `fleet_idle.py`, so two fleets on one machine
+# wrote into ONE file and every reader saw them interleaved. Derived from the single
+# owner rather than repeated a fourth time. `LOG=` still overrides.
+LOG="${LOG:-$(python3 -c 'import sys; from pathlib import Path
+for up in Path(sys.argv[1]).resolve().parents:
+    if (up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(up)); break
+from squad.paths import lead_log_path
+print(lead_log_path(sys.argv[2]))' "$(dirname "$0")" "${PROJECT:-.}")}"
 MARKERS="${MARKERS:-/tmp/squad-markers}"
 # The project the fleet runs over. Derived from this script's own location —
 # `mechanisms/fleet/` sits inside the ecosystem — so it is right in the kit's own

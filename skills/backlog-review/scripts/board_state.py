@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -241,13 +242,31 @@ def _slug_for(item_id: str, records: Path) -> str | None:
     Derived from what exists rather than constructed, because only the phase that
     wrote the artefact knows the words after the number.
     """
-    number = item_id.replace("-", "").lower()          # B-033 -> b033
+    #: Two spellings are in use for one thing, and a reader that knows only one finds
+    #: nothing. `b033-prometheus-url-dev-public` is the form this docstring was written
+    #: for; `B-022-plan.md` — the bare id — is what a consumer's own PLAN stage writes.
+    #:
+    #: The old match lowercased and stripped the hyphen (`B-022` -> `b022`) and globbed
+    #: `*b022*`. On a case-sensitive filesystem that never matches `B-022-plan.md`.
+    #: Measured on a consumer 2026-09-16: `slug` was None for ALL 35 items holding a
+    #: plan, so `item_detail` never opened one — `phases: []`, `tasks: []`,
+    #: `done_ratio: None` — and the implementation view drew 35 blocks whose only
+    #: content was the fallback sentence. A list of empty items, which is exactly what
+    #: it looked like.
+    #:
+    #: Matched on the FILENAME rather than by constructing a slug, because only the
+    #: phase that wrote the artefact knows the words after the number — that part of the
+    #: original reasoning was right and is kept.
+    candidates = (item_id.lower(), item_id.replace("-", "").lower())
     for base in ("plans", "implementations", "alignment"):
         directory = records / base
         if not directory.is_dir():
             continue
-        for entry in sorted(directory.glob(f"*{number}*")):
+        for entry in sorted(directory.iterdir()):
             name = entry.name.lstrip(".")
+            lowered = name.lower()
+            if not any(c in lowered for c in candidates):
+                continue
             for suffix in ("-plan.md", "-implementation.md", "-alignment.md", ".json"):
                 if name.endswith(suffix):
                     return _slug_from_filename(entry.name, suffix)
@@ -284,6 +303,49 @@ def halted_items(project_root: Path) -> set[str]:
     except ImportError:
         return set()
     return set(halt_reports(project_root))
+
+
+#: Item id -> the furthest stage whose RECORD exists on disk.
+#:
+#: `STATUS_PHASE` maps `approved` to `discover`, which is where an approved item is
+#: until something writes a plan for it. Nothing writes the status when that happens:
+#: `planned` is issued by the stage that STARTS work, so between PLAN and IMPLEMENT the
+#: registry says nothing at all about a plan that exists.
+#:
+#: Measured on a consumer 2026-09-16: 35 plans written, 34 belonging to items still
+#: `approved` — every one of them drawn in `discover`, a phase they had left. The board
+#: showed 82 items in `discover` and the true figure was 57. An operator reading that
+#: column saw work nobody had started sitting where finished plans were.
+#:
+#: Records, not status, for the same reason `select_backlog_item` reads them: a file on
+#: disk is a fact about what happened, and the status is a claim somebody has to
+#: remember to write. The ladder stops at implementations — `reviews/` names files
+#: `{ITEM}-{phase}-{date}.md`, and reading one as "REVIEW finished" would assign a
+#: meaning the filename does not carry.
+_RECORD_STAGE = (("implementations", "-implementation.md", "implement"),
+                 ("plans", "-plan.md", "plan"))
+
+
+def stage_on_disk(project_root: Path) -> dict[str, str]:
+    """Item id -> `implement` or `plan`, whichever record exists. One listing each."""
+    records = _records_dir(project_root)
+    if records is None:
+        return {}
+    # Through `squad_boss.records_by_item`, the one reader that knows both filename
+    # spellings. This carried its own prefix glob — `entry.name[: -len(suffix)]` — which
+    # matched `B-022-plan.md` and missed `b022-descriptive-words-plan.md`, so this MODULE
+    # held two readers of one question and only `_slug_for` had been corrected.
+    try:
+        from squad_boss import records_by_item  # noqa: PLC0415
+    except ImportError:
+        return {}
+    reached: dict[str, str] = {}
+    for base, suffix, stage in _RECORD_STAGE:
+        for item_id in records_by_item(records, base, suffix):
+            # First writer wins: the tuple is ordered furthest-stage-first, so an item
+            # with both records is reported at the later one.
+            reached.setdefault(item_id, stage)
+    return reached
 
 
 def planned_items(project_root: Path) -> dict[str, str]:
@@ -565,6 +627,214 @@ def read_lead(log_path: Path | None, marker_path: Path | None) -> dict:
     return out
 
 
+def _closes(open_phase: dict | None, ended: str) -> bool:
+    """Does an end for `ended` close this open start?
+
+    Same phase, or one further along `PHASES`. An end for an earlier phase is a trailing
+    event; an item whose LATER phase finished has demonstrably left the one it opened,
+    whatever the stream failed to say about leaving it.
+
+    A phase outside `PHASES` closes nothing: an unknown cycle is not evidence of order.
+    """
+    if not open_phase:
+        return False
+    started = open_phase.get("phase") or ""
+    if started == ended:
+        return True
+    order = list(PHASES)
+    if started not in order or ended not in order:
+        return False
+    return order.index(ended) >= order.index(started)
+
+
+#: Which ITEM is being worked on, and what makes that claim true.
+#:
+#: Two sources, in order of strength. A phase that started and has not ended is the
+#: cycle saying so itself. Failing that, a commit whose message names an item is the
+#: author saying so — weaker, because a commit is finished work rather than work under
+#: way, but it is evidence and it is dated.
+#:
+#: `why` travels with the answer so the page never shows a highlight a reader cannot
+#: check. And `None` is a real answer: measured on a consumer 2026-09-16, the session
+#: had sixteen unpushed commits and NOT ONE of the twelve most recent named a backlog
+#: item. There was no item being worked on — the work was real and none of it was
+#: backlog work. A board that guessed one from the busiest column would have invented
+#: the one fact the owner was asking for.
+_ITEM_IN_TEXT = re.compile(r"\b([A-Z]-\d{2,})\b")
+#: `type(B-069): subject` — the scope slot of a conventional commit.
+#:
+#: Read, but not relied on. A consumer's own `contribution-overrides.txt` records that
+#: **the scope is the AREA, not the item**, so a commit spelling an id there is a
+#: violation of the convention rather than an instance of it. Measured 2026-09-16: of
+#: that session's sixteen commits, ZERO put an id in the scope — they are `fix(quality)`,
+#: `fix(security)`, `style(<a package>)`. A reader tied to this slot alone would report
+#: quieter registry the better the convention took hold, which is this kit's own finding
+#: about lists-instead-of-properties arriving at its own mechanism.
+_COMMIT_SCOPE = re.compile(r"^[a-z]+\(([A-Z]-\d{2,})\)!?:")
+
+#: `Refs B-069` / `Closes B-069` on its own line in the body — a TRAILER.
+#:
+#: The slot that survives the convention above: unbounded, structured, and not competing
+#: with the scope for meaning. Anchored to the start of a line and to a small set of
+#: verbs, which is what keeps it a position rather than prose — the same sentence
+#: mentioning the id mid-paragraph does not match.
+_COMMIT_TRAILER = re.compile(
+    r"^\s*(?:refs?|closes?|fixes|item|part-of)\s*[: ]\s*([A-Z]-\d{2,})\b",
+    re.IGNORECASE | re.MULTILINE)
+
+
+def _working_item(items: list[dict], project_root: Path) -> dict | None:
+    """The item under way, with the evidence for it, or None when nothing supports one."""
+    for item in items:
+        if item.get("running_phase"):
+            return {"item": item["id"], "why": "phase_started",
+                    "detail": f"{item['running_phase']} started and has not ended",
+                    "since": item.get("running_since")}
+
+    known = {i["id"] for i in items}
+    try:
+        out = subprocess.run(
+            ["git", "log", "-20", "--format=%h\x1f%ct\x1f%s%n%b\x1e"],
+            cwd=str(project_root), capture_output=True, text=True, timeout=10,
+            check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if out.returncode != 0:
+        return None
+    for chunk in out.stdout.split("\x1e"):
+        if "\x1f" not in chunk:
+            continue
+        sha, _, rest = chunk.strip().partition("\x1f")
+        when, _, message = rest.partition("\x1f")
+        # The SUBJECT only. A body cannot tell you what is being worked on, because any
+        # prose mention looks exactly like work.
+        #
+        # Two drafts failed here, each one narrower than the last and both wrong. The
+        # first took any id anywhere and picked B-001 out of "four debts that pointed at
+        # a registry nobody gets" — four items mentioned, none of them the subject. The
+        # second required exactly one and picked B-069 out of a sentence explaining that
+        # `merge(B-069):` had been REFUSED as a commit scope. An example of a rejected
+        # message read as a claim of work on the item it named.
+        #
+        # The subject line is a structured position: `fix(B-069): ...` is an author
+        # saying which item this commit belongs to. Prose is not, and no amount of
+        # narrowing makes it one.
+        subject = message.splitlines()[0] if message.strip() else ""
+        # The conventional-commit SCOPE, `type(B-069): …`, and nowhere else.
+        #
+        # "The subject line is a structured position" was the right idea and the wrong
+        # implementation: matching anywhere in the subject is prose again, one line up.
+        # `docs(debt): B-001 and B-048 both point at a registry nobody gets` names two
+        # items in a sentence, and filtering to the ones this registry knows left
+        # exactly one — so the badge would have claimed work on an item the commit was
+        # only listing. Fourth narrowing of this reader, and the first that looks at
+        # WHERE the id sits rather than how many there are.
+        scope = _COMMIT_SCOPE.match(subject)
+        named = {scope.group(1)} & known if scope else set()
+        if not named:
+            # The trailer, which is where the link belongs once the scope names the area.
+            # Still exactly one: a body listing several items is discussing them, and
+            # that is as true of trailers as it was of prose.
+            # COUNT first, filter second. Intersecting with the registry before
+            # counting let a commit trailing two items pass whenever only one of them
+            # was filed here — the commit is discussing two either way, and what this
+            # registry happens to know does not change what its author was doing.
+            trailers = {m.group(1) for m in _COMMIT_TRAILER.finditer(message)}
+            if len(trailers) == 1 and trailers <= known:
+                return {"item": trailers.pop(), "why": "commit",
+                        "detail": f"commit {sha} refers to it in a trailer",
+                        "since": int(when) if when.isdigit() else None}
+        # EXACTLY one, or the commit is discussing items rather than working on one.
+        #
+        # The first draft took the first id it found anywhere in the message and would
+        # have lit a WORKING badge from prose. Measured on a consumer 2026-09-16:
+        # `10e463349` names B-001, B-048, B-058 and B-074 in the sentence "four debts
+        # that pointed at a registry nobody gets" — four items MENTIONED, none of them
+        # the subject of the commit. The badge would have claimed B-001 was under way
+        # because it was first in a list of things that were not.
+        #
+        # Eighth instance this day of a reader matching a pattern inside prose that
+        # merely quotes it.
+        if len(named) == 1:
+            return {"item": named.pop(), "why": "commit",
+                    "detail": f"commit {sha} declares it in its scope",
+                    "since": int(when) if when.isdigit() else None}
+    return None
+
+
+#: What the repository itself says about whether anyone is working, right now.
+#:
+#: `read_lead` was written for this question — "the session had handed its turn back and
+#: sat still for two hours, and the only way to find out was to attach to a tmux pane" —
+#: and it needs a supervisor writing a marker. A board pointed at a repository nobody
+#: supervises answers `watching: false` and nothing else.
+#:
+#: The repository answers it with no infrastructure at all. Measured on a consumer
+#: 2026-09-16: the cycle stream had been silent for two hours while the session had
+#: fifteen unpushed commits, the newest from minutes earlier. The work was real, visible
+#: in git, and invisible on the board — so the page reported a quiet registry and the
+#: owner read it as a quiet session.
+#:
+#: A commit is NOT a phase, and this is reported beside cycle activity rather than mixed
+#: into it. Conflating them would let a busy repository make an untouched backlog look
+#: like progress, which is the error this board exists to refuse.
+#:
+#: All three reads together cost ~130ms on a 3000-file repository, which is affordable
+#: at the poll interval. Each degrades to None on its own rather than failing the state.
+def _repo_activity(project_root: Path) -> dict:
+    def git(*args: str) -> str | None:
+        try:
+            out = subprocess.run(["git", *args], cwd=str(project_root),
+                                 capture_output=True, text=True, timeout=10, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        return out.stdout.strip() if out.returncode == 0 else None
+
+    head = git("log", "-1", "--format=%h\x1f%s\x1f%ct")
+    out: dict = {"head": None, "subject": None, "committed_at": None,
+                 "dirty_files": None, "unpushed": None, "branch": git("rev-parse",
+                                                                      "--abbrev-ref",
+                                                                      "HEAD")}
+    if head and "\x1f" in head:
+        sha, _, rest = head.partition("\x1f")
+        subject, _, when = rest.rpartition("\x1f")
+        out["head"] = sha
+        out["subject"] = subject
+        out["committed_at"] = int(when) if when.isdigit() else None
+
+    # `--untracked-files=no`: an untracked file is not work in progress the way a
+    # modified tracked one is, and counting build output as activity would report every
+    # repository as busy forever.
+    status = git("status", "--porcelain", "--untracked-files=no")
+    if status is not None:
+        out["dirty_files"] = len([ln for ln in status.splitlines() if ln.strip()])
+
+    ahead = git("rev-list", "--count", "@{upstream}..HEAD")
+    if ahead is not None and ahead.isdigit():
+        out["unpushed"] = int(ahead)
+    return out
+
+
+def _last_activity(events: list[dict]) -> dict | None:
+    """The newest event that names an item, or None when the stream names none.
+
+    None rather than a zero or a placeholder: a stream with no item-attributed event is
+    not a cycle that just went quiet, and the page must be able to tell those apart.
+    """
+    for event in reversed(events):
+        slug = item_id_of(event.get("slug") or "")
+        if not slug:
+            continue
+        return {
+            "item": slug,
+            "at": event.get("timestamp"),
+            "cycle": event.get("cycle"),
+            "verdict": event.get("verdict"),
+            "type": event.get("type"),
+        }
+    return None
+
+
 def build_state(project_root: Path, lead_log: Path | None = None,
                 lead_marker: Path | None = None) -> dict:
     backlog = project_root / "BACKLOG.md"
@@ -577,6 +847,7 @@ def build_state(project_root: Path, lead_log: Path | None = None,
     events = read_events(project_root)
     plans = planned_items(project_root)
     halted = halted_items(project_root)
+    on_disk = stage_on_disk(project_root)
 
     # A phase that STARTED and has not ended is work happening right now. Without it
     # the board can only draw what finished, which is a picture of the past: an item
@@ -590,7 +861,29 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             continue
         if event.get("type") == "cycle:phase:start":
             running[slug] = {"phase": cycle, "since": event.get("timestamp")}
-        elif event.get("type") == "cycle:phase:end" and running.get(slug, {}).get("phase") == cycle:
+        elif event.get("type") == "cycle:phase:end" and _closes(running.get(slug), cycle):
+            # An end closes an open start when it names the SAME phase or one FURTHER
+            # ALONG the chain, and not when it names an earlier one.
+            #
+            # A lane that stops without emitting its own end leaves a start hanging, and
+            # the item then goes on to finish LATER phases — which is proof it moved on,
+            # whatever the stream failed to say about the phase it left. Requiring the
+            # matching cycle meant the board kept drawing the abandoned one as live work.
+            #
+            # Measured on a consumer 2026-09-16: B-001 opened `plan` on 09-12 and never
+            # closed it, then ended `code-quality` on 09-14, 09-15 and again that
+            # morning. Four days later the board still reported `running plan`, and the
+            # owner read the column as where the work was. Seventeen events for that item
+            # and the page named the one phase none of them had finished.
+            #
+            # A start with no end is a fact about the STREAM. Drawing it as running is a
+            # claim about the WORK, and the two stop agreeing the moment a lane dies.
+            #
+            # The first attempt closed on ANY later end, and a sibling test refused it
+            # for a case that is genuinely different: `implement` starts, then a trailing
+            # `plan` end arrives. An end for an EARLIER phase is an event catching up,
+            # not evidence the item moved on, and clearing on it would hide work actually
+            # in flight. Later-or-equal is the line, and the chain order is what decides.
             running.pop(slug, None)
 
     # Last finished phase per item, from the stream.
@@ -648,6 +941,17 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             # Ending a phase is a fact; entering the next one is a guess, and a board
             # that guesses is a board nobody can check against reality.
             phase, source = hit["phase"], "stream"
+        elif on_disk.get(iid) and status in ("approved", "planned"):
+            # A record on disk beats a status nobody advanced. `position_from` says
+            # `disk` rather than `derived`, so a reader can tell a position read off a
+            # file from one inferred from a status field.
+            #
+            # `disk` and not `records`: `check_write_containment` reserves that literal
+            # for `squad/paths.py`, and it refused this line — correctly. A bare
+            # "records" in a module that also builds paths is ambiguous to any scan, and
+            # the gate cannot know this one was a label. Sixth time it has caught this
+            # hand; the shorter word is also the more accurate one here.
+            phase, source = on_disk[iid], "disk"
         else:
             phase = STATUS_PHASE.get(status, "backlog")
             source = "derived"
@@ -709,6 +1013,24 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         "lead": read_lead(lead_log, lead_marker),
         "running": sorted(running.keys()),
         "has_stream": _events_path(project_root) is not None,
+        #: When the cycle last did something to an ITEM, and what it was.
+        #:
+        #: The board drew positions and never said WHEN. A registry four days idle and
+        #: one working this minute rendered identically, so "where is each item" was
+        #: answerable and "is anything happening" was not — and the second is the
+        #: question someone opens a live board to ask.
+        #:
+        #: Item-attributed deliberately. Measured on a consumer 2026-09-16: 369 events,
+        #: of which 223 named no item. Counting those as activity would let a run that
+        #: touched nothing report the cycle as busy, which is the same error as a gate
+        #: passing on a sweep that examined nothing.
+        "last_activity": _last_activity(events),
+        #: The repository's own pulse, beside the cycle's. Two different questions:
+        #: "has the cycle moved an item" and "is anyone working in this tree at all".
+        "repo": _repo_activity(project_root),
+        #: The item under way and the evidence for it, or null when nothing supports
+        #: one. Never guessed from a column count.
+        "working": _working_item(out_items, project_root),
         "unplaced": {
             "without_item": unplaced_no_item,
             "off_chain": dict(sorted(unplaced_off_chain.items())),

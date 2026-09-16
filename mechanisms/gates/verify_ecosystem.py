@@ -356,7 +356,17 @@ def check_emitted_verdicts(ecosystem_dir: Path) -> tuple[bool, list[str]]:
                    for f in findings[:10]]
 
 
-def check_contribution_conventions(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+def _range_label(rev_range: str) -> str:
+    """What to print for a range, so the tick never names a window it did not grade."""
+    if rev_range == "@introduced":
+        return "what this push introduces"
+    if rev_range.startswith("-") and rev_range[1:].isdigit():
+        return f"last {rev_range[1:]} commits"
+    return rev_range
+
+
+def check_contribution_conventions(ecosystem_dir: Path,
+                                   rev_range: str = "-40") -> tuple[bool, list[str]]:
     """Do the recent commits follow the conventions this project declares?
 
     Runs HERE because a convention nobody checks is a preference. This repository's own
@@ -366,14 +376,33 @@ def check_contribution_conventions(ecosystem_dir: Path) -> tuple[bool, list[str]
 
     Scoped to the last 40 commits: the whole history predates the conventions, and a
     gate that fails on work done before the rule existed is a gate people disable.
+
+    That argument goes one step further for a PRE-PUSH caller, and not going it was a
+    deadlock. Work done before THIS PUSH is equally outside the pusher's reach: an amend
+    cannot touch a commit already on the remote, and only a force-push would. Measured
+    on a consumer 2026-09-16 through `.git/hooks/pre-push` -> `task quality:gates` ->
+    `ecosystemvalidators` -> here: four violations in the window, THREE already on
+    `origin/workspace`, and the two nearest would have left the window in eleven and
+    thirteen commits — which could not happen, because this gate refused the commits
+    that would have moved it. Nine verified commits sat behind that wall.
+
+    So the range is a parameter and `--introduced` sets it, rather than the two callers
+    sharing one. They ask different questions: a pre-push hook asks *may this push land*,
+    and the standalone audit asks *does this repository follow its conventions*, where
+    grading history IS the point.
+
+    The flag existed on `check_contribution_conventions.py` for an hour before it
+    reached here, and during that hour the deadlock was exactly where it had been. A fix
+    that lands in code and not in the procedure that invokes it is half a fix.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from check_contribution_conventions import check
 
-    report = check(ecosystem_dir, "-40")
+    report = check(ecosystem_dir, rev_range)
     if report.unmeasured_because:
         return False, [f"not measured: {report.unmeasured_because}"]
-    detail = [f"{report.commits_checked} commit(s) against {report.conventions.source}"]
+    detail = [f"{report.commits_checked} commit(s) over {report.resolved_range}"
+              f" against {report.conventions.source}"]
     if not report.findings:
         return True, detail
     return False, detail + [f"{f.sha} {f.code}" for f in report.findings[:8]]
@@ -844,15 +873,25 @@ def main(argv: list[str] | None = None) -> int:
     """
     argv = list(sys.argv[1:] if argv is None else argv)
     requested: str | None = None
+    rev_range = "-40"
     while argv:
         arg = argv.pop(0)
+        if arg == "--introduced":
+            # Which CALLER this is, expressed as the range its question implies. A
+            # pre-push hook asks "may this push land"; the standalone audit asks "does
+            # this repository follow its conventions". Only the second is answered by
+            # grading history, and only the first is a gate on work somebody can still
+            # change.
+            rev_range = "@introduced"
+            continue
         if arg in ("-h", "--help"):
             # A gate that refuses `--help` cannot be introspected, and
             # `tests/test_gates_say_what_they_examined.py` selects its roster by asking
             # each gate what flags it takes. This one aggregates ELEVEN checks and
             # answered `ERROR: unrecognised argument '--help'`, so it sat outside the
             # empty-sweep protection — silently, which reads as coverage.
-            print("usage: verify_ecosystem.py [-h] [--ecosystem-dir ECOSYSTEM_DIR]")
+            print("usage: verify_ecosystem.py [-h] [--ecosystem-dir ECOSYSTEM_DIR]"
+                  " [--introduced]")
             print()
             print("Run every ecosystem check over one tree. Without --ecosystem-dir the")
             print("tree is located; the header names whichever tree was verified.")
@@ -861,6 +900,9 @@ def main(argv: list[str] | None = None) -> int:
             print("  -h, --help            show this help message and exit")
             print("  --ecosystem-dir ECOSYSTEM_DIR")
             print("                        the tree to verify")
+            print("  --introduced          grade contribution conventions over what this")
+            print("                        push introduces, not the last 40 commits —")
+            print("                        the range a pre-push caller means")
             return 0
         if arg == "--ecosystem-dir":
             if not argv:
@@ -903,7 +945,12 @@ def main(argv: list[str] | None = None) -> int:
         ("Emitted verdicts declared", check_emitted_verdicts),
         ("Produced-file containment (runtime)", check_produced_files),
         ("Chain preconditions", check_chain_preconditions),
-        ("Contribution conventions (last 40 commits)", check_contribution_conventions),
+        # The label names the range actually graded. It said "(last 40 commits)"
+        # unconditionally, so a `--introduced` run would have reported a window it
+        # did not use — the same class as a gate claiming a universal property
+        # with no count behind it.
+        (f"Contribution conventions ({_range_label(rev_range)})",
+         lambda d: check_contribution_conventions(d, rev_range)),
         ("Data root (.squad)", check_data_root),
         ("Verdict bands", check_verdict_bands),
         ("Orphan verdicts", check_orphan_verdicts),

@@ -120,6 +120,12 @@ def fetch(project: Path, repo: str | None = None, limit: int = 200,
     """Read the tracker once. Never raises — every failure becomes `ok=False`."""
     cmd = ["gh", "issue", "list", "--state", "all",
            "--limit", str(limit), "--json", _FIELDS]
+    # An explicit `--issues-repo` wins. Otherwise scope the call when the remote is a
+    # GitHub URL `gh` cannot parse for itself — an SSH host alias. Without this the whole
+    # panel went dark against a repository that was on GitHub the entire time, and the
+    # remedy printed in its place asked the operator to retype what the remote already
+    # said. Derived is better than demanded when the answer is on disk.
+    repo = repo or _owner_repo_from_remote(project)
     if repo:
         cmd += ["--repo", repo]
     started = time.time()
@@ -184,6 +190,41 @@ def _failed(repo: str | None, reason: str, remedy: str) -> dict:
             "open": 0, "fetched_at": time.time(), "took_seconds": 0.0}
 
 
+def _owner_repo_from_remote(project: Path) -> str:
+    """`owner/name` read from the push remote URL, when `gh` cannot resolve it.
+
+    `gh` refuses an SSH host alias: a remote spelled `github-alias:acme/product.git`
+    — a `Host` entry in `~/.ssh/config` — is a GitHub repository that `gh repo view`
+    reports as *"none of the git remotes point to a known GitHub host"*. Measured on a
+    consumer 2026-09-16, where the board's whole issues panel was dark for that reason
+    while the repository sat on GitHub the entire time.
+
+    The remedy the failure names — pass `OWNER/NAME` explicitly — works and requires the
+    operator to read the remote and retype what is already there. Deriving it is the
+    same parse `mechanisms/cycle/promote_to_develop.py` already does for `gh -R`, for
+    the same alias, found the same week.
+
+    Both URL shapes carry the slug in the same place: `git@host:owner/repo.git` and
+    `https://host/owner/repo.git`. The parse is the tail, not the host.
+    """
+    try:
+        proc = subprocess.run(["git", "remote", "get-url", "origin"],
+                              cwd=str(project), capture_output=True, text=True,
+                              timeout=15, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if proc.returncode != 0:
+        return ""
+    stripped = re.sub(r"^[a-z][a-z0-9+.-]*://", "", proc.stdout.strip(),
+                      flags=re.IGNORECASE)
+    head, _, rest = stripped.partition("/")
+    owner = head.rpartition(":")[2] if ":" in head else ""
+    name = rest.rpartition("/")[2] if rest else ""
+    if not owner or not name:
+        return ""
+    return f"{owner}/{name[:-4] if name.endswith('.git') else name}"
+
+
 def _repo_of(project: Path) -> str:
     """Best effort, for display only. An empty string is an acceptable answer."""
     try:
@@ -192,8 +233,12 @@ def _repo_of(project: Path) -> str:
                               cwd=str(project), capture_output=True, text=True,
                               timeout=15, check=False)
     except (OSError, subprocess.TimeoutExpired):
-        return ""
-    return proc.stdout.strip() if proc.returncode == 0 else ""
+        return _owner_repo_from_remote(project)
+    if proc.returncode == 0 and proc.stdout.strip():
+        return proc.stdout.strip()
+    # `gh` said no. That is not the same as "there is no repository", and the alias case
+    # is exactly where the two diverge.
+    return _owner_repo_from_remote(project)
 
 
 def digest(snapshot: dict) -> tuple:

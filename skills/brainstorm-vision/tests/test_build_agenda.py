@@ -127,10 +127,31 @@ def test_shipped_work_tracing_to_no_objective_is_surfaced(tmp_path: Path) -> Non
 
 
 def test_a_blocked_report_on_disk_becomes_a_halt(tmp_path: Path) -> None:
+    """The report sits in `implementations/`, which is where a phase writes one.
+
+    It sat at the records ROOT until 2026-09-16, and passed because this module globbed
+    the whole tree with `rglob`. Nothing writes a halt report there: the four directories
+    a phase uses are declared in `squad_boss.HALT_DIRS`, and that set has been EXTENDED
+    once already when a cycle's directory was found missing from it. Reading through the
+    one reader narrows this module to those four, deliberately — a fixture in a place no
+    writer uses was testing the glob rather than the behaviour.
+    """
     root = _project(tmp_path, _item("B-010", domain="web", repo="web-console", status="planned"))
-    (write_records_dir(root) / "B-010-BLOCKED.md").write_text("halted", encoding="utf-8")
+    reports = write_records_dir(root, "implementations")
+    reports.mkdir(parents=True, exist_ok=True)
+    (reports / "B-010-BLOCKED.md").write_text("halted", encoding="utf-8")
     ag = build(root)
     assert [h["item"] for h in ag.halts] == ["B-010"]
+
+
+def test_a_withdrawn_halt_is_not_on_the_agenda(tmp_path: Path) -> None:
+    """The same marker the board honours. A halt whose report was renamed `.withdrawn`
+    is over, and an agenda listing it sends a reader to a wall that came down."""
+    root = _project(tmp_path, _item("B-010", domain="web", repo="web-console", status="planned"))
+    reports = write_records_dir(root, "implementations")
+    reports.mkdir(parents=True, exist_ok=True)
+    (reports / "B-010-BLOCKED.withdrawn.md").write_text("lifted", encoding="utf-8")
+    assert build(root).halts == []
 
 
 def test_a_killed_item_is_offered_as_signal_not_as_failure(tmp_path: Path) -> None:

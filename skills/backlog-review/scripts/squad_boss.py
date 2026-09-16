@@ -114,12 +114,71 @@ def _item_of(name: str) -> str:
     return f"B-{match.group(1)}" if match else ""
 
 
+#: A halt whose report carries this in its FILENAME is over.
+#:
+#: Adopted from a consumer 2026-09-16, where it had been in use and inert. A lane had
+#: renamed `B-069-BLOCKED.md` to `B-069-BLOCKED.withdrawn.md` to record that the halt no
+#: longer stood — and nothing in this kit read the marker, so the glob below matched it
+#: anyway and the item stayed halted on every board and in every selection. A convention
+#: a tool does not know is a convention that does nothing, and the person using it has
+#: no way to tell.
+#:
+#: The FILENAME rather than a line inside the file, deliberately. It shows in `ls`,
+#: survives a grep, needs no parse, and cannot disagree with itself — a marker in the
+#: body would be a second mechanism for one fact, which is the shape this kit keeps
+#: removing. A report declaring its own withdrawal in prose is therefore still a live
+#: halt here: the fix is to rename the file, and that is one command.
+WITHDRAWN_MARKER = ".withdrawn"
+
+
+#: Item id -> the record of `kind` on disk, for every item that has one.
+#:
+#: THE reader of "does this item have a record", for the same reason `halt_reports` is
+#: the reader of halt files: two scans of one directory drift, and these two already had.
+#:
+#: Two spellings are in use and each reader knew one. `board_state._slug_for` matched
+#: `b022-descriptive-words-plan.md` and missed `B-022-plan.md`; `select_backlog_item`
+#: took the filename prefix and matched `B-022-plan.md` while missing the descriptive
+#: form. Measured 2026-09-16: the first reported `phases: []` for all 35 items holding a
+#: plan and drew a list of empty blocks; the second reported an item with a plan on disk
+#: as `awaiting_plan`, which sends a reader to write one that exists.
+#:
+#: Matching on the FILENAME rather than constructing a slug, because only the phase that
+#: wrote the artefact knows the words after the number.
+def records_by_item(records: Path, sub: str, suffix: str) -> dict[str, Path]:
+    """`{item_id: path}` for every `*{suffix}` in `records/{sub}`, both spellings."""
+    directory = records / sub
+    if not directory.is_dir():
+        return {}
+    found: dict[str, Path] = {}
+    for entry in sorted(directory.iterdir()):
+        name = entry.name.lstrip(".")
+        if not name.endswith(suffix):
+            continue
+        stem = name[: -len(suffix)]
+        item = _item_of(name)
+        if item:
+            found.setdefault(item, entry)
+        elif stem:
+            found.setdefault(stem, entry)
+    return found
+
+
 def halt_reports(project_root: Path) -> dict[str, Path]:
     """Item id -> the BLOCKED report a phase left for it.
 
-    The single reader of these files. `board_state.halted_items` and the selector both
-    come through here, because two scans of the same directory drift the way two copies
-    of a blocking-verdict list already did in this repository.
+    The single reader of these files. `board_state.halted_items`, the selector and
+    `mechanisms/fleet/squad_lead.py` all come through here, because two scans of the same
+    directory drift the way two copies of a blocking-verdict list already did in this
+    repository.
+
+    That was a claim before it was a fact. `squad_lead` carried its own glob until
+    2026-09-16 — `*{item[2:]}*-BLOCKED.md`, anchoring BLOCKED to the end, which is the
+    exact form the comment below records as wrong. It told a lane "not blocked" for an
+    item whose halt report was a lane's second, while the board and the selector said
+    blocked: one registry answering two ways depending on which mechanism asked.
+
+    A claim of singleness is a claim nothing checks. The test beside this one now does.
     """
     records = _records_dir(project_root)
     if records is None:
@@ -137,6 +196,8 @@ def halt_reports(project_root: Path) -> dict[str, Path]:
         # `_item_of` decides whether a name carries an id; that is its job, and it
         # already handles both the `B-079-...` and `b165-...` forms.
         for entry in sorted(directory.glob("*BLOCKED*.md")):
+            if WITHDRAWN_MARKER in entry.name:
+                continue
             item = _item_of(entry.name)
             if item:
                 found.setdefault(item, entry)
