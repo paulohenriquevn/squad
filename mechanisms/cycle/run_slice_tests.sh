@@ -159,9 +159,39 @@ for i in "${!SUITES[@]}"; do
         "$path" "$rc" "${passed:--}" "${failed:--}" "${collected:--}")")
 done
 
+# WHICH TREE these suites were asking about.
+#
+# "Red in an install, green upstream" is a different finding from "red everywhere" and
+# takes a different action — one is a defect in the kit's own tests, the other is a
+# defect in the code. The run said neither, so a consumer reading a failure could not
+# tell which they had.
+#
+# Measured 2026-09-16: three slices green in the kit's repository and red in an install,
+# same code, nothing edited between. All three were paths that resolve to the kit here
+# and to the CONSUMER'S project there — a conftest walking up to `.git`, a template path
+# the installer overwrites with live configuration, a records root that is one directory
+# upstream and two once installed. The kit's own suite could not see any of them by
+# construction, and a consumer's push gate found all three.
+# The kit root is where `skills/` sits beside `mechanisms/`, found by walking UP.
+# A fixed `/..` was wrong on the first attempt — this file is at `mechanisms/cycle/`, so
+# one level up is `mechanisms/`, and the `*/.claude` test could never match. Counting
+# levels breaks the moment a file moves; asking what a directory CONTAINS does not.
+_kit_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [ "$_kit_dir" != "/" ]; do
+    if [ -d "$_kit_dir/skills" ] && [ -d "$_kit_dir/mechanisms" ]; then break; fi
+    _kit_dir="$(dirname "$_kit_dir")"
+done
+case "$_kit_dir" in
+    */.claude) _tree="INSTALLED at $_kit_dir — these suites are running against a
+  consumer tree. A failure here that passes upstream is a defect in the kit's TESTS,
+  not in the code they cover." ;;
+    *) _tree="the kit's own repository at $_kit_dir" ;;
+esac
+
 echo
 printf '%s\n' "${trailer[@]}"
 echo
+echo "TREE: $_tree"
 if [ "${#failures[@]}" -eq 0 ]; then
     echo "ALL SUITES GREEN"
     exit 0
