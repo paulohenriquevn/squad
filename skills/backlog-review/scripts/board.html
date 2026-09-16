@@ -429,6 +429,16 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The pulse: when the cycle last touched an ITEM. Above the columns because it
+   qualifies every one of them — a position four days old and one from this minute
+   are drawn the same way, and only this line separates them. */
+.pulse { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: baseline;
+         margin: .35rem 0 .9rem; font-size: .84rem; }
+.pulse .fresh { color: var(--good, #1f8a54); }
+.pulse .stale { color: var(--warn, #b07020); }
+.pulse .what { font-family: var(--mono, ui-monospace, monospace); opacity: .85; }
+.pulse .why { opacity: .7; flex-basis: 100%; }
+
 /* The ordinal is information here: these are the cycle's phases, and the order
    is the order work moves through them. */
 .col-head .ord {
@@ -970,6 +980,7 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
     <span class="live"><span class="dot" id="dot"></span><span id="conn">connecting</span></span>
   </div>
   <div class="tallies" id="tallies"></div>
+  <div class="pulse" id="pulse"></div>
   <div class="filters">
     <input type="search" id="q" placeholder="filter by id or title" aria-label="Filter items">
     <div class="seg" role="group" aria-label="Scope">
@@ -1246,7 +1257,11 @@ function ago(seconds) {
   if (seconds === null || seconds === undefined) return "—";
   if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s ago`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-  return `${Math.round(seconds / 3600)}h ago`;
+  // Days, because "101h ago" is a number a reader has to divide before it means
+  // anything — and the case that matters most here is the registry nobody touched
+  // since Friday.
+  if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
+  return `${Math.round(seconds / 86400)}d ago`;
 }
 
 function issueCard(it) {
@@ -1339,6 +1354,31 @@ function render(state) {
   ].map(([cls, n, label]) =>
     `<div class="tally ${cls}"><b>${n}</b><span>${label}</span></div>`
   ).join("");
+
+  // WHEN the cycle last touched an item, above the columns.
+  //
+  // The board drew positions and never said when. A registry four days idle and one
+  // working this minute rendered identically, so "where is each item" was answerable
+  // and "is anything happening" was not — and the second is why someone opens a live
+  // board. Item-attributed only: a run that touched nothing must not read as busy.
+  const act = state.last_activity;
+  const pulse = el("pulse");
+  if (pulse) {
+    if (!act || !act.at) {
+      pulse.innerHTML = `<span class="why">No event in this stream names an item, so
+        this board can place work and cannot say when any of it happened.</span>`;
+    } else {
+      const secs = (Date.now() - Date.parse(act.at)) / 1000;
+      const stale = secs > 3600;
+      pulse.innerHTML = `<span class="${stale ? "stale" : "fresh"}">
+          last touched an item <b>${ago(secs)}</b></span>
+        <span class="what"><b>${escapeHtml(act.item)}</b> ·
+          ${escapeHtml(act.cycle || "")}${act.verdict ? " → " + escapeHtml(act.verdict) : ""}</span>
+        ${stale ? `<span class="why">Older than an hour. Work may still be happening —
+          a commit, a gate run, a session thinking — but nothing has reached this
+          registry since.</span>` : ""}`;
+    }
+  }
 
   // The domain list comes from the data, so a registry that grows a domain gains the
   // option without anyone editing this page.

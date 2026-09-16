@@ -622,6 +622,26 @@ def read_lead(log_path: Path | None, marker_path: Path | None) -> dict:
     return out
 
 
+def _last_activity(events: list[dict]) -> dict | None:
+    """The newest event that names an item, or None when the stream names none.
+
+    None rather than a zero or a placeholder: a stream with no item-attributed event is
+    not a cycle that just went quiet, and the page must be able to tell those apart.
+    """
+    for event in reversed(events):
+        slug = item_id_of(event.get("slug") or "")
+        if not slug:
+            continue
+        return {
+            "item": slug,
+            "at": event.get("timestamp"),
+            "cycle": event.get("cycle"),
+            "verdict": event.get("verdict"),
+            "type": event.get("type"),
+        }
+    return None
+
+
 def build_state(project_root: Path, lead_log: Path | None = None,
                 lead_marker: Path | None = None) -> dict:
     backlog = project_root / "BACKLOG.md"
@@ -648,7 +668,22 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             continue
         if event.get("type") == "cycle:phase:start":
             running[slug] = {"phase": cycle, "since": event.get("timestamp")}
-        elif event.get("type") == "cycle:phase:end" and running.get(slug, {}).get("phase") == cycle:
+        elif event.get("type") == "cycle:phase:end":
+            # ANY later end closes an open start, not only one naming the same cycle.
+            #
+            # A lane that stops without emitting its own end leaves a start hanging, and
+            # the item then goes on to finish LATER phases — which is proof it moved on,
+            # whatever the stream failed to say about the phase it left. Requiring the
+            # matching cycle meant the board kept drawing the abandoned one as live work.
+            #
+            # Measured on a consumer 2026-09-16: B-001 opened `plan` on 09-12 and never
+            # closed it, then ended `code-quality` on 09-14, 09-15 and again that
+            # morning. Four days later the board still reported `running plan`, and the
+            # owner read the column as where the work was. Seventeen events for that item
+            # and the page named the one phase none of them had finished.
+            #
+            # A start with no end is a fact about the STREAM. Drawing it as running is a
+            # claim about the WORK, and the two stop agreeing the moment a lane dies.
             running.pop(slug, None)
 
     # Last finished phase per item, from the stream.
@@ -778,6 +813,18 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         "lead": read_lead(lead_log, lead_marker),
         "running": sorted(running.keys()),
         "has_stream": _events_path(project_root) is not None,
+        #: When the cycle last did something to an ITEM, and what it was.
+        #:
+        #: The board drew positions and never said WHEN. A registry four days idle and
+        #: one working this minute rendered identically, so "where is each item" was
+        #: answerable and "is anything happening" was not — and the second is the
+        #: question someone opens a live board to ask.
+        #:
+        #: Item-attributed deliberately. Measured on a consumer 2026-09-16: 369 events,
+        #: of which 223 named no item. Counting those as activity would let a run that
+        #: touched nothing report the cycle as busy, which is the same error as a gate
+        #: passing on a sweep that examined nothing.
+        "last_activity": _last_activity(events),
         "unplaced": {
             "without_item": unplaced_no_item,
             "off_chain": dict(sorted(unplaced_off_chain.items())),
