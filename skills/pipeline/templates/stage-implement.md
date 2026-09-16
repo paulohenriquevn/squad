@@ -223,7 +223,27 @@ python3 $([ -d {REPO}/.claude/skills ] && echo {REPO}/.claude || echo {REPO})/sk
     {ITEM} --project-root {REPO}
 ```
 
-**3. The completion promise is the gate's to give, not yours.**
+**3. Run `/code-quality` standalone, so the next phase has the file it reads.**
+
+```bash
+python3 "$KIT/skills/code-quality/scripts/run_code_quality.py" {ITEM} \
+    --project-root {REPO}
+```
+
+`run_validation.py` already ran this phase nested and passed it `--no-audit-write`, so
+it returned a verdict and wrote nothing. `/review`'s pre-condition reads the audit FILE
+— `{ITEM}-code-quality-*.md` under the records' `audits/` — and refuses without it.
+
+Measured on a consumer 2026-09-15: 8 audit files in the whole registry, every one a
+`deps-audit`, **zero** `code-quality`. Five of six implemented items were refused at
+REVIEW for an audit the nested run was instructed not to produce, and the refusal reads
+as "nobody ran the phase". Nothing had ever reached `shipped` there, and the items were
+being blamed for it.
+
+Suppressing the write inside validate is right — validate runs many times per item and
+a dated audit per run litters the trail. What was missing is this step.
+
+**4. The completion promise is the gate's to give, not yours.**
 `rules/cycle-implement.md` is explicit: the promise is emitted *"EXCLUSIVELY when
 `run_validation.py` exits 0. There is no graceful-exit path that emits the
 promise on a partial pass."* If it exits non-zero, you report what it said and

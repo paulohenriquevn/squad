@@ -687,3 +687,107 @@ def test_the_judge_reads_the_brief_at_its_path_in_the_repository(tmp_path: Path)
     repo = str(tmp_path / "repo")
     assert f"{repo}/.squad/records/alignment/" in brief
     assert "scratchpad" in brief, "the brief does not name the failure it is preventing"
+
+
+def test_the_lane_is_discovered_not_assumed(tmp_path: Path) -> None:
+    """Work reaches an item by more than one path. This pipeline creates
+    `pipeline/<subject>`; a direct dispatch creates `impl/<subject>`; and a template that
+    hardcodes one prefix looks for a branch that does not exist.
+
+    Measured on a consumer 2026-09-15: the item furthest along had its keeper lane at
+    `impl/audit-read-failure-is-observable` while REVIEW and RELEASE both named
+    `pipeline/{LANE}`. RELEASE would have written its changelog entry to a branch that was
+    not there.
+    """
+    for stage in ("review", "release"):
+        brief = _briefs(tmp_path)[stage]
+        assert "pipeline/" not in brief.split("## What you return")[0] or \
+            "branch --contains" in brief, f"{stage} assumes a branch prefix"
+        assert "branch --contains" in brief, f"{stage} does not discover the lane"
+
+
+def test_the_stage_refuses_to_pick_when_the_two_sources_disagree(tmp_path: Path) -> None:
+    """The checkpoint and the implementation record are written by different steps, and on
+    that consumer they disagreed — two lanes implemented one item thirty minutes apart, and
+    the adjudication of which one survives was made by a person.
+
+    A stage that picks is deciding an adjudication that is not its to make. Picking the
+    checkpoint's answer would have released the discarded lane.
+    """
+    for stage in ("review", "release"):
+        brief = _briefs(tmp_path)[stage]
+        assert "STOP and report both" in brief, f"{stage} does not refuse the collision"
+
+
+def test_the_discovery_command_does_not_depend_on_the_shell(tmp_path: Path) -> None:
+    """`for sha in $SHAS` does not word-split in zsh: the whole list arrives as one
+    malformed object name. Found by running the generated command in the shell this
+    machine actually uses, rather than the one the snippet was written in."""
+    for stage in ("review", "release"):
+        brief = _briefs(tmp_path)[stage]
+        assert "while read -r sha" in brief, f"{stage} relies on word-splitting"
+        # The COMMENT names the broken form to explain why it went. A line that starts
+        # with `#` is documentation, not a command — third time today a guard of mine
+        # failed on its own explanation, which is the same shape as reading a fenced
+        # heading as document structure.
+        commands = [line for line in brief.splitlines()
+                    if not line.lstrip().startswith("#")]
+        assert not any("for sha in $SHAS" in line for line in commands), \
+            f"{stage} still runs the word-splitting form"
+
+
+def test_the_lane_is_read_from_the_record_before_it_is_inferred(tmp_path: Path) -> None:
+    """The implementation record DECLARES the lane in its frontmatter — 5 of 6 records on
+    a consumer carry `branch:`. The first version of this block skipped it and inferred
+    the lane from `git branch --contains` over SHAs in the body.
+
+    It got the wrong answer, and the way it got it is the lesson: the body correctly
+    documents BOTH dispatch attempts, 15 SHAs split 5 keeper / 5 discarded / 5 shared, and
+    the one the rule happened to reach was discarded-only. A rule that picks one SHA out
+    of fifteen picked against the `## Commits` table, which is the section that answers
+    the question.
+
+    Reconstructing a fact a document states is how you get an answer that disagrees with
+    the document while looking derived.
+    """
+    for stage in ("review", "release"):
+        brief = _briefs(tmp_path)[stage]
+        head = brief.split("branch --contains")[0]
+        assert "^branch:" in head, \
+            f"{stage} infers the lane before reading the field that declares it"
+        assert "Frontmatter first" in brief
+
+
+def test_the_writing_stage_produces_the_audit_the_next_phase_reads(tmp_path: Path) -> None:
+    """Three files, each correct alone, meeting where nothing ran:
+
+        cycle-phases.txt     code-quality | nested-in: implement
+        cq_invoke.py:62      passes --no-audit-write
+        check_upstream_gate  requires {slug}-code-quality-*.md, BLOCKER when absent
+
+    The nested run executes and returns a verdict; it is told not to write the one file
+    the next phase reads. Measured on a consumer 2026-09-15: 8 audit files in the whole
+    registry, every one a `deps-audit`, ZERO `code-quality`. Five of six implemented items
+    were refused at REVIEW for an artifact the nested run was instructed not to produce,
+    nothing had ever reached `shipped`, and the items were being blamed for it.
+
+    Suppressing the write inside validate is right — validate runs many times per item.
+    What was missing is the standalone run, and without it the chain needs a person per
+    item, which is not a chain.
+    """
+    brief = _briefs(tmp_path)["implement"]
+    assert "run_code_quality.py" in brief, \
+        "the writing stage never produces the audit /review requires"
+    assert "--no-audit-write" in brief, \
+        "the brief does not say why the nested run left no file"
+
+
+def test_the_declaration_does_not_read_as_already_done() -> None:
+    """`nested-in: implement` alone reads as "already handled" — which is how the marker
+    added this same afternoon made the gap harder to see, not easier. The declaration has
+    to say which HALF is nested."""
+    phases = (Path(__file__).resolve().parents[3] / "rules" / "cycle-phases.txt"
+              ).read_text(encoding="utf-8")
+    line = next(l for l in phases.splitlines() if l.startswith("code-quality"))
+    assert "VERDICT" in line and "AUDIT FILE" in line, \
+        f"the declaration does not separate the nested verdict from the written file: {line}"

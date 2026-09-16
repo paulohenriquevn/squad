@@ -153,3 +153,54 @@ def test_the_absence_marker_does_not_swallow_a_live_claim() -> None:
         "a deletion mentioned after the claim does not un-make the claim; the reader "
         "has already read it as live"
     )
+
+
+def test_no_procedure_concludes_a_project_phase_from_a_missing_file() -> None:
+    """"pre-code phase" is a claim about the repository; a missing manifest is a fact
+    about the manifest. The gates stopped confusing them on 2026-09-15 and the procedures
+    that invoke those gates kept prescribing it — eight occurrences across four files,
+    after the code was fixed.
+
+    That is the gap a consumer session named: a fix that lands in code and not in what
+    invokes it is half a fix, and the missing half is the one a new reader follows.
+
+    Two uses survive and both are legitimate: a section describing a project that
+    genuinely has no source yet, and the comment that quotes the retired phrase to explain
+    why it went. A phrase used to DESCRIBE a real state is not the defect; a phrase used
+    to CONCLUDE one from an absent file is.
+    """
+    root = Path(__file__).resolve().parents[1]
+    offenders = []
+    for doc in list(root.glob("skills/**/*.md")) + list(root.glob("rules/*.md")):
+        if "/tests/" in str(doc):
+            continue
+        for number, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), 1):
+            if "pre-code phase" not in line:
+                continue
+            # The offence is concluding the phase from ONE ecosystem's manifest. Saying
+            # a repo with NO manifest of any language is pre-code is not that — it is the
+            # honest reading, and `cycle-implement.md` already writes it as "genuine".
+            #
+            # This exemption started narrower and refused three correct lines in
+            # `rules/`, which is the same shape as the pre-filter that cost a consumer
+            # session a wrong count an hour earlier: a guard that decides in advance what
+            # is worth examining fails silently toward MORE findings here, and toward
+            # fewer there. Both are the guard deciding instead of measuring.
+            if re.search(r"reality check|without source code|NOT \"pre-code"
+                         r"|no language manifest at all|genuine pre-code"
+                         r"|no source code exists|not installed", line, re.I):
+                continue
+            offenders.append(f"{doc.relative_to(root)}:{number}")
+    assert not offenders, (
+        f"these conclude a project phase from an absent file: {offenders}. Say what was "
+        f"looked for and not found.")
+
+
+def test_no_procedure_names_npm_as_the_only_suite() -> None:
+    """The validation gate runs Go, Rust, Python and npm. A checklist naming only `npm
+    test` read a Go workspace with 1918 lines of new code as having nothing to run."""
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "skills" / "implement" / "templates"
+                / "implementation-task-template.md").read_text(encoding="utf-8")
+    for other in ("go test", "cargo", "pytest"):
+        assert other in template, f"the task checklist does not mention {other}"

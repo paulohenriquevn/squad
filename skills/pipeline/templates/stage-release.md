@@ -13,9 +13,47 @@ your job is to make it findable by the people who did not watch it happen.
 ## Where you write
 
 **Inside the lane's worktree, on its branch — never in the main tree.** IMPLEMENT
-created `pipeline/{LANE}`; your changelog entry belongs on it, beside the
+created the lane; your changelog entry belongs on it, beside the
 change it describes. An entry written on the main branch describes work that is
 not there yet, and separates the record from the thing it records.
+
+**Find the lane before you write to it.**
+
+```bash
+# The record DECLARES the lane in its frontmatter. Read it; do not reconstruct it.
+RECORD={REPO}/.squad/records/implementations/{ITEM}-implementation.md
+LANE_BRANCH=$(sed -n '1,20p' "$RECORD" | grep -oE '^branch:[[:space:]]*\S+' | head -1 | awk '{print $2}')
+```
+
+**Frontmatter first, discovery only when it is absent.** 5 of 6 implementation records on
+a consumer 2026-09-15 carry `branch:`. The first version of this block skipped it and
+inferred the lane from `git branch --contains` over SHAs in the body — reconstructing a
+fact the document states, and getting it wrong, because the body correctly documents BOTH
+dispatch attempts and the SHA it happened to reach belonged to the discarded one. A rule
+that picks one SHA out of fifteen picked against the section that answers the question.
+
+When `branch:` is absent, and only then:
+
+```bash
+# Discovery is the FALLBACK. Work reaches an item by more than one path — this pipeline
+# creates `pipeline/<subject>`, a direct dispatch creates `impl/<subject>` — so no prefix
+# may be assumed. Work reaches an item by more than one path —
+# this pipeline creates `pipeline/<subject>`, a direct dispatch creates `impl/<subject>`,
+# and a template that hardcodes one prefix looks for a branch that does not exist.
+CHECKPOINT={REPO}/.squad/records/implementations/.progress-{ITEM}.json
+# One SHA per LINE, read with `while read`: `for sha in $SHAS` does not word-split in
+# zsh, and the whole list arrives as a single malformed object name. Measured here.
+python3 -c "import json,sys;[print(t['commit_sha']) for t in json.load(open(sys.argv[1]))['tasks'] if t.get('commit_sha')]" "$CHECKPOINT" \
+  | while read -r sha; do git -C {REPO} branch --contains "$sha" --format='%(refname:short)'; done | sort -u
+grep -oE '\b[0-9a-f]{7,40}\b' {REPO}/.squad/records/implementations/{ITEM}-implementation.md | sort -u | head
+```
+
+**If the two sources name different branches, STOP and report both.** The checkpoint and
+the implementation record are written by different steps, and on a consumer 2026-09-15
+they disagreed: two lanes implemented one item thirty minutes apart, the checkpoint kept
+the first lane's SHAs and the record kept the one adjudicated the keeper. Picking either
+would be this stage deciding an adjudication that is not its to make — and picking the
+checkpoint's would have released the discarded lane.
 
 ## What you do
 

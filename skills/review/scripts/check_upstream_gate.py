@@ -117,8 +117,12 @@ def check_upstream_gate(project_root: Path, slug: str) -> list[dict[str, Any]]:
             f"no /code-quality audit for `{slug}`",
             f"looked in {records_dir(project_root, 'audits')} for "
             f"`{slug}-code-quality-*.md`",
-            "run `/code-quality {slug}` before `/review` — reviewing code that no audit "
-            "swept means the review inherits whatever the audit would have caught",
+            f"run `/code-quality {slug}` STANDALONE before `/review`. 'No audit' here "
+            f"means no audit FILE: `run_validation.py` already ran this phase nested and "
+            f"passed it `--no-audit-write`, so it returned a verdict and wrote nothing. "
+            f"A reader who takes this line as 'the phase never ran' looks at the item "
+            f"for an hour — measured on a consumer 2026-09-15. Reviewing code that no "
+            f"audit swept means the review inherits whatever the audit would have caught",
         )]
 
     try:

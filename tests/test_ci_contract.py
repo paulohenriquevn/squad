@@ -182,3 +182,29 @@ def test_the_documented_dispatch_passes_what_the_scheduler_can_use() -> None:
     for key in ("awaiting_plan", "in_flight"):
         assert key in workflow, f"the workflow cannot read {key}, so nothing can pass it"
         assert key in skill, f"the procedure does not mention {key}"
+
+
+def test_the_dispatch_does_not_promise_a_file_it_cannot_check() -> None:
+    """The stage prompt told every agent its instruction file was "written to disk before
+    this run and versioned so a wrong finding can be traced to the prompt that produced
+    it". Neither half was true.
+
+    Materialising is the CALLER's Step 1 and a workflow script has no filesystem access,
+    so nothing enforced the first claim — on a consumer 8 of 99 items had been
+    materialised and four dispatched items ran with no instruction file at all. And
+    `.squad/*` is gitignored, so `git ls-files .squad` returns 0: the prompt is on one
+    disk and the traceability the sentence promised does not exist.
+
+    Promising a guarantee that is absent is worse than its absence, because a reader stops
+    looking for it. What replaces it is an instruction the agent can act on, since the
+    script cannot: stop and report, rather than reconstruct the contract from siblings.
+    """
+    workflow = (Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"
+                / "pipeline_workflow.js").read_text(encoding="utf-8")
+    dispatch = workflow.split("const stagePrompt")[1].split("const BRIEF")[0]
+    assert "versioned so a wrong" not in dispatch, \
+        "the dispatch still promises traceability that gitignore removes"
+    assert "written to disk before this run and" not in dispatch, \
+        "the dispatch still asserts a file nothing checked"
+    assert "STOP and report" in dispatch, \
+        "the agent is not told what to do when the file is absent"

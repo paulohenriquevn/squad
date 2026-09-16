@@ -30,7 +30,7 @@ This skill is **the only phase** of [`cycle-review`](../../rules/cycle-review.md
 
 User explicitly invokes `/review {plan-slug}` when:
 
-- Recent commits on `workspace` passed `/implement` validation. PASS is the canonical state; PARTIAL with documented SKIPs (e.g., pre-code phase skipping npm gates) is acceptable only when `cycle-review.md § Pre-conditions` explicitly permits it for the current project lifecycle stage
+- Recent commits on `workspace` passed `/implement` validation. PASS is the canonical state; PARTIAL with documented SKIPs — a language absent from the repository, a coverage command that does not exist — is acceptable, and `PARTIAL` sits in the `caveats` band precisely because the caveat travels with the result. What is never acceptable is a SKIP that names a project phase it did not observe.
 - All tests are green on the branch
 - The implementation plan at `plans/{slug}-plan.md` is the canonical contract (un-revised since /implement)
 - PR is drafted OR ready to be drafted
@@ -78,7 +78,10 @@ python3 .claude/skills/review/scripts/check_upstream_gate.py {slug} --project-ro
 grep -qE '"verdict":[[:space:]]*"(PASS|PASS_WITH_CAVEATS)"' .claude/records/audits/{slug}-code-quality-*.md \
   || (echo "Refuse: /code-quality verdict is not PASS/PASS_WITH_CAVEATS. Loop back to /implement." && exit 1)
 # Tests green on the branch
-npm test  # or skip if pre-code phase
+# Whatever this project runs — `go test ./...`, `pytest`, `cargo test`, `npm test`.
+# The validation gate runs every language whose manifest is at the root; naming
+# only npm here read a Go workspace as having no tests to run.
+npm test  # or the project's equivalent
 ```
 
 If any check fails, refuse with the specific missing piece surfaced honestly. The `/code-quality` gate is mandatory — `/review` refuses to start when the audit is missing or its verdict is below `PASS_WITH_CAVEATS`.
