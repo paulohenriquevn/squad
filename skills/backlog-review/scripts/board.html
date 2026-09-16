@@ -440,6 +440,10 @@ h1 {
 .pulse .why { opacity: .7; flex-basis: 100%; }
 .pulse .warnish { color: var(--warn, #b07020); }
 .pulse.repo { margin-top: -.55rem; opacity: .92; }
+.pulse.working { margin-top: -.55rem; }
+.pulse .badge, .chip.working {
+  background: var(--accent, #4a4ee0); color: #fff; border-radius: 3px;
+  padding: .05rem .4rem; font-size: .68rem; font-weight: 700; letter-spacing: .06em; }
 
 /* The ordinal is information here: these are the cycle's phases, and the order
    is the order work moves through them. */
@@ -984,6 +988,7 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
   <div class="tallies" id="tallies"></div>
   <div class="pulse" id="pulse"></div>
   <div class="pulse repo" id="repopulse"></div>
+  <div class="pulse working" id="working"></div>
   <div class="filters">
     <input type="search" id="q" placeholder="filter by id or title" aria-label="Filter items">
     <div class="seg" role="group" aria-label="Scope">
@@ -1027,6 +1032,8 @@ const PHASE_LABEL = {
   "implement": "Implement", "code-quality": "Code quality", "review": "Review",
   "release": "Release", "acceptance": "Acceptance", "done": "Done", "killed": "Killed"
 };
+
+let WORKING_ITEM = null;
 
 const el = (id) => document.getElementById(id);
 
@@ -1177,6 +1184,12 @@ function cardHtml(it) {
   // and `derived` on 165 of 170, so the two loudest marks carried no information.
   // What is left is what actually varies.
   const chips = [];
+  // WORKING, and only where evidence says so. `WORKING_ITEM` is set from `state.working`,
+  // which carries the reason with the answer — a highlight a reader cannot check is
+  // worse than none, because it looks like the board knows something it inferred.
+  if (WORKING_ITEM && it.id === WORKING_ITEM.item) {
+    chips.push(`<span class="chip working" title="${escapeHtml(WORKING_ITEM.detail || "")}">WORKING</span>`);
+  }
   if (it.running_phase) {
     chips.push(`<span class="chip running">running</span>`);
   } else if (it.position_from === "stream" && !it.last_verdict) {
@@ -1336,6 +1349,7 @@ function renderIssues(state) {
 
 function render(state) {
   LAST_STATE = state;
+  WORKING_ITEM = state.working || null;
   if (TAB === "issues" && !state.issues) TAB = "cycle";
   el("path").textContent = state.project_path || "";
 
@@ -1412,6 +1426,27 @@ function render(state) {
         bits.push(`<span class="warnish"><b>${repo.dirty_files}</b> file(s) modified</span>`);
       }
       rp.innerHTML = bits.join("");
+    }
+  }
+
+  // WHICH item, with the evidence. Null is a real answer and says so: on a consumer
+  // 2026-09-16 the session had sixteen unpushed commits and none of their SUBJECTS
+  // named an item — work that was real and was not backlog work. A board that guessed
+  // one from the busiest column would have invented the single fact being asked for.
+  const wk = el("working");
+  if (wk) {
+    if (!WORKING_ITEM) {
+      wk.innerHTML = `<span class="why">No evidence names an item under way — no phase
+        is open, and no recent commit subject names one. Work may still be happening;
+        none of it is attributed to a backlog item.</span>`;
+    } else {
+      const secs = WORKING_ITEM.since ? (Date.now() / 1000) -
+        (typeof WORKING_ITEM.since === "number" ? WORKING_ITEM.since
+          : Date.parse(WORKING_ITEM.since) / 1000) : null;
+      wk.innerHTML = `<span class="badge">WORKING</span>
+        <span class="what"><b>${escapeHtml(WORKING_ITEM.item)}</b></span>
+        <span class="why">${escapeHtml(WORKING_ITEM.detail || "")}${
+          secs === null ? "" : " · " + ago(secs)}</span>`;
     }
   }
 

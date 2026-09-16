@@ -643,6 +643,91 @@ def _closes(open_phase: dict | None, ended: str) -> bool:
     return order.index(ended) >= order.index(started)
 
 
+#: Which ITEM is being worked on, and what makes that claim true.
+#:
+#: Two sources, in order of strength. A phase that started and has not ended is the
+#: cycle saying so itself. Failing that, a commit whose message names an item is the
+#: author saying so — weaker, because a commit is finished work rather than work under
+#: way, but it is evidence and it is dated.
+#:
+#: `why` travels with the answer so the page never shows a highlight a reader cannot
+#: check. And `None` is a real answer: measured on a consumer 2026-09-16, the session
+#: had sixteen unpushed commits and NOT ONE of the twelve most recent named a backlog
+#: item. There was no item being worked on — the work was real and none of it was
+#: backlog work. A board that guessed one from the busiest column would have invented
+#: the one fact the owner was asking for.
+_ITEM_IN_TEXT = re.compile(r"\b([A-Z]-\d{2,})\b")
+#: `type(B-069): subject` — the scope slot of a conventional commit, which is an author
+#: saying which item this commit belongs to. Prose is not that, however few ids it holds.
+_COMMIT_SCOPE = re.compile(r"^[a-z]+\(([A-Z]-\d{2,})\)!?:")
+
+
+def _working_item(items: list[dict], project_root: Path) -> dict | None:
+    """The item under way, with the evidence for it, or None when nothing supports one."""
+    for item in items:
+        if item.get("running_phase"):
+            return {"item": item["id"], "why": "phase_started",
+                    "detail": f"{item['running_phase']} started and has not ended",
+                    "since": item.get("running_since")}
+
+    known = {i["id"] for i in items}
+    try:
+        out = subprocess.run(
+            ["git", "log", "-20", "--format=%h\x1f%ct\x1f%s%n%b\x1e"],
+            cwd=str(project_root), capture_output=True, text=True, timeout=10,
+            check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if out.returncode != 0:
+        return None
+    for chunk in out.stdout.split("\x1e"):
+        if "\x1f" not in chunk:
+            continue
+        sha, _, rest = chunk.strip().partition("\x1f")
+        when, _, message = rest.partition("\x1f")
+        # The SUBJECT only. A body cannot tell you what is being worked on, because any
+        # prose mention looks exactly like work.
+        #
+        # Two drafts failed here, each one narrower than the last and both wrong. The
+        # first took any id anywhere and picked B-001 out of "four debts that pointed at
+        # a registry nobody gets" — four items mentioned, none of them the subject. The
+        # second required exactly one and picked B-069 out of a sentence explaining that
+        # `merge(B-069):` had been REFUSED as a commit scope. An example of a rejected
+        # message read as a claim of work on the item it named.
+        #
+        # The subject line is a structured position: `fix(B-069): ...` is an author
+        # saying which item this commit belongs to. Prose is not, and no amount of
+        # narrowing makes it one.
+        subject = message.splitlines()[0] if message.strip() else ""
+        # The conventional-commit SCOPE, `type(B-069): …`, and nowhere else.
+        #
+        # "The subject line is a structured position" was the right idea and the wrong
+        # implementation: matching anywhere in the subject is prose again, one line up.
+        # `docs(debt): B-001 and B-048 both point at a registry nobody gets` names two
+        # items in a sentence, and filtering to the ones this registry knows left
+        # exactly one — so the badge would have claimed work on an item the commit was
+        # only listing. Fourth narrowing of this reader, and the first that looks at
+        # WHERE the id sits rather than how many there are.
+        scope = _COMMIT_SCOPE.match(subject)
+        named = {scope.group(1)} & known if scope else set()
+        # EXACTLY one, or the commit is discussing items rather than working on one.
+        #
+        # The first draft took the first id it found anywhere in the message and would
+        # have lit a WORKING badge from prose. Measured on a consumer 2026-09-16:
+        # `10e463349` names B-001, B-048, B-058 and B-074 in the sentence "four debts
+        # that pointed at a registry nobody gets" — four items MENTIONED, none of them
+        # the subject of the commit. The badge would have claimed B-001 was under way
+        # because it was first in a list of things that were not.
+        #
+        # Eighth instance this day of a reader matching a pattern inside prose that
+        # merely quotes it.
+        if len(named) == 1:
+            return {"item": named.pop(), "why": "commit",
+                    "detail": f"commit {sha} declares it in its scope",
+                    "since": int(when) if when.isdigit() else None}
+    return None
+
+
 #: What the repository itself says about whether anyone is working, right now.
 #:
 #: `read_lead` was written for this question — "the session had handed its turn back and
@@ -909,6 +994,9 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         #: The repository's own pulse, beside the cycle's. Two different questions:
         #: "has the cycle moved an item" and "is anyone working in this tree at all".
         "repo": _repo_activity(project_root),
+        #: The item under way and the evidence for it, or null when nothing supports
+        #: one. Never guessed from a column count.
+        "working": _working_item(out_items, project_root),
         "unplaced": {
             "without_item": unplaced_no_item,
             "off_chain": dict(sorted(unplaced_off_chain.items())),

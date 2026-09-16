@@ -174,3 +174,68 @@ def test_the_two_pulses_stay_separate(tmp_path: Path) -> None:
     assert state["last_activity"] is None, \
         "a commit was counted as the cycle touching an item"
     assert state["repo"]["head"] is not None
+
+
+# ── which item is under way ──────────────────────────────────────────────────
+
+def _commit(root: Path, subject: str, body: str = "") -> None:
+    import subprocess
+    (root / "a.txt").write_text(subject, encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, timeout=120,
+                   capture_output=True)
+    message = subject if not body else f"{subject}\n\n{body}"
+    subprocess.run(["git", "commit", "-qm", message], cwd=root, check=True,
+                   timeout=120, capture_output=True)
+
+
+def test_an_open_phase_is_the_strongest_evidence(tmp_path: Path) -> None:
+    state = build_state(_registry(tmp_path, _start("implement", "2026-09-16T18:00:00Z")))
+    assert state["working"]["item"] == "B-001"
+    assert state["working"]["why"] == "phase_started"
+
+
+def test_a_commit_subject_naming_the_item_counts(tmp_path: Path) -> None:
+    root = _checkout(tmp_path)
+    _commit(root, "fix(B-001): the thing")
+    assert build_state(root)["working"]["item"] == "B-001"
+
+
+def test_prose_in_a_body_is_not_a_claim_of_work(tmp_path: Path) -> None:
+    """Two drafts failed here, each narrower than the last and both wrong.
+
+    The first took any id anywhere and picked B-001 out of "four debts that pointed at a
+    registry nobody gets" — four items mentioned, none of them the subject. The second
+    required exactly one and picked B-069 out of a sentence explaining that
+    `merge(B-069):` had been REFUSED as a commit scope: an example of a rejected message
+    read as a claim of work on the item it named.
+
+    A body cannot tell you what is being worked on, because any prose mention looks
+    exactly like work. No amount of narrowing makes prose a structured position.
+    """
+    root = _checkout(tmp_path)
+    _commit(root, "chore(records): centralise the write root",
+            "`merge(B-001):` was refused, and not for the type.")
+    assert build_state(root)["working"] is None
+
+
+def test_several_items_in_one_subject_claim_none(tmp_path: Path) -> None:
+    """A commit naming four items is discussing them."""
+    root = _checkout(tmp_path)
+    _commit(root, "docs(debt): B-001 and B-048 both point at a registry nobody gets")
+    assert build_state(root)["working"] is None
+
+
+def test_an_unknown_id_is_not_adopted(tmp_path: Path) -> None:
+    """An id the registry does not carry would put a badge on nothing."""
+    root = _checkout(tmp_path)
+    _commit(root, "fix(B-999): an item this backlog never filed")
+    assert build_state(root)["working"] is None
+
+
+def test_no_evidence_answers_null(tmp_path: Path) -> None:
+    """Null is a real answer. On a consumer the session had sixteen unpushed commits and
+    none of their subjects named an item — work that was real and was not backlog work.
+    Guessing one from the busiest column would invent the single fact being asked for."""
+    root = _checkout(tmp_path)
+    _commit(root, "fix(quality): scan the CLI for exit codes")
+    assert build_state(root)["working"] is None
