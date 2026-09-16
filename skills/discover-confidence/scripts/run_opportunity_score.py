@@ -171,7 +171,24 @@ def main() -> int:
     # finding is carried by runtime observations, which are not disk-verifiable. The
     # empty-corner and mode-contract gates are what catch a genuinely evidence-free
     # opportunity, so this dimension does not double-penalise.
-    ep_score = 100.0 if evidence["total"] == 0 else 100.0 * evidence["verified"] / evidence["total"]
+    # A dimension that examined nothing must not report that everything resolved.
+    # `total == 0` used to award a flat 100.0, so an opportunity citing NOTHING scored
+    # perfectly on the 0.30-weight dimension whose entire job is "does the evidence
+    # resolve?". Measured 2026-09-16 across a 57-opportunity registry: it never fired
+    # there — every real discovery cited something — so this closes a latent hole, not
+    # an active one. The hole matters because DISCOVER now answers "is it possible /
+    # which technique / where in the system", and that answer can be written entirely
+    # as prose about an external technique, with no pointer anywhere.
+    #
+    # The runtime-only case is deliberately left at 100.0: an HTTP observation is not
+    # re-verifiable on disk (see check_evidence_pointers' module docstring), so no code
+    # pointer could have failed. That is a real distinction, not a loophole.
+    if evidence["evidence_total"] == 0:
+        ep_score = 0.0
+    elif evidence["total"] == 0:
+        ep_score = 100.0
+    else:
+        ep_score = 100.0 * evidence["verified"] / evidence["total"]
 
     oc_score = 100.0 * completeness["found"] / completeness["total_required"]
     sr_score = max(0.0, 100.0 + smells.total_penalty)  # penalty is negative
@@ -198,6 +215,13 @@ def main() -> int:
 
     if evidence["fabricated"] > 0:
         hard_caps_triggered.append("fabricated_evidence")
+        cap_value = min(cap_value, 49.0)
+
+    # Citing nothing is not the same as citing correctly. Without this cap an
+    # opportunity with zero pointers of either class reached the same verdict band as
+    # one whose every pointer resolved, because `verified / total` is vacuous at zero.
+    if evidence["evidence_total"] == 0:
+        hard_caps_triggered.append("no_evidence_cited")
         cap_value = min(cap_value, 49.0)
 
     if completeness["missing_mandatory"]:
