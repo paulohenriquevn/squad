@@ -31,6 +31,26 @@ PROJECT_OWNED = (
 )
 
 
+#: Directories the kit ships WHOLE, where the manifest is not consulted at all.
+#: Nobody else creates `.claude/mechanisms/` — everything under one of these names
+#: arrived with the kit, and structure says so more reliably than any file.
+#:
+#: This is a LIMIT on the manifest's authority, and it exists because the manifest
+#: has not always been complete. `install.sh` recorded in its own comment that the
+#: file once "covers only `agents/`, `rules/` and `skills/` — for `hooks/` and
+#: `scripts/` it is blind, so consulting it would answer by omission". Every
+#: consumer installed before it widened still holds one of those. Reading absence
+#: there as a concession would unlock `hooks/` and `mechanisms/` on all of them,
+#: which is a far worse error than the one being fixed — and it is not theoretical:
+#: `test_kit_is_read_only` builds exactly that manifest and caught this.
+#:
+#: `skills/` and the kit ROOT are deliberately NOT here. Both are shared ground —
+#: a project writes its own skills, and every installed plugin writes loose files
+#: beside the kit's — so there the manifest is the only thing that can tell them
+#: apart, and the measured defect lived at the root.
+KIT_TREES = ("hooks/", "mechanisms/", "squad/", "commands/", "rules/")
+
+
 def _claimed(kit_dir: Path) -> set[str] | None:
     """What the install manifest says the kit brought, or `None` if it cannot say."""
     manifest = kit_dir / ".kit-manifest.txt"
@@ -69,6 +89,8 @@ def is_project_owned(rel: str, kit_dir: Path) -> bool:
     """
     if any(pattern.search(rel) for pattern in PROJECT_OWNED):
         return True
+    if rel.startswith(KIT_TREES):
+        return False
     claimed = _claimed(kit_dir)
     if claimed is None:
         return False

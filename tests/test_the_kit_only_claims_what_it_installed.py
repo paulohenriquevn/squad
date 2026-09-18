@@ -132,3 +132,33 @@ def test_without_a_manifest_nothing_is_conceded(installed: Path, tmp_path: Path)
     (kit / ".kit-manifest.txt").unlink()
     assert is_project_owned("code-review-loop.local.md", kit) is False
     assert is_project_owned("README.md", kit) is False
+
+
+def test_an_old_manifest_does_not_unlock_the_trees_it_predates(tmp_path: Path) -> None:
+    """The regression this fix nearly shipped, caught by `test_kit_is_read_only`.
+
+    The manifest has not always listed everything. `install.sh` recorded that it
+    once "covers only `agents/`, `rules/` and `skills/` — for `hooks/` and
+    `scripts/` it is blind, so consulting it would answer by omission". Every
+    consumer installed before it widened still holds one of those on disk.
+
+    Reading absence from such a manifest as a concession would hand `hooks/` and
+    `mechanisms/` to the project on all of them — a far larger hole than the one
+    being closed, opened by the fix for it. So the manifest's authority stops at
+    the trees the kit ships whole, where structure answers and no file has to.
+    """
+    kit = tmp_path / ".claude"
+    (kit / "mechanisms" / "gates").mkdir(parents=True)
+    (kit / "hooks").mkdir()
+    (kit / "skills" / "a-project-skill").mkdir(parents=True)
+    (kit / ".kit-manifest.txt").write_text(
+        "# an install from before the manifest listed hooks/ or mechanisms/\n"
+        "skills/review\nrules/cycle-review.md\n", encoding="utf-8")
+
+    assert is_project_owned("mechanisms/gates/check_xrefs.py", kit) is False
+    assert is_project_owned("hooks/stop-validation.py", kit) is False
+    assert is_project_owned("commands/plan-goal.md", kit) is False
+    assert is_project_owned("rules/cycle-implement.md", kit) is False
+    # Still true where the manifest is the ONLY thing that can tell them apart.
+    assert is_project_owned("skills/a-project-skill/SKILL.md", kit) is True
+    assert is_project_owned("code-review-loop.local.md", kit) is True

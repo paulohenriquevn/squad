@@ -89,7 +89,12 @@ GUARD_FILES = {
 #: The exemption is the exact repository slug and nothing else, so it cannot widen:
 #: any OTHER use of the token still fails, in this file or any future one. That is
 #: the difference between exempting an address and exempting a name.
-EXTERNAL_DEPENDENCIES = ("usetheodev/judge-codex-plugin-cc",)
+#: BOTH slugs, because the repository was renamed (`…-plugin-cc` → `judge-codex`,
+#: 2026-09) and the old one still resolves by GitHub redirect — which is precisely
+#: how a stale install instruction survives unnoticed. The old name stays because
+#: released CHANGELOG entries carry it and a released entry is never edited.
+EXTERNAL_DEPENDENCIES = ("usetheodev/judge-codex-plugin-cc",
+                         "usetheodev/judge-codex")
 
 
 def _leaks(text: str) -> list[str]:

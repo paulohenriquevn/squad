@@ -13,7 +13,7 @@ This cycle is delivered by an external plugin — `judge-codex-plugin-cc` (https
 ## Pre-conditions
 
 - Codex CLI installed (`npm install -g @openai/codex`) and authenticated (`codex login`).
-- judge-codex plugin installed in Claude Code (`/plugin marketplace add usetheodev/judge-codex-plugin-cc` then `/plugin install judge-codex@judge-codex`).
+- judge-codex plugin installed in Claude Code (`/plugin marketplace add usetheodev/judge-codex` then `/plugin install judge-codex@judge-codex`).
 - At least one `plan` cycle artifact persisted (opportunity, plan, implementation log, or review report).
 
 Do NOT invoke when:
@@ -126,7 +126,7 @@ left but to guess, which is how this started.
 The table holds `design`, `discover` and `plan`. The plugin's `implementation` and
 `final` stages exit 2 rather than receiving a path composed from the pattern of the
 others — a convention invented on a caller's behalf is exactly what went wrong here
-the first time. Tracked as `usetheodev/judge-codex#2`.
+the first time. Tracked as issue #2 in the plugin's own tracker.
 
 A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** until either the underlying issue is fixed OR an explicit ADR dismisses it with a sunset window.
 

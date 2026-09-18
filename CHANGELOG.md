@@ -26,7 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   left. Locating and judging fail on different things and are now separate. A phase the
   table does not hold exits 2, this kit's word for could not measure, rather than
   composing a path from the pattern of the others: a convention invented on a caller's
-  behalf is what went wrong the first time. Tracked as `usetheodev/judge-codex#2`.
+  behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
 - **A third gate charged `/review`'s own output for being output** (#149)
@@ -95,6 +95,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   the copy loop and the manifest writer so the two cannot drift. With no manifest the
   boundary concedes nothing and the old refusal stands, because treating an unreadable
   manifest as a blanket unlock is this kit's most-repeated defect wearing the other face.
+  The manifest's authority stops at the trees the kit ships whole (`hooks/`,
+  `mechanisms/`, `squad/`, `commands/`, `rules/`), where structure answers and no file
+  has to. Without that limit the fix opened a larger hole than the one it closed: the
+  manifest once covered `agents/`, `rules/` and `skills/` only, by `install.sh`'s own
+  admission, so every consumer installed before it widened would have had `hooks/` and
+  `mechanisms/` handed to the project. `test_kit_is_read_only` builds exactly that
+  manifest and caught it.
 
 ### Added
 - **The board opens with a verdict, and every column says whether work is happening
