@@ -26,6 +26,8 @@ Exit codes:
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -50,11 +52,18 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# These resolve only after the sys.path bootstrap above: the kit ships as loose
+# scripts, not an installed package, so E402 is suppressed here on purpose.
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.cli.report import FINDING, OK, UNMEASURED, Report  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 def _find_ecosystem_dir() -> Path:
     """Locate ecosystem directory (delegates to shared module)."""
+    # Same narrowing mypy cannot do: require=True raises rather than returning None.
     return find_ecosystem_dir(require=True)  # type: ignore[return-value]
 
 
@@ -93,19 +102,33 @@ def check_python_syntax(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 
 
 def check_shell_syntax(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """`bash -n` over every shell script the kit ships, wherever it lives.
+
+    The label said "Shell hooks syntax" and the list began with `hooks/*.sh`, which
+    matches ZERO files: the hooks migrated to Python and the glob was never revisited.
+    What the check actually measures is the shell under `skills/` and `mechanisms/`, and
+    a name that promises `hooks/` sends a reader to look for coverage that is not there —
+    while a shell hook added tomorrow would be swept by the glob and by nothing else.
+    The glob stays (it is correct the day a `.sh` hook returns); the COUNT is now
+    reported, so a sweep of zero can never read as a clean one.
+    """
     issues: list[str] = []
     sh_files = list((ecosystem_dir / "hooks").glob("*.sh"))
     sh_files.extend((ecosystem_dir / "skills").rglob("*.sh"))
     sh_files.extend((ecosystem_dir / "mechanisms").rglob("*.sh"))
+    if not sh_files:
+        return NOT_RUN, [f"  no .sh under {ecosystem_dir} — nothing was parsed"]
     for sh in sh_files:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             ["bash", "-n", str(sh)],
             capture_output=True,
             text=True,
-        )
+         check=False)
         if result.returncode != 0:
             issues.append(f"  shell syntax error in {sh.relative_to(ecosystem_dir)}: {result.stderr.strip()}")
-    return len(issues) == 0, issues
+    if not issues:
+        return True, [f"  {len(sh_files)} shell script(s) parsed"]
+    return False, issues
 
 
 class _NotRun:
@@ -155,11 +178,17 @@ def check_xrefs(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     validator = ecosystem_dir / "mechanisms" / "gates" / "check_xrefs.py"
     if not validator.exists():
         return NOT_RUN, ["  check_xrefs.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(validator), "--ecosystem-dir", str(ecosystem_dir)],
+    # `--strict` is not cosmetic, and both other callers already knew it:
+    # `mechanisms/distribution/install.sh` and `.github/workflows/ci.yml` pass it. Without it a WARN
+    # finding is printed and the process exits 0, so every WARN class reached this
+    # gate as a tick — the same commit could be green here and refused at install
+    # time. A smoke test weaker than the installer that depends on it is worse than
+    # no smoke test, because it is the one a reader trusts first.
+    result = subprocess.run(
+        [sys.executable, str(validator), "--root", str(ecosystem_dir), "--strict"],
         capture_output=True,
         text=True,
-    )
+     check=False)
     if result.returncode != 0:
         return False, [f"  check_xrefs.py returned {result.returncode}", "  " + result.stdout[-200:]]
     return True, []
@@ -173,18 +202,9 @@ def check_skill_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     point. An index is the one document nothing forces you to open when you add a
     file, so it goes stale by default and reads as complete while it does.
     """
-    checker = ecosystem_dir / "mechanisms" / "gates" / "check_skill_map.py"
-    if not checker.exists():
-        return NOT_RUN, ["  check_skill_map.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
-        capture_output=True, text=True,
-    )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False, [f"  check_skill_map.py produced no usable JSON "
-                       f"(exit {result.returncode})"]
+    payload, refusal = _gate_payload(ecosystem_dir, "check_skill_map", "--root", str(ecosystem_dir))
+    if refusal is not None:
+        return refusal
     findings = payload.get("findings", [])
     return not findings, [f"  {f}" for f in findings]
 
@@ -214,6 +234,12 @@ def check_readme_advisory_skills(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 
     if result.returncode == 0:
         return True, []
+    if result.returncode == 2:
+        # NOT CHECKED: neither README.md nor HOW-TO-USE.md is in the tree, so nothing
+        # was compared. The gate has printed that sentence since 2026-09-05 and returned
+        # 0 with it, and this function reads only the code — so the one line saying it
+        # was not a pass reached a human and the chain drew a tick.
+        return NOT_RUN, [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
     return False, [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
 
 
@@ -229,18 +255,9 @@ def check_squad_map(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     hooks — and deliberately leaves the skill inventory to `check_skill_map.py`,
     because two checkers over one fact can disagree about it.
     """
-    checker = ecosystem_dir / "mechanisms" / "gates" / "check_squad_map.py"
-    if not checker.exists():
-        return NOT_RUN, ["  check_squad_map.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
-        capture_output=True, text=True,
-    )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False, [f"  check_squad_map.py produced no usable JSON "
-                       f"(exit {result.returncode})"]
+    payload, refusal = _gate_payload(ecosystem_dir, "check_squad_map", "--root", str(ecosystem_dir))
+    if refusal is not None:
+        return refusal
     findings = payload.get("findings", [])
     return not findings, [f"  {f['message']}" for f in findings]
 
@@ -257,18 +274,9 @@ def check_verdict_bands(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     vocabulary, including three success verdicts, with nothing in the output to
     notice.
     """
-    checker = ecosystem_dir / "mechanisms" / "gates" / "check_verdict_bands.py"
-    if not checker.exists():
-        return NOT_RUN, ["  check_verdict_bands.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
-        capture_output=True, text=True,
-    )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False, [f"  check_verdict_bands.py produced no usable JSON "
-                       f"(exit {result.returncode})"]
+    payload, refusal = _gate_payload(ecosystem_dir, "check_verdict_bands", "--root", str(ecosystem_dir))
+    if refusal is not None:
+        return refusal
     coverage = payload.get("coverage")
     if coverage == "unreadable":
         return False, [f"  rules/verdict-bands.txt could not be read: "
@@ -430,20 +438,24 @@ def check_chain_preconditions(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     # condition it cannot have — and a gate that cries wolf about itself is one people
     # learn to skip, which is the opposite of what this one is for.
     if not (ecosystem_dir / "BACKLOG.md").is_file():
-        return True, ["not applicable: no BACKLOG.md, so no chain runs here. "
-                      "`cycle-maintenance.md` runs this gate in a consumer, where the "
-                      "question is real"]
+        # NOT_RUN, not True. This module's own contract says it in as many words: "the
+        # skip stops being spelled True, because True is what a pass looks like". The
+        # sentence printed beside the tick said "not applicable" while the tick itself
+        # said PASSED and the tally counted it as one — three outputs, two of them wrong.
+        return NOT_RUN, ["not applicable: no BACKLOG.md, so no chain runs here. "
+                         "`cycle-maintenance.md` runs this gate in a consumer, where the "
+                         "question is real"]
 
     rep = measure(ecosystem_dir)
     lines = [f"{c.mark} {c.name}: {c.detail}" for c in rep.checks]
     if rep.failed:
         return False, lines
     if rep.unmeasured:
-        # Not a pass and not a failure: the kit's own tree has no backlog to run a
-        # chain against, and calling that green would be the shape this whole gate
-        # exists to refuse.
-        return True, lines + ["not applicable here — the kit is not a project with a "
-                              "chain; this gate is run by cycle-maintenance in a consumer"]
+        # Same correction, same reason: the comment already said "not a pass and not a
+        # failure" and the code returned the value that means pass.
+        return NOT_RUN, lines + ["not applicable here — the kit is not a project with a "
+                                 "chain; this gate is run by cycle-maintenance in a "
+                                 "consumer"]
     return True, lines
 
 
@@ -483,18 +495,10 @@ def check_panel_capability(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     An absent declaration is a VIOLATION rather than a skip: a project that never
     configured a panel cannot form one, and that is determinable from disk.
     """
-    checker = ecosystem_dir / "mechanisms" / "gates" / "check_panel_capability.py"
-    if not checker.exists():
-        return NOT_RUN, ["  check_panel_capability.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--json"],
-        capture_output=True, text=True, cwd=str(ecosystem_dir),
-    )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return NOT_RUN, [f"  check_panel_capability.py produced no usable JSON "
-                         f"(exit {result.returncode})"]
+    payload, refusal = _gate_payload(ecosystem_dir, "check_panel_capability",
+                                    "--root", str(ecosystem_dir))
+    if refusal is not None:
+        return refusal
     verdict = payload.get("result")
     if verdict in ("violated", "unchecked"):
         # Both are the repository's: a declaration that cannot form a panel on any
@@ -524,18 +528,10 @@ def check_merge_autonomy(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     states separately for exactly this reason, and collapsing UNCHECKED into success would
     make a partial install read as a verified premise.
     """
-    checker = ecosystem_dir / "mechanisms" / "gates" / "check_merge_autonomy.py"
-    if not checker.exists():
-        return NOT_RUN, ["  check_merge_autonomy.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--json"],
-        capture_output=True, text=True, cwd=str(ecosystem_dir),
-    )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return NOT_RUN, [f"  check_merge_autonomy.py produced no usable JSON "
-                         f"(exit {result.returncode}) — the premise was not tested"]
+    payload, refusal = _gate_payload(ecosystem_dir, "check_merge_autonomy",
+                                    "--root", str(ecosystem_dir))
+    if refusal is not None:
+        return refusal
     verdict = payload.get("result")
     if verdict == "violated":
         return False, ["  " + line for line in str(payload.get("message", "")).splitlines()]
@@ -558,18 +554,9 @@ def check_mechanisms_inventory(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     sends the reader somewhere gone; a row under the wrong family is the worst of
     the three, because it is present and therefore trusted.
     """
-    checker = ecosystem_dir / "mechanisms" / "gates" / "check_mechanisms_inventory.py"
-    if not checker.exists():
-        return NOT_RUN, ["  check_mechanisms_inventory.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
-        capture_output=True, text=True,
-    )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False, [f"  check_mechanisms_inventory.py produced no usable JSON "
-                       f"(exit {result.returncode})"]
+    payload, refusal = _gate_payload(ecosystem_dir, "check_mechanisms_inventory", "--root", str(ecosystem_dir))
+    if refusal is not None:
+        return refusal
     if payload.get("verdict") == "INVENTORY_UNREADABLE":
         return False, [f"  {payload.get('detail', 'the inventory could not be read')}"]
     rows = (payload.get("undocumented", []) + payload.get("phantom", [])
@@ -585,25 +572,55 @@ def check_phase_numbering(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     file the reader opened, and the kit shipped exactly that to every consumer for
     five days after `/deps-audit` was inserted into `cycle-plan`.
     """
-    checker = ecosystem_dir / "mechanisms" / "gates" / "check_phase_numbering.py"
-    if not checker.exists():
-        return NOT_RUN, ["  check_phase_numbering.py not installed — skipping"]
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--root", str(ecosystem_dir), "--json"],
-        capture_output=True, text=True,
-    )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False, [f"  check_phase_numbering.py produced no usable JSON "
-                       f"(exit {result.returncode})"]
+    payload, refusal = _gate_payload(ecosystem_dir, "check_phase_numbering", "--root", str(ecosystem_dir))
+    if refusal is not None:
+        return refusal
     findings = payload.get("findings", [])
     if findings:
         return False, [f"  {f['cycle']}: {f['detail']}" for f in findings]
     return True, []
 
 
-def _run_gate(ecosystem_dir: Path, gate: str, flag: str = "--repo") -> tuple[bool, list[str]]:
+def _gate_payload(ecosystem_dir: Path, gate: str, *args: str,
+                  cwd: Path | None = None) -> tuple[object, object]:
+    """Run a JSON-emitting gate and hand back `(payload, None)` — or `(None, verdict)`.
+
+    Eight wrappers in this file spelled out the same five steps: build the path under
+    `mechanisms/gates/`, check it exists, `subprocess.run` it with `--json`, `json.loads`
+    the stdout, and turn a decode error into a message. Eight copies of a ritual is eight
+    places for the ritual to drift, and it had: two of them returned NOT_RUN for
+    unparseable output where the other six returned False, so the same failure drew a
+    skip in one row and a cross in another.
+
+    The second element is what the CALLER must return when the payload is None — already
+    shaped as `(verdict, lines)` — so a wrapper reads:
+
+        payload, refusal = _gate_payload(eco, "check_skill_map", "--root", str(eco))
+        if refusal is not None:
+            return refusal
+    """
+    checker = ecosystem_dir / "mechanisms" / "gates" / f"{gate}.py"
+    if not checker.exists():
+        return None, (NOT_RUN, [f"  {gate}.py not installed — skipping"])
+    try:
+        result = subprocess.run(
+            [sys.executable, str(checker), *args, "--json"],
+            capture_output=True, text=True, check=False,
+            cwd=str(cwd) if cwd else None)
+    except (OSError, subprocess.SubprocessError) as exc:
+        # The checker could not be RUN. Narrow on purpose, and never NOT_RUN: the script
+        # is on disk, so this is a failure rather than an absence.
+        return None, (False, [f"  {gate}.py could not be run: {exc}"])
+    try:
+        return json.loads(result.stdout), None
+    except json.JSONDecodeError:
+        # FALSE, uniformly. A gate that ran and produced unreadable output is a gate that
+        # failed; NOT_RUN is reserved for the not-installed branch above.
+        return None, (False, [f"  {gate}.py produced no usable JSON "
+                              f"(exit {result.returncode})"])
+
+
+def _run_gate(ecosystem_dir: Path, gate: str) -> tuple[bool, list[str]]:
     """Run a gate that reports by exit code, and relay what it said.
 
     Both gates wired through this were, until 2026-09-02, executed by nothing at
@@ -617,7 +634,7 @@ def _run_gate(ecosystem_dir: Path, gate: str, flag: str = "--repo") -> tuple[boo
     if not checker.exists():
         return NOT_RUN, [f"  {gate}.py not installed — skipping"]
     result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), flag, str(ecosystem_dir)],
+        [sys.executable, str(checker), "--root", str(ecosystem_dir)],
         capture_output=True, text=True,
     )
     if result.returncode == 0:
@@ -664,20 +681,11 @@ def check_wiki_migration(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     the old copy becomes unreachable, so it cannot be seen to be stale, and
     nothing errors while the two drift.
     """
-    checker = ecosystem_dir / "mechanisms" / "gates" / "check_wiki_migration.py"
-    if not checker.exists():
-        return NOT_RUN, ["  check_wiki_migration.py not installed — skipping"]
     project_root = (ecosystem_dir.parent if ecosystem_dir.name == ".claude"
                     else ecosystem_dir)
-    result = subprocess.run(  # noqa: PLW1510
-        [sys.executable, str(checker), "--root", str(project_root), "--json"],
-        capture_output=True, text=True,
-    )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False, [f"  check_wiki_migration.py produced no usable JSON "
-                       f"(exit {result.returncode})"]
+    payload, refusal = _gate_payload(ecosystem_dir, "check_wiki_migration", "--root", str(project_root))
+    if refusal is not None:
+        return refusal
     split = [leaf for leaf in payload["leaves"] if leaf["state"] == "SPLIT"]
     unmigrated = [leaf for leaf in payload["leaves"] if leaf["state"] == "UNMIGRATED"]
     if split:
@@ -688,81 +696,52 @@ def check_wiki_migration(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     return True, []
 
 
+#: `cycle-rule-schema.md` is the schema, not a cycle graded by it. It sits in the same
+#: glob and is the one file this sweep must skip.
+_SCHEMA_RULE = "cycle-rule-schema.md"
+
+
 def check_cycle_rules(ecosystem_dir: Path) -> tuple[bool, list[str]]:
+    """Every `cycle-*.md` on disk carries the sections `cycle-rule-schema.md` requires.
+
+    DERIVED from the tree, not listed here. This iterated a hardcoded tuple of six names
+    while fourteen cycle rules were on disk, so eight were never graded — and the schema
+    (:11 "Every `cycle-*.md` MUST have these top-level sections") and this file's own
+    docstring both said every one was. `cycle-design.md` was one of the eight: it carried
+    `## Why this cycle exists` instead of `## Purpose` and had no `## Anti-patterns` at
+    all, which is what an ungraded rule drifts into. A cycle added tomorrow is graded
+    without anyone editing a list.
+    """
     issues: list[str] = []
     required_sections = ("## Purpose", "## Chain", "## Anti-patterns")
-    for cycle_name in ("discover", "plan", "implement", "review", "code-quality", "idea-to-release"):
-        rule = ecosystem_dir / "rules" / f"cycle-{cycle_name}.md"
-        if not rule.exists():
-            issues.append(f"  missing cycle rule: cycle-{cycle_name}.md")
-            continue
+    rules_dir = ecosystem_dir / "rules"
+    rules = sorted(p for p in rules_dir.glob("cycle-*.md") if p.name != _SCHEMA_RULE)
+    if not rules:
+        # Not a pass. An empty `rules/` and a broken glob produce the same silence.
+        return NOT_RUN, [f"  no cycle-*.md under {rules_dir} — nothing was graded"]
+    for rule in rules:
         content = rule.read_text(encoding="utf-8-sig")
         for section in required_sections:
             if section not in content:
-                issues.append(f"  cycle-{cycle_name}.md missing section `{section}`")
+                issues.append(f"  {rule.name} missing section `{section}`")
+    if issues:
+        issues.append(f"  ({len(rules)} cycle rule(s) graded)")
     return len(issues) == 0, issues
 
 
 def check_skill_frontmatter(ecosystem_dir: Path) -> tuple[bool, list[str]]:
-    """Validate every SKILL.md has a parseable YAML frontmatter with required fields.
+    """DELEGATED to `validate_skill_frontmatter.py`, which owns the contract.
 
-    The earlier substring check (`"name:" in fm`) silently passed `roadmap-feature/SKILL.md`
-    when the description contained an unquoted colon that made YAML parsing fail —
-    Claude Code aborts skill discovery for an entire tree on a single invalid frontmatter,
-    so the gap caused 'skills do not load on consumers'. This function now validates the
-    YAML structurally with PyYAML and requires the canonical fields.
+    This function held its own copy: it required `name` and `description`, while the
+    sibling gate requires `name`, `description` AND `user-invocable`. So the aggregate's
+    tick certified a SMALLER contract than the gate it was named after — a skill missing
+    `user-invocable` passed here and failed there, and the operator reading a green
+    `verify_ecosystem` had no way to know the two disagreed.
+
+    Two implementations of one rule diverge; that is what they did. The twenty other
+    wrappers in this file delegate, and so does this one now.
     """
-    issues: list[str] = []
-    required_fields = ("name", "description")
-    try:
-        import yaml  # PyYAML — listed as a setup pre-condition in README
-    except ImportError:
-        issues.append("  PyYAML not available — install via `pip install pyyaml`")
-        return False, issues
-
-    for skill_dir in (ecosystem_dir / "skills").iterdir():
-        # A leading underscore marks a directory under `skills/` that is NOT a
-        # skill — `_kit-rules/` holds rules two or more skills read. Every other
-        # enumerator in the kit finds skills by the presence of `SKILL.md` and so
-        # never sees it; this one enumerated directories and demanded the file,
-        # which turned a deliberate non-skill into a missing one.
-        # A dot-directory under `skills/` is a tool artifact, never a skill:
-        # pytest-benchmark drops `.benchmarks/` here on any run that measures, and
-        # this check then reported the tool's own output as a broken skill.
-        if not skill_dir.is_dir() or skill_dir.name == "generated" \
-                or skill_dir.name.startswith(("_", ".")):
-            continue
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.exists():
-            issues.append(f"  skill {skill_dir.name} missing SKILL.md")
-            continue
-        content = skill_md.read_text(encoding="utf-8-sig")
-        if not content.startswith("---\n"):
-            issues.append(f"  {skill_dir.name}/SKILL.md missing opening frontmatter")
-            continue
-        end = content.find("\n---\n", 4)
-        if end == -1:
-            issues.append(f"  {skill_dir.name}/SKILL.md missing closing frontmatter")
-            continue
-        fm_raw = content[4:end]
-        try:
-            fm = yaml.safe_load(fm_raw)
-        except yaml.YAMLError as e:
-            # Compact the YAML error to a single line so the report stays readable.
-            err = str(e).splitlines()[0] if str(e) else "unknown YAML error"
-            issues.append(
-                f"  {skill_dir.name}/SKILL.md YAML frontmatter is invalid: {err}"
-            )
-            continue
-        if not isinstance(fm, dict):
-            issues.append(
-                f"  {skill_dir.name}/SKILL.md frontmatter is not a YAML mapping"
-            )
-            continue
-        for field in required_fields:
-            if not fm.get(field):
-                issues.append(f"  {skill_dir.name}/SKILL.md missing field `{field}`")
-    return len(issues) == 0, issues
+    return _run_gate(ecosystem_dir, "validate_skill_frontmatter")
 
 
 def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
@@ -782,10 +761,10 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 
         # 2. detect_domain
         detect = review_skill / "scripts" / "detect_domain.py"
-        r1 = subprocess.run(  # noqa: PLW1510
+        r1 = subprocess.run(
             [sys.executable, str(detect), "--plan", str(plan)],
             capture_output=True, text=True,
-        )
+         check=False)
         if r1.returncode not in (0, 1):
             issues.append(f"  detect_domain exit {r1.returncode}: {r1.stderr[:200]}")
             return False, issues
@@ -802,7 +781,7 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
         tmp_skills = tmp / "skills"
         tmp_skills.mkdir(parents=True, exist_ok=True)
         spawn = review_skill / "scripts" / "spawn_reviewers.py"
-        r2 = subprocess.run(  # noqa: PLW1510
+        r2 = subprocess.run(
             [sys.executable, str(spawn),
              "--plan", str(plan),
              "--slug", "smoke",
@@ -811,7 +790,7 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
              "--skill-dir", str(review_skill),
              "--skills-dir", str(tmp_skills)],
             capture_output=True, text=True,
-        )
+         check=False)
         if r2.returncode != 0:
             issues.append(f"  spawn_reviewers exit {r2.returncode}: {r2.stderr[:200]}")
             return False, issues
@@ -842,14 +821,14 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
 
         report = tmp / "report.md"
         consolidate = review_skill / "scripts" / "consolidate_findings.py"
-        r3 = subprocess.run(  # noqa: PLW1510
+        r3 = subprocess.run(
             [sys.executable, str(consolidate),
              "--findings-dir", str(findings_dir),
              "--output", str(report),
              "--slug", "smoke",
              "--edge-case-coverage-ratio", "1.0"],
             capture_output=True, text=True,
-        )
+         check=False)
         if r3.returncode != 0:
             issues.append(f"  consolidate_findings exit {r3.returncode}: {r3.stderr[:200]}")
             return False, issues
@@ -873,9 +852,13 @@ def main(argv: list[str] | None = None) -> int:
     """
     argv = list(sys.argv[1:] if argv is None else argv)
     requested: str | None = None
+    as_json = False
     rev_range = "-40"
     while argv:
         arg = argv.pop(0)
+        if arg == "--json":
+            as_json = True
+            continue
         if arg == "--introduced":
             # Which CALLER this is, expressed as the range its question implies. A
             # pre-push hook asks "may this push land"; the standalone audit asks "does
@@ -890,26 +873,32 @@ def main(argv: list[str] | None = None) -> int:
             # each gate what flags it takes. This one aggregates ELEVEN checks and
             # answered `ERROR: unrecognised argument '--help'`, so it sat outside the
             # empty-sweep protection — silently, which reads as coverage.
-            print("usage: verify_ecosystem.py [-h] [--ecosystem-dir ECOSYSTEM_DIR]"
-                  " [--introduced]")
+            print("usage: verify_ecosystem.py [-h] [--root ROOT] [--introduced]"
+                  " [--json]")
             print()
-            print("Run every ecosystem check over one tree. Without --ecosystem-dir the")
+            print("Run every ecosystem check over one tree. Without --root the")
             print("tree is located; the header names whichever tree was verified.")
             print()
             print("options:")
             print("  -h, --help            show this help message and exit")
-            print("  --ecosystem-dir ECOSYSTEM_DIR")
+            print("  --root ROOT, --ecosystem-dir ROOT")
             print("                        the tree to verify")
+            print("  --json                emit a squad.cli.report.Report, whose")
+            print("                        `not_checked` names every check that did")
+            print("                        not run — the text footer only counts them")
             print("  --introduced          grade contribution conventions over what this")
             print("                        push introduces, not the last 40 commits —")
             print("                        the range a pre-push caller means")
             return 0
-        if arg == "--ecosystem-dir":
+        # `--root` is the contract's spelling (`mechanisms/gates/_contract.py`);
+        # `--ecosystem-dir` is what this gate answered to first and every existing
+        # caller types, so it stays. One question, one name, no flag day.
+        if arg in ("--root", "--ecosystem-dir"):
             if not argv:
-                print("ERROR: --ecosystem-dir needs a path", file=sys.stderr)
+                print(f"ERROR: {arg} needs a path", file=sys.stderr)
                 return 2
             requested = argv.pop(0)
-        elif arg.startswith("--ecosystem-dir="):
+        elif arg.startswith(("--root=", "--ecosystem-dir=")):
             requested = arg.split("=", 1)[1]
         else:
             print(f"ERROR: unrecognised argument {arg!r}", file=sys.stderr)
@@ -929,7 +918,7 @@ def main(argv: list[str] | None = None) -> int:
 
     checks = [
         ("Python syntax", check_python_syntax),
-        ("Shell hooks syntax", check_shell_syntax),
+        ("Shell syntax (skills, mechanisms, hooks)", check_shell_syntax),
         ("settings.json validity", check_settings_json),
         ("Cross-references", check_xrefs),
         ("Cycle rules schema", check_cycle_rules),
@@ -960,26 +949,71 @@ def main(argv: list[str] | None = None) -> int:
         ("Smoke chain (detect_domain → spawn_reviewers → consolidate)", check_smoke_chain),
     ]
 
+    # Under `--json` the human text is CAPTURED, not suppressed and not interleaved.
+    # Emitting both to stdout would leave a parser to find where the prose stops, and
+    # suppressing it would drop the per-check detail the ⊘ and ✗ lines carry. It goes
+    # into `Report.lines`, which is the field that exists for it.
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer) if as_json else contextlib.nullcontext():
+        code, observed, not_checked, not_run = _sweep(ecosystem_dir, checks)
+
+    if as_json:
+        print(json.dumps(Report(
+            verb="verify_ecosystem",
+            observed=observed,
+            not_checked=not_checked,
+            lines=buffer.getvalue().splitlines(),
+            detail={"ecosystem_dir": str(ecosystem_dir), "checks": len(checks),
+                    "not_run": not_run},
+            exit_code=code,
+        ).to_dict(), indent=2, ensure_ascii=False))
+    else:
+        print(buffer.getvalue(), end="")
+    return code
+
+
+def _sweep(ecosystem_dir: Path,
+           checks: list) -> tuple[int, list[str], list[str], int]:
+    """Run every check over one tree and report what ran, what did not, and why.
+
+    Split out of `main` so `--json` can capture the human text instead of racing it
+    to stdout. The two channels are built from the same walk on purpose: a summary
+    assembled separately from the printing is a summary that can disagree with it.
+    """
     print(f"=== E2E smoke test — ecosystem: {ecosystem_dir} ===\n")
 
     all_pass = True
     not_run = 0
+    #: What ran and what did not, in the Report's own terms. Built alongside the
+    #: printing rather than after it, so the two cannot disagree about a check.
+    observed: list[str] = []
+    not_checked: list[str] = []
     for name, check in checks:
         try:
             ok, issues = check(ecosystem_dir)
-        except Exception as exc:  # noqa: BLE001
+        # The exception becomes that gate's failure and the sweep continues; narrowing
+        # this would let an unforeseen error abort the run with nothing reported.
+        except Exception as exc:  # noqa: BLE001 — one gate raising must not decide the other twelve
             ok, issues = False, [f"  exception: {exc}"]
         if ok is NOT_RUN:
             # Not a failure, and not a pass either. Drawing it as a tick told a
             # reader scanning the marks that a gate had checked something when the
             # gate was not on disk.
             not_run += 1
+            # The reason, not just the count. A `--json` consumer had NO way to learn
+            # which checks were skipped: the text footer prints a number and the ⊘
+            # lines carry the causes, and neither survives being parsed. That is the
+            # false-coverage report `Report.not_checked` exists to prevent, emitted by
+            # the gate aggregator itself.
+            not_checked.append(f"{name}: " + (issues[0].strip() if issues
+                                              else "no reason given"))
             print(f"⊘ {name}")
             for note in issues[:5]:
                 print(note)
             if len(issues) > 5:
                 print(f"  ... and {len(issues) - 5} more")
         elif ok:
+            observed.append(f"{name}: pass")
             print(f"✓ {name}")
             # A passing check may still have something to say — a skipped
             # validator, a migration in progress. Printing only on failure meant
@@ -990,6 +1024,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  ... and {len(issues) - 5} more")
         else:
             all_pass = False
+            observed.append(f"{name}: FAIL")
             print(f"✗ {name}")
             for issue in issues[:5]:
                 print(issue)
@@ -1001,12 +1036,36 @@ def main(argv: list[str] | None = None) -> int:
     # wrong is a count nobody calibrates against, and the number that matters here
     # is how much of the suite did not execute.
     if not_run:
-        print(f"({not_run} not run — the gate script was not installed)")
-    if all_pass:
+        # The CAUSE is not one thing. A gate script that is not installed and a gate whose
+        # subject does not exist in this tree both land here, and the message named only
+        # the first — so a reader saw "the gate script was not installed" beside a gate
+        # that is installed and ran. Each ⊘ line above carries its own reason; this counts.
+        print(f"({not_run} not run — each ⊘ above says why: the gate script is not "
+              f"installed, or its subject does not exist in this tree)")
+
+    # A suite that executed nothing is not a green suite. `NOT_RUN` is truthy on
+    # purpose — a falsy sentinel would turn every partial install red — but that
+    # truthiness never reached `all_pass`, which is cleared only in the failure
+    # branch. So a tree where every delegating check skipped at once fell straight
+    # through to the line below and printed a full pass, exit 0. Measured
+    # 2026-09-17: 25 not run, `=== ALL CHECKS PASSED ===`, exit 0.
+    #
+    # Exit 2 rather than 1, matching the ERROR path above: this is "could not
+    # measure", not "measured and failed", and a caller that conflates the two
+    # learns nothing from either. Skipping SOME checks stays green, which is the
+    # behaviour the sentinel exists to protect.
+    if not_run == len(checks):
+        print("=== NOTHING RAN — no gate script was installed ===")
+        print("   This is not a pass. Install the kit's mechanisms/gates/ and re-run.")
+        code = UNMEASURED
+    elif all_pass:
         print("=== ALL CHECKS PASSED ===")
-        return 0
-    print("=== SOME CHECKS FAILED ===")
-    return 1
+        code = OK
+    else:
+        print("=== SOME CHECKS FAILED ===")
+        code = FINDING
+
+    return code, observed, not_checked, not_run
 
 
 if __name__ == "__main__":

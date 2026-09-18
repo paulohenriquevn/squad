@@ -40,3 +40,4 @@ CHANGELOG.md               | human    | Keep a Changelog puts it at the root, an
 .go-arch-lint.yml          | tool     | go-arch-lint reads it from the repository root
 .dependency-cruiser.cjs    | tool     | dependency-cruiser reads it from the repository root
 .importlinter              | tool     | import-linter reads it from the repository root
+.*.lock                    | tool     | The sidecar `squad/shared_file.py` locks while a shared file is read-modify-written. It lives beside its target because `os.replace` on the target would release a lock on an inode nobody holds any more; it carries no content and is never read

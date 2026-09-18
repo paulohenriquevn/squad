@@ -49,13 +49,13 @@ LANGUAGE_MANIFESTS: dict[str, tuple[str, ...]] = {
 def run_command(cmd: list[str], cwd: Path, timeout: int = 300) -> dict[str, Any]:
     """Run a command, never raise. Shared by every check in the gate."""
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             cmd,
             cwd=str(cwd),
             capture_output=True,
             text=True,
             timeout=timeout,
-        )
+         check=False)
         return {
             "exit_code": result.returncode,
             "stdout_tail": result.stdout[-500:] if result.stdout else "",

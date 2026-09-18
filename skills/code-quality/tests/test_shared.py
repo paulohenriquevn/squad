@@ -213,7 +213,7 @@ def test_write_atomic_no_partial_file_on_concurrent_writes(tmp_path: Path) -> No
         try:
             for _ in range(20):
                 write_atomic(target, payload)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001 — the thread collects whatever write_atomic raises; narrowing would hide the race under test
             errors.append(e)
 
     t1 = threading.Thread(target=writer, args=(payload_a,))

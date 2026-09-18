@@ -43,8 +43,8 @@ def _run(*command: str) -> str:
     here prints a positive verdict, so silence never reads as approval.
     """
     try:
-        done = subprocess.run(command, capture_output=True, text=True,  # noqa: PLW1510
-                              timeout=_TOOL_TIMEOUT)
+        done = subprocess.run(command, capture_output=True, text=True,
+                              timeout=_TOOL_TIMEOUT, check=False)
     except (OSError, subprocess.SubprocessError):
         return ""
     return (done.stdout + done.stderr).strip()

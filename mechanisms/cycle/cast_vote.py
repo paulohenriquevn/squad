@@ -40,7 +40,16 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import records_dir, write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad import shared_file  # noqa: E402 — post-bootstrap import
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    confined,
+    records_dir,
+    safe_segment,
+    write_records_dir,
+)
 
 VERDICTS = ("approve", "return", "abstain")
 MIN_REASON_WORDS = 15
@@ -59,7 +68,15 @@ def refuse(reason: str) -> None:
 
 def cast(project: Path, slug: str, phase: str, reviewer: str, model: str,
          verdict: str, reason: str) -> dict:
-    apath = panels_dir(project) / f"{slug}-{phase}.assignment.json"
+    # `slug` and `phase` arrive from the CLI and become part of a filename that is
+    # `mkdir -p`'d. `../` in either escaped the write root and created the directories on
+    # the way. `safe_segment` refuses the spelling; `confined` refuses the result, so a
+    # caller composing the name some other way is still held. See `squad/paths.py`.
+    safe_segment(slug, what="--slug")
+    safe_segment(phase, what="--phase")
+    _panels = panels_dir(project)
+    apath = confined(_panels / f"{slug}-{phase}.assignment.json", _panels,
+                     what="the assignment")
     if not apath.is_file():
         print(f"no assignment at {apath} — nothing was recorded. A vote with no "
               "assignment behind it is a vote the tally refuses, and refusing it here "
@@ -84,25 +101,36 @@ def cast(project: Path, slug: str, phase: str, reviewer: str, model: str,
                f"{MIN_REASON_WORDS}. Name WHAT you checked against WHICH evidence — "
                "a vote nobody can argue with is a vote nobody can overturn")
 
-    record_path = panels_dir(project, write=True) / f"{slug}-{phase}.json"
+    _write_panels = panels_dir(project, write=True)
+    record_path = confined(_write_panels / f"{slug}-{phase}.json", _write_panels,
+                           what="the panel record")
     record_path.parent.mkdir(parents=True, exist_ok=True)
-    if record_path.is_file():
-        panel = json.loads(record_path.read_text(encoding="utf-8"))
-    else:
-        panel = {"slug": slug, "phase": phase, "author": author,
-                 "artifact": assignment.get("artifact", ""),
-                 "assigned": assigned, "votes": []}
 
-    if any(v.get("reviewer") == reviewer for v in panel["votes"]):
-        refuse(f"`{reviewer}` already voted. A second vote from one seat is a duplicate "
-               "the tally refuses; to change a verdict, edit the record deliberately")
+    # The read, the duplicate refusal and the write are ONE transaction. They were not:
+    # the record was read, `panel["votes"]` inspected for this reviewer, and the whole
+    # file rewritten — with nothing serialising the three. The panel seats THREE
+    # reviewers whose invocations a session can issue at once, so two votes read the same
+    # `votes` list and the second rewrite dropped the first vote. A panel short one vote
+    # is incomplete, which is precisely what the refusal three lines down protects.
+    with shared_file.locked(record_path):
+        if record_path.is_file():
+            panel = json.loads(record_path.read_text(encoding="utf-8"))
+        else:
+            panel = {"slug": slug, "phase": phase, "author": author,
+                     "artifact": assignment.get("artifact", ""),
+                     "assigned": assigned, "votes": []}
 
-    panel["votes"].append({
-        "reviewer": reviewer, "model": model, "verdict": verdict,
-        "reason": reason.strip(),
-        "cast_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    })
-    record_path.write_text(json.dumps(panel, indent=2) + "\n", encoding="utf-8")
+        if any(v.get("reviewer") == reviewer for v in panel["votes"]):
+            refuse(f"`{reviewer}` already voted. A second vote from one seat is a "
+                   "duplicate the tally refuses; to change a verdict, edit the record "
+                   "deliberately")
+
+        panel["votes"].append({
+            "reviewer": reviewer, "model": model, "verdict": verdict,
+            "reason": reason.strip(),
+            "cast_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        })
+        shared_file.write_atomic(record_path, json.dumps(panel, indent=2) + "\n")
 
     remaining = [a for a in assigned if a not in {v["reviewer"] for v in panel["votes"]}]
     return {"record": str(record_path), "votes": len(panel["votes"]),

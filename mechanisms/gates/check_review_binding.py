@@ -3,6 +3,8 @@
 
     python3 mechanisms/gates/check_review_binding.py --slug B-014
 
+**NOT YET FED.** The record it reads — `{slug}-review-*.json` carrying `reviewed_sha` and `examined_files` — is written by nothing in this kit: the review stage emits markdown, and `reviewed_sha` appears in this gate and nowhere else. So the refusal has never fired for any project, and every run returns NO_RECORD. Deciding the record's shape is a change to the review contract and is not made here; `tests/test_a_gate_reads_a_format_someone_declares.py` pins the gap.
+
 ## The gap this closes
 
 A review verdict says the work was examined. It does not say WHICH work: nothing
@@ -139,12 +141,13 @@ def check(slug: str, *, project: Path, tip: str = "HEAD") -> tuple[int, dict]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--slug", required=True)
-    ap.add_argument("--project", type=Path, default=Path.cwd())
+    ap.add_argument(
+        "--root", "--project", dest="root", type=Path, default=Path.cwd())
     ap.add_argument("--tip", default="HEAD")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    code, result = check(args.slug, project=args.project, tip=args.tip)
+    code, result = check(args.slug, project=args.root, tip=args.tip)
     if args.json:
         print(json.dumps(result, indent=2))
         return code

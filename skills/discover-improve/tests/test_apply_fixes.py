@@ -13,7 +13,7 @@ def _run(opportunity: Path, dry_run: bool = False) -> tuple[int, dict]:
     args = [sys.executable, str(SCRIPT), str(opportunity), "--json"]
     if dry_run:
         args.append("--dry-run")
-    result = subprocess.run(args, capture_output=True, text=True)  # noqa: PLW1510
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:

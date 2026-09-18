@@ -159,34 +159,83 @@ def test_the_fallback_does_not_demand_every_keyword(tmp_path: Path) -> None:
     report = run(plan, tests)
 
     malformed = next(i for i in report["items"] if "malformed" in i["description"])
-    assert malformed["status"] == "covered"
+    assert malformed["route"] == "keyword-fallback"
+    assert malformed["status"] == "partial"
 
 
-# --- The two that read this repository's own plans, deliberately: they ARE the item's evidence. ---
+# --- The counts and statuses, against fixtures this repository carries. ---
+#
+# Three tests here read `.claude/records/plans/b025-...` and `b001-...` and each began
+# `if not plan.exists(): return`. `.claude/` is never versioned, so in any clone those
+# files are absent and all three returned before reaching an assertion — three green
+# results asserting nothing, in the file that measures whether coverage is real.
+# A `return` is not a skip: pytest reports it as a pass. The fixtures now live here.
 
-def test_b025_reports_seven() -> None:
-    plan = REPO / ".claude/records/plans/b025-silent-guards-plan.md"
-    if not plan.exists():
-        return
-    report = run(plan, REPO / "src")
+_SEVEN_CASE_PLAN = """# Plan: seven
+
+## Phase 1
+
+### T1.1 — render the frame
+
+#### Deep Dives
+- Edge case: a physical line longer than the frame is truncated, not wrapped.
+- Edge case: ESC yields no raw control byte in the output.
+- Edge case: a handler returning `false` counts a loss, not a no-op.
+- Edge case: an empty input renders the frame and nothing else.
+- Edge case: a non-positive width throws a typed error.
+- Edge case: two writers on one frame serialise.
+- Edge case: a resize mid-render redraws once, not twice.
+
+#### TDD
+RED: test_a_physical_line_longer_than_the_frame_is_truncated — asserts the truncation.
+RED: test_esc_yields_no_raw_control_byte — asserts the escaping.
+RED: test_a_handler_returning_false_counts_a_loss — asserts the tally.
+"""
+
+_FOUR_CASE_PLAN = """# Plan: four
+
+## Phase 1
+
+### T1.1 — render the order list
+
+#### Deep Dives
+- Edge case: an empty order list renders nothing.
+- Edge case: a non-positive window throws a typed error.
+- Edge case: a duplicate id is refused.
+- Edge case: a missing total is not zero.
+"""
+
+
+def _plan(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "a-plan.md"
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def test_a_plan_declaring_seven_cases_reports_seven(tmp_path: Path) -> None:
+    report = run(_plan(tmp_path, _SEVEN_CASE_PLAN), tmp_path / "tests")
+
     assert report["edge_cases_found_in_plan"] == 7
 
 
-def test_b001_reports_four() -> None:
-    plan = REPO / ".claude/records/plans/b001-usage-panel-plan.md"
-    if not plan.exists():
-        return
-    report = run(plan, REPO / "src")
+def test_a_plan_declaring_four_cases_reports_four(tmp_path: Path) -> None:
+    report = run(_plan(tmp_path, _FOUR_CASE_PLAN), tmp_path / "tests")
+
     assert report["edge_cases_found_in_plan"] == 4
 
 
-def test_the_three_b025_cases_with_named_tests_are_covered() -> None:
-    plan = REPO / ".claude/records/plans/b025-silent-guards-plan.md"
-    if not plan.exists():
-        return
-    report = run(plan, REPO / "src")
-    wanted = ["physical line", "ESC yields no raw control byte", "returning `false` counts a loss"]
-    for fragment in wanted:
+def test_cases_whose_named_tests_exist_are_covered_not_partial(tmp_path: Path) -> None:
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_frame.py").write_text(
+        "def test_a_physical_line_longer_than_the_frame_is_truncated(): pass\n"
+        "def test_esc_yields_no_raw_control_byte(): pass\n"
+        "def test_a_handler_returning_false_counts_a_loss(): pass\n", encoding="utf-8")
+
+    report = run(_plan(tmp_path, _SEVEN_CASE_PLAN), tests)
+
+    for fragment in ("physical line", "ESC yields no raw control byte",
+                     "returning `false` counts a loss"):
         item = next(i for i in report["items"] if fragment in i["description"])
         assert item["status"] == "covered", f"{fragment}: {item}"
 

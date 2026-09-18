@@ -78,6 +78,14 @@ class Graph:
     #: Edges that exist ONLY in test files. Kept apart from `edges` so they never widen the
     #: production allow-list — a test crossing a boundary is not a licence for production to.
     test_edges: dict[tuple[str, str], int] = field(default_factory=dict)
+    #: Modules whose imports were never measured: `go list -json ./...` could not be run,
+    #: exited non-zero, printed nothing, or named no module. Each used to `return` in
+    #: silence, so a module with a build error or a missing dependency contributed no unit
+    #: and no edge — and the proposal that followed was a rule set derived from a graph
+    #: with a hole in it, presented as if the repo had been read. `units_seen` above
+    #: separates "read it, no cross-imports" from "read nothing"; this separates
+    #: "read every module" from "read the ones that built".
+    unreadable_modules: dict[str, str] = field(default_factory=dict)
     #: Module directories, when the repo is a `go.work` workspace. Empty for a single-module repo.
     #: go-arch-lint reads a project from its `go.mod`, so a workspace needs one config per module.
     modules: list[str] = field(default_factory=list)
@@ -240,6 +248,20 @@ def propose(graph: Graph) -> dict:
     read is the exact failure mode the D5 meta-gate exists to catch, and it would be absurd to
     build that gate and then ship it inside this.
     """
+    if graph.unreadable_modules:
+        # A rule set derived from a graph with a hole in it, presented as if the repo had
+        # been read, is the failure the paragraph above names. Each module here
+        # contributed no unit and no edge, so every rule proposed below would be an
+        # allow-list that never saw what those modules import.
+        return {
+            "status": "refused",
+            "reason": (
+                f"{len(graph.unreadable_modules)} module(s) could not be read, so their "
+                f"imports are unknown rather than absent. A proposal built on the rest "
+                f"would permit exactly what was not measured."),
+            "unreadable_modules": dict(sorted(graph.unreadable_modules.items())),
+        }
+
     if graph.total_edges == 0:
         if len(graph.units_seen) < 2:
             return {
@@ -436,9 +458,15 @@ def _add_module(graph: Graph, manifest_dir: Path, *, prefix: str) -> None:
             timeout=_GO_LIST_TIMEOUT_SEC,
             check=False,
         )
-    except (FileNotFoundError, subprocess.SubprocessError, OSError):
+    except (FileNotFoundError, subprocess.SubprocessError, OSError) as exc:
+        graph.unreadable_modules[prefix or "."] = f"`go list` could not be run: {exc}"
         return
-    if result.returncode != 0 or not result.stdout.strip():
+    if result.returncode != 0:
+        graph.unreadable_modules[prefix or "."] = (
+            f"`go list` exited {result.returncode}: {(result.stderr or '').strip()[:200]}")
+        return
+    if not result.stdout.strip():
+        graph.unreadable_modules[prefix or "."] = "`go list` printed nothing"
         return
 
     module = ""
@@ -446,6 +474,7 @@ def _add_module(graph: Graph, manifest_dir: Path, *, prefix: str) -> None:
     for pkg in packages:
         module = module or str((pkg.get("Module") or {}).get("Path", ""))
     if not module:
+        graph.unreadable_modules[prefix or "."] = "no package named a module path"
         return
 
     # Every package path the module actually ships, relative to the module root. This is what makes
@@ -743,12 +772,30 @@ def main(argv: list[str] | None = None) -> int:
         print("usage: propose_rules.py <repo-path> [--language go|typescript]", file=sys.stderr)
         return 2
     repo = Path(args[0]).resolve()
-    language = args[args.index("--language") + 1] if "--language" in args else _detect(repo)
+    graphs = {"go": go_graph, "typescript": typescript_graph}
+
+    # `args[args.index(flag) + 1]` raised IndexError on a trailing `--language`, and the
+    # dispatch below raised KeyError on `--language rust`. Both reached the operator as
+    # a traceback, from a function that already prints a usage line four lines above —
+    # so a typo looked like a crash in the tool.
+    if "--language" in args:
+        position = args.index("--language") + 1
+        if position >= len(args):
+            print("usage: propose_rules.py <repo-path> [--language go|typescript]\n"
+                  "--language was given with no value after it", file=sys.stderr)
+            return 2
+        language = args[position]
+        if language not in graphs:
+            print(f"no renderer for {language!r}. Supported: "
+                  f"{', '.join(sorted(graphs))}", file=sys.stderr)
+            return 2
+    else:
+        language = _detect(repo)
     if language is None:
         print(json.dumps({"status": "refused", "reason": "no supported manifest at the repo root"}))
         return 0
 
-    graph = {"go": go_graph, "typescript": typescript_graph}[language](repo)
+    graph = graphs[language](repo)
     result = propose(graph)
     result["language"] = language
     print(json.dumps(result, indent=2, ensure_ascii=False))

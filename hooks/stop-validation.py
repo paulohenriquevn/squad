@@ -39,6 +39,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -120,8 +121,8 @@ def git(*args: str) -> str:
     a secret gate that did not run and a session that ended clean.
     """
     try:
-        done = subprocess.run(["git", *args], capture_output=True, text=True,  # noqa: PLW1510
-                              timeout=_GIT_TIMEOUT)
+        done = subprocess.run(["git", *args], capture_output=True, text=True,
+                              timeout=_GIT_TIMEOUT, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         _GIT_UNREACHABLE.append(f"`git {' '.join(args)}`: {type(exc).__name__}")
         return ""
@@ -181,15 +182,42 @@ def is_production_source(name: str) -> bool:
             and not IS_TEST.search(name) and not GENERATED.search(name))
 
 
+#: The unit walk and the test bodies, both keyed by path and both bounded to ONE hook
+#: invocation. `has_paired_test` runs once per changed source file, and every run walked
+#: the whole owning unit and re-read every test in it — so a commit touching 30 files in
+#: one package did that walk 30 times over the same tree and read the same test bodies
+#: 30 times. This is a Stop hook: its runtime is the pause a person sits through.
+_UNIT_TESTS: dict[Path, list[Path]] = {}
+_TEST_BODIES: dict[Path, str | None] = {}
+
+
+def reset_pairing_cache() -> None:
+    """Forget the walk and the bodies. Called once at the top of a hook run."""
+    _UNIT_TESTS.clear()
+    _TEST_BODIES.clear()
+
+
 def _test_files(unit: Path) -> list[Path]:
     """Every test file inside the unit, skipping the heavy trees."""
+    if unit in _UNIT_TESTS:
+        return _UNIT_TESTS[unit]
     found = []
     for path in unit.rglob("*"):
         if not path.is_file() or VENDORED.search(str(path)):
             continue
         if IS_TEST.search(path.name) or path.name.startswith("test_"):
             found.append(path)
+    _UNIT_TESTS[unit] = found
     return found
+
+
+def _test_body(path: Path) -> str | None:
+    if path not in _TEST_BODIES:
+        try:
+            _TEST_BODIES[path] = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            _TEST_BODIES[path] = None
+    return _TEST_BODIES[path]
 
 
 def _reexported_by_package(module: Path) -> str | None:
@@ -267,9 +295,8 @@ def has_paired_test(source: str, root: Path) -> bool:
     for test in _test_files(unit):
         if test.name in named:
             return True
-        try:
-            text = test.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        text = _test_body(test)
+        if text is None:
             continue
         if by_import.search(text) or by_path.search(text):
             return True
@@ -349,6 +376,104 @@ def check_leakage(project_dir: Path, kit_dir: Path) -> str | None:
             f"CHANGELOG.md:{body}")
 
 
+def _gate_tests(files: list[str], root: Path, kit: bool, warnings: list[str]) -> list[str]:
+    """the tests gate
+
+    Extracted from `main`, which measured cyclomatic complexity 43 across 122 lines
+    holding four independent gates plus the report. Pure code movement: the block below
+    is the block that was there. `gate` is the closure `main` uses to record a
+    blocker — or a warning, on a second pass — and `warnings` is appended to.
+    Both were reached through a shared scope before; they are arguments now.
+    """
+    # ── tests ────────────────────────────────────────────────────────────────
+    sources = [f for f in files if is_production_source(f)]
+    # Bounded to this run: the caches below are per-invocation, and a hook process
+    # that somehow served two runs must not answer the second from the first.
+    reset_pairing_cache()
+    untested = [f for f in sources if not has_paired_test(f, root)]
+    if untested:
+        listed = "".join(f"\n    - {f}" for f in untested)
+        warnings.append(
+            "TDD gate (warn-first) — Unbreakable Rule 7: the following production "
+            f"source files have no sibling test file detected:{listed}"
+            f"\n  See {kit}/rules/testing.md for the project's test pairing convention.")
+    return sources
+
+
+def _gate_changelog(files: list[str], root: Path, sources: list[str],
+                    gate: Callable[[str], None], warnings: list[str]) -> None:
+    """the changelog gate
+
+    Extracted from `main`, which measured cyclomatic complexity 43 across 122 lines
+    holding four independent gates plus the report. Pure code movement: the block below
+    is the block that was there. `gate` is the closure `main` uses to record a
+    blocker — or a warning, on a second pass — and `warnings` is appended to.
+    Both were reached through a shared scope before; they are arguments now.
+    """
+    # ── changelog ────────────────────────────────────────────────────────────
+    code = [f for f in sources
+            if not IN_TEST_TREE.search(f) and not CONFIG_FILE.search(f)]
+    if (root / "CHANGELOG.md").is_file():
+        substantive = [f for f in code if diff_carries_code(f, root)]
+        touched = [f for f in files
+                   if CHANGELOG_TOUCH.search(f) and f != ".changeset/README.md"]
+        if substantive and not touched:
+            gate("CHANGELOG.md not updated despite production source changes "
+                 "(Unbreakable Rule 6; cycle-review BLOCKER). Add an entry to "
+                 "[Unreleased] before stopping. Override with "
+                 "STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg "
+                 "with the rationale documented separately.")
+    elif code:
+        warnings.append(
+            "No CHANGELOG.md in this project, so the Rule 6 gate cannot run — "
+            "production source changed and nothing recorded it. Create CHANGELOG.md "
+            "with an [Unreleased] section (Keep a Changelog format) to activate the "
+            "gate, or leave it absent deliberately if this repo does not ship to "
+            "consumers.")
+
+
+def _gate_secrets(files: list[str], gate: Callable[[str], None]) -> None:
+    """the secrets gate
+
+    Extracted from `main`, which measured cyclomatic complexity 43 across 122 lines
+    holding four independent gates plus the report. Pure code movement: the block below
+    is the block that was there. `gate` is the closure `main` uses to record a
+    blocker — or a warning, on a second pass — and `warnings` is appended to.
+    Both were reached through a shared scope before; they are arguments now.
+    """
+    # ── secrets ──────────────────────────────────────────────────────────────
+    secrets = [f for f in files if SECRET_FILE.search(f)]
+    if secrets:
+        listed = "".join(f"\n    - {f}" for f in secrets)
+        gate("Secret-pattern files appear in this session's diff (cycle-review "
+             f"BLOCKER). Verify they are intentionally NOT secrets, or remove them "
+             f"before stopping:{listed}")
+
+
+def _gate_public_copy(files: list[str], root: Path, kit: bool, warnings: list[str]) -> None:
+    """the public copy gate
+
+    Extracted from `main`, which measured cyclomatic complexity 43 across 122 lines
+    holding four independent gates plus the report. Pure code movement: the block below
+    is the block that was there. `gate` is the closure `main` uses to record a
+    blocker — or a warning, on a second pass — and `warnings` is appended to.
+    Both were reached through a shared scope before; they are arguments now.
+    """
+    # ── public copy ──────────────────────────────────────────────────────────
+    # The same nine checks `public-copy-lint` applies after an edit, from the
+    # same module. This gate used to carry two of them, rewritten by hand, so
+    # 'battle-tested', 'enterprise-grade', 'drop-in replacement', 'zero
+    # downtime', 'lock-in free', '<X> killer' and an unbacked 'faster than' were
+    # warned about at edit time and passed the end-of-session gate untouched.
+    for name in (f for f in files if is_public(f)):
+        try:
+            content = (root / name).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for claim in public_copy_warnings(content):
+            warnings.append(f"{name}: {claim} ({kit}/rules/public-copy.md)")
+
+
 def main() -> None:
     c = create_context(StopContext)
     # Already refused once on this stop attempt. Report, do not refuse again.
@@ -382,58 +507,10 @@ def main() -> None:
     def gate(message: str) -> None:
         (warnings if (WARN_ONLY or second_pass) else blockers).append(message)
 
-    # ── tests ────────────────────────────────────────────────────────────────
-    sources = [f for f in files if is_production_source(f)]
-    untested = [f for f in sources if not has_paired_test(f, root)]
-    if untested:
-        listed = "".join(f"\n    - {f}" for f in untested)
-        warnings.append(
-            "TDD gate (warn-first) — Unbreakable Rule 7: the following production "
-            f"source files have no sibling test file detected:{listed}"
-            f"\n  See {kit}/rules/testing.md for the project's test pairing convention.")
-
-    # ── changelog ────────────────────────────────────────────────────────────
-    code = [f for f in sources
-            if not IN_TEST_TREE.search(f) and not CONFIG_FILE.search(f)]
-    if (root / "CHANGELOG.md").is_file():
-        substantive = [f for f in code if diff_carries_code(f, root)]
-        touched = [f for f in files
-                   if CHANGELOG_TOUCH.search(f) and f != ".changeset/README.md"]
-        if substantive and not touched:
-            gate("CHANGELOG.md not updated despite production source changes "
-                 "(Unbreakable Rule 6; cycle-review BLOCKER). Add an entry to "
-                 "[Unreleased] before stopping. Override with "
-                 "STOP_VALIDATION_WARN_ONLY=1 only when the change is a bulk reorg "
-                 "with the rationale documented separately.")
-    elif code:
-        warnings.append(
-            "No CHANGELOG.md in this project, so the Rule 6 gate cannot run — "
-            "production source changed and nothing recorded it. Create CHANGELOG.md "
-            "with an [Unreleased] section (Keep a Changelog format) to activate the "
-            "gate, or leave it absent deliberately if this repo does not ship to "
-            "consumers.")
-
-    # ── secrets ──────────────────────────────────────────────────────────────
-    secrets = [f for f in files if SECRET_FILE.search(f)]
-    if secrets:
-        listed = "".join(f"\n    - {f}" for f in secrets)
-        gate("Secret-pattern files appear in this session's diff (cycle-review "
-             f"BLOCKER). Verify they are intentionally NOT secrets, or remove them "
-             f"before stopping:{listed}")
-
-    # ── public copy ──────────────────────────────────────────────────────────
-    # The same nine checks `public-copy-lint` applies after an edit, from the
-    # same module. This gate used to carry two of them, rewritten by hand, so
-    # 'battle-tested', 'enterprise-grade', 'drop-in replacement', 'zero
-    # downtime', 'lock-in free', '<X> killer' and an unbacked 'faster than' were
-    # warned about at edit time and passed the end-of-session gate untouched.
-    for name in (f for f in files if is_public(f)):
-        try:
-            content = (root / name).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        for claim in public_copy_warnings(content):
-            warnings.append(f"{name}: {claim} ({kit}/rules/public-copy.md)")
+    sources = _gate_tests(files, root, kit, warnings)
+    _gate_changelog(files, root, sources, gate, warnings)
+    _gate_secrets(files, gate)
+    _gate_public_copy(files, root, kit, warnings)
 
     # ── report ───────────────────────────────────────────────────────────────
     if blockers:

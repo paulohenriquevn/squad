@@ -23,12 +23,10 @@ import sys
 
 # The one owner of every data-root literal. A local copy is what produced six lists in
 # four different orders, and `check_write_containment.py` refuses a second one.
-import sys as _sys_bootstrap
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from pathlib import Path as _Path_bootstrap
-from typing import Any
+from typing import Any, NamedTuple
 
 from _rubric_loader import load_rubric
 from check_adr_completeness import ADRReport, check_adr_completeness
@@ -39,21 +37,24 @@ from check_concurrency_tests import check_concurrency_tests
 from check_coverage_matrix import CoverageReport, check_coverage_matrix
 from check_criterion_executability import ExecutabilityReport, check_criterion_executability
 from check_deps_audit import check_deps_audit
-from check_impediment_agrees import check_impediment_agrees
-from check_symbol_naming import check_symbol_naming
 from check_drawbacks_section import check_drawbacks_section
 from check_evidence_citations import EvidenceReport, check_evidence_citations
 from check_failure_scenarios import check_failure_scenarios
+from check_impediment_agrees import check_impediment_agrees
 from check_patterns_consumption import PatternsConsumptionReport, check_patterns_consumption
 from check_spec_smells import SmellReport, check_spec_smells
+from check_symbol_naming import check_symbol_naming
 from check_task_interfaces import check_task_interfaces
 from check_tdd_in_bugfix import TDDReport, check_tdd_in_bugfix
 
-for _up in _Path_bootstrap(__file__).resolve().parents:
+for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
-        _sys_bootstrap.path.insert(0, str(_up))
+        sys.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import rules_dir, write_records_dir  # noqa: E402 — post-bootstrap import
 
 SKILL_ROOT = Path(__file__).parent.parent
 DEFAULT_RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"
@@ -109,7 +110,13 @@ def _find_holdout_dir(project_root: Path) -> Path:
 
 
 PROJECT_ROOT = _find_project_root(SKILL_ROOT)
-DEFAULT_THRESHOLDS = PROJECT_ROOT / ".claude" / "rules" / "plan-confidence-thresholds.txt"
+# Asked of the one owner rather than hardcoded. This line read `.claude/rules/` only,
+# and the kit's own file is at `rules/` — so in this repository the path did not exist
+# and every run silently fell back to the built-in bands. A consumer that recalibrates
+# its cutoffs and keeps the standalone layout was scored against the shipped ones and
+# told nothing, which is the failure this whole skill exists to refuse.
+_RULES_DIR = rules_dir(PROJECT_ROOT)
+DEFAULT_THRESHOLDS = (_RULES_DIR or PROJECT_ROOT / ".claude" / "rules") / "plan-confidence-thresholds.txt"
 PLANS_DIR = _find_plans_dir(PROJECT_ROOT)
 HOLDOUT_DIR = _find_holdout_dir(PROJECT_ROOT)
 HOLDOUT_TARGET = 30  # M1 milestone: N>=30 for Cohen's kappa to make sense
@@ -255,6 +262,29 @@ def _compute_structural_risk(smells: SmellReport) -> tuple[float, list[Reason]]:
     return structural_risk, reasons
 
 
+#: The caps that force INVALID regardless of the score bands.
+#:
+#: Named once, as a set, because SKILL.md has to be checkable against it. Spread
+#: across five `or` clauses it could not be, and the document drifted to listing two
+#: of the five — so a plan returned INVALID on `alignment_not_reached` found no
+#: explanation in the contract its author was reading.
+#: The two cap values, named once. They were bare literals in eight `triggered.append`
+#: calls — the same two numbers, spelled eight times — so a reader could not see that
+#: there are exactly TWO severities here, and `_lookup_verdict` reads the band table for
+#: the same boundaries under different names. 49 is the top of INVALID; 70 is the top of
+#: SHIPPABLE_WITH_CAVEATS.
+CAP_INVALID = 49
+CAP_WITH_CAVEATS = 70
+
+_INVALID_CAPS: frozenset[str] = frozenset({
+    "coverage_lt_100",
+    "fabricated_citation",
+    "patterns_skill_ignored",
+    "deps_audit_insecure",
+    "alignment_not_reached",
+})
+
+
 def _detect_hard_caps(
     cov: CoverageReport,
     adr: ADRReport,
@@ -272,21 +302,21 @@ def _detect_hard_caps(
     if not cov.is_complete:
         triggered.append(("coverage_lt_100", 49))
     if adr.total_adrs > 0 and adr.completeness_ratio < 1.0:
-        triggered.append(("adr_without_alternatives", 70))
+        triggered.append(("adr_without_alternatives", CAP_WITH_CAVEATS))
     if tdd.total_bugfix_tasks > 0 and tdd.coverage_ratio < 1.0:
-        triggered.append(("bugfix_without_tdd", 70))
+        triggered.append(("bugfix_without_tdd", CAP_WITH_CAVEATS))
     if evidence is not None and evidence.unresolved_citations:
-        triggered.append(("fabricated_citation", 49))
+        triggered.append(("fabricated_citation", CAP_INVALID))
     if executability is not None and executability.soft_cap_triggered:
         # Heuristic-grade soft cap — Acceptance Criteria not executable enough.
         # See check_criterion_executability.py for the gate thresholds.
-        triggered.append(("vague_acceptance_criteria", 70))
+        triggered.append(("vague_acceptance_criteria", CAP_WITH_CAVEATS))
     if patterns_consumption is not None and not patterns_consumption.is_clean:
         # An applicable *-patterns skill was neither cited nor ADR-overridden.
         # Hard cap at 49 (INVALID) — silently skipping applicable domain
         # knowledge is as corrosive to plan integrity as a fabricated citation.
         # Escape hatch: a one-line override ADR naming the skill.
-        triggered.append(("patterns_skill_ignored", 49))
+        triggered.append(("patterns_skill_ignored", CAP_INVALID))
     return triggered
 
 
@@ -321,28 +351,35 @@ def _apply_conservative_floor(
     return score, None
 
 
-def run_structural(
-    plan_path: Path,
-    rubric_path: Path = DEFAULT_RUBRIC,
-    thresholds_path: Path = DEFAULT_THRESHOLDS,
-    *,
-    structural_only: bool = False,
-) -> StructuralScoreReport:
-    """Main orchestrator.
+class _Checks(NamedTuple):
+    """Every checker's report, run once and passed on by name.
 
-    The review-panel gate is ON by default: a plan no panel carried must not reach a
-    verdict that advances it. `structural_only=True` measures structure alone, and the
-    choice is RECORDED in `sub_reports["panel"]` rather than left invisible — a bypass
-    nobody can see in the artifact is a bypass that quietly becomes the norm.
+    Extracted from `run_structural`, which measured cyclomatic complexity 39. The
+    fifteen calls below were fifteen locals in one scope, and everything downstream
+    reached them by being in that scope — which is what made the function unsplittable.
+    A named tuple, not a dict: a typo in a field name is an error here and a silent
+    `None` there, and this is the scorer.
     """
-    plan_version = _read_plan_version(plan_path)
-    # Validate rubric parses (raises if malformed) — content used inside check_spec_smells.
-    load_rubric(rubric_path)
-    bands = _load_thresholds(thresholds_path) if thresholds_path.exists() else [
-        ("SHIPPABLE", 90), ("SHIPPABLE_WITH_CAVEATS", 70),
-        ("NON_SHIPPABLE", 50), ("INVALID", 0),
-    ]
 
+    cov: object
+    adr: object
+    tdd: object
+    smells: object
+    compliance: object
+    evidence: object
+    executability: object
+    baseline_ctx: object
+    drawbacks: object
+    concurrency: object
+    failure_scenarios: object
+    deps_audit: object
+    alignment: object
+    interfaces: object
+    patterns_consumption: object
+
+
+def _run_checkers(plan_path: Path, rubric_path: Path) -> _Checks:
+    """Run every checker over the plan. Pure code movement from `run_structural`."""
     # Run checkers
     cov = check_coverage_matrix(plan_path)
     adr = check_adr_completeness(plan_path)
@@ -362,7 +399,20 @@ def run_structural(
     # mismatched calls are already written.
     interfaces = check_task_interfaces(plan_path)
     patterns_consumption = check_patterns_consumption(plan_path, _find_repo_root_from_plan(plan_path))
+    return _Checks(
+        cov=cov, adr=adr, tdd=tdd, smells=smells, compliance=compliance,
+        evidence=evidence, executability=executability, baseline_ctx=baseline_ctx,
+        drawbacks=drawbacks, concurrency=concurrency,
+        failure_scenarios=failure_scenarios, deps_audit=deps_audit,
+        alignment=alignment, interfaces=interfaces,
+        patterns_consumption=patterns_consumption)
 
+
+def _weighted_score(cov, adr, tdd, smells) -> tuple:
+    """The per-dimension scores and their renormalised average (ADR D8).
+
+    Pure code movement from `run_structural`.
+    """
     # Compute per-dimension scores
     completeness, completeness_reasons = _compute_completeness(cov, adr, tdd)
     structural_risk, structural_risk_reasons = _compute_structural_risk(smells)
@@ -376,6 +426,52 @@ def run_structural(
         normalized_weights["completeness"] * completeness
         + normalized_weights["structural_risk"] * structural_risk
     )
+
+    return (completeness, completeness_reasons, structural_risk,
+            structural_risk_reasons, weighted_avg, active, normalized_weights,
+            norm_factor)
+
+
+def run_structural(
+    plan_path: Path,
+    rubric_path: Path = DEFAULT_RUBRIC,
+    thresholds_path: Path = DEFAULT_THRESHOLDS,
+    *,
+    structural_only: bool = False,
+) -> StructuralScoreReport:
+    """Main orchestrator.
+
+    The review-panel gate is ON by default: a plan no panel carried must not reach a
+    verdict that advances it. `structural_only=True` measures structure alone, and the
+    choice is RECORDED in `sub_reports["panel"]` rather than left invisible — a bypass
+    nobody can see in the artifact is a bypass that quietly becomes the norm.
+    """
+    plan_version = _read_plan_version(plan_path)
+    # Validate rubric parses (raises if malformed) — content used inside check_spec_smells.
+    load_rubric(rubric_path)
+    # The source of the bands is RECORDED, not assumed. A fallback nobody can see in
+    # the artifact is a fallback that quietly becomes the norm.
+    if thresholds_path.exists():
+        bands = _load_thresholds(thresholds_path)
+        bands_source = {"source": str(thresholds_path), "origin": "file"}
+    else:
+        bands = [
+            ("SHIPPABLE", 90), ("SHIPPABLE_WITH_CAVEATS", 70),
+            ("NON_SHIPPABLE", 50), ("INVALID", 0),
+        ]
+        bands_source = {"source": "built-in defaults", "origin": "fallback",
+                        "detail": f"{thresholds_path} does not exist"}
+
+    # Every checker, run once. The names below are unpacked from the record so the
+    # eighty lines of cap logic that follow read exactly as they did.
+    _checks = _run_checkers(plan_path, rubric_path)
+    (cov, adr, tdd, smells, compliance, evidence, executability, baseline_ctx,
+     drawbacks, concurrency, failure_scenarios, deps_audit, alignment, interfaces,
+     patterns_consumption) = _checks
+
+    (completeness, completeness_reasons, structural_risk, structural_risk_reasons,
+     weighted_avg, active, normalized_weights,
+     norm_factor) = _weighted_score(cov, adr, tdd, smells)
 
     # Hard caps (strict, fail-closed)
     triggered = _detect_hard_caps(cov, adr, tdd, evidence, executability, patterns_consumption)
@@ -401,7 +497,10 @@ def run_structural(
         final_score = 89.0
         hard_cap_ids.append("soft_floor_low_architecture_compliance")
 
-    # SOTA-upgrade soft caps (sunset 2026-09-07 — after which these promote to hard caps at 70).
+    # SOTA-upgrade soft caps, at 89. A sunset date of 2026-09-07 stood here promising a
+    # promotion to 70; the date passed, the promotion did not happen, and nothing
+    # detected the expiry. Promoting changes the verdict for every consumer and is a
+    # decision somebody makes, not a date arriving — so 89 is the rule, stated as one.
     # These verify the new mandatory sections introduced by the SOTA plan-template upgrade:
     #   - Baseline Context (deep review of current state) — file table + callers + glossary
     #   - Drawbacks & Risks — ≥ 2 entries with severity + mitigation + owner
@@ -491,14 +590,7 @@ def run_structural(
         final_score = min(final_score, float(alignment.soft_floor))
 
     verdict = _lookup_verdict(final_score, bands)
-    # Hard caps "coverage_lt_100" and "fabricated_citation" force INVALID regardless of bands.
-    if (
-        "coverage_lt_100" in hard_cap_ids
-        or "fabricated_citation" in hard_cap_ids
-        or "patterns_skill_ignored" in hard_cap_ids
-        or "deps_audit_insecure" in hard_cap_ids
-        or "alignment_not_reached" in hard_cap_ids
-    ):
+    if _INVALID_CAPS & set(hard_cap_ids):
         verdict = "INVALID"
 
     # The panel gates the VERDICT, never the score. A script scores structure; the
@@ -562,6 +654,7 @@ def run_structural(
         reasons=reasons_by_dimension,
         sub_reports={
             "panel": panel,
+            "thresholds": bands_source,
             "coverage_matrix": {
                 "total_gaps": cov.total_gaps,
                 "mapped_gaps": cov.mapped_gaps,
@@ -683,6 +776,17 @@ def run_structural(
                     "machine_ratio": alignment.machine_ratio,
                     "brief_path": alignment.brief_path,
                 },
+                # `impediment` caps nothing by design (see its call site). It is carried
+                # here because the comment there says it is REPORTED, and until this block
+                # existed the value was computed and dropped — a claim with no channel.
+                "impediment": {
+                    "applies": impediment.applies,
+                    "plan_declares": list(impediment.plan_declares),
+                    "registry_declares": list(impediment.registry_declares),
+                    "missing_in_registry": list(impediment.missing_in_registry),
+                    "missing_in_plan": list(impediment.missing_in_plan),
+                    "reasons": list(impediment.reasons),
+                },
                 "deps_audit": {
                     "applies": deps_audit.applies,
                     "verdict": deps_audit.verdict,
@@ -704,6 +808,12 @@ def run_structural(
     )
 
 
+#: The verdicts the PANEL gate produces. Not scores: the plan's number stands, and the
+#: verdict is held pending a person. They share exit code 4 because all three mean the
+#: same thing to a caller — convene or wait, do not fix the command.
+PANEL_VERDICTS: tuple[str, ...] = ("AWAITING_REVIEW", "NEEDS_REVISION", "ITEM_IN_FLIGHT")
+
+
 def _exit_code(verdict: str) -> int:
     if verdict in ("SHIPPABLE", "SHIPPABLE_WITH_CAVEATS"):
         return 0
@@ -711,6 +821,12 @@ def _exit_code(verdict: str) -> int:
         return 1
     if verdict == "NON_SHIPPABLE":
         return 3
+    if verdict in PANEL_VERDICTS:
+        # 4, not the fall-through 2. SKILL.md maps 2 to "Error (plan not found,
+        # malformed rubric)", so a structurally perfect plan waiting on its panel was
+        # indistinguishable, to anything reading exit codes, from a command typed
+        # wrong — and the two take opposite actions.
+        return 4
     return 2
 
 
@@ -788,10 +904,21 @@ for _cq_dir in _CQ_INVOKE_DIRS:
         sys.path.insert(0, str(_cq_dir))
         break
 
+#: Why the code-quality gate is off, or None when it is on. The import below used to
+#: set `cq_invoke = None` and say nothing else, so on any install where the sibling
+#: skill is not resolvable the gate did nothing, reported nothing, and the plan scored
+#: as if it had been checked. Nothing here makes the gate mandatory — a project may
+#: legitimately not ship `code-quality` — but a gate that turns itself off has to leave
+#: the reason somewhere the reader of the score will meet it.
+CQ_UNAVAILABLE_BECAUSE: str | None = None
+
 try:
-    import cq_invoke  # type: ignore[import-not-found]
-except ImportError:
-    cq_invoke = None  # type: ignore[assignment]
+    import cq_invoke  # type: ignore[import-not-found] — sibling skill, resolved by the sys.path line above
+except ImportError as _exc:
+    cq_invoke = None  # type: ignore[assignment] — the module-or-None sentinel every caller below tests for
+    CQ_UNAVAILABLE_BECAUSE = (
+        f"cq_invoke could not be imported ({_exc}); looked under "
+        f"{', '.join(str(d) for d in _CQ_INVOKE_DIRS)}")
 
 
 #: A plan dismissing one soft cap, with the reason inline.
@@ -845,6 +972,9 @@ def _merge_code_quality_verdict(out: dict, cq_summary: dict, plan_text: str = ""
     without it no cap is dismissed, which is the pre-existing behaviour.
     """
     if cq_invoke is None:
+        out["code_quality_unchecked"] = (
+            CQ_UNAVAILABLE_BECAUSE
+            or "cq_invoke is unavailable; the code-quality gate did not run")
         return
     cq_invoke.merge_verdict_into_plan_confidence(
         out, cq_summary, dismissed_soft_caps=_dismissed_soft_caps(plan_text)

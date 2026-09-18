@@ -350,6 +350,19 @@ python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cy
     --cycle release --slug {item-or-milestone} --verdict "${VERDICT:-PRE_RELEASED}"
 ```
 
+Then tell whoever asked to be told:
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/release/scripts/notify_slack.py" \
+    --repo . --verdict "${VERDICT:-PRE_RELEASED}" --version "v$NEXT_VERSION"
+```
+
+**Inert unless the project opted in, and it never blocks.** The script posts only on
+`RELEASED`, only when `rules/notifications.txt` says `slack_enabled = true`, only when
+the named environment variable holds a webhook — and exits 0 on every other path,
+including failure. Which is why it not being invoked was invisible: `rules/notifications.txt`
+ships, so a consumer could configure a notification that was never going to be sent.
+
 **Emitting `RELEASED` for a pre-release would close work that did not finish.**
 `advance_items.py` reads that token and writes `shipped` into the registry — the one
 artefact that outlives the session. An rc says installable, never finished.
@@ -375,7 +388,7 @@ Merge commit: {sha}
 Tag: v{NEXT_VERSION}
 GitHub release: {url}
 
-Next: nothing — release is published. Start a new cycle with /plan-write or /plan-grill.
+Next: nothing — release is published. Start a new cycle with /backlog-item, or /plan-write if the item is already measured.
 ```
 
 ## Hard gates (cannot proceed)

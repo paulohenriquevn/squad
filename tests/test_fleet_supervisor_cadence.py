@@ -55,5 +55,50 @@ def test_land_still_runs(source):
 def test_the_two_loops_are_supervised_together(source):
     """If one loop dies the supervisor must not look alive on the strength of
     the other. A half-dead supervisor that still prints is worse than a dead
-    one — this kit's most-found defect, an inability to work published as work."""
-    assert "wait" in source, "the shell must wait on both background loops"
+    one — this kit's most-found defect, an inability to work published as work.
+
+    `-n` is the whole assertion. `assert "wait" in source` stood here, and a bare
+    `wait "$a" "$b"` contains it — that form blocks until BOTH children exit and
+    returns the LAST one's status, so a killed route loop left the supervisor
+    waiting on the land loop as if nothing had happened. `wait -n` returns on the
+    FIRST exit, which is the event this test is named for.
+    """
+    assert re.search(r"^\s*wait\s+-n\s", source, re.MULTILINE), (
+        "the supervisor must `wait -n` — a plain `wait` on both pids returns only "
+        "when the LAST one exits, which is exactly the half-dead case this guards")
+
+
+def test_the_supervisor_names_which_loop_died(source):
+    """Knowing one exited is not knowing which. The operator restarts one of them."""
+    assert 'kill -0 "$_route_pid"' in source, (
+        "nothing distinguishes a dead route loop from a dead land loop")
+    assert "the ROUTE loop" in source and "the LAND loop" in source
+
+
+def test_every_step_reports_its_exit_code(source):
+    """The three steps the loops run must each say whether they worked.
+
+    None of them read a code: `fleet_router.py`, `fleet_lander.py` and
+    `issue_lifecycle.py` ran and the loop moved on, so a gh auth expiry, a rate
+    limit and a crash all left the same trace as success. A supervisor that cannot
+    tell a finished step from a failed one is this kit's most-found defect wearing
+    a supervisor's hat.
+    """
+    for step in ("fleet_router.py", "fleet_lander.py", "issue_lifecycle.py"):
+        invocation = next((i for i, ln in enumerate(source.splitlines())
+                           if step in ln and ln.strip().startswith("python3")), None)
+        assert invocation is not None, f"{step} is not invoked"
+
+    assert "_say_step_result" in source, "no step's exit code is read"
+    assert source.count("_say_step_result") >= 4, (
+        "each of the three steps must report, plus the helper's own definition")
+
+
+def test_a_failed_step_does_not_stop_the_supervisor(source):
+    """One failed pass is a pass to retry, not a reason to stop supervising."""
+    helper = source.split("_say_step_result() {", 1)[1].split("\n}", 1)[0]
+
+    # The COMMAND, not the word: the message says "exited N", which is the report.
+    assert not re.search(r"^\s*exit\b", helper, re.MULTILINE), (
+        "reporting a failure must not end the supervisor")
+    assert ">&2" in helper, "the report belongs on stderr, beside the other notices"

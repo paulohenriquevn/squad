@@ -187,7 +187,7 @@ def test_the_terminal_states_are_unchanged_so_every_consumer_still_agrees() -> N
     pendency from `committed` OR `blocked`; if this fix had added a word to that set, a
     task carrying it would count as pending forever — which is exactly what `done` did
     before it was retired."""
-    from check_progress_schema import _VALID_STATUSES  # noqa: PLC0415
+    from check_progress_schema import _VALID_STATUSES
 
     assert _VALID_STATUSES == {"pending", "red", "green", "refactor", "wired",
                                "committed", "blocked"}

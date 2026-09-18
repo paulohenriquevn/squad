@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from run_structural import run_structural  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from run_structural import run_structural  # noqa: E402 — post-bootstrap import
 
 SKILL_ROOT = Path(__file__).parent.parent
 RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"
@@ -30,9 +33,9 @@ Test fixture plan.
 
 ## Coverage Matrix
 
-| # | Gap | Task |
-|---|---|---|
-| G1 | thing | T1.1 |
+| # | Gap | Task(s) | Resolution |
+|---|-----|---------|------------|
+| 1 | thing | T1.1 | done |
 
 ## Test Plan
 
@@ -214,7 +217,10 @@ def test_main_runs_end_to_end_with_code_quality_active(tmp_path, monkeypatch, ca
     code = run_structural.main([str(plan), "--no-warn"])
 
     out = capsys.readouterr().out
-    assert code in (0, 1, 2, 3), f"unexpected exit {code}"
+    # 4 joined the set when the panel verdicts stopped sharing 2 with "the command
+    # was typed wrong". Enumerated rather than ranged, so a NEW code has to be
+    # added here deliberately.
+    assert code in (0, 1, 2, 3, 4), f"unexpected exit {code}"
     assert '"code_quality"' in out, "the CQ block must reach stdout on the active path"
 
 

@@ -68,10 +68,17 @@ gate says plainly that it did not assess it. A gate that examined nothing must n
 print a verdict about everything.
 
 Exit codes:
-  0  every required audit produced a well-formed report, and none reports Critical
-  1  a required report is missing, malformed, or carries Critical findings
+  0  every required audit produced a well-formed report
+  1  a required report is missing or malformed
   2  the assignment or a checker could not be read; nothing was verified, not a pass
   3  a required plugin is not installed HERE — an `access` impediment
+
+Severity is CARRIED, never gated. Rows 0 and 1 said "and none reports Critical" and
+"or carries Critical findings" until 2026-09-17, describing a gate the section above
+argues against and the code never had: `severity_counts()` becomes `severity_signal`
+in the result and `main` prints it as "(not a gate)", and nothing appends to `failing`
+because of it. A reader who trusted the table believed a Critical finding would stop
+a review here; it does not, and the row that says so is the only thing that changed.
 """
 from __future__ import annotations
 
@@ -168,8 +175,18 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
     reg = registry_path(project)
     try:
         declared = parse_registry(reg.read_text(encoding="utf-8"))
-    except OSError:
+    except FileNotFoundError:
+        # The one OSError that means what the branch below says: the project never
+        # wrote a registry. Every OTHER OSError used to land here too — a permission
+        # bit, a directory in the file's place, an I/O error — and an empty list two
+        # lines down became COVERED with the detail "Stated, never inferred from an
+        # empty result". It was inferred from an empty result, and the gate that exists
+        # to prove an audit happened answered "none required" when it could not read
+        # which audits are required.
         declared = []
+    except OSError as exc:
+        return UNCHECKED, {"status": "unchecked", "slug": slug,
+                           "detail": f"cannot read {reg}: {type(exc).__name__}: {exc}"}
     except ValueError as exc:
         return UNCHECKED, {"status": "unchecked", "slug": slug,
                            "detail": f"cannot read {reg}: {exc}"}
@@ -349,12 +366,13 @@ def auditor_coverage_findings(project: Path, slug: str,
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--slug", required=True)
-    ap.add_argument("--project", type=Path, default=Path.cwd())
+    ap.add_argument(
+        "--root", "--project", dest="root", type=Path, default=Path.cwd())
     ap.add_argument("--config-dir", type=Path, default=None)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    code, result = check(args.slug, project=args.project, config_dir=args.config_dir)
+    code, result = check(args.slug, project=args.root, config_dir=args.config_dir)
     if args.json:
         print(json.dumps(result, indent=2))
         return code

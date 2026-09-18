@@ -125,9 +125,16 @@ if ! python3 "$_here/session_ready.py" "$NAME" --quiet; then
   exit 1
 fi
 
-tmux send-keys -t "$NAME" "$BRIEF" C-m
+# TWO calls each, and this is not stylistic. `dispatch_to_lane.sh` records the
+# measurement: on 2026-09-02, `send-keys "$text" C-m` left the line sitting in the
+# composer on all three lanes. This script appeared to work because the second
+# send-keys submitted the first as a side effect nobody had noticed — and the `/loop`
+# line has no successor to submit IT, so the brief was delivered and the loop was not.
+tmux send-keys -t "$NAME" "$BRIEF"
+tmux send-keys -t "$NAME" C-m
 sleep 1
-tmux send-keys -t "$NAME" "/loop $INTERVAL Run one lead round now, following the brief above." C-m
+tmux send-keys -t "$NAME" "/loop $INTERVAL Run one lead round now, following the brief above."
+tmux send-keys -t "$NAME" C-m
 
 # And it is checked again afterwards, because the brief is what the earlier
 # failure was made of: reporting a looping lead that a keystroke had just killed.

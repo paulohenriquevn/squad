@@ -81,8 +81,13 @@ HEADER_RE = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[a-z0-9][a-z0-9-]*)\))?
 
 #: Overrides a project may set. An unknown key is refused: a typo that is ignored is a
 #: convention the project thinks it declared and did not.
-KNOWN_KEYS = {"commit_types", "commit_scopes", "subject_max", "body_required",
-              "branch_trunk"}
+#: `branch_trunk` was here and is not: this checker's subject is COMMITS — header shape,
+#: subject length, body — and it never read a branch name at all. Accepting the key made
+#: `rules/contribution-overrides.txt` document a setting a project could write, have
+#: parsed, have validated as known, and have applied to nothing. Which branch is the trunk
+#: matters to `hooks/validate-command.py`, which refuses work on it; that is where such a
+#: key belongs if it is ever wanted.
+KNOWN_KEYS = {"commit_types", "commit_scopes", "subject_max", "body_required"}
 #: Keys that would reach a rule the contract says cannot be overridden.
 FORBIDDEN_KEYS = {"allow_coauthor", "coauthor", "allow_secrets", "secrets"}
 
@@ -356,7 +361,8 @@ def render(rep: Report) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--repo", type=Path, default=Path("."))
+    ap.add_argument(
+        "--root", "--repo", dest="root", type=Path, default=Path("."))
     ap.add_argument("--range", dest="rev_range", default="-40",
                     help="a git range, or -N for the last N commits (default: -40)")
     # Registered AFTER `--range` on purpose: argparse applies a default only when the
@@ -373,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    rep = check(args.repo.resolve(), args.rev_range, args.message_file)
+    rep = check(args.root.resolve(), args.rev_range, args.message_file)
     if args.json:
         print(json.dumps({**rep.__dict__,
                           "conventions": rep.conventions.__dict__,

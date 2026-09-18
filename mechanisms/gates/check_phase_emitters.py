@@ -66,13 +66,25 @@ def _emitter_patterns(phase: str) -> tuple[re.Pattern[str], ...]:
         re.compile(rf"""cycle=["']{escaped}["']"""),
     )
 
-SEARCH_GLOBS = ("scripts/*.py", "skills/*/scripts/*.py", "skills/*/SKILL.md", "commands/*.md")
+#: `scripts/` became `mechanisms/<family>/` on 2026-09-01 and this tuple did not follow,
+#: so `scripts/*.py` matched ZERO files while `mechanisms/` held 89 — the whole cycle
+#: runtime was outside the sweep and the gate kept exiting 0. A glob that matches
+#: nothing fails silently, which is why `tests/test_a_gate_that_swept_nothing_is_not_clean.py`
+#: now asserts that every entry here matches at least one file.
+SEARCH_GLOBS = ("mechanisms/*/*.py", "skills/*/scripts/*.py", "skills/*/SKILL.md",
+                "commands/*.md")
 
 #: Files that MENTION a phase without emitting for it — this sweep's own prose, the
 #: drift checker's, and the emitter's. Excluded by path so the sweep cannot pass by
 #: reading its own docstring.
 _SELF = ("mechanisms/gates/check_phase_emitters.py", "mechanisms/gates/check_phase_drift.py",
-         "mechanisms/cycle/cycle_events.py")
+         "mechanisms/cycle/cycle_events.py",
+         # Added when SEARCH_GLOBS was widened to `mechanisms/*/*.py`: this sibling
+         # gate's own docstring explains the rule using `--cycle nosuch` as its
+         # counter-example, and the sweep read that as a phase being emitted and
+         # dropped. A gate that reports its neighbour's prose as a defect teaches the
+         # reader to skip the report, which is what _SELF exists to prevent.
+         "mechanisms/gates/check_emitted_verdicts.py")
 
 
 #: Any phase name an emitter passes, whether or not a contract declares it. The
@@ -180,11 +192,28 @@ def check_phase_emitters(repo_root: Path) -> EmitterReport:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--root", "--repo-root", dest="root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
-    report = check_phase_emitters(args.repo_root)
+    report = check_phase_emitters(args.root)
+
+    # Zero declared phases means the contract could not be read, not that every phase
+    # in it has an emitter. The arithmetic printed below is true over an empty set and
+    # says nothing about the repository: `0 declared phase(s): 0 have an emitter` used
+    # to return 0, so a tree missing rules/cycle-phases.txt reported as satisfied.
+    # Exit 2 keeps "could not measure" apart from "measured and found a silent phase".
+    if report.phases == 0:
+        message = (f"UNCHECKED  no phase declared in {PHASES_FILE} under "
+                   f"{args.root} — there was no contract to measure emitters against")
+        if args.json:
+            payload = report.as_dict()
+            payload["unchecked_because"] = message
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(message, file=sys.stderr)
+        return 2
 
     if args.json:
         print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))

@@ -16,7 +16,10 @@ from pathlib import Path
 SCRIPTS = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import check_criteria_discriminate as cd  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import check_criteria_discriminate as cd  # noqa: E402 — post-bootstrap import
 
 
 def _brief(tmp_path: Path, *bullets: str) -> Path:
@@ -477,7 +480,7 @@ class _Ran:
 
 
 def test_a_criterion_that_states_a_bound_is_compared_as_one() -> None:
-    """`prints 4 or more` was compared for EQUALITY, so a correct `6` read as a failure.
+    r"""`prints 4 or more` was compared for EQUALITY, so a correct `6` read as a failure.
 
     Worse than the false verdict is its direction: the check reported "discriminates"
     because the number DIFFERED, not because the criterion was unmet. A discrimination

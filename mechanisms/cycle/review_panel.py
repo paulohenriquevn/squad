@@ -401,6 +401,16 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Tally a review panel over one artifact.")
     ap.add_argument("--record", type=Path, required=True,
                     help="the panel record: slug, phase, author, votes")
+    # `Panel.assigned` is what refuses "the panel that voted is not the panel that was
+    # convened", and `convene_panel.py`'s docstring says this module "refuses a record
+    # whose voters do not match". Nothing ever SET it: `load()` deliberately does not
+    # read it from the record (a document supplying the list it is checked against proves
+    # nothing) and `main` had no other source, so `assigned` stayed empty and the check
+    # was skipped on every tally the CLI performed. The list comes from the assignment
+    # `convene_panel` wrote, which sits beside the record by construction.
+    ap.add_argument("--assignment", type=Path, default=None,
+                    help="the assignment convene_panel wrote; defaults to the sibling "
+                         "<slug>-<phase>.assignment.json")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -409,6 +419,24 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, KeyError, json.JSONDecodeError) as exc:
         print(f"review_panel: cannot read the panel record — {exc}", file=sys.stderr)
         return 2
+
+    assignment_path = args.assignment or args.record.with_name(
+        args.record.name.replace(".json", ".assignment.json"))
+    if assignment_path.is_file():
+        try:
+            panel.assigned = list(
+                json.loads(assignment_path.read_text(encoding="utf-8")).get("assigned", []))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"review_panel: the assignment at {assignment_path} could not be read "
+                  f"({exc}), so whether the panel that voted is the panel that was "
+                  f"convened was NOT checked", file=sys.stderr)
+            return 2
+    else:
+        # Said out loud. A tally that skipped the convening check and printed an outcome
+        # is a tally whose strongest guarantee was silently absent.
+        print(f"review_panel: no assignment at {assignment_path} — whether the panel "
+              f"that voted is the panel that was convened was NOT checked",
+              file=sys.stderr)
 
     try:
         record = panel.record()

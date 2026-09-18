@@ -17,9 +17,15 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 CATEGORY_ORDER = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"]
+
+
+#: Keep-a-Changelog headings carry a plain semver, no leading `v`. The optional
+#: suffix covers the `-rc.N` cuts this kit makes.
+_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?")
 
 
 def main() -> int:
@@ -28,6 +34,21 @@ def main() -> int:
     parser.add_argument("--version", required=True, help="Semver string without leading 'v' (e.g. '1.2.0').")
     parser.add_argument("--date", required=True, help="ISO date (YYYY-MM-DD).")
     args = parser.parse_args()
+
+    # Both go into a heading that is never edited again, and `render_release_notes.py`
+    # looks the section up by exact string. A typo produced `## [1.2.O] - yesterday` in
+    # the permanent record, and the reader was then told "version section [1.2.0] not
+    # found" — pointing at their argument instead of at the malformed heading three
+    # commits back. This is the last writer before the record hardens.
+    if not _SEMVER_RE.fullmatch(args.version):
+        print(f"not a semver version: {args.version!r}. Expected MAJOR.MINOR.PATCH with "
+              f"an optional pre-release suffix, and no leading 'v'.", file=sys.stderr)
+        return 2
+    try:
+        date.fromisoformat(args.date)
+    except ValueError:
+        print(f"not an ISO date: {args.date!r}. Expected YYYY-MM-DD.", file=sys.stderr)
+        return 2
 
     if not args.changelog.exists():
         print(f"file not found: {args.changelog}", file=sys.stderr)
@@ -95,14 +116,14 @@ def main() -> int:
 
     ordered_lines: list[str] = []
     for cat in CATEGORY_ORDER:
-        if cat in sections and any(l.strip().startswith("- ") for l in sections[cat]):  # noqa: E741
+        if cat in sections and any(ln.strip().startswith("- ") for ln in sections[cat]):
             ordered_lines.append(f"### {cat}")
             ordered_lines.extend(sections[cat])
             ordered_lines.append("")
             del sections[cat]
     # Preserve any unrecognized categories.
     for cat, lines in sections.items():
-        if any(l.strip().startswith("- ") for l in lines):  # noqa: E741
+        if any(ln.strip().startswith("- ") for ln in lines):
             ordered_lines.append(f"### {cat}")
             ordered_lines.extend(lines)
             ordered_lines.append("")

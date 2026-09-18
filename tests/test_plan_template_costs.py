@@ -79,5 +79,5 @@ def test_the_template_says_where_a_criterion_writes_its_evidence() -> None:
 def test_the_pipeline_skill_does_not_model_the_shape_it_warns_about() -> None:
     skill = (Path(__file__).resolve().parents[1] / "skills" / "pipeline"
              / "SKILL.md").read_text(encoding="utf-8")
-    assert "/tmp/queue.json" not in skill, \
-        "the dispatch still writes a fixed path two concurrent runs would share"
+    assert "/tmp/queue.json" not in skill, (  # prose-test: a ban on a literal a reader would copy — weak against synonyms, kept for the regression it names
+        "the dispatch still writes a fixed path two concurrent runs would share")

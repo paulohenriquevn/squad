@@ -113,7 +113,14 @@ def post_to_slack(webhook_url: str, message: str, version: str) -> tuple[bool, s
     import urllib.request
 
     payload = json.dumps({"text": message})
-    try:
+
+    def _post() -> int:
+        """POST the payload and return the status. Called twice, written once.
+
+        The retry path below held a verbatim copy of this request — same URL, same
+        headers, same timeout — so a change to any of them had to be made in two
+        places, and the second was the one nobody would remember.
+        """
         req = urllib.request.Request(
             webhook_url,
             data=payload.encode("utf-8"),
@@ -121,24 +128,22 @@ def post_to_slack(webhook_url: str, message: str, version: str) -> tuple[bool, s
             method="POST"
         )
         with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status == 200:
-                return True, f"Posted to Slack (version {version})"
-            return False, f"Slack returned status {response.status}"
+            return response.status
+
+    try:
+        status = _post()
+        if status == 200:
+            return True, f"Posted to Slack (version {version})"
+        return False, f"Slack returned status {status}"
     except urllib.error.HTTPError as e:
         if e.code >= 500:
             # Server error: retry once
             time.sleep(1)
             try:
-                req = urllib.request.Request(
-                    webhook_url,
-                    data=payload.encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="POST"
-                )
-                with urllib.request.urlopen(req, timeout=10) as response:
-                    if response.status == 200:
-                        return True, f"Posted to Slack (retry, version {version})"
-                    return False, f"Slack retry returned status {response.status}"
+                status = _post()
+                if status == 200:
+                    return True, f"Posted to Slack (retry, version {version})"
+                return False, f"Slack retry returned status {status}"
             except (urllib.error.URLError, OSError, TimeoutError) as ex:
                 return False, f"Slack retry failed: {type(ex).__name__}"
         else:

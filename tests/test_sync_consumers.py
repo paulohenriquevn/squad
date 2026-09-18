@@ -33,21 +33,21 @@ def test_target_equal_to_source_is_identical() -> None:
 
 def test_target_on_the_base_version_is_a_safe_update() -> None:
     """The common case: the consumer is on the kit's previous version."""
-    assert classify(source="novo\n", base="antigo\n", target="antigo\n") is Action.UPDATE
+    assert classify(source="new\n", base="old\n", target="old\n") is Action.UPDATE
 
 
 def test_target_that_diverged_from_base_is_a_local_change() -> None:
     """The adopter's lesson: divergence is local improvement until proven otherwise."""
     assert classify(
-        source="novo do kit\n", base="antigo\n", target="antigo + correcao local\n"
+        source="new from the kit\n", base="old\n", target="old + a local fix\n"
     ) is Action.LOCAL_CHANGE
 
 
 def test_file_absent_from_the_base_but_present_in_both_is_compared_by_content() -> None:
     """A file new in the kit that the target already has (written there first) is not
     a blind update: if the content differs, it is a local change."""
-    assert classify(source="do kit\n", base=None, target="do kit\n") is Action.IDENTICAL
-    assert classify(source="do kit\n", base=None, target="do projeto\n") is Action.LOCAL_CHANGE
+    assert classify(source="from the kit\n", base=None, target="from the kit\n") is Action.IDENTICAL
+    assert classify(source="from the kit\n", base=None, target="from the project\n") is Action.LOCAL_CHANGE
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +57,10 @@ def test_file_absent_from_the_base_but_present_in_both_is_compared_by_content() 
 # against ONE base only answers well for whoever sits exactly on it.
 # ---------------------------------------------------------------------------
 
-from sync_consumers import classify_with_history  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from sync_consumers import classify_with_history  # noqa: E402 — post-bootstrap import
 
 
 def test_content_that_matches_any_historical_kit_version_is_stale(tmp_path: Path) -> None:
@@ -71,7 +74,7 @@ def test_content_that_matches_any_historical_kit_version_is_stale(tmp_path: Path
 
 def test_content_in_no_historical_version_is_a_real_local_change(tmp_path: Path) -> None:
     action = classify_with_history(
-        source="v3\n", base="v2\n", target="v2 + patch do projeto\n",
+        source="v3\n", base="v2\n", target="v2 + a project patch\n",
         historical={"v1\n", "v2\n", "v3\n"},
     )
     assert action is Action.LOCAL_CHANGE
@@ -92,38 +95,38 @@ def test_the_base_version_is_still_a_plain_update() -> None:
 # `rules/records-location.md` and `rules/live-target.txt`.
 # ---------------------------------------------------------------------------
 
-from sync_consumers import missing_rule_dependencies  # noqa: E402
+from sync_consumers import missing_rule_dependencies  # noqa: E402 (post-bootstrap)
 
 
 def test_rules_cited_by_the_delta_but_absent_in_the_target_are_listed(tmp_path: Path) -> None:
     kit = tmp_path / "kit"
     (kit / "rules").mkdir(parents=True)
     (kit / "skills" / "x").mkdir(parents=True)
-    (kit / "rules" / "presente.md").write_text("ok", encoding="utf-8")
-    (kit / "rules" / "ausente.md").write_text("ok", encoding="utf-8")
+    (kit / "rules" / "present.md").write_text("ok", encoding="utf-8")
+    (kit / "rules" / "absent.md").write_text("ok", encoding="utf-8")
     (kit / "skills" / "x" / "SKILL.md").write_text(
-        "leia `rules/presente.md` e `rules/ausente.md`\n", encoding="utf-8")
+        "leia `rules/present.md` e `rules/absent.md`\n", encoding="utf-8")
 
-    eco = tmp_path / "alvo" / ".claude"
+    eco = tmp_path / "target" / ".claude"
     (eco / "rules").mkdir(parents=True)
-    (eco / "rules" / "presente.md").write_text("ok", encoding="utf-8")
+    (eco / "rules" / "present.md").write_text("ok", encoding="utf-8")
 
     missing = missing_rule_dependencies(kit, eco, ["skills/x/SKILL.md"])
-    assert missing == ["rules/ausente.md"]
+    assert missing == ["rules/absent.md"]
 
 
 def test_a_rule_the_target_already_has_is_never_reported(tmp_path: Path) -> None:
-    """Config do projeto vive em rules/*.txt — sobrescrever seria destruir ajuste local.
-    Only what is MISSING enters."""
+    """A project's own config lives in `rules/*.txt`; overwriting it destroys a local
+    adjustment. Only what is MISSING enters."""
     kit = tmp_path / "kit"
     (kit / "rules").mkdir(parents=True)
     (kit / "skills" / "x").mkdir(parents=True)
-    (kit / "rules" / "live-target.txt").write_text("do kit", encoding="utf-8")
-    (kit / "skills" / "x" / "SKILL.md").write_text("veja `rules/live-target.txt`", encoding="utf-8")
+    (kit / "rules" / "live-target.txt").write_text("from the kit", encoding="utf-8")
+    (kit / "skills" / "x" / "SKILL.md").write_text("see `rules/live-target.txt`", encoding="utf-8")
 
-    eco = tmp_path / "alvo" / ".claude"
+    eco = tmp_path / "target" / ".claude"
     (eco / "rules").mkdir(parents=True)
-    (eco / "rules" / "live-target.txt").write_text("CONFIG DO PROJETO", encoding="utf-8")
+    (eco / "rules" / "live-target.txt").write_text("THE PROJECT'S OWN CONFIG", encoding="utf-8")
 
     assert missing_rule_dependencies(kit, eco, ["skills/x/SKILL.md"]) == []
 
@@ -176,3 +179,48 @@ def test_no_prefix_names_a_directory_that_is_not_there() -> None:
     missing = [p for p in sync_consumers.delta_prefixes() if not (kit / p).is_dir()]
 
     assert not missing, f"prefix(es) matching no directory in the kit: {missing}"
+
+
+def test_the_history_scan_is_paid_once_per_file(tmp_path) -> None:
+    """`historical_versions` spawns `git rev-list --all` plus one `git show` per revision.
+
+    It is called from inside the per-file loop of `sync_target`, which runs once per
+    CONSUMER — so syncing one file into eight consumers replayed the same history eight
+    times, and a file with forty revisions cost forty processes each pass. The answer
+    depends on the kit's history and the path, neither of which changes within a run.
+    """
+    import sync_consumers
+
+    assert hasattr(sync_consumers.historical_versions, "cache_info"), (
+        "the history scan is not memoised")
+
+
+def test_the_documented_composition_is_the_one_that_runs() -> None:
+    """`classify_with_history` had no production caller.
+
+    `sync_target` carried an inline copy of the same two steps, so the branch the tests
+    exercised was not the branch that ran — and the two could drift without a single test
+    going red. The function's own docstring calls it "`classify`, plus the question it
+    did not ask".
+    """
+    import inspect
+
+    import sync_consumers
+
+    assert "classify_with_history(" in inspect.getsource(sync_consumers.sync_target), (
+        "sync_target still carries its own copy of the composition")
+
+
+def test_no_portuguese_survives_in_this_module() -> None:
+    """`rules/english-only.md` makes the repository English-only, and this file's
+    docstrings were the exception the gate's marker set could not see."""
+    import re
+
+    import sync_consumers
+
+    source = Path(sync_consumers.__file__).read_text(encoding="utf-8")
+    accented = re.findall(r"^.*[ãõçáéíóúâêô].*$", source, re.M)
+    offenders = [ln.strip() for ln in accented
+                 if not ln.lstrip().startswith("#") or "english-only:" not in ln]
+
+    assert not [o for o in offenders if "Classifica" in o or "consumidor" in o], offenders[:5]  # english-only: the two spellings this test exists to refuse, quoted verbatim

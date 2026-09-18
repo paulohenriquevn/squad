@@ -59,6 +59,24 @@ pointed at, and a whole run went by without anyone noticing.
 pipeline. Blocked items are carried, not dropped — so the scheduler can say why one
 is not running, and `unpark()` can bring it back when the blocker lands.
 
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/fleet/pipeline_orchestrator.py" \
+    --selection selection.json --backlog BACKLOG.md --json
+```
+
+Add `--apply` to drain the pending status writes into the registry, and
+`--stage <name>` to see the batch waiting at one stage. `--apply` exits 1 when a
+transition was refused and prints which — refusals are RETURNED rather than raised, so
+one illegal transition does not abort the others.
+
+**This command did not exist until the module was audited.** Every public method here
+— `schedule`, `take_batch`, `drain_writes`, `apply_writes`, `from_selection` — was
+reachable from exactly two places in the tree, both test files, and this paragraph
+named `from_selection()` without giving anything that calls it. `apply_writes` even
+imported `backlog_status` with no path bootstrap: it resolved because the two test
+files had already extended `sys.path`, and raised `ModuleNotFoundError` the first time
+anything else ran it. A module that passes its tests and runs nowhere passes its tests.
+
 ### Step 1 — Materialise the stage agents
 
 ```bash

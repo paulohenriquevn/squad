@@ -82,6 +82,17 @@ except ImportError:  # pragma: no cover - environment problem, not a code path
 HERE = Path(__file__).resolve().parent
 SHELL = HERE.parent / "templates" / "walkthrough-shell.html"
 
+
+class EnvironmentMissing(RuntimeError):
+    """A dependency this MACHINE does not have, which is exit 2 and not exit 1.
+
+    The distinction is the docstring's own: 1 is "the spec is invalid (every reason is
+    named)" and 2 is "the spec could not be read, or Graphviz is not installed". Both
+    environment guards used `raise SystemExit("FATAL: ...")`, which exits 1 — so a
+    missing dependency reached the caller as a rejected SPEC, and the caller reported an
+    author's document as the problem when the machine was.
+    """
+
 #: Graphviz works in points with y growing UP; SVG grows DOWN. Every coordinate
 #: crossing this boundary is flipped exactly once, here.
 _PT_PER_INCH = 72.0
@@ -117,7 +128,12 @@ class Spec:
 def load_spec(path: Path) -> Spec:
     """Read the YAML spec and say everything that is wrong with it at once."""
     if yaml is None:
-        raise SystemExit("FATAL: PyYAML is required (pip install pyyaml)")
+        # Exit 2, not 1. `raise SystemExit("...")` exits 1, and the docstring above
+        # reserves 1 for "the spec is invalid (every reason is named)" and 2 for "the
+        # spec could not be read, or Graphviz is not installed". A missing dependency
+        # arriving as 1 tells the caller the SPEC was rejected, and the caller then
+        # reports an author's document as the problem when the machine is.
+        raise EnvironmentMissing("PyYAML is required (pip install pyyaml)")
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     problems: list[str] = []
 
@@ -217,7 +233,9 @@ def _bezier_path(points: list[list[float]], height: float) -> str:
     """
     if len(points) < 4 or len(points) % 3 != 1:
         raise ValueError(f"unexpected spline with {len(points)} control points")
-    fx = lambda p: f"{p[0]:.2f},{height - p[1]:.2f}"  # noqa: E731
+    def fx(p: tuple[float, float]) -> str:
+        return f"{p[0]:.2f},{height - p[1]:.2f}"
+
     out = [f"M {fx(points[0])}"]
     for i in range(1, len(points), 3):
         out.append(f"C {fx(points[i])} {fx(points[i+1])} {fx(points[i+2])}")
@@ -226,8 +244,8 @@ def _bezier_path(points: list[list[float]], height: float) -> str:
 
 def _run(engine: str, args: list[str], source: str) -> dict:
     if not shutil.which(engine):
-        raise SystemExit(
-            f"FATAL: `{engine}` not found. Install Graphviz "
+        raise EnvironmentMissing(
+            f"`{engine}` not found. Install Graphviz "
             f"(apt install graphviz / brew install graphviz).")
     proc = subprocess.run([engine, *args, "-Tjson"], input=source,  # noqa: PLW1510 — returncode is read below
                           capture_output=True, text=True)
@@ -361,6 +379,9 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2
+    except EnvironmentMissing as exc:
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
 
     if spec.problems:
         print(f"{len(spec.problems)} problem(s) in {args.spec}:", file=sys.stderr)
@@ -368,7 +389,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  - {p}", file=sys.stderr)
         return 1
 
-    html = build(spec, args.engine)
+    try:
+        html = build(spec, args.engine)
+    except EnvironmentMissing as exc:
+        # The Graphviz guard fires here, inside the layout. Exit 2: the spec was read and
+        # found valid two lines up, so nothing about it is what stopped the run.
+        print(f"FATAL: {exc}", file=sys.stderr)
+        return 2
     if args.check:
         print(f"ok: {len(spec.nodes)} nodes · {len(spec.flows)} flow(s) · "
               f"{sum(len(s) for s in spec.flows.values())} steps · "

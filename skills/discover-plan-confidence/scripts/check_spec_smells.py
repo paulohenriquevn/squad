@@ -7,14 +7,29 @@ rubric-measurement-plan.md instead of rubric-opportunity.md / rubric-v1.md.
 from __future__ import annotations
 
 import re
+import sys as _sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _P
 from typing import Any
 
-from _rubric_loader import load_rubric
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
+from _rubric_loader import load_rubric  # noqa: E402 — post-bootstrap import
+
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,
+)
 
 CONTEXT_WINDOW = 20  # chars on each side of a match
-FENCED_CODE_RE = re.compile(r"^```[^\n]*\n.*?^```", re.MULTILINE | re.DOTALL)
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+FENCED_CODE_RE = _FENCED_CODE_OWNER
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 
 

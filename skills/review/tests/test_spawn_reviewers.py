@@ -47,7 +47,7 @@ def _run(
     ]
     if extra_args:
         args.extend(extra_args)
-    result = subprocess.run(args, capture_output=True, text=True)  # noqa: PLW1510
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -474,3 +474,24 @@ def test_no_skills_flag_suppresses_skill_generation(
         assert children == [], f"Expected no skill dirs, found: {children}"
     # But agents should still be generated
     assert (output_dir / "architecture.md").exists()
+
+
+def test_a_domain_that_walks_out_of_the_output_directory_is_refused(tmp_path) -> None:
+    """`role` is `f"domain-{domain}"` from the CLI and becomes a filename directly.
+
+    `--primary-domain ../../escape` produced `domain-../../escape.md` under a directory
+    `mkdir(parents=True)` had just created on the way out of the write root. Neither the
+    domain nor `--slug` was checked before becoming a path segment.
+    """
+    import spawn_reviewers
+
+    for bad in ("../escape", "a/b", "..", ""):
+        with pytest.raises(ValueError):
+            spawn_reviewers.safe_name(bad, what="the agent role")
+
+
+def test_an_ordinary_domain_is_still_accepted() -> None:
+    import spawn_reviewers
+
+    assert spawn_reviewers.safe_name("domain-api-gateway", what="the agent role") \
+        == "domain-api-gateway"

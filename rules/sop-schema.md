@@ -102,11 +102,17 @@ flowchart TD
   procedure nobody has re-read since the system changed under it is the
   measurement-decay failure: the document keeps being followed while it stopped
   describing the thing.
-- **A run record accounts for every step** — `check_sop_run.py`. A step the
+- **A run record accounts for every step** — `check_sop_run.py`
+  _(not mechanized: debt — since 2026-09-17. The checker is written and correct; no
+  phase emits a `records/sop-runs/{slug}-{date}.md`, so it has never had a subject.
+  Both rows below are the same debt, and the consumer measured in § Cross-references
+  produced zero run records in the system's lifetime.)_ A step the
   record does not mention is indistinguishable from a step somebody skipped, and
   omitting is cheaper than admitting — the exact asymmetry `/implement`'s
   checkpoint gate exists to close.
-- **A deviation names the condition that caused it** — `check_sop_run.py`. A
+- **A deviation names the condition that caused it** — `check_sop_run.py`
+  _(not mechanized: debt — since 2026-09-17. Same subject, same absence as the row
+  above.)_ A
   deviation with no observed condition is not judgement, it is improvisation
   with better manners. The condition is what lets the next reader decide whether
   the SOP should change or the situation was genuinely singular.

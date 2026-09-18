@@ -2,8 +2,11 @@
 
 Regression for e5527e6, when three specialists (cap-theorem, backpressure,
 resilience) were deleted and the README was never updated to reflect the removal.
-This gate catches that drift in both directions: README promises skills that don't
-exist, and skills exist that README doesn't know about.
+The gate catches ONE direction — a document naming a skill that is not on disk. The
+reverse ("skills exist that README doesn't know about") was claimed by both docstrings
+and implemented by neither; unscoped it would report 30 of the kit's 39 skills, because
+the README table enumerates the advisory ones and never claimed to enumerate the rest.
+The claim is gone from the gate; this file stops repeating it.
 """
 import json
 from pathlib import Path
@@ -54,18 +57,28 @@ def test_a_skill_that_exists_is_not_reported(tmp_path: Path) -> None:
     )
 
 
-def test_gate_returns_empty_when_consistent(tmp_path: Path) -> None:
-    """When README and disk are consistent, check returns empty list."""
+def test_a_consistent_pair_produces_no_finding_and_an_inconsistent_one_names_it(
+        tmp_path: Path) -> None:
+    """Named for an empty result, this asserted only `isinstance(findings, list)`.
+
+    Both `all(...)` calls are vacuously true over an empty list and the isinstance call
+    is true for any list, so the test passed whether the gate returned nothing, one
+    finding, or forty. It now builds both states and asserts the difference between them.
+    """
     from mechanisms.gates import check_readme_advisory_skills
 
-    findings = check_readme_advisory_skills.check(_REPO)
+    (tmp_path / "skills" / "on-disk").mkdir(parents=True)
+    (tmp_path / "skills" / "on-disk" / "SKILL.md").write_text("x", encoding="utf-8")
+    readme = tmp_path / "README.md"
+    readme.write_text("## Advisory skills\n\n| `on-disk` | here |\n", encoding="utf-8")
 
-    # After README is corrected, this should pass (findings empty).
-    # Before that, it should fail (findings non-empty with missing skills).
-    # We test the structure regardless of the state.
-    assert isinstance(findings, list)
-    assert all(isinstance(f, dict) for f in findings)
-    assert all("type" in f and "skill_name" in f for f in findings)
+    assert check_readme_advisory_skills.check(tmp_path) == []
+
+    readme.write_text("## Advisory skills\n\n| `on-disk` | here |\n| `ghost` | not |\n",
+                      encoding="utf-8")
+    findings = check_readme_advisory_skills.check(tmp_path)
+
+    assert [(f["type"], f["skill_name"]) for f in findings] == [("readme_skill_missing", "ghost")]
 
 
 # ── the entry point, which is what the chain actually runs ────────────────────
@@ -76,10 +89,9 @@ _GATE = Path(__file__).resolve().parents[1] / "mechanisms" / "gates" / "check_re
 def _run(root: Path):
     import subprocess
     import sys as _sys
-    return subprocess.run(  # noqa: PLW1510
+    return subprocess.run(
         [_sys.executable, str(_GATE), "--root", str(root)],
-        capture_output=True, text=True, timeout=120,
-    )
+        capture_output=True, text=True, timeout=120, check=False)
 
 
 def test_the_gate_fails_when_the_readme_cites_a_skill_that_is_not_on_disk(tmp_path: Path) -> None:
@@ -135,6 +147,56 @@ def test_a_missing_readme_is_not_reported_as_a_clean_bill(tmp_path: Path) -> Non
     assert out.strip(), "no README and no output at all"
     assert "not checked" in out or "nothing" in out, (
         f"a gate whose subject is absent must say so; got {out!r}"
+    )
+    # The exit code is the ONLY part `verify_ecosystem` reads. Until this assert existed
+    # the branch printed "NOT CHECKED" and returned 0, so the paragraph above it in the
+    # gate — "it is NOT a pass" — reached a human and never reached the verifier.
+    assert result.returncode == 2, (
+        f"NOT CHECKED still exits {result.returncode}, which verify_ecosystem draws as a tick"
+    )
+
+
+def test_a_verifier_reading_the_gate_records_not_checked_rather_than_a_pass(
+        tmp_path: Path) -> None:
+    """The other half of the same defect, at the caller."""
+    import sys as _sys
+
+    _sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
+    import verify_ecosystem
+
+    (tmp_path / "mechanisms" / "gates").mkdir(parents=True)
+    (tmp_path / "mechanisms" / "gates" / "check_readme_advisory_skills.py").write_text(
+        (_REPO / "mechanisms" / "gates" / "check_readme_advisory_skills.py").read_text(
+            encoding="utf-8"), encoding="utf-8")
+    (tmp_path / "skills").mkdir()
+
+    ok, _issues = verify_ecosystem.check_readme_advisory_skills(tmp_path)
+
+    assert ok is verify_ecosystem.NOT_RUN, (
+        "a tree with no README reached the verifier as a pass or a failure, not as "
+        "'nothing was compared'"
+    )
+
+
+def test_a_document_whose_skills_section_is_gone_is_counted_not_assumed(
+        tmp_path: Path) -> None:
+    """HOW-TO-USE.md stopped carrying a skills table, and the gate said nothing.
+
+    `advisory_skills_in_how_to_use` returns an empty set both when the document has no
+    recognised section and when it has one naming nothing. Measured on this repository:
+    the README half compares 9 names and the HOW-TO-USE half has compared 0 since the
+    document was restructured — a silent half nobody could see from the output.
+    """
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "README.md").write_text("## Advisory skills\n\n(none yet)\n", encoding="utf-8")
+    (tmp_path / "HOW-TO-USE.md").write_text("## Which phase, when\n\n| a | b |\n",
+                                            encoding="utf-8")
+
+    result = _run(tmp_path)
+    out = result.stdout + result.stderr
+
+    assert "HOW-TO-USE" in out and "no skills section" in out.lower(), (
+        f"the gate did not say which document contributed nothing:\n{out}"
     )
 
 

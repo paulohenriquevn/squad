@@ -31,15 +31,18 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import importlib.util  # noqa: E402
-import re  # noqa: E402
-import subprocess  # noqa: E402
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import importlib.util  # noqa: E402 — post-bootstrap import
+import re  # noqa: E402 — post-bootstrap import
+import subprocess  # noqa: E402 — post-bootstrap import
+import sys  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-import pytest  # noqa: E402
+import pytest  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 yaml = pytest.importorskip("yaml")
 
@@ -595,7 +598,7 @@ def test_every_status_a_stage_writes_is_a_legal_hop_from_the_one_before(
     the status the previous stage left. Checked against `backlog_status.ALLOWED` rather
     than against a list kept here, which would drift the moment the contract changes."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
-    import backlog_status  # noqa: PLC0415
+    import backlog_status
 
     briefs = _briefs(tmp_path)
     per_stage = {stage: re.findall(r"--to\s+(\w+)", briefs[stage]) for stage in STAGES}
@@ -635,7 +638,7 @@ def test_a_status_a_stage_writes_mid_flight_has_a_way_back(tmp_path: Path) -> No
     `planned`, so the obvious guess is refused by the registry.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
-    import backlog_status  # noqa: PLC0415
+    import backlog_status
 
     brief = _briefs(tmp_path)["implement"]
     assert "--to approved" in brief, \
@@ -799,7 +802,7 @@ def test_the_declaration_does_not_read_as_already_done() -> None:
     to say which HALF is nested."""
     phases = (Path(__file__).resolve().parents[3] / "rules" / "cycle-phases.txt"
               ).read_text(encoding="utf-8")
-    line = next(l for l in phases.splitlines() if l.startswith("code-quality"))
+    line = next(ln for ln in phases.splitlines() if ln.startswith("code-quality"))
     assert "VERDICT" in line and "AUDIT FILE" in line, \
         f"the declaration does not separate the nested verdict from the written file: {line}"
 
@@ -874,7 +877,7 @@ def test_every_path_in_every_generated_brief_resolves(tmp_path: Path) -> None:
     to a test of its OUTPUT. A brief is a program whose paths are only checked when an
     agent runs it, unless something like this runs first.
     """
-    import re  # noqa: PLC0415
+    import re
 
     assert _run(tmp_path).returncode == 0
     repo = tmp_path / "repo"
@@ -910,7 +913,7 @@ def test_no_command_depends_on_shell_state_from_a_previous_line(tmp_path: Path) 
     difference between a brief that works and one that works only if the reader happens to
     paste the whole block.
     """
-    import re  # noqa: PLC0415
+    import re
 
     for stage in STAGES:
         brief = (tmp_path / "agents" / f"{stage}.md").read_text(encoding="utf-8") \
@@ -955,11 +958,11 @@ def test_a_gate_is_invoked_with_the_flags_it_requires(tmp_path: Path) -> None:
     """
     brief = _briefs(tmp_path)["implement"]
     lines = brief.splitlines()
-    i = next(n for n, l in enumerate(lines)
-             if "check_tdd_shape.py" in l and "python3" in l)
+    i = next(n for n, ln in enumerate(lines)
+             if "check_tdd_shape.py" in ln and "python3" in ln)
     # The command wraps, so the flag may sit on the continuation. Reading only the line
     # with the script name tests where the wrap fell.
-    whole = " ".join(l.strip().rstrip("\\") for l in lines[i:i + 3])
+    whole = " ".join(ln.strip().rstrip("\\") for ln in lines[i:i + 3])
     assert "--plan" in whole, \
         f"check_tdd_shape is invoked without --plan: {whole[:90]}"
 
@@ -977,11 +980,10 @@ def test_every_flag_a_brief_passes_exists_in_the_script_it_calls(tmp_path: Path)
     Both were mine, written within two hours of each other while anchoring paths. Anchoring
     a path and checking a flag are different verifications and I did only the first.
     """
-    import re  # noqa: PLC0415
-    import subprocess  # noqa: PLC0415
+    import re
+    import subprocess
 
     briefs = _briefs(tmp_path)
-    repo = tmp_path / "repo"
     kit = Path(__file__).resolve().parents[3]
     offenders: list[str] = []
     for stage, brief in briefs.items():
@@ -995,17 +997,31 @@ def test_every_flag_a_brief_passes_exists_in_the_script_it_calls(tmp_path: Path)
             script = re.findall(r"([\w./-]+\.py)", line)
             if not script:
                 continue
-            local = kit / script[-1].split("/skills/", 1)[-1] if "/skills/" in script[-1] else None
-            candidates = list(kit.rglob(Path(script[-1]).name))
+            # The RELATIVE PATH the brief names, resolved as a path — not the basename
+            # matched anywhere in the tree. `rglob` yields in `os.scandir` order, which
+            # is filesystem- and inode-dependent and is not sorted, and this repository
+            # is built on the premise that slices ship modules with the same basename
+            # and different contents. `candidates[0]` therefore probed whichever copy
+            # the filesystem happened to hand over first, so the test's answer could
+            # change between two machines with identical checkouts.
+            named = Path(script[-1])
+            candidates = [kit / named] if (kit / named).is_file() else sorted(
+                q for q in kit.rglob(named.name) if q.is_file())
             if not candidates:
                 continue
+            if len(candidates) > 1:
+                # Sorted, so at least it is the SAME wrong one everywhere — and said
+                # out loud, because a silent pick among colliding names is how this
+                # kind of test starts measuring a file nobody meant.
+                print(f"NOTE: {named.name} is ambiguous ({len(candidates)} copies); "
+                      f"probing {candidates[0].relative_to(kit)}")
             following = brief.split(line, 1)[1].splitlines()[:2]
             flags = re.findall(r"(--[a-z][a-z-]+)", line + " " + " ".join(following))
             if not flags:
                 continue
             helped = subprocess.run(
                 ["python3", str(candidates[0]), "--help"],
-                capture_output=True, text=True, timeout=60)
+                capture_output=True, text=True, timeout=60, check=False)
             usage = helped.stdout + helped.stderr
             for flag in flags:
                 if flag not in usage:

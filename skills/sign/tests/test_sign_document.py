@@ -23,7 +23,10 @@ _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from sign_document import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from sign_document import (  # noqa: E402 — post-bootstrap import
     HUMAN_PREFIX,
     _agents_dir,
     check,
@@ -283,3 +286,46 @@ def test_a_standalone_layout_finds_its_agents_too(tmp_path: Path) -> None:
 
     assert _agents_dir(tmp_path) == tmp_path / "agents"
     assert [p.name for p in waiting(tmp_path)] == ["pkg.md"]
+
+
+def test_an_unreadable_file_is_not_a_document_with_nothing_to_sign(tmp_path) -> None:
+    """`load` returned None for an OSError and for "no sign-off section".
+
+    The docstring claims the value means one thing — "None when there is nothing here to
+    sign" — so a document the tool could not open was reported as "not at the stage where
+    a signature applies". In `--list`, an unreadable document simply did not appear: the
+    list of what is waiting was quietly shorter than the truth.
+    """
+    import sign_document
+
+    a_directory = tmp_path / "looks-like-a-doc.md"
+    a_directory.mkdir()
+
+    with pytest.raises(sign_document.Unreadable):
+        sign_document.load(a_directory)
+
+
+def test_a_document_with_no_signoff_section_still_returns_none(tmp_path) -> None:
+    """The separation must not turn "nothing to sign" into an error."""
+    import sign_document
+
+    doc = tmp_path / "plain.md"
+    doc.write_text("# Just a document\n\nNo sign-off here.\n", encoding="utf-8")
+
+    assert sign_document.load(doc) is None
+
+
+def test_the_list_says_how_many_documents_it_could_not_read(tmp_path, capsys) -> None:
+    import sign_document
+
+    # One of the roots `waiting()` sweeps, so the file is actually reached.
+    root = tmp_path / ".squad" / "records" / "plans"
+    root.mkdir(parents=True)
+    (root / "unreadable.md").mkdir()
+    (root / "fine.md").write_text("## Sign-off\n\n- [ ] a box\n", encoding="utf-8")
+
+    found = sign_document.waiting(tmp_path)
+
+    assert any(p.name == "fine.md" for p in found), found
+
+    assert "could not be read" in capsys.readouterr().err

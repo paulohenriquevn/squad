@@ -8,12 +8,15 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import subprocess  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import subprocess  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-from flip_milestone_checkbox import flip  # noqa: E402
+from flip_milestone_checkbox import flip  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 def test_flips_unchecked_milestone(roadmap_pre_flip: Path) -> None:
@@ -65,7 +68,7 @@ def test_cli_runs_against_real_file(roadmap_pre_flip: Path, tmp_path: Path) -> N
     """End-to-end via CLI; --commit OFF (no git side effect)."""
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
     runs_dir = tmp_path / "roadmap-runs"
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [
             "python3", str(script),
             "--roadmap", str(roadmap_pre_flip),
@@ -75,7 +78,7 @@ def test_cli_runs_against_real_file(roadmap_pre_flip: Path, tmp_path: Path) -> N
         ],
         capture_output=True,
         text=True,
-    )
+     check=False)
     assert result.returncode == 0, result.stderr
     assert "FLIPPED M2" in result.stdout
     assert "### M2 — [x] Streaming" in roadmap_pre_flip.read_text(encoding="utf-8")
@@ -96,22 +99,22 @@ def test_cli_returncode_1_on_multi_flip(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         ["python3", str(script), "--roadmap", str(bad_roadmap), "--milestone-id", "M2", "--version", "0.1.0"],
         capture_output=True,
         text=True,
-    )
+     check=False)
     assert result.returncode == 1
     assert "single-flip invariant" in result.stderr
 
 
 def test_cli_returncode_2_on_invalid_milestone_id(roadmap_pre_flip: Path) -> None:
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         ["python3", str(script), "--roadmap", str(roadmap_pre_flip), "--milestone-id", "not-valid", "--version", "0.1.0"],
         capture_output=True,
         text=True,
-    )
+     check=False)
     assert result.returncode == 2
     assert "invalid milestone_id" in result.stderr
 

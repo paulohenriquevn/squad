@@ -88,11 +88,11 @@ def _kit_agents(root: Path) -> set[str]:
 
     import subprocess
 
-    out = subprocess.run(  # noqa: PLW1510
+    out = subprocess.run(
         ["git", "-C", str(root), "ls-files", "agents/"],
         capture_output=True,
         text=True,
-    )
+     check=False)
     if out.returncode != 0:
         return set()
     return {

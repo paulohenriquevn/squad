@@ -41,7 +41,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
-from check_sop_structure import check_sop_structure  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_sop_structure import check_sop_structure  # noqa: E402 (post-bootstrap)
 
 _FRONTMATTER = """\
 ---
@@ -332,12 +335,30 @@ def test_the_cli_exits_nonzero_on_a_finding(tmp_path: Path) -> None:
 
 def test_this_repository_has_structurally_sound_sops() -> None:
     """The gate turned on its own SOPs. If the kit writes procedures it does not
-    hold to the schema, the schema is decoration."""
-    report = check_sop_structure(REPO_ROOT)
+    hold to the schema, the schema is decoration.
 
-    assert report.findings == [], "\n".join(
-        f"{f.sop}: [{f.kind}] {f.detail}" for f in report.findings
+    STRUCTURE only. This called `check_sop_structure(REPO_ROOT)` with no `today=`, unlike
+    every other test in the file, so it inherited `date.today()` and the gate's
+    `sop_stale` finding — which fires once `last_reviewed` passes its interval. The test
+    therefore had a date on which it turns red with nothing changed in the repository, and
+    a suite that goes red by the calendar teaches people to ignore it. Staleness is a real
+    signal and gets its own test below, with the date supplied.
+    """
+    report = check_sop_structure(REPO_ROOT)
+    structural = [f for f in report.findings if f.kind != "sop_stale"]
+
+    assert structural == [], "\n".join(
+        f"{f.sop}: [{f.kind}] {f.detail}" for f in structural
     )
+
+
+def test_a_sop_past_its_review_interval_is_reported_as_stale() -> None:
+    """Freshness, measured against a date this test SUPPLIES rather than the clock."""
+    report = check_sop_structure(REPO_ROOT, today="2099-01-01")
+
+    assert any(f.kind == "sop_stale" for f in report.findings), (
+        "no SOP in this repository reads as stale in 2099 — the staleness check is not "
+        "running, which is what this test exists to notice")
 
 
 def test_okf_reserved_filenames_are_not_concepts(tmp_path: Path) -> None:

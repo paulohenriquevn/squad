@@ -27,7 +27,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "conventions"))
 
-from sop_format import knowledge_base_dir, resolve_knowledge_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from sop_format import (  # noqa: E402 — post-bootstrap import
+    knowledge_base_dir,
+    resolve_knowledge_dir,
+)
 
 
 def test_the_bundle_wins_when_both_exist(tmp_path: Path) -> None:

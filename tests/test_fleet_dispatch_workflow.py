@@ -73,15 +73,22 @@ def test_workflow_verify_is_independent() -> None:
     """
     content = _WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    # The second stage should use repair result as input but should not
-    # assume the verifier is the same agent
+    # The second stage uses the repair result as input and does not assume the
+    # verifier is the same agent.
     assert "=> {" in content or ".then(" in content, "Workflow should pipe repair result to verify"
-    # Rough heuristic: verify is a second stage reading the branch
+
     lines = content.split("\n")
     repair_idx = next((i for i, ln in enumerate(lines) if "Repair" in ln or "REPAIR" in ln), -1)
     verify_idx = next((i for i, ln in enumerate(lines) if "Verify" in ln or "VERIFIED" in ln), -1)
-    if repair_idx >= 0 and verify_idx >= 0:
-        assert verify_idx > repair_idx, "Verify phase should come after Repair"
+
+    # The two phases are REQUIRED to be findable, not merely compared when they happen
+    # to be. `if repair_idx >= 0 and verify_idx >= 0:` guarded the only assertion about
+    # ordering — so a workflow that renamed either phase, or dropped one, satisfied
+    # this test by making the comparison unreachable. A guard on the subject of the
+    # assertion is a test that passes hardest when the subject is gone.
+    assert repair_idx >= 0, "no Repair phase in the workflow"
+    assert verify_idx >= 0, "no Verify phase in the workflow — nothing checks the fix"
+    assert verify_idx > repair_idx, "Verify phase should come after Repair"
 
 
 if __name__ == "__main__":

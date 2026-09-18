@@ -19,9 +19,9 @@ SQ = ROOT / "sq"
 
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: PLW1510
+    return subprocess.run(
         [sys.executable, str(SQ), *args], capture_output=True, text=True, timeout=60, cwd=ROOT
-    )
+    , check=False)
 
 
 def test_the_shim_exists_and_is_executable() -> None:

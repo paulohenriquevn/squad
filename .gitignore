@@ -137,3 +137,6 @@ agents/*.md
 !agents/leonardo-researcher.md
 !agents/metis-oracle.md
 !agents/clio-historian.md
+
+# Output of the loop-code-review plugin — a tool artifact, never the project.
+code-review-output/

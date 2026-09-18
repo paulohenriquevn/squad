@@ -26,7 +26,10 @@ _FLEET = Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"
 if str(_FLEET) not in sys.path:
     sys.path.insert(0, str(_FLEET))
 
-import lens_review  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import lens_review  # noqa: E402 — post-bootstrap import
 
 _WORKFLOW = _FLEET / "kit_audit_workflow.js"
 
@@ -128,3 +131,31 @@ def test_an_agent_that_raises_does_not_take_the_other_lenses_with_it() -> None:
     found, note = lens_review.review("diff --git a/x b/x", lenses=lenses, ask=flaky)
     assert len(found) == 1
     assert "one" in note and "fell over" in note
+
+
+def test_a_diff_that_could_not_be_produced_is_not_nothing_to_review(tmp_path) -> None:
+    """`branch_diff` returned `""` whenever git exited non-zero.
+
+    An unknown branch, a missing `origin/workspace`, a repository that is not there —
+    each produced the empty string, `review()` reads that as "no diff to review", and
+    `main` prints it as the result. The module's own docstring names this pattern as the
+    first on its list: "a lens that did not run and a lens that ran clean are the same
+    output otherwise". It applied to the diff itself.
+    """
+    import lens_review as lr
+
+    not_a_repo = tmp_path / "nowhere"
+    not_a_repo.mkdir()
+
+    with pytest.raises(lr.DiffUnavailable):
+        lr.branch_diff(not_a_repo, "some-branch")
+
+
+def test_a_real_empty_diff_is_still_nothing_to_review() -> None:
+    """The refusal above must not swallow the honest empty case."""
+    import lens_review as lr
+
+    found, note = lr.review("", lenses=[], ask=None)
+
+    assert found == []
+    assert note == "no diff to review"

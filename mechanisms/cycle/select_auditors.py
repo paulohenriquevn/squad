@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from installed_plugins import Plugin
 from installed_plugins import load as load_plugins
 
-from squad.paths import write_records_dir
+from squad.paths import rules_dir, write_records_dir
 
 OK, INVALID, UNREADABLE, NOT_INSTALLED = 0, 1, 2, 3
 
@@ -94,10 +95,20 @@ def registry_path(project: Path) -> Path:
     `.squad/` holds only what the system produces; a rule the project configures is an
     input, and putting it there would make the one write root a mixed directory.
     """
-    for base in (project / ".claude" / "rules", project / "rules"):
+    # `squad.paths.rules_dir` owns the order; see it for which wins and why.
+    directory = rules_dir(project)
+    for base in ([directory] if directory else []):
         if (base / "review-auditors.txt").is_file():
             return base / "review-auditors.txt"
     return project / "rules" / "review-auditors.txt"
+
+
+#: What a plugin name may look like. `command_for` builds `/{plugin} {target} …` and
+#: that string is printed for an agent to run and written into the assignment record,
+#: so anything accepted here ends up in a command. Letters, digits, `-` and `_`, plus
+#: at most one `:` — the separator a namespaced skill uses (`judge-codex:final-judge`).
+#: Deliberately narrow: no whitespace, no `;`, no `$`, no `/`.
+_PLUGIN_NAME_RE = re.compile(r"[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?")
 
 
 def parse_registry(text: str) -> list[Auditor]:
@@ -118,6 +129,14 @@ def parse_registry(text: str) -> list[Auditor]:
             raise ValueError(
                 f"malformed auditor row: {raw.strip()!r} — expected `auditor = "
                 "<domain> | <plugin> | <diff-mode> | [report glob]`")
+        if not _PLUGIN_NAME_RE.fullmatch(parts[1]):
+            raise ValueError(
+                f"not a plugin name: {parts[1]!r} in {raw.strip()!r}. `command_for` "
+                f"splices this into `/{{plugin}} {{target}} …` — a string printed for "
+                f"an agent to RUN and persisted into the assignment JSON — and the only "
+                f"check was that it was non-empty, so a row could put a whole second "
+                f"command there. A plugin name is letters, digits, `-`, `_` and at most "
+                f"one `:` for a namespaced skill.")
         if parts[2] not in DIFF_MODES:
             raise ValueError(
                 f"unknown diff mode {parts[2]!r} in {raw.strip()!r}; the plugin "

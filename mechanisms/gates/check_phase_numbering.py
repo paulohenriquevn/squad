@@ -275,7 +275,10 @@ def main(argv: list[str] | None = None) -> int:
                           "verdict": ("FAIL" if findings
                                       else "PASS" if skills else "NOTHING_DECLARED")},
                          indent=2))
-        return 1 if findings else 0
+        # The same three-way answer the prose branch gives. It returned `1 if findings
+        # else 0`, so the `verdict` key it had just serialised as NOTHING_DECLARED was
+        # thrown away by the exit code — and `--json` is the form a machine reads.
+        return 1 if findings else (0 if skills else 2)
 
     print(f"phase numbering — {root}")
     for finding in findings:
@@ -285,9 +288,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Overall: FAIL — {len(findings)} incoherent phase number(s)")
         return 1
     if not skills:
+        # Exit 2, not 0. The printed word changed on 2026-09-02 — PASS became
+        # NOTHING_DECLARED — and the exit code did not, so the sentence "This is not a
+        # pass" reached a human reading a terminal while the chain read 0 and drew a tick.
+        # The code is the only part `verify_ecosystem` and CI consume.
         print("Overall: NOTHING_DECLARED — 0 skill(s) declare a phase under this "
               "root, so nothing was checked. This is not a pass.")
-        return 0
+        return 2
     print(f"Overall: PASS — {skills} skill(s) across {cycles} cycle(s): every "
           f"declared numbering is unique and in chain order")
     return 0

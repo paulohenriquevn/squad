@@ -123,14 +123,25 @@ def load_run_results(benchmark_dir: Path) -> dict:
                     print(f"Warning: Invalid JSON in {grading_file}: {e}")
                     continue
 
-                # Extract metrics
+                # A grading file with no `summary` block is a run that was not graded,
+                # not a run that scored zero. `.get("summary", {}).get(..., 0.0)` made
+                # the two identical, so a grader that crashed before writing its summary
+                # pulled the benchmark's mean down as if the skill had failed every
+                # assertion — and the aggregate reported a regression nobody caused.
+                summary = grading.get("summary")
+                if not isinstance(summary, dict) or "pass_rate" not in summary:
+                    print(f"Warning: {grading_file} has no summary block; this run was "
+                          f"NOT graded and is excluded from the aggregate rather than "
+                          f"counted as 0%")
+                    continue
+
                 result = {
                     "eval_id": eval_id,
                     "run_number": run_number,
-                    "pass_rate": grading.get("summary", {}).get("pass_rate", 0.0),
-                    "passed": grading.get("summary", {}).get("passed", 0),
-                    "failed": grading.get("summary", {}).get("failed", 0),
-                    "total": grading.get("summary", {}).get("total", 0),
+                    "pass_rate": summary.get("pass_rate", 0.0),
+                    "passed": summary.get("passed", 0),
+                    "failed": summary.get("failed", 0),
+                    "total": summary.get("total", 0),
                 }
 
                 # Extract timing — check grading.json first, then sibling timing.json
@@ -335,7 +346,7 @@ def generate_markdown(benchmark: dict) -> str:
     return "\n".join(lines)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Aggregate benchmark run results into summary statistics"
     )

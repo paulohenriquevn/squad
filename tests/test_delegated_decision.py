@@ -11,6 +11,8 @@ provisioned. Invented text agrees with whatever matcher you point at it.
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "cycle"))
 
 import delegated_decision as dd
@@ -264,3 +266,88 @@ def test_a_class_that_does_not_redefine_success_needs_no_supersedes() -> None:
     )
 
     assert "msgpack" in line
+
+
+# ── the classifier must read the consumer's language, not only this repo's ────
+#
+# Measured: of fifteen delegable patterns exactly one could match English, and of
+# eleven impediment patterns two. A consumer writing its registry in English got
+# `retain` for every wall, and nothing in the output said the reason was language —
+# the silent default, over a mechanism `mechanisms/README.md` ships as a kit feature.
+
+
+@pytest.mark.parametrize("wall,klass,delegated", [
+    ("This is a binary decision: keep the flag or drop it", DecisionClass.BINARY, True),
+    ("Needs a status disposition; no canonical transition fits", DecisionClass.STATUS, True),
+    ("A scope decision: which slice of the DoD is in this pass", DecisionClass.SCOPE, True),
+    ("A threshold decision — where the floor sits", DecisionClass.THRESHOLD, True),
+    ("Choice between keeping it or deleting it or rewriting", DecisionClass.OPTION, True),
+    ("There are three options and the item names all of them", DecisionClass.OPTION, True),
+    ("Blocked: re-measurement of the baseline", DecisionClass.MEASUREMENT, True),
+])
+def test_an_english_delegable_wall_is_delegated(wall, klass, delegated) -> None:
+    verdict = classify_wall(wall)
+
+    assert verdict.delegated is delegated, f"{wall!r} → {verdict}"
+    assert verdict.klass is klass, f"{wall!r} → {verdict}"
+
+
+@pytest.mark.parametrize("wall,klass", [
+    ("Requires provisioning of /opt on the build host", DecisionClass.ACCESS),
+    ("Installing unit files is not code work", DecisionClass.ACCESS),
+    ("No ssh access to the machine", DecisionClass.ACCESS),
+    ("Needs 30 more days to elapse before the series is usable", DecisionClass.ELAPSED),
+    ("Requires a running build to exercise", DecisionClass.LIVENESS),
+    ("Not verifiable from this session", DecisionClass.LIVENESS),
+])
+def test_an_english_impediment_is_retained_and_classified(wall, klass) -> None:
+    """Retained is the right answer — but for the RIGHT reason, and named.
+
+    Before this, an English impediment was retained because nothing matched, which is
+    indistinguishable from a wall the classifier does not understand at all.
+    """
+    verdict = classify_wall(wall)
+
+    assert verdict.delegated is False
+    assert verdict.klass is klass, f"{wall!r} → {verdict}"
+    assert verdict.evidence, "the phrase that decided it was not recorded"
+
+
+# ── a quote cut in half must say it was cut ──────────────────────────────────
+#
+# `rewrite_wall` truncated both quoted strings at 200 and 160 characters, silently.
+# The line it writes IS the audit trail for a decision the system made on the
+# sponsor's behalf, and a wall quoted as "the sponsor must confirm the migration
+# window before we" reads as a sentence somebody wrote rather than one this function
+# cut. A reader reconstructing the decision could not tell the two apart.
+
+
+def test_a_truncated_prior_wall_says_it_was_truncated() -> None:
+    wall = "x" * (dd.PRIOR_WALL_CHARS + 50)
+
+    line = rewrite_wall(
+        wall=wall, klass=DecisionClass.BINARY,
+        decision="proceed", rationale="the answer is knowable from the tree")
+
+    assert "…" in line and "[quoted to" in line, line[-120:]
+
+
+def test_a_short_prior_wall_is_quoted_whole() -> None:
+    line = rewrite_wall(
+        wall="a short wall", klass=DecisionClass.BINARY,
+        decision="proceed", rationale="the answer is knowable from the tree")
+
+    assert "a short wall" in line
+    assert "[quoted to" not in line, "an untruncated quote must not claim to be cut"
+
+
+def test_a_truncated_supersedes_says_so_too() -> None:
+    long_obligation = "y" * (dd.SUPERSEDES_CHARS + 50)
+
+    line = rewrite_wall(
+        wall="a wall", klass=DecisionClass.SCOPE,
+        decision="narrow it", rationale="the narrower scope is what was asked",
+        supersedes=long_obligation)
+
+    marker = line.split("Supersedes obligation:", 1)[1].split(".", 1)[0]
+    assert "[quoted to" in marker, marker[-100:]

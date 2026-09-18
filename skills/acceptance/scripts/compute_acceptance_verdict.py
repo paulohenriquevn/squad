@@ -86,6 +86,19 @@ def compute(criteria: list[dict], results: list[dict], defects: list[dict]) -> d
     """Return {verdict, reasons, flip_allowed} for the criteria/evidence pair."""
     _validate_shapes(results, defects)
 
+    if not criteria:
+        # NOT_VALIDATED, never ACCEPTED. With no criteria the function fell through to
+        # the final return and announced "all 0 criteria exercised and evidenced in the
+        # live system" — a sentence that is true and means nothing, attached to the
+        # verdict that flips the milestone checkbox. A release nobody wrote criteria for
+        # has not been accepted; it has not been checked. `NOT_VALIDATED` already exists
+        # for exactly this and is outside `FLIP_ALLOWED`.
+        return {"verdict": NOT_VALIDATED,
+                "reasons": ["no acceptance criteria were supplied, so nothing was "
+                            "validated. This is not an acceptance: it is the absence "
+                            "of one."],
+                "flip_allowed": NOT_VALIDATED in FLIP_ALLOWED}
+
     by_id = {result["id"]: result for result in results}
     reasons: list[str] = []
 

@@ -294,6 +294,11 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         "skills/brainstorm-vision/tests/test_build_agenda.py",
         "tests/test_advance_items.py",
         "tests/test_blocked_by_readers_agree.py",
+        # Tests that `check_backlog_structure._effective_counts` delegates the
+        # derivation to `backlog_status.effective_state`. It asserts on statuses
+        # to build its fixtures; the routing it exercises belongs to the owner,
+        # which IS pinned above.
+        "tests/test_one_owner_decides_the_effective_state.py",
         # Tests OF `backlog-approve`. They assert that a signed brief moves items to
         # `approved` and that `shipped` refuses the same move; the routing decision
         # they exercise belongs to `backlog_status.py`, which IS pinned.
@@ -321,7 +326,9 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # `--untracked`: `git grep` reads the INDEX, so a reader added and not yet
         # committed is invisible to it. Measured here by mutation — dropping a new
         # file holding two status literals into the tree left this test green.
-        ["git", "grep", "--untracked", "-lE",
+        # `-I`: a binary artifact that happens to carry the status bytes (a review
+        # database, a compiled blob) is not a reader, and judging one is noise.
+        ["git", "grep", "--untracked", "-I", "-lE",
          r'"(raw|triaged|approved|planned|shipped|killed)"'],
         cwd=REPO_ROOT, capture_output=True, text=True,
         check=False,

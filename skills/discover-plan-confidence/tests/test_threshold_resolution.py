@@ -19,7 +19,13 @@ import pytest
 SCRIPTS = Path(__file__).parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from run_measurement_plan_score import _plan_version, _resolve_thresholds  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from run_measurement_plan_score import (  # noqa: E402 — post-bootstrap import
+    _plan_version,
+    _resolve_thresholds,
+)
 
 BANDS = "SHIPPABLE|95|2027-01-31|ADR\nINVALID|0|2027-01-31|ADR\n"
 

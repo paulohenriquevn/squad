@@ -17,14 +17,20 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import sys  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir, write_wiki_dir  # noqa: E402
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    write_records_dir,
+    write_wiki_dir,
+)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from build_agenda import build, render  # noqa: E402
+from build_agenda import build, render  # noqa: E402 — post-bootstrap import
 
 ROUTING = "web | web-console | agents/web.md\napi | search-api | agents/api.md\n"
 

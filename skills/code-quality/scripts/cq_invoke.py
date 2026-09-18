@@ -15,7 +15,39 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from enum import Enum
 from pathlib import Path
+
+
+class Unavailable(str, Enum):
+    """Why `invoke` returned None. Four states shared ONE return value.
+
+    `None` meant "the script is absent", "the subprocess raised", "it exited outside
+    {0,1}" — which includes `run_code_quality.py`'s own ORCHESTRATOR_CRASH exit 2 — and
+    "its stdout was not JSON". `run_validation.py` maps None to SKIP, main() folds SKIP
+    into PARTIAL and PARTIAL exits 0, so a quality gate that CRASHED was indistinguishable
+    from one that was never installed, and delivery proceeded either way.
+
+    The enum is what lets the caller separate "there was nothing to run" from "it ran
+    and fell over". Only the first is a SKIP.
+    """
+
+    MISSING = "missing"
+    CRASHED = "crashed"
+    TIMEOUT = "timeout"
+    UNPARSEABLE = "unparseable"
+
+
+#: Why the LAST `invoke` failed, for a caller that needs to tell the four apart.
+#: A module-level record rather than a changed return type: `invoke` has callers in two
+#: repositories and the dict-or-None contract is what they read. `last_failure()` is the
+#: addition; nothing that worked before behaves differently.
+_last_failure: dict[str, object] = {"why": None, "detail": ""}
+
+
+def last_failure() -> tuple[Unavailable | None, str]:
+    """`(why, detail)` for the most recent `invoke` that returned None."""
+    return _last_failure["why"], str(_last_failure["detail"])  # type: ignore[return-value]
 
 
 def invoke(plan_slug: str, repo_root: Path, *, timeout_s: int = 600) -> dict | None:
@@ -57,6 +89,8 @@ def invoke(plan_slug: str, repo_root: Path, *, timeout_s: int = 600) -> dict | N
         # Fallback for repos that vendor under `.claude/skills/`.
         script = repo_root / ".claude" / "skills" / "code-quality" / "scripts" / "run_code_quality.py"
     if not script.exists():
+        _last_failure["why"] = Unavailable.MISSING
+        _last_failure["detail"] = f"no run_code_quality.py under {repo_root}"
         return None
 
     cmd = ["python3", str(script), plan_slug, "--no-audit-write", "--json-out", "-"]
@@ -81,15 +115,32 @@ def invoke(plan_slug: str, repo_root: Path, *, timeout_s: int = 600) -> dict | N
             cwd=str(repo_root),
             check=False,
         )
-    except (FileNotFoundError, subprocess.SubprocessError, OSError):
+    except subprocess.TimeoutExpired:
+        _last_failure["why"] = Unavailable.TIMEOUT
+        _last_failure["detail"] = f"did not finish within {timeout_s}s"
+        return None
+    except (FileNotFoundError, subprocess.SubprocessError, OSError) as exc:
+        _last_failure["why"] = Unavailable.MISSING
+        _last_failure["detail"] = f"{type(exc).__name__}: {exc}"
         return None
 
     if result.returncode not in (0, 1):
+        # `run_code_quality.py` exits 2 on ORCHESTRATOR_CRASH. Folding that into the same
+        # None as "the skill is not installed" is what let a CRASHED quality gate reach
+        # `run_validation` as SKIP, become PARTIAL and exit 0 — a gate that fell over,
+        # reported as a gate that was not asked to run.
+        _last_failure["why"] = Unavailable.CRASHED
+        _last_failure["detail"] = (f"exited {result.returncode}: "
+                                   f"{(result.stderr or '').strip()[:300]}")
         return None
 
     try:
+        _last_failure["why"] = None
+        _last_failure["detail"] = ""
         return json.loads(result.stdout)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as exc:
+        _last_failure["why"] = Unavailable.UNPARSEABLE
+        _last_failure["detail"] = f"stdout is not JSON: {exc}"
         return None
 
 
@@ -138,9 +189,20 @@ def merge_verdict_into_plan_confidence(
                 existing.append(cap)
         out["hard_caps_triggered"] = existing
 
-    cq_score_cap = cq_summary.get("score_cap", 100)
     cq_verdict = cq_summary.get("verdict", "UNKNOWN")
-    if cq_score_cap >= 100:
+    # The VERDICT decides, and the cap is derived from it when the summary does not carry
+    # one. This read `score_cap` with a default of 100 and returned immediately when it
+    # was >= 100 — which is what happens whenever the key is ABSENT — so a summary
+    # carrying `verdict: FAIL_HARD` and no `score_cap` returned before the FAIL_HARD
+    # branch below ever ran, and the plan kept its own SHIPPABLE verdict over code the
+    # audit had failed hard. A missing key is not a passing score.
+    _CAP_FOR = {"PASS": 100, "PASS_WITH_CAVEATS": 89, "FAIL_SOFT": 70,
+                "FAIL_HARD": 49, "INVALID": 0}
+    cq_score_cap = cq_summary.get("score_cap")
+    if cq_score_cap is None:
+        cq_score_cap = _CAP_FOR.get(cq_verdict, 100)
+
+    if cq_verdict in ("PASS", "UNKNOWN") and cq_score_cap >= 100:
         return
 
     # What is about to be replaced. The merge is deliberate — `cycle-code-quality.md`

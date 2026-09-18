@@ -180,9 +180,15 @@ def detect_current_version(repo_root: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    # The release step assigns this command's stdout to CURRENT_VERSION and feeds it
+    # straight to `bump_version.py --from`. Under `--quiet` the note about skipped tags
+    # is suppressed rather than merely redirected: a caller capturing both streams gets
+    # the version and nothing else, which is the whole reason the flag is documented.
+    parser.add_argument("--quiet", action="store_true",
+                        help="print the version alone; suppress the non-semver-tag note")
     args = parser.parse_args()
     _, skipped = _tags(args.repo_root)
-    if skipped:
+    if skipped and not args.quiet:
         print(f"note: {skipped} tag(s) not semver, skipped", file=sys.stderr)
     print(detect_current_version(args.repo_root))
     return 0

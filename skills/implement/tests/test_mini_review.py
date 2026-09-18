@@ -267,7 +267,10 @@ def test_report_filename_format(tmp_path: Path) -> None:
 # half was the report line reading like a check that ran. It is replaced by the
 # question the SKIP left open — will Step 5's audit actually cover these files?
 
-from mini_review import _check_delta_audit_coverage  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from mini_review import _check_delta_audit_coverage  # noqa: E402 (post-bootstrap)
 
 
 def _languages_rule(root: Path, body: str) -> Path:

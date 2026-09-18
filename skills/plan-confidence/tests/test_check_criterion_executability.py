@@ -4,7 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from check_criterion_executability import (  # noqa: E402
+
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_criterion_executability import (  # noqa: E402 — post-bootstrap import
     _has_measurable_object,
     _has_observable_verb,
     _has_oracle,
@@ -87,12 +91,22 @@ def _write_plan(tmp_path: Path, body: str) -> Path:
     return plan
 
 
-def test_plan_with_no_criteria_sections_is_vacuously_acceptable(tmp_path: Path) -> None:
+def test_a_plan_with_no_criteria_is_capped_not_excused(tmp_path: Path) -> None:
+    """It used to be "vacuously acceptable": ratios of 1.0 and no cap.
+
+    That made a plan with no Acceptance Criteria and no DoD section the one shape this
+    check could never charge for — better scored than a plan full of vague criteria.
+    A plan that states no acceptance criteria has not written executable ones; the cap
+    is the same soft 70 either way, so the absence becomes visible in
+    `hard_caps_triggered` rather than passing as perfection.
+    """
     plan = _write_plan(tmp_path, "# Plan\n\nNo acceptance section at all.\n")
+
     report = check_criterion_executability(plan)
+
     assert report.total_criteria == 0
-    assert report.acceptable_ratio == 1.0
-    assert report.soft_cap_triggered is False
+    assert report.acceptable_ratio == 0.0
+    assert report.soft_cap_triggered is True
 
 
 def test_plan_with_all_executable_criteria_passes(tmp_path: Path) -> None:

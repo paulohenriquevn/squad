@@ -24,13 +24,16 @@ _FLEET = Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"
 if str(_FLEET) not in sys.path:
     sys.path.insert(0, str(_FLEET))
 
-import fleet_router  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import fleet_router  # noqa: E402 — post-bootstrap import
 
 #: Any absolute path will do; it must not be one that exists on a single machine.
 #: `test_no_origin_ecosystem_leak` fails a versioned file carrying a workstation
 #: path, because every consumer gets the string and none of them get the directory.
 _REPO = "/srv/example/kit"
-from kit_issues import Issue, Unavailable  # noqa: E402
+from kit_issues import Issue, Unavailable  # noqa: E402 — post-bootstrap import
 
 
 def _issue(n: int, title: str = "a defect") -> Issue:
@@ -112,23 +115,32 @@ def test_an_unreadable_source_is_not_an_empty_one(monkeypatch: pytest.MonkeyPatc
     def boom(_repo: str, **_kw: object) -> object:
         raise Unavailable("`gh` is not installed")
     monkeypatch.setattr(fleet_router.kit_issues, "fleet_work", boom)
-    units, note = fleet_router.kit_units("owner/repo")
+    units, note, read = fleet_router.kit_units("owner/repo")
+
     assert units == []
     assert "not installed" in note
     assert "no known defects" not in note.lower()
+    # The third element, which is what `main` reads for its exit 1. That decision was
+    # `if "could not be read" in note` — a match against prose worded by hand here, so
+    # rewording the sentence turned the exit code silently green.
+    assert read is False
 
 
 def test_an_empty_registry_says_so_in_its_own_words(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fleet_router.kit_issues, "fleet_work", lambda *_a, **_k: ([], []))
-    units, note = fleet_router.kit_units("owner/repo")
+    units, note, read = fleet_router.kit_units("owner/repo")
+
     assert units == []
     assert "readable" in note
+    assert read is True, "an empty registry WAS read; that is not a failed read"
 
 
 def test_held_issues_are_named_rather_than_dropped(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(fleet_router.kit_issues, "fleet_work",
                         lambda *_a, **_k: ([_issue(19)], [_issue(30)]))
-    units, note = fleet_router.kit_units("owner/repo")
+    units, note, read = fleet_router.kit_units("owner/repo")
+
+    assert read is True
     assert [u.slug for u in units] == ["kit#19"]
     assert "kit#30" in note, "an issue nobody can see is an issue nobody decides"
 
@@ -553,3 +565,101 @@ def test_three_lanes_do_not_dirty_each_others_trees(tmp_path) -> None:
             f"kit#28 exactly: N items in one working tree, every pre-flight failing "
             f"on somebody else's artifacts"
         )
+
+
+def test_a_unit_is_held_from_the_decision_not_from_the_keystroke(tmp_path) -> None:
+    """The window `dispatch_to_lane.sh` opens, closed.
+
+    `plan()` read the in-flight set and `dispatch()` appended `assigned` only AFTER the
+    lane script ran — and that script polls `session_ready.py --timeout 20` and sleeps
+    1s + 3s. For those seconds a second router over the same log read the unit as free.
+    A `claimed` row now goes in under the log's lock the moment the plan decides.
+    """
+    import fleet_router as fr
+
+    log = tmp_path / "assignments.jsonl"
+    fr.record(log, "claimed", unit="B-014", lane="lane-a", source="backlog")
+
+    assert fr.in_flight(log) == {"B-014": "lane-a"}
+
+
+def test_a_dispatch_that_failed_gives_the_claim_back(tmp_path) -> None:
+    """The property the old design bought by recording late, kept by releasing early."""
+    import fleet_router as fr
+
+    log = tmp_path / "assignments.jsonl"
+    fr.record(log, "claimed", unit="B-014", lane="lane-a", source="backlog")
+    fr.record(log, "released", unit="B-014", lane="lane-a", reason="dispatch exited 1")
+
+    assert fr.in_flight(log) == {}
+
+
+def test_the_assignment_log_is_scoped_to_the_project_not_to_the_machine(tmp_path) -> None:
+    """`~/.squad-fleet/assignments.jsonl` made `B-014` in two consumers one key."""
+    from squad.paths import assignment_log_path
+
+    one = assignment_log_path(tmp_path / "consumer-one")
+    two = assignment_log_path(tmp_path / "consumer-two")
+
+    assert one != two
+    assert one.parent.parent == tmp_path / "consumer-one"
+
+
+def test_a_consumer_queue_that_could_not_be_read_is_not_an_empty_queue(tmp_path) -> None:
+    """`backlog_units` returned `([], note)` for four different outcomes.
+
+    No selector installed, the selector could not be run, the selector returned no JSON,
+    and the queue is legitimately empty — all one empty list. `main` distinguished none
+    of them, so a consumer whose selector crashed looked exactly like one with nothing to
+    do, and the router offered KIT work or a self-audit on the strength of a failed read.
+    """
+    import fleet_router as fr
+
+    no_selector = tmp_path / "consumer"
+    no_selector.mkdir()
+
+    units, note, read = fr.backlog_units(no_selector)
+
+    assert units == []
+    assert read is False, "a queue that was never asked reported as a queue that answered"
+    assert "not read" in note
+
+
+def test_an_empty_queue_that_answered_is_read(tmp_path) -> None:
+    """The distinction must cut both ways: nothing to start IS a measurement."""
+    import fleet_router as fr
+
+    selector = tmp_path / ".claude/skills/backlog-review/scripts/select_backlog_item.py"
+    selector.parent.mkdir(parents=True)
+    selector.write_text(
+        'import sys\n'
+        'print(\'{"queue": [], "verdict": "BACKLOG_EMPTY", "reason": "nothing raw"}\')\n'
+        'sys.exit(1)\n',
+        encoding="utf-8")
+    (tmp_path / "BACKLOG.md").write_text("# empty\n", encoding="utf-8")
+
+    units, _note, read = fr.backlog_units(tmp_path)
+
+    assert units == []
+    assert read is True, "an answered-but-empty queue reported as unreadable"
+
+
+def test_a_selector_answering_something_that_is_not_an_object_is_unreadable(tmp_path) -> None:
+    """`json.loads` succeeding does not mean the answer has the shape this expects.
+
+    A selector printing a bare JSON string or list parsed fine and then raised
+    AttributeError on `.get` — a traceback out of the router rather than a note saying
+    the answer was unusable, which is the outcome the surrounding code is built for.
+    """
+    import fleet_router as fr
+
+    selector = tmp_path / ".claude/skills/backlog-review/scripts/select_backlog_item.py"
+    selector.parent.mkdir(parents=True)
+    selector.write_text('print(\'"just a string"\')\n', encoding="utf-8")
+    (tmp_path / "BACKLOG.md").write_text("# empty\n", encoding="utf-8")
+
+    units, note, read = fr.backlog_units(tmp_path)
+
+    assert units == []
+    assert read is False
+    assert "usable" in note

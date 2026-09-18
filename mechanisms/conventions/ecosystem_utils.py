@@ -94,9 +94,16 @@ def resolve_ecosystem_dir(project_dir: Path) -> Path | None:
     directory is the kit" actually means, and it is the test every hook already uses.
     """
     # `.claude/` FIRST. When both it and the root hold the kit trees, the install is
-    # what should win — the same order `cycle_events._is_standalone` uses, where the
-    # test is whether `.claude/` HOLDS the kit rather than whether it exists. The
-    # records probe used to break that tie; it moved out, so the order carries it.
+    # what should win. The test is whether a directory HOLDS the kit trees rather than
+    # whether it exists — the same test `cycle_events._holds_the_kit` applies, though
+    # NOT the same order: `cycle_events.project_root_for` tries the candidate before
+    # `candidate/.claude`, because it is answering a different question (which project
+    # is this) and the project is the outer directory either way.
+    #
+    # This comment used to cite `cycle_events._is_standalone`, a symbol that has never
+    # existed in this repository, and to attribute this order to it. A citation that
+    # resolves to nothing cannot be checked, and this one was wrong in both halves.
+    # The records probe used to break the tie; it moved out, so the order carries it.
     candidates = [
         project_dir / ".claude",
         project_dir,

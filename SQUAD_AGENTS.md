@@ -104,7 +104,7 @@
 
 ## Execution Layer (Lanes)
 
-### 10. **Lanes (squad1, squad2, squad3)** — Repair Units
+### 10. **Lanes (`squad-<project>-1`, `-2`, `-3`)** — Repair Units
 - **Role:** Worker
 - **Responsibility:** Receive unit spec → plan → implement → commit → push branch
 - **Inputs:** Unit (B-001, kit#19, etc)

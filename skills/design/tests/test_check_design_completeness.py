@@ -21,7 +21,10 @@ _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from check_design_completeness import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_design_completeness import (  # noqa: E402 — post-bootstrap import
     DRAWINGS,
     EXIT,
     MIN_MERMAID_LINES,
@@ -30,6 +33,7 @@ from check_design_completeness import (  # noqa: E402
     check,
     declares_kind,
     mermaid_blocks,
+    render,
     verdict_of,
 )
 
@@ -311,11 +315,11 @@ def test_the_contract_does_not_point_at_the_wrong_generator() -> None:
     skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
 
     render_section = skill.split("### Step 4")[1].split("### Step 5")[0]
-    assert "import-mermaid" in render_section
-    assert "build_walkthrough.py" in render_section, (
+    assert "import-mermaid" in render_section  # prose-test: the sentence an operator reads IS the deliverable here
+    assert "build_walkthrough.py" in render_section, (  # prose-test: naming the wrong generator is itself the defect
         "the wrong generator must stay NAMED as wrong — removing the mention silently "
         "invites the next author to reach for it")
-    assert "Not `build_walkthrough.py`" in render_section
+    assert "Not `build_walkthrough.py`" in render_section  # prose-test: the warning is the contract, not a proxy for one
 
 
 # ------------------------------------------------------------------ parseability
@@ -366,8 +370,9 @@ def test_the_sop_does_not_send_the_operator_at_a_file_nothing_makes() -> None:
     """
     sop = (Path(__file__).resolve().parents[1] / "SOP.md").read_text(encoding="utf-8")
 
-    assert "walkthrough.html" not in sop
-    assert "import-mermaid" in sop, "the render path must be named where the operator reads"
+    assert "walkthrough.html" not in sop  # prose-test: a path to a file nothing makes
+    assert "import-mermaid" in sop, (  # prose-test: the operator reads this to find the renderer
+        "the render path must be named where the operator reads")
 
 
 # ------------------------------------------------------------------ the panel
@@ -427,3 +432,44 @@ def test_an_abstention_is_never_agreement() -> None:
     gr = (Path(__file__).resolve().parents[3] / "rules" / "design-golden-rule.md")
 
     assert "Counted as incomplete, never as agreement" in gr.read_text(encoding="utf-8")
+
+
+# ── an absent optional drawing was reported as a present one ─────────────────
+#
+# `(rep.missing if drawing.mandatory else rep.present).append(...)` put every
+# non-mandatory drawing that does not exist into `present`, and `render` tested
+# `drawing.key in rep.present` — so `system-map`, the one optional drawing, printed
+# `ok  system-map  (derived)` for a file nobody had written.
+
+
+def test_an_absent_optional_drawing_is_not_reported_as_present(tmp_path: Path) -> None:
+    design = tmp_path / ".squad" / "wiki" / "design"
+    design.mkdir(parents=True)
+    for drawing in DRAWINGS:
+        if drawing.mandatory:
+            (design / drawing.filename).write_text(
+                f"# {drawing.key}\n\n```mermaid\ngraph TD\n  a-->b\n```\n", encoding="utf-8")
+
+    report = check(tmp_path)
+
+    optional = [d.key for d in DRAWINGS if not d.mandatory]
+    assert optional, "no optional drawing ships; this test lost its subject"
+    for key in optional:
+        assert key not in report.present, f"{key} does not exist and is reported present"
+        assert key in report.absent_optional, key
+
+
+def test_the_rendered_line_says_absent_rather_than_ok(tmp_path: Path) -> None:
+    design = tmp_path / ".squad" / "wiki" / "design"
+    design.mkdir(parents=True)
+    for drawing in DRAWINGS:
+        if drawing.mandatory:
+            (design / drawing.filename).write_text(
+                f"# {drawing.key}\n\n```mermaid\ngraph TD\n  a-->b\n```\n", encoding="utf-8")
+
+    rendered = render(check(tmp_path))
+
+    optional = next(d for d in DRAWINGS if not d.mandatory)
+    line = next(ln for ln in rendered.splitlines() if optional.key in ln)
+    assert "ok " not in line, f"a drawing nobody wrote reads as done: {line!r}"
+    assert "absent" in line, line

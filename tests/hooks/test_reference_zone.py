@@ -46,8 +46,8 @@ def _hook(name: str) -> Path:
 def _run(name: str, payload: dict) -> subprocess.CompletedProcess:
     hook = _hook(name)
     cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
-    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,  # noqa: PLW1510
-                          text=True, cwd=REPO)
+    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
+                          text=True, cwd=REPO, check=False)
 
 
 def _write(path: str) -> dict:

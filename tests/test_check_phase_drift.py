@@ -47,8 +47,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "cycle"))
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
-from check_phase_drift import check_phase_drift, load_declared_phases  # noqa: E402
-from cycle_events import emit_phase_end, emit_phase_start  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_phase_drift import (  # noqa: E402 — post-bootstrap import
+    check_phase_drift,
+    load_declared_phases,
+)
+from cycle_events import (  # noqa: E402 — post-bootstrap import
+    emit_phase_end,
+    emit_phase_start,
+)
 
 _PLAN = """\
 # comment
@@ -448,3 +457,45 @@ def test_the_shipped_plan_marks_the_phase_run_validation_invokes() -> None:
     assert by_name["code-quality"].nested_in == "implement"
     assert not by_name["implement"].nested_in
     assert not by_name["review"].nested_in
+
+
+def test_the_rule_says_nothing_invokes_this_gate_today() -> None:
+    """Five pre-conditions in `cycle-idea-to-release.md` name this gate as their enforcer.
+
+    It is written, tested and correct — and no entry point runs it, with or without
+    `--expect-complete`. A rule naming a mechanism that nothing invokes reads as an
+    enforced gate, which is the defect `check_gate_mechanisms` exists to catch from the
+    other side. The claim now carries the debt, dated, and names the caller it needs.
+    """
+    rule = Path(__file__).resolve().parents[1] / "rules" / "cycle-idea-to-release.md"
+    text = rule.read_text(encoding="utf-8")
+
+    assert "not invoked by anything today" in text, (
+        "the rule still presents check_phase_drift as an enforced gate")
+    assert "not mechanized: debt" in text, "the debt carries no class"
+
+
+def test_nothing_has_started_invoking_it_without_updating_the_rule() -> None:
+    """The mirror: the day a caller appears, the note above becomes false and must go."""
+    root = Path(__file__).resolve().parents[1]
+    callers = []
+    for base in ("mechanisms", "skills", "hooks"):
+        directory = root / base
+        for path in list(directory.rglob("*.py")) + list(directory.rglob("*.sh")):
+            if "tests" in path.parts or "__pycache__" in path.parts:
+                continue
+            if path.name == "check_phase_drift.py":
+                continue
+            body = path.read_text(encoding="utf-8", errors="replace")
+            # The gate being RUN, not mentioned. `board_state.py` names it in a comment
+            # about which file declares the chain, and also happens to import subprocess
+            # for unrelated reasons — "both strings appear in this file" is not evidence
+            # of a call, and reading it as one is the same conflation this suite exists
+            # to refuse.
+            import re as _re
+            if _re.search(r'["\']?check_phase_drift(\.py)?["\']?\s*[,)\]]', body) \
+                    and "run(" in body:
+                callers.append(str(path.relative_to(root)))
+
+    assert not callers, (
+        f"something now invokes the gate; the rule's debt note is stale: {callers}")

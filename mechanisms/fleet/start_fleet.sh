@@ -48,7 +48,6 @@ default=$(( (cores - 2) / 2 ))
 [ "$default" -gt 6 ] && default=6
 SIZE="${2:-$default}"
 
-MARKERS="${MARKERS:-/tmp/squad-markers}"
 
 # Where this script is, not where the kit is assumed to be. The line further down
 # that spawns the watchdog resolves it through `$PROJECT/.claude/`, which only
@@ -69,11 +68,23 @@ print(lead_log_path(sys.argv[2]))' "$_here" "${PROJECT:-.}")}"
 # fleet on the machine exactly as the decision log was — same defect, one line down, and
 # it survived the first fix because that fix was written for the other filename.
 RUN_LOG="${RUN_LOG:-${LOG%.jsonl}-run.log}"
-# The per-consultation ceiling the lead passes to `--max-budget-usd`. The default
-# lives in `squad_lead.py` and its comment says 6.00 was measured "with room for a
-# larger project" — a real one exceeded it on 2026-08-31 and the lead exited 1,
-# stopping the whole fleet over a ceiling, not over the work. The knob is here
-# because raising it must not mean editing the script that carries it.
+# Markers belong to the PROJECT, same failure as the lead log above and same fix.
+# `/tmp/squad-markers` plus lane names `squad1..squadN` are BOTH machine-global, so two
+# fleets over two projects wrote and read the same `$MARKERS/squad1.log`, and the
+# watchdog derives idleness from its mtime (`squad_lead._idle_seconds`) — project A's
+# lane activity made project B's lead believe its own lane was working. The lane names
+# carry the project too, because a marker scoped to the project and a tmux session that
+# is not still collide the moment two fleets run.
+MARKERS="${MARKERS:-$(dirname "$LOG")/markers}"
+# A short, stable tag for THIS project: the directory name, reduced to what tmux accepts.
+FLEET_TAG="$(basename "$PROJECT" | tr -c 'A-Za-z0-9' '-' | sed 's/-*$//')"
+# The per-consultation ceiling the lead passes to `--max-budget-usd`. The default lives
+# in `squad_lead.Lead.agent_budget_usd` and is 40.00 — NOT the 6.00 this comment named
+# until 2026-09-17. 6.00 was the earlier ceiling; a large project exceeded it on
+# 2026-08-31 and the lead exited 1, stopping the whole fleet over a number rather than
+# over the work, which is why the default was raised. The knob is here because raising it
+# must not mean editing the script that carries it. No number is repeated: `--help` on
+# the lead reads the field.
 AGENT_BUDGET_USD="${AGENT_BUDGET_USD:-}"
 mkdir -p "$MARKERS"
 
@@ -82,7 +93,7 @@ echo "==> Fleet of $SIZE over $PROJECT (cores: $cores)"
 names=()
 checked=()
 for i in $(seq 1 "$SIZE"); do
-  name="squad$i"
+  name="squad-$FLEET_TAG-$i"
   names+=("$name")
   if tmux has-session -t "$name" 2>/dev/null; then
     # Left alone, but NOT left unwatched. A preserved session keeps whatever pipe it
@@ -150,7 +161,7 @@ if tmux has-session -t lead 2>/dev/null; then
 fi
 joined="$(IFS=,; echo "${names[*]}")"
 tmux new-session -d -s lead -c "$PROJECT" \
-  "python3 $PROJECT/.claude/mechanisms/fleet/squad_lead.py \
+  "python3 $_here/squad_lead.py \
      --session $joined --project $PROJECT \
      --marker-dir $MARKERS --log $LOG \
      --idle 120 --poll 20 --agents-when-stuck \

@@ -608,3 +608,82 @@ def test_the_closed_finding_is_reported_rather_than_silenced(tmp_path) -> None:
     assert finding["severity"] == "minor"
     assert "history" in finding["message"]
     assert "shipped" in finding["message"]
+
+
+def test_a_registry_this_parser_cannot_read_is_not_shippable(tmp_path: Path) -> None:
+    """The verdict is derived from the findings list, and no items means no findings.
+
+    Counts were all zero, the verdict was SHIPPABLE and `main` returned 0 — over a file
+    with content that this parser produced nothing from. No branch asked whether the file
+    it had just read yielded any item, so "the registry is clean" and "the registry could
+    not be parsed" were the same answer.
+    """
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text(
+        "# Backlog\n\n"
+        "### B-001 — an item under the wrong heading level\n\n"
+        "status: planned\n" * 20,
+        encoding="utf-8")
+
+    report = check_backlog(backlog)
+
+    assert report["items_total"] == 0
+    assert report["verdict"] != "SHIPPABLE", report["verdict"]
+    assert any(f["check"] == "registry_parses" for f in report["findings"]), (
+        [f["check"] for f in report["findings"]])
+
+
+def test_a_genuinely_empty_registry_is_still_clean(tmp_path: Path) -> None:
+    """The refusal must be about an unreadable file, not about an empty one."""
+    backlog = tmp_path / "BACKLOG.md"
+    backlog.write_text("", encoding="utf-8")
+
+    report = check_backlog(backlog)
+
+    assert not any(f["check"] == "registry_parses" for f in report["findings"])
+
+
+# ── the contract lists every class the checker emits ─────────────────────────
+#
+# `SKILL.md` says `check_backlog_structure.py` produces "every finding class
+# below", and ten of the twenty-four were absent from the table — among them every
+# impediment-edge and lineage check. A reader auditing what the review can tell
+# them read a list that was missing the half about edges.
+
+
+def test_every_emitted_finding_class_is_documented() -> None:
+    import re as _re
+
+    root = Path(__file__).resolve().parents[3]
+    source = (root / "skills" / "backlog-review" / "scripts"
+              / "check_backlog_structure.py").read_text(encoding="utf-8")
+    skill = (root / "skills" / "backlog-review" / "SKILL.md").read_text(encoding="utf-8")
+
+    emitted = sorted(set(_re.findall(r'Finding\("([a-z_]+)"', source)))
+    assert emitted, "no finding class found in the source; this test lost its subject"
+
+    undocumented = [code for code in emitted if f"`{code}`" not in skill]
+    assert undocumented == [], (
+        "SKILL.md says it lists every finding class and these are absent: "
+        f"{undocumented}")
+
+
+def test_the_table_documents_no_class_the_checker_cannot_emit() -> None:
+    """The other direction: a documented class nothing produces is a promise."""
+    import re as _re
+
+    root = Path(__file__).resolve().parents[3]
+    source = (root / "skills" / "backlog-review" / "scripts"
+              / "check_backlog_structure.py").read_text(encoding="utf-8")
+    skill = (root / "skills" / "backlog-review" / "SKILL.md").read_text(encoding="utf-8")
+
+    emitted = set(_re.findall(r'Finding\("([a-z_]+)"', source))
+    # Only the two finding-class tables — `SKILL.md` carries others (statuses,
+    # scripts) whose first column is also a backticked word.
+    documented: set[str] = set()
+    for block in skill.split("| Check | Severity |")[1:]:
+        table = block.split("\n\n", 1)[0]
+        documented |= set(_re.findall(r"^\| `([a-z_]+)` \|", table, _re.MULTILINE))
+
+    assert documented - emitted == set(), (
+        f"documented and emitted by nothing: {sorted(documented - emitted)}")

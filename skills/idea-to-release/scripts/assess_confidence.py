@@ -76,7 +76,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
     records_dir,
     resolve_knowledge_dir,
     write_records_dir,
@@ -264,14 +267,28 @@ def refuses(verdict: str) -> bool:
     return verdict == "LOW"
 
 
+#: The score bands, highest first. Named as one table because they are one decision:
+#: they were four bare literals inside the predicates below, which meant a reader could
+#: not see the whole scale at once and a change to one cutoff did not have to be read
+#: against the others. `is_refusable` a few lines up already treats LOW as a field.
+BANDS: tuple[tuple[int, str, str, str], ...] = (
+    (95, "HIGH", "none", "Sufficient prior art; skip discover."),
+    (70, "MED-HIGH", "light",
+     "Some prior art; 2-3 focused research questions recommended."),
+    (30, "MED-LOW", "full",
+     "Limited prior art; full discover (5-10 questions) recommended. "
+     "Cap likely SHIPPABLE_WITH_CAVEATS without it."),
+    (0, "LOW", "full", "Insufficient signals. REFUSE without --force-override."),
+)
+
+
 def verdict_from_score(score: int) -> tuple[str, str, str]:
     """Map score -> (verdict, recommended_depth, reasoning)."""
-    if score >= 95:
-        return ("HIGH", "none", "Sufficient prior art; skip discover.")
-    if score >= 70:
-        return ("MED-HIGH", "light", "Some prior art; 2-3 focused research questions recommended.")
-    if score >= 30:
-        return ("MED-LOW", "full", "Limited prior art; full discover (5-10 questions) recommended. Cap likely SHIPPABLE_WITH_CAVEATS without it.")
+    for floor, verdict, depth, reasoning in BANDS:
+        if score >= floor:
+            return (verdict, depth, reasoning)
+    # Unreachable while the table ends at 0, and stated rather than assumed: a table
+    # edited to start above 0 would otherwise fall off the end returning None.
     return ("LOW", "full", "Insufficient signals. REFUSE without --force-override.")
 
 

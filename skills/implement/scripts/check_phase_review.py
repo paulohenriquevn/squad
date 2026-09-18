@@ -51,7 +51,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 @dataclass(frozen=True)
@@ -263,7 +266,7 @@ def main() -> int:
         default_mini_reviews_dir(root),
         write_records_dir(root, "mini-reviews"),
     ]
-    report = check_phase_review(args.plan, progress, args.slug, review_dirs)
+    report = check_phase_review(args.plan, progress, args.slug, review_dirs, repo_root=root)
 
     if args.json:
         print(json.dumps({

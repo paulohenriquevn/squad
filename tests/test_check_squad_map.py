@@ -24,11 +24,11 @@ MAP_REL = "rules/squad-map.md"
 
 
 def _run(root: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(  # noqa: PLW1510
+    return subprocess.run(
         [sys.executable, str(SCRIPT), "--root", str(root), "--json"],
         capture_output=True,
         text=True,
-    )
+     check=False)
 
 
 @pytest.fixture

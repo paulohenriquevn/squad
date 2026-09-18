@@ -45,7 +45,8 @@ import json
 import re
 import subprocess
 import sys
-import time
+import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -161,12 +162,21 @@ def run(command: list[str], *, cwd: Path, timeout: int = 3000) -> Ran:
     return Ran(done.returncode == 0, done.stdout or "", done.stderr or "")
 
 
-def lane_branches(repo: Path) -> list[str]:
-    """Branches a lane produced that are ahead of the working branch."""
+def lane_branches(repo: Path) -> list[str] | None:
+    """Branches a lane produced that are ahead of the working branch, or None.
+
+    None means the listing FAILED — git missing, a broken repository, a timeout, all of
+    which `run()` folds into `Ran(ok=False)`. It used to be `[]`, which `main` renders
+    as "swept the repository: no lane branch is ahead of origin/workspace" over a sweep
+    that never happened. The comment on that very line states the contract this broke:
+    "'nothing to land' and 'I did not look' must not read the same, and on this kit they
+    have before." `fleet_router.plan()` refuses on an unreadable branch set for the same
+    reason, one file along.
+    """
     listed = run(["git", "-C", str(repo), "branch", "-a",
                   "--format=%(refname:short)"], cwd=repo, timeout=60)
     if not listed.ok:
-        return []
+        return None
     names = {ln.strip().removeprefix("origin/") for ln in listed.stdout.splitlines()}
     out = []
     for name in sorted(n for n in names if _LANE_BRANCH.match(n)):
@@ -190,10 +200,18 @@ def land(repo: Path, branch: str, *, apply: bool, timeout: int) -> Verdict:
     a command and discards the answer is how a leaked worktree became
     unexplainable on this module's first live run.
     """
-    stamp = int(time.time())
+    # Unique BY CONSTRUCTION. The names were `<branch>-alone-<epoch seconds>` under a
+    # machine-global root, so two landers on the same branch within the same second — the
+    # supervisor's land loop plus an operator's manual `--apply`, or two supervisors —
+    # picked the same paths. `git worktree add` then failed for the second, and the
+    # failure reads as a missing worktree rather than as a collision. `mkdtemp` makes the
+    # clash impossible instead of unlikely.
     root = Path("/tmp/squad-landing")
-    alone = root / f"{branch.replace('/', '-')}-alone-{stamp}"
-    merged_tree = root / f"{branch.replace('/', '-')}-merged-{stamp}"
+    root.mkdir(parents=True, exist_ok=True)
+    safe_branch = branch.replace("/", "-")
+    session = Path(tempfile.mkdtemp(prefix=f"{safe_branch}-", dir=str(root)))
+    alone = session / "alone"
+    merged_tree = session / "merged"
     made: list[Path] = []
 
     def add(tree: Path, ref: str) -> bool:
@@ -249,9 +267,17 @@ def land(repo: Path, branch: str, *, apply: bool, timeout: int) -> Verdict:
         raise
 
 
-def report_each(branches: list[str], *, land, repo: Path, apply: bool,
+def report_each(branches: list[str], *,
+                assess_branch: Callable[..., Verdict],
+                repo: Path, apply: bool,
                 timeout: int) -> list[Verdict]:
     """Assess each branch, printing before and after rather than at the end.
+
+    `assess_branch`, not `land`. That parameter shadowed the module-level function
+    `land` it is called with, while `verdict.land` inside this body is the boolean
+    saying whether the branch may be pushed — so in fifteen lines a reader met `land`
+    as a module function, as an injected callable and as a field. It was untyped too,
+    so nothing said which of the three a given occurrence was.
 
     Two full suites per branch is slow on purpose — what it protects is the
     branch every other lane cuts from — and on a five-branch pass that is over an
@@ -286,14 +312,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{repo} is not a git repository", file=sys.stderr)
         return 2
 
-    run(["git", "-C", str(repo), "fetch", "--quiet", "origin"], cwd=repo, timeout=300)
+    # The fetch's result was DROPPED, and everything below decides what is landable from
+    # `origin/workspace..<branch>` against whatever remote-tracking refs happen to be on
+    # disk. With the network down or the remote unauthenticated, the sweep ran on stale
+    # refs and printed the line two paragraphs down — the one that insists a sweep and a
+    # non-sweep must not read the same.
+    fetched = run(["git", "-C", str(repo), "fetch", "--quiet", "origin"],
+                  cwd=repo, timeout=300)
+    if not fetched.ok:
+        print(f"could not fetch origin, so the remote-tracking refs are stale and a "
+              f"sweep over them is not a sweep: {(fetched.stderr or '').strip()[:300]}",
+              file=sys.stderr)
+        return 2
+
     branches = lane_branches(repo)
+    if branches is None:
+        print("the repository's branches could not be listed, so whether a lane has "
+              "work to land is unknown. Refusing to report a sweep.", file=sys.stderr)
+        return 2
     if not branches:
         # Said out loud. "nothing to land" and "I did not look" must not read the
         # same, and on this kit they have before.
         print("swept the repository: no lane branch is ahead of origin/workspace")
     verdicts = ([] if args.json else
-                report_each(branches, land=land, repo=repo, apply=args.apply,
+                report_each(branches, assess_branch=land, repo=repo, apply=args.apply,
                             timeout=args.timeout))
     if args.json:
         verdicts = [land(repo, b, apply=args.apply, timeout=args.timeout)

@@ -112,11 +112,11 @@ def _leaks(text: str) -> list[str]:
 
 
 def _versioned_files() -> list[Path]:
-    out = subprocess.run(  # noqa: PLW1510
+    out = subprocess.run(
         ["git", "-C", str(REPO), "ls-files"],
         capture_output=True,
         text=True,
-    )
+     check=False)
     assert out.returncode == 0, out.stderr
     return [
         REPO / line
@@ -182,11 +182,11 @@ def test_no_versioned_path_names_the_origin_ecosystem():
 @pytest.fixture(scope="module")
 def installed_rules(versioned_kit: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
     target = tmp_path_factory.mktemp("consumer")
-    proc = subprocess.run(  # noqa: PLW1510
+    proc = subprocess.run(
         ["bash", str(versioned_kit / "mechanisms" / "distribution" / "install.sh"), str(target)],
         capture_output=True,
         text=True,
-    )
+     check=False)
     assert proc.returncode == 0, proc.stderr
     return target / ".claude" / "rules"
 

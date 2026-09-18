@@ -65,10 +65,10 @@ def _repo(tags: list[str], manifest_version: str | None) -> Path:
 def test_the_base_ignores_ancestry() -> None:
     # The defect itself: tags exist, none is reachable from HEAD.
     root = _repo(["v0.60.0", "v0.64.0"], "0.64.0")
-    described = subprocess.run(  # noqa: PLW1510
+    described = subprocess.run(
         ["git", "describe", "--tags", "--abbrev=0"],
         cwd=root, capture_output=True, text=True,
-    )
+     check=False)
     assert described.returncode != 0 or described.stdout.strip() != "v0.64.0"
 
     assert detect_current_version(root) == "0.64.0"

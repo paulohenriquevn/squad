@@ -9,7 +9,12 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from check_patterns_consumption import check_patterns_consumption  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_patterns_consumption import (
+    check_patterns_consumption,  # noqa: E402 — post-bootstrap import
+)
 
 
 def _ecosystem(tmp: Path, patterns: dict[str, str]) -> Path:

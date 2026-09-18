@@ -30,7 +30,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURE_BACKLOG = REPO / "skills" / "backlog-item" / "evals" / "fixtures" / "BACKLOG.md"

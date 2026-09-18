@@ -47,11 +47,14 @@ for _up in _here.parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-import re  # noqa: E402
-from dataclasses import dataclass, field  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import re  # noqa: E402 — post-bootstrap import
+from dataclasses import dataclass, field  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-from squad.paths import (  # noqa: E402
+from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
     LEGACY_RECORDS_ROOTS,
     records_dir,
@@ -264,6 +267,28 @@ def check_deps_audit(plan_path: Path) -> DepsAuditReport:
     verdict = match.group("verdict")
     common = {"applies": True, "verdict": verdict, "audit_path": str(audit),
               "declared": tuple(declared)}
+
+    # Does the audit MENTION each dependency the plan declares?
+    #
+    # Nothing asked. The verdict was read off the report's `**Verdict:**` line and
+    # applied to `declared` — the hard-cap reason even says the audit "reports {verdict}
+    # against the declared dependencies ({', '.join(declared)})" — while the two lists
+    # were never compared. So a PASS over a scan that covered one package cleared a plan
+    # that declared four, and the reason SAID it had covered all four.
+    #
+    # Mentioned, not "scanned": this reads a markdown report, and the strongest honest
+    # claim is that the name appears in it. A name that does not appear was certainly
+    # not audited, which is the direction that matters.
+    unmentioned = tuple(d for d in declared if d.lower() not in audit_body.lower())
+    if unmentioned:
+        return DepsAuditReport(
+            **common, soft_floor=True, stable_id="soft_floor_deps_audit_partial",
+            reasons=(f"{audit.name} reports {verdict}, and {len(unmentioned)} of "
+                     f"{len(declared)} declared dependencies are not named in it: "
+                     f"{', '.join(unmentioned)}. A verdict covers what was scanned; "
+                     f"applying it to a dependency the report never mentions is the "
+                     f"scan's silence read as its approval.",),
+        )
 
     if verdict in _CLEAN:
         return DepsAuditReport(**common)

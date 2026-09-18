@@ -89,6 +89,18 @@ def default_panel_path() -> Path:
     return Path(__file__).resolve().parents[2] / "rules" / "review-panel.txt"
 
 
+#: Why each seat could not be filled on the LAST run: `(phase, agent, reason)`. A
+#: module-level record rather than a changed return type — `PanelCapability` is what six
+#: readers compute from, and widening it to a tuple would rewrite all of them to carry a
+#: detail only `main` prints. `unfillable_seats()` is the addition.
+unfillable: list[tuple[str, str, str]] = []
+
+
+def unfillable_seats() -> list[tuple[str, str, str]]:
+    """`(phase, agent, reason)` for every seat the last check could not fill."""
+    return list(unfillable)
+
+
 def check_panel_capability(
     panel_path: Path | None = None,
     *,
@@ -132,14 +144,24 @@ def check_panel_capability(
 
     # Reachability is checked LAST and reported separately, because it is the only
     # question here whose answer depends on the machine rather than on the repository.
-    for seats in by_phase.values():
+    #
+    # EVERY unfillable seat, with the reason `resolve_seat` gave. This returned on the
+    # first one and discarded the string it had just been handed — `no agent \`X\` in
+    # <dir>`, `plugin \`X\` is not installed`, `\`X\` is not on PATH` — so the operator
+    # read "no such agent, or no such binary on PATH" and had to go find out which, for
+    # a seat the gate had already identified.
+    unfillable.clear()
+    for phase, seats in by_phase.items():
         for seat in seats:
-            # The panel is short a member here. When it is the orthogonal one, this
-            # also removes the only thing the diversity rule was protecting — so it
-            # still stops a real run, it just is not the repository's fault.
-            if resolve_seat(seat, agents=agents, which=resolve,
-                            config_dir=config_dir):
-                return PanelCapability.UNREACHABLE
+            reason = resolve_seat(seat, agents=agents, which=resolve,
+                                  config_dir=config_dir)
+            if reason:
+                # The panel is short a member here. When it is the orthogonal one, this
+                # also removes the only thing the diversity rule was protecting — so it
+                # still stops a real run, it just is not the repository's fault.
+                unfillable.append((phase, seat.agent, reason))
+    if unfillable:
+        return PanelCapability.UNREACHABLE
 
     return PanelCapability.HOLDS
 
@@ -199,6 +221,10 @@ _MESSAGES = {
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Check that a review panel can be formed.")
     ap.add_argument("--panel", type=Path, default=None)
+    # `--root`, per the contract in `_contract.py`: a caller that does not know
+    # which gate it is talking to passes this and it works. This gate resolved the
+    # tree implicitly from the working directory, so it could not be pointed at one.
+    ap.add_argument("--root", type=Path, default=Path.cwd())
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -222,9 +248,15 @@ def main(argv: list[str] | None = None) -> int:
         home=HOME_FAMILY,
     )
 
+    if result is PanelCapability.UNREACHABLE and unfillable_seats():
+        message += "\n\nWhich seats, and why:\n" + "\n".join(
+            f"  {phase}/{agent}: {reason}" for phase, agent, reason in unfillable_seats())
+
     if args.json:
         print(json.dumps({
             "result": result.value,
+            "unfillable_seats": [{"phase": p, "agent": a, "reason": r}
+                                 for p, a, r in unfillable_seats()],
             "panel_phases": gated,
             "seats": [{"phase": s.phase, "agent": s.agent, "model": s.model,
                        "family": s.family, "via": s.invocation} for s in seats],

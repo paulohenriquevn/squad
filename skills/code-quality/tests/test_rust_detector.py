@@ -78,7 +78,10 @@ def test_rust_detector_handles_malformed_json(tmp_path: Path) -> None:
 # D2 false-positive guards — ported with the detector, which shipped untested
 # --------------------------------------------------------------------------
 
-from scripts.detectors.rust import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from scripts.detectors.rust import (  # noqa: E402 — post-bootstrap import
     _RUST_BUILTIN_CRATES,
     _has_glob_import,
     _in_scope_names,

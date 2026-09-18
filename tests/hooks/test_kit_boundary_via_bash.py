@@ -50,6 +50,44 @@ def _run(command: str, kit: Path, project: Path) -> int:
              "CLAUDE_PLUGIN_ROOT": str(kit)}).returncode
 
 
+#: The SPELLING of the target, not only the verb. Every case below built
+#: `kit / "rules" / "architecture.md"`, which is always an ABSOLUTE tmp_path, and
+#: `check_kit_boundary` collected candidates with a pattern matching `/…`, `./…` and
+#: `../…` only. `sed -i s/a/b/ .claude/rules/architecture.md` — the most natural way to
+#: type it from the project root — was therefore never examined by any test here.
+_SPELLINGS = ("absolute", "dot-relative", "bare-relative")
+
+
+def _nested_kit(tmp_path: Path) -> tuple[Path, Path]:
+    """A kit INSIDE the project — the copy install, where a relative path can reach it.
+
+    `_kit` above builds the two as siblings, so no relative spelling from the project
+    could ever name a kit file. That is precisely why the hole survived: the layout the
+    tests used could not express the case.
+    """
+    project = tmp_path / "project"
+    kit = project / ".claude"
+    for tree in ("skills", "rules", "hooks", "mechanisms"):
+        (kit / tree).mkdir(parents=True, exist_ok=True)
+    (kit / "rules" / "architecture.md").write_text("# rules\n", encoding="utf-8")
+    return kit, project
+
+
+@pytest.mark.parametrize("spelling", _SPELLINGS)
+def test_the_boundary_holds_however_the_path_is_spelled(spelling: str, tmp_path: Path) -> None:
+    kit, project = _nested_kit(tmp_path)
+    absolute = kit / "rules" / "architecture.md"
+    relative = absolute.relative_to(project)
+    target = {
+        "absolute": str(absolute),
+        "dot-relative": f"./{relative}",
+        "bare-relative": str(relative),
+    }[spelling]
+
+    assert _run(f"sed -i s/a/b/ {target}", kit, project) == 2, (
+        f"the {spelling} spelling of a kit-owned file reached the tool: {target}")
+
+
 @pytest.mark.parametrize("verb", [
     "sed -i s/a/b/ {target}",
     "echo x > {target}",

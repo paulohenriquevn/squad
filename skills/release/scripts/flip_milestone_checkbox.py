@@ -50,7 +50,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 def _header_re(milestone_id: str) -> re.Pattern[str]:
@@ -76,13 +79,13 @@ def flip(roadmap_text: str, milestone_id: str) -> tuple[str, str]:
 
     new_text = roadmap_text[: match.start(2)] + "x" + roadmap_text[match.end(2):]
 
-    # Single-flip invariant: count diff transitions to be safe
-    transitions_before = roadmap_text.count("] ")
-    transitions_after = new_text.count("] ")
-    if transitions_after != transitions_before:
-        # Sanity check — shouldn't happen with our replacement, but defensive
-        return roadmap_text, "multi-flip"
-
+    # The single-flip invariant is enforced ABOVE, by `len(matches) > 1`, and that is
+    # the whole of it. What stood here counted occurrences of "] " before and after the
+    # replacement — a substring starting at the closing bracket, i.e. AFTER the one
+    # character this function rewrites. The two counts were therefore equal for every
+    # possible input, and the branch below them was unreachable. A guard that cannot
+    # fire reads as a second, independent check and is not one; deleting it leaves the
+    # real invariant visible instead of shadowed.
     return new_text, "flipped"
 
 
@@ -209,17 +212,29 @@ def main() -> int:
 
     args.roadmap.write_text(new_text, encoding="utf-8")
     flip_sha: str | None = None
+    commit_failed = False
     if args.commit:
         flip_sha = _git_commit(args.roadmap, args.milestone_id, args.version)
+        commit_failed = flip_sha is None
 
     run_file = _append_roadmap_run(
         runs_dir, args.milestone_id, args.plan, args.release_log, flip_sha
     )
+    # Three states, three words. `flip_sha or 'n/a (--commit not passed)'` printed the
+    # SAME line whether the caller never asked for a commit or asked and git refused —
+    # and it returned 0 either way, so a release script reading the exit code was told
+    # the roadmap change had landed when it was sitting unstaged in the working tree.
+    if commit_failed:
+        detail = "FAILED — the flip is in the working tree and is NOT committed"
+    elif flip_sha:
+        detail = flip_sha
+    else:
+        detail = "n/a (--commit not passed)"
     print(
         f"FLIPPED {args.milestone_id} [ ]→[x] in {args.roadmap}; "
-        f"audit: {run_file}; commit: {flip_sha or 'n/a (--commit not passed)'}"
+        f"audit: {run_file}; commit: {detail}"
     )
-    return 0
+    return 1 if commit_failed else 0
 
 
 if __name__ == "__main__":

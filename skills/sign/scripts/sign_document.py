@@ -34,9 +34,16 @@ contributes over `sed`.
   - THE AUTHOR SIGNING THEIR OWN WORK. The same rule that keeps a judge off a brief
     it wrote and an author off their own review panel. Read from git, so it holds
     without anyone declaring it.
-  - A DOCUMENT THE MACHINE FAILED. Signing below the floor puts a person's name on
-    something the deterministic check already refused. The score is not the
-    signature's business, but a `NEEDS_REVISION` is not waiting on a reviewer.
+  - A THIN OVERRIDE REASON. `--despite-authorship` preserves the fact of self-signing
+    rather than dismissing it; under five words is a reason nobody can argue with,
+    which is the same as no reason.
+
+    What stood here instead was a claim that this tool refuses a document below the
+    score floor. It does not, and never did: `check()` returns exactly these four
+    Refusals, and none of them reads a score. The deterministic gate is what refuses
+    below the floor — a separate claim, made by a separate process — and `preview()`
+    has said so all along. A refusal listed and not implemented is worse than one
+    never written down: the reader stops looking for the check that would catch it.
 
 ## What it does NOT do
 
@@ -66,7 +73,10 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import records_dir, wiki_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import records_dir, wiki_dir  # noqa: E402 — post-bootstrap import
 
 #: The marker every scorer already reads. `human` / `human/<name>` is a person;
 #: anything else is an agent — `score_alignment.signed_by_is_human` owns that rule and
@@ -98,12 +108,27 @@ class Document:
         return self.unticked == 0 and bool(self.signers)
 
 
+class Unreadable(OSError):
+    """The file could not be read, which is not the same as having nothing to sign.
+
+    `load` returned None for both, and the docstring below claims the value means one
+    thing: "None when there is nothing here to sign". A document the tool could not open
+    was therefore reported as "not at the stage where a signature applies" — and in
+    `--list`, a directory of unreadable documents simply did not appear, so the list of
+    what is waiting silently excluded everything the tool could not read.
+    """
+
+
 def load(path: Path) -> Document | None:
-    """None when there is nothing here to sign — never an exception, never a guess."""
+    """None when there is nothing here to sign — never an exception, never a guess.
+
+    Raises `Unreadable` when the file itself could not be opened. That is a different
+    fact and the caller decides what to do with it.
+    """
     try:
         body = path.read_text(encoding="utf-8")
-    except OSError:
-        return None
+    except OSError as exc:
+        raise Unreadable(f"{path} could not be read: {exc}") from exc
     match = SECTION_RE.search(body)
     if match is None:
         return None
@@ -237,12 +262,49 @@ def waiting(project: Path) -> list[Path]:
                          _agents_dir(project))
              if d is not None and d.is_dir()]
     found: list[Path] = []
+    unreadable: list[str] = []
     for root in roots:
         for path in sorted(root.rglob("*.md")):
-            doc = load(path)
+            try:
+                doc = load(path)
+            except Unreadable as exc:
+                # Counted, not skipped. A document this tool cannot open is not a
+                # document with nothing to sign, and dropping it makes the list of what
+                # is waiting quietly shorter than the truth.
+                unreadable.append(str(exc))
+                continue
             if doc is not None and not doc.already_signed:
                 found.append(path)
+    if unreadable:
+        print(f"{len(unreadable)} document(s) could not be read and are NOT in this list:",
+              file=sys.stderr)
+        for line in unreadable[:10]:
+            print(f"  {line}", file=sys.stderr)
     return found
+
+
+def resolve_target(target: str, project: Path) -> Path | None:
+    """The document `target` names — as a path, or as a slug.
+
+    The usage block advertised `<path-or-slug>` while `main` resolved a path only, so a
+    slug became `./<slug>` and the user was told the document has no sign-off section.
+    That sends them to read a file that is not the one they meant.
+
+    A path that exists wins, always. Otherwise the slug is matched against the stems of
+    the documents `--list` would have shown, with and without the `-plan` suffix the
+    plans carry. Returns None when nothing matches, so the caller can say "unknown
+    slug" rather than blaming a document.
+    """
+    as_path = Path(target)
+    if as_path.exists():
+        return as_path.resolve()
+
+    slug = as_path.name.removesuffix(".md")
+    for candidate in waiting(project):
+        stem = candidate.stem
+        if slug in (stem, stem.removesuffix("-plan")):
+            return candidate
+    return None
 
 
 def preview(doc: Document, signer: str) -> str:
@@ -297,16 +359,38 @@ def main(argv: list[str] | None = None) -> int:
     if not args.target:
         ap.error("give a document to sign, or --list to see what is waiting")
 
-    path = Path(args.target).resolve()
-    doc = load(path)
+    path = resolve_target(args.target, args.project.resolve())
+    if path is None:
+        print(f"FATAL: `{args.target}` is neither a path that exists nor a slug of any "
+              f"document waiting for a signature under {args.project.resolve()}. "
+              f"Run with --list to see what is waiting. Nothing was signed.",
+              file=sys.stderr)
+        return 2
+    try:
+        doc = load(path)
+    except Unreadable as exc:
+        print(f"FATAL: {exc}. Nothing was signed, and this is NOT "
+              f"'the document is not at the stage where a signature applies' — the tool "
+              f"could not open it at all.", file=sys.stderr)
+        return 2
     if doc is None:
         print(f"NOT SIGNABLE: {path} — no `## Sign-off` or `## Reviewer sign-off` "
-              "section, or the file could not be read. Nothing was signed, and that is "
-              "not a refusal: the document is not at the stage where a signature "
-              "applies.", file=sys.stderr)
+              "section. Nothing was signed, and that is not a refusal: the document is "
+              "not at the stage where a signature applies.", file=sys.stderr)
         return 2
 
-    signer = args.signer.strip() or "human"
+    # A NAME is required. `--as` used to default to the bare string "human", which
+    # `sign()` expanded to `signed-by: human/human` and the footer to "Signed by
+    # `human/human` — a person, not a judge". `score_alignment.signed_by_is_human`
+    # accepts anything starting with `human/`, so the strongest verdict the chain can
+    # carry was produced by a run that named nobody — and the whole point of a human
+    # signature is which human. The prefix alone is not a name either.
+    signer = args.signer.strip()
+    if not signer.removeprefix(HUMAN_PREFIX).strip():
+        print("REFUSED [no_signer_named]: --as must name the person signing. A "
+              "signature is worth exactly the name on it, and `human` is not a name. "
+              "Nothing was signed.", file=sys.stderr)
+        return 1
     doc.authors = git_authors(path)
 
     refusal = check(doc, signer, despite=args.despite)

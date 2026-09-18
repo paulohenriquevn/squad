@@ -31,7 +31,7 @@ The hook cannot tell a merge that finalizes an approved PR from one that skips i
 |---|---|---|
 | `git checkout` | Ambiguous (branch vs file); easy to discard work | `git switch <branch>` / `git restore <path>` |
 | `git revert` | Hides history behind an auto-commit | A new explicit commit that reverses the change |
-| `git push --force` / `-f` | Rewrites shared history | `git push --force-with-lease` only when explicitly authorized, and never on `main`/`develop` |
+| `git push --force` / `-f` | Rewrites shared history | `git push --force-with-lease` on a DISPOSABLE branch. Never on `main`, `develop` or `workspace` — the lease guards against clobbering a fetch you have not seen, not against rewriting a permanent branch. The hook enforces both halves; "only when explicitly authorized" stood here while nothing asked. |
 | `git reset --hard` | Destroys uncommitted work irrecoverably | `git reset --soft`, or commit on a branch |
 | `git stash` while the repository has more than one worktree | The stack is **shared**: `refs/stash` lives in the common git dir, so every worktree pushes and pops the same stack and `pop` returns the top entry whichever tree pushed it | Copy the files aside with `cp`, or commit them on your own branch, then `git restore` |
 | Any mutation of `main` (commit/merge/rebase/reset/cherry-pick) | `main` is release-only | Do the work on `workspace`; cut the release via PR |

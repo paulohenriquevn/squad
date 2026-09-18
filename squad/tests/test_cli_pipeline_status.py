@@ -20,8 +20,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from squad.cli import pipeline_status  # noqa: E402
-from squad.cli.report import FINDING, OK, UNMEASURED  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.cli import pipeline_status  # noqa: E402 — post-bootstrap import
+from squad.cli.report import (  # noqa: E402 — post-bootstrap import
+    FINDING,
+    OK,
+    UNMEASURED,
+)
 
 RUN = {
     "databaseId": 1,
@@ -135,3 +142,32 @@ def test_a_repeated_annotation_is_marked_rather_than_dropped() -> None:
     assert "same annotation" in body.lower(), (
         f"the second job is bare, which reads as 'no annotation':\n{body}"
     )
+
+
+def test_the_limit_flag_says_it_fetches_rather_than_considers() -> None:
+    """`--limit` reached `gh run list --limit N` and everything after `runs[0]` was
+    discarded, so `--limit 20` reported exactly what `--limit 1` reports while its help
+    text said "how many recent runs to consider"."""
+    import inspect
+
+    from squad.cli import pipeline_status
+
+    source = inspect.getsource(pipeline_status.main)
+
+    assert "how many runs to FETCH" in source, source[source.index("--limit"):][:200]
+
+
+def test_the_replay_carries_a_per_gate_budget() -> None:
+    """`sq check` replayed every CI command with no timeout at all.
+
+    Every other subprocess in this partition carries an explicit budget with a comment
+    justifying it, so a single hung gate held the whole run with nothing naming which —
+    and a hang in a pre-push path is a gate people learn to bypass.
+    """
+    import inspect
+
+    from squad.cli import run_checks
+
+    assert run_checks._GATE_TIMEOUT_SEC > 0
+    assert "timeout=_GATE_TIMEOUT_SEC" in inspect.getsource(run_checks.main)
+    assert run_checks._TIMED_OUT == 124

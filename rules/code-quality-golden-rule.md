@@ -27,8 +27,9 @@ In order of severity ceiling; first hit wins (smallest cap is the verdict).
 | Symbol fabrication (production code references undefined symbol) | `FAIL_HARD` (49) | `symbol_fabrication_{language}` |
 | Dead exported symbol with no caller and no test (unallowlisted) | `FAIL_HARD` (49) | `dead_code_unallowlisted_{language}` |
 | Allowlist entry malformed (parse error) | `FAIL_HARD` (49) | `allowlist_malformed_entry` |
+| Declared architecture rule broken by the code (detector D5) | `FAIL_HARD` (49) | `architecture_violation_{language}` |
+| Declared architecture rule names something no longer in the tree (D5) | `FAIL_HARD` (49) | `vacuous_architecture_rule_{language}` |
 | Code-quality golden rule missing (this file) | `INVALID` (0) | `code_quality_golden_rule_missing` |
-| Plan missing `## Critical paths` section (Mode 2 + D4 mutation only) | `FAIL_SOFT` (70) | `plan_missing_critical_paths_section` |
 | Orphan exported symbol (no importer, exporting from a public package) | `FAIL_SOFT` (70) | `soft_cap_orphan_export_{language}` |
 | Mutation score < 60% on declared critical paths | `FAIL_SOFT` (70) | `soft_cap_mutation_score_low_{language}` |
 | Mutation runner not configured by the project | `FAIL_SOFT` (70) | `soft_cap_mutation_unconfigured_{language}` |
@@ -39,6 +40,8 @@ In order of severity ceiling; first hit wins (smallest cap is the verdict).
 | Mutation score 60-79% on declared critical paths | `PASS_WITH_CAVEATS` (89) | `soft_floor_mutation_score_medium_{language}` |
 | Dead internal symbol (private function with no caller) | `PASS_WITH_CAVEATS` (89) | `dead_internal_symbol_{language}` |
 | Unused parameter (often refactor leftover) | `PASS_WITH_CAVEATS` (89) | `unused_parameter_{language}` |
+
+**Retired 2026-09-17: `plan_missing_critical_paths_section`.** It capped a plan with no `## Critical paths` section at 70, on the strength of that section scoping D4. The scoping was removed deliberately — neither mutmut nor Stryker accepts an arbitrary file list, so `detect_mutation_score` reads the project's own mutation config — and no code has emitted this identifier since. A declared cap nothing can trigger is a rule that reports itself as enforced.
 
 ## § 3 — Hard caps (LOCKED)
 

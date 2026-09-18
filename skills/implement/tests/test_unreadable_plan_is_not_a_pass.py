@@ -53,7 +53,7 @@ def _run(tmp_path: Path, body: str) -> subprocess.CompletedProcess:
     plan = tmp_path / "plan.md"
     plan.write_text(body, encoding="utf-8")
     return subprocess.run([sys.executable, str(_SCRIPT), "--plan", str(plan)],
-                          capture_output=True, text=True, timeout=180)
+                          capture_output=True, text=True, timeout=180, check=False)
 
 
 def test_a_plan_the_checker_cannot_read_does_not_pass(tmp_path: Path) -> None:
@@ -81,3 +81,34 @@ def test_a_readable_plan_still_passes(tmp_path: Path) -> None:
     result = _run(tmp_path, _FLAT)
     assert result.returncode == 0, result.stdout
     assert "UNREADABLE" not in result.stdout
+
+
+def test_a_plan_that_parses_to_zero_tasks_fails_the_tdd_gate(tmp_path) -> None:
+    """SKIP counted into `skips`, `overall` became PARTIAL, and PARTIAL exits 0.
+
+    `check_tdd_shape_gate` mapped `total_tasks == 0` to SKIP with the reason "the plan
+    declares no `### T{n}.{m}` task blocks" — a claim about the PLAN derived from the
+    checker's inability to parse it. The plan file exists; `_find_plan` returned it. So
+    IMPLEMENTATION_COMPLETE could be emitted with the TDD shape never verified, over a
+    gate `rules/cycle-implement.md § Hard gates` calls blocking.
+    """
+    import run_validation as rv
+
+    plans = tmp_path / ".squad" / "records" / "plans"
+    plans.mkdir(parents=True)
+    (plans / "some-slug-plan.md").write_text(
+        "# Plan\n\nProse only. No task blocks at all.\n", encoding="utf-8")
+
+    result = rv.check_tdd_shape_gate(tmp_path, "some-slug")
+
+    assert result["status"] == "FAIL", result
+    assert "could not be audited" in result["reason"] or "parsed to zero" in result["reason"]
+
+
+def test_a_missing_plan_is_still_a_skip(tmp_path) -> None:
+    """The separation must hold: no plan at all is a different fact from an unreadable one."""
+    import run_validation as rv
+
+    result = rv.check_tdd_shape_gate(tmp_path, "nothing-here")
+
+    assert result["status"] == "SKIP", result

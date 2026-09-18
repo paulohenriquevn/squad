@@ -14,6 +14,7 @@ if [[ ! -d ".venv" ]]; then
   python3 -m venv .venv
 fi
 
+# The venv activate script exists only after the line above creates it.
 # shellcheck disable=SC1091
 source .venv/bin/activate
 

@@ -53,11 +53,11 @@ def _add_zone_file(repo: Path, relative: str, content: str) -> None:
 
 
 def _run(repo: Path, *extra: str) -> subprocess.CompletedProcess:
-    return subprocess.run(  # noqa: PLW1510
+    return subprocess.run(
         [sys.executable, str(SCRIPT), "--repo", str(repo), *extra],
         capture_output=True,
         text=True,
-    )
+     check=False)
 
 
 def test_literal_copy_from_zone_is_detected(tmp_path):
@@ -231,3 +231,46 @@ def test_zone_traversal_skips_vendored_trees(tmp_path):
     assert "real.py" in found
     assert "index.py" not in found, "the zone's node_modules was walked"
     assert "thing.py" not in found, "the zone's .git was walked"
+
+
+def test_a_tree_git_cannot_describe_is_not_a_clean_bill(tmp_path: Path) -> None:
+    """All three probes swallowed their failure and `continue`d.
+
+    git absent, a `--repo` that is not a repository, a repository with no HEAD — each
+    left `rels` empty, and an empty change set is also what a clean tree looks like. The
+    scan then compared nothing against the study zone and printed
+    "PASS reference-leakage: no 8-line block shared with N scanned zone files", which is
+    a claim about code it never read.
+    """
+    import subprocess as sp
+    import sys as _sys
+
+    gate = (Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
+            / "check_reference_leakage.py")
+    zone = tmp_path / "study-material"
+    zone.mkdir()
+    (zone / "third-party.txt").write_text("\n".join(f"line {n}" for n in range(40)),
+                                          encoding="utf-8")
+
+    done = sp.run([_sys.executable, str(gate), "--repo", str(tmp_path)],
+                  capture_output=True, text=True, timeout=180, check=False)
+
+    assert done.returncode == 2, (
+        f"a tree git cannot describe exited {done.returncode}:\n{done.stdout}{done.stderr}")
+    assert "UNCHECKED" in done.stdout + done.stderr
+    assert "PASS" not in done.stdout
+
+
+def test_a_real_repository_is_still_scanned(tmp_path: Path) -> None:
+    """The refusal must be about the unreadable tree, not about the gate."""
+    import subprocess as sp
+    import sys as _sys
+
+    gate = (Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
+            / "check_reference_leakage.py")
+    repo = Path(__file__).resolve().parent.parent
+
+    done = sp.run([_sys.executable, str(gate), "--repo", str(repo)],
+                  capture_output=True, text=True, timeout=300, check=False)
+
+    assert done.returncode == 0, done.stdout + done.stderr

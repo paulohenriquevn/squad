@@ -48,9 +48,8 @@ import argparse
 import json
 import shutil
 import sys
-from pathlib import Path
-
 import sys as _sys_bootstrap
+from pathlib import Path
 from pathlib import Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
@@ -63,8 +62,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "conventions"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from installed_plugins import resolve as resolve_plugin
-from review_panel import (
+# These resolve only after the sys.path bootstrap above: the kit ships as loose
+# scripts, not an installed package, so E402 is suppressed here on purpose.
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from installed_plugins import resolve as resolve_plugin  # noqa: E402 (post-bootstrap)
+from review_panel import (  # noqa: E402 — post-bootstrap import
     HOME_FAMILY,
     PANEL_SIZE,
     Seat,
@@ -72,7 +76,11 @@ from review_panel import (
     seats_for,
 )
 
-from squad.paths import write_records_dir
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    confined,
+    safe_segment,
+    write_records_dir,
+)
 
 OK, INVALID, UNREADABLE, UNFILLABLE = 0, 1, 2, 3
 
@@ -106,7 +114,25 @@ def repo_root() -> Path:
 
 
 def default_panel_path() -> Path:
-    return repo_root() / "rules" / "review-panel.txt"
+    """Where the roster lives, resolved against the KIT rather than the project.
+
+    `repo_root()` above answers a different question — where this project's records are
+    WRITTEN — and it is right for that. It was wrong here: `install.sh` copies `rules/`
+    into `<target>/.claude/`, so in a plugin install the roster is at
+    `<project>/.claude/rules/review-panel.txt` and `<project>/rules/review-panel.txt`
+    does not exist. Every consumer install therefore convened against a roster that was
+    not there, while `check_panel_capability.py` two directories away resolved it from
+    the kit and found it.
+
+    `squad.layout.kit_dir` is the answer to "where does the kit's code live", and the
+    standalone fallback below is the shape where the two coincide.
+    """
+    from squad.layout import resolve
+
+    layout = resolve(warn=False)
+    if layout is not None:
+        return layout.kit_dir / "rules" / "review-panel.txt"
+    return Path(__file__).resolve().parents[2] / "rules" / "review-panel.txt"
 
 
 def agents_dir(project: Path) -> Path:
@@ -245,7 +271,14 @@ def panels_dir(project: Path) -> Path:
 
 
 def assignment_path(project: Path, slug: str, phase: str) -> Path:
-    return panels_dir(project) / f"{slug}-{phase}.assignment.json"
+    # `slug` and `phase` arrive from the CLI and become part of a filename that is
+    # `mkdir -p`'d. `../` in either escaped the write root and created the directories on
+    # the way. `safe_segment` refuses the spelling; `confined` refuses the result, so a
+    # caller composing the name some other way is still held. See `squad/paths.py`.
+    root = panels_dir(project)
+    safe_segment(slug, what="--slug")
+    safe_segment(phase, what="--phase")
+    return confined(root / f"{slug}-{phase}.assignment.json", root, what="the assignment")
 
 
 def main(argv: list[str] | None = None) -> int:

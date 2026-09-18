@@ -21,7 +21,15 @@
 
 set -uo pipefail
 
-HOST="${SQUAD_RUNNER:-paulo@165.227.121.20}"
+# No default. The fallback was one person's account on one machine, versioned in a kit
+# that ships to other repositories. Every consumer got the string and none of them get
+# the host, so the failure was an ssh attempt against somebody else's server rather
+# than a usage message.
+#
+# Refusing is right here for the same reason the script refuses to fall back to local:
+# "the work comes home without anyone deciding it should" applies just as much to the
+# work going to a machine nobody chose.
+HOST="${SQUAD_RUNNER:-}"
 DIR=""; CAPTURE=""; TIMEOUT="${SQUAD_REMOTE_TIMEOUT:-3600}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -35,6 +43,12 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$DIR" ] || { echo "usage: run_remote.sh --in <remote-dir> [--capture FILE] -- <command...>" >&2; exit 64; }
 [ $# -gt 0 ] || { echo "FATAL: no command after --" >&2; exit 64; }
+if [ -z "$HOST" ]; then
+  echo "run_remote.sh: no runner. Set SQUAD_RUNNER=<user>@<host>, or pass --host." >&2
+  echo "    There is no default: a kit that ships to other repositories cannot name" >&2
+  echo "    one person's machine as everybody's runner." >&2
+  exit 64
+fi
 
 # Reachability is checked BEFORE the command, and a failure here is loud. A
 # runner script that silently falls back to local is how the work comes home
@@ -45,14 +59,29 @@ if ! timeout 30 ssh -o BatchMode=yes -o ConnectTimeout=15 "$HOST" true 2>/dev/nu
   exit 69
 fi
 
-_cmd="$*"
-echo "==> $HOST:$DIR \$ $_cmd" >&2
+# Each argument quoted for the REMOTE shell, one at a time. `"$*"` flattened them into
+# one string that the login shell re-parsed, so quoting did not survive the trip:
+# `run_remote.sh --in ~/dev/theo -- grep "foo bar" .` ran `grep foo bar .` on the
+# runner, and any `;`, `|`, backtick or `$(...)` in an argument — or in `--in` — was
+# executed there as shell syntax. This script is driven programmatically by the fleet,
+# so the arguments are not always a human's.
+_quote() {
+  # POSIX single-quote escaping: wrap in single quotes and replace each
+  # embedded quote with '\'' — the only form that is safe for every byte.
+  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+_remote="cd $(_quote "$DIR") && "
+for _arg in "$@"; do
+  _remote="$_remote$(_quote "$_arg") "
+done
+
+echo "==> $HOST:$DIR \$ $*" >&2
 _start=$(date +%s)
 if [ -n "$CAPTURE" ]; then
-  timeout "$TIMEOUT" ssh -o BatchMode=yes "$HOST" "cd $DIR && $_cmd" 2>&1 | tee "$CAPTURE"
+  timeout "$TIMEOUT" ssh -o BatchMode=yes "$HOST" "$_remote" 2>&1 | tee "$CAPTURE"
   _rc=${PIPESTATUS[0]}
 else
-  timeout "$TIMEOUT" ssh -o BatchMode=yes "$HOST" "cd $DIR && $_cmd"
+  timeout "$TIMEOUT" ssh -o BatchMode=yes "$HOST" "$_remote"
   _rc=$?
 fi
 echo "==> remote exit $_rc after $(( $(date +%s) - _start ))s" >&2

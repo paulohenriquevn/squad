@@ -67,9 +67,9 @@ def pane_pid(session: str) -> int | None:
     """The pid tmux runs in the session's first pane — which IS the `claude`
     process (verified on the fleet: `pane_pid` and the CLI's reported pid match).
     """
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         ["tmux", "list-panes", "-t", session, "-F", "#{pane_pid}"],
-        capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
     if done.returncode != 0:
         return None
     first = (done.stdout or "").strip().splitlines()
@@ -97,9 +97,9 @@ def _agent_status() -> dict[int, str]:
 
 def screen(session: str) -> str | None:
     """What the session is showing, or None when there is no such session."""
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         ["tmux", "capture-pane", "-p", "-t", session],
-        capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
     return done.stdout if done.returncode == 0 else None
 
 

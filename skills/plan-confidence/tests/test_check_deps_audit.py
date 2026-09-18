@@ -42,7 +42,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from check_deps_audit import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_deps_audit import (  # noqa: E402 — post-bootstrap import
     _declared_dependencies,
     check_deps_audit,
 )
@@ -83,13 +86,23 @@ def _plan(root: Path, body: str, slug: str = "demo") -> Path:
     return path
 
 
-def _audit(root: Path, verdict: str, slug: str = "demo", caps: str = "") -> Path:
+def _audit(root: Path, verdict: str, slug: str = "demo", caps: str = "",
+           scanned: tuple[str, ...] = ("requests",)) -> Path:
+    """A deps-audit report. `scanned` is which declared packages it NAMES.
+
+    It used to write the verdict line and nothing else — so every fixture was a report
+    that mentioned none of the plan's dependencies, which is exactly the case
+    `soft_floor_deps_audit_partial` now reports: a verdict covering a scan that did not
+    reach what the plan declared.
+    """
     audits = root / "records" / "audits"
     audits.mkdir(parents=True, exist_ok=True)
     path = audits / f"{slug}-deps-audit-2026-08-26.md"
+    rows = "\n".join(f"| `{name}` | scanned | — |" for name in scanned)
     path.write_text(
         f"# Deps Audit: {slug}\n\n**Date:** 2026-08-26\n**Mode:** plan-bound:{slug}\n"
-        f"**Verdict:** {verdict}\n**Hard caps triggered:** {caps or '_none_'}\n",
+        f"**Verdict:** {verdict}\n**Hard caps triggered:** {caps or '_none_'}\n\n"
+        f"## Packages\n\n| Package | Status | CVE |\n|---|---|---|\n{rows}\n",
         encoding="utf-8",
     )
     return path
@@ -185,7 +198,7 @@ def test_the_newest_audit_wins(tmp_path: Path) -> None:
     _audit(tmp_path, "FAIL_INSECURE")
     audits = tmp_path / "records" / "audits"
     (audits / "demo-deps-audit-2026-08-27.md").write_text(
-        "**Verdict:** PASS\n", encoding="utf-8")
+        "**Verdict:** PASS\n\n## Packages\n\n- `requests` scanned\n", encoding="utf-8")
 
     assert check_deps_audit(plan).hard_cap is False
 
@@ -198,7 +211,8 @@ def test_both_install_layouts_are_searched(tmp_path: Path, layout: str) -> None:
     plan.write_text(_PLAN_WITH_DEPS, encoding="utf-8")
     audits = tmp_path / layout / "audits"
     audits.mkdir(parents=True)
-    (audits / "demo-deps-audit-2026-08-26.md").write_text("**Verdict:** PASS\n", encoding="utf-8")
+    (audits / "demo-deps-audit-2026-08-26.md").write_text(
+        "**Verdict:** PASS\n\n## Packages\n\n- `requests` scanned\n", encoding="utf-8")
 
     assert check_deps_audit(plan).hard_cap is False
     assert check_deps_audit(plan).soft_floor is False
@@ -320,3 +334,56 @@ def test_a_bullet_declares_a_package_only_when_the_package_opens_it():
         sec + "- `golang.org/x/net` v0.33.0 — for `http2` fixes\n") == ["golang.org/x/net"]
     assert _declared_dependencies(
         sec + "- **`gopkg.in/yaml.v3`** — already required\n") == ["gopkg.in/yaml.v3"]
+
+
+# ── a verdict covers what was scanned ────────────────────────────────────────
+#
+# The verdict was read off the report's `**Verdict:**` line and applied to the
+# plan's declared dependencies — the hard-cap reason even says the audit "reports
+# {verdict} against the declared dependencies ({', '.join(declared)})" — while the
+# two lists were never compared. A PASS over a scan that covered one package
+# cleared a plan that declared four, and the reason said it had covered all four.
+
+
+_PLAN_WITH_TWO_DEPS = """# Plan
+
+## Dependencies
+
+| Package | Version | Why |
+|---|---|---|
+| `requests` | 2.31.0 | HTTP client for the webhook sender |
+| `pyyaml` | 6.0.1 | reads the rule tables |
+
+## Phase 1
+"""
+
+
+def test_a_pass_over_a_partial_scan_does_not_clear_the_gate(tmp_path: Path) -> None:
+    plan = _plan(tmp_path, _PLAN_WITH_TWO_DEPS)
+    _audit(tmp_path, "PASS", scanned=("requests",))
+
+    report = check_deps_audit(plan)
+
+    assert report.soft_floor is True, "a scan that skipped pyyaml cleared the gate"
+    assert report.stable_id == "soft_floor_deps_audit_partial"
+    assert "pyyaml" in " ".join(report.reasons)
+
+
+def test_a_pass_over_a_complete_scan_clears_it(tmp_path: Path) -> None:
+    plan = _plan(tmp_path, _PLAN_WITH_TWO_DEPS)
+    _audit(tmp_path, "PASS", scanned=("requests", "pyyaml"))
+
+    report = check_deps_audit(plan)
+
+    assert report.soft_floor is False, " ".join(report.reasons)
+    assert report.hard_cap is False
+
+
+def test_the_reason_names_which_dependencies_were_not_scanned(tmp_path: Path) -> None:
+    """Not a count: the reader has to know which package to go and audit."""
+    plan = _plan(tmp_path, _PLAN_WITH_TWO_DEPS)
+    _audit(tmp_path, "PASS", scanned=())
+
+    reasons = " ".join(check_deps_audit(plan).reasons)
+
+    assert "requests" in reasons and "pyyaml" in reasons, reasons

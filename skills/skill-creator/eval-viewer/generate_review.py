@@ -288,10 +288,10 @@ def generate_html(
 def _kill_port(port: int) -> None:
     """Kill any process listening on the given port."""
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             ["lsof", "-ti", f":{port}"],
             capture_output=True, text=True, timeout=5,
-        )
+         check=False)
         for pid_str in result.stdout.strip().split("\n"):
             if pid_str.strip():
                 try:

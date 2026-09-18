@@ -554,73 +554,111 @@ def _tri(present: bool, complete: bool) -> int:
     return 2 if complete else (1 if present else 0)
 
 
-def score_alignment(brief_path: Path) -> AlignmentReport:
-    """Score one alignment brief against the rubric."""
-    body = Path(brief_path).read_text(encoding="utf-8-sig")
-    criteria: list[Criterion] = []
+@dataclass(frozen=True)
+class _Sections:
+    """The parses more than one criterion reads, done ONCE.
 
-    def add(key: str, label: str, score: int, why: str) -> None:
-        criteria.append(Criterion(key, label, score, why))
+    Seven criteria share a reading of the same four sections, and in the single
+    276-line function they shared it by being in one scope — which is also why that
+    function could not be split without the later blocks losing the earlier ones'
+    locals. Naming the shared state makes the sharing visible and makes each criterion
+    a function of its inputs: `_criterion_coverage` says in its signature that it needs
+    the requirement ids, where before it simply found them lying around.
+    """
 
-    # 1 — The problem, in the system's own terms.
+    fr_section: str | None
+    fr: list[str]
+    nfr_section: str | None
+    nfr: list[str]
+    ac_section: str | None
+    ac: list[str]
+    flows: str | None
+    fr_ids: set[str]
+    nfr_ids: set[str]
+
+
+def _read_sections(body: str) -> _Sections:
+    fr_section = _section(body, "Functional Requirements", "Functional requirements")
+    nfr_section = _section(body, "Non-Functional Requirements",
+                           "Non-functional requirements")
+    ac_section = _section(body, "Acceptance Criteria", "Acceptance criteria")
+    return _Sections(
+        fr_section=fr_section, fr=_bullets(fr_section),
+        nfr_section=nfr_section, nfr=_bullets(nfr_section),
+        ac_section=ac_section, ac=_bullets(ac_section),
+        flows=_section(body, "Flows", "Flow", "User flows"),
+        fr_ids=set(_FR_ID_RE.findall(fr_section or "")),
+        nfr_ids=set(_NFR_ID_RE.findall(nfr_section or "")),
+    )
+
+
+def _criterion_problem(body: str) -> Criterion:
+    """1 — The problem, in the system's own terms."""
     problem = _section(body, "Problem", "Context", "Why now")
-    add("problem", "The problem is stated as something observed here",
+    return Criterion("problem", "The problem is stated as something observed here",
         _tri(bool(problem), bool(problem and len(problem.split()) >= 30)),
         "absent" if not problem else ("too short to have said anything" if len(
             problem.split()) < 30 else "stated"))
 
-    # 2 — Functional requirements.
+def _criterion_functional_requirements(body: str) -> Criterion:
+    """2 — Functional requirements."""
     fr_section = _section(body, "Functional Requirements", "Functional requirements")
     fr = _bullets(fr_section)
-    add("functional_requirements", "Functional requirements enumerated",
+    return Criterion("functional_requirements", "Functional requirements enumerated",
         _tri(bool(fr), len(fr) >= 2),
         f"{len(fr)} listed" if fr else _absent_or_empty(
             fr_section, "Functional Requirements"))
 
-    # 3 — Non-functional requirements, WITH numbers.
+def _criterion_nonfunctional_requirements(body: str) -> Criterion:
+    """3 — Non-functional requirements, WITH numbers."""
     nfr_section = _section(body, "Non-Functional Requirements", "Non-functional requirements")
     nfr = _bullets(nfr_section)
     measurable = [b for b in nfr if _MEASURABLE_RE.search(b)]
-    add("nfr_measurable", "Non-functional requirements carry numbers",
+    return Criterion("nfr_measurable", "Non-functional requirements carry numbers",
         _tri(bool(nfr), bool(nfr) and len(measurable) == len(nfr)),
         f"{len(measurable)}/{len(nfr)} measurable" if nfr
         else _absent_or_empty(nfr_section, "Non-Functional Requirements"))
 
-    # 4 — Flows, named and stepped.
+def _criterion_flows(body: str) -> Criterion:
+    """4 — Flows, named and stepped."""
     flows = _section(body, "Flows", "Flow", "User flows")
     flow_names = re.findall(r"^###\s+(.+)$", flows or "", re.MULTILINE)
     stepped = bool(flows and re.search(r"^\s*\d+\.", flows, re.MULTILINE))
-    add("flows", "Flows named, each broken into steps",
+    return Criterion("flows", "Flows named, each broken into steps",
         _tri(bool(flow_names), bool(flow_names) and stepped),
         f"{len(flow_names)} flow(s)" if flow_names else "no named flow")
 
-    # 5 — spec-kit /checklist: the four scenario classes.
+def _criterion_scenario_classes(sections: _Sections) -> Criterion:
+    """5 — spec-kit /checklist: the four scenario classes."""
     # "Happy path only" was an anti-pattern in prose. Naming the classes makes it
     # a measurement — the defects live in the three nobody drew.
-    covered = [c for c in _SCENARIO_CLASSES if _class_is_drawn(c, flows)]
-    add("scenario_classes", "Primary, alternate, exception and recovery flows drawn",
+    covered = [c for c in _SCENARIO_CLASSES if _class_is_drawn(c, sections.flows)]
+    return Criterion("scenario_classes", "Primary, alternate, exception and recovery sections.flows drawn",
         _tri(bool(covered), len(covered) == len(_SCENARIO_CLASSES)),
         f"{len(covered)}/4 classes: {', '.join(covered) or 'none'}"
         + ("" if len(covered) == 4
            else f" — missing {', '.join(c for c in _SCENARIO_CLASSES if c not in covered)}"))
 
-    # 6 — A system-level picture.
+def _criterion_system_picture(body: str) -> Criterion:
+    """6 — A system-level picture."""
     has_system = bool(re.search(r"```mermaid|<svg|flowchart|C4Context|graph (TB|LR)", body))
     system_sec = _section(body, "System design", "Architecture", "System Design")
-    add("system_diagram", "A system-level diagram exists",
+    return Criterion("system_diagram", "A system-level diagram exists",
         _tri(has_system or bool(system_sec), has_system and bool(system_sec)),
         "diagram + section" if (has_system and system_sec)
         else ("diagram only" if has_system else "neither"))
 
-    # 7 — How the pieces interact.
+def _criterion_interaction(body: str) -> Criterion:
+    """7 — How the pieces interact."""
     has_interaction = bool(re.search(
         r"sequenceDiagram|classDiagram|participant\s|\bclass\s+\w+\s*\{", body))
-    add("interaction_model", "Interaction between the parts is drawn",
+    return Criterion("interaction_model", "Interaction between the parts is drawn",
         _tri(has_interaction, has_interaction and body.count("participant") + body.count(
             "class ") >= 3),
         "present" if has_interaction else "no sequence or class diagram")
 
-    # 8 — Acceptance criteria that can fail.
+def _criterion_acceptance_criteria(body: str) -> tuple[Criterion, list[str]]:
+    """8 — Acceptance criteria that can fail."""
     ac_section = _section(body, "Acceptance Criteria", "Acceptance criteria")
     ac = _bullets(ac_section)
     # A criterion carrying an unresolved placeholder cannot run, whatever command it
@@ -640,55 +678,62 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     if unrunnable:
         detail += (f" — {len(unrunnable)} carry an unresolved placeholder and cannot "
                    "run whatever they name")
-    add("acceptance_executable", "Acceptance criteria name something that runs",
-        _tri(bool(ac), bool(ac) and len(executable) == len(ac)), detail)
+    # `ac` travels out beside the Criterion: `_vacuous_criteria` needs the same
+    # bullets, and parsing the section twice would let the two readings disagree.
+    return (Criterion("acceptance_executable",
+                      "Acceptance criteria name something that runs",
+                      _tri(bool(ac), bool(ac) and len(executable) == len(ac)), detail),
+            ac)
 
-    # 9 — spec-kit /analyze: stable ids. Every reference implementation converged
+
+def _criterion_stable_ids(sections: _Sections) -> Criterion:
+    """9 — spec-kit /analyze: stable ids. Every reference implementation converged"""
     # on this independently — FR-###/SC-### there, EARS ids in feature-forge,
     # sequential REQ-xxx in FredAntB. Without one the traceability chain has no
     # first link.
-    fr_ids = set(_FR_ID_RE.findall(fr_section or ""))
-    nfr_ids = set(_NFR_ID_RE.findall(nfr_section or ""))
-    ac_ids = set(_AC_ID_RE.findall(ac_section or ""))
+    ac_ids = set(_AC_ID_RE.findall(sections.ac_section or ""))
     id_coverage = [
-        bool(fr_ids) and len(fr_ids) == len(fr),
-        bool(nfr_ids) and len(nfr_ids) == len(nfr),
-        bool(ac_ids) and len(ac_ids) == len(ac),
+        bool(sections.fr_ids) and len(sections.fr_ids) == len(sections.fr),
+        bool(sections.nfr_ids) and len(sections.nfr_ids) == len(sections.nfr),
+        bool(ac_ids) and len(ac_ids) == len(sections.ac),
     ]
-    add("stable_ids", "Requirements and criteria carry stable ids",
+    return Criterion("stable_ids", "Requirements and criteria carry stable ids",
         _tri(any(id_coverage), all(id_coverage)),
-        f"FR {len(fr_ids)}/{len(fr)} · NFR {len(nfr_ids)}/{len(nfr)} · AC {len(ac_ids)}/{len(ac)}"
+        f"FR {len(sections.fr_ids)}/{len(sections.fr)} · NFR {len(sections.nfr_ids)}/{len(sections.nfr)} · AC {len(ac_ids)}/{len(sections.ac)}"
         if any(id_coverage) else "no FR-/NFR-/AC- ids — nothing can cite anything")
 
-    # 10 — spec-kit /analyze coverage pass, both directions. A criterion citing
+def _criterion_coverage(sections: _Sections) -> Criterion:
+    """10 — spec-kit /analyze coverage pass, both directions. A criterion citing"""
     # nothing proves nothing in particular; a requirement no criterion cites
     # ships unverified.
-    cited = set(_FR_ID_RE.findall(ac_section or "")) | set(_NFR_ID_RE.findall(ac_section or ""))
-    declared = fr_ids | nfr_ids
-    ac_citing = [b for b in ac if _FR_ID_RE.search(b) or _NFR_ID_RE.search(b)]
+    cited = set(_FR_ID_RE.findall(sections.ac_section or "")) | set(_NFR_ID_RE.findall(sections.ac_section or ""))
+    declared = sections.fr_ids | sections.nfr_ids
+    ac_citing = [b for b in sections.ac if _FR_ID_RE.search(b) or _NFR_ID_RE.search(b)]
     uncovered = sorted(declared - cited)
-    traced = bool(ac) and len(ac_citing) == len(ac) and not uncovered
-    add("traceability", "Every criterion cites a requirement, and none is uncovered",
+    traced = bool(sections.ac) and len(ac_citing) == len(sections.ac) and not uncovered
+    return Criterion("traceability", "Every criterion cites a requirement, and none is uncovered",
         _tri(bool(ac_citing), traced),
-        (f"{len(ac_citing)}/{len(ac)} criteria cite a requirement"
+        (f"{len(ac_citing)}/{len(sections.ac)} criteria cite a requirement"
          + (f"; uncovered: {', '.join(uncovered)}" if uncovered else ""))
-        if ac else "no acceptance criteria to trace")
+        if sections.ac else "no acceptance criteria to trace")
 
-    # 11 — spec-kit /analyze ambiguity pass. The old rubric demanded numbers from
+def _criterion_ambiguity(sections: _Sections) -> Criterion:
+    """11 — spec-kit /analyze ambiguity pass. The old rubric demanded numbers from"""
     # the NFR section alone, so "the explorer shall be responsive" passed as a
     # functional requirement.
-    weighted = "\n".join(filter(None, (fr_section, nfr_section, ac_section)))
+    weighted = "\n".join(filter(None, (sections.fr_section, sections.nfr_section, sections.ac_section)))
     hits = sorted({m.group(1).lower() for m in _VAGUE_RE.finditer(weighted)})
     unquantified = [h for h in hits
                     if not any(_MEASURABLE_RE.search(ln)
                                for ln in weighted.splitlines()
                                if re.search(rf"\b{re.escape(h)}\b", ln, re.IGNORECASE))]
-    add("no_vague_terms", "No unquantified quality adjective in a requirement",
+    return Criterion("no_vague_terms", "No unquantified quality adjective in a requirement",
         _tri(True, not unquantified),
         "none" if not unquantified
         else f"{len(unquantified)} unquantified: {', '.join(unquantified)}")
 
-    # 12 — superpowers' spec self-review, applied to the whole document.
+def _criterion_self_review(body: str) -> Criterion:
+    """12 — superpowers' spec self-review, applied to the whole document."""
     # Everything EXCEPT the questions section, which owns its own open items.
     #
     # kit#18. An `UNKNOWN` inside `## Questions answered` is that section's
@@ -718,38 +763,43 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
         body, "Questions answered", "Questions", "Reviewer sign-off")
     placeholders = sorted({m.group(0).upper()
                            for m in _UNRESOLVED_RE.finditer(outside_questions)})
-    add("no_placeholders", "No unresolved placeholder anywhere in the brief",
+    return Criterion("no_placeholders", "No unresolved placeholder anywhere in the brief",
         2 if not placeholders else 0,
         "none" if not placeholders else f"{len(placeholders)} found: {', '.join(placeholders)}")
 
-    # 13 — Dependencies, named or explicitly none.
+def _criterion_dependencies(body: str) -> Criterion:
+    """13 — Dependencies, named or explicitly none."""
     deps = _section(body, "Dependencies", "Depends on")
     deps_bullets = _bullets(deps)
     explicit_none = bool(deps and re.search(r"\b(none|no dependenc)\b", deps, re.IGNORECASE))
-    add("dependencies", "Dependencies named, or explicitly none",
+    return Criterion("dependencies", "Dependencies named, or explicitly none",
         _tri(bool(deps), bool(deps_bullets) or explicit_none),
         "declared" if (deps_bullets or explicit_none) else "section missing or empty")
 
-    # 14 — What this is NOT. The boundary nobody writes and everybody assumes.
+def _criterion_non_goals(body: str) -> Criterion:
+    """14 — What this is NOT. The boundary nobody writes and everybody assumes."""
     scope_out = _section(body, "Out of scope", "Not in scope", "What this does not do")
-    add("out_of_scope", "What the item does NOT cover is written down",
+    return Criterion("out_of_scope", "What the item does NOT cover is written down",
         _tri(bool(scope_out), len(_bullets(scope_out)) >= 1),
         "declared" if _bullets(scope_out) else "absent — the boundary is being assumed")
 
-    # 15 — The questions the grill asked, and their answers.
+def _criterion_grill_answers(body: str) -> Criterion:
+    """15 — The questions the grill asked, and their answers."""
     grill = _section(body, "Questions answered", "Clarifications", "Open questions", "Grill")
-    add("questions_closed", "Every question raised was answered",
+    return Criterion("questions_closed", "Every question raised was answered",
         _tri(bool(grill), bool(grill) and not _UNRESOLVED_RE.search(grill)),
         "all closed" if (grill and not _UNRESOLVED_RE.search(grill))
         else ("open answers remain" if grill else "no record of questions"))
 
-    # 16 — How it will be demonstrated.
+def _criterion_demonstration(body: str) -> Criterion:
+    """16 — How it will be demonstrated."""
     demo = _section(body, "Demonstration", "How to demo", "Demo")
-    add("demonstration", "How the result gets demonstrated is written",
+    return Criterion("demonstration", "How the result gets demonstrated is written",
         _tri(bool(demo), len(_bullets(demo)) >= 1),
         "declared" if _bullets(demo) else "absent")
 
-    # 17 — The interactive artefact.
+def _criterion_interactive_artefact(body: str, brief_path: Path) -> Criterion:
+    """17 — The interactive artefact."""
     #
     # RESOLVED on disk, not merely referenced. This scored `_tri(bool(html), bool(html))`
     # until a consumer measured it: a brief citing a walkthrough nobody generated took
@@ -765,12 +815,52 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
             if candidate.is_file():
                 resolved = candidate
                 break
-    add("interactive_artefact", "An interactive walkthrough was produced",
+    return Criterion("interactive_artefact", "An interactive walkthrough was produced",
         _tri(bool(html), bool(resolved)),
         f"{cited} — resolved" if resolved
         else f"cited but missing on disk: {cited}" if cited
         else "no .html referenced")
 
+def _score_criteria(body: str, brief_path: Path) -> tuple[list[Criterion], list[str]]:
+    """The seventeen rubric criteria, scored — one function each, driven by this list.
+
+    `score_alignment` measured cyclomatic complexity 100 across 276 lines, and the 276
+    were seventeen independent readings of one document glued together by a closure
+    that appended to a list. Each is now its own function: the rubric's order is the
+    order of the table below, a reader looking for criterion 11 opens
+    `_criterion_ambiguity`, and changing one cannot reach the other sixteen.
+
+    `ac` travels back out because `_vacuous_criteria` needs the acceptance bullets and
+    recomputing them would be a second parse of the same section.
+    """
+    sections = _read_sections(body)
+    acceptance, ac = _criterion_acceptance_criteria(body)
+    criteria = [
+        _criterion_problem(body),
+        _criterion_functional_requirements(body),
+        _criterion_nonfunctional_requirements(body),
+        _criterion_flows(body),
+        _criterion_scenario_classes(sections),
+        _criterion_system_picture(body),
+        _criterion_interaction(body),
+        acceptance,
+        _criterion_stable_ids(sections),
+        _criterion_coverage(sections),
+        _criterion_ambiguity(sections),
+        _criterion_self_review(body),
+        _criterion_dependencies(body),
+        _criterion_non_goals(body),
+        _criterion_grill_answers(body),
+        _criterion_demonstration(body),
+        _criterion_interactive_artefact(body, brief_path),
+    ]
+    return criteria, ac
+
+
+
+
+def _read_signoff(body: str) -> tuple[tuple[str, ...], int, str | None]:
+    """`(pending, box_count, signed_by)` from the reviewer's half of the brief."""
     # ── the reviewer's half ────────────────────────────────────────────────
     # Generated unchecked by the agent that wrote the brief; ticked by a reviewer who
     # is NOT that agent — a person, or `alignment_judge.py` when none is coming
@@ -795,11 +885,6 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
                            if s != "human" and not s.startswith("human/"))
         signed_by = non_human[0] if non_human else sorted(signers)[0]
 
-    judgement = (
-        "whether the stated problem is the real one",
-        "whether the flows drawn are the flows that matter",
-        "whether the numbers in the NFRs are the right numbers",
-    )
     # kit#14. The marker counts when it is USED, not when it is mentioned. A brief
     # explains to its reviewer how to declare a split — "mark this brief
     # `<!-- verdict: NEEDS_SPLIT: ... -->`" — and that sentence made the scorer
@@ -809,6 +894,11 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     # A declaration stands on its own line. A mention sits inside a sentence, a
     # list item or a code span. Same distinction kit#17 needed, and the same root:
     # a marker matched anywhere, with no notion of mentioned versus used.
+    return pending, len(boxes), signed_by
+
+
+def _read_declarations(body: str):
+    """`(split, withdrawn, restored)` — the three markers, as match objects or None."""
     declarations = _declarations_only(body)
     split = _NEEDS_SPLIT_RE.search(declarations)
     withdrawn = _WITHDRAWN_RE.search(declarations)
@@ -817,8 +907,30 @@ def score_alignment(brief_path: Path) -> AlignmentReport:
     restored = None
     if withdrawn:
         restored = _RESTORED_RE.search(declarations, withdrawn.end())
+    return split, withdrawn, restored
+
+
+def score_alignment(brief_path: Path) -> AlignmentReport:
+    """Score one alignment brief against the rubric.
+
+    An assembler: the scoring, the reviewer's half and the declaration markers are
+    three independent readings of one document, and each is now answered where it is
+    asked.
+    """
+    body = Path(brief_path).read_text(encoding="utf-8-sig")
+
+    criteria, ac = _score_criteria(body, brief_path)
+    pending, box_count, signed_by = _read_signoff(body)
+    split, withdrawn, restored = _read_declarations(body)
+
+    judgement = (
+        "whether the stated problem is the real one",
+        "whether the flows drawn are the flows that matter",
+        "whether the numbers in the NFRs are the right numbers",
+    )
+    declarations = _declarations_only(body)
     return AlignmentReport(
-        tuple(criteria), judgement, pending, len(boxes), signed_by,
+        tuple(criteria), judgement, pending, box_count, signed_by,
         vacuous_criteria=_vacuous_criteria(ac),
         needs_split=bool(split),
         split_reason=(split.group(1) or "").strip() if split else "",
@@ -866,6 +978,17 @@ def main(argv: list[str] | None = None) -> int:
             "signed_by_is_human": report.signed_by_is_human,
             "needs_split": report.needs_split,
             "split_reason": report.split_reason,
+            # The warrant's own history. These four were computed and emitted on
+            # NEITHER output path — the source says `unmarked_withdrawal_prose` is
+            # "quoted so the reviewer knows exactly which line to mark" and
+            # `sign_off_restored` is "Reported so a reader can see the warrant was
+            # taken back and given again", and no reader could see either. A field
+            # computed for a reader and shown to nobody is the same as not computing it.
+            "sign_off_withdrawn": report.sign_off_withdrawn,
+            "withdrawal_reason": report.withdrawal_reason,
+            "sign_off_restored": report.sign_off_restored,
+            "restoration_reason": report.restoration_reason,
+            "unmarked_withdrawal_prose": report.unmarked_withdrawal_prose,
             "reviewer_items_total": report.reviewer_items_total,
             "pending_review": list(report.pending_review),
             "criteria": [
@@ -900,6 +1023,19 @@ def main(argv: list[str] | None = None) -> int:
         print("\nThis item must NOT be built yet. Close these first:")
         for c in report.gaps:
             print(f"  - {c.label} — {c.why}")
+
+    # The warrant's history, on the text path too. A withdrawal the reader cannot see
+    # is a withdrawal that reads as a sign-off nobody gave.
+    if report.sign_off_withdrawn:
+        print(f"\nSIGN-OFF WITHDRAWN: {report.withdrawal_reason or '(no reason given)'}")
+    elif report.sign_off_restored:
+        print(f"\nSign-off withdrawn and RESTORED: "
+              f"{report.restoration_reason or '(no reason given)'}")
+    if report.unmarked_withdrawal_prose:
+        print("\nA line in this brief reads as a withdrawal and carries no marker, so "
+              "nothing downstream can act on it. Mark it "
+              "`<!-- sign-off: WITHDRAWN: <why> -->` or reword it:")
+        print(f"  {report.unmarked_withdrawal_prose}")
 
     print()
     if report.reviewer_signed_off:

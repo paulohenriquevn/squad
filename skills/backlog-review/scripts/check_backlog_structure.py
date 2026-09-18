@@ -169,9 +169,7 @@ def _routing(backlog_dir: Path) -> dict[str, dict] | None:
     `except Exception` around the import would swallow that into a silent None. The check
     would then never run while the report looked healthy.
     """
-    tooling = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
-    if str(tooling) not in sys.path:
-        sys.path.insert(0, str(tooling))
+    _add_cycle_tooling_to_path()
     try:
         from route_domain import (
             _routing_table_path,
@@ -210,6 +208,17 @@ LINEAGE_EDGES = {
     "supersedes": "killed",
     "regression_of": "shipped",
 }
+
+
+def _add_cycle_tooling_to_path() -> None:
+    """Make `mechanisms/cycle/` importable. Located relative to THIS FILE.
+
+    In real use the registry sits at the umbrella root while the tooling lives under
+    `.claude/scripts/`, so resolving against the backlog's directory finds nothing.
+    """
+    tooling = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
 
 
 def declares_impediment(raw: str) -> bool:
@@ -291,7 +300,31 @@ def _find_cycles(edges: dict[str, list[str]]) -> list[list[str]]:
 
 
 
+def effective_state(status: str, blockers: list[str], statuses: dict[str, str]) -> str:
+    """The derivation rule, asked of its owner in `mechanisms/cycle/backlog_status.py`.
+
+    NOT the same call as `parse_blocked_by` above, whose duplication is deliberate and
+    explained there: that one mirrors the WRITER, and this gate must review a registry
+    produced by anything. This is the derivation — "a blocker that shipped or was killed
+    stops blocking" — and there is one correct answer to it. Two copies meant the owner's
+    version had no caller at all, so it could drift from the one that runs and its own
+    tests would keep passing.
+
+    Falls back to the local computation when the owner cannot be imported, because a
+    counter that raises is worse than a counter that agrees with an older copy — and the
+    fallback is the code that was here already, not a new second opinion.
+    """
+    try:
+        from backlog_status import effective_state as _owner
+    except ImportError:
+        if status not in OPEN_STATUS:
+            return status
+        return "blocked" if any(statuses.get(b, "") in OPEN_STATUS for b in blockers) else status
+    return _owner(status, blockers, statuses)
+
+
 def _effective_counts(items: list[Item]) -> dict[str, int]:
+    _add_cycle_tooling_to_path()
     statuses = {i.item_id: i.fields.get("status", "") for i in items}
     counts: dict[str, int] = {}
     for item in items:
@@ -300,53 +333,29 @@ def _effective_counts(items: list[Item]) -> dict[str, int]:
         state = status
         if status in OPEN_STATUS and declares_impediment(raw):
             ids = parse_blocked_by(raw)
-            if not ids or any(statuses.get(b, "") in OPEN_STATUS for b in ids):
-                state = "blocked"
+            # No ids means a prose impediment: nothing another item's status can
+            # resolve, so it holds until a human removes the line. The owner takes
+            # only id edges, which is why that case is decided here.
+            state = "blocked" if not ids else effective_state(status, ids, statuses)
         counts[state] = counts.get(state, 0) + 1
     return dict(sorted(counts.items()))
 
 
 
-def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, Any]:
-    today = today or date.today()
-    content = backlog_path.read_text(encoding="utf-8-sig")
-    items = _parse_items(content)
+def _check_each_item(items: list[Item], known_repos: set[str] | None,
+                     today: date) -> tuple[list[Finding], list[int]]:
+    """Every per-item check, in the order the registry's own contract lists them.
+
+    Extracted from `check_backlog`, which measured cyclomatic complexity 82 across 297
+    lines: a preamble, this loop of fifteen per-item checks, and a tail of cross-item
+    ones. Pure code movement — the body below is the body that was there.
+
+    `seen_ids` and `numeric_ids` accumulate ACROSS items, which is why they live here
+    rather than inside a per-item helper: the duplicate-id and monotonic-id checks are
+    the two that cannot be answered one item at a time. `numeric_ids` travels back out
+    because the tail's monotonicity check reads it.
+    """
     findings: list[Finding] = []
-
-    project_root = backlog_path.resolve().parent
-    routing = _routing(project_root)
-    known_repos = (
-        None if routing is None else {r for e in routing.values() for r in e["repos"]}
-    )
-
-    # A domain whose specialist file is absent routes every one of its items to nobody.
-    #
-    # `route_domain.py` calls that a BROKEN ROUTE and exits 3 — "a defect in the table itself" — but
-    # this report never asked. Gate G1 checks whether a repo is IN the table, not whether the table's
-    # answer exists, so a registry could read SHIPPABLE while all of its items resolved to a file
-    # nobody had written. Measured on an adopter 2026-09-03: its table named a specialist file that
-    # did not exist, every repo in it exited 3 from `route_domain.py`, and 106 items routed to nobody
-    # while this report came back clean.
-    #
-    # The measurement is deliberately anonymous. `test_no_origin_ecosystem_leak` refuses a versioned
-    # kit file that names a specific ecosystem's repositories, and its reason applies here: the kit
-    # describes ANY product that adopts it, and a named one makes every consumer inherit a map of
-    # repos they do not have. The first version of this comment named the adopter and the detector
-    # caught it.
-    #
-    # This is the same failure the routing gate exists to prevent, one level up, and it failed in the
-    # reassuring direction.
-    if routing is not None:
-        for domain, entry in sorted(routing.items()):
-            agent = entry.get("agent")
-            if agent is None:
-                findings.append(Finding("broken_route", "deterministic", "blocker", domain,
-                    f"domain `{domain}` names no specialist — every item it routes reaches nobody"))
-                continue
-            if not (project_root / agent).exists() and not (project_root / ".claude" / agent).exists():
-                findings.append(Finding("broken_route", "deterministic", "blocker", domain,
-                    f"domain `{domain}` routes to `{agent}`, which is not on disk"))
-
     seen_ids: dict[str, Item] = {}
     numeric_ids: list[int] = []
 
@@ -450,33 +459,16 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
                     f"raw for {age} days. Either it matters and nobody measured it, or it "
                     "does not and it should be killed with that as the reason."))
 
-    if numeric_ids and numeric_ids != sorted(numeric_ids):
-        findings.append(Finding("renumbered", "deterministic", "blocker", "-",
-            "ids are not monotonic. Ids are never reused and never reordered — a reused "
-            "id makes every earlier reference ambiguous."))
+    return findings, numeric_ids
 
-    open_items = [i for i in items if i.fields.get("status") in OPEN_STATUS]
-    for idx, a in enumerate(open_items):
-        for b in open_items[idx + 1 :]:
-            if _title_overlap(a.title, b.title) >= 0.6:
-                findings.append(Finding("possible_duplicate", "heuristic", "minor", a.item_id,
-                    f"title overlaps heavily with {b.item_id} (\"{b.title}\") — the intake "
-                    "dedup may have missed it"))
 
-    # The index at the top has to agree with the blocks below it. Nothing forces the two to move
-    # together — the index is regenerated by a command someone has to remember to run — so a
-    # registry whose summary says "3 open" while 11 items are open reads as authoritative and is
-    # wrong. That is strictly worse than having no index, because a reader stops at the summary.
-    # Imported here rather than at module scope: `backlog_index` imports this module for the item
-    # parser, and a top-level import in both directions is a cycle.
-    from backlog_index import index_is_current
+def _check_impediment_edges(items: list[Item]) -> list[Finding]:
+    """Every `blocked_by` edge: does it resolve, does it hold, is it a ring?
 
-    index_current, _ = index_is_current(content)
-    if not index_current:
-        findings.append(Finding("index_stale", "deterministic", "major", "—",
-            "the index at the top does not match the items below it (or is absent). "
-            "Regenerate with `python3 backlog_index.py BACKLOG.md --write`."))
-
+    Extracted from `check_backlog`, which measured cyclomatic complexity 82 across 297
+    lines. Pure code movement: the block below is the block that was there.
+    """
+    findings: list[Finding] = []
     # ── impediment edges ──────────────────────────────────────────────────────
     #
     # `blocked_by` is written on the blocked side only; the reverse edge is derived by
@@ -529,6 +521,17 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
             f"impediment cycle: {' -> '.join(ring)}. Every item in the ring waits for another "
             "in it, so none can ever ship. Break it by splitting one item or dropping one edge."))
 
+    return findings
+
+
+def _check_lineage_edges(items: list[Item]) -> list[Finding]:
+    """Every `supersedes` / `regression_of` edge, and the status it implies.
+
+    Extracted from `check_backlog`, which measured cyclomatic complexity 82 across 297
+    lines. Pure code movement: the block below is the block that was there.
+    """
+    findings: list[Finding] = []
+    statuses = {i.item_id: i.fields.get("status", "") for i in items}
     # ── lineage edges ─────────────────────────────────────────────────────────
     #
     # Same shape as the impediment edge above, one question shorter: a lineage edge
@@ -560,6 +563,101 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
                         f"`{field_name}` names {target}, which is `{statuses[target]}` and not "
                         f"`{required_status}`. The field asserts a state its target is not in — "
                         f"a duplicate of an OPEN item folds in as ITEM_MERGED instead."))
+
+    return findings
+
+
+def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, Any]:
+    today = today or date.today()
+    content = backlog_path.read_text(encoding="utf-8-sig")
+    items = _parse_items(content)
+    findings: list[Finding] = []
+
+    # A file with content that yields no item is a file THIS PARSER could not read, and
+    # that is not the same fact as an empty registry. The verdict is derived from the
+    # findings list, and no items means no findings — so counts were all zero, the
+    # verdict was SHIPPABLE and `main` returned 0 over a registry nothing had parsed.
+    # No branch asked whether the file it just read produced anything.
+    if content.strip() and not items:
+        findings.append(Finding(
+            item="(file)", check="registry_parses", severity="blocker",
+            kind="deterministic",
+            message=(f"{backlog_path.name} is {len(content.splitlines())} line(s) long "
+                     f"and this parser found no `## B-NNN` item in it. That is a registry "
+                     f"this check could not read, not a registry with nothing in it — and "
+                     f"the two must not share a verdict"),
+        ))
+
+    project_root = backlog_path.resolve().parent
+    routing = _routing(project_root)
+    known_repos = (
+        None if routing is None else {r for e in routing.values() for r in e["repos"]}
+    )
+
+    # A domain whose specialist file is absent routes every one of its items to nobody.
+    #
+    # `route_domain.py` calls that a BROKEN ROUTE and exits 3 — "a defect in the table itself" — but
+    # this report never asked. Gate G1 checks whether a repo is IN the table, not whether the table's
+    # answer exists, so a registry could read SHIPPABLE while all of its items resolved to a file
+    # nobody had written. Measured on an adopter 2026-09-03: its table named a specialist file that
+    # did not exist, every repo in it exited 3 from `route_domain.py`, and 106 items routed to nobody
+    # while this report came back clean.
+    #
+    # The measurement is deliberately anonymous. `test_no_origin_ecosystem_leak` refuses a versioned
+    # kit file that names a specific ecosystem's repositories, and its reason applies here: the kit
+    # describes ANY product that adopts it, and a named one makes every consumer inherit a map of
+    # repos they do not have. The first version of this comment named the adopter and the detector
+    # caught it.
+    #
+    # This is the same failure the routing gate exists to prevent, one level up, and it failed in the
+    # reassuring direction.
+    if routing is not None:
+        for domain, entry in sorted(routing.items()):
+            agent = entry.get("agent")
+            if agent is None:
+                findings.append(Finding("broken_route", "deterministic", "blocker", domain,
+                    f"domain `{domain}` names no specialist — every item it routes reaches nobody"))
+                continue
+            if not (project_root / agent).exists() and not (project_root / ".claude" / agent).exists():
+                findings.append(Finding("broken_route", "deterministic", "blocker", domain,
+                    f"domain `{domain}` routes to `{agent}`, which is not on disk"))
+
+
+    # The per-item half. `numeric_ids` comes back because the monotonicity check below
+    # reads the order the ids appeared in.
+    item_findings, numeric_ids = _check_each_item(items, known_repos, today)
+    findings.extend(item_findings)
+
+
+    if numeric_ids and numeric_ids != sorted(numeric_ids):
+        findings.append(Finding("renumbered", "deterministic", "blocker", "-",
+            "ids are not monotonic. Ids are never reused and never reordered — a reused "
+            "id makes every earlier reference ambiguous."))
+
+    open_items = [i for i in items if i.fields.get("status") in OPEN_STATUS]
+    for idx, a in enumerate(open_items):
+        for b in open_items[idx + 1 :]:
+            if _title_overlap(a.title, b.title) >= 0.6:
+                findings.append(Finding("possible_duplicate", "heuristic", "minor", a.item_id,
+                    f"title overlaps heavily with {b.item_id} (\"{b.title}\") — the intake "
+                    "dedup may have missed it"))
+
+    # The index at the top has to agree with the blocks below it. Nothing forces the two to move
+    # together — the index is regenerated by a command someone has to remember to run — so a
+    # registry whose summary says "3 open" while 11 items are open reads as authoritative and is
+    # wrong. That is strictly worse than having no index, because a reader stops at the summary.
+    # Imported here rather than at module scope: `backlog_index` imports this module for the item
+    # parser, and a top-level import in both directions is a cycle.
+    from backlog_index import index_is_current
+
+    index_current, _ = index_is_current(content)
+    if not index_current:
+        findings.append(Finding("index_stale", "deterministic", "major", "—",
+            "the index at the top does not match the items below it (or is absent). "
+            "Regenerate with `python3 backlog_index.py BACKLOG.md --write`."))
+
+    findings.extend(_check_impediment_edges(items))
+    findings.extend(_check_lineage_edges(items))
 
     counts = {"blocker": 0, "major": 0, "minor": 0}
     for f in findings:

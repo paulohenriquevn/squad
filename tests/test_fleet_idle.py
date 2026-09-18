@@ -18,6 +18,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"))
 
 from fleet_idle import measure, read_events, render
@@ -108,3 +110,58 @@ def test_a_missing_log_is_not_an_idle_fleet(tmp_path: Path) -> None:
 
     assert report.events == 0
     assert "nothing to measure" in report.detail
+
+
+def test_a_log_that_exists_and_cannot_be_read_is_not_a_young_fleet(tmp_path) -> None:
+    """`read_events` returned the empty list it was given when the log could not be read.
+
+    `main` has already confirmed the file exists, so the OSError hidden there is a
+    permission or I/O failure — and the report built from an empty list says "fewer than
+    two events — there is no interval to measure", which is exactly what a fleet that
+    just started looks like. Two different facts, one sentence.
+    """
+    import fleet_idle as fi
+
+    log = tmp_path / "lead.jsonl"
+    log.mkdir()  # a directory where the log belongs: read_text raises IsADirectoryError
+
+    with pytest.raises(fi.LogUnreadable):
+        fi.read_events(log)
+
+    assert fi.main(["--log", str(log), "--project", str(tmp_path)]) == 2
+
+
+def test_a_row_whose_timestamp_will_not_parse_is_dropped_not_fatal(tmp_path, capsys) -> None:
+    """One bad stamp used to raise ValueError out of `main`.
+
+    `when()` called `fromisoformat` inside the sort key AND inside the subtraction, so a
+    single malformed row took the whole measurement down — in a log several processes
+    append to, where a truncated or hand-edited line is ordinary.
+    """
+    import fleet_idle as fi
+
+    report = fi.measure([
+        {"at": "2026-09-17T10:00:00+00:00", "event": "start", "session": "a"},
+        {"at": "not a timestamp at all", "event": "start", "session": "a"},
+        {"at": "2026-09-17T10:10:00+00:00", "event": "start", "session": "a"},
+    ])
+
+    assert report.events == 2, "the unparseable row was not dropped"
+    assert report.window_seconds == 600
+    assert "will not parse" in capsys.readouterr().err
+
+
+def test_a_log_mixing_aware_and_naive_stamps_still_measures(tmp_path) -> None:
+    """Subtracting an aware datetime from a naive one raises TypeError.
+
+    A log written across a change in how the stamp is produced carries both shapes, and
+    that is a log to read rather than a log to refuse.
+    """
+    import fleet_idle as fi
+
+    report = fi.measure([
+        {"at": "2026-09-17T10:00:00", "event": "start", "session": "a"},
+        {"at": "2026-09-17T10:05:00+00:00", "event": "start", "session": "a"},
+    ])
+
+    assert report.window_seconds == 300

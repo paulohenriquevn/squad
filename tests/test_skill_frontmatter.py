@@ -10,7 +10,10 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from ecosystem_utils import find_ecosystem_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from ecosystem_utils import find_ecosystem_dir  # noqa: E402 — post-bootstrap import
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
@@ -100,38 +103,25 @@ def test_skill_names_match_directory() -> None:
     assert not mismatches, "Skill name vs directory mismatches:\n" + "\n".join(mismatches)
 
 
-def test_skill_count() -> None:
-    """Sanity check: we expect exactly 27 SKILL.md files.
+def test_every_skill_directory_carries_exactly_one_manifest() -> None:
+    """The invariant, instead of a count nobody can keep true.
 
-    Retired the in-cycle skill-distillation tail (skill-writer + skill-validator
-    + skill-register, -3), adopted the standalone official skill-creator (+1),
-    added the frontend-design utility skill (+1), the session-goal session-binding
-    skill (+1), the acceptance cycle skill (+1), and the roadmap-review skill (+1):
-    30 -> 28 -> 29 -> 30 -> 31 -> 32.
+    This asserted `len(files) == 39` under a docstring that opened "we expect exactly
+    27 SKILL.md files" and then ran an arithmetic log of every addition and retirement
+    — `30 -> 28 -> 29 -> 30 -> 31 -> 32 ... 34 -> 27` — terminating at 27 and never
+    reaching 39. One function, two answers, and a failure message that told the next
+    reader to bump the number rather than look at what changed.
 
-    Squad: added the BACKLOG intake cycle — backlog-item (phase 0) and
-    backlog-init (one-time registry bootstrap): 32 -> 34. Retired the three
-    roadmap-* skills (init/feature/review, -3) and added backlog-review (+1):
-    34 -> 32. Added the cap-theorem-specialist, backpressure-specialist and
-    resilience-specialist auxiliary skills (+3): 32 -> 35. Added arch-check,
-    the boundary proposer/verifier that pairs with the D5 detector (+1): 35 -> 36.
-    Added the SOP family — sop-author (the static script), sop-run (the judgement
-    that ran it) and sop-review (whether either is still true) (+3): 36 -> 39.
-    shared-understanding, the alignment gate between DISCOVER and PLAN (+1): 39 -> 40.
-    pipeline, which schedules many items through the cycle at once (+1): 40 -> 41.
-    Deleted the seven skills no cycle phase referenced — the presentation trio
-    (slide-deck, marp-slide, excalidraw), the vendored frontend-design, and the
-    three domain specialists (cap-theorem, backpressure, resilience), which the
-    scaffolded per-project specialists replace (-7): 41 -> 34. Cut seven more on
-    utility grounds (-7): 34 -> 27. trajectory-review shipped six hard caps its own
-    rule said were never computed; session-goal bound sessions to hand-authored
-    milestones the kit has no producer for; commands-help was superseded by
-    skills/map.md; grill-me produced one grill in a consumer's history and
-    plan-alignment interrogates as its first act; and the three sop-* skills wrapped
-    a schema two scripts already enforce, with zero run records ever written.
+    A hardcoded total measures nothing about the skills: adding one and deleting one
+    keeps it green. What is worth pinning is that every skill directory has exactly one
+    manifest and none is orphaned, which stays true at any count.
     """
-    files = _get_skill_files()
-    assert len(files) == 39, (
-        f"Expected 39 SKILL.md files, found {len(files)}. "
-        f"Update this test if skills were added or removed."
-    )
+    eco = find_ecosystem_dir(start=_REPO_ROOT)
+    manifests = _get_skill_files()
+    directories = sorted(d for d in (eco / "skills").iterdir()
+                         if d.is_dir() and not d.name.startswith((".", "_")))
+
+    without = [d.name for d in directories if not (d / "SKILL.md").is_file()]
+    assert without == [], f"skill directories with no SKILL.md: {without}"
+    assert len(manifests) == len(directories), (
+        f"{len(manifests)} manifests over {len(directories)} directories")

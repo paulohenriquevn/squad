@@ -19,7 +19,6 @@ elsewhere in this kit.
 """
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 
@@ -41,7 +40,7 @@ esac
 
 def _verdict(start: Path) -> str:
     return subprocess.run(["bash", "-c", _RESOLVE % start], capture_output=True,
-                          text=True, timeout=120).stdout.strip()
+                          text=True, timeout=120, check=False).stdout.strip()
 
 
 def test_the_runner_prints_which_tree_it_asked_about() -> None:

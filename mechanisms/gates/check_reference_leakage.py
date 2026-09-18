@@ -102,11 +102,19 @@ def in_zone(rel: str) -> bool:
     return any(rel.startswith(z + "/") for z in ZONE_DIRS)
 
 
-def changed_files(repo: Path, explicit: list[str] | None) -> list[Path]:
-    """Files to inspect: explicit list, else what git reports as changed."""
+def changed_files(repo: Path, explicit: list[str] | None) -> tuple[list[Path], int]:
+    """`(files, probes that answered)`. Three git probes, and how many of them worked.
+
+    All three used to `continue` past their failure, so git absent, a `--repo` that is
+    not a repository, or a repository with no HEAD left `rels` empty — and an empty
+    change set is also what a clean tree looks like. The scan then compared nothing
+    against the zone and printed PASS. The count is the difference between "nothing
+    changed" and "nothing could be asked".
+    """
     if explicit:
-        return [repo / f for f in explicit]
+        return [repo / f for f in explicit], 3
     rels: set[str] = set()
+    answered = 0
     for args in (
         ["git", "diff", "--name-only", "HEAD"],
         ["git", "diff", "--name-only", "--cached"],
@@ -118,8 +126,9 @@ def changed_files(repo: Path, explicit: list[str] | None) -> list[Path]:
             ).stdout
         except (subprocess.CalledProcessError, FileNotFoundError):
             continue
+        answered += 1
         rels.update(line for line in out.splitlines() if line.strip())
-    return [repo / r for r in sorted(rels) if not in_zone(r)]
+    return [repo / r for r in sorted(rels) if not in_zone(r)], answered
 
 
 def zone_roots(repo: Path) -> list[Path]:
@@ -178,17 +187,20 @@ def scan(repo: Path, size: int, max_zone_files: int, explicit: list[str] | None)
         "zone_files": 0,
         "zone_scanned": 0,
         "truncated": False,
+        #: How many of the three git probes answered. 0 means the change set is unknown,
+        #: not empty — see `changed_files`.
+        "probes_answered": 3,
     }
     if not roots:
         return [], stats
 
     # THE INDEX FIRST, THE ZONE AFTERWARDS — and the order is the point.
-    # Este script roda em todo Stop, antes do early-exit do hook. Enumerar a
     # This script runs on every Stop, before the hook's early exit. Enumerating
     # the zone before knowing whether there is anything to compare made a session
     # that wrote nothing pay the full walk of thousands of third-party files just
     # to reach "nothing to compare".
-    index = build_index(changed_files(repo, explicit), repo, size)
+    changed, stats["probes_answered"] = changed_files(repo, explicit)
+    index = build_index(changed, repo, size)
     stats["indexed_shingles"] = len(index)
     if not index:
         return [], stats
@@ -231,7 +243,8 @@ def scan(repo: Path, size: int, max_zone_files: int, explicit: list[str] | None)
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--repo", default=".", help="repository root (default: cwd)")
+    ap.add_argument(
+        "--root", "--repo", dest="root", default=".", help="repository root (default: cwd)")
     ap.add_argument("--shingle", type=int, default=DEFAULT_SHINGLE,
                     help=f"consecutive meaningful lines per window (default {DEFAULT_SHINGLE})")
     ap.add_argument("--max-zone-files", type=int, default=DEFAULT_MAX_ZONE_FILES,
@@ -243,7 +256,7 @@ def main() -> int:
     if args.shingle < 2:
         print("ERROR: --shingle must be >= 2", file=sys.stderr)
         return 2
-    repo = Path(args.repo).resolve()
+    repo = Path(args.root).resolve()
     if not repo.is_dir():
         print(f"ERROR: repo not found: {repo}", file=sys.stderr)
         return 2
@@ -253,6 +266,12 @@ def main() -> int:
     if not stats["zone_present"]:
         print("SKIP reference-leakage: study zone absent or empty — nothing to compare against.")
         return 0
+
+    if not stats["probes_answered"]:
+        print("UNCHECKED reference-leakage: none of the three git probes answered, so "
+              "the set of changed files is unknown rather than empty. Nothing was "
+              "compared against the study zone.", file=sys.stderr)
+        return 2
 
     if stats["truncated"]:
         print(

@@ -98,7 +98,7 @@ Soft caps appear in `hard_caps_triggered` with the `soft_floor_` prefix for audi
 ## Workflow
 
 1. **Resolve the path.** A slug resolves to `.claude/records/discoveries/opportunities/{slug}-opportunity.md`; a `.md` path is used directly.
-2. **Run the scorer.** `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/scripts/run_opportunity_score.py" <opportunity-path>`.
+2. **Run the scorer.** `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/discover-confidence/scripts/run_opportunity_score.py" <opportunity-path>`.
 3. **Parse the JSON**, matching `templates/score-report.schema.json`.
 4. **Render the report.** Top 3 contributors and detractors per dimension, verdict band marked.
 
@@ -175,6 +175,13 @@ the report, so the choice cannot quietly become the norm.
 - `1` — INVALID (hard cap triggered)
 - `2` — Error (opportunity not found, malformed rubric)
 - `3` — NON_SHIPPABLE (score < 50 without a hard cap)
+- `4` — NEEDS_REVISION (the panel judged it and returned it; editing can lift this)
+- `5` — AWAITING_REVIEW (structure is complete and the panel has not sat yet)
+- `6` — ITEM_IN_FLIGHT (the panel could not convene here — a material impediment)
+
+The last three fell through to `0` until 2026-09-17, so a caller reading the exit code
+— which is what a chain does — could not tell an opportunity nobody had reviewed from
+one that passed. The verdict was in the JSON all along; the code said SHIPPABLE.
 
 ## Out of scope for M2
 

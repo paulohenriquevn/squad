@@ -210,12 +210,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--slug", required=True)
     ap.add_argument("--phase", required=True)
-    ap.add_argument("--project", type=Path, default=None)
+    ap.add_argument(
+        "--root", "--project", dest="root", type=Path, default=None)
     ap.add_argument("--panel", type=Path, default=None)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    code, result = check(args.slug, args.phase, project=args.project,
+    code, result = check(args.slug, args.phase, project=args.root,
                          panel_path=args.panel)
     if args.json:
         print(json.dumps(result, indent=2))

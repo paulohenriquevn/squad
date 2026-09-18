@@ -8,7 +8,10 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).parent.parent / "scripts" / "run_validation.py"
 
-from run_validation import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from run_validation import (  # noqa: E402 — post-bootstrap import
     wiring_summary,
 )
 
@@ -88,11 +91,11 @@ def test_wiring_summary_na_when_nothing_verifiable(tmp_path: Path) -> None:
 
 
 def _run_validation(slug: str, project_root: Path) -> tuple[int, dict]:
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(SCRIPT), slug, "--project-root", str(project_root), "--no-write-report"],
         capture_output=True,
         text=True,
-    )
+     check=False)
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -214,7 +217,7 @@ def test_summary_buckets_account_for_every_check(fake_project: Path) -> None:
 
 # T2.1 — patterns-consumption advisory (patterns-consumption-gate-plan, ADR D3)
 
-from run_validation import check_patterns_advisory  # noqa: E402
+from run_validation import check_patterns_advisory  # noqa: E402 — post-bootstrap import
 
 
 def test_patterns_advisory_never_fails(tmp_path: Path) -> None:
@@ -553,10 +556,9 @@ def test_go_workspace_runs_each_module_not_the_root(fake_project: Path) -> None:
 
 # ── a JS probe was answering a question about the project ───────────────────
 
-from suite_runners import (  # noqa: E402
+from suite_runners import (  # noqa: E402 — post-bootstrap import
     TYPECHECK_COMMANDS,
     _scope_to_change,
-    check_lint,
     check_typecheck,
 )
 
@@ -692,7 +694,7 @@ def test_a_failing_suite_reports_what_failed_not_the_tail_of_its_logs() -> None:
     characters with INFO lines from tests that passed, and the failing names sit above
     the cut. The finding is extracted, not tailed.
     """
-    from suite_runners import _diagnostic  # noqa: PLC0415
+    from suite_runners import _diagnostic
 
     noisy = (
         "--- FAIL: TestAuditReadFailureIsObservable (0.00s)\n"
@@ -709,7 +711,7 @@ def test_a_failing_suite_reports_what_failed_not_the_tail_of_its_logs() -> None:
 def test_a_build_error_on_stderr_still_wins() -> None:
     """When a build fails, stderr IS the finding — falling through to stdout would
     report a suite that never ran as a suite with no failures."""
-    from suite_runners import _diagnostic  # noqa: PLC0415
+    from suite_runners import _diagnostic
 
     out = _diagnostic({"exit_code": 2, "stderr_tail": "cannot find module for path x",
                        "stdout_tail": "", "stdout_full": ""})
@@ -746,7 +748,7 @@ def test_an_annotated_files_to_edit_bullet_still_declares_its_file() -> None:
     A gate that reports correct work as a defect spends the reviewer's attention and
     returns nothing — the same shape as 19 false phase divergences the same day.
     """
-    from check_diff_cohesion import FILE_LINE_RE  # noqa: PLC0415
+    from check_diff_cohesion import FILE_LINE_RE
 
     for line, expected in (
         ("- `api/internal/x.go`", "api/internal/x.go"),
@@ -762,7 +764,7 @@ def test_an_annotated_files_to_edit_bullet_still_declares_its_file() -> None:
 def test_a_sentence_mentioning_a_filename_declares_nothing() -> None:
     """The path must be the FIRST thing on the bullet. Widening the tail must not turn
     every prose line containing a filename into a declaration of scope."""
-    from check_diff_cohesion import FILE_LINE_RE  # noqa: PLC0415
+    from check_diff_cohesion import FILE_LINE_RE
 
     assert FILE_LINE_RE.match("the plan touches `api/x.go` in passing") is None
     assert FILE_LINE_RE.match("- see the note about main.go below and why") is None
@@ -780,7 +782,7 @@ def test_a_failing_package_the_change_did_not_touch_is_reported_not_charged() ->
     This never turns a failure into a pass — a red suite stays visibly red. It turns a
     charge into a WARN that names the packages and says the change did not touch them.
     """
-    from suite_runners import scope_suite_to_change  # noqa: PLC0415
+    from suite_runners import scope_suite_to_change
 
     red = {"name": "go tests", "status": "FAIL", "runner": "go test",
            "stderr_tail": ("--- FAIL: TestMigrationReferencesADR (0.00s)\n"
@@ -801,7 +803,7 @@ def test_the_failing_package_is_not_swallowed_by_a_bare_FAIL_line() -> None:
     NEXT line's package name and the real one was never seen. The scoping then found no
     packages and passed the failure through unchanged — a fix that silently did nothing,
     which is the shape it exists to prevent."""
-    from suite_runners import _FAILING_PACKAGE_RE  # noqa: PLC0415
+    from suite_runners import _FAILING_PACKAGE_RE
 
     found = _FAILING_PACKAGE_RE.findall("FAIL\nFAIL\tgithub.com/example/api/tests/unit\t6s\n")
     assert "github.com/example/api/tests/unit" in found
@@ -810,8 +812,8 @@ def test_the_failing_package_is_not_swallowed_by_a_bare_FAIL_line() -> None:
 def test_a_scoped_suite_still_counts_as_having_executed() -> None:
     """Turning one FAIL into a WARN made `check_test_execution` report "no test suite
     executed" about a suite whose failing test names it had just printed."""
-    from suite_runners import check_test_execution  # noqa: PLC0415
-    import suite_runners  # noqa: PLC0415
+    import suite_runners
+    from suite_runners import check_test_execution
 
     scoped = [{"name": "go tests", "status": "WARN", "runner": "go test"}]
     original = suite_runners.detect_languages
@@ -826,7 +828,7 @@ def _git_repo(tmp_path: Path):
     """A real repository. A temp directory is not one, and `diff_source` correctly
     reports `none` there — a fixture that forgets this tests the failure path while
     claiming to test the success path."""
-    import subprocess  # noqa: PLC0415
+    import subprocess
 
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"], check=True)
@@ -835,12 +837,13 @@ def _git_repo(tmp_path: Path):
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "seed"], check=True)
     return subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "HEAD"],
-                          capture_output=True, text=True).stdout.strip()
+                          capture_output=True, text=True, check=False).stdout.strip()
 
 
 def _cohesion(tmp_path: Path, files_block: str, sha: str):
-    import json as _json  # noqa: PLC0415
-    from check_diff_cohesion import check_diff_cohesion  # noqa: PLC0415
+    import json as _json
+
+    from check_diff_cohesion import check_diff_cohesion
 
     plan = tmp_path / "p.md"
     plan.write_text(f"## Tasks\n\n### T1.1 — a task\n\n#### Files to edit\n\n"
@@ -870,7 +873,7 @@ def test_an_explicit_none_in_files_to_edit_is_a_declaration(tmp_path: Path) -> N
 def test_declaring_nothing_and_touching_source_is_drift_not_absence() -> None:
     """The declaration makes this the STRONGEST form of the check, not the weakest: the
     plan said none and the diff says otherwise."""
-    from check_diff_cohesion import _EXPLICIT_NO_FILES_RE  # noqa: PLC0415
+    from check_diff_cohesion import _EXPLICIT_NO_FILES_RE
 
     assert _EXPLICIT_NO_FILES_RE.search("None.")
     assert _EXPLICIT_NO_FILES_RE.search("None. This task writes no tracked file.")
@@ -890,3 +893,51 @@ def test_declaring_a_file_and_never_touching_it_is_also_drift(tmp_path: Path) ->
     sha = _git_repo(tmp_path)
     codes = _cohesion(tmp_path, "- `api/never_touched.go` — planned but not written", sha)
     assert "declared_but_untouched" in codes
+
+
+def _cq_invoke_module():
+    """The sibling helper `check_code_quality` imports after extending sys.path itself."""
+    import importlib
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    scripts = (_Path(__file__).resolve().parents[2] / "code-quality" / "scripts")
+    if str(scripts) not in _sys.path:
+        _sys.path.insert(0, str(scripts))
+    return importlib.import_module("cq_invoke")
+
+
+def test_a_quality_gate_that_crashed_is_not_reported_as_skipped(tmp_path, monkeypatch) -> None:
+    """`cq_invoke.invoke` returned None for four different states.
+
+    "the script is absent", "the subprocess raised", "it exited outside {0,1}" — which
+    includes `run_code_quality.py`'s own ORCHESTRATOR_CRASH exit 2 — and "stdout was not
+    JSON" all shared one return value. `run_validation` mapped None to SKIP, main() folds
+    SKIP into PARTIAL and PARTIAL exits 0, so a quality gate that FELL OVER let delivery
+    proceed exactly as one that was never installed.
+    """
+    cq_invoke = _cq_invoke_module()
+    import run_validation as rv
+
+    monkeypatch.setattr(cq_invoke, "invoke", lambda *_a, **_k: None)
+    monkeypatch.setattr(cq_invoke, "last_failure",
+                        lambda: (cq_invoke.Unavailable.CRASHED, "exited 2: traceback"))
+
+    result = rv.check_code_quality(tmp_path, "some-slug")
+
+    assert result["status"] == "FAIL", result
+    assert "crashed" in result["reason"]
+
+
+def test_a_quality_gate_that_is_not_installed_is_still_a_skip(tmp_path, monkeypatch) -> None:
+    """The separation must not turn an absent optional skill into a failure."""
+    cq_invoke = _cq_invoke_module()
+    import run_validation as rv
+
+    monkeypatch.setattr(cq_invoke, "invoke", lambda *_a, **_k: None)
+    monkeypatch.setattr(cq_invoke, "last_failure",
+                        lambda: (cq_invoke.Unavailable.MISSING, "no run_code_quality.py"))
+
+    result = rv.check_code_quality(tmp_path, "some-slug")
+
+    assert result["status"] == "SKIP", result

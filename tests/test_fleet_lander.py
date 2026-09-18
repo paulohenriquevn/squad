@@ -24,7 +24,10 @@ _FLEET = Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"
 if str(_FLEET) not in sys.path:
     sys.path.insert(0, str(_FLEET))
 
-import fleet_lander  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import fleet_lander  # noqa: E402 — post-bootstrap import
 
 
 def _c(ok: bool, out: str = "", err: str = "") -> fleet_lander.Ran:
@@ -182,7 +185,7 @@ def test_each_verdict_is_reported_as_it_lands(capsys) -> None:
                 "the first verdict was still being held when the second began"
         return verdicts[branch]
 
-    fleet_lander.report_each(["fix/kit19-a", "fix/kit20-b"], land=fake_land,
+    fleet_lander.report_each(["fix/kit19-a", "fix/kit20-b"], assess_branch=fake_land,
                              repo=Path("/srv/example/kit"), apply=False, timeout=60)
 
 
@@ -191,7 +194,7 @@ def test_the_stream_says_which_branch_it_is_starting(capsys) -> None:
     the five it is on, twelve minutes in."""
     fleet_lander.report_each(
         ["fix/kit19-a"],
-        land=lambda _r, b, **_k: fleet_lander.Verdict(True, f"{b}: green"),
+        assess_branch=lambda _r, b, **_k: fleet_lander.Verdict(True, f"{b}: green"),
         repo=Path("/srv/example/kit"), apply=False, timeout=60)
     out = capsys.readouterr().out
     assert out.index("fix/kit19-a") < out.rindex("fix/kit19-a"), \
@@ -215,3 +218,82 @@ def test_a_conflicting_merge_is_refused_without_paying_for_a_suite() -> None:
     # "the suite was not run" goes looking for a broken test runner.
     assert "merge did not apply" in verdict.reason
     assert "suite was not run" not in verdict.reason
+
+
+def test_a_branch_listing_that_failed_is_not_an_empty_sweep(tmp_path) -> None:
+    """`main`'s own comment: "'nothing to land' and 'I did not look' must not read the
+    same, and on this kit they have before."
+
+    `lane_branches` returned `[]` when `git branch -a` failed — git missing, a broken
+    repository, a timeout, all folded into `Ran(ok=False)` — and `main` rendered that as
+    "swept the repository: no lane branch is ahead of origin/workspace", exit 0.
+    """
+    import fleet_lander as fl
+
+    not_a_repo = tmp_path / "nothing"
+    not_a_repo.mkdir()
+
+    assert fl.lane_branches(not_a_repo) is None
+
+
+def test_a_fetch_that_failed_stops_the_sweep(tmp_path, monkeypatch) -> None:
+    """A sweep over stale remote-tracking refs is not a sweep."""
+    import fleet_lander as fl
+
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+
+    def fake_run(cmd, **kwargs):
+        if "fetch" in cmd:
+            return fl.Ran(False, "", "fatal: could not read Username for 'https://github.com'")
+        return fl.Ran(True, "", "")
+
+    monkeypatch.setattr(fl, "run", fake_run)
+
+    code = fl.main(["--repo", str(repo)])
+
+    assert code == 2
+
+
+# ── two landers on one branch must not pick the same scratch path ────────────
+#
+# The names were `<branch>-alone-<epoch seconds>` under a machine-global root, so
+# two landers on the same branch within the same second — the supervisor's land
+# loop plus an operator's manual `--apply`, or two supervisors — picked the same
+# paths. `git worktree add` then failed for the second, and the failure reads as a
+# missing worktree rather than as a collision.
+
+
+def test_two_landings_of_one_branch_get_different_trees(monkeypatch, tmp_path) -> None:
+    """The property, exercised rather than asserted about the source."""
+    seen: list[str] = []
+
+    def _capture(argv, **_kw):
+        if "worktree" in argv and "add" in argv:
+            seen.append(argv[argv.index("add") + 2])
+        return fleet_lander.Ran(ok=False, stderr="stubbed")
+
+    monkeypatch.setattr(fleet_lander, "run", _capture)
+    monkeypatch.setattr(fleet_lander.tempfile, "gettempdir", lambda: str(tmp_path))
+
+    for _ in range(2):
+        fleet_lander.land(tmp_path, "fix/kit19-a", apply=False, timeout=5)
+
+    assert len(seen) >= 2, f"no worktree add was attempted: {seen}"
+    assert len(set(seen)) == len(seen), f"two landings picked the same path: {seen}"
+
+
+def test_the_scratch_path_carries_the_branch_name(monkeypatch, tmp_path) -> None:
+    """Uniqueness must not cost legibility: an operator reading `ls` needs the branch."""
+    seen: list[str] = []
+
+    def _capture(argv, **_kw):
+        if "worktree" in argv and "add" in argv:
+            seen.append(argv[argv.index("add") + 2])
+        return fleet_lander.Ran(ok=False, stderr="stubbed")
+
+    monkeypatch.setattr(fleet_lander, "run", _capture)
+    fleet_lander.land(tmp_path, "fix/kit19-a", apply=False, timeout=5)
+
+    assert seen, "no worktree add was attempted"
+    assert "fix-kit19-a" in seen[0], seen[0]

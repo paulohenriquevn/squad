@@ -1,0 +1,28 @@
+# Who reviews what, so a change to a rule cannot merge without the person who owns it.
+#
+# The rule set is the reason this file exists. `rules/` is where the kit states what it
+# refuses and why — a cap value, a blocking verdict, a threshold — and a change there
+# changes every consumer's behaviour without touching a line of their code. Nothing
+# declared an owner for it, so such a change was reviewable by whoever happened to look.
+#
+# Paths are matched last-wins, GitHub-gitignore style. An entry here is a REVIEW
+# requirement only when branch protection asks for owner review; without that it is a
+# statement of who to ask, which is worth having on its own.
+
+# Everything, unless a later line is more specific.
+*                                   @paulohenriquevn
+
+# The contracts. A change here is a change to what every consumer is held to.
+/rules/                             @paulohenriquevn
+/skills/_kit-rules/                 @paulohenriquevn
+
+# The gates that enforce them, and the hook library they run through.
+/mechanisms/gates/                  @paulohenriquevn
+/hooks/                             @paulohenriquevn
+/squad/                             @paulohenriquevn
+
+# How the kit reaches a consumer's disk. A defect here lands in every install.
+/mechanisms/distribution/           @paulohenriquevn
+
+# The pipeline that decides whether any of the above is green.
+/.github/                           @paulohenriquevn

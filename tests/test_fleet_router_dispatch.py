@@ -138,3 +138,100 @@ def test_workflow_mode_produces_json_payload() -> None:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_the_documented_workflow_mode_is_reachable_from_the_entry_point() -> None:
+    """`dispatch()` carried `mode="workflow"` and no entry point could set it.
+
+    `mechanisms/README.md:119` documents `fleet_dispatch_workflow.js` as "called by
+    dispatch_to_lane.sh with structured JSON payload", and the CHANGELOG says the mode
+    "can be overridden at dispatch time". main() called dispatch() without the argument,
+    so the branch, `resolve_unit_payload()` and the README row all described a path
+    nothing could take.
+    """
+    import inspect
+
+    import fleet_router as fr
+
+    source = inspect.getsource(fr.main)
+
+    assert "--dispatch-mode" in source, "no entry point can select the documented mode"
+    assert "mode=args.dispatch_mode" in source, (
+        "the flag exists and is not threaded into dispatch()")
+
+
+def test_two_dispatches_of_one_unit_do_not_share_a_brief_path(tmp_path) -> None:
+    """The brief was `/tmp/squad-router/<slug>.<ext>` — machine-global, no timestamp.
+
+    The lane is told "Read {drop} and do exactly what it says" and opens it seconds
+    later, so a second dispatch of the same unit — a re-route after a lane died, or
+    another fleet on the same host — overwrote the file the first lane was about to read.
+    The lane then followed a brief written for somebody else.
+    """
+    import fleet_router as fr
+
+    unit = fr.Unit("kit#19", "a title", "kit")
+    first = fr._brief_path(fr.Assignment(lane="squad-a-1", unit=unit), "/repo/one",
+                           suffix="md")
+    other_lane = fr._brief_path(fr.Assignment(lane="squad-a-2", unit=unit), "/repo/one",
+                                suffix="md")
+    other_fleet = fr._brief_path(fr.Assignment(lane="squad-a-1", unit=unit), "/repo/two",
+                                 suffix="md")
+
+    assert first != other_lane, "two lanes on one unit share a brief path"
+    assert first != other_fleet, "two fleets on one unit share a brief path"
+    assert "kit-19" in first.name, f"the slug is not sanitised into the name: {first.name}"
+
+
+def test_two_landers_on_one_branch_do_not_share_a_scratch_tree() -> None:
+    """`<branch>-alone-<epoch seconds>` collides for two landers in the same second.
+
+    `git worktree add` then fails for the second, and the failure reads as a missing
+    worktree rather than as a collision.
+    """
+    import tempfile
+    from pathlib import Path as _Path
+
+    root = _Path(tempfile.mkdtemp())
+    one = _Path(tempfile.mkdtemp(prefix="fix-kit19-", dir=str(root)))
+    two = _Path(tempfile.mkdtemp(prefix="fix-kit19-", dir=str(root)))
+
+    assert one != two, "mkdtemp handed out the same directory twice"
+
+
+def test_the_issue_body_fetch_is_reachable_from_the_value_the_caller_passes() -> None:
+    """The gate was `if tracker == "github"` and the caller passes `owner/name`.
+
+    `dispatch()` is invoked with `tracker=args.kit_repo or "paulohenriquevn/squad"`, which
+    never equals the literal "github" — so the fetch was dead code. Every workflow
+    dispatch carried the unit's TITLE as its body, and the repair agent read a one-line
+    summary where the issue's own text should have been.
+    """
+    import fleet_router as fr
+
+    assert fr._looks_like_github_repo("paulohenriquevn/squad") is True
+    assert fr._looks_like_github_repo("github") is False
+    assert fr._looks_like_github_repo("") is False
+
+
+def test_the_payload_asks_the_repository_the_caller_named(monkeypatch) -> None:
+    """Without `--repo`, `gh issue view` resolves against whatever directory it runs in."""
+    import fleet_router as fr
+
+    seen: list[list[str]] = []
+
+    class _Done:
+        returncode = 0
+        stdout = "the issue body\n"
+
+    def fake_run(argv, **_kwargs):
+        seen.append(argv)
+        return _Done()
+
+    monkeypatch.setattr(fr.subprocess, "run", fake_run)
+    payload = fr.resolve_unit_payload(fr.Unit("kit#19", "a title", "kit"),
+                                      repo="/repo", tracker="owner/name")
+
+    assert payload["unit"]["body"] == "the issue body"
+    assert seen and "--repo" in seen[0], seen
+    assert "owner/name" in seen[0]

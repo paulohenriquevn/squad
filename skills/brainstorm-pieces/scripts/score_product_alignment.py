@@ -59,7 +59,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_wiki_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_wiki_dir  # noqa: E402 — post-bootstrap import
 
 FLOOR_PCT = 90.0
 
@@ -154,21 +157,15 @@ def _has_number(value: str) -> bool:
     return bool(re.search(r"\d", value))
 
 
-def score(root: Path) -> Report:
-    rep = Report()
-    product = write_wiki_dir(root, "product")
-    texts: dict[str, str] = {}
-    for name in DOCS:
-        path = product / name
-        if not path.is_file():
-            rep.missing_docs.append(name)
-            texts[name] = ""
-        else:
-            texts[name] = path.read_text(encoding="utf-8")
+def _gate_vision(rep: Report, texts: dict[str, str]) -> None:
+    """vision: 5 criteria (G-B1)
 
-    if rep.missing_docs:
-        rep.hard_caps.append("missing_document")
-
+    Extracted from `score`, which measured cyclomatic complexity 66 across 136 lines
+    holding five independent gate sections. Pure code movement: the block below is the
+    block that was there, reading the same documents. What changed is that each section
+    now declares what it reads and what it produces, instead of leaving both lying in a
+    shared scope.
+    """
     # ---- vision: 5 criteria (G-B1) ------------------------------------------
     v = texts[VISION]
     for key, header in (
@@ -195,6 +192,16 @@ def score(root: Path) -> Report:
     if not _section(v, "Who it is for").strip():
         rep.floor_caps.append("vision_without_named_user")
 
+
+def _gate_objectives(rep: Report, texts: dict[str, str]) -> set[str]:
+    """objectives: 4 criteria (G-B2)
+
+    Extracted from `score`, which measured cyclomatic complexity 66 across 136 lines
+    holding five independent gate sections. Pure code movement: the block below is the
+    block that was there, reading the same documents. What changed is that each section
+    now declares what it reads and what it produces, instead of leaving both lying in a
+    shared scope.
+    """
     # ---- objectives: 4 criteria (G-B2) --------------------------------------
     objectives = _blocks(texts[OBJECTIVES], OBJ_RE)
     obj_ids = {oid for oid, _, _ in objectives}
@@ -221,7 +228,18 @@ def score(root: Path) -> Report:
         rep.floor_caps.append("objective_without_measurable_metric")
     if len(with_horizon) != len(objectives):
         rep.floor_caps.append("objective_without_horizon")
+    return obj_ids
 
+
+def _gate_trd(rep: Report, texts: dict[str, str], obj_ids: set[str]) -> tuple[list, set[str], list]:
+    """trd: 4 criteria (G-B3)
+
+    Extracted from `score`, which measured cyclomatic complexity 66 across 136 lines
+    holding five independent gate sections. Pure code movement: the block below is the
+    block that was there, reading the same documents. What changed is that each section
+    now declares what it reads and what it produces, instead of leaving both lying in a
+    shared scope.
+    """
     # ---- trd: 4 criteria (G-B3) ---------------------------------------------
     reqs = _blocks(texts[TRD], REQ_RE)
     req_ids = {rid for rid, _, _ in reqs}
@@ -245,7 +263,18 @@ def score(root: Path) -> Report:
     rep.criteria.append(Criterion(
         "req_no_placeholder", TRD, 0 if PLACEHOLDER_RE.search(texts[TRD]) else 2,
         "placeholder found" if PLACEHOLDER_RE.search(texts[TRD]) else "no placeholder"))
+    return reqs, req_ids, with_cite
 
+
+def _gate_pieces(rep: Report, texts: dict[str, str], reqs: list, req_ids: set[str], with_cite: list) -> None:
+    """pieces: 4 criteria (G-B3)
+
+    Extracted from `score`, which measured cyclomatic complexity 66 across 136 lines
+    holding five independent gate sections. Pure code movement: the block below is the
+    block that was there, reading the same documents. What changed is that each section
+    now declares what it reads and what it produces, instead of leaving both lying in a
+    shared scope.
+    """
     # ---- pieces: 4 criteria (G-B3) ------------------------------------------
     pieces = _blocks(texts[PIECES], PIECE_RE)
     rep.criteria.append(Criterion(
@@ -280,6 +309,16 @@ def score(root: Path) -> Report:
         # caps the artifact, because no edit to the CITING document can fix it.
         rep.hard_caps.append("citation_without_referent")
 
+
+def _gate_signature(rep: Report, product: Path) -> None:
+    """the signature (G-B5)
+
+    Extracted from `score`, which measured cyclomatic complexity 66 across 136 lines
+    holding five independent gate sections. Pure code movement: the block below is the
+    block that was there, reading the same documents. What changed is that each section
+    now declares what it reads and what it produces, instead of leaving both lying in a
+    shared scope.
+    """
     # ---- the signature (G-B5) ------------------------------------------------
     align = product / ALIGNMENT
     if align.is_file():
@@ -288,6 +327,30 @@ def score(root: Path) -> Report:
         rep.unticked = len(UNTICKED_RE.findall(body))
     else:
         rep.unticked = -1  # no checklist at all: an absent gate is not a passed one
+
+    return rep
+
+
+def score(root: Path) -> Report:
+    rep = Report()
+    product = write_wiki_dir(root, "product")
+    texts: dict[str, str] = {}
+    for name in DOCS:
+        path = product / name
+        if not path.is_file():
+            rep.missing_docs.append(name)
+            texts[name] = ""
+        else:
+            texts[name] = path.read_text(encoding="utf-8")
+
+    if rep.missing_docs:
+        rep.hard_caps.append("missing_document")
+
+    _gate_vision(rep, texts)
+    obj_ids = _gate_objectives(rep, texts)
+    reqs, req_ids, with_cite = _gate_trd(rep, texts, obj_ids)
+    _gate_pieces(rep, texts, reqs, req_ids, with_cite)
+    _gate_signature(rep, product)
 
     return rep
 

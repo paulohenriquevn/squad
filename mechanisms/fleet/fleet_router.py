@@ -59,9 +59,19 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
+for _up in _HERE.parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
 
-import kit_issues  # noqa: E402
-import session_ready  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import kit_issues  # noqa: E402 — post-bootstrap import
+import session_ready  # noqa: E402 — post-bootstrap import
+
+from squad import shared_file  # noqa: E402 — post-bootstrap import
+from squad.paths import assignment_log_path  # noqa: E402 — post-bootstrap import
 
 
 class StateUnreadable(RuntimeError):
@@ -122,8 +132,7 @@ def record(log: Path, event: str, **fields: object) -> None:
     log.parent.mkdir(parents=True, exist_ok=True)
     row = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
            "at_epoch": time.time(), "event": event, **fields}
-    with log.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    shared_file.append_line(log, json.dumps(row, ensure_ascii=False))
 
 
 def in_flight(log: Path) -> dict[str, str]:
@@ -148,7 +157,14 @@ def in_flight(log: Path) -> dict[str, str]:
         unit = row.get("unit")
         if not unit:
             continue
-        if row.get("event") == "assigned":
+        # `claimed` is written under the log's lock the moment the plan decides, and
+        # `assigned` after the keystroke landed. Both mean held: recording only on
+        # delivery left a multi-second window — `dispatch_to_lane.sh` polls
+        # `session_ready.py --timeout 20` and sleeps 1s + 3s — in which a second router
+        # over the same log read the unit as free and handed it to another lane. A
+        # dispatch that fails writes `released`, so the trade-off the old comment
+        # defended ("do not reserve a unit for a lane that never received it") still holds.
+        if row.get("event") in ("assigned", "claimed"):
             held[unit] = row.get("lane", "")
         elif row.get("event") == "released":
             held.pop(unit, None)
@@ -245,8 +261,16 @@ def audit_unit(log: Path, *, has_work: bool, now: float | None = None) -> "Unit 
 
 # ── the sources ───────────────────────────────────────────────────────────────
 
-def kit_units(repo: str, *, timeout: int = 60) -> tuple[list[Unit], str]:
-    """What the kit owes, and a note a person can act on.
+def kit_units(repo: str, *, timeout: int = 60) -> tuple[list[Unit], str, bool]:
+    """`(units, note, read)` — what the kit owes, said in words, and whether it was READ.
+
+    The third element exists because `main` used to decide its documented exit 1 — "a
+    source could not be read" — with `if "could not be read" in note`. `note` is prose
+    assembled here for a human, worded by hand, so any rewording of that sentence turned
+    exit 1 into exit 0 silently and the supervisor loop would then treat a tracker it
+    could not read as a tracker with nothing to do. The failure is already typed one
+    call below (`kit_issues.Unavailable`); this carries it out instead of re-deriving it
+    from English. `backlog_units` has answered in this shape all along.
 
     The note never says the kit is clean on the strength of a tool that did not
     run. `kit_issues.Unavailable` carries its own reason and it is passed through
@@ -255,32 +279,39 @@ def kit_units(repo: str, *, timeout: int = 60) -> tuple[list[Unit], str]:
     try:
         actionable, held = kit_issues.fleet_work(repo, timeout=timeout)
     except kit_issues.Unavailable as exc:
-        return [], f"the kit registry could not be read: {exc}"
+        return [], f"the kit registry could not be read: {exc}", False
     units = [Unit(i.slug, i.title, "kit") for i in actionable]
     note = f"the kit registry is readable: {len(units)} actionable"
     if held:
         # Named, not counted. An issue nobody can see is an issue nobody decides.
         note += (f", {len(held)} waiting on a person "
                  f"({', '.join(i.slug for i in held)})")
-    return units, note
+    return units, note, True
 
 
-def backlog_units(project: Path, *, timeout: int = 120) -> tuple[list[Unit], str]:
-    """What the consumer's registry says may start. Always outranks kit work.
+def backlog_units(project: Path, *, timeout: int = 120) -> tuple[list[Unit], str, bool]:
+    """`(units, note, read)` — what may start, said in words, and whether it was READ.
 
-    A fleet that prefers auditing itself to shipping the product is worse than an
-    idle one: it looks busy.
+    Four outcomes used to share `([], note)`: no selector installed, the selector could
+    not be run, the selector returned no JSON, and the queue is legitimately empty.
+    `main` distinguished none of them, so a consumer whose selector crashed looked exactly
+    like a consumer with nothing to do — and the router then offered KIT work, or a
+    self-audit of the kit, on the strength of a read that failed. A fleet that prefers
+    auditing itself to shipping the product is worse than an idle one: it looks busy.
+
+    `read` is False only when the queue could not be ASKED. An empty queue that answered
+    is read=True: the consumer has nothing to start, which is a measurement.
     """
     selector = project / ".claude/skills/backlog-review/scripts/select_backlog_item.py"
     if not selector.is_file():
-        return [], f"no selector at {selector}; the consumer's queue was not read"
+        return [], f"no selector at {selector}; the consumer's queue was not read", False
     try:
         done = subprocess.run(  # noqa: PLW1510 — the exit code is a verdict, read below
             [sys.executable, str(selector), str(project / "BACKLOG.md"), "--json"],
             capture_output=True, text=True, timeout=timeout, cwd=str(project),
             stdin=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError) as exc:
-        return [], f"the consumer's selector could not be run ({exc})"
+        return [], f"the consumer's selector could not be run ({exc})", False
     # Read stdout BEFORE the returncode. SELECT ends on `0 if ITEM_SELECTED else 1`,
     # so a held backlog always exits non-zero with the verdict on stdout — the
     # exact ordering that made the lead log `SELECT exited 1: ` with a blank reason.
@@ -288,16 +319,23 @@ def backlog_units(project: Path, *, timeout: int = 120) -> tuple[list[Unit], str
         answer = json.loads(done.stdout)
     except json.JSONDecodeError:
         detail = (done.stderr or done.stdout or "").strip()[:200]
-        return [], f"the consumer's selector returned no usable answer: {detail or 'no output'}"
+        return [], f"the consumer's selector returned no usable answer: {detail or 'no output'}", False
+    if not isinstance(answer, dict):
+        # Parsing is not the same as having the expected shape. A selector printing a
+        # bare JSON string or list parsed fine and then raised AttributeError on `.get`,
+        # so a malformed answer left the router as a traceback rather than as the note
+        # every branch around here is built to produce.
+        return [], (f"the consumer's selector returned no usable answer: a JSON "
+                    f"{type(answer).__name__}, not an object"), False
     queue = [q for q in (answer.get("queue") or []) if q]
     if not queue:
         awaiting = answer.get("awaiting_human") or []
         note = f"{answer.get('verdict', 'no verdict')}: {answer.get('reason', '')}"
         if awaiting:
             note += f" [awaiting a person: {', '.join(awaiting)}]"
-        return [], note
+        return [], note, True
     return ([Unit(q, "", "backlog") for q in queue],
-            f"the consumer's queue has {len(queue)} startable item(s)")
+            f"the consumer's queue has {len(queue)} startable item(s)", True)
 
 
 # ── the lanes ─────────────────────────────────────────────────────────────────
@@ -532,9 +570,9 @@ def open_branches(repo: Path, *, timeout: int = 30) -> set[str] | None:
     """Every branch name in `repo`, local and remote, or `None` when git could not
     be asked. `None` is not `set()` — see `plan`."""
     try:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             ["git", "-C", str(repo), "branch", "-a", "--format=%(refname:short)"],
-            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     if done.returncode != 0:
@@ -552,9 +590,9 @@ def closed_in_history(repo: Path, *, ref: str = "origin/workspace",
     offered, and the tracker remains the authority on whether it is still open.
     """
     try:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             ["git", "-C", str(repo), "log", "--format=%B", "-n", "400", ref],
-            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, check=False)
     except (OSError, subprocess.SubprocessError):
         return set()
     if done.returncode != 0:
@@ -613,6 +651,16 @@ def plan(*, units: list[Unit], lanes: dict[str, str], log: Path,
     return result
 
 
+def _looks_like_github_repo(tracker: str) -> bool:
+    """Whether `tracker` names a GitHub repository this kit can ask `gh` about.
+
+    `owner/name`, which is what every caller passes. The previous gate compared the same
+    value against the literal `"github"` and was therefore never true — a dead branch
+    that made every dispatched payload carry the unit's title where its body belonged.
+    """
+    return bool(re.fullmatch(r"[\w.-]+/[\w.-]+", tracker or ""))
+
+
 def resolve_unit_payload(unit: Unit, *, repo: str, tracker: str) -> dict:
     """Fetch full unit metadata and return structured payload for workflow.
 
@@ -629,13 +677,19 @@ def resolve_unit_payload(unit: Unit, *, repo: str, tracker: str) -> dict:
 
     # If the unit has a body already (from kit_issues), use it.
     # Otherwise, fetch via gh issue view
+    # The gate used to be `if tracker == "github"`, and the only caller passes
+    # `tracker=args.kit_repo or "paulohenriquevn/squad"` — an `owner/name` string, which
+    # never equals "github". So the fetch was dead: every workflow dispatch carried the
+    # TITLE as its body, and the repair agent read a one-line summary where the issue's
+    # own text should have been. One `tracker` vocabulary, decided here: it is the
+    # `owner/name` this kit passes, and `--repo` is what makes the fetch unambiguous.
     body = ""
-    if tracker == "github":
+    if _looks_like_github_repo(tracker):
         try:
-            # Try to fetch issue body from GitHub
             result = subprocess.run(
-                ["gh", "issue", "view", unit.number, "--json", "body", "-q", ".body"],
-                capture_output=True, text=True, check=False
+                ["gh", "issue", "view", str(unit.number), "--repo", tracker,
+                 "--json", "body", "-q", ".body"],
+                capture_output=True, text=True, check=False, timeout=60,
             )
             if result.returncode == 0:
                 body = result.stdout.strip()
@@ -660,6 +714,24 @@ def resolve_unit_payload(unit: Unit, *, repo: str, tracker: str) -> dict:
     }
 
 
+def _brief_path(assignment: "Assignment", repo: str, *, suffix: str) -> Path:
+    """Where this dispatch's brief lands. One path per DISPATCH, not per unit.
+
+    It was `/tmp/squad-router/<slug>.<ext>`: machine-global, no timestamp, no fleet or
+    project component. The lane is told "Read {drop} and do exactly what it says" and
+    opens it seconds later, so a second dispatch of the same unit — a re-route after a
+    lane died, or another fleet on the same host — overwrote the file the first lane was
+    about to read. The lane then followed a brief written for somebody else, and nothing
+    in either run said so.
+    """
+    root = Path("/tmp/squad-router")
+    root.mkdir(parents=True, exist_ok=True)
+    slug = re.sub(r"[^A-Za-z0-9._-]", "-", assignment.unit.slug)
+    fleet = re.sub(r"[^A-Za-z0-9._-]", "-", Path(repo).name or "kit")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    return root / f"{fleet}-{slug}-{assignment.lane}-{stamp}.{suffix}"
+
+
 def dispatch(assignment: Assignment, *, repo: str, log: Path,
              tracker: str, apply: bool, mode: str = "tmux",
              project: str = "") -> tuple[bool, str]:
@@ -680,7 +752,7 @@ def dispatch(assignment: Assignment, *, repo: str, log: Path,
     if mode == "workflow":
         # New workflow mode: write structured JSON payload
         payload = resolve_unit_payload(assignment.unit, repo=repo, tracker=tracker)
-        drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.json"
+        drop = _brief_path(assignment, repo, suffix="json")
         if not apply:
             return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane} (workflow mode)"
         drop.parent.mkdir(parents=True, exist_ok=True)
@@ -692,7 +764,7 @@ def dispatch(assignment: Assignment, *, repo: str, log: Path,
     else:
         # Traditional tmux mode: write markdown brief
         text = brief(assignment.unit, repo=repo, tracker=tracker, project=project)
-        drop = Path("/tmp/squad-router") / f"{assignment.unit.slug.replace('#', '')}.md"
+        drop = _brief_path(assignment, repo, suffix="md")
         if not apply:
             return True, f"dry-run: would dispatch {assignment.unit.slug} to {assignment.lane}"
         drop.parent.mkdir(parents=True, exist_ok=True)
@@ -707,8 +779,11 @@ def dispatch(assignment: Assignment, *, repo: str, log: Path,
          "--prompt", workflow_prompt],
         capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if done.returncode != 0:
-        # Not recorded. An unrecorded unit is offered again next run, which is the
-        # right failure: the alternative is a unit nobody holds and nobody retries.
+        # The claim written before this call is given back, so the unit is offered
+        # again next run — the same outcome the old comment defended, now reached by
+        # releasing a reservation rather than by never making one.
+        record(log, "released", unit=assignment.unit.slug, lane=assignment.lane,
+               reason=f"dispatch exited {done.returncode}")
         return False, (f"{assignment.unit.slug} was NOT delivered to "
                        f"{assignment.lane} (exit {done.returncode}): "
                        f"{(done.stderr or done.stdout).strip()[:160]}")
@@ -725,17 +800,32 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kit-path", default=str(_HERE.parents[1]),
                     help="working copy the lanes clone worktrees from")
     ap.add_argument("--project", default="", help="consumer whose backlog outranks kit work")
-    ap.add_argument("--log", default=str(Path.home() / ".squad-fleet" / "assignments.jsonl"))
+    # No literal default. `~/.squad-fleet/assignments.jsonl` is scoped to the MACHINE,
+    # and `in_flight()` keys the held set by unit slug alone — so `B-014` in one consumer
+    # and `B-014` in another were ONE key, and a unit held by one fleet read as held by
+    # the other. `squad.paths.assignment_log_path` scopes it to the project, the way
+    # `lead_log_path` already does one file along. Resolved after parsing, from --project.
+    ap.add_argument("--log", default="",
+                    help="assignment log; defaults to the project's .squad/assignments.jsonl")
     ap.add_argument("--apply", action="store_true",
                     help="actually dispatch; without it nothing is typed anywhere")
     ap.add_argument("--json", action="store_true")
+    # `dispatch()` has carried `mode="workflow"` since the JS workflow landed, and
+    # `mechanisms/README.md:119` documents it as "called by dispatch_to_lane.sh with
+    # structured JSON payload". No entry point could set it: main() called dispatch()
+    # without the argument, so the branch, `resolve_unit_payload()` and the README row
+    # described a path nothing could take. This is the flag that was missing.
+    ap.add_argument("--dispatch-mode", choices=("tmux", "workflow"), default="tmux",
+                    help="tmux writes a markdown brief; workflow writes the JSON payload "
+                         "fleet_dispatch_workflow.js reads")
     args = ap.parse_args(argv)
 
     lanes = [name.strip() for name in args.lanes.split(",") if name.strip()]
     if not lanes:
         print("no lanes given", file=sys.stderr)
         return 2
-    log = Path(args.log)
+    log = Path(args.log) if args.log else assignment_log_path(
+        Path(args.project) if args.project else Path(args.kit_path))
 
     notes: list[str] = []
     units: list[Unit] = []
@@ -744,21 +834,26 @@ def main(argv: list[str] | None = None) -> int:
     # The consumer's backlog always wins. Kit work is where the fleet goes when the
     # alternative is idling, never a shortcut around the product.
     if args.project:
-        found, note = backlog_units(Path(args.project))
+        found, note, read = backlog_units(Path(args.project))
         notes.append(f"backlog: {note}")
         units.extend(found)
+        if not read:
+            # A queue that could not be READ is not an empty queue. Offering kit work or
+            # a self-audit on the strength of a failed read is the fleet inventing work.
+            partial = True
     if args.kit_repo and not units:
-        found, note = kit_units(args.kit_repo)
+        found, note, read = kit_units(args.kit_repo)
         notes.append(f"kit: {note}")
-        if "could not be read" in note:
+        if not read:
             partial = True
         units.extend(found)
 
-    # Last, and only when both real sources came back empty. `units` being empty
-    # is the condition, not "the sources failed" — a source that could not be read
-    # already said so in its own note above, and sweeping on the strength of a
-    # failed read would be inventing work out of an absent measurement.
-    audit = audit_unit(log, has_work=bool(units))
+    # Last, and only when both real sources came back empty AND both were actually read.
+    # The comment below has said this since it was written; the code did not enforce the
+    # second half, because nothing carried "this source failed" out of `backlog_units` —
+    # its four outcomes shared one empty list. A self-audit offered on the strength of a
+    # failed read is work invented out of an absent measurement.
+    audit = audit_unit(log, has_work=bool(units) or partial)
     if audit is not None:
         units.append(audit)
         notes.append("both queues are empty; offering a sweep of the kit instead of idling")
@@ -770,21 +865,33 @@ def main(argv: list[str] | None = None) -> int:
             raise StateUnreadable(
                 "the repository's branches could not be listed, so whether a unit "
                 "is already being worked on is unknown. Refusing to plan.")
-        # Reaped BEFORE planning: a unit released now is offered in the same run,
-        # which is the difference between recovering and merely noticing.
-        for freed in reap(log, lanes=states, branches=branches):
-            notes.append(f"released {freed}: its lane is free with nothing to show")
-        the_plan = plan(units=units, lanes=states, log=log, branches=branches,
-                        closed=closed_in_history(Path(args.kit_path)))
+        # Read-decide-claim, serialised. Nothing in this block runs a subprocess that
+        # waits, so the lock is held for milliseconds; the dispatches below, which take
+        # seconds each, run outside it against claims already recorded.
+        with shared_file.locked(log):
+            # Reaped BEFORE planning: a unit released now is offered in the same run,
+            # which is the difference between recovering and merely noticing.
+            for freed in reap(log, lanes=states, branches=branches):
+                notes.append(f"released {freed}: its lane is free with nothing to show")
+            the_plan = plan(units=units, lanes=states, log=log, branches=branches,
+                            closed=closed_in_history(Path(args.kit_path)))
+            if args.apply:
+                for assignment in the_plan.assignments:
+                    record(log, "claimed", unit=assignment.unit.slug,
+                           lane=assignment.lane, source=assignment.unit.source)
     except StateUnreadable as exc:
         print(str(exc), file=sys.stderr)
+        return 1
+    except TimeoutError as exc:
+        print(f"the assignment log is held by another router: {exc}", file=sys.stderr)
         return 1
 
     delivered: list[str] = []
     for assignment in the_plan.assignments:
         ok, line = dispatch(assignment, repo=args.kit_path, log=log,
                             tracker=args.kit_repo or "paulohenriquevn/squad",
-                            apply=args.apply, project=args.project)
+                            apply=args.apply, mode=args.dispatch_mode,
+                            project=args.project)
         (delivered if ok else notes).append(line)
 
     report = {

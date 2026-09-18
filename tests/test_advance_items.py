@@ -186,3 +186,53 @@ def test_a_git_failure_does_not_read_as_all_untracked(tmp_path: Path) -> None:
     from advance_items import all_changes_are_untracked
 
     assert all_changes_are_untracked(tmp_path / "not-a-repo", [".claude/x"]) is False
+
+
+def test_the_verdict_the_rule_defines_is_reachable_from_the_entry_point(tmp_path: Path) -> None:
+    """`ITEM_VERIFIED_LOCAL` was defined by a whole section of `cycle-maintenance.md`
+    and produced by nothing.
+
+    `Advance.verified_local` was never appended to, and `all_changes_are_untracked()`
+    had no caller in the module — the branch computing the verdict could not be entered.
+    A rule naming a decider that never runs reads as an implemented gate, and this one
+    was cited by `rules/cycle-rule-schema.md` as a terminal state of the macro loop.
+
+    The file list is supplied by the caller. Inferring it from the working tree would be
+    a guess about which change belongs to which item, and the rule calls this test
+    mechanical.
+    """
+    import subprocess
+
+    from advance_items import advance
+
+    repo = _repo(tmp_path)
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t",
+                    "-c", "commit.gpgsign=false", "commit", "-qm", "base"], check=True)
+    backlog = repo / "BACKLOG.md"
+    backlog.write_text("## B-001\n\nstatus: planned\n", encoding="utf-8")
+
+    result = advance(backlog, repo, apply=False,
+                     verified_local={"B-001": [".claude/hook.sh"]})
+
+    assert result.verified_local == ["B-001"]
+    assert result.as_dict()["verdict"] == "ITEM_VERIFIED_LOCAL"
+
+
+def test_a_tracked_file_keeps_the_item_out_of_the_local_verdict(tmp_path: Path) -> None:
+    """"It has a release, and it must take it." One tracked file is enough."""
+    import subprocess
+
+    from advance_items import advance
+
+    repo = _repo(tmp_path)
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t",
+                    "-c", "commit.gpgsign=false", "commit", "-qm", "base"], check=True)
+    backlog = repo / "BACKLOG.md"
+    backlog.write_text("## B-001\n\nstatus: planned\n", encoding="utf-8")
+
+    result = advance(backlog, repo, apply=False,
+                     verified_local={"B-001": [".claude/hook.sh", "src.py"]})
+
+    assert result.verified_local == []

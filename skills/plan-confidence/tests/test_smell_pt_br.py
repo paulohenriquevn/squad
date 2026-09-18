@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from check_spec_smells import check_spec_smells  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_spec_smells import check_spec_smells  # noqa: E402 — post-bootstrap import
 
 SKILL_ROOT = Path(__file__).parent.parent
 RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"

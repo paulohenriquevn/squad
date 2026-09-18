@@ -29,9 +29,16 @@ sys.path.insert(0, str(_REPO / "mechanisms" / "cycle"))
 sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
 sys.path.insert(0, str(_REPO / "mechanisms" / "conventions"))
 
-from check_write_containment import OWNER, scan, strip_prose  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_write_containment import (  # noqa: E402 — post-bootstrap import
+    OWNER,
+    scan,
+    strip_prose,
+)
 
-from squad.paths import (  # noqa: E402
+from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
     contains,
     records_dir,
@@ -205,3 +212,34 @@ def test_the_bundle_and_the_trail_stay_apart_inside_the_root(tmp_path: Path) -> 
     """
     assert write_wiki_dir(tmp_path) != write_records_dir(tmp_path)
     assert wiki_dir(tmp_path) is None and records_dir(tmp_path) is None
+
+
+def test_the_json_branch_answers_an_empty_sweep_the_same_way_the_prose_branch_does(
+        tmp_path: Path) -> None:
+    """One status, two exit codes, decided by an output flag.
+
+    `main` computes `status="nothing_scanned"` when zero files were read, and the prose
+    branch returns UNCHECKED with "That is not containment; it is an unexamined tree."
+    The `--json` branch is evaluated FIRST and returns CONTAINED — the sentinel is
+    serialised into the payload and thrown away by the exit code. Every caller that reads
+    the code rather than the body saw a clean bill over a tree nothing looked at, and
+    `--json` is the form a machine uses.
+    """
+    import json as _json
+    import subprocess
+    import sys as _sys
+
+    gate = Path(__file__).resolve().parents[1] / "mechanisms" / "gates" / "check_write_containment.py"
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    prose = subprocess.run([_sys.executable, str(gate), "--root", str(empty)],
+                           capture_output=True, text=True, timeout=120, check=False)
+    as_json = subprocess.run([_sys.executable, str(gate), "--root", str(empty), "--json"],
+                             capture_output=True, text=True, timeout=120, check=False)
+
+    assert _json.loads(as_json.stdout)["status"] == "nothing_scanned"
+    assert as_json.returncode == prose.returncode, (
+        f"the same sweep exits {as_json.returncode} as JSON and {prose.returncode} as prose"
+    )
+    assert as_json.returncode != 0, "an unexamined tree exits 0 under --json"

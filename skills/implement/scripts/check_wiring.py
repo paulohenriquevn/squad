@@ -159,7 +159,7 @@ def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], excl
         cmd.extend(["--exclude-dir", exc])
     cmd.extend([pattern, str(project_root)])
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)  # noqa: PLW1510
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
     except (subprocess.SubprocessError, FileNotFoundError):
         return []
     if result.returncode > 1:  # 0 = match, 1 = no match, >1 = real error

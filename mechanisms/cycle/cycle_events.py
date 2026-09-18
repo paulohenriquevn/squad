@@ -48,6 +48,7 @@ from pathlib import Path as _Path
 _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
 
 import argparse
+import contextlib
 import json
 import math
 import re
@@ -56,9 +57,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from squad import shared_file
 from squad.paths import (
     DATA_DIRNAME,
     LEGACY_RECORDS_ROOTS,
+    RULE_BASES,
     write_records_dir,
 )
 
@@ -72,9 +75,9 @@ PHASE_START = "cycle:phase:start"
 PHASE_END = "cycle:phase:end"
 
 
-_KIT_PARTS = ("skills", "rules", "hooks")
-
-
+#: Assigned twice, identically, until 2026-09-17. Harmless while the two agreed, and the
+#: shape that produces a real defect the moment one of them is edited: the second wins
+#: silently and the reader who changed the first has no way to see why nothing happened.
 _KIT_PARTS = ("skills", "rules", "hooks")
 
 
@@ -169,10 +172,20 @@ def _json_safe(value: Any) -> Any:
 
 
 def _append_line(path: Path, line: str) -> None:
-    """Append one line. Isolated so a test can make it fail."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(line + "\n")
+    """Append one line, under the lock. Isolated so a test can make it fail.
+
+    An `O_APPEND` write is atomic only up to PIPE_BUF (4 KiB on Linux) — and beyond the
+    stream's own 8 KiB buffer it is not even one write syscall. An event carrying a long
+    `detail` or a list of reviewers crosses that, and two cycles emitting concurrently
+    then interleave halves of two JSON objects into one line. The stream is append-only
+    and never rewritten, so a torn line is permanent: every later reader skips it, and
+    what it recorded is gone. `squad.shared_file` already owns this serialisation.
+
+    Nesting is safe: `shared_file.locked` is reentrant within a process, so the
+    `--once` path — which holds the lock over its whole read-decide-append span —
+    passes straight through here rather than queueing behind itself.
+    """
+    shared_file.append_line(path, line)
 
 
 def _emit(project_root: Path, event_type: str, cycle: str, slug: str,
@@ -276,7 +289,8 @@ def declared_verdicts(project_root: Path, phase: str) -> set[str]:
     that carry no `## Verdicts` section. Refusing those would break honest emitters to
     catch a dishonest one.
     """
-    for base in ("rules", ".claude/rules"):
+    # `squad.paths.rules_dir` owns the order; see it for which wins and why.
+    for base in RULE_BASES:
         rule = project_root / base / f"cycle-{phase}.md"
         if not rule.is_file():
             continue
@@ -375,6 +389,26 @@ def main(argv: list[str] | None = None) -> int:
     # complete, plan written, released — passes `--once`; a gate that iterates does
     # not. Refusing rather than silently skipping, because a caller that emitted twice
     # by accident should learn of it.
+    # The duplicate check reads the stream and the emit below appends to it. Nothing
+    # serialised the two, and concurrent writers of one stream are an explicit feature of
+    # this kit — `mechanisms/fleet` dispatches lanes in parallel and each runs the phase
+    # commands that emit here. Two sessions could both read a stream whose last line was
+    # not yet the other's, and both append. The lock spans read AND append.
+    #
+    # What is NOT changed here: the duplicate test still compares against the LAST
+    # event. Scanning backward for a matching end was the other half of the proposal,
+    # and it contradicts the semantics this file already carries and the suite pins —
+    # "anything since" is how a caller says the phase ran a second time, and
+    # `test_once_allows_the_same_verdict_after_something_else_ran` asserts exactly
+    # that. A backward scan would refuse a legitimate second run.
+    stream = resolve_events_path(root)
+    once_guard = shared_file.locked(stream) if args.once and args.transition == "end" \
+        else contextlib.nullcontext()
+    with once_guard:
+        return _emit_under_guard(args, root)
+
+
+def _emit_under_guard(args: argparse.Namespace, root: Path) -> int:
     if args.once and args.transition == "end":
         previous = read_events(root)
         if previous:

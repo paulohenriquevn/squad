@@ -86,7 +86,7 @@ def _run(backlog: Path, repo: str, terms: list[str]) -> tuple[int, dict]:
     ]
     for term in terms:
         args.extend(["--term", term])
-    result = subprocess.run(args, capture_output=True, text=True)  # noqa: PLW1510
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:
@@ -175,11 +175,11 @@ def _run_raw(project: Path, repo: str, backlog: Path) -> subprocess.CompletedPro
     These tests MUTATE the project — deleting the routing tool, breaking the table,
     removing a specialist — so they need to hold the project they broke.
     """
-    return subprocess.run(  # noqa: PLW1510
+    return subprocess.run(
         [sys.executable, str(SCRIPT), "--backlog", str(backlog),
          "--repo", repo, "--project-root", str(project)],
         capture_output=True, text=True,
-    )
+     check=False)
 
 
 def test_an_unreadable_routing_table_is_inconclusive_not_a_refusal(tmp_path: Path) -> None:

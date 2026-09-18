@@ -377,3 +377,58 @@ def test_the_session_hook_still_matches_the_line_it_surfaces() -> None:
             f"the gate prints {label!r} and the hook matches {prefix!r}, so the line "
             f"the hook exists to surface would stop being surfaced"
         )
+
+
+def test_an_older_kit_version_is_still_recognised_through_the_batch_read(tmp_path) -> None:
+    """`git show` was spawned once PER REVISION, with no cap and no early exit.
+
+    A file with forty revisions cost forty processes — per file, per consumer. The blobs
+    now arrive over one `git cat-file --batch` pipe, and the classification must not
+    change: a body that matches an older kit version is STALE, not "needs a human".
+    """
+    import subprocess as sp
+
+    from check_install_drift import _historical_contents
+
+    kit = tmp_path / "kit"
+    kit.mkdir()
+    sp.run(["git", "-C", str(kit), "init", "-q"], check=True)
+    target = kit / "rules" / "a-rule.md"
+    target.parent.mkdir()
+    for body in ("first version\n", "second version\n", "third version\n"):
+        target.write_text(body, encoding="utf-8")
+        sp.run(["git", "-C", str(kit), "add", "-A"], check=True)
+        sp.run(["git", "-C", str(kit), "-c", "user.email=t@t", "-c", "user.name=t",
+                "-c", "commit.gpgsign=false", "commit", "-qm", body.strip()], check=True)
+
+    history = _historical_contents(kit, "rules/a-rule.md")
+
+    assert history is not None
+    assert {"first version\n", "second version\n", "third version\n"} <= history, history
+
+
+def test_a_history_that_could_not_be_read_is_not_an_empty_history(tmp_path, capsys) -> None:
+    """`set()` for a git failure made `body in history` false for every body.
+
+    So a git failure reclassified every stale file as "needs a human" — the exact
+    false-positive class this function was written to remove.
+    """
+    from check_install_drift import _historical_contents
+
+    not_a_repo = tmp_path / "plain"
+    not_a_repo.mkdir()
+
+    assert _historical_contents(not_a_repo, "rules/a-rule.md") is None
+    assert "NOT determined" in capsys.readouterr().err
+
+
+def test_a_versioned_install_does_not_report_its_own_git_objects() -> None:
+    """`.git` was not in `_CONSUMER_LOCAL`.
+
+    When `_installed_scope` returns None the walk covers the whole install root, so a
+    consumer that versions its `.claude/` had every object under `.git/` reported as a
+    consumer-local file — thousands of rows, with the signal underneath them invisible.
+    """
+    from check_install_drift import _CONSUMER_LOCAL
+
+    assert ".git" in _CONSUMER_LOCAL

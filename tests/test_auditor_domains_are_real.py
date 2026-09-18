@@ -19,8 +19,11 @@ sys.path.insert(0, str(_REPO / "mechanisms" / "cycle"))
 sys.path.insert(0, str(_REPO / "mechanisms" / "conventions"))
 sys.path.insert(0, str(_REPO / "skills" / "review" / "scripts"))
 
-from detect_domain import DOMAINS  # noqa: E402
-from select_auditors import ALWAYS, parse_registry  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from detect_domain import DOMAINS  # noqa: E402 — post-bootstrap import
+from select_auditors import ALWAYS, parse_registry  # noqa: E402 — post-bootstrap import
 
 
 def _registry() -> list:

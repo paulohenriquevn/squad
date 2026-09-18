@@ -30,7 +30,10 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "skills" / "code-quality" / "scripts"))
 
-from check_symbol_fab import _SUPPORTED_LANGUAGES  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_symbol_fab import _SUPPORTED_LANGUAGES  # noqa: E402 — post-bootstrap import
 
 CONFIGS = (
     PROJECT_ROOT / "rules" / "code-quality-languages.txt",

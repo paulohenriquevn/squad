@@ -65,10 +65,12 @@ machine, a credential, elapsed time, a system that is not standing — and it re
 through the registry, never by a session standing still. See
 [`autonomy-envelope.md § The autonomous span`](autonomy-envelope.md).
 
-## The four roles, and the seam between them
+## The roles, and the seam between them
 
 They are **mechanism**: each describes a DECISION, not a repository, which is why
-they may be versioned when a domain specialist may not.
+they may be versioned when a domain specialist may not. Fourteen ship today; the
+first four rows are the founding ones, and the paragraph after the table still
+means those four when it says so.
 
 | Agent | Decides | Runs |
 |---|---|---|

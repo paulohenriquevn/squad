@@ -62,7 +62,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import (  # noqa: E402  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
     WIKI,
     write_records_dir,
@@ -135,18 +138,34 @@ def _objectives(root: Path) -> list[tuple[str, str]]:
     return [(m.group(1), m.group(2).strip()) for m in OBJ_RE.finditer(path.read_text(encoding="utf-8"))]
 
 
+#: Why `_known_domains` came back empty, or None when it did not.
+_known_domains_why: str | None = None
+
+
 def _known_domains(root: Path) -> set[str]:
+    """The domains the routing table declares, or an empty set with the reason said.
+
+    An unreadable or absent table used to return a bare `set()`, and the caller renders
+    an empty set as "no unroutable domains" — so the section vanished from a human's
+    agenda exactly when routing was the thing nobody could check. `_known_domains_why`
+    carries the reason so the caller can print it instead of the section.
+    """
+    global _known_domains_why
+    _known_domains_why = None
     try:
         sys.path.insert(0, str(_HERE.parents[3] / "mechanisms" / "cycle"))
         from route_domain import _routing_table_path, parse_routing_table
-    except ImportError:
+    except ImportError as exc:
+        _known_domains_why = f"the routing tool is not importable here ({exc})"
         return set()
     table_path = _routing_table_path(root)
     if table_path is None:
+        _known_domains_why = f"no routing table found under {root}"
         return set()
     try:
         return set(parse_routing_table(table_path))
-    except (ValueError, OSError):
+    except (ValueError, OSError) as exc:
+        _known_domains_why = f"{table_path} could not be parsed ({exc})"
         return set()
 
 
@@ -165,7 +184,7 @@ def _halt_reports(root: Path) -> dict:
                 sys.path.insert(0, str(scripts))
             break
     try:
-        from squad_boss import halt_reports  # noqa: PLC0415
+        from squad_boss import halt_reports
     except ImportError:
         return {}
     return halt_reports(root)
@@ -208,6 +227,13 @@ def build(root: Path) -> Agenda:
 
     items, parse_blocked_by = loaded
     domains = _known_domains(root)
+    if _known_domains_why:
+        # The agenda's own "What could not be read" section. Without this the empty set
+        # below silently disables the G1 check — `if domain and domains and ...` is
+        # false for every item — so the unroutable section vanished from a human's
+        # agenda exactly when routing was the thing nobody could verify.
+        ag.notes.append(f"{_known_domains_why} — the unroutable-domain check (G1) did "
+                        f"not run, so this agenda says nothing about routing")
     cited_domains: set[str] = set()
     served: set[str] = set()
 

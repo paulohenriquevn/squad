@@ -12,14 +12,29 @@ v1.1 EC-8 fix: uses `encoding='utf-8-sig'` to tolerate UTF-8 BOM.
 from __future__ import annotations
 
 import re
+import sys as _sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _P
+
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+)
 
 TASK_ID_RE = re.compile(r"T\d+\.\d+")
 TASK_HEADER_RE = re.compile(r"^###\s+T\d+\.\d+", re.MULTILINE)
 COVERAGE_HEADER_RE = re.compile(r"^##\s+Coverage Matrix\s*$", re.MULTILINE)
 NEXT_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
-FENCED_CODE_RE = re.compile(r"^```[^\n]*\n.*?^```", re.MULTILINE | re.DOTALL)
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+FENCED_CODE_RE = _FENCED_CODE_OWNER
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 
 
@@ -213,7 +228,13 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
         else effective_covered / total_gaps
     )
 
-    is_complete = coverage_ratio >= 1.0 and not orphans
+    # `is_complete` requires a matrix that PARSED. Zero gaps gave `coverage_ratio =
+    # 1.0` — 100% of nothing — and that cleared `coverage_lt_100`, one of the two caps
+    # that force INVALID. So a plan whose Coverage Matrix heading carried no readable
+    # row scored better on coverage than one whose rows were readable and partly
+    # unmapped. A heading with nothing under it is not a plan with no gaps; it is a
+    # plan whose gaps nobody could read.
+    is_complete = coverage_ratio >= 1.0 and not orphans and total_gaps > 0
 
     return CoverageReport(
         total_gaps=total_gaps,

@@ -51,7 +51,15 @@ def test_the_prohibition_is_still_stated_where_it_is_owned() -> None:
     schema = _read("cycle-backlog.md")
 
     assert "forbidden" in schema
-    assert re.search(r"triaged\s*(→|->)\s*planned.*forbidden|forbidden", schema)
+    # `|` binds loosest in a regex, so this pattern used to read as
+    # `(triaged → planned.*forbidden)` OR the bare literal `forbidden` — and the line
+    # above already asserts that literal is present. The second assert could not fail
+    # while the first passed: it asserted nothing the first had not. Grouped, and
+    # `[^\n]*` rather than `.*` so the two halves must be on ONE line, which is what
+    # "the prohibition is stated here" means.
+    assert re.search(r"triaged\s*(→|->)\s*planned[^\n]*forbidden", schema), (
+        "`cycle-backlog.md` no longer states the `triaged → planned` prohibition on one "
+        "line; the two files may now silently agree on the wrong thing")
 
 
 def test_every_status_the_rules_name_is_one_the_mechanism_accepts() -> None:

@@ -42,7 +42,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
-from check_semantic_names import check_semantic_names  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_semantic_names import check_semantic_names  # noqa: E402 (post-bootstrap)
 
 
 def _repo(tmp_path: Path, *relative: str) -> Path:

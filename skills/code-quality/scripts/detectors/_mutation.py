@@ -121,7 +121,7 @@ def _reuse_report(report_path: Path, manifest_dir: Path, max_age_minutes: int) -
 
 
 def _run(cmd: list[str], cwd: Path, timeout_seconds: int) -> tuple[int, str, str]:
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(  # noqa: S603 — cmd is built by this module from a fixed tool table, never from user text
         cmd, cwd=str(cwd), capture_output=True, text=True,
         timeout=timeout_seconds, check=False,
     )

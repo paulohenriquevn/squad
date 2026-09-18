@@ -12,6 +12,25 @@ import json
 import sys
 from pathlib import Path
 
+#: Where a pass rate stops being good and where it stops being acceptable. Named,
+#: because they were two bare literals inside a predicate — and defined ONCE, because
+#: the function holding them was redefined on every loop iteration, so a reader could
+#: not tell whether the cutoffs varied per row.
+SCORE_GOOD = 0.8
+SCORE_OK = 0.5
+
+
+def _score_class(correct: int, total: int) -> str:
+    """The CSS class for a pass rate. `score-bad` when there is nothing to divide by:
+    a run with no cases did not score well, it did not score."""
+    if total > 0:
+        ratio = correct / total
+        if ratio >= SCORE_GOOD:
+            return "score-good"
+        if ratio >= SCORE_OK:
+            return "score-ok"
+    return "score-bad"
+
 
 def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") -> str:
     """Generate HTML report from loop output data. If auto_refresh is True, adds a meta refresh tag."""
@@ -210,11 +229,11 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
 
     # Add rows for each iteration
     for h in history:
+        # Four `h.get(...)` statements stood here whose results were discarded — a
+        # refactor that stopped using them and left the lookups behind. They read as
+        # setup for the block below, which computes its own numbers; deleting them
+        # changes nothing and stops the next reader looking for where they are used.
         iteration = h.get("iteration", "?")
-        h.get("train_passed", h.get("passed", 0))
-        h.get("train_total", h.get("total", 0))
-        h.get("test_passed")
-        h.get("test_total")
         description = h.get("description", "")
         train_results = h.get("train_results", h.get("results", []))
         test_results = h.get("test_results", [])
@@ -240,18 +259,8 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         train_correct, train_runs = aggregate_runs(train_results)
         test_correct, test_runs = aggregate_runs(test_results)
 
-        # Determine score classes
-        def score_class(correct: int, total: int) -> str:
-            if total > 0:
-                ratio = correct / total
-                if ratio >= 0.8:
-                    return "score-good"
-                elif ratio >= 0.5:
-                    return "score-ok"
-            return "score-bad"
-
-        train_class = score_class(train_correct, train_runs)
-        test_class = score_class(test_correct, test_runs)
+        train_class = _score_class(train_correct, train_runs)
+        test_class = _score_class(test_correct, test_runs)
 
         row_class = "best-row" if iteration == best_iter else ""
 
@@ -301,7 +310,7 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
     return "".join(html_parts)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Generate HTML report from run_loop output")
     parser.add_argument("input", help="Path to JSON output from run_loop.py (or - for stdin)")
     parser.add_argument("-o", "--output", default=None, help="Output HTML file (default: stdout)")

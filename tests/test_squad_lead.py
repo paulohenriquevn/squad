@@ -16,7 +16,14 @@ import time
 from pathlib import Path
 
 import pytest
-from squad_lead import SQUAD_FACILITATOR, Decision, Lead, watch
+from squad_lead import (
+    SQUAD_FACILITATOR,
+    ClaimsUnreadable,
+    Decision,
+    Fleet,
+    Lead,
+    watch,
+)
 
 from squad.paths import write_records_dir
 
@@ -1457,3 +1464,176 @@ def test_a_halt_report_with_a_suffix_after_blocked_is_still_found(tmp_path):
     found = squad_boss.halt_reports(tmp_path)
     assert "B-134" in found, "the plain form must keep working"
     assert "B-079" in found, "a suffix after BLOCKED must not hide the halt"
+
+
+def test_a_claim_log_that_cannot_be_replayed_stops_the_fleet(tmp_path) -> None:
+    """An empty claim set is what hands one item to two sessions.
+
+    `Fleet.restored` returned an empty fleet on OSError and skipped a line that would
+    not parse. Both make `holder()` answer None, so `held_reason()` reports a held item
+    as free — the exact collision the class exists to prevent, reached by the class
+    starting empty.
+    """
+    import squad_lead as sl
+
+    log = tmp_path / "lead.jsonl"
+    log.write_text('{"event": "start", "sent": true, "session": "a", "item": "B-1"}\n'
+                   'not json at all\n', encoding="utf-8")
+
+    with pytest.raises(sl.ClaimsUnreadable):
+        sl.Fleet.restored(log)
+
+
+def test_a_claim_log_that_is_simply_absent_is_an_empty_fleet(tmp_path) -> None:
+    """The refusal above must not swallow the ordinary first run."""
+    import squad_lead as sl
+
+    assert sl.Fleet.restored(tmp_path / "never-written.jsonl").taken == {}
+
+
+def test_an_unreadable_event_stream_holds_the_item_rather_than_freeing_it(tmp_path) -> None:
+    """`_last_verdict` answered None for "no verdict" and for "could not read".
+
+    `held_reason` consumes it, so an unreadable stream made every held item look
+    startable and the lead typed into a session for work a blocking verdict was holding.
+    """
+    import squad_lead as sl
+
+    lead = sl.Lead(session="s", project=tmp_path)
+    lead._last_verdict = lambda _item: sl.Lead.UNREADABLE
+
+    held = lead.held_reason("B-014")
+
+    assert held and "could not be read" in held
+
+
+def test_a_log_line_that_did_not_land_is_reported_rather_than_swallowed(tmp_path, capsys) -> None:
+    """The log is the fleet's state, not only its human trail."""
+    import squad_lead as sl
+
+    unwritable = tmp_path / "dir-in-the-way"
+    unwritable.mkdir()
+
+    recorded = sl._log(unwritable, "s", {"event": "start", "sent": True, "item": "B-1"})
+
+    assert recorded is False
+    assert "could not record the decision" in capsys.readouterr().err
+
+
+def test_the_budget_help_reads_the_default_rather_than_restating_it() -> None:
+    """The help said 6.00 and the code passed 40.00.
+
+    6.00 is the ceiling that STOPPED a fleet on 2026-08-31 — a large project exceeded it
+    and the lead exited 1, halting over a number rather than over the work — which is why
+    the field says 40.00. An operator reading `--help` saw the ceiling that failed.
+    """
+    import subprocess as sp
+    import sys as _sys
+
+    import squad_lead as sl
+
+    done = sp.run([_sys.executable, str(Path(sl.__file__)), "--help"],
+                  capture_output=True, text=True, timeout=120, check=False)
+
+    assert f"default {sl.Lead.agent_budget_usd:.2f}" in done.stdout, done.stdout
+    assert "default 6.00" not in done.stdout
+
+
+def test_the_launcher_does_not_repeat_the_number() -> None:
+    """`start_fleet.sh` named 6.00 in prose beside a flag whose default is 40.00."""
+    launcher = (Path(__file__).resolve().parents[1] / "mechanisms" / "fleet"
+                / "start_fleet.sh").read_text(encoding="utf-8")
+
+    assert 'comment says 6.00 was measured' not in launcher, (
+        "the launcher still presents 6.00 as the current default")
+
+
+# ── the branch that holds the fleet, which nothing exercised ──────────────────
+#
+# `Fleet.restored` was tested for an ABSENT log (returns an empty fleet, correctly:
+# no log is no claims) and never for an UNREADABLE one. Those two take opposite
+# actions and the second is the dangerous one — an empty claim set makes `holder()`
+# answer None for every item, `held_reason()` reports held work as free, and a second
+# session is handed an item somebody is already on. That is the exact collision the
+# class exists to prevent, reached by the class starting empty.
+
+
+def test_an_unreadable_log_refuses_rather_than_reporting_no_claims(tmp_path) -> None:
+    log = tmp_path / "lead.jsonl"
+    log.write_text('{"event":"start","sent":true,"session":"s1","item":"B-001"}\n',
+                   encoding="utf-8")
+    log.chmod(0o000)
+    try:
+        with pytest.raises(ClaimsUnreadable):
+            Fleet.restored(log)
+    finally:
+        log.chmod(0o644)
+
+
+def test_a_line_that_is_not_json_refuses_rather_than_skipping(tmp_path) -> None:
+    """A hole in the log is a hole in the claim set, and skipping it under-reports."""
+    log = tmp_path / "lead.jsonl"
+    log.write_text('{"event":"start","sent":true,"session":"s1","item":"B-001"}\n'
+                   'this line is not json\n', encoding="utf-8")
+
+    with pytest.raises(ClaimsUnreadable) as caught:
+        Fleet.restored(log)
+
+    assert ":2" in str(caught.value), "the refusal must name which line"
+
+
+def test_an_absent_log_is_an_empty_fleet_not_a_refusal(tmp_path) -> None:
+    """The other side, which was the only one covered: no log IS no claims."""
+    fleet = Fleet.restored(tmp_path / "never-written.jsonl")
+
+    assert fleet.holder("B-001") is None
+
+
+def test_a_readable_log_replays_its_claims(tmp_path) -> None:
+    log = tmp_path / "lead.jsonl"
+    log.write_text('{"event":"start","sent":true,"session":"s1","item":"B-001"}\n'
+                   '{"event":"start","sent":true,"session":"s2","item":"B-002"}\n',
+                   encoding="utf-8")
+
+    fleet = Fleet.restored(log)
+
+    assert fleet.holder("B-001") == "s1"
+    assert fleet.holder("B-002") == "s2"
+
+
+# ── one lane's turn does not cost a full poll interval ───────────────────────
+#
+# `watch_once` is `watch(..., rounds=1)`, and `watch_fleet` calls it once PER LANE.
+# Every branch inside `watch` slept unconditionally, so a round over six lanes cost
+# six polls plus the loop's own — at the default 30s, three and a half minutes
+# before a stalled lane is looked at twice, and worse with every lane added.
+# The sleep paces an unbounded loop; a bounded one that has finished does not need it.
+
+
+def test_a_single_round_does_not_sleep(monkeypatch) -> None:
+    slept: list[float] = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    lead = Lead(session="s1", project=None)
+    monkeypatch.setattr(lead, "capture", lambda: "an idle screen")
+    monkeypatch.setattr(lead, "decide",
+                        lambda screen, idle: Decision("wait", reason="nothing to do"))
+
+    watch(lead, marker=None, log=None, poll=30, rounds=1)
+
+    assert slept == [], f"one lane's turn paid {sum(slept)}s of poll interval"
+
+
+def test_a_multi_round_watch_still_paces_between_rounds(monkeypatch) -> None:
+    """The sleep is not removed — it is moved to where another round follows."""
+    slept: list[float] = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    lead = Lead(session="s1", project=None)
+    monkeypatch.setattr(lead, "capture", lambda: "an idle screen")
+    monkeypatch.setattr(lead, "decide",
+                        lambda screen, idle: Decision("wait", reason="nothing to do"))
+
+    watch(lead, marker=None, log=None, poll=30, rounds=3)
+
+    assert slept == [30, 30], f"three rounds should pace twice, got {slept}"

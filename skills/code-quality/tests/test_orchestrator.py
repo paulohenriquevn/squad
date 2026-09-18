@@ -8,14 +8,20 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import json  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import json  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-import pytest  # noqa: E402
-from squad.paths import write_records_dir  # noqa: E402
+import pytest  # noqa: E402 — post-bootstrap import
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
-from scripts._detector_contract import Finding, compute_verdict  # noqa: E402
-from scripts.run_code_quality import (  # noqa: E402
+from scripts._detector_contract import (  # noqa: E402 — post-bootstrap import
+    Finding,
+    compute_verdict,
+)
+from scripts.run_code_quality import (  # noqa: E402 — post-bootstrap import
     _enumerate_source_files,
     _resolve_plan_path,
     _safe_call,

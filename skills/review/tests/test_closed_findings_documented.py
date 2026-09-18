@@ -35,7 +35,10 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = SKILL_ROOT.parents[1]
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
-from consolidate_findings import _classify_verdict  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from consolidate_findings import _classify_verdict  # noqa: E402 — post-bootstrap import
 
 
 def _finding(severity: str, status: str = "") -> dict:

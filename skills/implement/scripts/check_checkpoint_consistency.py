@@ -78,10 +78,10 @@ def plan_task_ids_from_text(plan_text: str) -> list[str]:
 
 def _commit_exists(repo_root: Path, sha: str) -> bool:
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             ["git", "-C", str(repo_root), "cat-file", "-e", f"{sha}^{{commit}}"],
             capture_output=True, text=True, timeout=10,
-        )
+         check=False)
     except (subprocess.SubprocessError, FileNotFoundError):
         return False
     return result.returncode == 0
@@ -96,11 +96,11 @@ def _task_ids_in_git_history(repo_root: Path, candidate_ids: list[str]) -> set[s
     if not candidate_ids:
         return set()
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             ["git", "-C", str(repo_root), "log", "-n", str(_GIT_SCAN_LIMIT),
              "-z", "--format=%H%x1f%B"],
             capture_output=True, text=True, timeout=20,
-        )
+         check=False)
     except (subprocess.SubprocessError, FileNotFoundError):
         return set()
     if result.returncode != 0:

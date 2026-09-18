@@ -287,6 +287,9 @@ def test_blocked_by_parsing(raw, expected):
 # Eight items in one install carried `blocked_by` before it was specified, and seven
 # of them named no item at all. These pin that the writer serves that usage.
 
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
 from backlog_status import (  # noqa: E402 — imported here, beside the behaviour it covers; the comment above says which
     blocked_by_raw,
     declares_impediment,

@@ -52,9 +52,13 @@ install permission to delete it.
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
+import pathlib
+import shutil
 import sys
+import tempfile
 from typing import Any
 
 #: Keys that wire the kit's own scripts. A stale copy is a gate that quietly
@@ -202,6 +206,25 @@ def merge_permissions(
 
 # ── the whole file ────────────────────────────────────────────────────────────
 
+def _write_atomic(target, content: str) -> None:
+    """Replace `target` in one step no reader can observe half of.
+
+    Accepts a `str` or a `Path` — this module's callers pass both, and a helper that
+    refuses one of them is a helper somebody bypasses. The temporary file is created in
+    the target's OWN directory, because `os.replace` is atomic only within a filesystem.
+    """
+    target = pathlib.Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", dir=str(target.parent), delete=False,
+                                     encoding="utf-8", prefix=f".{target.name}.",
+                                     suffix=".tmp") as tmp:
+        tmp.write(content)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        tmp_path = tmp.name
+    os.replace(tmp_path, target)
+
+
 def merge_with_report(
     mine: dict, kit: dict, *,
     previous: dict[str, list[str]] | None = None,
@@ -214,7 +237,12 @@ def merge_with_report(
     are separate files and separate arguments, because a hook and a permission
     retire for different reasons and on different schedules.
     """
-    merged = dict(mine)
+    # DEEP. `dict(mine)` is shallow, so the nested `permissions` object stayed shared
+    # with the caller's input — and `merge_permissions` calls
+    # `mine.setdefault("permissions", {})` and mutates that object in place. The
+    # caller's dict was silently rewritten by a function whose name says it returns a
+    # merge, which makes "what did the consumer have before" unanswerable after the call.
+    merged = copy.deepcopy(mine)
 
     for key in KIT_OWNED_KEYS:
         if key in kit:
@@ -235,18 +263,12 @@ def merge_with_report(
     }
 
 
-def merge(
-    mine: dict, kit: dict, *,
-    previous: dict[str, list[str]] | None = None,
-    hook_previous: dict[str, list[str]] | None = None,
-    declared_retired: set[str] | None = None,
-) -> dict:
-    """`merge_with_report` without the report."""
-    merged, _ = merge_with_report(mine, kit, previous=previous,
-                                  hook_previous=hook_previous,
-                                  declared_retired=declared_retired)
-    return merged
-
+#: `merge()` lived here until 2026-09-17: a report-less wrapper around
+#: `merge_with_report` with no production caller. `main()` calls the reporting form and
+#: so does `install.sh`, while seventeen of the suite's nineteen assertions went through
+#: the wrapper — so the tested surface and the running surface were different functions,
+#: and the report every caller actually reads was covered by two assertions. The suite
+#: now exercises what runs, and the wrapper is gone rather than kept for the tests.
 
 def _load(path: str, default: Any = None) -> Any:
     try:
@@ -298,13 +320,17 @@ def main(argv: list[str] | None = None) -> int:
                            {k: v for k, v in (kit.get("permissions") or {}).items()
                             if isinstance(v, list)}),
                           (hooks_baseline, hook_baseline(kit))):
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2)
-            handle.write("\n")
+        _write_atomic(path, json.dumps(payload, indent=2) + "\n")
 
-    with open(target, "w", encoding="utf-8") as handle:
-        json.dump(merged, handle, indent=2)
-        handle.write("\n")
+    # The consumer's settings.json, kept and replaced rather than truncated. `open(w)`
+    # truncates BEFORE anything is written, so an interruption, a full disk or a
+    # serialisation error between the truncate and the flush left an empty or half-written
+    # settings.json — the file carrying the consumer's own hooks and permission grants,
+    # and the one file whose loss cannot be recovered from the kit.
+    target_path = pathlib.Path(target)
+    if target_path.exists():
+        shutil.copy2(target_path, target_path.with_suffix(".json.bak"))
+    _write_atomic(target_path, json.dumps(merged, indent=2) + "\n")
 
     # Said out loud, always. A silent merge over someone else's file is how the
     # deletion this module exists to prevent went unnoticed for four days.

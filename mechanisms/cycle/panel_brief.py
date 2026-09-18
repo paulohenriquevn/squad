@@ -42,7 +42,10 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
     RECORDS,
     WIKI,
     data_root,
@@ -116,10 +119,15 @@ def build(project: Path, slug: str, phase: str) -> dict:
 
     apath = assignment_path(project, slug, phase)
     if not apath.is_file():
-        raise SystemExit(
-            f"no assignment at {apath}. Run `convene_panel.py --slug {slug} "
-            f"--phase {phase} --write` first — briefing reviewers nobody assigned "
-            "produces votes the tally refuses, which is late.")
+        # 2, by hand, because `SystemExit("text")` prints the text and exits 1 — the
+        # same code the missing-contract branch above gives. The header separates the
+        # two ON PURPOSE: this one the caller clears by running `convene_panel`, that
+        # one is a kit defect nobody at this end can fix. Arriving as one code erases
+        # the only difference that matters to whoever is reading the exit status.
+        print(f"no assignment at {apath}. Run `convene_panel.py --slug {slug} "
+              f"--phase {phase} --write` first — briefing reviewers nobody assigned "
+              f"produces votes the tally refuses, which is late.", file=sys.stderr)
+        raise SystemExit(2)
 
     assignment = json.loads(apath.read_text(encoding="utf-8"))
     contract = data_path(project, str(source["contract"]))

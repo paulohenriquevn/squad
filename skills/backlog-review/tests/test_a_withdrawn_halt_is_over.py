@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from squad_boss import WITHDRAWN_MARKER, halt_reports  # noqa: E402
+from squad_boss import WITHDRAWN_MARKER, halt_reports
 
 
 def _with_reports(tmp_path: Path, *names: str) -> Path:

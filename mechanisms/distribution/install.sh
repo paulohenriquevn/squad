@@ -4,11 +4,21 @@
 # picked up identically to the standalone repo.
 #
 # Usage:
-#   bash mechanisms/distribution/install.sh <target-project-dir> [--force]
+#   bash mechanisms/distribution/install.sh <target-project-dir> [--force | --merge]
 #
 # What it does:
-#   1. Validates target is a directory.
-#   2. Refuses to overwrite an existing target/.claude/ unless --force.
+#   1. Validates target is a directory, and refuses the machine-wide roots — $HOME,
+#      $CLAUDE_CONFIG_DIR and its parent, and /. Everything under <target>/.claude/ is
+#      replaced, so a mistyped argument there rewrites the configuration of every
+#      project on the machine.
+#   2. Refuses to overwrite an existing target/.claude/ unless --force or --merge.
+#      --force  replaces every name the kit ships, snapshotting what it overwrote into
+#               .claude/.install-backups/<timestamp>/ first. Files the kit does NOT
+#               ship are left alone.
+#      --merge  adds the kit's files and deletes nothing. The header listed only
+#               --force until 2026-09-17, while the parser had accepted --merge since
+#               it was added — an operator reading the usage line could not discover
+#               the one flag that does not clobber.
 #   3. Copies skills/, rules/, hooks/, commands/, mechanisms/, squad/, plugin.json,
 #      HOW-TO-USE.md into target/.claude/.
 #   4. settings.json: MERGED by key ownership when the target already has one —
@@ -20,9 +30,14 @@
 #      target/.claude/settings.json" until 2026-09-04, describing the behaviour
 #      issue #8 reported and this merge replaced in August. A reader who trusted
 #      it avoided the installer to protect permissions the merge would have kept.)
-#   5. Creates empty scaffold under target/.claude/records/
-#      (plans, implementations, reviews, audits, discoveries/{plans,opportunities,snapshots},
-#      adrs, grills, honesty-gate, judge-codex, backlog, maintenance-runs, tools).
+#   5. Creates an empty scaffold under target/.squad/records/ — NOT under
+#      target/.claude/, which holds the installed kit and nothing the kit writes.
+#      The list is `KB_DIRS` below and is the only authority; this line names it
+#      rather than restating it, because the previous restatement drifted three ways
+#      at once: it gave the .claude path the code contradicts in its own comment,
+#      promised `adrs/` (retired — decisions live in .squad/wiki/decisions/) and
+#      promised `grills/` and `discoveries/opportunities/` that nothing created,
+#      so the terminal artifact of DISCOVER had nowhere to land. Both now exist.
 #      agents/ receives README.md (the routing mechanism) AND the kit's 14 generic
 #      specialists — nemesis-claim-auditor, vera-technical-arbiter and the rest, which
 #      the review panel and the judge stages name by id. agents/ is never deleted, so a
@@ -79,6 +94,26 @@ if [ "$TARGET" = "$SRC_DIR" ]; then
   exit 2
 fi
 
+# Everything destructive below is rooted at $ECO: `rm -rf "${ECO:?}/$item"` for six
+# directories, plus a settings.json merge. Until these three refusals existed, the only
+# check was the source repo above, so `bash install.sh ~` resolved $ECO to the MACHINE-WIDE
+# Claude configuration and rewrote the hook wiring and permission floor for every project
+# on the machine. A mistyped or agent-supplied argument is the whole vector.
+#
+# A project marker is deliberately NOT required: the kit installs into bare directories
+# legitimately. What is refused is the set of roots that are never a project.
+CONFIG_HOME="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+CONFIG_PARENT="$(dirname "$CONFIG_HOME")"
+for forbidden in "/" "$HOME" "$CONFIG_HOME" "$CONFIG_PARENT"; do
+  [ -n "$forbidden" ] || continue
+  if [ "$TARGET" = "$forbidden" ]; then
+    echo "ERROR: refusing to install into $TARGET." >&2
+    echo "  Everything under $TARGET/.claude would be replaced, and that path is the" >&2
+    echo "  machine-wide Claude configuration, not a project. Name the project directory." >&2
+    exit 2
+  fi
+done
+
 if [ -d "$ECO" ] && [ "$FORCE" -ne 1 ] && [ "$MERGE" -ne 1 ]; then
   echo "ERROR: $ECO already exists." >&2
   echo "  --merge  add the kit's files, delete nothing." >&2
@@ -105,9 +140,21 @@ echo "    target: $ECO"
 # to make the overwrite recoverable and loud. For an upgrade that must NOT clobber, use
 # `patch_install.sh`, which copies a manifest and leaves agents/ and settings.json alone.
 BACKUP_DIR=""
+# ALWAYS under the target, never under /tmp, and never empty. The `:-/tmp` fallback that
+# first replaced `mktemp -d` would have reintroduced the defect on any path where this
+# block did not run — a default that restores the bug is not a default.
+STAGING="$ECO/.install-backups/staging"
+mkdir -p "$STAGING"
 if [ -d "$ECO" ]; then
   BACKUP_DIR="$ECO/.install-backups/$(date +%Y%m%dT%H%M%S)"
   mkdir -p "$BACKUP_DIR"
+  # Where project-authored files are held between the `rm -rf` and the restore loop.
+  # This was `mktemp -d` — a directory under /tmp — and for that window it held the ONLY
+  # copy of every file under skills/, rules/, hooks/, commands/, mechanisms/ and squad/
+  # that the kit does not ship. An interrupt, a crash or a reboot in that window loses
+  # them with nothing to recover from, and /tmp is the one directory a machine may clear
+  # on its own. Beside the snapshot instead: same filesystem, same lifetime, and the
+  # operator is already told where that directory is.
   for item in rules agents; do
     [ -d "$ECO/$item" ] && cp -r "$ECO/$item" "$BACKUP_DIR/$item"
   done
@@ -153,7 +200,7 @@ prune_caches() {
   find "$1" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete 2>/dev/null || true
 }
 
-# --- tabela de roteamento: entregue VAZIA ------------------------------------
+# --- routing table: shipped EMPTY ---------------------------------------------
 # --- copy ecosystem code ---
 # Two modes, because a target with a `.claude/` of its own has no correct answer in one of them.
 # Measured on an adopter: 598 files under `skills/` — 5 of the kit's, 10 the project wrote
@@ -318,7 +365,7 @@ for item in skills rules hooks commands mechanisms squad; do
     # files. Each fix was right and none generalised. The rule is: whatever the
     # SOURCE kit does not ship is the project's, whatever its shape.
     if [ "$item" = "skills" ] && [ -d "$ECO/skills" ]; then
-      SKILLS_KEEP="$(mktemp -d)"
+      SKILLS_KEEP="$(mktemp -d "$STAGING/skills_keep.XXXXXX")"
       for d in "$ECO/skills"/* "$ECO/skills"/.[!.]*; do
         [ -e "$d" ] || continue
         name="$(basename "$d")"
@@ -330,7 +377,7 @@ for item in skills rules hooks commands mechanisms squad; do
 
     CONFIG_KEEP=""
     if [ "$item" = "rules" ] && [ -d "$ECO/rules" ]; then
-      CONFIG_KEEP="$(mktemp -d)"
+      CONFIG_KEEP="$(mktemp -d "$STAGING/config_keep.XXXXXX")"
       for f in "$ECO/rules"/*; do
         [ -f "$f" ] || continue
         base="$(basename "$f")"
@@ -367,7 +414,7 @@ for item in skills rules hooks commands mechanisms squad; do
     # `scripts/` it is blind, so consulting it would answer by omission.
     OWN_KEEP=""
     if [ -d "$ECO/$item" ]; then
-      OWN_KEEP="$(mktemp -d)"
+      OWN_KEEP="$(mktemp -d "$STAGING/own_keep.XXXXXX")"
       # Descend only where the kit also has a directory. A subtree the kit does
       # not ship is copied WHOLE and not walked — which is both correct and the
       # difference between finishing and not: one consumer keeps a `.venv` inside
@@ -428,9 +475,8 @@ for item in skills rules hooks commands mechanisms squad; do
     fi
     if [ "$item" = "rules" ]; then
       # Even on a clean install: project-specific config is born blank. Without
-      # this, the non-merge branch copied the kit's own configuration (Python
-      # enabled,
-      # alvo vivo do ecossistema de origem) e o consumidor nascia com ela.
+      # this, the non-merge branch copied the kit's own configuration (Python enabled,
+      # the source ecosystem's own live target) and the consumer was born with it.
       for tpl in "$SRC_DIR"/rules/templates/*; do
         [ -f "$tpl" ] || continue
         [ "$(basename "$tpl")" = "domain-routing.md" ] && continue
@@ -473,8 +519,8 @@ legacy_arg, target, kit, project = sys.argv[1], Path(sys.argv[2]), Path(sys.argv
 sys.path.insert(0, str(kit / "mechanisms" / "cycle"))
 sys.path.insert(0, str(kit / "skills" / "backlog-init" / "scripts"))
 
-from route_domain import count_candidate_rows, parse_routing_table  # noqa: E402
-from detect_domains import (  # noqa: E402
+from route_domain import count_candidate_rows, parse_routing_table  # noqa: E402 — post-bootstrap
+from detect_domains import (  # noqa: E402 — post-bootstrap
     Domain,
     domains_from_backlog,
     write_routing_table,
@@ -598,7 +644,15 @@ rm -rf "$ECO/rules/templates"
 # `rules/*.txt` and in the routing table: distributing the author's configuration
 # as if it were the installer's. The consumer generates its own with the same
 # command, against its own numbers — step 3 of the closing instructions names it.
-rm -rf "$ECO/hooks/quality"
+#
+# GUARDED on the source. `hooks/quality/` is not in this repository's tree — `ls hooks/`
+# has none and `tests/test_kit_manifest.py` asserts it is never listed — so this line
+# deleted a consumer-owned directory the kit does not ship, which is the exact ownership
+# rule stated twenty lines above. The guard makes the line refresh only what the
+# installer actually carries.
+if [ -e "$SRC_DIR/hooks/quality" ]; then
+  rm -rf "$ECO/hooks/quality"
+fi
 
 # agents/ is copied FILE BY FILE, not wholesale. This repo dogfoods its own cycles, and
 # `/implement` and `/review` write their per-run agent definitions into subdirectories here
@@ -718,7 +772,13 @@ KB_DIRS=(
   "tools"                       # read-only docs of tools the project depends on (consumer populates)
   "discoveries"                 # /discover-* root
   "discoveries/plans"           # /discover-plan outputs
+  # The TERMINAL artifact of DISCOVER, documented by `HOW-TO-USE.md` and resolved by
+  # `squad/paths.py` — and the one directory nothing here created, so the phase's own
+  # output had nowhere to land on a fresh install.
+  "discoveries/opportunities"   # /discover-execute outputs
   "discoveries/snapshots"       # hash-verified snapshots cited by opportunities
+  # `skills/plan-write/SKILL.md` reads `records/grills/{slug}-grill.md` before writing a plan.
+  "grills"                      # requirement-grilling transcripts a plan cites
   "progress"                    # per-slug progress.md (read by hooks + session-catchup)
   "sop-runs"                    # run records: what one machine did following a procedure
   "brainstorms"                 # one record per product-alignment session, discards included
@@ -773,7 +833,11 @@ if [ -n "$BACKUP_DIR" ]; then
     echo ""
     echo "    Your previous copies: $BACKUP_DIR"
     echo "    Nothing was merged — diff them and re-apply what is yours. Project config lives in"
-    echo "    rules/*.txt, the routing table in rules/cycle-backlog.md, and agents/*.md."
+    echo "    rules/*.txt, the routing table in rules/domain-routing.txt (or"
+    echo "    .squad/domain-routing.txt under this install), and agents/*.md."
+    echo "    This line said cycle-backlog.md until 2026-09-17. The table moved, and"
+    echo "    cycle-backlog.md is kit-owned — an operator recovering their routing into it"
+    echo "    is refused by boundary-check and loses the file they were trying to restore."
     echo "    To upgrade WITHOUT clobbering next time, use patch_install.sh instead."
   fi
 fi
@@ -871,18 +935,28 @@ MANIFEST="$ECO/.kit-manifest.txt"
 } > "$MANIFEST"
 echo "==> Manifest written: $(grep -vc '^#' "$MANIFEST") paths from the kit"
 
+# The reason a validator failed is KEPT, and a failure decides the exit status. Both ran
+# with `> /dev/null 2>&1` — so the one output that says what is wrong with the install was
+# destroyed — and neither branch set a status, so the script printed
+# "Installation complete." and exited 0 whether they passed or failed. An installer that
+# reports success over a broken install is worse than one that does not check.
 echo "==> Validating install (from the target, not from here)"
-if (cd "$TARGET" && python3 .claude/mechanisms/gates/check_xrefs.py --strict > /dev/null 2>&1); then
-  echo "    check_xrefs.py: OK"
-else
-  echo "    check_xrefs.py: FAIL (re-run manually)"
-fi
+VALIDATION_LOG="$ECO/.install-backups/validation-$(date -u +%Y%m%dT%H%M%SZ).log"
+mkdir -p "$(dirname "$VALIDATION_LOG")"
+VALIDATION_FAILED=0
 
-if (cd "$TARGET" && python3 .claude/mechanisms/gates/verify_ecosystem.py > /dev/null 2>&1); then
-  echo "    verify_ecosystem.py: OK"
-else
-  echo "    verify_ecosystem.py: FAIL (re-run manually)"
-fi
+for _gate in "check_xrefs.py --strict" "verify_ecosystem.py"; do
+  # shellcheck disable=SC2086
+  # Unquoted on purpose: `$_gate` carries the script name AND its flag.
+  if (cd "$TARGET" && python3 .claude/mechanisms/gates/$_gate) >> "$VALIDATION_LOG" 2>&1; then
+    echo "    ${_gate%% *}: OK"
+  else
+    VALIDATION_FAILED=1
+    echo "    ${_gate%% *}: FAIL — last lines:"
+    tail -n 12 "$VALIDATION_LOG" | sed 's/^/      /'
+  fi
+done
+echo "    validation log: $VALIDATION_LOG"
 
 # The two validators above import modules from the target, and the interpreter
 # writes `__pycache__` while doing so. Without this, the step that confirms the
@@ -945,3 +1019,46 @@ Next steps for the target project:
   A compact form of it is injected at every SessionStart, so an agent starting
   work already knows the chain and the four roles.
 EOF
+
+# The exit status carries the validation. Printing "Installation complete." and exiting 0
+# over a failed check is the installer reporting success about a state it just measured
+# as broken — the files ARE installed, which is why this is exit 1 and not exit 2, but a
+# caller scripting the install must be able to see the difference.
+if [ "${VALIDATION_FAILED:-0}" -ne 0 ]; then
+  echo "" >&2
+  echo "==> The files are installed AND the post-install validation reported a FAILURE." >&2
+  echo "    See $VALIDATION_LOG. Nothing above is a claim that this install works." >&2
+  # WHICH failures decide the status: the ones whose subject is what this script just
+  # WROTE. Two gates grade content the installer neither authored nor can fix, and both
+  # are reported above and in the log either way:
+  #
+  #   Contribution conventions   the CONSUMER's last 40 commits. A fresh `git init` fails
+  #                              it on its first commit, and so does any project whose
+  #                              history does not follow this kit's header shape.
+  #   Skill map                  the consumer's OWN skills sitting beside the kit's. A
+  #                              project-authored skill has no row in the kit's `map.md`
+  #                              and never will — that file is the kit's inventory.
+  #   Skill frontmatter          the same tree. A consumer's malformed SKILL.md is a real
+  #                              defect and is REPORTED, but it is the project's file to
+  #                              fix, not evidence that the copy failed.
+  #
+  # What this does NOT weaken: CI runs all three over the KIT itself, where a broken
+  # frontmatter or a missing map row fails the build. The exclusion is scoped to
+  # install time, where the same gates also see files the installer did not write.
+  #
+  # Letting either decide would mean every honest install into a real project exits
+  # non-zero for a reason that has nothing to do with the install. Every OTHER failure is
+  # about the ecosystem this script wrote, and does decide.
+  #
+  # `grep -c` PRINTS 0 and EXITS 1 when nothing matches, so `|| echo 0` used to append a
+  # second zero and the arithmetic saw "0\n0". grep+wc has one behaviour for both cases.
+  _all_failures=$(grep '^✗' "$VALIDATION_LOG" 2>/dev/null | wc -l | tr -d ' ')
+  _consumer_subject=$(grep -E '^✗ (Contribution conventions|Skill map|Skill frontmatter)' \
+    "$VALIDATION_LOG" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$(( _all_failures - _consumer_subject ))" -gt 0 ]; then
+    exit 1
+  fi
+  echo "    Every failure grades THIS PROJECT's own content — its commit history, or its" >&2
+  echo "    own skills beside the kit's — rather than what the installer wrote. Reported," >&2
+  echo "    not treated as an install failure. Everything the installer wrote validated." >&2
+fi

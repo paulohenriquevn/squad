@@ -25,7 +25,10 @@ import pytest
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
-import build_walkthrough as bwt  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import build_walkthrough as bwt  # noqa: E402 — post-bootstrap import
 
 pytestmark = pytest.mark.skipif(
     not shutil.which("dot") or not shutil.which("neato"),

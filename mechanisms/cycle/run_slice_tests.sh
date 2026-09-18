@@ -3,7 +3,8 @@
 #
 # WHY isolated (one pytest process per slice) instead of a single wide
 # `pytest skills/` run:
-#   The 31 slices are deliberately import-isolated (package-by-feature). Several
+#   The slices under `skills/*/tests` are deliberately import-isolated
+#   (package-by-feature). Several
 #   slices ship modules with the SAME top-level basename but DIFFERENT content
 #   (e.g. check_research_coverage.py, apply_fixes.py, check_reference_citations.py).
 #   In production each skill runs alone with only its own scripts/ on sys.path, so
@@ -172,10 +173,11 @@ done
 # the installer overwrites with live configuration, a records root that is one directory
 # upstream and two once installed. The kit's own suite could not see any of them by
 # construction, and a consumer's push gate found all three.
-# The kit root is where `skills/` sits beside `mechanisms/`, found by walking UP.
-# A fixed `/..` was wrong on the first attempt — this file is at `mechanisms/cycle/`, so
-# one level up is `mechanisms/`, and the `*/.claude` test could never match. Counting
-# levels breaks the moment a file moves; asking what a directory CONTAINS does not.
+# The kit root is `REPO_ROOT`, and `REPO_ROOT` is a fixed two levels up from this file
+# (line 29). Counting levels DOES break the moment a file moves — this comment used to
+# argue against counting while the line below it counted, which told a reader relocating
+# the script that the resolution would follow them. It will not: move this file and
+# line 29 is what has to change.
 # `REPO_ROOT`, which line 29 already computed and line 30 already `cd`-ed into. This
 # re-resolved `BASH_SOURCE[0]` here instead, and that path is RELATIVE when the script is
 # invoked by a relative path — so after the `cd` it resolved against the wrong directory,

@@ -1,7 +1,7 @@
 ---
 name: arch-check
 version: 0.1.0
-requires: []
+requires: [code-quality]  # `typescript_graph` imports `extract_imports_and_calls`
 description: Check a repo's architecture boundaries, or set them up when it has none. Verifies declared rules via dependency-cruiser (TypeScript), go-arch-lint (Go), layered-crate (Rust) or import-linter (Python), and asserts the rules can still fire — a rule naming a directory that moved passes GREEN in every one of these tools. When no rules exist, measures the real import graph and proposes only boundaries the repo ALREADY obeys, each with the count that proves it. Use when adopting architecture gates in a repo, after a restructure that moved directories, when `npm run boundaries` or `go-arch-lint` passes and you want to know whether it verified anything, or before writing a `.dependency-cruiser.cjs` / `.go-arch-lint.yml` by hand.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit AskUserQuestion
@@ -131,8 +131,23 @@ that no file imports.
 1. Run the proposer and read the evidence on each candidate — the count is the argument.
 2. Drop the ones you disagree with. A boundary nobody believes gets deleted at the first
    inconvenience, so a rule you kept only because a tool suggested it is worse than no rule.
-3. Write the config in the linter's own format, carrying the evidence into the rule's comment.
-   Squad invents no fourth format.
+3. Render the ones you kept, in the linter's own format. Squad invents no fourth format:
+
+   ```bash
+   python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/arch-check/scripts/emit_config.py" \
+       proposal.json --measured-on "$(date +%F)"
+   ```
+
+   **This does not ratify anything** — step 2 is where you decided, and the renderer only
+   writes down what survived it. It exists because the translation is where the criterion
+   gets lost: adopting a proposal by hand against `control-plane` took four attempts, and
+   all four failures were translation details, not wrong rules (a component key missing its
+   `:`, an `in:` that skipped subpackages, self-dependency counted as a crossing, an
+   allow-list derived from production imports while the linter scanned tests). Each of
+   those reported GREEN having validated nothing. Writing the file by hand invites the
+   same four again; the script's docstring names them one by one.
+
+   For Go only, today. Any other language is still step 3 by hand.
 4. Install the linter **locally**, never as a global binary — see the measured reason above.
 5. Run `/code-quality` and confirm zero violations. A config that is red on arrival was adopted
    against the criterion.
@@ -146,4 +161,5 @@ alone, since it disables the tool's own guard against exactly the failure D5 exi
 
 - The repo root carries no supported manifest — there is no graph to build.
 - The scan reaches fewer than two units — see the refusal above.
-- You ask it to write a config: it proposes, you ratify.
+- You ask it to DECIDE a config: it proposes, you ratify. Rendering what you ratified
+  is `emit_config.py` above, and it refuses any proposal whose status is not `proposed`.

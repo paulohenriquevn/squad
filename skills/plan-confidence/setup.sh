@@ -20,7 +20,17 @@ SOURCE_SKILLS_PARENT="$(cd "${SOURCE_SKILL_DIR}/.." && pwd)"
 SOURCE_CLAUDE_DIR="$(cd "${SOURCE_SKILLS_PARENT}/.." && pwd)"
 SOURCE_PROJECT_ROOT="$(cd "${SOURCE_CLAUDE_DIR}/.." && pwd)"
 
-TARGET="${1:-$(pwd)}"
+# The first POSITIONAL argument, not the first argument. `${1:-$(pwd)}` took `--with-rules`
+# as the target directory, so `setup.sh --with-rules` installed into a directory named
+# `--with-rules` — created on the way, since the installer mkdir -p's its target.
+TARGET=""
+for arg in "$@"; do
+    case "$arg" in
+        --*) ;;
+        *) [ -z "$TARGET" ] && TARGET="$arg" ;;
+    esac
+done
+TARGET="${TARGET:-$(pwd)}"
 WITH_RULES=0
 WITH_GATE=0
 

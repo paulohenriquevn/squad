@@ -15,18 +15,21 @@ set -uo pipefail
 # spelled here, in `fleet_status.sh` and in `fleet_idle.py`, so two fleets on one machine
 # wrote into ONE file and every reader saw them interleaved. Derived from the single
 # owner rather than repeated a fourth time. `LOG=` still overrides.
+# The project the fleet runs over. Derived from this script's own location —
+# `mechanisms/fleet/` sits inside the ecosystem — so it is right in the kit's own
+# repository and in a `.claude/` install without either being named here.
+_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT="${PROJECT:-$(cd "$_here/../.." && pwd)}"
 LOG="${LOG:-$(python3 -c 'import sys; from pathlib import Path
 for up in Path(sys.argv[1]).resolve().parents:
     if (up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(up)); break
 from squad.paths import lead_log_path
 print(lead_log_path(sys.argv[2]))' "$(dirname "$0")" "${PROJECT:-.}")}"
-MARKERS="${MARKERS:-/tmp/squad-markers}"
-# The project the fleet runs over. Derived from this script's own location —
-# `mechanisms/fleet/` sits inside the ecosystem — so it is right in the kit's own
-# repository and in a `.claude/` install without either being named here.
-_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT="${PROJECT:-$(cd "$_here/../.." && pwd)}"
+# Beside the lead log, and for the same reason `start_fleet.sh` puts it there: two
+# fleets over two projects shared `/tmp/squad-markers/squad1.log`, and the watchdog
+# reads idleness off its mtime. The reader must resolve it exactly as the writer does.
+MARKERS="${MARKERS:-$(dirname "$LOG")/markers}"
 LINES=6
 FOLLOW=0
 ONLY=""
@@ -131,8 +134,11 @@ render() {
   printf '%s│%s\n' "$B" "$Z"
   if [ -f "$LOG" ]; then
     local starts stalls
-    starts="$(grep -c '"event": "start"' "$LOG" 2>/dev/null || echo 0)"
-    stalls="$(grep -c '"event": "stalled"' "$LOG" 2>/dev/null || echo 0)"
+    # `grep -c` PRINTS 0 and EXITS 1 when nothing matches, so `|| echo 0` appended a
+    # second zero and the line read "0\n0 handed out". Counting the lines instead gives
+    # one value on every path, including the empty one.
+    starts="$(grep '"event": "start"' "$LOG" 2>/dev/null | wc -l | tr -d ' ')"
+    stalls="$(grep '"event": "stalled"' "$LOG" 2>/dev/null | wc -l | tr -d ' ')"
     printf '%s├─ %slead%s      %s handed out · %s stalled · log %s\n' \
       "$B" "$B" "$Z" "$starts" "$stalls" "$LOG"
     BODY="$BODY" python3 - "$LOG" <<'PY' 2>/dev/null | sed "s/^/${B}│${Z}     /"

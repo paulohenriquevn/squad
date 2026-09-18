@@ -3,19 +3,21 @@
 
 For a given phase, compares the set of files declared in `Files to edit`
 (per task in the plan) against the set of files ACTUALLY modified during
-the phase (per .progress-{slug}.json or git log). Flags two classes:
+the phase (per .progress-{slug}.json or git log). Flags ONE class:
 
   (1) Scope drift — file modified that no phase task declared in `Files to edit`.
                     HIGH severity. Often signals an opportunistic edit slipping in.
-  (2) Cross-layer mix — files modified span layers the project's architecture
-                        forbids mixing inside one commit (e.g., domain + infra
-                        without explicit composition root). MEDIUM. Only fires
-                        if the project declares layers in rules/architecture.md
-                        AND the plan does not explicitly authorize the mix.
 
-Honest defaults:
-  - Cross-layer detection requires per-project layer config; absent → SKIP that
-    check rather than guess. The audit report records the skip.
+NOT IMPLEMENTED — cross-layer mix. This section listed it as "(2)", a MEDIUM finding
+that "only fires if the project declares layers in rules/architecture.md", and the code
+has never been able to emit it: line 336 says "intentionally not implemented yet" and
+appends an INFO `cross_layer_check_skipped` on EVERY run, unconditionally, whatever the
+project declares. So the contract advertised a second class of finding, and a reader
+seeing only scope-drift findings concluded the layers were clean.
+
+Stated as a gap rather than as a class with a condition on it: the condition was never
+evaluated. Implementing it needs a layer model the project declares, and `arch-check`
+is the skill that owns that question.
   - Git history is preferred for diff (`git log <first-sha>..<last-sha>`), with
     progress-file fallback when git is unavailable or commit SHAs are missing.
   - Files outside the source tree (CHANGELOG, docs, fixtures) are NOT flagged —
@@ -333,8 +335,9 @@ def check_diff_cohesion(
             ),
         ))
 
-    # Cross-layer check is intentionally not implemented yet — needs per-project
-    # layer config in rules/architecture.md. Skip with an INFO record.
+    # NOT IMPLEMENTED, and said on every run rather than conditionally. The docstring
+    # used to advertise this as a finding class gated on `rules/architecture.md`; the
+    # condition is not evaluated anywhere, so the INFO below is the whole behaviour.
     findings.append(Finding(
         severity="INFO",
         code="cross_layer_check_skipped",

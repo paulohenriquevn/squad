@@ -33,7 +33,10 @@ _FLEET = REPO / "mechanisms" / "fleet"
 if str(_FLEET) not in sys.path:
     sys.path.insert(0, str(_FLEET))
 
-import fleet_router  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import fleet_router  # noqa: E402 — post-bootstrap import
 
 #: Any absolute path will do, as long as it is not one workstation's.
 _REPO = "/srv/example/kit"
@@ -111,6 +114,10 @@ def test_no_unenumerated_site_hands_out_a_worktree() -> None:
         "mechanisms/fleet/fleet_lander.py",
         # This file.
         "tests/test_worktree_briefs_name_the_stash.py",
+        # Quotes the `worktree add` line in a docstring while asserting that two
+        # dispatches of one unit do not resolve to the same path. It briefs no agent;
+        # the sweep matches the words, which is the sweep working.
+        "tests/test_fleet_router_dispatch.py",
 
         # --- read-only reviewers -------------------------------------------------
         # These five cut `--detach` trees to READ a diff. They are briefed to
@@ -149,17 +156,40 @@ def test_no_unenumerated_site_hands_out_a_worktree() -> None:
         "skills/pipeline/tests/test_spawn_stages.py",
         "tests/test_fleet_router.py",
         "tests/test_session_ready.py",
+        # Asserts that two landings of one branch get different scratch paths. It
+        # quotes `worktree add` to inspect the argv `fleet_lander` builds, and
+        # briefs nobody.
+        "tests/test_fleet_lander.py",
     }
 
-    found = subprocess.run(
-        ["git", "grep", "-l", "worktree add", "--", ":!CHANGELOG.md", ":!*.lock"],
-        cwd=REPO, capture_output=True, text=True,
-        check=False,
+    # The WORKING TREE, not the index. `git grep` was here and reads what is STAGED,
+    # so the file in the state that matters — just written by the author running the
+    # suite before committing — matched nothing and the sweep reported clean. The
+    # author saw green, committed, and the guard fired on somebody else's next run.
+    # The exemption three entries above this already records the same lesson about
+    # itself; it should not have needed a second demonstration.
+    #
+    # `git ls-files --cached --others --exclude-standard` gives tracked AND untracked
+    # files while still honouring `.gitignore`, so nothing under `.venv/` or
+    # `__pycache__/` reaches the read below.
+    listed = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=REPO, capture_output=True, text=True, check=False,
     )
-    if found.returncode not in (0, 1):
-        raise AssertionError(f"git grep failed: {found.stderr}")
+    if listed.returncode != 0:
+        raise AssertionError(f"git ls-files failed: {listed.stderr}")
 
-    sweep = {p for p in found.stdout.split() if p}
+    sweep = set()
+    for relative in listed.stdout.split("\n"):
+        relative = relative.strip()
+        if not relative or relative == "CHANGELOG.md" or relative.endswith(".lock"):
+            continue
+        path = REPO / relative
+        try:
+            if "worktree add" in path.read_text(encoding="utf-8", errors="replace"):
+                sweep.add(relative)
+        except (OSError, UnicodeDecodeError):
+            continue
     covered = {
         "mechanisms/fleet/kit_repair_workflow.js",
         "mechanisms/fleet/fleet_dispatch_workflow.js",

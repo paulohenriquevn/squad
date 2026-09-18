@@ -54,6 +54,32 @@ LOOPHOLE_PHRASES: list[str] = [
 ]
 
 TASK_HEADER_RE = re.compile(r"^###\s+T\d+\.\d+\b")
+
+#: Sections whose CONTENT is modality. Rewriting `may` to `must` inside them inverts
+#: what they say: a risk is something that MAY happen and an unresolved question is
+#: something that MIGHT be, so "the cache may go stale" became "the cache must go
+#: stale" — a drawback rewritten into a promise, by a fix the module calls "SAFE,
+#: deterministic". Deterministic it is; meaning-preserving it is not.
+#:
+#: The plan template mandates both (`check_drawbacks_section.py` enforces them), so
+#: every plan the fix runs over has them.
+MODALITY_SECTIONS = ("drawbacks", "risks", "unresolved questions", "open questions",
+                     "trade-offs", "tradeoffs", "prior art", "alternatives considered")
+
+_HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$")
+
+
+def _in_modality_section(line: str, current: str | None) -> str | None:
+    """The section this line is in, tracked heading by heading.
+
+    Returns the lowered heading when it is one whose content is modality, and None
+    otherwise — so the caller can leave those lines alone.
+    """
+    heading = _HEADING_RE.match(line)
+    if heading is None:
+        return current
+    title = heading.group(2).lower()
+    return title if any(name in title for name in MODALITY_SECTIONS) else None
 TASK_HEADER_FULL_RE = re.compile(r"^###\s+(T\d+\.\d+)\s*[—\-–:]\s*(.+)$")
 BUGFIX_KEYWORDS = (
     "bug-fix", "bug fix", "bugfix", "regression", "fix a bug", "fix the bug",
@@ -90,20 +116,6 @@ class TotalReport:
 # ---------------------------------------------------------------------------
 # Code-block awareness
 # ---------------------------------------------------------------------------
-
-def is_inside_code_block(lines_so_far: list[str]) -> bool:
-    """Given the list of lines UP TO AND INCLUDING the current one,
-    return True iff the current line is inside a fenced code block
-    (i.e., AFTER opening ``` but BEFORE closing ```).
-
-    A line that IS itself a fence (``` ...) is NOT considered "inside".
-    """
-    fence_count = 0
-    for line in lines_so_far[:-1]:
-        if line.lstrip().startswith("```"):
-            fence_count += 1
-    return (fence_count % 2) == 1
-
 
 def _split_with_state(content: str) -> list[tuple[str, bool]]:
     """Return list of (line, in_code_block) tuples."""
@@ -163,63 +175,88 @@ def _sub_outside_inline_code(
     return "".join(parts), total + count
 
 
-def fix_weak_imperatives(plan_path: Path, dry_run: bool = False) -> FixReport:
-    report = FixReport(category="weak_imperatives")
+def _rewrite_lines(plan_path: Path, category: str, *, skip_task_headers: bool,
+                   rewrite, tidy) -> FixReport:
+    """Walk the plan line by line, rewrite what is not code, and write once.
+
+    `fix_weak_imperatives` and `fix_loopholes` were this loop written twice: split with
+    fence state, skip fenced and fence lines, walk a phrase table through
+    `_sub_outside_inline_code`, count into the same three report fields, re-normalise
+    leading whitespace, join, honour `dry_run`, write only if changed. Twenty-five lines
+    each, diverging in exactly two places — which table is walked, and whether the
+    whitespace pass also closes the gap before punctuation.
+
+    Those two places are the arguments. `rewrite(modified, report, line_no)` returns
+    `(text, changes)`; `tidy(rest)` returns the tidied remainder of a changed line.
+    """
+    report = FixReport(category=category)
     content = plan_path.read_text(encoding="utf-8")
-    lines = _split_with_state(content)
 
     new_lines: list[str] = []
-    for line_no, (line, in_code) in enumerate(lines, start=1):
-        if in_code or _is_fence_line(line) or TASK_HEADER_RE.match(line):
+    for line_no, (line, in_code) in enumerate(_split_with_state(content), start=1):
+        if in_code or _is_fence_line(line) or (skip_task_headers
+                                               and TASK_HEADER_RE.match(line)):
             new_lines.append(line)
             continue
-        modified = line
-        line_changes = 0
+        modified, line_changes = rewrite(line, report, line_no)
+        # Only normalise whitespace if THIS LINE was modified — touching an untouched
+        # line would reflow indented prose and lists that triggered no pattern.
+        if line_changes > 0:
+            leading_match = re.match(r"^(\s*)", modified)
+            leading = leading_match.group(1) if leading_match else ""
+            modified = leading + tidy(modified[len(leading):])
+        new_lines.append(modified)
+
+    new_content = "".join(new_lines)
+    return report, new_content
+
+
+def _commit(plan_path: Path, report: FixReport, new_content: str,
+            dry_run: bool) -> FixReport:
+    """Write the rewritten plan, unless this is a dry run. One writer for both fixes."""
+    if dry_run:
+        return report
+    if new_content != plan_path.read_text(encoding="utf-8"):
+        plan_path.write_text(new_content, encoding="utf-8")
+        report.changes_applied = report.changes_proposed
+    return report
+
+
+def fix_weak_imperatives(plan_path: Path, dry_run: bool = False) -> FixReport:
+    section: list[str | None] = [None]
+
+    def rewrite(line: str, report: FixReport, line_no: int) -> tuple[str, int]:
+        section[0] = _in_modality_section(line, section[0])
+        if section[0] is not None:
+            # Inside a section whose subject IS modality. `may` there is the content.
+            return line, 0
+        modified, line_changes = line, 0
         for pattern, replacement in WEAK_IMPERATIVE_PATTERNS:
             new_modified, count = _sub_outside_inline_code(
                 modified, lambda seg, p=pattern, r=replacement: re.subn(p, r, seg))
             if count > 0:
                 report.changes_proposed += count
                 line_changes += count
-                report.locations.append(f"L{line_no}: {pattern} -> {replacement} (x{count})")
+                report.locations.append(
+                    f"L{line_no}: {pattern} -> {replacement} (x{count})")
                 modified = new_modified
-        # Only normalize whitespace if THIS LINE was modified (avoid touching
-        # indented prose / lists that didn't trigger any pattern).
-        if line_changes > 0:
-            # Preserve leading whitespace; only collapse internal doubles.
-            leading_match = re.match(r"^(\s*)", modified)
-            leading = leading_match.group(1) if leading_match else ""
-            rest = modified[len(leading):]
-            rest, _ = _sub_outside_inline_code(
-                rest, lambda seg: re.subn(r"  +", " ", seg))
-            modified = leading + rest
-        new_lines.append(modified)
+        return modified, line_changes
 
-    new_content = "".join(new_lines)
-    if dry_run:
-        return report
-    if new_content != content:
-        plan_path.write_text(new_content, encoding="utf-8")
-        report.changes_applied = report.changes_proposed
-    return report
+    def tidy(rest: str) -> str:
+        # Through `_sub_outside_inline_code`, so a double space inside a code span
+        # survives — it may be significant there and is not prose.
+        tidied, _ = _sub_outside_inline_code(rest, lambda seg: re.subn(r"  +", " ", seg))
+        return tidied
 
+    report, new_content = _rewrite_lines(
+        plan_path, "weak_imperatives", skip_task_headers=True,
+        rewrite=rewrite, tidy=tidy)
+    return _commit(plan_path, report, new_content, dry_run)
 
-# ---------------------------------------------------------------------------
-# Fix 2: loopholes
-# ---------------------------------------------------------------------------
 
 def fix_loopholes(plan_path: Path, dry_run: bool = False) -> FixReport:
-    report = FixReport(category="loopholes")
-    content = plan_path.read_text(encoding="utf-8")
-    lines = _split_with_state(content)
-
-    new_lines: list[str] = []
-    for line_no, (line, in_code) in enumerate(lines, start=1):
-        if in_code or _is_fence_line(line):
-            new_lines.append(line)
-            continue
-        modified = line
-        line_changes = 0
+    def rewrite(line: str, report: FixReport, line_no: int) -> tuple[str, int]:
+        modified, line_changes = line, 0
         for phrase in LOOPHOLE_PHRASES:
             pattern = re.compile(rf"\s*\b{re.escape(phrase)}\b", flags=re.IGNORECASE)
             new_modified, count = _sub_outside_inline_code(
@@ -229,23 +266,18 @@ def fix_loopholes(plan_path: Path, dry_run: bool = False) -> FixReport:
                 line_changes += count
                 report.locations.append(f"L{line_no}: removed '{phrase}' (x{count})")
                 modified = new_modified
-        # Only normalize whitespace on lines we changed.
-        if line_changes > 0:
-            leading_match = re.match(r"^(\s*)", modified)
-            leading = leading_match.group(1) if leading_match else ""
-            rest = modified[len(leading):]
-            rest = re.sub(r"  +", " ", rest)
-            rest = re.sub(r" +([.,;:])", r"\1", rest)
-            modified = leading + rest
-        new_lines.append(modified)
+        return modified, line_changes
 
-    new_content = "".join(new_lines)
-    if dry_run:
-        return report
-    if new_content != content:
-        plan_path.write_text(new_content, encoding="utf-8")
-        report.changes_applied = report.changes_proposed
-    return report
+    def tidy(rest: str) -> str:
+        # Removing a phrase leaves a gap before punctuation as well as a double space,
+        # which is the one way this fix's tidying differs from the other's.
+        rest = re.sub(r"  +", " ", rest)
+        return re.sub(r" +([.,;:])", r"\1", rest)
+
+    report, new_content = _rewrite_lines(
+        plan_path, "loopholes", skip_task_headers=False,
+        rewrite=rewrite, tidy=tidy)
+    return _commit(plan_path, report, new_content, dry_run)
 
 
 # ---------------------------------------------------------------------------

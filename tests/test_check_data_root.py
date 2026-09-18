@@ -18,9 +18,12 @@ _REPO = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
 sys.path.insert(0, str(_REPO))
 
-from check_data_root import check_project  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_data_root import check_project  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 def _states(root: Path) -> dict[str, str]:

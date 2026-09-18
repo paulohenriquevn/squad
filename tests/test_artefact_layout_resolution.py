@@ -44,7 +44,10 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills/implement/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-import run_validation as rv  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import run_validation as rv  # noqa: E402 — post-bootstrap import
 
 LAYOUTS = (
     (".claude/records", "the plugin layout the kit ships"),

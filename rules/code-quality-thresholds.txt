@@ -15,6 +15,18 @@
 #   VALUE   — int, float, or string; type coerced by parser
 #
 # Lines starting with `#` and blank lines are skipped.
+#
+# ## WHICH OF THESE ACTUALLY DO ANYTHING
+#
+# Twelve of the sixteen keys shown below are marked `# NOT READ by any detector`.
+# Setting one changes nothing: no code looks the key up, and the detector it names
+# uses its own built-in value. They are documented here because the golden rule § 6
+# lists them as the tuning surface — and a knob a project turns with no effect is
+# worse than a knob that does not exist, because the project believes it tuned
+# something.
+#
+# The four that ARE read are the ones without the marker. If you need one of the
+# twelve, wiring it is a change to the detector, not to this file.
 # Whitespace around `=` is tolerated.
 #
 # Adding/changing entries:
@@ -25,30 +37,30 @@
 # D1 — Dead code
 # Defaults inherited; override only when project's call-graph review is unusual.
 # vulture.min_confidence = 80
-# knip.exit_code = strict
-# cargo_udeps.fail_on_unused = true
-# deadcode.fail_on_unused = true
+# knip.exit_code = strict    # NOT READ by any detector
+# cargo_udeps.fail_on_unused = true    # NOT READ by any detector
+# deadcode.fail_on_unused = true    # NOT READ by any detector
 
 # D2 — Symbol fabrication
-# symbol_fab.cache_ttl_hours = 24
-# symbol_fab.registry_timeout_seconds = 5
-# symbol_fab.fallback_on_introspection_failure = warning
+# symbol_fab.cache_ttl_hours = 24    # NOT READ by any detector
+# symbol_fab.registry_timeout_seconds = 5    # NOT READ by any detector
+# symbol_fab.fallback_on_introspection_failure = warning    # NOT READ by any detector
 
 # D3 — Cross-package wiring
-# orphan_export.skip_barrel_files = true
-# orphan_export.skip_entry_points = true
+# orphan_export.skip_barrel_files = true    # NOT READ by any detector
+# orphan_export.skip_entry_points = true    # NOT READ by any detector
 
 # D4 — Mutation testing
-# mutation.critical_paths_required = true
+# mutation.critical_paths_required = true    # NOT READ by any detector
 # mutation.score_floor_high = 80
 # mutation.score_floor_low = 60
 # mutation.timeout_minutes = 5
 
 # Orchestrator
-# orchestrator.no_network_disables_d2 = true
-# orchestrator.detector_timeout_seconds = 300
+# orchestrator.no_network_disables_d2 = true    # NOT READ by any detector
+# orchestrator.detector_timeout_seconds = 300    # NOT READ by any detector
 
 # Coverage gate (/implement final validation — skills/implement/scripts/coverage_gate.py)
 # Floor for TOTAL line coverage, read from the project's coverage report.
 # Unset = 80. The report says which source the number came from (cli/project/default).
-# coverage.min_percent = 80
+# coverage.min_percent = 80    # NOT READ by any detector

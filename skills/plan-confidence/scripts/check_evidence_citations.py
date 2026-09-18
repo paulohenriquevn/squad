@@ -19,19 +19,32 @@ Per ADR D1 of `harden-fabrication-and-cq-gate-plan.md`, code-file refs
 from __future__ import annotations
 
 import re
+import sys as _sys
+from pathlib import Path as _P
 
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
 # The one owner of every data-root literal. A local copy is what produced six lists in
 # four different orders, and `check_write_containment.py` refuses a second one.
-import sys as _sys_bootstrap
-from dataclasses import dataclass, field
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+import sys as _sys_bootstrap  # noqa: E402 — post-bootstrap import
+from dataclasses import dataclass, field  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
+from pathlib import Path as _Path_bootstrap  # noqa: E402 — post-bootstrap import
+
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+)
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 UNBREAKABLE_RULE_MAX = 13
 
@@ -76,7 +89,12 @@ _UNBREAKABLE_RULE_RE = re.compile(r"Unbreakable\s+Rule\s+(\d+)")
 _MD_HEADER_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.MULTILINE)
 
 # Fenced code blocks (``` or ~~~). DOTALL so they span multiple lines.
-_FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+_FENCED_CODE_RE = _FENCED_CODE_OWNER
 
 
 @dataclass(frozen=True)
@@ -248,13 +266,29 @@ def _section_exists(file_path: Path, section: str) -> bool:
     except OSError:
         return False
     section_norm = section.strip().lower()
+    bare = section_norm.lstrip("§").strip()
+    # A NUMBERED section is matched at a word boundary, and a NAMED one by substring.
+    # `in` over the whole heading applied to both, so `§1` resolved against
+    # `## 21 — Retry policy` and `## Phase 1` — for a single digit the check
+    # effectively could not fail, and its result feeds `fabricated_citation`, one of
+    # the two caps that force INVALID. A section number is a token; a section name is
+    # prose, and prose is where a substring is the right tool.
+    numbered = re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", bare)
+    # ANCHORED at the start of the heading, after an optional section sign. A bare
+    # boundary match still accepted `## Phase 1 of the rollout` as section 1 — the
+    # digit is a word there, not a section number. Numbered sections are written
+    # `## 1 — Foo` or `## §1 — Foo`, which is what this matches.
+    pattern = (re.compile(rf"^§?\s*{re.escape(bare)}(?![0-9.])") if numbered else None)
     for m in _MD_HEADER_RE.finditer(content):
-        title = m.group(2).strip()
-        title_norm = title.lower()
+        title_norm = m.group(2).strip().lower()
+        if pattern is not None:
+            if bare and pattern.search(title_norm):
+                return True
+            continue
         if section_norm in title_norm:
             return True
         # Tolerate "§N" or just "N" in titles like "## §1 — Foo".
-        if section_norm.lstrip("§").strip() and section_norm.lstrip("§").strip() in title_norm:
+        if bare and bare in title_norm:
             return True
     return False
 

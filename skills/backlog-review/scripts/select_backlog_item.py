@@ -59,9 +59,12 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
         _sys_bootstrap.path.insert(0, str(_up))
         break
 
-from squad.paths import records_dir  # noqa: E402
-
-from check_backlog_structure import (
+# These resolve only after the sys.path bootstrap above: the kit ships as loose
+# scripts, not an installed package, so E402 is suppressed here on purpose.
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_backlog_structure import (  # noqa: E402 — post-bootstrap import
     OPEN_STATUS,
     Item,
     _parse_items,
@@ -69,6 +72,9 @@ from check_backlog_structure import (
     declares_impediment,
     parse_blocked_by,
 )
+
+from squad.paths import records_dir  # noqa: E402 — post-bootstrap import
+
 
 def _records_by_item(root: Path, sub: str, suffix: str) -> dict:
     """Through `squad_boss.records_by_item`, which knows BOTH filename spellings.
@@ -82,12 +88,12 @@ def _records_by_item(root: Path, sub: str, suffix: str) -> dict:
     Empty on ImportError rather than falling back to a local glob: a second
     implementation appearing whenever an import fails is exactly how these two diverged.
     """
-    from squad.paths import records_dir  # noqa: PLC0415
+    from squad.paths import records_dir
     records = records_dir(root, "") if root is not None else None
     if records is None or not records.is_dir():
         return {}
     try:
-        from squad_boss import records_by_item  # noqa: PLC0415
+        from squad_boss import records_by_item
     except ImportError:
         return {}
     return records_by_item(records, sub, suffix)
@@ -309,15 +315,13 @@ def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[It
                                         _number(i)))
 
 
-def select(text: str, requested: str | None = None,
-           halted: frozenset[str] = frozenset(),
-           unblocking: frozenset[str] = frozenset(),
-           root: Path | None = None) -> Selection:
-    """Choose the next item, or explain why none may start.
+def _read_queue(text: str, halted: set[str], unblocking: set[str]) -> tuple:
+    """What may start now, ranked — and what is held by a person rather than an item.
 
-    `requested` asks the narrower question — may THIS one start? — which is the form
-    the gate takes when a human has already picked. Same computation either way, so
-    the gate and the selector cannot disagree.
+    Extracted from `select`, which measured cyclomatic complexity 64 across 252 lines.
+    Pure code movement: the block below is the block that was there, reading the same
+    registry. What changed is that each half declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
     """
     items = _parse_items(text)
     by_id = {i.item_id: i for i in items}
@@ -353,6 +357,21 @@ def select(text: str, requested: str | None = None,
     # other work exists, and the rules that declare this verdict say the cost of
     # not emitting it is that "every reader sees an item that was never touched".
     awaiting = sorted(k for k, v in walls.items() if not v)
+    return items, by_id, statuses, queue, ordered, awaiting, walls, stopped
+
+
+def _read_state(items: list, statuses: dict, halted: set[str], root) -> tuple:
+    """The four keys BESIDE the queue: approved, planned, implemented, in flight.
+
+    Each of these was absent from every key a scheduler reads at some point, and each
+    absence sent a reader somewhere there was nothing to do — the comments below record
+    the three measured instances.
+
+    Extracted from `select`, which measured cyclomatic complexity 64 across 252 lines.
+    Pure code movement: the block below is the block that was there, reading the same
+    registry. What changed is that each half declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
 
     # Decided, not yet planned. Reported beside the queue and never inside it: SELECT
     # hands work to `/discover-plan`, and `cycle-maintenance.md § Chain` sends an
@@ -425,6 +444,25 @@ def select(text: str, requested: str | None = None,
              if i.fields.get("status") == "planned"
              and live_blockers(i, statuses) is None),
             key=_number)]
+
+    return (awaiting_plan, plan_written, approved_implemented, in_flight,
+            implemented, plans_on_disk)
+
+
+def select(text: str, requested: str | None = None,
+           halted: frozenset[str] = frozenset(),
+           unblocking: frozenset[str] = frozenset(),
+           root: Path | None = None) -> Selection:
+    """Choose the next item, or explain why none may start.
+
+    `requested` asks the narrower question — may THIS one start? — which is the form
+    the gate takes when a human has already picked. Same computation either way, so
+    the gate and the selector cannot disagree.
+    """
+    (items, by_id, statuses, queue, ordered, awaiting, walls,
+     stopped) = _read_queue(text, halted, unblocking)
+    (awaiting_plan, plan_written, approved_implemented, in_flight,
+     implemented, plans_on_disk) = _read_state(items, statuses, halted, root)
 
     if requested:
         if requested not in by_id:

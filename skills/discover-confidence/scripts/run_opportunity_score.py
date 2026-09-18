@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
-from _rubric_loader import load_rubric  # noqa: F401
+from _rubric_loader import load_rubric
 from check_corner_coverage import check_corner_coverage
 from check_evidence_pointers import check_evidence_pointers
 from check_opportunity_completeness import check_opportunity_completeness
@@ -34,7 +34,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 SKILL_ROOT = Path(__file__).parent.parent
 
@@ -65,9 +68,17 @@ def _resolve_rubric(arg: Path | None) -> Path:
     return SKILL_ROOT / "templates" / "rubric-opportunity.md"
 
 
-def _resolve_thresholds(arg: Path | None, opportunity_path: Path) -> Path:
+def _resolve_thresholds(arg: Path | None, opportunity_path: Path) -> tuple[Path, str]:
+    """`(path, origin)` — which bands the verdict was computed against, and from where.
+
+    `origin` exists because nothing recorded it. Four sources answer this question and
+    the report named none of them, so a project that recalibrated its bands and kept a
+    layout this resolver checks second was scored against the SHIPPED example — and
+    told a confident verdict with no way to see which cutoffs produced it. The scorer's
+    whole subject is whether a claim is grounded; its own grounding was not reported.
+    """
     if arg and arg.exists():
-        return arg
+        return arg, "given on the command line"
     project_root = _find_project_root(opportunity_path)
     # Both layouts, deliberately: `rules/` is standalone, `.claude/rules/` is plugin.
     # Checking only one made the project's own bands lose silently in the other, and a
@@ -77,8 +88,9 @@ def _resolve_thresholds(arg: Path | None, opportunity_path: Path) -> Path:
         project_root / ".claude" / "rules" / "discover-opportunity-thresholds.txt",
     ):
         if candidate.exists():
-            return candidate
-    return SKILL_ROOT / "templates" / "discover-opportunity-thresholds.example.txt"
+            return candidate, "this project's own"
+    return (SKILL_ROOT / "templates" / "discover-opportunity-thresholds.example.txt",
+            "the kit's shipped EXAMPLE — this project declares no thresholds of its own")
 
 
 def _parse_thresholds(path: Path) -> dict[str, int]:
@@ -152,7 +164,13 @@ def main() -> int:
         return 2
 
     rubric_path = _resolve_rubric(args.rubric)
-    bands = _parse_thresholds(_resolve_thresholds(args.thresholds, opportunity_path))
+    # Validate the rubric parses before any dimension is scored — `run_structural` does
+    # the same. Until this line the loader was imported here and never called, so a
+    # malformed rubric reached `check_spec_smells` and produced a score from nothing.
+    load_rubric(rubric_path)
+    thresholds_path, thresholds_origin = _resolve_thresholds(
+        args.thresholds, opportunity_path)
+    bands = _parse_thresholds(thresholds_path)
 
     coverage = check_corner_coverage(opportunity_path)
     evidence = check_evidence_pointers(opportunity_path)
@@ -320,6 +338,10 @@ def main() -> int:
     out = {
         "opportunity_slug": opportunity_path.stem.replace("-opportunity", ""),
         "opportunity_path": str(opportunity_path),
+        # Which bands produced the verdict below, and from where. A scorer whose
+        # own cutoffs are unreported is a verdict nobody can check.
+        "thresholds_path": str(thresholds_path),
+        "thresholds_origin": thresholds_origin,
         "scored_at": datetime.now(timezone.utc).isoformat(),
         "corner_coverage_score": round(cc_score, 1),
         "evidence_pointers_score": round(ep_score, 1),
@@ -357,11 +379,17 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    if verdict == "INVALID":
-        return 1
-    if verdict == "NON_SHIPPABLE":
-        return 3
-    return 0
+    # Every verdict this scorer can reach has a code. NEEDS_REVISION, AWAITING_REVIEW and
+    # ITEM_IN_FLIGHT used to fall through to 0, so a caller reading the exit code — which
+    # is what a chain does — could not tell an opportunity nobody had reviewed from one
+    # that passed. The verdict was in the JSON the whole time; the code said SHIPPABLE.
+    return {
+        "INVALID": 1,
+        "NON_SHIPPABLE": 3,
+        "NEEDS_REVISION": 4,
+        "AWAITING_REVIEW": 5,
+        "ITEM_IN_FLIGHT": 6,
+    }.get(verdict, 0)
 
 
 if __name__ == "__main__":

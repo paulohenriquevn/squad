@@ -54,7 +54,14 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+    rules_dir,
+)
 
 
 #: The board's columns, in cycle order, READ FROM THE DECLARATION rather than copied.
@@ -71,7 +78,7 @@ from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
 #: Found by exercising `board_server.py` for real: `/api/state` reported eight phases
 #: starting at `backlog`. No test caught it because every test asserted against
 #: `PHASES` itself, which agrees with itself no matter what it says.
-def _declared_phases() -> tuple[str, ...]:
+def _declared_phases() -> tuple[tuple[str, ...], str]:
     """The chain from `rules/cycle-phases.txt`, in declared order.
 
     Falls back to the historical eight only when the file cannot be read — a board
@@ -88,12 +95,16 @@ def _declared_phases() -> tuple[str, ...]:
             if line and "|" in line:
                 names.append(line.split("|")[0].strip())
         if names:
-            return tuple(names)
-    return ("backlog", "discover", "plan", "implement", "code-quality", "review",
-            "release", "acceptance")
+            return tuple(names), "declared"
+    # The fallback is NAMED. `PHASES` drives what the board draws and which events are
+    # placed, so a chain nobody read produced a board that looks exactly like a board
+    # drawn from the contract — and the eight names here are a snapshot of one moment
+    # in a file that changes.
+    return (("backlog", "discover", "plan", "implement", "code-quality", "review",
+             "release", "acceptance"), "fallback")
 
 
-PHASES = _declared_phases()
+PHASES, PHASES_SOURCE = _declared_phases()
 
 #: What a registry status implies about position when no stream exists: the last
 #: phase the status proves ENDED. Not the next one — entering a phase is a guess.
@@ -196,15 +207,22 @@ _ARTEFACT_DIRS = (
 _VERDICTS_RULE = "blocking-verdicts.txt"
 
 
-def blocking_verdicts(project_root: Path) -> frozenset[str]:
-    """Read `rules/blocking-verdicts.txt`.
+def blocking_verdicts(project_root: Path) -> frozenset[str] | None:
+    """The verdicts `rules/blocking-verdicts.txt` declares, or None when it is absent.
+
+    The docstring promised this and the code did the opposite: an absent file returned
+    `frozenset()`, and an empty set makes `verdict.upper() in blocking` false for every
+    verdict — so the panel rendered "nothing is holding this item" over a rule file it
+    never found. None is what lets the caller tell the two apart, which is the whole
+    sentence below.
 
     An absent file returns nothing and the panel says so, rather than claiming the
     item is unheld: the board reports what it can read, and a missing rule file is
     something it could not read — not evidence that no gate is closed.
     """
-    for relative in ("rules", ".claude/rules"):
-        candidate = project_root / relative / _VERDICTS_RULE
+    # `squad.paths.rules_dir` owns the order; six sites used one and three the other.
+    directory = rules_dir(project_root)
+    for candidate in ([directory / _VERDICTS_RULE] if directory else []):
         if candidate.is_file():
             verdicts = {
                 line.split("#", 1)[0].strip().upper()
@@ -213,7 +231,7 @@ def blocking_verdicts(project_root: Path) -> frozenset[str]:
             }
             verdicts.discard("")
             return frozenset(verdicts)
-    return frozenset()
+    return None
 
 
 #: The progress file is named `.progress-<slug>.json`, so the slug is not simply the
@@ -336,7 +354,7 @@ def stage_on_disk(project_root: Path) -> dict[str, str]:
     # matched `B-022-plan.md` and missed `b022-descriptive-words-plan.md`, so this MODULE
     # held two readers of one question and only `_slug_for` had been corrected.
     try:
-        from squad_boss import records_by_item  # noqa: PLC0415
+        from squad_boss import records_by_item
     except ImportError:
         return {}
     reached: dict[str, str] = {}
@@ -403,30 +421,14 @@ def _in_registry(project_root: Path, item_id: str) -> bool:
         return False
 
 
-def item_detail(project_root: Path, item_id: str) -> dict:
-    """Everything the cycle left behind for one item.
+def _detail_plan_phases(out: dict, records: Path | None, slug: str | None) -> None:
+    """the plan's own phases, and the tasks under them
 
-    Loaded on demand rather than folded into the board: one registry here carries 167
-    items, and reading every plan and every progress file to render a column of cards
-    would spend the whole page budget on work nobody asked to see.
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
     """
-    records = _records_dir(project_root)
-    out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
-                 "artefacts": [], "verdicts": [], "blocking": [],
-                 "done_ratio": None, "specialist": None, "domain": None,
-                 "halted": None, "attest": None,
-                 # Whether the REGISTRY carries this id at all. Without it the shape
-                 # above is returned for an id nobody ever filed, and a caller cannot
-                 # tell "no records yet" from "no such item" — the two states this
-                 # board exists to keep apart, since it draws position by evidence and
-                 # labels derived what it inferred.
-                 "in_registry": _in_registry(project_root, item_id)}
-    if records is None:
-        return out
-
-    slug = _slug_for(item_id, records)
-    out["slug"] = slug
-
     # ── the plan's own phases, and the tasks under them ────────────────────
     if slug:
         plan = records / "plans" / f"{slug}-plan.md"
@@ -472,6 +474,15 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                     "bytes": entry.stat().st_size,
                 })
 
+
+def _detail_halt_report(out: dict, records: Path | None, slug: str | None) -> None:
+    """a phase that halted and wrote down why
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── a phase that halted and wrote down why ────────────────────────────
     # `/implement` writes `{slug}-BLOCKED.md` when it stops and needs a person. That
     # file is the phase's own statement of what holds the item — stronger evidence
@@ -500,6 +511,15 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                 }
                 break
 
+
+def _detail_attestation_drift(out: dict, records: Path | None, slug: str | None) -> None:
+    """was the plan changed after it was attested?
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── was the plan changed after it was attested? ───────────────────────
     # The implementation record states the sha it was built against. If the plan on
     # disk hashes to something else, the work was done against a plan that has since
@@ -519,6 +539,15 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                     "drifted": match.group(1) != current,
                 }
 
+
+def _detail_progress(out: dict) -> None:
+    """how much of the plan is finished
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── how much of the plan is finished ──────────────────────────────────
     # Counted from task status, which is the only place that knows. `committed` is the
     # terminal one this repository writes; the others are treated as not-done rather
@@ -527,6 +556,15 @@ def item_detail(project_root: Path, item_id: str) -> dict:
         done = sum(1 for t in out["tasks"] if t["status"] in _DONE_TASK_STATUS)
         out["done_ratio"] = round(done / len(out["tasks"]), 3)
 
+
+def _detail_owner(out: dict, project_root: Path, item_id: str) -> None:
+    """who owns this work
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── who owns this work ────────────────────────────────────────────────
     # The item's `domain` routes to a specialist, and that file is the closest thing
     # to a name. It is the ASSIGNED specialist, not proof of who ran the last command:
@@ -543,10 +581,18 @@ def item_detail(project_root: Path, item_id: str) -> dict:
                     out["specialist"] = f"{base}/{match.group(1)}.md"
                     break
 
+
+def _detail_verdicts(out: dict, project_root: Path, item_id: str, blocking: frozenset[str] | None) -> None:
+    """every verdict, not only the last
+
+    Extracted from `item_detail`, which measured cyclomatic complexity 44 across 180
+    lines holding six independent readings of one item. Pure code movement: the block
+    below is the block that was there. Each fills its own keys on `out`, which is what
+    it did before — through a shared scope rather than through an argument.
+    """
     # ── every verdict, not only the last ──────────────────────────────────
     # The board's card shows one. This item ended `code-quality` ten times, and a
     # single FAIL_SOFT hides that it was iterating rather than advancing.
-    blocking = blocking_verdicts(project_root)
     for event in read_events(project_root):
         if event.get("type") != "cycle:phase:end":
             continue
@@ -556,7 +602,7 @@ def item_detail(project_root: Path, item_id: str) -> dict:
         out["verdicts"].append({
             "phase": event.get("cycle"), "verdict": verdict, "at": event.get("timestamp"),
         })
-        if verdict and verdict.upper() in blocking:
+        if verdict and blocking is not None and verdict.upper() in blocking:
             out["blocking"].append({"phase": event.get("cycle"), "verdict": verdict,
                                     "at": event.get("timestamp")})
 
@@ -572,6 +618,51 @@ def item_detail(project_root: Path, item_id: str) -> dict:
         if last and last.upper() in blocking:
             still_blocking.append(entry)
     out["blocking"] = still_blocking
+    return out
+
+
+def item_detail(project_root: Path, item_id: str) -> dict:
+    """Everything the cycle left behind for one item.
+
+    Loaded on demand rather than folded into the board: one registry here carries 167
+    items, and reading every plan and every progress file to render a column of cards
+    would spend the whole page budget on work nobody asked to see.
+    """
+    records = _records_dir(project_root)
+    out: dict = {"id": item_id, "slug": None, "phases": [], "tasks": [],
+                 "artefacts": [], "verdicts": [], "blocking": [],
+                 "done_ratio": None, "specialist": None, "domain": None,
+                 "halted": None, "attest": None,
+                 # Whether the REGISTRY carries this id at all. Without it the shape
+                 # above is returned for an id nobody ever filed, and a caller cannot
+                 # tell "no records yet" from "no such item" — the two states this
+                 # board exists to keep apart, since it draws position by evidence and
+                 # labels derived what it inferred.
+                 "in_registry": _in_registry(project_root, item_id)}
+
+    # Determined BEFORE the early return below. Whether the blocking-verdicts rule could
+    # be read has nothing to do with whether this item has records, and a reader of the
+    # early-return payload sees the same empty `blocking` list — which renders as "no
+    # gate is holding this item" rather than as "the rule was not found".
+    blocking = blocking_verdicts(project_root)
+    if blocking is None:
+        out["blocking_unknown"] = (
+            f"no {_VERDICTS_RULE} under {project_root} — whether a verdict holds this "
+            f"item was not determined")
+
+    if records is None:
+        return out
+
+    slug = _slug_for(item_id, records)
+    out["slug"] = slug
+
+    _detail_plan_phases(out, records, slug)
+    _detail_halt_report(out, records, slug)
+    _detail_attestation_drift(out, records, slug)
+    _detail_progress(out)
+    _detail_owner(out, project_root, item_id)
+    _detail_verdicts(out, project_root, item_id, blocking)
+
     return out
 
 
@@ -835,24 +926,14 @@ def _last_activity(events: list[dict]) -> dict | None:
     return None
 
 
-def build_state(project_root: Path, lead_log: Path | None = None,
-                lead_marker: Path | None = None) -> dict:
-    backlog = project_root / "BACKLOG.md"
-    if not backlog.is_file():
-        return {"error": f"no BACKLOG.md under {project_root}", "items": [],
-                "phases": list(PHASES), "lead": read_lead(lead_log, lead_marker)}
+def _phases_running(events: list[dict]) -> dict[str, dict]:
+    """Which item is inside which phase right now, from the event stream.
 
-    items = _parse_items(backlog.read_text(encoding="utf-8-sig"))
-    statuses = {i.item_id: i.fields.get("status", "") for i in items}
-    events = read_events(project_root)
-    plans = planned_items(project_root)
-    halted = halted_items(project_root)
-    on_disk = stage_on_disk(project_root)
-
-    # A phase that STARTED and has not ended is work happening right now. Without it
-    # the board can only draw what finished, which is a picture of the past: an item
-    # under active work showed the verdict of a phase that was already over, and
-    # nothing on the page said anything was running.
+    Extracted from `build_state`, which measured cyclomatic complexity 41 across 206
+    lines. Pure code movement: the block below is the block that was there, reading the
+    same stream. What changed is that each pass declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
     running: dict[str, dict] = {}
     for event in events:
         slug = item_id_of(event.get("slug") or "")
@@ -887,6 +968,17 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             running.pop(slug, None)
 
     # Last finished phase per item, from the stream.
+    return running
+
+
+def _phases_reached(events: list[dict]) -> dict[str, dict]:
+    """Last FINISHED phase per item, from the same stream.
+
+    Extracted from `build_state`, which measured cyclomatic complexity 41 across 206
+    lines. Pure code movement: the block below is the block that was there, reading the
+    same stream. What changed is that each pass declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
     reached: dict[str, dict] = {}
     for event in events:
         slug = item_id_of(event.get("slug") or "")
@@ -908,6 +1000,19 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             reached[slug] = {"phase": cycle, "verdict": event.get("verdict"),
                              "at": event.get("timestamp")}
 
+    return reached
+
+
+def _board_items(items: list, statuses: dict, running: dict, reached: dict,
+                 plans: set, halted: set, on_disk: dict) -> list[dict]:
+    """One row per registry item: its status, its phase, and what holds it.
+
+    Extracted from `build_state`, which measured cyclomatic complexity 41 across 206
+    lines. Pure code movement: the block below is the block that was there, reading the
+    same stream. What changed is that each pass declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
+    out_items: list[dict] = []
     out_items = []
     for item in items:
         iid = item.item_id
@@ -982,6 +1087,32 @@ def build_state(project_root: Path, lead_log: Path | None = None,
             "halted": iid in halted,
         })
 
+    return out_items
+
+
+def build_state(project_root: Path, lead_log: Path | None = None,
+                lead_marker: Path | None = None) -> dict:
+    backlog = project_root / "BACKLOG.md"
+    if not backlog.is_file():
+        return {"error": f"no BACKLOG.md under {project_root}", "items": [],
+                "phases": list(PHASES), "phases_source": PHASES_SOURCE,
+                "lead": read_lead(lead_log, lead_marker)}
+
+    items = _parse_items(backlog.read_text(encoding="utf-8-sig"))
+    statuses = {i.item_id: i.fields.get("status", "") for i in items}
+    events = read_events(project_root)
+    plans = planned_items(project_root)
+    halted = halted_items(project_root)
+    on_disk = stage_on_disk(project_root)
+
+    # A phase that STARTED and has not ended is work happening right now. Without it
+    # the board can only draw what finished, which is a picture of the past: an item
+    # under active work showed the verdict of a phase that was already over, and
+    # nothing on the page said anything was running.
+    running = _phases_running(events)
+    reached = _phases_reached(events)
+    out_items = _board_items(items, statuses, running, reached, plans, halted, on_disk)
+
     # ── what the stream carries and this board cannot place ──────────────
     # Measured on 2026-08-31 against theo: 3 of 28 events had `slug: null` and two
     # more named cycles outside the declared chain. All five were dropped in silence.
@@ -1007,6 +1138,10 @@ def build_state(project_root: Path, lead_log: Path | None = None,
         "project": project_root.name,
         "project_path": str(project_root),
         "phases": list(PHASES),
+        #: `declared` when `rules/cycle-phases.txt` was read, `fallback` when it was not
+        #: found and the eight hardcoded names are being drawn instead. A board drawn
+        #: from a chain nobody read looks exactly like one drawn from the contract.
+        "phases_source": PHASES_SOURCE,
         "items": out_items,
         "events": events[-200:],
         "event_total": len(events),

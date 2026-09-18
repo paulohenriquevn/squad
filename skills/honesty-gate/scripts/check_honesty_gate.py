@@ -66,10 +66,10 @@ for _up in _here.parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import records_dir  # noqa: E402
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "conventions"))
-
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import RULE_BASES, records_dir  # noqa: E402 — post-bootstrap import
 
 SUFFICIENT = "EVIDENCE_SUFFICIENT"
 WITH_CAVEATS = "EVIDENCE_WITH_CAVEATS"
@@ -106,6 +106,15 @@ _REQUIRED_EVIDENCE_FIELDS = ("scenario", "date", "operator", "outcome", "summary
 #: is a file that does not say what the rule requires, which is the case
 #: `_REQUIRED_EVIDENCE_FIELDS` already answers with "ignored".
 PASS = "pass"
+
+#: Below this, one run is carrying the claim. Named because `freshness_days` next to it
+#: is a field on the report — the reader who found that number configurable had no way
+#: to know these two were not, and a threshold spelled as a bare literal in a predicate
+#: is a threshold nobody can cite in an argument about whether it is right.
+MIN_EVIDENCE_FOR_A_CLAIM = 3
+
+#: Below this, one person's experience is the whole evidence base. Same reasoning.
+MIN_OPERATORS_FOR_A_CLAIM = 2
 _EVIDENCE_OUTCOMES = (PASS, "partial", "fail")
 
 
@@ -151,7 +160,7 @@ def check(root: Path, *, today: date | None = None) -> HonestyReport:
     report = HonestyReport()
 
     rule = next((root / r / "honesty-gate-golden-rule.md"
-                 for r in ("rules", ".claude/rules")
+                 for r in RULE_BASES
                  if (root / r / "honesty-gate-golden-rule.md").is_file()), None)
     if rule is None:
         report.hard_caps.append("golden_rule_missing")
@@ -231,11 +240,11 @@ def check(root: Path, *, today: date | None = None) -> HonestyReport:
         return report
 
     # ── soft caps — the claim is permitted and the caveats travel ────────────
-    if report.evidence_count < 3:
+    if report.evidence_count < MIN_EVIDENCE_FOR_A_CLAIM:
         report.soft_caps.append("thin_evidence")
     if all(fields["outcome"].lower() == PASS for _, fields in matching):
         report.soft_caps.append("no_failure_story")
-    if len(report.operators) < 2:
+    if len(report.operators) < MIN_OPERATORS_FOR_A_CLAIM:
         report.soft_caps.append("single_operator")
 
     report.verdict = WITH_CAVEATS if report.soft_caps else SUFFICIENT

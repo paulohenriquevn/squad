@@ -41,6 +41,7 @@ data root, so the copies cannot come back. One owner, or the drift returns silen
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 #: The single write root. A folder, under the project, holding only produced data.
@@ -104,6 +105,46 @@ def data_root(project_root: Path | str) -> Path:
     return Path(project_root) / DATA_DIRNAME
 
 
+#: What may appear in a path segment built from a CLI argument. Deliberately narrow:
+#: a slug is an item id or a plan name, and a phase is a word from `cycle-phases.txt`.
+_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+class UnsafeSegment(ValueError):
+    """A CLI string was going to become part of a path and is not a single safe name."""
+
+
+def safe_segment(value: str, *, what: str) -> str:
+    """`value`, or a refusal naming what was wrong with it.
+
+    Four mechanisms built a filename by interpolating `--slug` and `--phase` straight
+    into an f-string and then `mkdir -p`'d the parent: `convene_panel.assignment_path`,
+    `cast_vote`, `critic_round` and the record writer beside them. A slug containing
+    `../` escaped the write root and CREATED the directories on the way, so a mechanism
+    whose whole contract is "everything this system writes goes under `.squad/`" wrote
+    outside the tree it owns. `.` and `..` are refused by name: both match the character
+    class and neither is a filename.
+    """
+    if not value or not _SAFE_SEGMENT.match(value) or value in (".", ".."):
+        raise UnsafeSegment(
+            f"{what} must be a single name of letters, digits, dot, dash or underscore "
+            f"— got {value!r}. It becomes part of a path, and `../` in one is how a "
+            f"writer leaves the write root.")
+    return value
+
+
+def confined(path: Path, root: Path, *, what: str) -> Path:
+    """`path`, once it is proved to resolve inside `root`.
+
+    The second half of the same guard. `safe_segment` refuses the spelling; this refuses
+    the RESULT, so a future caller composing segments some other way is still held.
+    """
+    resolved = path.resolve()
+    if not resolved.is_relative_to(root.resolve()):
+        raise UnsafeSegment(f"{what} resolves to {resolved}, outside {root}")
+    return path
+
+
 def write_records_dir(project_root: Path | str, leaf: str = "") -> Path:
     """Where a dated artifact is WRITTEN. Never falls back, never guesses."""
     base = data_root(project_root) / RECORDS
@@ -145,9 +186,50 @@ def lead_log_path(project_root: Path | str) -> Path:
     return data_root(project_root) / "lead.jsonl"
 
 
+def assignment_log_path(project_root: Path | str) -> Path:
+    """Where the router records which unit is held by which lane, scoped to the PROJECT.
+
+    The default was `~/.squad-fleet/assignments.jsonl`, which is scoped to the MACHINE.
+    Every `fleet_supervisor.sh --project X` and `--project Y` on one host replayed and
+    appended to the same file, and `in_flight()` keys the held set by unit slug alone —
+    so `B-014` in one consumer and `B-014` in another are one key. A unit held in one
+    project therefore read as held in the other, and the second fleet skipped work that
+    nothing was doing.
+
+    Same failure and same fix as `lead_log_path` above, one file along. `--log` still
+    overrides for anyone who wants it elsewhere.
+    """
+    return data_root(project_root) / "assignments.jsonl"
+
+
 def active_plan_pointer(project_root: Path | str) -> Path:
     """The file naming which plan is active. One name, one place."""
     return data_root(project_root) / ACTIVE_PLAN
+
+
+def active_plan_candidates(project_root: Path | str) -> list[Path]:
+    """Where to LOOK for the active-plan pointer, canonical first, then legacy.
+
+    A reader — the status line, most visibly — has to try the old name too, or a
+    project that has not migrated shows no plan while a plan is active. Those old
+    names are data-root literals, and `check_write_containment.py` fails any kit file
+    outside this module that spells one. That is the rule working: the shell had
+    `.active_plan` typed into it, which is exactly the second spelling this module
+    exists to prevent. So the LIST is published here and the reader iterates it.
+    """
+    root = Path(project_root)
+    candidates = [active_plan_pointer(root)]
+    for name in LEGACY_STATE_NAMES:
+        if name == ACTIVE_PLAN or name.lstrip(".").replace("_", "-") == ACTIVE_PLAN:
+            candidates.append(root / name)
+    return candidates
+
+
+def plans_dir_candidates(project_root: Path | str) -> list[Path]:
+    """Where to LOOK for written plans, canonical first, then the legacy roots."""
+    root = Path(project_root)
+    return [write_records_dir(root, "plans"),
+            *(root / base / "plans" for base in LEGACY_RECORDS_ROOTS)]
 
 
 #: The routing table: which repositories exist here, and who owns each. DERIVED by
@@ -167,6 +249,36 @@ ROUTING_TABLE = "domain-routing.txt"
 #: run anything inside another project's repository, so a hard cut breaks every
 #: consumer that updates without migrating.
 LEGACY_ROUTING_ROOTS: tuple[str, ...] = (".claude/rules", "rules")
+
+
+#: The two places a rules directory can be, in the ONE order this module declares.
+#: Exported because some readers iterate the BASES rather than asking for a directory —
+#: the file they want may live in either — and a second spelling of this pair is the
+#: defect `rules_dir` was written to remove.
+RULE_BASES: tuple[str, ...] = (".claude/rules", "rules")
+
+
+def rules_dir(project_root: Path | str) -> Path | None:
+    """Where this project's rule tables are READ from, or None when there are none.
+
+    ONE order, declared once. Nine sites resolved this pair by hand and they disagreed:
+    six tried `("rules", ".claude/rules")` and three tried `(".claude/rules", "rules")`.
+    In a plugin install BOTH directories exist — `.claude/rules/` is the installed kit's
+    and `rules/` may be the project's own — so the same question got two answers
+    depending on which module asked it, and a table edited in one was invisible to half
+    the readers.
+
+    `.claude/rules` wins, for the case where the disagreement is observable: in a
+    consumer, the kit's tables are the ones under `.claude/`. In the kit's own checkout
+    only `rules/` exists and the order never comes up. This matches `LEGACY_ROUTING_ROOTS`
+    above, which settled the same question for the routing table first.
+    """
+    root = Path(project_root)
+    for relative in RULE_BASES:
+        candidate = root / relative
+        if candidate.is_dir():
+            return candidate
+    return None
 
 
 def write_routing_table(project_root: Path | str) -> Path:
@@ -230,21 +342,6 @@ def resolve_knowledge_dir(project_root: Path | str, leaf: str) -> Path | None:
         return records_dir(root, leaf)
     found = wiki_dir(root, leaf)
     return found if found is not None else records_dir(root, legacy_leaf)
-
-
-def legacy_data_dirs(project_root: Path | str) -> list[Path]:
-    """Legacy roots this project still has on disk, for a migration to report.
-
-    Nothing here moves them. A migration the kit performed inside a consumer's
-    repository would be the kit writing to a project it does not own.
-    """
-    root = Path(project_root)
-    seen: list[Path] = []
-    for relative in (*LEGACY_RECORDS_ROOTS, *LEGACY_WIKI_ROOTS):
-        candidate = root / relative
-        if candidate.is_dir() and candidate not in seen:
-            seen.append(candidate)
-    return seen
 
 
 def contains(project_root: Path | str, path: Path | str) -> bool:

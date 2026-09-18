@@ -21,8 +21,10 @@ def _repo(tmp_path: Path, phases: str = _PHASES, skill: str = "", script: str = 
     d = tmp_path / "skills" / "doer"
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(skill or "# doer\n", encoding="utf-8")
-    (tmp_path / "scripts").mkdir(exist_ok=True)
-    (tmp_path / "scripts" / "runner.py").write_text(script or "# nothing\n", encoding="utf-8")
+    # `scripts/` until 2026-09-01; the fixture followed the tree when SEARCH_GLOBS did.
+    cycle = tmp_path / "mechanisms" / "cycle"
+    cycle.mkdir(parents=True, exist_ok=True)
+    (cycle / "runner.py").write_text(script or "# nothing\n", encoding="utf-8")
     return tmp_path
 
 
@@ -50,7 +52,7 @@ def test_the_requirement_column_is_carried_into_the_finding(tmp_path: Path) -> N
 
 def test_where_reports_which_file_emits(tmp_path: Path) -> None:
     report = check_phase_emitters(_repo(tmp_path, script='cycle="release"\n'))
-    assert report.where["release"] == ["scripts/runner.py"]
+    assert report.where["release"] == ["mechanisms/cycle/runner.py"]
 
 
 def test_a_phase_named_only_in_prose_does_not_count(tmp_path: Path) -> None:

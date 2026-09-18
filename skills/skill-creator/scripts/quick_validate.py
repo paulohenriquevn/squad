@@ -9,29 +9,38 @@ from pathlib import Path
 
 import yaml
 
+#: The frontmatter Claude Code reads, plus the four keys this kit adds. Anything else
+#: is a typo or a convention this validator does not know, and both are worth naming
+#: rather than ignoring.
+#:
+#: The kit's own keys are here because they are load-bearing, not tolerated: the
+#: chain-precondition gate reads `requires`, the runner reads `user-invocable`, and the
+#: drift gate reads `version`. An allowlist that rejects them rejects all 39 skills in
+#: this repository — and a validator nothing can pass validates nothing.
+ALLOWED_PROPERTIES = {
+    'name', 'description', 'license', 'allowed-tools', 'metadata', 'compatibility',
+    'version', 'requires', 'user-invocable', 'argument-hint',
+}
 
-def validate_skill(skill_path):
+
+def validate_skill(skill_path: str | Path) -> tuple[bool, str]:
     """Basic validation of a skill"""
     skill_path = Path(skill_path)
 
-    # Check SKILL.md exists
     skill_md = skill_path / 'SKILL.md'
     if not skill_md.exists():
         return False, "SKILL.md not found"
 
-    # Read and validate frontmatter
     content = skill_md.read_text()
     if not content.startswith('---'):
         return False, "No YAML frontmatter found"
 
-    # Extract frontmatter
     match = re.match(r'^---\n(.*?)\n---', content, re.DOTALL)
     if not match:
         return False, "Invalid frontmatter format"
 
     frontmatter_text = match.group(1)
 
-    # Parse YAML frontmatter
     try:
         frontmatter = yaml.safe_load(frontmatter_text)
         if not isinstance(frontmatter, dict):
@@ -39,10 +48,9 @@ def validate_skill(skill_path):
     except yaml.YAMLError as e:
         return False, f"Invalid YAML in frontmatter: {e}"
 
-    # Define allowed properties
-    ALLOWED_PROPERTIES = {'name', 'description', 'license', 'allowed-tools', 'metadata', 'compatibility'}
 
-    # Check for unexpected properties (excluding nested keys under metadata)
+    # Nested keys under `metadata` are deliberately not walked: the platform treats that
+    # object as opaque, so a key inside it is the skill author's business.
     unexpected_keys = set(frontmatter.keys()) - ALLOWED_PROPERTIES
     if unexpected_keys:
         return False, (
@@ -50,13 +58,11 @@ def validate_skill(skill_path):
             f"Allowed properties are: {', '.join(sorted(ALLOWED_PROPERTIES))}"
         )
 
-    # Check required fields
     if 'name' not in frontmatter:
         return False, "Missing 'name' in frontmatter"
     if 'description' not in frontmatter:
         return False, "Missing 'description' in frontmatter"
 
-    # Extract name for validation
     name = frontmatter.get('name', '')
     if not isinstance(name, str):
         return False, f"Name must be a string, got {type(name).__name__}"

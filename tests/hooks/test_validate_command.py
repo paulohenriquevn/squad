@@ -69,11 +69,11 @@ def _run(root: Path, command: str | None, cwd: Path | None = None) -> int:
     cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
     tool_input = {} if command is None else {"command": command}
     payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": tool_input}
-    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,  # noqa: PLW1510
+    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
                           text=True, cwd=cwd or root,
                           env={"PATH": __import__("os").environ["PATH"],
                                "HOME": str(root),
-                               "CLAUDE_PROJECT_DIR": str(root)}).returncode
+                               "CLAUDE_PROJECT_DIR": str(root)}, check=False).returncode
 
 
 #: (command, expected exit, branch HEAD is on). 2 = blocked, 0 = allowed.
@@ -83,7 +83,16 @@ CASES: list[tuple[str, int, str]] = [
     ("git revert abc123", 2, "workspace"),  # git revert is blocked
     ("git push --force origin develop", 2, "workspace"),  # git push --force is blocked
     ("git push -f origin develop", 2, "workspace"),  # git push -f is blocked
-    ("git push --force-with-lease origin develop", 0, "workspace"),  # git push --force-with-lease is allowed
+    # `--force-with-lease` on a PERMANENT branch is blocked. This row read `0` and
+    # pinned the free pass: the hook's own refusal text said "--force-with-lease only
+    # when explicitly authorized" while nothing asked about authorization, and the flag
+    # matched none of FORCE_TOKEN_RE's alternatives. The lease guards against
+    # clobbering a fetch you have not seen; it does not make rewriting develop's
+    # published history safe. git-safety.md § 1: never on main, develop or workspace.
+    ("git push --force-with-lease origin develop", 2, "workspace"),
+    # On a disposable branch it stays allowed — the rule permits it there, and a guard
+    # that refuses everything is a guard people route around.
+    ("git push --force-with-lease origin an-experiment", 0, "workspace"),
     ("git reset --hard HEAD~1", 2, "workspace"),  # git reset --hard is blocked
     ("git reset --soft HEAD~1", 0, "workspace"),  # git reset --soft is allowed
     ("git stash", 0, "workspace"),  # git stash is allowed

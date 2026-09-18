@@ -32,11 +32,26 @@ Stable identifier for the soft cap: `baseline_context_incomplete`.
 from __future__ import annotations
 
 import re
+import sys as _sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _P
+
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+)
 
 TABLE_ROW_RE = re.compile(r"^\|[^|\n]+(?:\|[^|\n]*)+\|\s*$", re.MULTILINE)
-FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+FENCED_CODE_RE = _FENCED_CODE_OWNER
 
 # Template example fragments — if any of these appears verbatim in the plan,
 # the section is not yet populated with real data. Kept conservative so a real
@@ -228,12 +243,14 @@ def check_baseline_context(plan_path: Path) -> BaselineContextReport:
 
     glossary_entries = 0
     glossary_placeholder_hits = 0
+    glossary_is_empty = False
     if glossary_sub is not None:
         glossary_entries = _count_glossary_entries(glossary_sub)
         glossary_placeholder_hits = _count_placeholder_hits(glossary_sub)
         # "(none)" is acceptable per template — explicit empty.
         explicit_none = "(none)" in glossary_sub
         if glossary_entries == 0 and not explicit_none:
+            glossary_is_empty = True
             reasons.append(
                 "'### Domain glossary' has no entries and no '(none)' marker"
             )
@@ -243,11 +260,18 @@ def check_baseline_context(plan_path: Path) -> BaselineContextReport:
                 "template placeholder fragment(s)"
             )
 
+    # `glossary_is_empty` belongs in this conjunction. It was appended to `reasons` and
+    # consulted by nothing, so a plan whose glossary heading was present and empty came
+    # back `is_complete=True` with a reason list saying otherwise — and `run_structural`
+    # reads only the flag, so no soft floor fired while the sub-report explained why one
+    # should have. A report that names a problem and then reports no problem is worse
+    # than one that misses it: the reader who checked the detail is the one misled.
     is_complete = (
         not missing
         and file_table_rows > 0
         and file_table_placeholder_hits == 0
         and glossary_placeholder_hits == 0
+        and not glossary_is_empty
     )
 
     return BaselineContextReport(

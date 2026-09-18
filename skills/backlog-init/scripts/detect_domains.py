@@ -65,6 +65,9 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
 from squad.paths import write_routing_table as _write_root_table  # noqa: E402
 
 #: Directories that are never an architectural unit, in any ecosystem.
@@ -95,6 +98,8 @@ class Domain:
     #: named — deleting them would hide the divergence, and an item filed against
     #: them routes to code nobody opens. Same decision as the "Repos an inventory
     #: names but disk does not" section kept by hand.
+    # None is the "never filled" sentinel `__post_init__` replaces with a list; the
+    # annotation states what callers see AFTER construction, which mypy cannot follow.
     missing_on_disk: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -326,92 +331,10 @@ def domains_from_backlog(backlog_path: Path, root: Path) -> list[Domain]:
 UNREVIEWED_MARKER = "<!-- TO BE FILLED IN: only a human knows this -->"
 
 
-def render_specialist(domain: Domain, root: Path) -> str:
-    """Skeleton of `agents/<domain>.md` carrying what was MEASURED, and nothing else.
-
-    It exists because deriving the table without resolving the specialist trades one
-    defect for another: `route_domain` answers `BROKEN ROUTE — the table names an
-    owner who does not exist`. Measured 2026-08-20: 11 consumers were already in that
-    state.
-
-    What goes in: the domain name, the repos it covers, the languages whose manifest
-    is on disk. What does NOT go in: invariants, what a real finding looks like, the
-    false positives — the three things that make a specialist worth anything and that
-    no measurement produces. They are present and empty, marked, because a file
-    without them looks complete.
-    """
-    try:
-        import sys as _sys
-        _impl = Path(__file__).resolve().parents[2] / "implement" / "scripts"
-        if str(_impl) not in _sys.path:
-            _sys.path.insert(0, str(_impl))
-        from suite_runners import detect_languages
-        languages = detect_languages(root) or []
-    except Exception:  # noqa: BLE001 — detection is a bonus; without it the skeleton still serves
-        languages = []
-
-    repos = "\n".join(f"| `{r}` |" for r in domain.repos)
-    langs = ", ".join(f"`{l}`" for l in languages) if languages else (  # noqa: E741
-        "no language manifest at the root — the per-language gates answer SKIP, "
-        "and that describes the repository rather than being pending configuration")
-
-    return f"""---
-name: {domain.name}
-description: Domain specialist for `{domain.name}`. DERIVED automatically by detect_domains.py and NOT YET REVIEWED — the judgement sections are empty.
-tools: Read, Grep, Glob, Bash
-derived: true
-reviewed_by_human: false
----
-
-# {domain.name} — derived skeleton
-
-> **This file was generated, not written.** It exists so the routing works
-> (`route_domain` exits 3 when the table names a missing specialist) and so the debt
-> stays visible. While the markers below exist, `check_xrefs` reports WARN. Remove
-> each marker as you fill the section in — and remove `reviewed_by_human: false` when
-> the file genuinely describes the domain.
-
-## Coverage (measured on disk)
-
-| Repo |
-|---|
-{repos}
-
-**Languages detected:** {langs}
-
-## Commands
-
-{UNREVIEWED_MARKER}
-
-The commands this domain actually uses, **verified by running them** — not copied
-from a README. E.g. `python3 scripts/audit.py`, `pnpm test`, `go test ./...`.
-
-## What a real finding looks like here
-
-{UNREVIEWED_MARKER}
-
-The shapes a defect takes in this domain. A specialist that cannot tell a finding
-from noise returns noise with authority.
-
-## False positives this domain generates
-
-{UNREVIEWED_MARKER}
-
-What looks like a defect and is not. Without this section, every sweep re-discovers
-the same non-problems.
-
-## Invariants
-
-{UNREVIEWED_MARKER}
-
-What must never stop holding here.
-
-## Cycle contract
-
-Routing destination for domain `{domain.name}` (`rules/cycle-backlog.md § Domain
-routing`, derived by `skills/backlog-init/scripts/detect_domains.py`).
-"""
-
+# `render_specialist()` stood here: a second 87-line template for `agents/<domain>.md`,
+# called by nothing but its own tests. `scaffold_specialists.render()` does this work and
+# is what `SKILL.md` Step 1 names as the live path. Two templates for one artefact is two
+# places to update and one that nobody does; the reachable one stays.
 
 def render_table(domains: list[Domain]) -> str:
     lines = [

@@ -55,8 +55,8 @@ _DRIFT_ATTENTION_PREFIXES = (
 
 def _git(root: Path, *args: str) -> str | None:
     try:
-        done = subprocess.run(["git", "-C", str(root), *args],  # noqa: PLW1510
-                              capture_output=True, text=True, timeout=_GIT_TIMEOUT)
+        done = subprocess.run(["git", "-C", str(root), *args],
+                              capture_output=True, text=True, timeout=_GIT_TIMEOUT, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     return done.stdout.strip() if done.returncode == 0 else None
@@ -170,12 +170,12 @@ def drift_line(layout: Layout) -> str | None:
     if not checker.is_file():
         return None
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             [sys.executable, str(checker),
              "--install", str(layout.kit_dir),
              "--kit", str(source)],
             capture_output=True, text=True, timeout=_DRIFT_TIMEOUT,
-        )
+         check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     # The gate exits 1 when there is unharvested work and 2 on argument errors;
@@ -207,10 +207,19 @@ def loop_line(eco: Path) -> str | None:
             f"(>24h, no progress), cancel via /ralph-loop:cancel-ralph or delete the file")
 
 
-def chain_lines(eco: Path) -> list[str]:
+def chain_lines(kit_dir: Path) -> list[str]:
+    """The chain, and where its map and its router live.
+
+    `kit_dir`, not `eco`. Both paths below point at the KIT's code — `rules/squad-map.md`
+    and `mechanisms/cycle/route_domain.py` — and this took the cycle's DATA root, which
+    holds them only in the copy layout. `squad/layout.py` says so in as many words:
+    "kit_dir the kit's code (skills/, rules/, hooks/) ... Under the native plugin layout
+    it lives OUTSIDE the project." So under a plugin install the session was handed two
+    paths that do not exist, in the block whose job is telling it where to look.
+    """
     return [
         "",
-        f"SQUAD — the chain, and who decides (full map: {eco}/rules/squad-map.md)",
+        f"SQUAD — the chain, and who decides (full map: {kit_dir}/rules/squad-map.md)",
         "  BRAINSTORM -> BACKLOG -> DISCOVER -> PLAN -> IMPLEMENT -> CODE-QUALITY -> "
         "REVIEW -> RELEASE -> ACCEPTANCE",
         "  BRAINSTORM is the ONLY phase that requires a person; everything after it "
@@ -218,8 +227,8 @@ def chain_lines(eco: Path) -> list[str]:
         "  ITEM_KILLED ends the chain and is a SUCCESSFUL outcome.",
         "  Roles: kairos=what work exists & in what order | iris=what the user "
         "experiences | daedalus=one item's technical path | hermes=flow & halts",
-        "  Domain specialists are the PROJECT's, never the kit's. Reach them with "
-        "mechanisms/cycle/route_domain.py <repo>;",
+        f"  Domain specialists are the PROJECT's, never the kit's. Reach them with "
+        f"{kit_dir}/mechanisms/cycle/route_domain.py <repo>;",
         "    exit 3 (BROKEN ROUTE) means the domain names a specialist nobody wrote "
         "— stop, do NOT stand in for them.",
         "  No verdict is asserted in prose: a script computes it. Read the cycle rule "
@@ -234,7 +243,7 @@ def build_context(layout: Layout) -> str:
     lines = [line for line in (git_line(layout.project_dir), plan_line(layout.eco),
                                 loop_line(layout.eco), drift_line(layout))
              if line]
-    lines.extend(chain_lines(layout.eco))
+    lines.extend(chain_lines(layout.kit_dir))
     return "\n".join(lines) + "\n"
 
 

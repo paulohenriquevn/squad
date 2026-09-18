@@ -58,7 +58,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import records_dir  # noqa: E402 — post-bootstrap import
 
 # The upstream gate lives beside this script. It runs as `__main__` (the directory
 # enters sys.path on its own) and is also imported by tests that insert the directory
@@ -103,7 +106,7 @@ SEVERITY_ALIASES = {
 def _read_findings_file(path: Path) -> dict[str, Any] | None:
     """Read one YAML findings file. Returns None when it could not be read.
 
-    B-019 — this returned `{}` on ANY error, and the caller could not tell that from a file whose
+    this returned `{}` on ANY error, and the caller could not tell that from a file whose
     `findings:` list was legitimately empty. It then counted the file in `agents_run` under its
     filename stem, so a malformed file became an agent that "ran cleanly and found nothing" and the
     report named six agents while grading a review that read one.
@@ -146,9 +149,9 @@ def _normalize_finding(f: dict[str, Any], agent_role: str) -> dict[str, Any]:
 
     return {
         "id": str(f.get("id", "")),
-        # B-056 — a re-review's whole job is to report whether the fixes worked, and this field was
+        # a re-review's whole job is to report whether the fixes worked, and this field was
         # dropped here, so the verdict could not tell a pass that CLOSED every finding from one that
-        # closed none. Measured on the B-022 second pass: NEEDS_FIXES with 5 HIGH, all five marked
+        # closed none. Measured on an earlier second pass: NEEDS_FIXES with 5 HIGH, all five marked
         # CLOSED in the file the script had just read.
         #
         # Absence keeps today's behaviour (ADR D1): every findings file written before this omits
@@ -179,9 +182,9 @@ def _normalised_summary(summary: str) -> str:
 def _dedupe_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Combine findings that say the SAME THING at the same place.
 
-    B-049 — this keyed on `(file, line, plan_ref)` alone and, on a collision, kept the FIRST
+    this keyed on `(file, line, plan_ref)` alone and, on a collision, kept the FIRST
     finding's id and summary while raising its severity to the highest in the cluster. Measured on
-    the B-022 review: three findings shared `("src/prompts/select-list.tsx", 217, "")` — a refactor
+    an earlier review: three findings shared `("src/prompts/select-list.tsx", 217, "")` — a refactor
     threshold (LOW), an unprotected half of a shipped change (HIGH), and a wrapping bug (LOW). The
     report printed the LOW text under `## HIGH findings`, and the finding that EARNED the HIGH
     appeared nowhere.
@@ -231,7 +234,7 @@ FOLLOWUPS_SECTION_RE = re.compile(
 ISSUE_REF_RE = re.compile(r"#\d+")
 
 
-# B-042 — the ids `spawn_reviewers.py` mandates in every agent brief look like `F-arch-1`, and the
+# the ids `spawn_reviewers.py` mandates in every agent brief look like `F-arch-1`, and the
 # previous pattern (`\b[A-Za-z]+-\d+\b`) extracted `arch-1` from them: `\b[A-Za-z]+` cannot start at
 # `F`, because `F-` is not followed by digits, so the match began after the first hyphen.
 #
@@ -339,6 +342,10 @@ def _classify_verdict(
         return "READY_TO_MERGE_WITH_FOLLOWUPS"
     if coverage_ratio is not None and coverage_ratio < 0.80:
         return "NEEDS_DEEPER"
+    # A None ratio does NOT reach `NEEDS_DEEPER`, deliberately: not measuring edge-case
+    # coverage is not evidence that it is poor, and blocking every review that lacked
+    # the input would make the input optional in name only. The report says NOT
+    # MEASURED in the header instead, so the gap is visible where the verdict is read.
     return "READY_TO_MERGE"
 
 
@@ -352,6 +359,7 @@ def _render_markdown(
     total_findings: int,
     closed: list[dict[str, Any]] | None = None,
     contamination: dict[str, Any] | None = None,
+    unreadable: list[str] | None = None,
 ) -> str:
     md = [
         f"# Review: {slug}",
@@ -364,7 +372,14 @@ def _render_markdown(
     ]
     if coverage_ratio is not None:
         md.append(f"**Edge-case coverage:** {coverage_ratio:.0%}")
-        md.append("")
+    else:
+        # SAID, not skipped. A missing ratio used to leave the line out entirely, so a
+        # report where coverage was never measured looked exactly like one where the
+        # line happened to scroll past — and the verdict path below already declines to
+        # apply the 0.80 band, silently. Two silences over one unmeasured thing.
+        md.append("**Edge-case coverage:** NOT MEASURED — the band below was not "
+                  "applied, so this verdict says nothing about edge-case coverage.")
+    md.append("")
     if contamination:
         # Near the top on purpose: a reader who learns this in a footer has already believed the
         # findings above it.
@@ -397,7 +412,7 @@ def _render_markdown(
             md.append(_heading(f))
             md.append("")
             md.append(f"- **Found by:** {', '.join(f.get('found_by_list', [f['found_by']]))}")
-            # B-049 — name what this row absorbed. A merged finding used to vanish entirely, so a
+            # name what this row absorbed. A merged finding used to vanish entirely, so a
             # reader searching for `F-dom-2` found nothing; the row it was folded into carried
             # somebody else's id.
             absorbed = [i for i in f.get("merged_ids", []) if i != f["id"]]
@@ -444,7 +459,7 @@ def _render_markdown(
     md.append("")
 
 
-    # B-056 — closed findings get their own section rather than the severity ones. A closing pass
+    # closed findings get their own section rather than the severity ones. A closing pass
     # must not produce an empty report: "the reviewers found nothing" and "everything they found is
     # fixed" are different facts, and the report is where a human tells them apart.
     if closed:
@@ -468,15 +483,15 @@ def _render_markdown(
 
 
 
-# B-030 — the review reads a working tree that other reviewers can write to.
+# the review reads a working tree that other reviewers can write to.
 #
-# Measured on the B-025 run: six agents ran concurrently against ONE tree. `usage-panel.tsx` was
+# Measured on an earlier run: six agents ran concurrently against ONE tree. `usage-panel.tsx` was
 # found carrying `// MUTANT: undefined no longer skipped` mid-review, probe files appeared at the
 # repo root, and the architecture reviewer filed a false BLOCKER — `reportGuardFailure has zero
 # production call sites` — against a symbol called at `usage-panel.tsx:115` and `:147`.
 #
 # Isolation (a worktree per agent) is the fix. This is the DETECTOR beside it: isolation that
-# silently stops working looks exactly like isolation that works, and the B-025 run is the proof
+# silently stops working looks exactly like isolation that works, and an earlier run is the proof
 # that "the briefs say not to" is not a mechanism. Three of six reviewers happened to notice the
 # tree was dirty and re-derived their citations; that correctness depended on noticing is the defect.
 #
@@ -589,60 +604,22 @@ def check_tree_contamination(repo_root: Path, findings_dir: Path) -> dict[str, A
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Consolidate findings from spawned review agents.")
-    parser.add_argument("--findings-dir", type=Path, required=True, help="Directory with YAML findings files")
-    parser.add_argument("--output", type=Path, required=True, help="Output markdown report path")
-    parser.add_argument("--slug", default=None, help="Plan slug (default: derived from findings-dir path)")
-    parser.add_argument(
-        "--plan",
-        type=Path,
-        default=None,
-        help="Plan file whose `## Followups` section registers accepted HIGH debt. "
-             "Without it, > 2 HIGH is fail-closed to NEEDS_FIXES.",
-    )
-    parser.add_argument(
-        "--repo-root",
-        type=Path,
-        default=Path.cwd(),
-        help="Repository the agents reviewed. Compared against the state spawn_reviewers.py "
-             "recorded, to detect a tree that moved while it was being read (B-030).",
-    )
-    parser.add_argument(
-        "--edge-case-coverage-ratio",
-        type=float,
-        default=None,
-        help="Edge case coverage ratio 0.0-1.0 (from edge_case_coverage.py)",
-    )
-    args = parser.parse_args()
+def _collect_findings(args, slug: str) -> tuple[list[dict], list[str], list[str], list[str]]:
+    """Read every findings file, plus the gate and audit findings that enter the same way.
 
-    if not args.findings_dir.exists():
-        print(json.dumps({"error": f"Findings dir not found: {args.findings_dir}"}), file=sys.stderr)
-        return 2
+    Returns `(all_findings, agents_run, unreadable, skipped)`. `unreadable` and
+    `skipped` are as much of the answer as the findings: a reviewer whose file could
+    not be parsed is not a reviewer who found nothing.
 
-    slug = args.slug
-    if not slug:
-        # Try to extract from findings-dir path: .claude/agents/review-{slug}-{date}/findings/
-        parts = args.findings_dir.resolve().parts
-        for part in reversed(parts):
-            if part.startswith("review-"):
-                # review-{slug}-{date} — strip review- prefix and trailing date
-                rest = part[len("review-"):]
-                # Try to drop trailing YYYY-MM-DD
-                if len(rest) > 11 and rest[-11] == "-":
-                    slug = rest[:-11]
-                else:
-                    slug = rest
-                break
-    if not slug:
-        slug = "unknown"
-
-    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
+    Extracted from `main`, which measured cyclomatic complexity 43 across 235 lines.
+    Pure code movement: the block below is the block that was there, reading the same
+    directory. What changed is that each pass declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
     # Collect all findings
     all_findings: list[dict[str, Any]] = []
     agents_run: list[str] = []
-    # B-019 — `*.yml` AND `*.yaml`, and everything else in the directory is NAMED rather than
+    # `*.yml` AND `*.yaml`, and everything else in the directory is NAMED rather than
     # silently unseen. The measured failure was five reviewers writing `*.md`: the glob matched
     # nothing, `agents_run` came back empty, and the verdict was `READY_TO_MERGE`.
     unreadable: list[str] = []
@@ -661,11 +638,19 @@ def main() -> int:
             unreadable.append(yml_path.name)
             continue
         agent_role = data.get("agent", yml_path.stem)
-        if isinstance(agent_role, str):
-            agents_run.append(agent_role)
         findings = data.get("findings", [])
         if not isinstance(findings, list):
+            # Unreadable, not empty — and decided BEFORE the roster is appended to.
+            # The agent used to be added first and the malformed `findings:` skipped
+            # with a bare `continue`, so the reviewer appeared in "Reviewers (spawned
+            # agents)" having contributed nothing, and a reader counting reviewers was
+            # told the file had been read. This is the same reasoning as the
+            # `data is None` branch eight lines above; only that branch had it.
+            unreadable.append(f"{yml_path.name} (`findings:` is "
+                              f"{type(findings).__name__}, not a list)")
             continue
+        if isinstance(agent_role, str):
+            agents_run.append(agent_role)
         for f in findings:
             if isinstance(f, dict):
                 all_findings.append(_normalize_finding(f, str(agent_role)))
@@ -708,23 +693,91 @@ def main() -> int:
             for f in _auditor_findings(_project, slug)
         )
 
+    return all_findings, agents_run, unreadable, skipped
+
+
+def _dedupe(all_findings: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    """`(deduped, open_findings, closed)` — closed findings leave the TALLY and stay
+    in the REPORT, which is the distinction an earlier item records.
+
+    Extracted from `main`, which measured cyclomatic complexity 43 across 235 lines.
+    Pure code movement: the block below is the block that was there, reading the same
+    directory. What changed is that each pass declares what it reads and what it
+    produces, instead of leaving both in a shared scope.
+    """
     # Deduplicate
     deduped = _dedupe_findings(all_findings)
 
-    # B-056 — closed findings leave the TALLY and stay in the REPORT. Dropping them would make a
+    # closed findings leave the TALLY and stay in the REPORT. Dropping them would make a
     # closing pass produce an empty report, which reads as "the reviewers found nothing" — the exact
-    # ambiguity B-019 was about. Keeping them in the severity sections was rejected too: those
+    # ambiguity an earlier item was about. Keeping them in the severity sections was rejected too: those
     # sections are what a reader triages by, and a closed HIGH at the top of `## HIGH findings` is
-    # B-049's defect in a different costume.
+    # an earlier item's defect in a different costume.
     closed = [f for f in deduped if f.get("status") == "CLOSED"]
     open_findings = [f for f in deduped if f.get("status") != "CLOSED"]
 
     # Group by severity
+    return deduped, open_findings, closed
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Consolidate findings from spawned review agents.")
+    parser.add_argument("--findings-dir", type=Path, required=True, help="Directory with YAML findings files")
+    parser.add_argument("--output", type=Path, required=True, help="Output markdown report path")
+    parser.add_argument("--slug", default=None, help="Plan slug (default: derived from findings-dir path)")
+    parser.add_argument(
+        "--plan",
+        type=Path,
+        default=None,
+        help="Plan file whose `## Followups` section registers accepted HIGH debt. "
+             "Without it, > 2 HIGH is fail-closed to NEEDS_FIXES.",
+    )
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        default=Path.cwd(),
+        help="Repository the agents reviewed. Compared against the state spawn_reviewers.py "
+             "recorded, to detect a tree that moved while it was being read (an earlier item).",
+    )
+    parser.add_argument(
+        "--edge-case-coverage-ratio",
+        type=float,
+        default=None,
+        help="Edge case coverage ratio 0.0-1.0 (from edge_case_coverage.py)",
+    )
+    args = parser.parse_args()
+
+    if not args.findings_dir.exists():
+        print(json.dumps({"error": f"Findings dir not found: {args.findings_dir}"}), file=sys.stderr)
+        return 2
+
+    slug = args.slug
+    if not slug:
+        # Try to extract from findings-dir path: .claude/agents/review-{slug}-{date}/findings/
+        parts = args.findings_dir.resolve().parts
+        for part in reversed(parts):
+            if part.startswith("review-"):
+                # review-{slug}-{date} — strip review- prefix and trailing date
+                rest = part[len("review-"):]
+                # Try to drop trailing YYYY-MM-DD
+                if len(rest) > 11 and rest[-11] == "-":
+                    slug = rest[:-11]
+                else:
+                    slug = rest
+                break
+    if not slug:
+        slug = "unknown"
+
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    all_findings, agents_run, unreadable, skipped = _collect_findings(args, slug)
+    deduped, open_findings, closed = _dedupe(all_findings)
+
     findings_by_severity: dict[str, list[dict[str, Any]]] = {sev: [] for sev in SEVERITY_ORDER}
     for f in open_findings:
         findings_by_severity[f["severity"]].append(f)
 
-    # B-019 — zero readable agents produces NO verdict. `READY_TO_MERGE` from an empty directory is
+    # zero readable agents produces NO verdict. `READY_TO_MERGE` from an empty directory is
     # not a wrong grade; it is a grade of nothing, and the cycle treats it as evidence.
     # `cycle-rule-schema.md` reserves `INVALID` for "structural integrity broken", which is this.
     #
@@ -760,6 +813,7 @@ def main() -> int:
         total_findings=len(deduped),
         closed=closed,
         contamination=contamination,
+        unreadable=unreadable,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(md_content, encoding="utf-8")
@@ -770,12 +824,12 @@ def main() -> int:
         "verdict": verdict,
         "agents_run": agents_run,
         "agents_count": len(agents_run),
-        # B-019 — present whenever non-empty, so a short roster is visible in the JSON a downstream
+        # present whenever non-empty, so a short roster is visible in the JSON a downstream
         # gate reads, not only in the prose a human might.
-        # B-056 — a downstream gate reads the JSON, not the prose. Without this, a closing pass and
+        # a downstream gate reads the JSON, not the prose. Without this, a closing pass and
         # a clean pass are indistinguishable to anything automated, which is the item one layer down.
         **({"closed_count": len(closed)} if closed else {}),
-        # B-030 — a downstream gate reads the JSON. A review of a tree that moved mid-run is not
+        # a downstream gate reads the JSON. A review of a tree that moved mid-run is not
         # invalid on its face, but a reader who does not know it moved cannot weigh it.
         **({"tree_contaminated": True, "tree_contamination": contamination} if contamination else {}),
         **({"unreadable": unreadable} if unreadable else {}),

@@ -15,6 +15,18 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 
 def _find_project_root(start: Path) -> Path:
+    """The project root for a TEST fixture. Deliberately not the production resolver.
+
+    `run_validation._find_project_root` answers the same question for a real run and
+    returns None when there is none, because a gate that guessed validated the wrong
+    tree. This one is for a fixture that must produce a path: the four levels up from a
+    slice's `tests/` directory ARE the repository, by construction, and a test that
+    cannot locate its own checkout has no useful fallback.
+
+    Recorded because a sibling slice measured the two answers diverging between the
+    kit's own tree and an install — same walk, different first hit. Nothing here is
+    wrong; what was missing is the sentence saying the two are separate on purpose.
+    """
     current = start.resolve()
     while current != current.parent:
         if (current / ".claude").is_dir() or (current / ".git").exists():

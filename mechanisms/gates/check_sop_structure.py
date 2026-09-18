@@ -327,11 +327,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Check the structural shape of this project's SOPs.",
     )
-    parser.add_argument("--project-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--root", "--project-root", dest="root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--today", default=None, help="ISO date, for testing staleness")
     args = parser.parse_args(argv)
 
-    report = check_sop_structure(args.project_root, today=args.today)
+    report = check_sop_structure(args.root, today=args.today)
 
     plural = "" if report.sops_read == 1 else "s"
     print(

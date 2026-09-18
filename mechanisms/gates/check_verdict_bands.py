@@ -50,9 +50,12 @@ sys.path.insert(0, str(_HERE.parent / "cycle"))
 #: The extraction is `check_orphan_verdicts`'s, imported rather than repeated. Two
 #: definitions of "a declared verdict" would drift, and the drift would be invisible:
 #: this gate would pass while sweeping a different set from its sibling.
-import importlib.util  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import importlib.util  # noqa: E402 — post-bootstrap import
 
-from verdict_bands import BandEntry, load_bands  # noqa: E402
+from verdict_bands import BandEntry, load_bands  # noqa: E402 — post-bootstrap import
 
 _spec = importlib.util.spec_from_file_location(
     "_orphan_verdicts", _HERE / "check_orphan_verdicts.py")

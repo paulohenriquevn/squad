@@ -10,9 +10,18 @@ the invocation block it documents.
 
 WHAT THIS INDEX DOES NOT COVER
 ------------------------------
-It globs four trees. Three of them are kept honest by a gate that checks both
-directions (`check_mechanisms_inventory`, `check_skill_map`, `check_squad_map`); the
-fourth, `skills/*/scripts/`, has no inventory at all, so it is read straight off disk.
+It globs THREE trees, and `_TREES` below is the list:
+
+  `mechanisms/*/*.py`      kept honest by `check_mechanisms_inventory`
+  `hooks/*.py`             covered by no inventory gate — read straight off disk
+  `skills/*/scripts/*.py`  covered by no inventory gate — read straight off disk
+
+This overstated its own coverage until 2026-09-17: it claimed a tree count of four and
+three gates keeping them honest, and named
+`check_skill_map` and `check_squad_map` among the three. Those two check the SKILL and
+the MAP, not this index's script glob, and `hooks/` — which really has no inventory —
+was not the tree the disclaimer named. The section the whole CLI prints as its honesty
+statement overstated its own coverage.
 Every report says how many entries carry no description, because an index that answers
 confidently about the files it happens to know is the failure this CLI exists to
 prevent.
@@ -187,6 +196,16 @@ def main_run(argv: list[str] | None = None) -> int:
         print("    sq where --list  for the names", file=sys.stderr)
         return UNMEASURED
 
+    # `router.py` prints "sq <verb> --help  the options for one verb" as the last line of
+    # its verb list, and four of five verbs honour it through argparse. This one read
+    # argv[0] straight into the index lookup, so `sq run --help` searched for a mechanism
+    # named `--help`, failed, and suggested close matches — a documented flag answered
+    # with "no mechanism named '--help'".
+    if argv[0] in ("-h", "--help"):
+        print(main_run.__doc__ or "sq run <mechanism> [args...]")
+        print("\n    sq where --list   the names this verb accepts")
+        return 0
+
     name, forwarded = argv[0], argv[1:]
     root = _repo_root()
     paths = build_index(root).get(name)
@@ -204,9 +223,9 @@ def main_run(argv: list[str] | None = None) -> int:
             print(f"    {p.relative_to(root)}", file=sys.stderr)
         return FINDING
 
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         [sys.executable, str(paths[0]), *forwarded]
-    )
+    , check=False)
     return done.returncode
 
 

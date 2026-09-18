@@ -51,8 +51,8 @@ def _run_write(path: str) -> int:
     cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
     payload = {"hook_event_name": "PreToolUse", "tool_name": "Write",
                "tool_input": {"file_path": path}}
-    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,  # noqa: PLW1510
-                          text=True, cwd=REPO).returncode
+    return subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
+                          text=True, cwd=REPO, check=False).returncode
 
 
 def _zones_named_by(path: Path) -> set[str]:

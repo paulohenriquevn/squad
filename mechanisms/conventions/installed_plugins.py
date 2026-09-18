@@ -110,7 +110,12 @@ def resolve(name: str, config_dir: Path | None = None) -> Plugin | None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--list", action="store_true")
+    # Declared so the documented invocation is accepted, and the listing is the
+    # default anyway — `args.list` was referenced nowhere, so the flag was taken,
+    # ignored, and indistinguishable from one that works. Naming it here makes it
+    # the explicit spelling of what happens with no flag at all.
+    ap.add_argument("--list", action="store_true",
+                    help="list installed plugins (the default with no other flag)")
     ap.add_argument("--resolve", metavar="NAME")
     ap.add_argument("--agents", metavar="NAME", help="agents this plugin supplies")
     ap.add_argument("--config-dir", type=Path, default=None)

@@ -5,7 +5,7 @@ requires: [implement]
 description: Audit project code for dead symbols, fabricated APIs, cross-package orphans, and weak test quality across Go, Python, TypeScript, and Rust (per rules/code-quality-languages.txt enablement). Auto-detects manifests; runs knip + vulture + cargo-udeps + deadcode + tree-sitter symbol fabrication checks + ast-grep cross-package wiring + stryker/mutmut mutation testing. Read-only by design (never edits code). Use after /implement completes its halt-loop, before /review begins — or standalone for periodic audits.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash Write Edit
-argument-hint: "[plan-slug] (optional — bind audit to a plan's Critical paths section)"
+argument-hint: "[plan-slug] (optional — write the audit against a plan and record it under that slug)"
 ---
 
 # Code Quality
@@ -74,7 +74,7 @@ Reads `.claude/records/plans/{slug}-plan.md`. Slug resolution order (strict — 
 2. `.claude/records/plans/completed/{slug}-plan.md` (already merged)
 3. **REFUSE** if slug matches only `.claude/records/discoveries/plans/{slug}-plan.md` (discovery plan; different schema) — emits helpful error pointing to `/discover-confidence`.
 
-Parses plan's `## Critical paths` section (when present, drives D4 mutation testing scope). Writes audit Markdown to `.claude/records/audits/{slug}-code-quality-{date}.md`. Emits JSON verdict to stdout (or `--json-out PATH`).
+Writes audit Markdown to `.claude/records/audits/{slug}-code-quality-{date}.md`. Emits JSON verdict to stdout (or `--json-out PATH`).
 
 ---
 
@@ -96,7 +96,7 @@ For each (language, manifest-present) pair, instantiate the language's detector 
 - **D1 — Dead code**: subprocess external CLI (vulture/knip/cargo-udeps/deadcode); parse output; emit `Finding(severity=HARD, detector="d1_dead_code")` for unallowlisted entries.
 - **D2 — Symbol fabrication**: tree-sitter AST parse of changed/new files; extract imports + calls; validate against registry (PyPI/npm/crates.io/Go proxy) with 24h cache; introspect lib signatures via Python `inspect` / TS Compiler API. Skip module-local imports (relative/crate::/self-module) + monorepo subpath exports.
 - **D3 — Cross-package wiring** (soft cap): ast-grep enumeration of public exports across the repo; compute bipartite map (exports → importers); emit SOFT_CAP Finding for orphan exports.
-- **D4 — Mutation testing** (soft cap): mutmut (Python) + stryker (TS) scoped to `## Critical paths` declared by plan (Mode 2 only); Rust + Go DEFERRED to v0.2 (graceful skip INFO).
+- **D4 — Mutation testing** (soft cap): mutmut (Python) + stryker (TS), scoped by the PROJECT's own mutation config (`[mutmut] source_paths`, `stryker.config.json`); Rust + Go DEFERRED to v0.2 (graceful skip INFO). This said "scoped to `## Critical paths` declared by plan" until 2026-09-17 — a scoping the orchestrator removed deliberately, because neither runner accepts an arbitrary file list and the list was built, passed and dropped. See `detectors/__init__.detect_mutation_score`.
 
 ### Step 3 — Apply allowlist (with sunset)
 
@@ -113,7 +113,6 @@ Per [`code-quality-golden-rule.md § Severity rubric`](../../rules/code-quality-
 |---|---|---|
 | Dead code unallowlisted | 49 (FAIL_HARD) | `dead_code_unallowlisted_{language}` |
 | Symbol fabrication | 49 (FAIL_HARD) | `symbol_fabrication_{language}` |
-| Plan missing `## Critical paths` (Mode 2 + D4) | 70 (FAIL_SOFT) | `plan_missing_critical_paths_section` |
 | Allowlist entry malformed | 49 (FAIL_HARD) | `allowlist_malformed_entry` |
 | Orphan export | 70 | `soft_cap_orphan_export_{language}` |
 | Mutation score < 60% | 70 | `soft_cap_mutation_score_low_{language}` |
@@ -154,7 +153,19 @@ Per [`code-quality-golden-rule.md § Severity rubric`](../../rules/code-quality-
 | `--languages-rule PATH` | Override languages config path | `.claude/rules/code-quality-languages.txt` |
 | `--thresholds-rule PATH` | Override thresholds config path | `.claude/rules/code-quality-thresholds.txt` |
 | `--allowlist PATH` | Override allowlist path | `.claude/rules/code-quality-allowlist.txt` |
-| `--no-network` | Disable D2 (symbol fabrication); single INFO per language (per EC-25) | false |
+| `--no-network` | Disable D2's registry lookups; single INFO per language (per EC-25). **Already the default** — kept so existing callers keep working | `true` (the default) |
+| `--network` | The explicit opt-in to the networked path. Without it every run is offline, including a verdict | `false` |
+| `--baseline PATH` | Findings recorded as accepted debt; they are reported and do not fail the gate | `<repo>/.claude/rules/code-quality-baseline.txt` |
+| `--write-baseline` | Record today's findings as the baseline instead of judging them. Forces offline — a baseline taken with the network on is worthless | `false` |
+| `--repo-root PATH` | The tree under test | the repository containing the working directory |
+
+This table listed `--no-network` with default `false`, i.e. "D2 runs networked unless
+asked otherwise", and named none of the four rows below it. The parser says the
+opposite: offline is the default for a baseline AND for a verdict, because the Go
+symbol detector resolves imports against the module proxy and two consecutive networked
+runs of one tree reported 4818 then 4777 fabrications against ONE offline. A reader
+following the old row asked for the behaviour they already had and believed a run was
+networked when it was not.
 
 ---
 

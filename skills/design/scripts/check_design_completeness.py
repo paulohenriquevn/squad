@@ -59,7 +59,10 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import wiki_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import wiki_dir  # noqa: E402 — post-bootstrap import
 
 
 #: The drawings, in the order they remove ambiguity. `mermaid` is the kind the block
@@ -122,6 +125,12 @@ class Finding:
 class Report:
     verdict: str = ""
     present: list[str] = field(default_factory=list)
+    #: Optional drawings that are NOT on disk. They were put in `present`, so
+    #: `render` printed `ok  system-map  (derived)` for a file nobody had
+    #: written — the one non-mandatory drawing, reported as done because it was
+    #: allowed to be absent. Absent and optional is a third state, and it is the
+    #: one a reader needs to see.
+    absent_optional: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     pieces: list[str] = field(default_factory=list)
     uncovered: list[str] = field(default_factory=list)
@@ -192,7 +201,8 @@ def check(project: Path) -> Report:
         path = design / drawing.filename
         body = _read(path)
         if not body.strip():
-            (rep.missing if drawing.mandatory else rep.present).append(drawing.key)
+            (rep.missing if drawing.mandatory
+             else rep.absent_optional).append(drawing.key)
             if drawing.mandatory:
                 rep.findings.append(Finding(
                     "drawing_missing", "blocker", drawing.filename,
@@ -311,7 +321,12 @@ def render(rep: Report) -> str:
         return "\n".join(out)
 
     for drawing in DRAWINGS:
-        mark = "ok " if drawing.key in rep.present else "MISSING"
+        if drawing.key in rep.present:
+            mark = "ok "
+        elif drawing.key in rep.absent_optional:
+            mark = "absent (optional — not drawn, not a failure)"
+        else:
+            mark = "MISSING"
         flag = "" if drawing.mandatory else "  (derived)"
         out.append(f"  {mark:8} {drawing.key:12}{flag}")
     out.append("")

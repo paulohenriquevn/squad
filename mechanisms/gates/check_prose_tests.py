@@ -4,8 +4,8 @@
 WHY
 ---
 A test that greps a `SKILL.md` fails when someone improves the sentence and
-passes when someone breaks the thing the sentence describes. `rules/prompt-text-
-is-not-behaviour.md` carries the rule and where it came from; this is the
+passes when someone breaks the thing the sentence describes. `skills/_kit-rules/prompt-text-is-not-behaviour.md`
+carries the rule and where it came from; this is the
 mechanism, because a rule with no mechanism is a note — a lesson this kit has
 now paid for nine times in one day.
 
@@ -40,8 +40,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 #: A path that names prose the kit SHIPS for a human or an agent to read.
+#: Documents whose WORDS are the deliverable, so an assertion on their wording is a
+#: prose test and needs its reason stated.
+#:
+#: `SOP.md` and `README.md` were absent. Four asserts in `skills/design/tests` pin the
+#: wording of `SOP.md` — "the sentence an operator reads IS the deliverable here" — and
+#: this gate could not see them, so they were exempt by accident rather than by
+#: decision. The gate's whole subject is making that decision visible.
 _PROSE_PATH = re.compile(
-    r"SKILL\.md|\.prompt|HOW-TO-USE|CONTRIBUTING|golden-rule"
+    r"SKILL\.md|SOP\.md|README\.md|\.prompt|HOW-TO-USE|CONTRIBUTING|golden-rule"
     r"|rules/|/roles/|/reference/"
 )
 
@@ -83,7 +90,16 @@ def _prose_bindings(fn: ast.FunctionDef) -> set[str]:
     return names
 
 
+#: How many test files the LAST sweep parsed. `main` printed "no test pins the wording of
+#: shipped prose" and returned 0 whether the sweep read 180 files or none — and a root
+#: with no `tests/` produces exactly the same sentence as a clean repository.
+_last_files_parsed = 0
+
+
 def check_prose_tests(root: Path) -> list[Finding]:
+    global _last_files_parsed
+
+    _last_files_parsed = 0
     findings: list[Finding] = []
     for path in sorted({*root.glob("tests/**/*.py"), *root.glob("skills/*/tests/**/*.py")}):
         try:
@@ -91,6 +107,7 @@ def check_prose_tests(root: Path) -> list[Finding]:
             tree = ast.parse(text)
         except (OSError, SyntaxError):
             continue
+        _last_files_parsed += 1
         lines = text.splitlines()
         for fn in (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)):
             bound = _prose_bindings(fn)
@@ -123,18 +140,38 @@ def check_prose_tests(root: Path) -> list[Finding]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("root", nargs="?", type=Path, default=Path("."))
+    # `--root` beside the positional, per `_contract.py`. The positional stays: a
+    # consumer already types it, and the contract is about what a caller can rely
+    # on, never about taking something away.
+    #
+    # Separate dests, resolved here. Sharing one `dest` silently broke the flag —
+    # argparse applies the absent positional's default AFTER parsing the option, so
+    # `--root /empty/tree` was overwritten by `Path(".")` and the gate swept the
+    # repository it was standing in while reporting under the caller's path. It
+    # read 394 files on a tree holding none and called that a clean sweep.
+    parser.add_argument("positional_root", nargs="?", metavar="root", type=Path,
+                        default=None)
+    parser.add_argument("--root", dest="root", type=Path, default=None)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+    root = args.root or args.positional_root or Path(".")
 
-    findings = check_prose_tests(args.root)
+    findings = check_prose_tests(root)
 
     if args.json:
-        print(json.dumps([f.__dict__ for f in findings], indent=2, ensure_ascii=False))
-        return 1 if findings else 0
+        print(json.dumps({"files_parsed": _last_files_parsed,
+                          "findings": [f.__dict__ for f in findings]},
+                         indent=2, ensure_ascii=False))
+        return 1 if findings else (0 if _last_files_parsed else 2)
+
+    if not _last_files_parsed:
+        print(f"UNCHECKED: 0 test file(s) parsed under {root}. A tree this sweep "
+              f"could not read is not a tree with no prose tests in it.", file=sys.stderr)
+        return 2
 
     if not findings:
-        print("no test pins the wording of shipped prose")
+        print(f"no test pins the wording of shipped prose "
+              f"({_last_files_parsed} test file(s) parsed)")
         return 0
 
     print(f"{len(findings)} assert(s) pin the wording of shipped prose, "

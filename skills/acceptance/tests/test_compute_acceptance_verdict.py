@@ -12,8 +12,11 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import pytest  # noqa: E402
-from compute_acceptance_verdict import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import pytest  # noqa: E402 — post-bootstrap import
+from compute_acceptance_verdict import (  # noqa: E402 — post-bootstrap import
     ACCEPTED,
     ACCEPTED_WITH_CAVEATS,
     FLIP_ALLOWED,
@@ -23,7 +26,7 @@ from compute_acceptance_verdict import (  # noqa: E402
     compute,
 )
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 class TestGreenPaths:

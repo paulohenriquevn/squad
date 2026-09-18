@@ -23,13 +23,17 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import argparse  # noqa: E402
-import json  # noqa: E402
-import sys  # noqa: E402
-from datetime import datetime, timezone  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import argparse  # noqa: E402 — post-bootstrap import
+import json  # noqa: E402 — post-bootstrap import
+import re  # noqa: E402 — post-bootstrap import
+import sys  # noqa: E402 — post-bootstrap import
+from datetime import datetime, timezone  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 TEMPLATES = {
     "architecture": "agent-architecture-reviewer.md",
@@ -120,6 +124,8 @@ class _ModelOverrideAction(argparse.Action):
     Rejects empty model values (EC-5).
     """
 
+    # argparse.Action.__call__ is typed with `values: str | Sequence[Any] | None`;
+    # this action accepts only the str form and validates it, so the signature narrows.
     def __call__(  # type: ignore[override]
         self, parser: argparse.ArgumentParser, namespace: argparse.Namespace,
         values: object, _option_string: str | None = None,
@@ -167,16 +173,39 @@ def substitute(template_content: str, mapping: dict[str, str]) -> str:
     return result
 
 
+#: What may become a path segment here. `role` is built as `f"domain-{domain}"` from
+#: `--primary-domain` and every comma-separated `--secondary-domains` entry, and `--slug`
+#: is interpolated into the output directory name. Both arrive from the CLI, and neither
+#: was checked before becoming a filename — a `../` in either walks out of the write root
+#: and `mkdir(parents=True)` creates the directories on the way.
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def safe_name(value: str, *, what: str) -> str:
+    """`value`, or a ValueError naming what was wrong with it."""
+    if not _SAFE_NAME.match(value or "") or value in (".", ".."):
+        raise ValueError(
+            f"{what} must be a single name of letters, digits, dot, dash or underscore, "
+            f"starting with a letter or digit — got {value!r}. It becomes part of a path.")
+    return value
+
+
 def write_agent_file(skill_dir: Path, template_name: str, output_dir: Path, role: str, mapping: dict[str, str]) -> Path:
     template_path = skill_dir / "templates" / template_name
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
+
+    safe_name(role, what="the agent role")
 
     content = template_path.read_text(encoding="utf-8-sig")
     substituted = substitute(content, mapping)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{role}.md"
+    # The RESULT, not only the spelling: a caller composing the name some other way is
+    # still held to the directory this function was given.
+    if not output_path.resolve().is_relative_to(output_dir.resolve()):
+        raise ValueError(f"{output_path} resolves outside {output_dir}")
     output_path.write_text(substituted, encoding="utf-8")
     return output_path
 
@@ -276,6 +305,7 @@ def main() -> int:
     # Generated per-item files are OUTPUT, so they land in the project's write root —
     # never in `agents/`, where the kit keeps its DECLARED specialists, and never
     # inside the install, which receives nothing this system writes.
+    safe_name(args.slug, what="--slug")
     output_dir = args.output_dir or (
         write_records_dir(_project_root(skill_dir), "reviews")
         / f"review-{args.slug}-{date_str}")

@@ -40,7 +40,7 @@ def test_gives_up_after_consecutive_failures(monkeypatch):
 
     results = [_registry.package_exists_on_pypi(f"pkg{i}") for i in range(30)]
 
-    assert all(r is None for r in results), "falha de rede virou veredito"
+    assert all(r is None for r in results), "a network failure became a verdict"
     assert len(attempts) <= _registry._MAX_CONSECUTIVE_FAILURES, (
         f"the network was queried {len(attempts)} times after consecutive failures"
     )

@@ -53,7 +53,7 @@ def _repo_with_a_pushed_violation(tmp_path: Path) -> Path:
 
 def _run(repo: Path, *flags: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(_GATE), "--repo", str(repo), *flags],
-                          capture_output=True, text=True, timeout=180)
+                          capture_output=True, text=True, timeout=180, check=False)
 
 
 def test_the_introduced_range_grades_only_what_the_push_adds(tmp_path: Path) -> None:

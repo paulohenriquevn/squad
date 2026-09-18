@@ -47,15 +47,34 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, RECORDS  # noqa: E402
+# These resolve only after the sys.path bootstrap above: the kit ships as loose
+# scripts, not an installed package, so E402 is suppressed here on purpose.
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    RECORDS,
+)
 
 # ── the read-only zone (rules/reference-provenance.md § 1) ────────────────────
 ZONE = r"(\./)?(\.claude/)?study-material/"
 ZONE_RE = re.compile(ZONE)
 
 # ── git ───────────────────────────────────────────────────────────────────────
+#: Any option token between `git` and its subcommand. The list this replaced named
+#: six globals and git has more than twenty — `--no-pager`, `--literal-pathspecs`,
+#: `--exec-path=`, `--no-optional-locks`, `--bare` among them — so
+#: `git --no-pager checkout main` carried a verb no guard below ever saw. Measured
+#: 2026-09-17: allowed, while `git checkout main` was blocked.
+#:
+#: Enumerating is the wrong shape for this: the set grows with git and the failure
+#: is silent. A subcommand never begins with `-`, so the rule is structural — strip
+#: leading option tokens, and the two that take a separate argument (`-c`, `-C`)
+#: take theirs with them.
 _GIT_GLOBALS = re.compile(
-    r"(^|[^\w.])git\s+(--git-dir=\S+|--work-tree=\S+|-[cC]\s+\S+|--paginate|-p)\s+")
+    r"(^|[^\w.])git\s+(?:-[cC]\s+\S+|--(?:git-dir|work-tree|namespace|super-prefix"
+    r"|exec-path|list-cmds)=\S+|-{1,2}[A-Za-z][\w-]*)\s+")
 _QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 #: A NEWLINE separates two commands exactly as `;` does, and the Bash tool is
 #: handed multi-line blocks routinely. Leaving it out kept every such block as a
@@ -66,6 +85,18 @@ _SEGMENTS = re.compile(r"\|\||&&|;|\n")
 _SEGMENTS_WITH_PIPE = re.compile(r"\|\||&&|;|\n|\|")
 
 FORCE_TOKEN_RE = re.compile(r"(--force(\s|$)|(^|\s)-[a-z]*f(\s|$)|\s\+[^\s-]\S*)")
+
+#: The safer force push, which is still a force push. Kept SEPARATE from
+#: `FORCE_TOKEN_RE` because the two get different answers: this one is allowed on a
+#: disposable branch and refused on a permanent one, while the plain forms are
+#: refused everywhere. Anchored so `--force-with-lease=refs/heads/x` matches too.
+LEASE_TOKEN_RE = re.compile(r"--force-with-lease(\s|=|$)")
+
+#: The branches that are never force-pushed, in any form. `main` belongs here and
+#: not in `_PERMANENT`: that name answers "which branches are never DELETED", and
+#: `main` is not deletable by this flow in the first place. Two questions, two
+#: lists — merging them would widen the delete guard by accident.
+_NEVER_FORCE_PUSHED = re.compile(r"(^|\s|:)(origin/)?(main|develop|workspace)(\s|$)")
 
 #: Everything that writes to or consumes the stack. `list` and `show` only read
 #: it, and refusing those would teach an agent the guard is noise.
@@ -78,6 +109,31 @@ DANGEROUS_PATH_RE = re.compile(
     r"(/(\s|$)|(^|\s)/\*|~/?(\s|$)|\$HOME/?(\s|$)|/home(\s|$)|/home/(\s|$)"
     r"|/home/[^/\s]+/?(\s|$)|(/etc|/usr|/var|/bin|/lib|/opt|/boot|/root)(\s|/|$))")
 
+#: Quotes, a braced variable and a trailing glob are spellings of the same path, and
+#: the pattern above anchors on whitespace, so each of them slipped past it. Measured
+#: 2026-09-17: `rm -rf /etc` blocked; `rm -rf "/etc"`, `rm -rf \'/etc\'`, `rm -rf ~/*`,
+#: `rm -rf $HOME/*`, `rm -rf "$HOME"` and `rm -rf ${HOME}` all allowed.
+#:
+#: Normalising the text before the match keeps one pattern instead of six, and keeps
+#: the pattern readable — which is what let the gap hide in it.
+_BRACED_VAR = re.compile(r"\$\{(\w+)\}")
+
+
+def path_normalised(text: str) -> str:
+    """The same segment with quoting, braces and a trailing glob removed.
+
+    Only for deciding whether a path is a system or home root. It is deliberately
+    lossy — `${HOME}` and `$HOME` become one thing — because the guard's question is
+    which ROOT is named, not which exact string was typed.
+    """
+    text = _BRACED_VAR.sub(r"$\1", text)
+    text = text.replace('"', " ").replace("'", " ")
+    # `~/*` and `/etc/*` name the same root as `~/` and `/etc/`; the glob only says
+    # "the contents of".
+    text = re.sub(r"/\*(\s|$)", r"/\1", text)
+    return text
+
+
 EXPORT_VERB_RE = re.compile(r"(^|\s|\()\s*(cp|mv|rsync|scp|install|tar|zip|dd)(\s|$)")
 EXPORT_REDIRECT_RE = re.compile(r">{1,2}\s*[^\s&>]")
 EXPORT_PIPE_RE = re.compile(r"\|\s*(tee|dd)(\s|$)")
@@ -88,8 +144,23 @@ ZONE_WRITE_RE = re.compile(
 #: permanent branch and `develop` is where promotion lands; deleting either
 #: discards work that was never promoted and leaves the next `git switch` to
 #: recreate the name with none of the history every rule refers to.
-BRANCH_DELETE_RE = re.compile(r"git\s+branch\s+(-\S*\s+)*-\S*[dD]\S*\s+"
-                              r"(?P<name>(origin/)?(workspace|develop))(\s|$)")
+_PERMANENT = r"(?P<name>(origin/)?(workspace|develop))"
+#: Three spellings delete a permanent branch and only one was matched. The pattern
+#: required the flag BEFORE the name and looked only at `git branch`, so
+#: `git branch workspace -D`, `git branch --delete --force workspace`,
+#: `git push origin --delete workspace` and `git push origin :workspace` all passed —
+#: measured 2026-09-17, and `git branch tmpbr -D` confirmed to really delete.
+BRANCH_DELETE_PATTERNS = (
+    # flag first: git branch -D workspace
+    re.compile(rf"git\s+branch\s+(-\S+\s+)*-\S*[dD]\S*\s+{_PERMANENT}(\s|$)"),
+    # name first: git branch workspace -D  /  git branch workspace --delete --force
+    re.compile(rf"git\s+branch\s+{_PERMANENT}\s+(\S+\s+)*(-\S*[dD]\S*|--delete)(\s|$)"),
+    # long form in any order: git branch --delete --force workspace
+    re.compile(rf"git\s+branch\s+(--\S+\s+)*--delete(\s+--\S+)*\s+{_PERMANENT}(\s|$)"),
+    # the remote: git push origin --delete workspace  /  git push origin :workspace
+    re.compile(rf"git\s+push\s+\S+\s+(--delete|-d)\s+{_PERMANENT}(\s|$)"),
+    re.compile(rf"git\s+push\s+\S+\s+:{_PERMANENT}(\s|$)"),
+)
 
 #: A command that writes to a file, and the tokens it writes to. `>`/`>>` name
 #: their target directly; the verbs take theirs as operands. Not exhaustive and
@@ -124,13 +195,29 @@ def _git_prefix(command: str) -> list[str]:
     return ["-C", where.group(1).strip("'\"")] if where else []
 
 
-def _git_out(*args: str) -> str:
+#: Returned when git could not be asked at all — binary missing, timeout, non-zero
+#: exit. Distinct from `""`, which is git answering with nothing (a detached HEAD
+#: has no current branch name and that IS the answer).
+GIT_UNREACHABLE = None
+
+
+def _git_out(*args: str) -> str | None:
+    """The answer, `""` for an empty answer, or `GIT_UNREACHABLE` for no answer.
+
+    It used to return `""` for all three. The branch guard wrote
+    `_git_out(...) or "unknown"`, and `"unknown"` is in nobody's trunk list, so every
+    trunk guard fell silent exactly when the hook could not tell where HEAD was — it
+    failed OPEN on its own blindness. `hooks/stop-validation.py:127` already models the
+    other way, recording the unreachability and saying so.
+    """
     try:
-        done = subprocess.run(["git", *args], capture_output=True, text=True,  # noqa: PLW1510
-                              timeout=_GIT_TIMEOUT)
+        done = subprocess.run(["git", *args], capture_output=True, text=True,
+                              timeout=_GIT_TIMEOUT, check=False)
     except (OSError, subprocess.SubprocessError):
-        return ""
-    return done.stdout.strip() if done.returncode == 0 else ""
+        return GIT_UNREACHABLE
+    if done.returncode != 0:
+        return GIT_UNREACHABLE
+    return done.stdout.strip()
 
 
 def working_trees(command: str) -> int:
@@ -156,6 +243,11 @@ def working_trees(command: str) -> int:
     habit, which is what happened on 2026-09-04; it is not a sandbox.
     """
     listing = _git_out(*_git_prefix(command), "worktree", "list", "--porcelain")
+    if listing is GIT_UNREACHABLE:
+        # Documented fail-open, unchanged: the stash guard only narrows an allowance,
+        # and refusing every `git stash` because git could not be reached would block
+        # work over a condition that has nothing to do with the hazard.
+        return 1
     return sum(1 for line in listing.splitlines() if line.startswith("worktree "))
 
 
@@ -185,7 +277,7 @@ def trunks(prefix: list[str] | None = None) -> list[str]:
     """
     names = ["main", "master"]
     default = _git_out(*(prefix or []), "symbolic-ref", "--short",
-                       "refs/remotes/origin/HEAD")
+                       "refs/remotes/origin/HEAD") or ""
     default = default.removeprefix("origin/")
     if default and default not in ("workspace", "develop") and default not in names:
         names.append(default)
@@ -198,8 +290,20 @@ def _targets(unquoted: str, branch: str) -> bool:
                 or re.search(rf"git\s+checkout\s+(-b\s+)?{re.escape(branch)}(\s|$)", unquoted))
 
 
+#: `git "commit"` is `git commit`. `_QUOTED.sub("", ...)` deleted the quoted span
+#: entirely, so the verb vanished and every guard below matched nothing — measured
+#: 2026-09-17 on the trunk: allowed. Quotes are stripped ONLY here, on the token
+#: right after `git`, because everywhere else deleting quoted text is deliberate: a
+#: commit message saying "main" must not read as switching to it.
+_GIT_VERB_QUOTED = re.compile(r"""(^|[^\w.])(git\s+)(['"])([a-z][\w-]*)\3""")
+
+
+def unquote_git_verb(command: str) -> str:
+    return _GIT_VERB_QUOTED.sub(r"\1\2\4", command)
+
+
 def check_git(command: str) -> str | None:
-    cmd = strip_git_globals(command)
+    cmd = unquote_git_verb(strip_git_globals(unquote_git_verb(command)))
 
     if re.search(r"git\s+checkout(\s|$)", cmd):
         return ("BLOCKED: 'git checkout' is forbidden by Unbreakable Rule 4. "
@@ -207,7 +311,9 @@ def check_git(command: str) -> str | None:
     if re.search(r"git\s+revert(\s|$)", cmd):
         return ("BLOCKED: 'git revert' is forbidden by Unbreakable Rule 4. "
                 "Create a new commit that reverses the change explicitly.")
-    deleting = BRANCH_DELETE_RE.search(_QUOTED.sub("", cmd))
+    deleting = next(
+        (m for pattern in BRANCH_DELETE_PATTERNS
+         if (m := pattern.search(_QUOTED.sub("", cmd)))), None)
     if deleting:
         return (f"BLOCKED: '{deleting.group('name')}' is a permanent branch of the "
                 f"flow (git-safety.md § 1) and is never deleted. Deleting it "
@@ -215,9 +321,24 @@ def check_git(command: str) -> str | None:
                 f"recreates the name with none of the history the rules refer to. "
                 f"Delete the disposable branch instead, or leave it.")
     for segment in segments(cmd, with_pipe=True):
-        if re.search(r"git\s+push(\s|$)", segment) and FORCE_TOKEN_RE.search(segment):
-            return ("BLOCKED: force push is forbidden. Use --force-with-lease only "
-                    "when explicitly authorized.")
+        if not re.search(r"git\s+push(\s|$)", segment):
+            continue
+        if FORCE_TOKEN_RE.search(segment):
+            return ("BLOCKED: force push is forbidden on any branch (git-safety.md § 1). "
+                    "Force-push only a disposable branch — an experiment nobody else "
+                    "has — and never main, develop or workspace.")
+        # `--force-with-lease` used to reach here and pass: it matches none of
+        # FORCE_TOKEN_RE's three alternatives, while the refusal above named an
+        # authorization precondition nothing in this hook asks about. The lease
+        # protects against clobbering a fetch you have not seen; it protects NOTHING
+        # about a permanent branch, where the push rewrites published history exactly
+        # as `--force` does whenever the lease happens to hold.
+        if LEASE_TOKEN_RE.search(segment) and _NEVER_FORCE_PUSHED.search(segment):
+            return ("BLOCKED: '--force-with-lease' is still a force push, and main, "
+                    "develop and workspace are never force-pushed (git-safety.md § 1). "
+                    "The lease guards against clobbering a fetch you have not seen — "
+                    "it does not make rewriting a permanent branch's history safe. "
+                    "Force-push a disposable branch instead.")
     if re.search(r"git\s+reset\s+--hard", cmd):
         return ("BLOCKED: 'git reset --hard' is forbidden. Use 'git reset --soft', or "
                 "commit on a branch, instead.")
@@ -239,9 +360,42 @@ def check_git(command: str) -> str | None:
                 "reach a clean tree: copy the files aside with 'cp', or commit them "
                 "on your own branch, then 'git restore'.")
 
-    prefix = _git_prefix(command)
-    branch = _git_out(*prefix, "branch", "--show-current") or "unknown"
+    # The `-C` that decides WHICH repository is asked has to be the one carried by
+    # the segment being judged. `_git_prefix` read the first one anywhere in the
+    # command, so `git -C /tmp status && git commit -m x` asked /tmp which branch it
+    # was on and let the commit through on the trunk — measured 2026-09-17. A segment
+    # with no `-C` of its own acts on the repository the session is in.
+    # Segmented from the RAW command, not from `cmd`: `strip_git_globals` removes the
+    # very `-C <path>` this needs to read. Stripping it is right for verb matching and
+    # wrong for deciding which repository the verb acts on, and reading both from the
+    # stripped string is how the first version of this fix broke
+    # `test_the_branch_is_read_from_dash_c_not_only_from_the_cwd`.
+    verb_segments = [seg for seg in segments(command, with_pipe=True)
+                     if re.search(r"git\s+\S", seg)] or [command]
+    prefixes = {tuple(_git_prefix(seg)) for seg in verb_segments}
+
+    branch: str | None = None
+    unreachable = False
+    for pre in prefixes:
+        answer = _git_out(*pre, "branch", "--show-current")
+        if answer is GIT_UNREACHABLE:
+            unreachable = True
+            continue
+        if answer in trunks(list(pre)):
+            branch = answer
+            break
+        branch = branch or answer
+
+    if unreachable and branch is None:
+        return ("BLOCKED: git could not be reached, so this hook cannot tell which "
+                "branch HEAD is on. It refuses rather than assuming the branch is a "
+                "safe one — a guard that falls silent exactly when it cannot see is "
+                "not a guard. Re-run once git answers, or move the work to a branch "
+                "you have confirmed.")
+
+    prefix = list(next(iter(prefixes), ()))
     names = trunks(prefix)
+    branch = branch if branch is not None else "unknown"
 
     on_trunk = branch in names
     moving_to_trunk = any(_targets(unquoted, name) for name in names)
@@ -286,7 +440,10 @@ def _dangerous_cwd(segment: str) -> bool:
     crosses the boundary.
     """
     found = CD_RE.search(segment)
-    return bool(found and DANGEROUS_PATH_RE.search(found.group("path").rstrip("/") + " "))
+    if not found:
+        return False
+    target = path_normalised(found.group("path")).strip().rstrip("/")
+    return bool(DANGEROUS_PATH_RE.search(target + " "))
 
 
 def check_rm(command: str) -> str | None:
@@ -311,8 +468,12 @@ def check_rm(command: str) -> str | None:
     """
     at_risk = False
     for segment in segments(command):
+        # The path is matched against the NORMALISED segment: quoting, `${...}` and a
+        # trailing glob are spellings, not different paths. The invocation and the
+        # recursive flag are matched against the raw one, because normalising cannot
+        # help there and a lossy input is a bigger risk than none.
         if RM_INVOCATION_RE.search(segment) and RM_RECURSIVE_RE.search(segment) \
-                and (DANGEROUS_PATH_RE.search(segment) or at_risk):
+                and (DANGEROUS_PATH_RE.search(path_normalised(segment)) or at_risk):
             return ("BLOCKED: 'rm -r' on a system/home-root path. Scope recursive deletions "
                     "to project-relative paths, deep project subdirectories, or /tmp/.")
         # Evaluated after the `rm`, because a `cd` in the SAME segment runs after
@@ -356,9 +517,23 @@ def commit_text(command: str) -> str:
     text = command
     found = re.search(r"(-F|--file)\s+(\S+)", command)
     if found:
-        candidate = Path(found.group(2))
-        if candidate.is_file():
-            text += "\n" + candidate.read_text(encoding="utf-8", errors="replace")
+        candidate = Path(found.group(2).strip("'\""))
+        try:
+            if candidate.is_file():
+                text += "\n" + candidate.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            # `is_file()` says readable-as-a-file, not readable-by-us: `/etc/shadow`
+            # passes it and raises PermissionError on the read. Nothing caught that,
+            # so the hook exited 1 — which `squad/outputs.py:29` documents as "the user
+            # sees the stderr, the action proceeds" — and the two guards below, the
+            # co-author trailer and the study-material zone, never ran. A guard that
+            # crashes out of its own list is worse than one that reads less.
+            #
+            # Failing open HERE is the right direction and the opposite of the branch
+            # guard's: this function only ADDS text to search. Losing it means the
+            # message body goes unexamined, which is the pre-existing state for every
+            # commit that does not use -F; crashing means the whole hook is skipped.
+            text += f"\n[validate-command: could not read {candidate} — body unexamined]"
     return text
 
 
@@ -402,7 +577,15 @@ def check_kit_boundary(command: str, project_dir: Path) -> str | None:
     for segment in segments(command, with_pipe=True):
         targets: list[str] = []
         if WRITE_VERB_RE.search(segment):
-            targets += re.findall(r"(?<!\S)(/[^\s;&|>]+|\.{1,2}/[^\s;&|>]+)", segment)
+            # Absolute, `./`-prefixed AND bare-relative. The first two were the whole
+            # pattern, so `sed -i s/a/b/ .claude/rules/architecture.md` — the ordinary
+            # way anyone types it — was never collected and therefore never examined,
+            # while the absolute spelling of the same file was refused. Measured
+            # 2026-09-17. A bare token with no `/` cannot name a path inside the kit,
+            # so requiring one keeps flags and sed expressions out of the candidate
+            # list without narrowing what the guard can see.
+            targets += re.findall(
+                r"(?<!\S)((?:/|\.{1,2}/)?[\w.@+-]+(?:/[^\s;&|>]*)+)", segment)
         targets += [m.group("target") for m in REDIRECT_TARGET_RE.finditer(segment)]
         for token in targets:
             reason = violation(Path(token.strip("'\"")), layout)

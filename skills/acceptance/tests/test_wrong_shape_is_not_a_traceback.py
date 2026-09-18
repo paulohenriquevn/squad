@@ -32,7 +32,7 @@ def _run(tmp_path: Path, criteria, evidence) -> subprocess.CompletedProcess:
         [sys.executable, str(_SCRIPT), "--criteria", str(c), "--evidence", str(e),
          "--milestone", "M-999"],
         capture_output=True, text=True, timeout=180,
-    )
+     check=False)
 
 
 def test_a_list_where_an_object_belongs_names_the_shape(tmp_path: Path) -> None:

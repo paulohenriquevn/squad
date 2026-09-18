@@ -67,11 +67,11 @@ class Issue:
 def open_issues(repo: str, *, timeout: int = 60) -> list[Issue]:
     """Every open issue in `repo`, or `Unavailable` with the reason."""
     try:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             ["gh", "issue", "list", "--repo", repo, "--state", "open",
              "--limit", "100", "--json", "number,title,labels,url"],
             capture_output=True, text=True, timeout=timeout,
-            stdin=subprocess.DEVNULL)
+            stdin=subprocess.DEVNULL, check=False)
     except FileNotFoundError as exc:
         raise Unavailable(
             f"`gh` is not installed, so the kit's registry cannot be read on this "

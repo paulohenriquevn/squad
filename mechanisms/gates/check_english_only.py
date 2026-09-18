@@ -73,7 +73,29 @@ _MARKER_RE = re.compile(
     r"deve|pode|precisa|foi|serão|fica|ficou|"  # english-only: the gate must name what it detects
     # nouns that would be written in English in this codebase
     r"arquivo|arquivos|pasta|linha|razão|motivo|erro|"  # english-only: the gate must name what it detects
-    r"exemplo|somente|apenas|sempre|nunca\s+é"  # english-only: the gate must name what it detects
+    r"exemplo|somente|apenas|sempre|nunca\s+é|"  # english-only: the gate must name what it detects
+    # Verbs and nouns a docstring reaches for. A line like
+    # "Classify ... the delta against ONE consumer", written in Portuguese, survived every
+    # marker above for weeks: no accent, and none
+    # of its words was on the list. A word-frequency heuristic was the other option and
+    # was rejected — it guesses, and a gate that guesses about language teaches people to
+    # ignore it. These are spellings that cannot be English.
+    r"classifica|aplica|retorna|devolve|recebe|escreve|verifica|valida|"  # english-only: the gate must name what it detects
+    r"consumidor|consumidores|delta\s+em|entrada|saída|chamada|"  # english-only: the gate must name what it detects
+    r"opcionalmente|obrigatório|ausente|presente|falha|sucesso|"  # english-only: the gate must name what it detects
+    # Added 2026-09-17. `install.sh:203` carried a Portuguese section header for
+    # four months and this gate called the tree clean across 997 files:  # english-only: naming the marker it adds
+    # no accent on any word, and none of them on the list above. Found by a human
+    # reading the file for another reason, which is the detection method this gate
+    # exists to replace.
+    #
+    # TWO words, not the dozen the first draft added. `entregue`, `vazio`, `antes`,
+    # `cada`, `todos` and `abaixo` each fired on fixtures that carry Portuguese on
+    # purpose — this gate's own test data, a plan-confidence rubric, a backlog
+    # fixture — 22 hits in 14 files, of which one was a defect. A gate whose output
+    # is mostly noise is a gate people learn to scroll past, and that costs more
+    # than the words it would have caught.
+    r"tabela|roteamento"  # english-only: the gate must name what it detects
     r")(?![\w-])",
     re.IGNORECASE,
 )
@@ -141,11 +163,23 @@ def _versioned_files(root: Path) -> list[Path] | None:
     return files
 
 
+#: How many tracked files the LAST `scan_repository` actually read. `_versioned_files`
+#: answers None only when `git ls-files` exits non-zero; a repository that TRACKS nothing
+#: — a fresh `git init`, a sub-tree passed as `--root`, a worktree whose index is not
+#: populated — returns an empty list, and an empty report then printed "english-only:
+#: clean" and exited 0. Nothing carried the count out, so the caller could not tell a
+#: clean sweep from a sweep of zero files.
+_last_scan_file_count = 0
+
+
 def scan_repository(root: Path) -> dict[str, list[tuple[int, list[str]]]]:
     """Every tracked file with Portuguese outside an exemption."""
+    global _last_scan_file_count
+
     tracked = _versioned_files(root)
     if tracked is None:
         raise ValueError(f"{root} is not a git repository")
+    _last_scan_file_count = len(tracked)
 
     report: dict[str, list[tuple[int, list[str]]]] = {}
     for path in tracked:
@@ -178,12 +212,19 @@ def main(argv: list[str] | None = None) -> int:
                 for name, findings in report.items()
             },
             "file_count": len(report),
+            "files_examined": _last_scan_file_count,
             "line_count": sum(len(f) for f in report.values()),
         }, indent=2, ensure_ascii=False))
-        return 1 if report else 0
+        return 1 if report else (0 if _last_scan_file_count else 2)
+
+    if not _last_scan_file_count:
+        print(f"english-only: UNCHECKED — 0 tracked file(s) under {args.root}. A repository "
+              f"that tracks nothing is not a repository whose prose is in English.",
+              file=sys.stderr)
+        return 2
 
     if not report:
-        print("english-only: clean")
+        print(f"english-only: clean — {_last_scan_file_count} tracked file(s) examined")
         return 0
 
     lines = sum(len(f) for f in report.values())

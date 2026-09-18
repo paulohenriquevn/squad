@@ -149,7 +149,7 @@ class Result:
 
 
 def _tree_state(repo_root: Path) -> tuple[str, bool]:
-    """(HEAD sha, is the working tree dirty). Empty sha when this is not a repository.
+    r"""(HEAD sha, is the working tree dirty). Empty sha when this is not a repository.
 
     A verification does not survive the tree it measured, and that is not theoretical:
     on 2026-09-14 the kit wrote `go | api/go.mod | ENABLED` into a consumer's language
@@ -242,7 +242,7 @@ _ALLOWED_COMMANDS = frozenset({
     "uniq", "cut", "tr", "diff", "echo", "printf", "true", "false", "jq", "stat",
     "basename", "dirname", "realpath", "readlink", "sed", "python3", "python",
     "node", "go", "cargo", "pytest", "npm", "npx", "make", "task", "bash", "sh",
-    "xargs", "tee", "date", "pwd", "env", "which", "command", "yq", "helm",
+    "xargs", "date", "pwd", "env", "which", "command", "yq", "helm",
     "kubectl", "docker", "gofmt", "ruff", "shellcheck",
     # A pure builtin: it changes this shell's working directory and touches nothing
     # else. Refusing it made every criterion scoped to a module unrunnable — measured
@@ -275,11 +275,123 @@ _WRITING_FLAGS = ("-i", "--in-place", "-X POST", "-X PUT", "-X DELETE", "--delet
 #: What a command name can look like. Deliberately narrow: a leading letter, underscore,
 #: dot or slash, then the characters a path or a binary name may carry. A bare number, a
 #: word with a comma in it, or a quoted fragment is an operand, not a command.
+#: Commands that run something this checker cannot see. `sudo` escalates; `eval`,
+#: `exec`, `source` and `.` evaluate text as code — so whatever the allowlist says
+#: about the words after them, it is not what runs.
+_ESCALATES_OR_EVALUATES = frozenset({"sudo", "eval", "exec", "source", "."})
+
+#: Commands whose effect is outside this process: the filesystem, a machine, a network.
+#: Disjoint from the set above, and refused for a DIFFERENT reason — both used to
+#: return the identical sentence, so a reader could not tell which rule had fired or
+#: why, and the two are tested in different places in the chain.
+_CHANGES_THE_WORLD = frozenset({
+    "rm", "mv", "cp", "chmod", "chown", "kill", "curl", "wget", "ssh",
+    "scp", "dd", "mkfs", "shutdown", "reboot",
+})
+
 _COMMAND_NAME_RE = re.compile(r"[A-Za-z_./][\w.@/+-]*")
+
+#: An OUTPUT redirect: `>`, `>>`, `2>`, `1>>`, `&>`. Requires a destination after it, so
+#: a comparison (`-gt 3`) and an awk program's `$1 > 2` — which live inside quotes and
+#: are stripped before this runs — do not match. `<` is absent on purpose: it reads.
+_REDIRECT_RE = re.compile(r"(?:\d|&)?>>?\s*[^\s|&;)]+")
+
+
+def _without_quoted(text: str) -> str:
+    """`text` with quoted spans blanked, preserving length.
+
+    A `>` inside `awk '$1 > 2'` or `grep 'a > b'` is data, not a redirect. Blanking
+    rather than deleting keeps offsets meaningful for anything that reports a position.
+    """
+    return re.sub(r"'[^']*'|\"[^\"]*\"", lambda m: " " * len(m.group(0)), text)
 
 #: Commands whose ARGUMENT is another command. Each is harmless alone and transparent to
 #: whatever it runs, so the payload has to be read rather than inherited.
 _WRAPPERS = frozenset({"timeout", "env", "nice", "nohup", "stdbuf", "xargs", "command"})
+
+
+def _refused_head(part: str) -> str:
+    """Why this ONE command is refused, or "" when it reads.
+
+    Extracted from `_refused_command`, which measured cyclomatic complexity 35: the
+    splitting, this per-command decision and the writing-flag sweep in one body. Pure
+    code movement — the block below is the loop body that was there, for one token.
+
+    Every early `continue` became an early `return ""`, which says the same thing: this
+    fragment is not a command, so it refuses nothing.
+    """
+    words = part.strip().split()
+    if not words:
+        return ""
+    head = words[0].strip("'\"")
+    # A fragment starting with a flag or a comparison operator is the tail of a
+    # command already checked — `-eq 3` after `$(…)` closed. Not a command.
+    if head.startswith("-") or head in ("then", "else", "fi", "do", "done", "!"):
+        return ""
+    # A token the shell could not execute as a command is not one. After a split on
+    # `$(`, `)` and `&&`, the leftovers are operands — `1` from `-eq 1`, `ctx,` from
+    # inside a grep pattern, `e-s` from a broken word. Refusing them reported a
+    # policy decision about something that was never a command, and on a consumer
+    # 2026-09-15 that was the whole remaining refusal set for an item: 6 of 12
+    # clauses, none of them a command at all.
+    #
+    # Skipping is safe in the direction that matters: bash would not run these
+    # either, and every REAL command on the line is still checked.
+    if not _COMMAND_NAME_RE.fullmatch(head):
+        return ""
+    if head in _ESCALATES_OR_EVALUATES:
+        return (f"{head!r} runs something this checker cannot read — it escalates or "
+                f"evaluates, so the allowlist below says nothing about what happens")
+    # A wrapper runs ANOTHER command, so allowing the wrapper without reading its
+    # payload is how `timeout 60 rm -rf /` would have walked through the allowlist.
+    # `env` was already on the list and carried exactly that hole. The payload is
+    # re-checked as its own command; the wrapper's own flags are skipped.
+    if head in _WRAPPERS:
+        payload = [w for w in words[1:]
+                   if not w.startswith("-") and not w.replace(".", "").isdigit()
+                   and "=" not in w]
+        if payload:
+            refused = _refused_command(" ".join(payload))
+            if refused:
+                return refused
+        return ""
+    # `python3 -c` and `node -e` execute arbitrary code, exactly as `bash -c` does.
+    # The difference is that a shell script can be unwrapped and inspected while a
+    # Python one cannot, so the only honest answer for it is no.
+    if head in ("python3", "python", "node", "ruby", "perl") and any(
+            w in ("-c", "-e", "--eval", "--command") for w in words[1:]):
+        return f"`{head} -c` executes arbitrary code; this will not run it"
+    if head == "git":
+        sub = next((w for w in words[1:] if not w.startswith("-")), "")
+        # `git hash-object` computes a hash and writes nothing UNLESS `-w` is given,
+        # which is what stores the object. The blanket refusal charged the safe form
+        # for the dangerous one, and a criterion pinning a file by its hash is a
+        # common and entirely read-only shape.
+        if sub == "hash-object" and "-w" not in words[1:]:
+            return ""
+        if sub and sub not in _ALLOWED_GIT:
+            return f"`git {sub}` moves work; this runs only reading subcommands"
+        return ""
+    if head in _CHANGES_THE_WORLD:
+        return (f"{head!r} changes something outside this process — a file, a machine, "
+                f"a network — and a criterion is meant to READ")
+    # `tee` WRITES. It sat on the allowlist of "readable commands" beside `cat` and
+    # `grep`, and `… | tee ~/.bashrc` is a write through a pipe that no redirect
+    # check would have caught either. Its only purpose is to write.
+    if head == "tee":
+        return "'tee' writes a file; this runs only commands that read"
+    if head and head not in _ALLOWED_COMMANDS and "=" not in head:
+        # A path to a binary the criterion built is the common legitimate case —
+        # `/tmp/project-cli quality --list` appears throughout a real registry. It is
+        # still refused, and the trade is deliberate: that binary can do anything,
+        # and "not verified" is an honest answer while "ran something unknown
+        # against your tree" is not. The reader is told precisely this, so they can
+        # run it themselves if they choose.
+        if head.startswith("/") or head.startswith("./"):
+            return (f"{head!r} is a binary this will not run unattended — run it "
+                    "yourself if you trust it")
+        return f"{head!r} is not on the allowlist of readable commands"
+    return ""
 
 
 def _refused_command(span: str) -> str:
@@ -299,73 +411,27 @@ def _refused_command(span: str) -> str:
     # unknown command `(cd` — a parsing miss reported as a policy decision, which is
     # the worst way to be wrong: the reader is told the command is forbidden when it
     # was never read.
+    # OUTPUT REDIRECTION, checked before anything is split. `>` is not in the token
+    # separator set below, so a redirect stayed glued to the operands of a command that
+    # had already passed: `cat go.mod > /etc/hosts` has head `cat`, which is on the
+    # allowlist, and the write went unread. Every form writes a path the DOCUMENT chose,
+    # on the machine running the check — and the criteria are authored by whoever wrote
+    # the plan, which is the trust boundary this whole allowlist exists to hold.
+    #
+    # `<` is deliberately absent: an input redirect reads. So is `>` inside an awk or
+    # jq program, which `_REDIRECT_RE` avoids by requiring the operator to sit outside
+    # quotes and be followed by a path rather than a number-and-brace.
+    redirect = _REDIRECT_RE.search(_without_quoted(unwrapped))
+    if redirect:
+        return (f"{redirect.group(0).strip()!r} redirects output to a file; this runs "
+                f"only commands that read")
+
     tokens = re.split(r"[|;&\n(]|\$\(|\)|`|\{|\}", unwrapped)
     for part in tokens:
-        words = part.strip().split()
-        if not words:
-            continue
-        head = words[0].strip("'\"")
-        # A fragment starting with a flag or a comparison operator is the tail of a
-        # command already checked — `-eq 3` after `$(…)` closed. Not a command.
-        if head.startswith("-") or head in ("then", "else", "fi", "do", "done", "!"):
-            continue
-        # A token the shell could not execute as a command is not one. After a split on
-        # `$(`, `)` and `&&`, the leftovers are operands — `1` from `-eq 1`, `ctx,` from
-        # inside a grep pattern, `e-s` from a broken word. Refusing them reported a
-        # policy decision about something that was never a command, and on a consumer
-        # 2026-09-15 that was the whole remaining refusal set for an item: 6 of 12
-        # clauses, none of them a command at all.
-        #
-        # Skipping is safe in the direction that matters: bash would not run these
-        # either, and every REAL command on the line is still checked.
-        if not _COMMAND_NAME_RE.fullmatch(head):
-            continue
-        if head in ("sudo", "eval", "exec", "source", "."):
-            return f"{head!r} is not run from a document"
-        # A wrapper runs ANOTHER command, so allowing the wrapper without reading its
-        # payload is how `timeout 60 rm -rf /` would have walked through the allowlist.
-        # `env` was already on the list and carried exactly that hole. The payload is
-        # re-checked as its own command; the wrapper's own flags are skipped.
-        if head in _WRAPPERS:
-            payload = [w for w in words[1:]
-                       if not w.startswith("-") and not w.replace(".", "").isdigit()
-                       and "=" not in w]
-            if payload:
-                refused = _refused_command(" ".join(payload))
-                if refused:
-                    return refused
-            continue
-        # `python3 -c` and `node -e` execute arbitrary code, exactly as `bash -c` does.
-        # The difference is that a shell script can be unwrapped and inspected while a
-        # Python one cannot, so the only honest answer for it is no.
-        if head in ("python3", "python", "node", "ruby", "perl") and any(
-                w in ("-c", "-e", "--eval", "--command") for w in words[1:]):
-            return f"`{head} -c` executes arbitrary code; this will not run it"
-        if head == "git":
-            sub = next((w for w in words[1:] if not w.startswith("-")), "")
-            # `git hash-object` computes a hash and writes nothing UNLESS `-w` is given,
-            # which is what stores the object. The blanket refusal charged the safe form
-            # for the dangerous one, and a criterion pinning a file by its hash is a
-            # common and entirely read-only shape.
-            if sub == "hash-object" and "-w" not in words[1:]:
-                continue
-            if sub and sub not in _ALLOWED_GIT:
-                return f"`git {sub}` moves work; this runs only reading subcommands"
-            continue
-        if head in ("rm", "mv", "cp", "chmod", "chown", "kill", "curl", "wget", "ssh",
-                    "scp", "dd", "mkfs", "shutdown", "reboot"):
-            return f"{head!r} is not run from a document"
-        if head and head not in _ALLOWED_COMMANDS and "=" not in head:
-            # A path to a binary the criterion built is the common legitimate case —
-            # `/tmp/project-cli quality --list` appears throughout a real registry. It is
-            # still refused, and the trade is deliberate: that binary can do anything,
-            # and "not verified" is an honest answer while "ran something unknown
-            # against your tree" is not. The reader is told precisely this, so they can
-            # run it themselves if they choose.
-            if head.startswith("/") or head.startswith("./"):
-                return (f"{head!r} is a binary this will not run unattended — run it "
-                        "yourself if you trust it")
-            return f"{head!r} is not on the allowlist of readable commands"
+        refused = _refused_head(part)
+        if refused:
+            return refused
+
     lowered = span.lower()
     for flag in _WRITING_FLAGS:
         if flag.strip() and flag.lower() in lowered:

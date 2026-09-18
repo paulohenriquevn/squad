@@ -21,8 +21,25 @@ python3 "$ECO/skills/backlog-review/scripts/squad_boss.py" .
 # 3. What the chain declared against what actually ran.
 python3 "$ECO/mechanisms/gates/check_phase_drift.py"
 
-# 4. The watchdog's last decisions, if it is running.
-tail -5 /tmp/squad-lead.jsonl 2>/dev/null || echo "no watchdog log at /tmp/squad-lead.jsonl"
+# 4. The watchdog's last decisions, if it is running. The path comes from the owner:
+#    the `/tmp` default was removed on 2026-09-16 because two fleets on one machine
+#    wrote into one file, and this line kept reading the path that no longer exists —
+#    so step 4 always took its fallback and reported absence over live data.
+LEAD_LOG=$(python3 -c "
+import sys
+from pathlib import Path
+here = Path.cwd().resolve()
+for up in [here, *here.parents]:
+    for base in (up, up / '.claude'):
+        if (base / 'squad' / 'paths.py').is_file():
+            sys.path.insert(0, str(base)); break
+    else:
+        continue
+    break
+from squad.paths import lead_log_path
+print(lead_log_path('.'))
+" 2>/dev/null)
+tail -5 "$LEAD_LOG" 2>/dev/null || echo "no watchdog log at ${LEAD_LOG:-<unresolved>}"
 ```
 
 Then say, in this order and nothing more:

@@ -188,13 +188,16 @@ def test_files_this_repository_does_cover_are_not_reported(source: str) -> None:
 #: has shipped were one line of it. The third, a gate that named what may NOT
 #: pass instead of what may, sent five unsigned items to PLAN before an agent
 #: caught it. It now has assertions that read its executable lines.
+#: The catch-up script left this list on 2026-09-17, when its `run()` stopped swallowing
+#: errors and gained a suite: a command that could not run had returned `""` and every
+#: caller read the empty string as a fact about the repository, so `git status` failing
+#: printed "working tree clean". A file leaving this list is the gate working.
 _UNCOVERED = [
-    "/".join(("mechanisms", "fleet", "session" + "_catchup.py")),
     "/".join(("skills", "plan-confidence", "scripts", "patterns" + "_match.py")),
 ]
 
 
-@pytest.mark.parametrize("source", _UNCOVERED, ids=["catchup", "patterns"])
+@pytest.mark.parametrize("source", _UNCOVERED, ids=["patterns"])
 def test_the_files_that_genuinely_have_no_test_still_are(source: str) -> None:
     """Verified by hand on 2026-09-01: no test imports, names or runs any of these.
     They are what the gate is FOR, and pinning them keeps the widening honest — a

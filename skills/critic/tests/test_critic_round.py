@@ -19,9 +19,13 @@ _CYCLE = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
 if str(_CYCLE) not in sys.path:
     sys.path.insert(0, str(_CYCLE))
 
-from critic_round import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from critic_round import (  # noqa: E402 — post-bootstrap import
     MIN_FINDING_WORDS,
     VERDICTS,
+    CastRefused,
     brief,
     cast,
     load_phases,
@@ -89,7 +93,7 @@ def test_accepting_needs_no_finding(tmp_path: Path) -> None:
 def test_a_returned_with_no_finding_is_refused(tmp_path: Path) -> None:
     """"I disagree" returns the work and tells the agent nothing to change, which
     produces this round again and the one after it."""
-    with pytest.raises(SystemExit, match="Name what to change"):
+    with pytest.raises(CastRefused, match="Name what to change"):
         cast(_project(tmp_path), "acceptance", "M3", "returned", "nope")
 
 
@@ -97,12 +101,12 @@ def test_a_phase_with_no_critic_is_refused(tmp_path: Path) -> None:
     """`rules/critic-phases.txt` is the population, and a phase absent from it has no
     critic ON PURPOSE — asking for one is asking to add a fourth opinion where three
     reviewers already vote."""
-    with pytest.raises(SystemExit, match="no critic declared"):
+    with pytest.raises(CastRefused, match="no critic declared"):
         cast(_project(tmp_path), "plan", "B-014", "accepted", "")
 
 
 def test_an_invented_verdict_is_refused(tmp_path: Path) -> None:
-    with pytest.raises(SystemExit):
+    with pytest.raises(CastRefused):
         cast(_project(tmp_path), "acceptance", "M3", "maybe", FINDING)
 
 
@@ -188,3 +192,31 @@ def test_the_record_accumulates_rather_than_overwriting(tmp_path: Path) -> None:
     assert len(record["rounds"]) == 2
     assert MIN_FINDING_WORDS == 10
     assert set(VERDICTS) == {"accepted", "returned"}
+
+
+# ── a refusal an importer can handle ─────────────────────────────────────────
+#
+# Every refusal in `cast()` used to raise `SystemExit`, which `main` caught and
+# turned into exit 2 — so the only caller that worked was the one inside that file.
+# An importer got its PROCESS terminated instead of an error it could handle, and
+# the panel and critic skills call these mechanisms as modules.
+
+
+def test_a_refusal_does_not_terminate_an_importing_process(tmp_path) -> None:
+    """`SystemExit` from a library function is the caller's process, not its error."""
+    caught = None
+    try:
+        cast(tmp_path, "no-such-phase", "B-001", "approved", "")
+    except CastRefused as exc:
+        caught = exc
+    except SystemExit:  # pragma: no cover - the defect, if it comes back
+        raise AssertionError("cast() still exits the process instead of raising")
+
+    assert caught is not None
+    assert "no critic declared" in str(caught)
+
+
+def test_the_refusal_is_not_a_bare_runtime_error(tmp_path) -> None:
+    """A caller distinguishing a refusal from a bug needs its own type."""
+    assert issubclass(CastRefused, RuntimeError)
+    assert CastRefused is not RuntimeError

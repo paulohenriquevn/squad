@@ -173,16 +173,16 @@ def _validate_task(index: int, task: object, seen_ids: set[str]) -> list[Finding
     # stayed PENDING forever and the completion promise was never emitted. A field the
     # consumers ignore is safe; a status they ignore is the defect this validator exists
     # to end.
-    if status == "committed" and not task.get("commit_sha"):
-        if str(task.get("no_commit_reason") or "").strip():
-            pass
-        else:
-            findings.append(Finding(
-                "MEDIUM", "committed_without_sha",
-                f"{where} is 'committed' but has no 'commit_sha'; diff-based gates cannot "
-                "derive its real diff. If the task correctly produced no commit — a "
-                "measurement whose DoD requires no tracked file change — say so in "
-                "'no_commit_reason' rather than borrowing a SHA."))
+    # The guard, stated as the condition it is. `if <reason given>: pass / else: <finding>`
+    # made the reader hold a double negative to learn that a stated reason is accepted.
+    if (status == "committed" and not task.get("commit_sha")
+            and not str(task.get("no_commit_reason") or "").strip()):
+        findings.append(Finding(
+            "MEDIUM", "committed_without_sha",
+            f"{where} is 'committed' but has no 'commit_sha'; diff-based gates cannot "
+            "derive its real diff. If the task correctly produced no commit — a "
+            "measurement whose DoD requires no tracked file change — say so in "
+            "'no_commit_reason' rather than borrowing a SHA."))
 
     # blocked → needs an explicit reason (honesty contract)
     if status == "blocked" and not task.get("blocked_reason"):

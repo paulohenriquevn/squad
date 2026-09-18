@@ -27,12 +27,15 @@ _REPO = Path(__file__).resolve().parents[1]
 _SCRIPT = _REPO / "mechanisms" / "cycle" / "route_domain.py"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # for kit_agents
-from kit_agents import kit_agents  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from kit_agents import kit_agents  # noqa: E402 — post-bootstrap import
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "mechanisms" / "cycle"))
 
-from route_domain import (  # noqa: E402
+from route_domain import (  # noqa: E402 — post-bootstrap import
     count_candidate_rows,
     parse_routing_table,
     route,
@@ -546,10 +549,10 @@ def test_it_routes_from_a_subdirectory_of_the_project(tmp_path: Path) -> None:
 
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project),
            "CLAUDE_PLUGIN_ROOT": str(_REPO)}
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         [sys.executable, str(_SCRIPT), "my-service", "--json"],
         capture_output=True, text=True, cwd=str(deep), env=env,
-    )
+     check=False)
 
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
     assert json.loads(done.stdout)["routed"] is True
@@ -567,11 +570,11 @@ def test_an_explicit_rule_path_still_wins(tmp_path: Path) -> None:
     (other / "agents" / "infra.md").write_text("# infra\n", encoding="utf-8")
 
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project)}
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         [sys.executable, str(_SCRIPT), "terraform", "--json",
          "--rule", str(other / "rules" / "domain-routing.txt")],
         capture_output=True, text=True, cwd=str(project), env=env,
-    )
+     check=False)
 
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
     assert json.loads(done.stdout)["domain"] == "infra"
@@ -592,13 +595,51 @@ def test_an_explicit_project_root_is_the_only_subject_considered(tmp_path: Path)
     (elsewhere / "agents" / "infra.md").write_text("# infra\n", encoding="utf-8")
 
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(elsewhere)}
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         [sys.executable, str(_SCRIPT), "my-service", "--json",
          "--project-root", str(project)],
         capture_output=True, text=True, cwd=str(elsewhere), env=env,
-    )
+     check=False)
 
     assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
     assert json.loads(done.stdout)["domain"] == "backend", (
         "the named project lost to the environment or the working directory"
     )
+
+
+def test_a_row_missing_a_field_is_named_not_skipped(tmp_path: Path) -> None:
+    """`rules/domain-routing.txt` is hand-edited configuration.
+
+    A row missing its trailing `|` is a plausible edit, and `_rows_from_txt` dropped it
+    with a bare `continue`. The domain then routed nowhere: `route_domain` printed
+    UNROUTED for every repository that row owned, and the cause — one malformed line —
+    appeared in no output. `parse_roster` and `parse_registry` already raise with the
+    line number for exactly this shape.
+    """
+    table = tmp_path / "domain-routing.txt"
+    table.write_text("# a comment\n"
+                     "api | service-a, service-b | agents/api.md\n"
+                     "ui | dashboard\n",  # the trailing field is gone
+                     encoding="utf-8")
+
+    with pytest.raises(ValueError, match="line 3"):
+        parse_routing_table(table)
+
+
+def test_a_row_with_no_domain_is_named(tmp_path: Path) -> None:
+    table = tmp_path / "domain-routing.txt"
+    table.write_text(" | service-a | agents/api.md\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="domain cell is empty"):
+        parse_routing_table(table)
+
+
+def test_a_well_formed_table_still_parses(tmp_path: Path) -> None:
+    """The refusals must be about the malformed row, not about the format."""
+    table = tmp_path / "domain-routing.txt"
+    table.write_text("# header\n\napi | service-a, service-b | agents/api.md\n",
+                     encoding="utf-8")
+
+    parsed = parse_routing_table(table)
+
+    assert parsed["api"]["repos"] == ["service-a", "service-b"]

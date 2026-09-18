@@ -24,13 +24,13 @@ QUEUE_LINE = REPO / "mechanisms" / "fleet" / "fleet_queue_line.py"
 
 def _run(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
     base = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"), "TERM": "dumb"}
-    return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True,  # noqa: PLW1510
-                          text=True, env={**base, **(env or {})})
+    return subprocess.run(["bash", str(SCRIPT), *args], capture_output=True,
+                          text=True, env={**base, **(env or {})}, check=False)
 
 
 def test_it_is_executable_and_parses() -> None:
     assert os.access(SCRIPT, os.X_OK), "a status script nobody can run is a file"
-    check = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)  # noqa: PLW1510
+    check = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True, check=False)
     assert check.returncode == 0, check.stderr
 
 
@@ -65,8 +65,8 @@ def test_the_queue_line_reports_a_selection(tmp_path: Path) -> None:
     report.write_text(json.dumps({"verdict": "ITEM_SELECTED", "item_id": "B-060"}),
                       encoding="utf-8")
 
-    out = subprocess.run([sys.executable, str(QUEUE_LINE), str(report)],  # noqa: PLW1510
-                         capture_output=True, text=True).stdout
+    out = subprocess.run([sys.executable, str(QUEUE_LINE), str(report)],
+                         capture_output=True, text=True, check=False).stdout
 
     assert "ITEM_SELECTED" in out and "B-060" in out
 
@@ -77,8 +77,8 @@ def test_the_queue_line_explains_a_refusal(tmp_path: Path) -> None:
     report.write_text(json.dumps({"verdict": "BACKLOG_BLOCKED",
                                   "reason": "every item is held"}), encoding="utf-8")
 
-    out = subprocess.run([sys.executable, str(QUEUE_LINE), str(report)],  # noqa: PLW1510
-                         capture_output=True, text=True).stdout
+    out = subprocess.run([sys.executable, str(QUEUE_LINE), str(report)],
+                         capture_output=True, text=True, check=False).stdout
 
     assert "BACKLOG_BLOCKED" in out
     assert "every item is held" in out
@@ -86,8 +86,8 @@ def test_the_queue_line_explains_a_refusal(tmp_path: Path) -> None:
 
 def test_an_unreadable_report_says_so_instead_of_printing_a_verdict(tmp_path: Path) -> None:
     """The failure this whole kit keeps finding: absence rendered as a clean answer."""
-    out = subprocess.run([sys.executable, str(QUEUE_LINE), str(tmp_path / "missing.json")],  # noqa: PLW1510
-                         capture_output=True, text=True).stdout
+    out = subprocess.run([sys.executable, str(QUEUE_LINE), str(tmp_path / "missing.json")],
+                         capture_output=True, text=True, check=False).stdout
 
     assert "could not be read" in out
     assert "ITEM_SELECTED" not in out
@@ -100,13 +100,13 @@ WALL = REPO / "mechanisms" / "fleet" / "fleet_wall.sh"
 
 def _wall(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
     base = {"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"), "TERM": "dumb"}
-    return subprocess.run(["bash", str(WALL), *args], capture_output=True,  # noqa: PLW1510
-                          text=True, env={**base, **(env or {})})
+    return subprocess.run(["bash", str(WALL), *args], capture_output=True,
+                          text=True, env={**base, **(env or {})}, check=False)
 
 
 def test_the_wall_is_executable_and_parses() -> None:
     assert os.access(WALL, os.X_OK)
-    check = subprocess.run(["bash", "-n", str(WALL)], capture_output=True, text=True)  # noqa: PLW1510
+    check = subprocess.run(["bash", "-n", str(WALL)], capture_output=True, text=True, check=False)
     assert check.returncode == 0, check.stderr
 
 

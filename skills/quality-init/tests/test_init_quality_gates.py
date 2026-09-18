@@ -14,14 +14,20 @@ import pytest
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 
-from gate_authoring.detect import TEST_PATTERNS  # noqa: E402
-from gate_authoring.path_safety import confine, confine_or_none  # noqa: E402
-from gate_authoring.yaml_safe import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from gate_authoring.detect import TEST_PATTERNS  # noqa: E402 — post-bootstrap import
+from gate_authoring.path_safety import (  # noqa: E402 — post-bootstrap import
+    confine,
+    confine_or_none,
+)
+from gate_authoring.yaml_safe import (  # noqa: E402 — post-bootstrap import
     merge_hook_into_settings,
     read_json,
     write_json,
 )
-from init_quality_gates import (  # noqa: E402
+from init_quality_gates import (  # noqa: E402 — post-bootstrap import
     FLOOR_COMPLEXITY,
     FLOOR_FILE_LINES,
     FLOOR_FUNCTION_LINES,
@@ -178,17 +184,17 @@ class TestValidateTarget:
 class TestDetectLanguages:
     def test_detects_python(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        names = [l.name for l in languages]  # noqa: E741
+        names = [ln.name for ln in languages]
         assert "python" in names
 
     def test_file_counts(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        python = next(l for l in languages if l.name == "python")  # noqa: E741
+        python = next(ln for ln in languages if ln.name == "python")
         assert python.file_count >= 2  # main.py + processor.py (+ test_main.py)
 
     def test_loc_positive(self, tmp_project: Path) -> None:
         languages = detect_languages(str(tmp_project))
-        python = next(l for l in languages if l.name == "python")  # noqa: E741
+        python = next(ln for ln in languages if ln.name == "python")
         assert python.loc > 0
 
     def test_empty_project(self, tmp_empty: Path) -> None:

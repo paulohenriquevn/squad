@@ -43,6 +43,14 @@ import re
 import sys
 from pathlib import Path
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+
+# Post-bootstrap, like the loop above requires: the kit ships as loose scripts.
+from squad import shared_file  # noqa: E402 — post-bootstrap import
+
 LEGAL_STATUS = ("raw", "triaged", "approved", "planned", "shipped", "killed")
 
 #: Where each status may go.
@@ -470,6 +478,26 @@ def main() -> int:
     if not args.backlog.is_file():
         print(f"REFUSED: {args.backlog} does not exist", file=sys.stderr)
         return 1
+
+    # The read and the write below are ONE transaction. They were not: the file was read
+    # at the top, transformed, and `write_text` put the whole thing back — no lock across
+    # the span and no atomic replace at the end. Three modules in `mechanisms/cycle` and
+    # one in `mechanisms/fleet` rewrite this same registry, and the fleet runs lanes in
+    # parallel by design, so two writers reading the same bytes silently lost one of the
+    # two transitions. `squad/shared_file.py` carries the measurement.
+    try:
+        lock = shared_file.locked(args.backlog)
+        lock.__enter__()
+    except TimeoutError as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 1
+    try:
+        return _apply_under_lock(args)
+    finally:
+        lock.__exit__(None, None, None)
+
+
+def _apply_under_lock(args: argparse.Namespace) -> int:
     content = args.backlog.read_text(encoding="utf-8")
 
     try:
@@ -492,7 +520,7 @@ def main() -> int:
         print(updated[start:end].strip())
         return 0
 
-    args.backlog.write_text(updated, encoding="utf-8")
+    shared_file.write_atomic(args.backlog, updated)
     print(f"OK: {action}")
     return 0
 

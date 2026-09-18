@@ -24,6 +24,7 @@ nothing verified that.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -334,3 +335,64 @@ def test_the_reason_is_not_truncated_in_the_dissent(tmp_path, capsys) -> None:
     main(["--record", str(record)])
 
     assert _LONG in capsys.readouterr().out
+
+
+# ── the convening check, which the CLI never performed ───────────────────────
+
+
+def _panel_files(tmp_path, *, voted: list[str], assigned: list[str] | None):
+    """A record and, optionally, the assignment that sits beside it."""
+    record = tmp_path / "B-014-review.json"
+    record.write_text(json.dumps({
+        "slug": "B-014", "phase": "review", "author": "someone-else",
+        "artifact": "plan.md",
+        "votes": [{"reviewer": r, "model": "m", "verdict": "approve",
+                   "reason": "checked the artifact against its contract and the evidence"}
+                  for r in voted],
+    }), encoding="utf-8")
+    if assigned is not None:
+        (tmp_path / "B-014-review.assignment.json").write_text(
+            json.dumps({"slug": "B-014", "phase": "review", "assigned": assigned}),
+            encoding="utf-8")
+    return record
+
+
+def test_the_cli_refuses_a_record_whose_voters_are_not_the_convened_panel(tmp_path, capsys):
+    """`Panel.assigned` was the check and nothing ever set it.
+
+    `load()` deliberately does not read `assigned` from the record — a document
+    supplying the list it is checked against proves nothing — and `main` had no other
+    source, so `assigned` stayed None and the refusal was skipped on every tally the CLI
+    performed. `convene_panel.py`'s docstring says this module "refuses a record whose
+    voters do not match"; it did not.
+    """
+    import review_panel as rp
+
+    record = _panel_files(tmp_path, voted=["a", "b", "c"],
+                          assigned=["a", "b", "someone-who-never-voted"])
+
+    assert rp.main(["--record", str(record)]) == 2
+    err = capsys.readouterr().err
+    assert "did not convene" in err.lower(), err
+
+
+def test_the_cli_says_so_when_there_is_no_assignment_to_check_against(tmp_path, capsys):
+    """Skipping the strongest guarantee in silence is what this replaces."""
+    import review_panel as rp
+
+    record = _panel_files(tmp_path, voted=["a", "b", "c"], assigned=None)
+
+    rp.main(["--record", str(record)])
+
+    assert "NOT checked" in capsys.readouterr().err
+
+
+def test_a_record_matching_its_assignment_is_tallied(tmp_path, capsys):
+    """The refusal must be about the mismatch, not about the check existing."""
+    import review_panel as rp
+
+    record = _panel_files(tmp_path, voted=["a", "b", "c"], assigned=["a", "b", "c"])
+
+    rp.main(["--record", str(record)])
+
+    assert "NOT checked" not in capsys.readouterr().err

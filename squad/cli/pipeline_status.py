@@ -41,9 +41,9 @@ GhRunner = Callable[[list[str]], "tuple[int, str, str]"]
 
 def _default_gh(root: Path) -> GhRunner:
     def run(argv: list[str]) -> tuple[int, str, str]:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             ["gh", *argv], capture_output=True, text=True, cwd=root, timeout=60
-        )
+        , check=False)
         return done.returncode, done.stdout, done.stderr
 
     return run
@@ -96,7 +96,17 @@ def status(root: Path, *, gh: GhRunner | None = None, limit: int = 1) -> Report:
         report.lines.append("no workflow runs found — nothing to report, which is not success")
         return report
 
+    # ONE run is reported: the most recent. `--limit` decides how many are FETCHED, and
+    # everything after `runs[0]` was discarded — so `--limit 20` read as "consider the
+    # last twenty" and reported exactly what `--limit 1` reports. The help text now says
+    # which of the two it does, and the count is carried so a reader can see the gap
+    # between what was fetched and what was judged.
     run = runs[0]
+    if len(runs) > 1:
+        report.lines.append(
+            f"(fetched {len(runs)} run(s); this reports the most recent only — the "
+            f"other {len(runs) - 1} were NOT examined)")
+    report.detail["runs_fetched"] = len(runs)
     report.observed.insert(0, f"{run.get('workflowName', '?')} @ {str(run.get('headSha', ''))[:8]}")
     report.detail["run"] = run
     conclusion = run.get("conclusion")
@@ -163,7 +173,10 @@ def _failure_detail(call, run: dict, report: Report) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sq ci", description=__doc__.split("\n")[0])
     parser.add_argument("--json", action="store_true")
-    parser.add_argument("--limit", type=int, default=1, help="how many recent runs to consider")
+    parser.add_argument(
+        "--limit", type=int, default=1,
+        help="how many runs to FETCH; only the most recent is reported. This said "
+             "'consider' until 2026-09-17, and nothing after runs[0] was ever read")
     parser.add_argument("--root", type=Path, default=_repo_root())
     args = parser.parse_args(argv)
     return emit(status(args.root, limit=args.limit), as_json=args.json)

@@ -15,10 +15,43 @@ import time
 import webbrowser
 from pathlib import Path
 
-from scripts.generate_report import generate_html
-from scripts.improve_description import improve_description
-from scripts.run_eval import find_project_root, run_eval
-from scripts.utils import parse_skill_md
+# The kit ships as loose scripts, so `scripts.…` resolves only when the process
+# happens to start in `skills/skill-creator/`. Running the file by its path — from a
+# test, from CI, from the repository root — died on ModuleNotFoundError. A tool that
+# only works from one directory is a tool nobody runs from the place they are standing.
+_SKILL_ROOT = Path(__file__).resolve().parents[1]
+if str(_SKILL_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SKILL_ROOT))
+
+from scripts.generate_report import generate_html  # noqa: E402 — post-bootstrap import
+from scripts.improve_description import (  # noqa: E402 — post-bootstrap import
+    improve_description,
+)
+from scripts.run_eval import (  # noqa: E402 — post-bootstrap import
+    find_project_root,
+    run_eval,
+)
+from scripts.utils import parse_skill_md  # noqa: E402 — post-bootstrap import
+
+
+def _summarise(results: list[dict]) -> dict:
+    """Passed, failed and NOT OBSERVED — three counts, because there are three outcomes.
+
+    `run_eval.summarise_runs` goes to deliberate lengths to keep an unobservable run out
+    of the ratio: it emits verdict NOT_OBSERVED with `pass=None` and a separate
+    `not_observed` count, on the stated grounds that "3/5 with two timeouts and 3/5 with
+    two real misses are different facts". This function recombined them — `failed` was
+    `total - passed`, so every `None` landed in the failure column and the loop reported
+    a regression that nothing had measured.
+    """
+    passed = sum(1 for r in results if r.get("pass") is True)
+    failed = sum(1 for r in results if r.get("pass") is False)
+    not_observed = sum(1 for r in results if r.get("pass") is None)
+    return {"passed": passed, "failed": failed, "not_observed": not_observed,
+            "total": len(results),
+            # The denominator excludes what was never observed, so a timeout does not
+            # read as a miss. `total` is still reported for anyone who needs the count.
+            "observed": passed + failed}
 
 
 def split_eval_set(eval_set: list[dict], holdout: float, seed: int = 42) -> tuple[list[dict], list[dict]]:
@@ -42,6 +75,24 @@ def split_eval_set(eval_set: list[dict], holdout: float, seed: int = 42) -> tupl
     train_set = trigger[n_trigger_test:] + no_trigger[n_no_trigger_test:]
 
     return train_set, test_set
+
+
+def _best_iteration(history: list[dict], has_test_set: bool) -> tuple[dict, str]:
+    """The iteration that scored highest, and that score as `passed/total`.
+
+    By the TEST score when there is a held-out set, and by the train score otherwise —
+    the distinction is the whole reason a holdout exists: picking the best TRAIN score
+    over a set the description was rewritten against selects for overfitting, which is
+    the failure `split_eval_set` was added to prevent.
+
+    `or 0` on the test score, and not on the train one: `test_passed` is None on an
+    iteration whose test runs were not observed, and `max` over a None raises.
+    """
+    if has_test_set:
+        best = max(history, key=lambda h: h["test_passed"] or 0)
+        return best, f"{best['test_passed']}/{best['test_total']}"
+    best = max(history, key=lambda h: h["train_passed"])
+    return best, f"{best['train_passed']}/{best['train_total']}"
 
 
 def run_loop(
@@ -104,15 +155,11 @@ def run_loop(
         train_result_list = [r for r in all_results["results"] if r["query"] in train_queries_set]
         test_result_list = [r for r in all_results["results"] if r["query"] not in train_queries_set]
 
-        train_passed = sum(1 for r in train_result_list if r["pass"])
-        train_total = len(train_result_list)
-        train_summary = {"passed": train_passed, "failed": train_total - train_passed, "total": train_total}
+        train_summary = _summarise(train_result_list)
         train_results = {"results": train_result_list, "summary": train_summary}
 
         if test_set:
-            test_passed = sum(1 for r in test_result_list if r["pass"])
-            test_total = len(test_result_list)
-            test_summary = {"passed": test_passed, "failed": test_total - test_passed, "total": test_total}
+            test_summary = _summarise(test_result_list)
             test_results = {"results": test_result_list, "summary": test_summary}
         else:
             test_results = None
@@ -151,7 +198,7 @@ def run_loop(
             live_report_path.write_text(generate_html(partial_output, auto_refresh=True, skill_name=name))
 
         if verbose:
-            def print_eval_stats(label, results, elapsed):
+            def print_eval_stats(label: str, results: dict, elapsed: float) -> None:
                 pos = [r for r in results if r["should_trigger"]]
                 neg = [r for r in results if not r["should_trigger"]]
                 tp = sum(r["triggers"] for r in pos)
@@ -213,13 +260,7 @@ def run_loop(
 
         current_description = new_description
 
-    # Find the best iteration by TEST score (or train if no test set)
-    if test_set:
-        best = max(history, key=lambda h: h["test_passed"] or 0)
-        best_score = f"{best['test_passed']}/{best['test_total']}"
-    else:
-        best = max(history, key=lambda h: h["train_passed"])
-        best_score = f"{best['train_passed']}/{best['train_total']}"
+    best, best_score = _best_iteration(history, bool(test_set))
 
     if verbose:
         print(f"\nExit reason: {exit_reason}", file=sys.stderr)
@@ -241,7 +282,7 @@ def run_loop(
     }
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Run eval + improve loop")
     parser.add_argument("--eval-set", required=True, help="Path to eval set JSON file")
     parser.add_argument("--skill-path", required=True, help="Path to skill directory")

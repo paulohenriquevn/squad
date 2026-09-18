@@ -5,11 +5,11 @@ from pathlib import Path
 
 from apply_fixes import (
     FixReport,
+    _split_with_state,
     apply_all_fixes,
     fix_loopholes,
     fix_tdd_template,
     fix_weak_imperatives,
-    is_inside_code_block,
 )
 
 
@@ -145,12 +145,20 @@ def test_tdd_template_injection_idempotent(tmp_path: Path) -> None:
 
 # Code-block detection
 
-def test_is_inside_code_block_tracks_state() -> None:
-    lines = ["prose 1", "```py", "code", "```", "prose 2"]
-    state = [is_inside_code_block(lines[: i + 1]) for i in range(len(lines))]
-    assert state[0] is False
-    assert state[2] is True
-    assert state[4] is False
+def test_the_fence_state_is_tracked_line_by_line() -> None:
+    """Against `_split_with_state`, which is the implementation the fixes consult.
+
+    A second, public `is_inside_code_block` answered the same question and was called
+    from nowhere. The two disagreed on the fence line itself — one documented "a fence
+    is not inside", the other reported the state before counting it — so the repository
+    held one documented answer and one applied answer. This tests the applied one.
+    """
+    content = "before\n```\ninside\n```\nafter\n"
+
+    state = [inside for _, inside in _split_with_state(content)]
+
+    assert state == [False, False, True, True, False], state
+
 
 
 # Orchestrator
@@ -251,3 +259,52 @@ def test_prose_around_several_spans_is_still_rewritten(tmp_path: Path) -> None:
 
     assert plan.read_text(encoding="utf-8") == (
         "It must call `should_run()`, then it must read `may_read`.\n")
+
+
+# ── a section whose content IS modality must keep its modals ─────────────────
+#
+# `fix_weak_imperatives` rewrote should/could/may/might to `must` on every prose
+# line, and the module calls all three fixes "SAFE, deterministic". Deterministic
+# they are; meaning-preserving they are not. A risk is something that MAY happen
+# and an unresolved question is something that MIGHT be — so "the cache may go
+# stale" became "the cache must go stale", a drawback rewritten into a promise.
+
+
+def test_a_risk_keeps_its_may(tmp_path: Path) -> None:
+    plan = tmp_path / "a-plan.md"
+    plan.write_text(
+        "## Phase 1\n\nThe handler should retry.\n\n"
+        "## Drawbacks & Risks\n\n- The cache may go stale under load.\n",
+        encoding="utf-8")
+
+    fix_weak_imperatives(plan)
+    body = plan.read_text(encoding="utf-8")
+
+    assert "The cache may go stale" in body, "a drawback was rewritten into a promise"
+    assert "The handler must retry" in body, "the fix stopped doing its job"
+
+
+def test_an_unresolved_question_keeps_its_might(tmp_path: Path) -> None:
+    plan = tmp_path / "a-plan.md"
+    plan.write_text(
+        "## Unresolved Questions\n\n- The index might need rebuilding first.\n",
+        encoding="utf-8")
+
+    fix_weak_imperatives(plan)
+
+    assert "might need rebuilding" in plan.read_text(encoding="utf-8")
+
+
+def test_the_section_ends_at_the_next_heading(tmp_path: Path) -> None:
+    """A modality section must not protect everything after it."""
+    plan = tmp_path / "a-plan.md"
+    plan.write_text(
+        "## Drawbacks & Risks\n\n- It may fail.\n\n"
+        "## Phase 2\n\nThe worker should exit cleanly.\n",
+        encoding="utf-8")
+
+    fix_weak_imperatives(plan)
+    body = plan.read_text(encoding="utf-8")
+
+    assert "It may fail" in body
+    assert "The worker must exit cleanly" in body, "the exemption leaked past its section"

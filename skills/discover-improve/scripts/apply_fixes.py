@@ -49,8 +49,18 @@ import argparse
 import json as _json
 import re
 import sys
+import sys as _sys
 from pathlib import Path
+from pathlib import Path as _P
 from typing import Any
+
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,
+)
 
 # `dir/file.ext:LINE` — same shape the confidence checker resolves.
 CODE_POINTER_RE = re.compile(
@@ -63,7 +73,12 @@ LOOPHOLES_RE = re.compile(
     r"\b(if possible|as appropriate|when applicable|where feasible)\b",
     re.IGNORECASE | re.UNICODE,
 )
-FENCED_CODE_RE = re.compile(r"^```[^\n]*\n.*?^```", re.MULTILINE | re.DOTALL)
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+FENCED_CODE_RE = _FENCED_CODE_OWNER
 BLOCKED_MARKER_RE = re.compile(r"<!--\s*BLOCKED:.*?-->", re.IGNORECASE | re.DOTALL)
 
 REPLACEMENT_MAP = {"should": "must", "could": "can"}

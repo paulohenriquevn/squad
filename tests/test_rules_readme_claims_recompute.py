@@ -67,9 +67,9 @@ def test_the_golden_rule_protocol_sends_adrs_somewhere_that_travels() -> None:
     required = re.search(r"^1\.\s+An ADR in `([^`]+)`", protocol, re.MULTILINE)
     assert required, "step 1 no longer names an ADR destination"
     path = required.group(1)
-    ignored = subprocess.run(  # noqa: PLW1510
+    ignored = subprocess.run(
         ["git", "check-ignore", "-q", f"{path.rstrip('/')}/probe.md"], cwd=_ROOT
-    ).returncode == 0
+    , check=False).returncode == 0
     assert not ignored, (
         f"the Golden Rule Change Protocol requires an ADR in `{path}`, which git "
         "ignores — the justification for changing a LOCKED rule would not reach anyone "

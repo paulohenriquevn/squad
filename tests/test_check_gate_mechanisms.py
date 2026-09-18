@@ -54,7 +54,10 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "gates"))
 
-from check_gate_mechanisms import check_gate_mechanisms  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_gate_mechanisms import check_gate_mechanisms  # noqa: E402 (post-bootstrap)
 
 
 def _rules(tmp_path: Path, name: str, body: str) -> Path:
@@ -687,3 +690,102 @@ def test_this_repository_sweeps_every_cycle_rule_it_has() -> None:
     assert report.rules_swept + len(report.rules_without_gates) == len(on_disk), (
         f"swept {report.rules_swept} + {len(report.rules_without_gates)} without gates, "
         f"but {len(on_disk)} cycle rules are on disk")
+
+
+def test_a_hard_gate_table_outside_a_gate_heading_is_swept(tmp_path: Path) -> None:
+    """`_SECTION_RE` keys on a HEADING containing "gate", and two rules declare their
+    hard gates in a phase table under a heading that does not.
+
+    Measured on this repository: `cycle-plan.md` and `cycle-maintenance.md` each carry a
+    `| Phase | Input | Output | Hard gate |` table, eleven of thirteen rules were swept,
+    and both were reported as "no gate section (not swept, not a defect)" — the same
+    shape as the 2026-09-11 miss the comment above `_SECTION_RE` records. Ten declared
+    gates sat in a column the sweep could not reach, and `0 unresolved` was printed over
+    a population that excluded them.
+    """
+    import check_gate_mechanisms as cgm
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-thing.md").write_text(
+        "# Cycle: THING\n\n## Chain\n\n"
+        "| Phase | Input | Output | Hard gate |\n"
+        "|---|---|---|---|\n"
+        "| select | a | b | exactly one item in flight |\n"
+        "| route | c | d | the repo resolves (G1) |\n",
+        encoding="utf-8")
+
+    report = cgm.check_gate_mechanisms(tmp_path)
+
+    assert "cycle-thing.md" not in report.rules_without_gates, (
+        "a rule declaring two hard gates was reported as declaring none")
+    assert report.total_gates >= 2, f"the table's rows were not swept: {report.total_gates}"
+    assert len(report.phase_rows_without_mechanism) == 2, (
+        "the rows were swept but not counted as a population of their own")
+
+
+def test_a_rule_that_declares_no_gate_anywhere_is_still_named(tmp_path: Path) -> None:
+    """The refusal above must not turn every rule into a gate-declaring one."""
+    import check_gate_mechanisms as cgm
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-quiet.md").write_text("# Cycle: QUIET\n\n## Chain\n\nnothing here\n",
+                                          encoding="utf-8")
+
+    report = cgm.check_gate_mechanisms(tmp_path)
+
+    assert "cycle-quiet.md" in report.rules_without_gates
+
+
+def test_a_phase_row_is_counted_apart_from_a_declared_hard_gate(tmp_path: Path) -> None:
+    """Two different claims, and folding them would misreport both.
+
+    A row under `## Hard gates` is a gate somebody declared as such. A row in a
+    `| Phase | Input | Output | Hard gate |` table is a phase's output contract that
+    happens to use the same word. The sweep now reads both; `--strict-phase-rows` is
+    where a person decides the second kind blocks.
+    """
+    import subprocess
+    import sys as _sys
+
+    gate = (Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
+            / "check_gate_mechanisms.py")
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-thing.md").write_text(
+        "# Cycle: THING\n\n## Chain\n\n"
+        "| Phase | Input | Output | Hard gate |\n"
+        "|---|---|---|---|\n"
+        "| select | a | b | exactly one item in flight |\n",
+        encoding="utf-8")
+
+    lenient = subprocess.run([_sys.executable, str(gate), "--repo", str(tmp_path)],
+                             capture_output=True, text=True, timeout=120, check=False)
+    strict = subprocess.run(
+        [_sys.executable, str(gate), "--repo", str(tmp_path), "--strict-phase-rows"],
+        capture_output=True, text=True, timeout=120, check=False)
+
+    assert lenient.returncode == 0, lenient.stdout + lenient.stderr
+    assert "phase-table row" in lenient.stdout, (
+        "the lenient run did not say what it found:\n" + lenient.stdout)
+    assert strict.returncode == 1, "the flag did not make the rows blocking"
+
+
+def test_a_rule_the_sweep_did_not_read_is_not_called_not_a_defect(tmp_path: Path) -> None:
+    """The wording decided in the reader's place that nothing was lost."""
+    import subprocess
+    import sys as _sys
+
+    gate = (Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
+            / "check_gate_mechanisms.py")
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "cycle-quiet.md").write_text("# Cycle: QUIET\n\n## Chain\n\nnothing\n",
+                                          encoding="utf-8")
+
+    done = subprocess.run([_sys.executable, str(gate), "--repo", str(tmp_path)],
+                          capture_output=True, text=True, timeout=120, check=False)
+
+    assert "not a defect" not in done.stdout
+    assert "NOT READ" in done.stdout

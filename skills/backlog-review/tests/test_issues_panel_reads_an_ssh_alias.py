@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from board_issues import _owner_repo_from_remote  # noqa: E402
+from board_issues import _owner_repo_from_remote
 
 
 def _repo_with_remote(tmp_path: Path, url: str) -> Path:

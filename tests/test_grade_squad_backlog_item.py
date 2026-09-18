@@ -20,7 +20,15 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "skills" / "skill-creator" / "scripts"))
 
-from grade_squad_backlog_item import BASE_IDS, _blocks, _field, grade  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from grade_squad_backlog_item import (  # noqa: E402 — post-bootstrap import
+    BASE_IDS,
+    _blocks,
+    _field,
+    grade,
+)
 
 BASE_BACKLOG = """# Backlog
 
@@ -187,7 +195,7 @@ repo: control-plane/dashboard
 evidence: none-yet
 status: raw
 
-## B-033 — API devolve 500 em vez de 401   [ ]
+## B-033 — API returns 500 em vez de 401   [ ]
 
 domain: control-plane
 repo: control-plane

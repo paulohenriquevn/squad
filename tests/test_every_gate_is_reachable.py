@@ -104,11 +104,15 @@ def _invokes(text: str, gate: str) -> bool:
     `check_orphan_verdicts` was named in a COMMENT in a sibling gate, and that
     read as coverage until someone looked — so a bare occurrence of the name does
     not count. What counts is the filename, an import, or the name passed as an
-    argument to a runner (`_run_gate(dir, "check_x")`), which is how a dispatcher
-    invokes a gate whose path it builds itself.
+    argument to a runner (`_run_gate(dir, "check_x")` or `_gate_payload(dir,
+    "check_x", ...)`), which is how a dispatcher invokes a gate whose path it builds
+    itself. Both runner spellings are listed, not just the first: when nine wrappers
+    moved from `_run_gate` to `_gate_payload`, six live gates read as orphaned — a
+    detector that only knows yesterday's spelling reports the refactor as a regression.
     """
     return bool(re.search(
-        rf"{gate}\.py|from {gate} import|import {gate}\b|_run_gate\([^)]*[\"']{gate}[\"']",
+        rf"{gate}\.py|from {gate} import|import {gate}\b"
+        rf"|_(?:run_gate|gate_payload)\([^)]*[\"']{gate}[\"']",
         text))
 
 

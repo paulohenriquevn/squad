@@ -279,10 +279,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Bind each SOP run record to the procedure it claims to follow.",
     )
-    parser.add_argument("--project-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--root", "--project-root", dest="root", type=Path, default=Path(__file__).resolve().parents[2])
     args = parser.parse_args(argv)
 
-    report = check_sop_runs(args.project_root)
+    report = check_sop_runs(args.root)
     blocking = [f for f in report.findings if f.severity != "INFO"]
 
     plural = "" if report.runs_read == 1 else "s"

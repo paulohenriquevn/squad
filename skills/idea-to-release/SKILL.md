@@ -163,6 +163,7 @@ that is not the author:
 ```
 Bash(python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/alignment_judge.py" \
        .squad/records/alignment/{slug}-alignment.md \
+       --model "<the model doing the judging>" \
        --verdict signed --reason "<what was checked, against which evidence>")
 ```
 

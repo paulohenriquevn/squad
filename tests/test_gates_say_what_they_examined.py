@@ -25,60 +25,58 @@ import pytest
 
 _GATES = Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
 
-#: The flag each gate takes for the tree it should look at. A gate absent here
-#: takes no root and is skipped — see `test_the_roster_covers_every_gate_that_takes_a_root`.
-ROOT_FLAG = {
-    # Both joined 2026-09-16, when the roster stopped selecting by filename prefix and
-    # by a three-name flag list. `check_xrefs` had been `check_*` all along and was
-    # missed only because it spells its flag `--ecosystem-dir`; it had been run by hand
-    # dozens of times that week while sitting outside the empty-sweep protection.
-    # `validate_skill_frontmatter` was missed twice over — wrong prefix AND wrong flag —
-    # and exits 0 on an ecosystem whose `skills/` is present and empty.
-    # Joined 2026-09-16, the day it learned to answer `--help`. It aggregates ELEVEN
-    # checks, so it was the single largest hole in this roster and the hardest to see:
-    # it refused introspection, and a test that skips what it cannot read reports the
-    # skip as nothing at all.
-    "verify_ecosystem": "--ecosystem-dir",
-    "check_xrefs": "--ecosystem-dir",
-    "validate_skill_frontmatter": "--ecosystem-dir",
-    "check_english_only": "--root",
-    "check_install_drift": "--install",
-    # Joined 2026-09-11 with `rules/contribution-conventions.md`. It reads the project's
-    # overrides and then the repository's own log, so it takes a repo root.
-    "check_contribution_conventions": "--repo",
-    "check_gate_mechanisms": "--repo",
-    "check_mechanisms_inventory": "--root",
-    "check_orphan_verdicts": "--repo",
-    "check_phase_emitters": "--repo",
-    "check_phase_numbering": "--root",
-    # Joined the roster on 2026-09-05, the day it gained an entry point. It was
-    # registered in `verify_ecosystem` and defined no `__main__`, so it was not a
-    # gate that takes a root — it was a module that exited 0. This test noticing it
-    # is the roster working: a gate joins the class by becoming runnable.
-    "check_readme_advisory_skills": "--root",
-    "check_reference_leakage": "--repo",
-    # Joined 2026-09-08 with `rules/verdict-bands.txt`. It sweeps the rules tree for
-    # declared verdicts, so it takes a root like its sibling `check_orphan_verdicts`.
-    "check_verdict_bands": "--root",
-    "check_semantic_names": "--repo",
-    "check_skill_map": "--root",
-    "check_squad_map": "--root",
-    # Joined 2026-09-09 with the write root: it reports a project still holding data
-    # outside `.squad/`, so it sweeps a tree and takes a root.
-    "check_data_root": "--root",
-    "check_wiki_migration": "--root",
-    # Joined 2026-09-09 with the write root. It scans the kit's own trees for a data
-    # root spelled outside `squad/paths.py`, so it takes a root like its siblings.
-    "check_write_containment": "--root",
-    # Joined 2026-09-10. Its sibling above proves the roots no MODULE spells;
-    # this one covers the prose an agent executes, where a recipe creates a
-    # legacy root without ever importing the owner.
-    "check_prose_write_paths": "--root",
-    # Joined 2026-09-10, the mirror of check_orphan_verdicts: that one asks whether
-    # every DECLARED verdict is reachable, this one whether every INSTRUCTED verdict
-    # is declared. Five skills failed it, and cycle_events.py refuses each.
-    "check_emitted_verdicts": "--root",
+#: Every gate in the directory, discovered. Not a list.
+#:
+#: This was a hand-kept map of 22 gate names to the flag each one spelled its root
+#: with — eight spellings across the directory — and the map's own comments record
+#: what that cost: `check_xrefs` sat outside this protection for a week, run by hand
+#: dozens of times, because it said `--ecosystem-dir`; `validate_skill_frontmatter`
+#: was missed twice over, wrong prefix AND wrong flag, while exiting 0 on an empty
+#: `skills/`. Both were found by someone noticing, which is not a mechanism.
+#:
+#: `mechanisms/gates/_contract.py` now declares ONE spelling and every gate accepts
+#: it, so the roster is the glob. A gate added tomorrow is covered by existing, and
+#: `check_gate_mechanisms` reports any gate that drifts off the contract.
+#: Gates a root alone cannot invoke: each also requires an argument naming the ONE
+#: thing it is about. `check_auditor_coverage --slug`, `check_panel_approval --slug
+#: --phase` and `check_review_binding --slug` audit a named slice; `check_install_drift
+#: --install` compares a kit against one installation. There is no empty sweep to make
+#: honest, because there is no sweep — the subject is named or the gate does not run.
+#:
+#: Named here rather than skipped by a `returncode == 2` rule, which would also skip a
+#: gate that crashed. `test_every_named_gate_really_needs_its_argument` holds this list
+#: to the reason it gives, so a gate that loses its required argument rejoins the sweep.
+NEEDS_MORE_THAN_A_ROOT = {
+    "check_auditor_coverage", "check_install_drift",
+    "check_panel_approval", "check_review_binding",
 }
+
+
+def _roster() -> list[str]:
+    return [p.stem for p in sorted(_GATES.glob("*.py"))
+            if not p.name.startswith("_") and p.stem not in NEEDS_MORE_THAN_A_ROOT]
+
+
+ROOT_FLAG = {gate: "--root" for gate in _roster()}
+
+
+@pytest.mark.parametrize("gate", sorted(NEEDS_MORE_THAN_A_ROOT))
+def test_every_named_gate_really_needs_its_argument(gate: str, tmp_path: Path) -> None:
+    """The exemption holds only while the reason does.
+
+    A name left here after its gate stopped requiring an argument is a gate quietly
+    outside the empty-sweep protection — the exact failure this file was written for,
+    re-created by the list that documents it.
+    """
+    done = subprocess.run([sys.executable, str(_GATES / f"{gate}.py"),
+                           "--root", str(tmp_path)],
+                          capture_output=True, text=True, timeout=120, check=False)
+    output = done.stdout + done.stderr
+
+    assert "the following arguments are required" in output, (
+        f"{gate} runs on a root alone now, so it belongs in the sweep rather than "
+        f"in NEEDS_MORE_THAN_A_ROOT:\n{output[:400]}")
+
 
 #: Ways a gate can say "there was nothing here". Deliberately generous: the point
 #: is that SOMETHING in the output distinguishes an empty sweep from a clean one,
@@ -121,31 +119,24 @@ def test_no_gate_claims_a_universal_property_over_an_empty_sweep(
                 f"on an empty tree:\n  {line}")
 
 
-#: Flags by which a gate accepts a tree to sweep. A LIST, and that is the point: it is
-#: checked against every file in `gates/`, so a gate using a spelling absent from this
-#: tuple appears in the failure message rather than escaping the roster in silence.
-_ROOT_FLAGS = ("root", "repo", "install", "ecosystem-dir", "dir", "path", "target")
-
-
 def test_the_roster_covers_every_gate_that_takes_a_root() -> None:
     """A gate added later must not opt out of this by being forgotten.
 
-    This globbed `check_*.py` and matched three flag spellings. Both are rules written
-    as a list where the thing meant is a property — "it is a gate" — and both leaked:
+    This test has been rewritten twice by the same failure. It began globbing
+    `check_*.py` and matching three flag spellings; both are rules written as a list
+    where the thing meant is a property — "it is a gate" — and both leaked.
+    `verify_ecosystem.py` escaped on the prefix while aggregating ELEVEN other checks.
+    `validate_skill_frontmatter.py` escaped on BOTH, and exits 0 on an ecosystem whose
+    `skills/` is present and empty: a sweep that found nothing, reported as conformance.
+    Widening the flag tuple to seven spellings only moved the leak.
 
-      `verify_ecosystem.py`          not `check_*`, and aggregates ELEVEN other checks
-      `validate_skill_frontmatter.py` not `check_*`, and takes `--ecosystem-dir`
-
-    Measured 2026-09-16: the second exits 0 on an ecosystem whose `skills/` is present
-    and empty, printing "Validated 0 skills: 0 errors" — a sweep that found nothing,
-    reported as conformance. It sat outside this roster by two independent list-shaped
-    rules, which is exactly what this test exists to prevent elsewhere.
-
-    The glob is now every `*.py` in `gates/`, and a gate that cannot answer `--help` is
-    named rather than skipped — an uninstrospectable gate is one this roster cannot
-    protect, and silence about it reads as coverage.
+    So the list is gone. `_contract.py` declares one flag, every gate accepts it, and
+    the roster is the glob — membership by existing. What remains to check is that the
+    two things the glob assumes are true: a gate can be introspected, and it answers to
+    the contract's name. A gate that refuses `--help` is one this roster cannot protect,
+    and passing over it in silence reads as coverage.
     """
-    missing, opaque = [], []
+    opaque, off_contract = [], []
     for path in sorted(_GATES.glob("*.py")):
         if path.name.startswith("_"):
             continue
@@ -153,16 +144,17 @@ def test_the_roster_covers_every_gate_that_takes_a_root() -> None:
                                 capture_output=True, text=True, timeout=60, check=False)
         if helped.returncode != 0 or "usage:" not in helped.stdout:
             opaque.append(path.stem)
-            continue
-        flags = {f for f in _ROOT_FLAGS if f"--{f}" in helped.stdout}
-        if flags and path.stem not in ROOT_FLAG:
-            missing.append(f"{path.stem} (takes --{sorted(flags)[0]})")
+        elif "--root" not in helped.stdout:
+            off_contract.append(path.stem)
 
-    assert not missing, f"gates taking a root but absent from the roster: {missing}"
     assert not opaque, (
         "gates this roster cannot introspect because they refuse `--help`: "
         f"{opaque} — an unintrospectable gate is one this test cannot protect, and "
         "passing over it in silence reads as coverage")
+    assert not off_contract, (
+        f"gates that do not answer to `--root`: {off_contract}. The roster reaches "
+        "them by the contract in `mechanisms/gates/_contract.py`; a gate spelling it "
+        "otherwise leaves the sweep without anyone deciding that it should.")
 
 
 def test_phase_numbering_finds_the_kit_when_given_a_project_root(tmp_path: Path) -> None:
@@ -188,3 +180,37 @@ def test_phase_numbering_finds_the_kit_when_given_a_project_root(tmp_path: Path)
 
     assert "NOTHING_DECLARED" not in done.stdout, (
         f"the kit is in .claude/ and the gate did not look there:\n{done.stdout}")
+
+
+def test_the_prose_sweep_says_how_many_files_it_parsed(tmp_path: Path) -> None:
+    """`check_prose_tests` printed "no test pins the wording of shipped prose" and
+    returned 0 whether it parsed 180 test files or none.
+
+    A root with no `tests/` produced exactly the sentence a clean repository produces.
+    """
+    gate = _GATES / "check_prose_tests.py"
+
+    # The root is POSITIONAL on this gate, not a flag.
+    empty = subprocess.run([sys.executable, str(gate), str(tmp_path)],
+                           capture_output=True, text=True, timeout=120, check=False)
+    real = subprocess.run([sys.executable, str(gate), str(_GATES.parent.parent)],
+                          capture_output=True, text=True, timeout=180, check=False)
+
+    assert empty.returncode == 2, f"an unparsed tree exited {empty.returncode}"
+    assert real.returncode == 0, real.stdout + real.stderr
+    assert "test file(s) parsed" in real.stdout, real.stdout
+
+
+def test_the_shell_sweep_names_what_it_covers() -> None:
+    """The label said "Shell hooks syntax" and `hooks/*.sh` matches zero files.
+
+    The hooks migrated to Python and the glob was never revisited, so a reader went
+    looking for hook coverage that is not there — while the check's real subject, the
+    shell under `skills/` and `mechanisms/`, went unnamed.
+    """
+    import verify_ecosystem as ve
+
+    ok, lines = ve.check_shell_syntax(_GATES.parent.parent)
+
+    assert ok is True, lines
+    assert any("shell script(s) parsed" in ln for ln in lines), lines

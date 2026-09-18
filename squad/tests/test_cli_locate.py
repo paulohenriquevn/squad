@@ -13,8 +13,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from squad.cli import locate  # noqa: E402
-from squad.cli.report import FINDING, OK, UNMEASURED  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.cli import locate  # noqa: E402 — post-bootstrap import
+from squad.cli.report import (  # noqa: E402 — post-bootstrap import
+    FINDING,
+    OK,
+    UNMEASURED,
+)
 
 
 def test_the_index_finds_a_mechanism_by_bare_name() -> None:
@@ -74,3 +81,40 @@ def test_run_refuses_a_name_that_is_not_in_the_index() -> None:
     payload rather than its subject.
     """
     assert locate.main_run(["../../etc/passwd"]) == UNMEASURED
+
+
+def test_sq_run_honours_the_help_flag_the_router_advertises() -> None:
+    """`router.py` prints "sq <verb> --help  the options for one verb".
+
+    Four of five verbs honour it through argparse. `main_run` read `argv[0]` straight
+    into the index lookup, so `sq run --help` searched for a mechanism named `--help`,
+    failed, and offered close matches — a documented flag answered with
+    "no mechanism named '--help'".
+    """
+    from squad.cli.locate import main_run
+
+    assert main_run(["--help"]) == 0
+    assert main_run(["-h"]) == 0
+
+
+def test_sq_run_still_refuses_an_unknown_mechanism() -> None:
+    """The help branch must not swallow the refusal it sits in front of."""
+    from squad.cli.locate import UNMEASURED, main_run
+
+    assert main_run(["a-mechanism-that-does-not-exist"]) == UNMEASURED
+
+
+def test_the_index_disclaimer_names_the_trees_it_actually_globs() -> None:
+    """The section `sq where` prints as its honesty statement overstated its coverage.
+
+    It said "four trees. Three of them are kept honest by a gate", naming
+    `check_skill_map` and `check_squad_map` — which check the SKILL and the MAP, not this
+    index's script glob. `hooks/`, which really has no inventory, was not among the trees
+    the disclaimer named, and `_TREES` holds three entries, not four.
+    """
+    from squad.cli import locate
+
+    doc = locate.__doc__ or ""
+    assert "four trees" not in doc, "the disclaimer still claims a tree count it does not have"
+    assert "globs THREE trees" in doc or "THREE trees" in doc, doc[:400]
+    assert len(locate._TREES) == 3

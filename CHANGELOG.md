@@ -7,6 +7,119 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Three gates reported a verdict about a tree they had not read** (#129)
+  `check_prose_tests --root <empty tree>` answered `no test pins the wording of shipped
+  prose (394 test file(s) parsed)` — it had swept the repository it was standing in.
+  `check_chain_preconditions` did the same under a heading naming the other tree, and
+  `check_merge_autonomy` printed `HOLDS` because `gh` inherits the working directory, so
+  the flag it accepted changed nothing about what it asked. The first two shared one
+  `dest` between a positional and its option, and argparse applies the absent
+  positional's default after parsing the option. All three now answer for the tree they
+  were given, and an unreadable one exits 2 rather than reporting a pass.
+
+- **One question had eight spellings, so three callers each carried the whole table**
+  (#129)
+  Thirty-three gates take a tree to sweep and named it eight different ways — 12
+  `--root`, 4 `--repo-root`, 3 `--project`, 3 `--project-root`, 2 `--repo`, 2
+  `--ecosystem-dir`, two more, and 7 gates taking none. `mechanisms/gates/_contract.py`
+  now declares one flag, with every older spelling kept as an alias so no existing
+  invocation breaks, and reuses `squad/cli/report.py`'s exit vocabulary rather than
+  restating it. The three hand-kept tables are gone: `verify_ecosystem`'s adapters, the
+  22-entry `ROOT_FLAG` map — whose own comments record `check_xrefs` sitting outside the
+  empty-sweep protection for a week because it spelled its flag `--ecosystem-dir` — and
+  the obsolete half of `run_checks.py`'s reason for not globbing. The roster is now the
+  glob, which took it from 22 gates to 29 plus 4 that need a slug or an install path to
+  run at all, each named with its reason and held to it by a test.
+  `check_gate_mechanisms.py` reports any gate that drifts off the contract, reading the
+  AST: grepping for the flag called `check_produced_files.py` compliant, and it takes no
+  root — the literal is there because it invokes other gates with it.
+
+- **The gate that aggregates every other gate had no machine-readable answer** (#129)
+  `verify_ecosystem.py` runs 25 checks and is what a consumer points at to ask whether an
+  install is sound. A programmatic caller got an exit code and, in prose, `(N not run —
+  each ⊘ above says why)`: the reasons were on screen and nowhere a parser could reach
+  them, so sixteen skipped checks were indistinguishable from a clean run. It now accepts
+  `--json` and emits a `Report` whose `not_checked` names every check that did not run and
+  why, with the human text carried in `lines` rather than racing it to stdout.
+
+- **A Portuguese section header shipped in the installer for four months while the
+  language gate called the tree clean** (#130)
+  `mechanisms/distribution/install.sh:203` and one ADR heading were in Portuguese.
+  `check_english_only` matches a closed list of markers and none of those words carried an
+  accent or appeared on it, so 997 files were reported clean on every run. Both lines are
+  translated and two markers joined the list. The list's structural gap is filed rather
+  than papered over: a first attempt at a dozen more words produced 22 findings across 14
+  files, of which one was a defect and the rest were fixtures that carry Portuguese by
+  design.
+
+- **Two required CI steps failed on the tree they ship with, and half the suppressions in
+  the repository said nothing about why** (#87)
+  `ruff check` exited 1 on 90 findings at HEAD and `check_prose_tests.py` exited 1 on five
+  asserts, so the job was red from the code and not only from the Actions billing block.
+  Both now exit 0. The ruff half was not a formatting sweep: 41 `# noqa` directives named
+  rules nothing enforces, 100 `# noqa: PLW1510` hid a `subprocess.run` whose exit code
+  nobody declared — each now carries an explicit `check=False` instead of a suppression —
+  and 7 `l` bindings, 8 compound statements and one lambda assignment were rewritten rather
+  than silenced. 450 suppressions carried no reason at all; every one now states what the
+  rule cannot see, except six `E402` lines too long to take a clause, which their file's
+  bootstrap note covers. Two real defects surfaced underneath: `run_opportunity_score.py`
+  imported the rubric loader and never called it, so a malformed rubric reached the scorers
+  and produced a score from nothing, and `run_structural.py` computed an impediment report
+  its own comment called REPORTED and then dropped it. The five prose asserts were kept
+  with the exemption the gate ships, each naming why the contract text is the subject and
+  not a proxy for behaviour.
+
+- **The documentation offered three entry points that resolve to nothing, and pointed at
+  the wrong routing table** (#87)
+  `HOW-TO-USE.md` listed `/plan-grill`, `/session-goal` and `/trajectory-review`; the kit
+  ships no skill or command for any of them, and `skills/plan-write/SKILL.md` told an agent
+  to halt and recommend the first. `README.md` and `HOW-TO-USE.md` both named
+  `rules/cycle-backlog.md` as the domain routing table, which is worse than stale: the file
+  is kit-owned and `squad/boundaries.py` admits only `rules/*.txt`, so an adopter following
+  the instruction is refused by `boundary-check`. The table is `rules/domain-routing.txt`
+  and the documents now teach the bare `--write`, which resolves its own destination.
+  `CONTRIBUTING.md` prescribed a `lib/` submodule that `check_semantic_names.py` refuses in
+  CI and cited a precedent directory that does not exist. Four role prompts carried an
+  orphaned table row that rendered as a stray one-line table, and their heading counted
+  four roles over a table of fourteen.
+
+- **Eight spellings walked through the git-safety hook, and its own suite could not see
+  any of them** (#87)
+  The guard normalises a command and then matches verbs in it; every normalisation step
+  had a hole. `_GIT_GLOBALS` enumerated six of git's twenty-plus global options, so
+  `git --no-pager checkout main` carried a verb no guard saw. `_QUOTED` deleted a quoted
+  span entirely, so `git "commit" -m x` lost its subcommand. `_git_prefix` took the first
+  `-C` anywhere in a compound, so `git -C /tmp status && git commit -m x` asked the wrong
+  repository which branch it was on. `_git_out` returned `""` for both "git failed" and
+  "git answered nothing", so every trunk guard fell silent exactly when the hook could not
+  see. `DANGEROUS_PATH_RE` anchored on whitespace and missed `rm -rf "/etc"`, `rm -rf ~/*`,
+  `rm -rf $HOME/*` and `rm -rf ${HOME}`. `BRANCH_DELETE_RE` required the flag before the
+  name, so `git branch workspace -D` and `git push origin :workspace` passed. The
+  kit-boundary collector took absolute and `./` paths only, so
+  `sed -i s/a/b/ .claude/rules/architecture.md` was never examined. And an unreadable
+  `-F <path>` raised out of the hook entirely, exiting 1 — "the action proceeds" — before
+  the co-author and zone guards ran. All eight measured, each against the spelling that was
+  already refused. The suite missed them because it varies the VERB and fixes the SPELLING:
+  47 cases carrying `rm -rf /`, `/etc` and `/home` and no quoted or tilde form.
+  `tests/hooks/test_the_guard_matches_the_spelling_not_the_verb.py` now pairs each blocked
+  spelling with the one that reached the tool.
+
+- **Five gates reported a tree clean after measuring nothing in it** (#87)
+  `verify_ecosystem` printed `=== ALL CHECKS PASSED ===` and exited 0 when every check
+  returned `NOT_RUN` — `all_pass` is cleared only in the failure branch and the sentinel is
+  truthy by design. It also spawned `check_xrefs` without `--strict`, so every WARN class
+  arrived as exit 0 while `install.sh` and CI both passed the flag: the smoke test was
+  weaker than the installer depending on it. `check_emitted_verdicts` and
+  `check_prose_write_paths` printed `CLEAN` over a zero-file sweep against their own
+  exit-code tables, each already defining the `UNCHECKED` constant they did not reach.
+  `check_orphan_verdicts` reported every verdict reachable after sweeping zero cycle rules.
+  `check_phase_emitters` returned 0 with no `cycle-phases.txt` to read, and its
+  `SEARCH_GLOBS` still named `scripts/*.py` — zero files since the 2026-09-01 rename — so
+  `mechanisms/` was outside the sweep entirely. Each now separates "could not measure" from
+  "measured and found nothing", and
+  `tests/test_a_gate_that_swept_nothing_is_not_clean.py` asserts that no glob in the sweep
+  matches zero files.
+
 - **The documented dispatch prescribed the defect the code no longer had** (#86)
   `pipeline/SKILL.md` told an operator to pass the `queue` array while SELECT had grown
   two more keys carrying schedulable items, and the workflow's own input contract was a

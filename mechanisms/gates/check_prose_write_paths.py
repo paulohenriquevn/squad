@@ -130,14 +130,26 @@ def main(argv: list[str] | None = None) -> int:
         return UNCHECKED
 
     findings, read = sweep(root)
+
+    # Zero files read is not a clean tree. This file already owns the word for it —
+    # UNCHECKED, used two lines above — and the branch below used to print CLEAN and
+    # fall through to a 0. A gate whose glob stops matching goes silent rather than
+    # red, which is the failure this repository names in other people's code.
+    if not read:
+        where = ", ".join(f"{d}/" for d in SCANNED_DIRS)
+        message = f"UNCHECKED  nothing swept: no markdown under {where}"
+        if args.json:
+            print(json.dumps({"findings": [], "count": 0, "files_read": 0,
+                              "unchecked_because": message}, indent=2))
+        else:
+            print(message, file=sys.stderr)
+        return UNCHECKED
+
     if args.json:
         print(json.dumps(
             {"findings": findings, "count": len(findings), "files_read": read},
             indent=2,
         ))
-    elif not read:
-        where = ", ".join(f"{d}/" for d in SCANNED_DIRS)
-        print(f"CLEAN  nothing swept: no markdown under {where}")
     elif findings:
         print(f"INSTRUCTED  {len(findings)} legacy-root write instruction(s)\n")
         for f in findings:

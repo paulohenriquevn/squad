@@ -253,3 +253,28 @@ def test_the_usage_text_does_not_promise_a_deletion_that_no_longer_happens() -> 
         "the usage still promises to delete files the kit does not ship, which is "
         f"not what --force does:\n{joined}"
     )
+
+
+def test_the_staging_area_lives_beside_the_snapshot_not_in_tmp() -> None:
+    """Between `rm -rf` and the restore loop, the staging directory held the ONLY copy
+    of every project-authored file under six trees.
+
+    It was `mktemp -d` — a directory under /tmp — so an interrupt, a crash or a reboot in
+    that window lost them with nothing to recover from, and /tmp is the one directory a
+    machine may clear on its own. It now sits inside
+    `.claude/.install-backups/<timestamp>/staging`, on the same filesystem as the target
+    and in a directory the operator is already told about.
+    """
+    source = INSTALL.read_text(encoding="utf-8")
+
+    assert 'STAGING="$ECO/.install-backups/staging"' in source, (
+        "the staging area is not under the target's own install directory")
+    # Each name is declared empty first and then assigned; the ASSIGNMENT is the line
+    # that matters, and there must be no `mktemp -d` without the staging root.
+    assert "mktemp -d)" not in source, (
+        "a staging directory is still created under /tmp")
+    for name in ("SKILLS_KEEP", "CONFIG_KEEP", "OWN_KEEP"):
+        assigned = [ln for ln in source.splitlines() if f'{name}="$(mktemp' in ln]
+        assert assigned, f"{name} is no longer staged at all"
+        assert all("$STAGING" in ln for ln in assigned), (
+            f"{name} still stages outside the install: {assigned}")

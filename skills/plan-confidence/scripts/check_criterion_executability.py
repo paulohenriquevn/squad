@@ -128,9 +128,20 @@ class ExecutabilityReport:
 
     @property
     def soft_cap_triggered(self) -> bool:
-        """Heuristic-grade gate: >10% vague OR <80% reach acceptable."""
+        """Heuristic-grade gate: >10% vague OR <80% reach acceptable — or NO criteria.
+
+        Zero criteria used to return False, and the report was built with
+        `acceptable_ratio=1.0` "vacuously acceptable". Together those made a plan with
+        no Acceptance Criteria and no DoD section at all the ONE shape this check could
+        never charge for: worse than a plan full of vague criteria, and scored better.
+
+        A plan that states no acceptance criteria has not written executable ones. The
+        cap is the same soft 70 either way, so this cannot block a legitimate plan that
+        simply has none — it makes the absence visible in `hard_caps_triggered`, which
+        is where the author looks.
+        """
         if self.total_criteria == 0:
-            return False
+            return True
         return self.vague_ratio > 0.10 or self.acceptable_ratio < 0.80
 
 
@@ -198,8 +209,11 @@ def check_criterion_executability(plan_path: Path) -> ExecutabilityReport:
             acceptable_count=0,
             executable_count=0,
             vague_ratio=0.0,
-            acceptable_ratio=1.0,  # vacuously acceptable (no criteria to grade)
-            executable_ratio=1.0,
+            # 0.0, not 1.0. "Vacuously acceptable" was the phrase, and it put a plan
+            # with no criteria at the top of the scale for criterion quality. There is
+            # nothing acceptable about criteria nobody wrote; there is nothing at all.
+            acceptable_ratio=0.0,
+            executable_ratio=0.0,
             criteria=(),
         )
 

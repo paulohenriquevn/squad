@@ -1,6 +1,6 @@
 """Refuse a pytest run that spans two skill slices, and name the command that works.
 
-WHY THIS EXISTS. The 31 slices are import-isolated on purpose: in production each skill runs alone
+WHY THIS EXISTS. The slices under `skills/*/tests` are import-isolated on purpose: in production each skill runs alone
 with only its own `scripts/` on `sys.path`, and several ship modules with the same basename and
 different contents — `check_corner_coverage.py` exists in two skills and means two things.
 `mechanisms/cycle/run_slice_tests.sh` mirrors that by giving each slice its own process, and it exits 0.

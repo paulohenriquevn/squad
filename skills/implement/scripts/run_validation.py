@@ -59,14 +59,25 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
     LEGACY_RECORDS_ROOTS,
     write_records_dir,
 )
 
 
-def _find_project_root(start: Path) -> Path:
+def _find_project_root(start: Path) -> Path | None:
+    """The project root above `start`, or None when there is none.
+
+    It used to fall back to `start.resolve()`, which cannot fail and therefore cannot
+    report failure. A run launched outside any project validated the caller's working
+    directory instead, SKIPped every check it could not find a subject for, and exited
+    0 — which SKILL.md reads as "proceed directly to Step 6". None is the honest
+    answer, and `main` turns it into the exit 2 three documents already promise.
+    """
     current = start.resolve()
     for _ in range(20):
         if (current / ".claude").exists() or (current / ".git").exists():
@@ -74,7 +85,7 @@ def _find_project_root(start: Path) -> Path:
         if current == current.parent:
             break
         current = current.parent
-    return start.resolve()
+    return None
 
 
 def _has_package_json(project_root: Path) -> bool:
@@ -332,7 +343,7 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
     cq_invoke_dir = Path(__file__).resolve().parent.parent.parent / "code-quality" / "scripts"
     sys.path.insert(0, str(cq_invoke_dir))
     try:
-        import cq_invoke  # type: ignore[import-not-found]
+        import cq_invoke  # type: ignore[import-not-found] — sibling skill, resolved by the sys.path line above
     except ImportError:
         return {
             "name": "code_quality",
@@ -355,10 +366,19 @@ def check_code_quality(project_root: Path, plan_slug: str, *, skip: bool = False
             "reason": f"/code-quality invocation raised: {type(exc).__name__}: {exc}",
         }
     if summary is None:
+        why, detail = cq_invoke.last_failure()
+        # SKIP means "there was nothing to run". A gate that RAN and fell over is a
+        # failure, and folding the two together is what let ORCHESTRATOR_CRASH (exit 2)
+        # arrive here as SKIP, become PARTIAL and exit 0 — delivery proceeding on a
+        # quality gate that crashed.
+        ran_and_failed = why in (cq_invoke.Unavailable.CRASHED,
+                                 cq_invoke.Unavailable.TIMEOUT,
+                                 cq_invoke.Unavailable.UNPARSEABLE)
         return {
             "name": "code_quality",
-            "status": "SKIP",
-            "reason": "/code-quality script unavailable or invocation failed",
+            "status": "FAIL" if ran_and_failed else "SKIP",
+            "reason": (f"/code-quality {why.value if why else 'unavailable'}: {detail}"
+                       if why else "/code-quality script unavailable"),
         }
 
     verdict = summary.get("verdict", "UNKNOWN")
@@ -672,8 +692,18 @@ def check_tdd_shape_gate(project_root: Path, slug: str) -> dict[str, Any]:
 
     report = check_tdd_shape(plan)
     if report.total_tasks == 0:
-        return {"name": "tdd_shape", "status": "SKIP",
-                "reason": "the plan declares no `### T{n}.{m}` task blocks"}
+        # FAIL, not SKIP. The plan FILE exists — `_find_plan` returned it — so zero task
+        # blocks is a fact about what this checker could read, not a fact about the plan.
+        # As a SKIP it counted into `skips`, `overall` became PARTIAL, and PARTIAL exits
+        # 0, so IMPLEMENTATION_COMPLETE could be emitted with the TDD shape never
+        # verified. `rules/cycle-implement.md § Hard gates` calls this gate blocking.
+        return {"name": "tdd_shape", "status": "FAIL",
+                "reason": (f"{plan.name} parsed to zero `### T{{n}}.{{m}}` task blocks. "
+                           f"The plan is on disk, so this is what the checker could read "
+                           f"— not a plan that declares no tasks. A shape that could not "
+                           f"be audited is not a shape that passed."),
+                "findings": [{"severity": "HIGH", "code": "tdd_shape_unreadable",
+                              "message": f"no task block parsed from {plan}"}]}
     without = [t.task_id for t in report.tasks if not t.has_executable_shape]
     return {
         "name": "tdd_shape",
@@ -705,7 +735,12 @@ def check_phase_review_gate(project_root: Path, slug: str) -> dict[str, Any]:
     review_dirs = [
         *_artefact_dirs(project_root, "mini-reviews"),
     ]
-    report = check_phase_review(plan, progress, slug, review_dirs)
+    # `repo_root` is what `_check_ordering` needs to compare the review's recorded head
+    # against the phase's last commit. Both production call sites omitted it, so
+    # `_is_ancestor` ran only in tests and the HIGH `retroactive_review` finding — a
+    # review signed off before the code it reviews existed — could never be produced
+    # outside the suite. The value was already in hand here.
+    report = check_phase_review(plan, progress, slug, review_dirs, repo_root=project_root)
     return {
         "name": "phase_review",
         "status": report.status,
@@ -724,7 +759,7 @@ def _files_touched_by_this_change(project_root: Path, slug: str) -> list[str]:
     reads it as "do not scope", reporting the whole failure rather than a guess at which
     part of it belongs here.
     """
-    from check_acceptance_criteria import _changed_files  # noqa: PLC0415 — path-loaded
+    from check_acceptance_criteria import _changed_files
 
     progress = _read_progress(project_root, slug)
     shas = shas_from_progress(progress) if isinstance(progress, dict) else []
@@ -788,6 +823,11 @@ def main() -> int:
     args = parser.parse_args()
 
     project_root = args.project_root if args.project_root else _find_project_root(Path.cwd())
+    if project_root is None:
+        print(f"UNCHECKED: no project root at or above {Path.cwd()} — no `.claude/` and "
+              f"no `.git/` within 20 levels. Pass --project-root if that is deliberate.",
+              file=sys.stderr)
+        return 2
 
     # Every language whose suite the gate knows how to run. The npm check stays
     # first for report stability; test_execution consolidates all of them and is

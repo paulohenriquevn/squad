@@ -11,8 +11,17 @@ This checker is CONDITIONAL: it only enforces the section when the plan
 contains external-I/O signals. Plans whose code touches no external I/O
 (pure logic, refactor, UI markup) are unaffected.
 
-Soft cap stable id: `soft_floor_failure_scenarios_missing` (cap 89; sunset
-2026-09-07 — after which promotes to hard cap 70 via ADR).
+Soft cap stable id: `soft_floor_failure_scenarios_missing` (cap 89).
+
+This read "sunset 2026-09-07 — after which promotes to hard cap 70 via ADR". The date
+passed, `run_structural` still applies 89, no ADR exists, and nothing noticed — a
+sunset whose expiry nobody detects is a deadline that silently became permanent, which
+is the shape this kit refuses in a consumer's config and had in its own.
+
+The cap stays at 89 DELIBERATELY: promoting it to 70 changes the verdict for every
+consumer, and that is a policy decision somebody makes, not a date arriving. Stated as
+the current rule rather than as a promise with a date on it, so the next reader is not
+told a promotion happened.
 
 Detection rule:
 
@@ -31,10 +40,25 @@ not pollute signal counts.
 from __future__ import annotations
 
 import re
+import sys as _sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path as _P
 
-FENCED_CODE_RE = re.compile(r"^(```|~~~)[^\n]*\n.*?^\1", re.MULTILINE | re.DOTALL)
+for _up in _P(__file__).resolve().parents:
+    if (_up / "squad" / "markdown.py").is_file():
+        _sys.path.insert(0, str(_up))
+        break
+from squad.markdown import (  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+)
+
+#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
+#: their own, in two forms that do not mask the same input: five saw only backtick
+#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
+#: six readers and read as prose by the other five, so the same document scored
+#: differently depending on which checker asked.
+FENCED_CODE_RE = _FENCED_CODE_OWNER
 
 SCAN_HEADINGS = (
     "Baseline Context",

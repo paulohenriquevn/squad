@@ -30,7 +30,7 @@ def _score(tmp_path: Path, body: str) -> dict:
     out = subprocess.run(
         [sys.executable, str(_SCRIPT), str(doc), "--structural-only", "--no-warn"],
         capture_output=True, text=True, timeout=180,
-    ).stdout
+     check=False).stdout
     return json.loads(out[out.index("{"):])
 
 

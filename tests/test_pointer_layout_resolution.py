@@ -21,7 +21,10 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills/discover-confidence/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from check_evidence_pointers import _resolve_code_pointer  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_evidence_pointers import _resolve_code_pointer  # noqa: E402 (post-bootstrap)
 
 
 def test_a_pointer_resolves_in_the_plugin_layout(tmp_path: Path) -> None:

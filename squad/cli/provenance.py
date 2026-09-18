@@ -21,10 +21,10 @@ from pathlib import Path
 def _git(root: Path, *args: str) -> str | None:
     """A git fact, or None. Never raises: git is context here, not the subject."""
     try:
-        done = subprocess.run(  # noqa: PLW1510
+        done = subprocess.run(
             ["git", "-C", str(root), *args],
             capture_output=True, text=True, timeout=5,
-        )
+         check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     return done.stdout.strip() if done.returncode == 0 else None
@@ -38,7 +38,17 @@ def describe(root: Path) -> list[str]:
     head = _git(root, "rev-parse", "--short", "HEAD")
     if branch and head:
         dirty = _git(root, "status", "--porcelain")
-        state = "clean" if dirty == "" else f"{len(dirty.splitlines())} file(s) dirty"
+        # `_git` answers None for "git could not be asked" — an OSError, a
+        # SubprocessError, a 5s timeout, a non-zero exit. The branch and head above are
+        # checked for it; this one was not, so `None != ""` made the state read
+        # "1 file(s) dirty" over a question git never answered. `None.splitlines()` is
+        # the other half of the same hole.
+        if dirty is None:
+            state = "dirty state unknown — git did not answer"
+        elif dirty.strip() == "":
+            state = "clean"
+        else:
+            state = f"{len(dirty.splitlines())} file(s) dirty"
         facts.append(f"{branch} @ {head} ({state})")
     else:
         # Not a git repository, or git is absent. Say which rather than omitting the

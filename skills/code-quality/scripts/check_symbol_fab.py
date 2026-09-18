@@ -41,7 +41,7 @@ class ExtractedSymbol:
 def tree_sitter_available() -> bool:
     """Cheap probe for the optional tree-sitter-languages dep."""
     try:
-        import tree_sitter_languages  # noqa: F401
+        import tree_sitter_languages  # noqa: F401 — imported to probe availability; the name is never used
     except ImportError:
         return False
     return True
@@ -63,35 +63,55 @@ def extract_imports_and_calls(file_path: Path, language: str) -> list[ExtractedS
     if language not in _SUPPORTED_LANGUAGES:
         raise ValueError(f"unsupported language: {language!r}; expected one of {_SUPPORTED_LANGUAGES}")
 
+    return extract_checked(file_path, language)[0]
+
+
+def extract_checked(file_path: Path, language: str) -> tuple[list[ExtractedSymbol], bool]:
+    """`(symbols, parsed)` — the same walk, saying whether the parser ran.
+
+    `extract_imports_and_calls` returns `[]` for "this file imports nothing" AND for every
+    way the parse can fail: tree-sitter absent, the grammar failing to load, the file
+    unreadable, a malformed source, a per-language extractor bug. The D2 detectors take
+    the empty list at face value, so a parser that never ran reads as a file with no
+    imports and the audit reports CLEAN. Measured on the build droplet: 0 symbols from a
+    1600-line file carrying ten `use` statements, and the audit emitted PASS.
+
+    `parsed=False` is the channel that was missing. `rust.py` inferred it from
+    "a source has an import line and nothing was extracted anywhere", which works and is
+    a heuristic; this is the fact itself, and the other three detectors now use it.
+    """
+    if language not in _SUPPORTED_LANGUAGES:
+        raise ValueError(f"unsupported language: {language!r}; expected one of {_SUPPORTED_LANGUAGES}")
+
     if not tree_sitter_available():
-        # Per EC-8 — never raise; gracefully degrade to empty result.
-        return []
+        # Per EC-8 — never raise; gracefully degrade, and SAY the parse did not happen.
+        return [], False
 
     try:
         import tree_sitter_languages
 
         parser = tree_sitter_languages.get_parser(language)
     except Exception:  # noqa: BLE001 — protect orchestrator from parser-loading failures
-        return []
+        return [], False
 
     try:
         source = file_path.read_bytes()
     except OSError:
-        return []
+        return [], False
 
     try:
         tree = parser.parse(source)
     except Exception:  # noqa: BLE001 — EC-8 protect on malformed input
-        return []
+        return [], False
 
     root = tree.root_node
     extractor = _EXTRACTORS.get(language)
     if extractor is None:
-        return []
+        return [], False
     try:
-        return extractor(root, source, str(file_path))
+        return extractor(root, source, str(file_path)), True
     except Exception:  # noqa: BLE001 — defensive: a per-language extractor bug
-        return []
+        return [], False
 
 
 # ---------------------------------------------------------------------------

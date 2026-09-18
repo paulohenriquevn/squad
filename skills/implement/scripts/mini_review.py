@@ -245,7 +245,7 @@ def _collect_all_findings(
     phase_completeness: Any,
     diff_cohesion: Any,
     wiring: dict[str, Any],
-    cq: dict[str, Any],
+    delta_coverage: dict[str, Any],
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     for f in phase_completeness.findings:
@@ -253,7 +253,7 @@ def _collect_all_findings(
     for f in diff_cohesion.findings:
         findings.append({"severity": f.severity, "code": f.code, "message": f.message})
     findings.extend(wiring.get("findings", []))
-    findings.extend(cq.get("findings", []))
+    findings.extend(delta_coverage.get("findings", []))
     return findings
 
 
@@ -286,7 +286,7 @@ def _render_report(
     phase_completeness: Any,
     diff_cohesion: Any,
     wiring: dict[str, Any],
-    cq: dict[str, Any],
+    delta_coverage: dict[str, Any],
     findings: list[dict[str, str]],
     project_root: Path,
 ) -> str:
@@ -347,10 +347,10 @@ to `/review` (which runs once at the end of all phases).
     if wiring.get("reason"):
         md += f"- reason: {wiring['reason']}\n"
     md += "\n### 4. Delta audit coverage\n\n"
-    md += f"- status: `{cq.get('status')}`\n"
-    if cq.get("reason"):
-        md += f"- reason: {cq['reason']}\n"
-    for path in cq.get("uncovered_files", []):
+    md += f"- status: `{delta_coverage.get('status')}`\n"
+    if delta_coverage.get("reason"):
+        md += f"- reason: {delta_coverage['reason']}\n"
+    for path in delta_coverage.get("uncovered_files", []):
         md += f"- uncovered: `{path}`\n"
     md += "\n## Recommendation\n\n"
     if verdict == "PHASE_REVIEW_PASS":
@@ -373,12 +373,15 @@ def run_mini_review(
     output_dir: Path,
 ) -> tuple[str, str, Path]:
     """Return (verdict, max_severity, report_path)."""
-    pc = check_phase_completeness(plan_path, progress_path, phase)
-    dc = check_diff_cohesion(plan_path, progress_path, phase, project_root)
+    # Named. `pc`, `dc` and `cq` carried the four results the verdict is computed
+    # from, across a render function 130 lines away — and `cq` is the one whose
+    # meaning is least guessable from its letters.
+    completeness = check_phase_completeness(plan_path, progress_path, phase)
+    cohesion = check_diff_cohesion(plan_path, progress_path, phase, project_root)
     wiring = _aggregate_wiring(progress_path, phase, project_root)
-    cq = _check_delta_audit_coverage(dc.modified_files, project_root)
+    delta_coverage = _check_delta_audit_coverage(cohesion.modified_files, project_root)
 
-    findings = _collect_all_findings(pc, dc, wiring, cq)
+    findings = _collect_all_findings(completeness, cohesion, wiring, delta_coverage)
     findings.extend(_phase_checkpoint_findings(plan_path, progress_path, phase, project_root))
     verdict, max_severity = _compute_verdict(findings)
 
@@ -386,7 +389,7 @@ def run_mini_review(
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     report_path = output_dir / f"{slug}-phase{phase}-review-{date}.md"
     report_path.write_text(
-        _render_report(slug, phase, verdict, max_severity, pc, dc, wiring, cq, findings, project_root),
+        _render_report(slug, phase, verdict, max_severity, completeness, cohesion, wiring, delta_coverage, findings, project_root),
         encoding="utf-8",
     )
     return verdict, max_severity, report_path

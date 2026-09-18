@@ -30,18 +30,15 @@ Each arrow is an **unbreakable chain** — you do not skip a phase, and you do n
 | "Sweep a domain for things nobody filed" | `cycle-discover` | `/discover-execute --sweep {domain}` |
 | "Advance the next item end-to-end autonomously" | `cycle-maintenance` → `cycle-idea-to-release` | `/idea-to-release` (no arg) or `/idea-to-release B-NNN` |
 | "The measurement holds — design the fix" | `cycle-plan` | `/plan-write B-NNN` |
-| "Requirements are still vague" | `cycle-plan` phase 0 | `/plan-grill {slug}` |
 | "Build it per the plan" | `cycle-implement` | `/implement {plan-slug}` |
 | "Audit dead code + fabricated APIs post-implement" | `cycle-code-quality` | `/code-quality` |
 | "Review before merge" | `cycle-review` | `/review {plan-slug}` |
 | "Cut a release (develop → main + tag)" | `cycle-release` | `/release [bump-level]` |
 | "Check the released thing works for its user" | `cycle-acceptance` | `/acceptance M<N>` (milestones only — see below) |
-| "Hold the session to the process until acceptance is green" | `cycle-acceptance` | `/session-goal M<N> [M<N> ...]` |
 | "What has rotted in the registry?" | auxiliary | `/backlog-review` |
 | "Which specialist owns this repo?" | auxiliary | `python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/route_domain.py" {repo}` |
 | "Just locate something in the code" | (no cycle) | Glob/Grep, or `/ast-grep` for structural queries |
 | "Boundaries: does this repo have any, and do they still fire?" | auxiliary | `/arch-check` |
-| "Are we on the right trajectory? (benchmarks, complexity, scalability)" | `cycle-trajectory-review` | `/trajectory-review [plan-slug]` |
 | "Block code smells automatically on every Write/Edit" | (setup, once) | `/quality-init TARGET` |
 | "Can we call this production-ready?" | auxiliary | `/honesty-gate audit` |
 | "Can the squad even run in this project?" | auxiliary | `/squad-fit` — which domains have no specialist, which skills lack an SOP, whether a panel can form |
@@ -140,10 +137,10 @@ Chains plan → implement → code-quality → review → release, pausing at ea
 | Path | What |
 |---|---|
 | `BACKLOG.md` | The single registry, at the umbrella root |
-| `records/discoveries/plans/` | Measurement plans |
-| `records/discoveries/opportunities/` | Opportunities (the terminal artifact) |
-| `records/maintenance-runs/` | One record per macro-loop run |
-| `records/reviews/` | Edge-case reports |
+| `.squad/records/discoveries/plans/` | Measurement plans |
+| `.squad/records/discoveries/opportunities/` | Opportunities (the terminal artifact) |
+| `.squad/records/` | Everything the cycle writes about itself — `squad/paths.py` owns the root and every writer resolves it from there |
+| `.squad/wiki/` | Durable knowledge, as an OKF v0.2 bundle |
 | `rules/cycle-*.md` | The contracts. Source of truth for every phase |
 | `agents/*.md` | The domain specialists you derive (the kit ships only the README) |
 
@@ -193,7 +190,9 @@ No. `BACKLOG_EMPTY` means nobody has looked recently. Run `/discover-execute --s
 
 ### "How do I adapt this to another ecosystem?"
 
-Derive the domain routing table into `rules/cycle-backlog.md` (`detect_domains.py --write`), write one specialist per domain in `agents/`, and declare your live environments in `rules/live-target.txt`. All three ship empty on purpose: the phases, gates and evidence contracts are ecosystem-agnostic; a routing table, a specialist and a live target never are.
+Derive the domain routing table with `detect_domains.py --write` — the flag resolves
+its own destination, which is why no document repeats the path (`rules/domain-routing.txt`
+in the kit repo, `.squad/domain-routing.txt` under an install), write one specialist per domain in `agents/`, and declare your live environments in `rules/live-target.txt`. All three ship empty on purpose: the phases, gates and evidence contracts are ecosystem-agnostic; a routing table, a specialist and a live target never are.
 
 ## Maintenance notes
 

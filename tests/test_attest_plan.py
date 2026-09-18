@@ -211,10 +211,10 @@ def test_a_project_with_no_kit_says_so_instead_of_writing_somewhere(
     (project / "records" / "plans" / "demo-plan.md").write_text(_PLAN, encoding="utf-8")
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project),
            "CLAUDE_PLUGIN_ROOT": str(tmp_path / "nowhere")}
-    done = subprocess.run(  # noqa: PLW1510
+    done = subprocess.run(
         ["bash", str(_SCRIPT), "demo"],
         capture_output=True, text=True, cwd=str(project), env=env,
-    )
+     check=False)
 
     assert done.returncode != 0
     assert not write_state_dir(project, ATTESTATIONS).exists()

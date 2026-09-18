@@ -8,15 +8,18 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-import pytest  # noqa: E402
-from check_evidence_citations import (  # noqa: E402
+import pytest  # noqa: E402 — post-bootstrap import
+from check_evidence_citations import (  # noqa: E402 — post-bootstrap import
     Citation,
     EvidenceReport,
     check_evidence_citations,
 )
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 
 def _write_plan(tmp_path: Path, body: str) -> Path:
@@ -187,7 +190,7 @@ def test_plan_without_evidence_returns_zero_citations(tmp_path: Path) -> None:
 def test_evidence_report_is_frozen() -> None:
     report = EvidenceReport(total_citations=0, unresolved_citations=())
     with pytest.raises((AttributeError, Exception)):
-        report.total_citations = 5  # type: ignore[misc]
+        report.total_citations = 5  # type: ignore[misc] — assigning to a frozen field is the behaviour under test
 
 
 def test_citation_has_required_fields() -> None:

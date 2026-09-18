@@ -7,7 +7,27 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.check_symbol_fab import ExtractedSymbol, extract_imports_and_calls
+from scripts.check_symbol_fab import (
+    ExtractedSymbol,
+    extract_imports_and_calls,
+    tree_sitter_available,
+)
+
+#: Every test below asserts a NON-EMPTY extraction, and `extract_imports_and_calls`
+#: returns `[]` when `tree_sitter_languages` cannot be imported — a deliberate EC-8
+#: degradation. The dependency is declared nowhere: not in `pyproject.toml`, not in any
+#: CI install step. So on a machine without it these eight failed with a parser error
+#: that says nothing about parsing, and nobody could tell "the extractor is broken"
+#: from "the optional dependency is absent".
+#:
+#: Skipped rather than xfailed: this IS an environment that cannot answer, which is
+#: what a skip is for. The reason names the package so the reader can install it.
+pytestmark = pytest.mark.skipif(
+    not tree_sitter_available(),
+    reason="tree-sitter-languages is not installed; the extractor returns [] by design "
+           "(EC-8) and every assertion here needs a real parse. `pip install "
+           "tree-sitter-languages` to run them.",
+)
 
 
 def _modules(symbols: list[ExtractedSymbol]) -> list[str]:

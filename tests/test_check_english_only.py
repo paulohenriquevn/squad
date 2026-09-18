@@ -30,7 +30,14 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "mechanisms" / "gates"))
 
-from check_english_only import find_markers, is_exempt, scan_text  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_english_only import (  # noqa: E402 — post-bootstrap import
+    find_markers,
+    is_exempt,
+    scan_text,
+)
 
 
 @pytest.mark.parametrize("line", [
@@ -96,3 +103,34 @@ def test_scan_reports_line_numbers_and_the_words_found() -> None:
 def test_a_file_with_only_english_scans_clean() -> None:
     text = "# Purpose\n\nThis rule governs the intake cycle.\n\n- One item, one owner.\n"
     assert scan_text(text) == []
+
+
+def test_a_portuguese_docstring_with_no_accent_is_detected() -> None:
+    """The marker set missed the shape a docstring actually takes.
+
+    `Classifica (e opcionalmente aplica) a delta em UM consumidor` sat in versioned source  # english-only: quoting the line that slipped through
+    for weeks and the gate reported clean: no accent, and not one of its words was on the
+    list. The marker set had accented function words and a few nouns, and a Portuguese
+    sentence built from verbs slipped through every one of them.
+    """
+    from check_english_only import scan_text
+
+    assert scan_text("    \"\"\"Classifica (e opcionalmente aplica) a delta em UM consumidor.\"\"\"")  # english-only: the fixture IS the Portuguese this gate must catch
+
+
+@pytest.mark.parametrize("line", [
+    "# apply the delta to one consumer",
+    "# returns the validated entry",
+    "# this writes a file and validates the result",
+    "def classify(source: str) -> Action:",
+    "# the present value, or the absent one",
+])
+def test_the_widened_markers_do_not_fire_on_english(line: str) -> None:
+    """A gate that guesses about language is a gate people learn to ignore.
+
+    A word-frequency heuristic was the other option and was rejected for this reason:
+    every marker added is a spelling that cannot be English.
+    """
+    from check_english_only import scan_text
+
+    assert not scan_text(line), f"false positive on: {line}"

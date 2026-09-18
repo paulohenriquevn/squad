@@ -68,7 +68,13 @@ for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         sys.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, write_records_dir  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    write_records_dir,
+)
 
 #: What the kit copies into a consumer. Mirrors `install.sh`'s own list; a directory
 #: missing here is a directory the probes cannot exercise, which shows up as a probe
@@ -419,12 +425,23 @@ def render(r: Report) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--kit", type=Path, default=None, help="the kit root (default: this repo)")
+    ap.add_argument("--root", "--kit", dest="kit", type=Path, default=None,
+                help="the kit root to sweep (default: this repo)")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    kit = args.kit or next(p for p in Path(__file__).resolve().parents
-                           if (p / "squad" / "paths.py").is_file())
+    # A DEFAULT on the `next()`. Without one it raises StopIteration when no ancestor
+    # holds `squad/paths.py` — a copy of this file somewhere else in the tree, or an
+    # install whose layout shifted — and a StopIteration out of `main` is a traceback
+    # that names neither what was searched for nor where.
+    kit = args.kit or next(
+        (p for p in Path(__file__).resolve().parents
+         if (p / "squad" / "paths.py").is_file()), None)
+    if kit is None:
+        print(f"UNCHECKED: no ancestor of {Path(__file__).resolve()} holds "
+              f"squad/paths.py, so the kit root could not be resolved. Pass --kit. "
+              f"Nothing was measured.", file=sys.stderr)
+        return 2
     r = check(kit)
     print(json.dumps(r.__dict__, indent=2, default=str) if args.json else render(r))
 

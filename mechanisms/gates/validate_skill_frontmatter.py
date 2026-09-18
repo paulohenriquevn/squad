@@ -88,6 +88,15 @@ def validate_all(ecosystem_dir: Path, strict: bool = False) -> int:
     for skill_dir in sorted(skills_dir.iterdir()):
         if not skill_dir.is_dir():
             continue
+        # A leading `_` or `.` marks something that is not a skill: `_kit-rules/` holds
+        # the rules skills cite, and `.benchmarks/` is pytest's own output. Both were
+        # walked, both warned "has no SKILL.md" — correctly, they have none — and
+        # `--strict` turns warnings into exit 1. So the documented strict mode failed on
+        # tool output and on a directory the kit ships on purpose, which makes the flag
+        # unusable and teaches a reader that strictness is noise. `verify_ecosystem`
+        # already skips both prefixes.
+        if skill_dir.name.startswith(("_", ".")):
+            continue
         skill_md = skill_dir / "SKILL.md"
         if not skill_md.exists():
             warnings.append(f"WARN: {skill_dir.name}/ has no SKILL.md")
@@ -110,6 +119,20 @@ def validate_all(ecosystem_dir: Path, strict: bool = False) -> int:
         for field in REQUIRED_FIELDS:
             if field not in fields:
                 errors.append(f"ERROR: {skill_dir.name}/SKILL.md missing required field: {field}")
+
+        # `OPTIONAL_FIELDS` sat beside `REQUIRED_FIELDS` and was read by NOTHING — a
+        # tree-wide grep found exactly its declaration. A constant named for a check
+        # teaches every reader the check exists, and an unknown key in a SKILL.md
+        # frontmatter passed silently: a typo'd `descripton:` reported only as a missing
+        # `description`, with no word about the key sitting right beside it.
+        #
+        # A WARNING, not an error. Claude Code ignores keys it does not know, so an
+        # unrecognised one is a likely typo rather than a broken skill — and turning it
+        # into an error would refuse a frontmatter the platform accepts.
+        for field in sorted(set(fields) - REQUIRED_FIELDS - OPTIONAL_FIELDS):
+            warnings.append(
+                f"WARN: {skill_dir.name}/SKILL.md has an unrecognised frontmatter key "
+                f"`{field}`. Known keys: {', '.join(sorted(REQUIRED_FIELDS | OPTIONAL_FIELDS))}")
 
         # Check name matches directory
         if "name" in fields:
@@ -159,7 +182,7 @@ def validate_all(ecosystem_dir: Path, strict: bool = False) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--ecosystem-dir", type=Path, default=None,
+        "--root", "--ecosystem-dir", dest="ecosystem_dir", type=Path, default=None,
         help="the ecosystem to validate. Without it the root is resolved from the "
              "cwd — which is how `check_xrefs.py` used to audit whichever project "
              "the shell happened to sit in and print ITS verdict under another "
@@ -169,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     eco = args.ecosystem_dir or find_ecosystem_dir(require=True)
+    # `find_ecosystem_dir(require=True)` never returns None, but its signature is
+    # Path | None for the require=False caller; mypy cannot narrow across that.
     return validate_all(eco, strict=args.strict)  # type: ignore[arg-type]
 
 

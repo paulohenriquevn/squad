@@ -22,7 +22,10 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills/plan-confidence/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from check_alignment_gate import check_alignment_gate  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_alignment_gate import check_alignment_gate  # noqa: E402 (post-bootstrap)
 
 PLAN = """---
 version: 1.0
@@ -412,7 +415,7 @@ def test_every_verdict_the_scorer_produces_is_handled_here(tmp_path: Path) -> No
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]
                           / "skills" / "plan-alignment" / "scripts"))
-    import score_alignment  # noqa: PLC0415
+    import score_alignment
 
     source = Path(score_alignment.__file__).read_text(encoding="utf-8")
     verdicts = set(re.findall(r'return "([A-Z_]+)"', source))

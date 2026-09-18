@@ -19,7 +19,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "mechanisms" / "cycle"))
 
-import promote_to_develop as promote  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import promote_to_develop as promote  # noqa: E402 — post-bootstrap import
 
 
 def _gh(responses: dict[str, tuple[int, str, str]]):
@@ -199,7 +202,7 @@ def test_the_repository_is_named_rather_than_inferred_by_gh() -> None:
     source = (Path(__file__).resolve().parents[1] / "mechanisms" / "cycle"
               / "promote_to_develop.py").read_text(encoding="utf-8")
     for call in ('"pr", "list"', '"pr", "create"'):
-        line = next(l for l in source.splitlines() if call in l)
+        line = next(ln for ln in source.splitlines() if call in ln)
         assert "*scoped" in line, f"this gh call is still unscoped: {line.strip()}"
 
 
@@ -208,7 +211,7 @@ def test_every_remote_shape_yields_the_slug() -> None:
     after it. The first version keyed on `@`, and the consumer's remote has the user in
     ssh config — `alias-host:owner/repo.git` — so it parsed the alias as the slug.
     """
-    from promote_to_develop import _owner_repo  # noqa: PLC0415
+    from promote_to_develop import _owner_repo
 
     for url, expected in (
         ("alias-host:owner/repo.git", "owner/repo"),
@@ -223,7 +226,56 @@ def test_every_remote_shape_yields_the_slug() -> None:
 def test_an_unparseable_remote_leaves_the_call_unscoped() -> None:
     """None rather than a guess: the call stays exactly as it was, which is the behaviour
     before this existed."""
-    from promote_to_develop import _owner_repo  # noqa: PLC0415
+    from promote_to_develop import _owner_repo
 
     assert _owner_repo(lambda _b, _a: (1, "", "no such remote"), "git") is None
     assert _owner_repo(lambda _b, _a: (0, "not-a-url", ""), "git") is None
+
+
+def test_a_drift_gate_that_could_not_be_loaded_is_not_reported_as_no_reviews(tmp_path, monkeypatch) -> None:
+    """`[], 0` on ImportError made the caller print a specific, false cause.
+
+    "review drift: 0 record(s) examined — no `*-review-*.json` on disk" is a claim about
+    the repository. What actually happened was that the gate module did not import, and
+    the two shared a return value so nothing downstream could tell them apart.
+    """
+    import promote_to_develop as ptd
+
+    monkeypatch.setitem(sys.modules, "check_review_binding", None)
+
+    drifted, examined, why = ptd._reviews_that_drifted(tmp_path)
+
+    assert drifted == []
+    assert examined == ptd.UNCHECKED
+    assert "could not be loaded" in why
+
+
+def test_a_pr_whose_number_cannot_be_read_is_not_handed_to_merge() -> None:
+    """`gh pr create` succeeding with unparseable output produced the literal `"?"`.
+
+    That string went into `report.detail["pr"]` and then into `gh pr merge ?`, whose
+    failure lands in the AWAITING branch — which tells the operator to wait for checks on
+    a PR whose number nothing knows. The PR exists; what failed is reading its number,
+    and that is what the operator has to be told.
+    """
+    report = promote.promote(ROOT, git=_git(), gh=_gh({
+        "pr list": (0, "[]", ""),
+        "pr create": (0, "created, but not a URL\n", ""),
+        "pr merge": (0, "", ""),
+    }))
+
+    assert report.exit_code == promote.UNMEASURED, report.lines
+    joined = "\n".join(report.lines)
+    assert "number could not be read" in joined, joined
+    assert "?" not in report.detail.get("pr", ""), report.detail
+
+
+def test_a_pr_whose_number_reads_is_still_merged() -> None:
+    """The refusal must be about the unreadable output, not about opening a PR."""
+    report = promote.promote(ROOT, git=_git(), gh=_gh({
+        "pr list": (0, "[]", ""),
+        "pr create": (0, "https://github.com/o/r/pull/12\n", ""),
+        "pr merge": (0, "", ""),
+    }))
+
+    assert "opened PR #12" in "\n".join(report.lines)

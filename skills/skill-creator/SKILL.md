@@ -78,6 +78,20 @@ It's OK to briefly explain terms if you're in doubt, and feel free to clarify te
 
 ---
 
+## Where the scripts live
+
+Every command below runs the script **by its path**, and resolves that path once:
+
+```bash
+SKILL_CREATOR="$([ -d .claude/skills/skill-creator ] && echo .claude/skills/skill-creator || echo skills/skill-creator)"
+```
+
+The earlier form — `python -m scripts.run_loop` — resolved only when the shell's
+working directory happened to be `skills/skill-creator`. Read from anywhere else it
+died on `ModuleNotFoundError` before parsing an argument, which is not a usage error
+the reader can see coming. The scripts now bootstrap their own package, so a path
+invocation works from any directory.
+
 ## Creating a skill
 
 ### Output location (this project — Cycle)
@@ -295,7 +309,7 @@ Once all runs are done:
 
 2. **Aggregate into benchmark** — run the aggregation script from the skill-creator directory:
    ```bash
-   python -m scripts.aggregate_benchmark <workspace>/iteration-N --skill-name <name>
+   python3 "$SKILL_CREATOR/scripts/aggregate_benchmark.py" <workspace>/iteration-N --skill-name <name>
    ```
    This produces `benchmark.json` and `benchmark.md` with pass_rate, time, and tokens for each configuration, with mean ± stddev and the delta. If generating benchmark.json manually, see `references/schemas.md` for the exact schema the viewer expects.
 Put each with_skill version before its baseline counterpart.
@@ -448,7 +462,7 @@ Tell the user: "This will take some time — I'll run the optimization loop in t
 Save the eval set to the workspace, then run in the background:
 
 ```bash
-python -m scripts.run_loop \
+python3 "$SKILL_CREATOR/scripts/run_loop.py" \
   --eval-set <path-to-trigger-eval.json> \
   --skill-path <path-to-skill> \
   --model <model-id-powering-this-session> \
@@ -479,7 +493,7 @@ Take `best_description` from the JSON output and update the skill's SKILL.md fro
 Check whether you have access to the `present_files` tool. If you don't, skip this step. If you do, package the skill and present the .skill file to the user:
 
 ```bash
-python -m scripts.package_skill <path/to/skill-folder>
+python3 "$SKILL_CREATOR/scripts/package_skill.py" <path/to/skill-folder>
 ```
 
 After packaging, direct the user to the resulting `.skill` file path so they can install it.

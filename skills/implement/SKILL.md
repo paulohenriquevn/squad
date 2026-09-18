@@ -100,7 +100,7 @@ The wiring triad — enforced by `scripts/check_wiring.py` at the end of every t
 |---|---|---|
 | **(a) Static caller** | Every new public export is invoked by at least 1 production caller | `grep -rl 'symbolName' <src-root>/ --exclude='*test*' --exclude-dir=<vendor>` must return ≥1 file |
 | **(b) Integration test** | Every new behavior is exercised in at least 1 integration test that hits the real boundary (real DB, real external API stub with deterministic fixture, etc.) | `grep -rl 'symbolName' <integration-test-root>/` must return ≥1 file OR ADR-deferred for first-iteration prototypes |
-| **(c) Runtime metric** | Every metric/counter declared in the plan's Global DoD is observed non-zero during an integration test run | `.wiring-evidence.json` (written by integration test infra) shows `metric_name: count > 0` OR plan declared no metrics for this task |
+| **(c) Runtime metric** | Every metric/counter declared in the plan's Global DoD is observed non-zero during an integration test run | `.wiring-evidence.json` (written by integration test infra) shows `metric_name: count > 0` OR plan declared no metrics for this task. **Reachable only via `check_wiring.py --metric <name>`, and no production caller passes it** — `run_validation` and `wiring_recheck` both invoke the checker without the flag, so this pillar returns `N/A` on every run of the real chain and the triad is enforced as two pillars, not three. Wiring the flag needs a plan field naming the metric per task; until that exists this row describes a gate that does not fire. |
 
 Failure of any pillar = HALT before commit. The halt-loop iterates until all three pass OR an ADR explicitly defers a pillar with rationale (warn-first for pillars (b) and (c) during prototype phases; pillar (a) is non-negotiable).
 
@@ -304,7 +304,21 @@ This script consolidates (per ADR 0002 — `cq-gate-in-validate`) every post-imp
   run). Skips only where no manifest for that language sits at the root, which is a
   statement about the manifest and not about the project.
 - Project type-checker / strict linter — exit 0
-- Coverage gate — ≥ 90% on changed files; 100% on critical paths declared in plan
+- **Coverage gate (`coverage_gate.py`) — TOTAL line coverage, against the project's own
+  `coverage.min_percent` or a default of 80.** That is the whole of what it measures.
+
+  This line used to read "≥ 90% on changed files; 100% on critical paths declared in
+  plan". The gate enforces neither: it compares ONE total against one threshold, and
+  where no `coverage.min_percent` is configured the floor is 80 — ten points under the
+  number this line named. `coverage_gate.py`'s own docstring has said so all along
+  ("this reads TOTAL line coverage. The per-changed-file and critical-path thresholds
+  in SKILL.md remain unenforced here"), so the contract and the tool contradicted each
+  other in writing, and the contract was the one people read.
+
+  The per-file and critical-path thresholds are **not implemented**, deliberately
+  rather than by oversight: they need the plan's file list and a per-file report, and
+  deriving them from a total would be the same laundering in a new place. Stated here
+  as a gap so nobody reads the total as if it covered them.
 - **Wiring summary — INDEPENDENT re-verification, not self-report.** The gate derives the public symbols actually added in the committed diffs (`diff_symbols.py`) and RE-RUNS `check_wiring.py` per symbol (`wiring_recheck.py`). The `wiring` field of the progress file is treated as a CLAIM to be audited: a task self-reporting `wiring.a == "pass"` while the recheck finds an uncalled symbol is flagged `fabricated_wiring_evidence` → check `FAIL`. If no symbol can be re-verified (no SHAs, git unavailable), the check is `N/A` — never a PASS laundered from a claim.
 - **Acceptance-criteria gate (`check_acceptance_criteria.py`)** — parses the plan's AC/DoD checkboxes and enforces the mechanizable ones run_validation doesn't otherwise cover: file-size budget (`≤ N lines` per changed file, measured from the diff) and CHANGELOG-updated. Non-mechanizable criteria (e.g. "backward compatibility preserved") are surfaced as `criterion_requires_human_evidence` (LOW) — visible for review, never silently accepted as a ticked box. File-size violation → check `FAIL`.
 - **TDD-shape gate (`check_tdd_shape.py`, re-asserted)** — the Step 2 pre-loop gate runs AGAIN at the end. It was invoked from this prose only, so a halt-loop driven from a prose-only plan left no trace: nothing downstream ever asked whether the check had run. Any task without an executable RED-test shape → check `FAIL`.

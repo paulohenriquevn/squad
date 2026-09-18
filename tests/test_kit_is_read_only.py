@@ -39,7 +39,15 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hook_harness import ALLOW, BLOCK, pre_tool_use, run_hook  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from hook_harness import (  # noqa: E402 — post-bootstrap import
+    ALLOW,
+    BLOCK,
+    pre_tool_use,
+    run_hook,
+)
 
 
 def _run(file_path: str, project: Path, plugin_root: Path | None = None) -> int:

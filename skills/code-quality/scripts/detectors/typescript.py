@@ -13,9 +13,9 @@ from pathlib import Path
 
 from scripts import _registry
 from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
-from scripts.check_symbol_fab import extract_imports_and_calls
+from scripts.check_symbol_fab import extract_checked
 
-from . import BaseDetector, _arch, _mutation, _wiring
+from . import BaseDetector, _arch
 
 _TS_NODE_BUILTINS = frozenset(
     {
@@ -226,6 +226,13 @@ class TypescriptDetector(BaseDetector):
     def detect_symbol_fabrication(self, changed_files: list[Path]) -> list[Finding]:
         """T2.3 — Validate imports against npm. Skip relative + node: builtins + monorepo subpath (EC-16) + self-references (patch 2026-05-30)."""
         findings: list[Finding] = []
+        # Vacuity guard, the same one `rust.py` carries and for the same measured reason:
+        # `extract_checked` reports whether the parser RAN, and an empty symbol list from
+        # a parse that never happened reads to D2 as "this file imports nothing" — a
+        # silent false-green over an audit that did not run. Reported as unavailable,
+        # never as clean.
+        parsed_any = False
+        unparsed = 0
         self_name = self._find_self_package_name(changed_files)
         ws_names = self._find_workspace_package_names(changed_files)
         aliases = self._find_path_aliases(changed_files)
@@ -233,7 +240,10 @@ class TypescriptDetector(BaseDetector):
             if not src_file.exists():
                 continue
             rel = to_rel_path(src_file)
-            for sym in extract_imports_and_calls(src_file, "typescript"):
+            symbols, parsed = extract_checked(src_file, "typescript")
+            parsed_any = parsed_any or parsed
+            unparsed += 0 if parsed else 1
+            for sym in symbols:
                 if sym.kind != "import":
                     continue
                 module = sym.module
@@ -290,22 +300,25 @@ class TypescriptDetector(BaseDetector):
                             allowlist_key=f"typescript|{rel}|symbol_fab|symbol_fab_unverifiable_{sanitized}",
                         )
                     )
+        if unparsed and not parsed_any:
+            return [
+                Finding(
+                    detector="d2_symbol_fab",
+                    language="typescript",
+                    severity="SOFT_CAP",
+                    file_path=".",
+                    symbol_or_line="tree-sitter",
+                    message=(
+                        f"D2 parsed none of the {unparsed} TypeScript source(s) it was "
+                        f"given — the tree-sitter grammar is unavailable or failed to "
+                        f"load. The audit did not run; this is NOT evidence that no "
+                        f"symbol is fabricated."
+                    ),
+                    allowlist_key="typescript|.|symbol_fab|auditor_unavailable_tree-sitter",
+                )
+            ]
+
         return findings
-
-    def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
-
-    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
-        return _mutation.detect_mutation_score(
-            self.language,
-            manifest_dir,
-            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
-            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
-            timeout_minutes=self.threshold(
-                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
-            max_report_age_minutes=self.threshold(
-                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
-        )
 
     # ------------------------------------------------------------------
     # internal helpers

@@ -6,10 +6,17 @@ from keywords because it runs against an arbitrary plan. Here the item already d
 `repo:`, and a repo belongs to exactly one domain — so guessing would only add a way to
 be wrong.
 
-The routing table is PARSED from `rules/cycle-backlog.md § Domain routing` rather than
-duplicated here. One table, one truth: a copy in code drifts from the rule the moment
-someone edits one of them, and the drift is silent — work routes to a specialist who
-cannot open the repo, and nothing errors.
+The routing table is PARSED, never duplicated here. One table, one truth: a copy in
+code drifts from the file the moment someone edits one of them, and the drift is silent
+— work routes to a specialist who cannot open the repo, and nothing errors.
+
+WHICH file, in `_TABLE_LOCATIONS` order: `.squad/domain-routing.txt`, then
+`rules/domain-routing.txt`, then `.claude/rules/domain-routing.txt`, and only then
+`rules/cycle-backlog.md § Domain routing`. This paragraph named the last one alone for
+a while after the table moved out of it — and `rules/cycle-backlog.md` itself now says
+"not in this file", so a reader following the docstring found the pointer, not the
+table. The first three are where a project's own table lives; the fourth is the legacy
+location and is read last.
 
 Exit codes:
   0 — routed
@@ -112,7 +119,10 @@ def _candidate_roots(declared_root: Path | None = None) -> list[Path]:
     return roots
 
 
-from pathlib import Path as _Path_bootstrap  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from pathlib import Path as _Path_bootstrap  # noqa: E402 — post-bootstrap import
 
 
 def _load_paths():
@@ -212,16 +222,27 @@ def _rows_from_txt(content: str) -> dict[str, dict[str, Any]]:
     kit's configuration files, not two.
     """
     table: dict[str, dict[str, Any]] = {}
-    for raw in content.splitlines():
+    for number, raw in enumerate(content.splitlines(), 1):
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
         parts = [cell.strip() for cell in line.split("|")]
+        # NAMED, not skipped. Both of these used to `continue`, and this file is
+        # hand-edited configuration: a row missing its trailing `|` is a plausible edit,
+        # and it removed that domain from routing in silence. `route_domain` then printed
+        # UNROUTED for every repository the row owned, and the reason — one malformed
+        # line — was nowhere in the output. `parse_roster` and `parse_registry` already
+        # raise with the line number for the same shape of mistake.
         if len(parts) < 3:
-            continue
+            raise ValueError(
+                f"line {number}: `{line}` has {len(parts)} field(s); the row is "
+                f"`domain | repos | specialist`. A row this parser cannot read is a "
+                f"domain nothing routes to, and skipping it says so to nobody")
         domain, repos_cell, agent_cell = parts[0], parts[1], parts[2]
         if not domain:
-            continue
+            raise ValueError(
+                f"line {number}: the domain cell is empty. Every row names the domain "
+                f"it routes; a nameless one cannot be matched and cannot be reported")
         table[domain] = {
             "repos": [r.strip() for r in repos_cell.split(",") if r.strip()],
             "agent": agent_cell or None,
@@ -263,9 +284,16 @@ def parse_routing_table(rule_path: Path) -> dict[str, dict[str, Any]]:
     # pipe-delimited rows — every example table in the file becomes a domain.
     # Measured during the migration: it recovered a domain named `bug` from the
     # kit's own contract file and reported it as the consumer's routing.
-    table = (_rows_from_markdown(content, rule_path)
-             if re.search(r"^##\s+Domain routing\b", content, re.MULTILINE)
-             else _rows_from_txt(content))
+    is_markdown_table = bool(re.search(r"^##\s+Domain routing\b", content, re.MULTILINE))
+    if is_markdown_table:
+        table = _rows_from_markdown(content, rule_path)
+    elif rule_path.suffix == ".md":
+        # A markdown document with no `## Domain routing` section is not a routing table
+        # in any format, and handing its prose to the row parser makes every sentence a
+        # malformed row. The error below already names what the reader should open.
+        table = {}
+    else:
+        table = _rows_from_txt(content)
 
     if not table:
         # Name what the reader will actually open. Telling someone their `.txt`
@@ -320,7 +348,8 @@ def _specialist_path(agent: str, rule_path: Path, project_root: Path | None) -> 
     name = Path(agent).name
 
     try:
-        from convene_panel import agents_dir  # type: ignore
+        # Sibling module; the ImportError below is the supported path, not an accident.
+        from convene_panel import agents_dir  # type: ignore[import-not-found]
         return agents_dir(root) / name
     except ImportError:
         nested = root / ".claude" / "agents"

@@ -8,7 +8,7 @@ allowed-tools: Read Glob Grep Bash Write Skill
 argument-hint: "{topic-slug}"
 ---
 
-This skill takes the current conversation context, any pre-existing grill output at `.squad/records/grills/{slug}-grill.md`, and codebase understanding, then produces a detailed implementation plan. Do NOT interview the user during `/plan-write` itself — if requirements are unclear, halt and recommend `/plan-grill {topic-slug}` first. When a grill output exists, the plan's `## Context` section MUST cite specific decisions resolved during grilling.
+This skill takes the current conversation context, any pre-existing grill output at `.squad/records/grills/{slug}-grill.md`, and codebase understanding, then produces a detailed implementation plan. Do NOT interview the user during `/plan-write` itself — if requirements are unclear, halt and say which decision is missing. The kit ships no grilling skill, so naming one sent the reader at a command that does not resolve; what unblocks the plan is the answer, not a slash command. When a grill output exists, the plan's `## Context` section MUST cite specific decisions resolved during grilling.
 
 ## Process
 

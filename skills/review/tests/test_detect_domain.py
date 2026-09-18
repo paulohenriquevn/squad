@@ -15,15 +15,18 @@ from pathlib import Path
 SCRIPT = Path(__file__).parent.parent / "scripts" / "detect_domain.py"
 
 sys.path.insert(0, str(SCRIPT.parent))
-from detect_domain import count_domain_hits  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from detect_domain import count_domain_hits  # noqa: E402 — post-bootstrap import
 
 
 def _run(plan: Path) -> tuple[int, dict]:
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(SCRIPT), "--plan", str(plan)],
         capture_output=True,
         text=True,
-    )
+     check=False)
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:

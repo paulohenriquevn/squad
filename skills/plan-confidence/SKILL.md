@@ -62,11 +62,15 @@ A plan is INVALID and CANNOT score above 49 when any of these fire:
 
 - **Coverage Matrix < 100%** (gaps not mapped to tasks) — capped at 49 (M2 enforced). Stable identifier: `coverage_lt_100`.
 - **Fabricated citation** (file/symbol in `Evidence:` doesn't exist in repo) — capped at 49 (M3 future). Stable identifier: `fabricated_citation`.
+- **An applicable `*-patterns` skill neither cited nor ADR-overridden.** Stable identifier: `patterns_skill_ignored`.
+- **A dependency audit that found something insecure.** Stable identifier: `deps_audit_insecure`.
+- **Alignment not reached.** Stable identifier: `alignment_not_reached`. This one has, by design, no dismissing ADR and no `--skip`: an escape hatch on it is an escape hatch on the reason it exists.
 
 A plan caps at 70 (SHIPPABLE_WITH_CAVEATS at most) when:
 
 - **ADR without alternatives** listed in Rationale. Stable identifier: `adr_without_alternatives`.
-- **Bug-fix task without explicit TDD** (RED-GREEN-REFACTOR block). Stable identifier: `tdd_in_bugfix`.
+- **Bug-fix task without explicit TDD** (RED-GREEN-REFACTOR block). Stable identifier: `bugfix_without_tdd`. (`tdd_in_bugfix` is the sub-report key, not what appears in `hard_caps_triggered`.)
+- **Acceptance Criteria not executable enough** to be checked. Stable identifier: `vague_acceptance_criteria`.
 
 These caps are UNBREAKABLE. See `.claude/rules/plan-confidence-golden-rule.md` for full enforcement contract. The stable identifiers above are what appears in the JSON output's `hard_caps_triggered` list.
 
@@ -175,6 +179,7 @@ The skill produces a JSON object with these top-level keys (see `templates/score
 - `1` — INVALID (hard cap triggered).
 - `2` — Error (plan not found, malformed rubric).
 - `3` — NON_SHIPPABLE (score < 50 without hard cap; over-penalization to investigate).
+- `4` — a PANEL verdict: `AWAITING_REVIEW`, `NEEDS_REVISION` or `ITEM_IN_FLIGHT`. The score stands; the verdict is held pending a person. Convene the panel or wait — there is nothing wrong with the plan or the command.
 
 ## How to Read Edge Case Outputs
 

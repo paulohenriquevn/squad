@@ -8,9 +8,17 @@ Output: JSON with primary domain (highest confidence), 0-3 secondaries, and
 the matched keywords for audit.
 
 Exit codes:
-  0 — Domain detected with confidence ≥ 0.5 for primary
-  1 — No domain detected (no keyword hits) — confidence too low; report as "unknown"
+  0 — a primary domain was detected: it holds ≥ 0.20 of the keyword hits
+  1 — no primary domain: either no keyword hits at all, or the hits are spread so
+      thinly that no domain reaches 0.20. Both report as "unknown", and the second
+      is the common one — a plan touching four areas evenly names none of them.
   2 — Error (plan not found, etc.)
+
+The 0.20 floor is the number `main` applies. It read 0.5 here for a long time while
+the code used 0.20, which meant a plan whose top domain held a quarter of the hits
+was routed and reported as detected while this block said it should have been
+unknown. Routing decides which specialist reads the diff, and `_keyword_pattern`
+below records what one mis-route cost on a consumer.
 
 The DOMAINS dictionary below is intentionally agnostic across common software
 engineering concerns. Projects may extend it by editing this file (no per-project
@@ -110,12 +118,12 @@ def _read_plan(plan_path: Path) -> str:
 
 def _git_diff_filenames(project_root: Path, diff_base: str) -> list[str]:
     try:
-        result = subprocess.run(  # noqa: PLW1510
+        result = subprocess.run(
             ["git", "-C", str(project_root), "diff", "--name-only", f"{diff_base}..HEAD"],
             capture_output=True,
             text=True,
             timeout=15,
-        )
+         check=False)
         if result.returncode != 0:
             return []
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
@@ -197,10 +205,17 @@ def rank_domains(hits: dict[str, dict[str, int | list[str]]]) -> tuple[str | Non
     sorted_by_hits = sorted(hits.items(), key=lambda kv: int(kv[1]["hits"]), reverse=True)
     confidence = {d: int(h["hits"]) / total_hits for d, h in hits.items()}
     primary = sorted_by_hits[0][0]
-    # Secondaries: any domain with confidence ≥ 0.15 except primary, max 3
+    # Secondaries: any domain with confidence ≥ 0.15 except primary, the STRONGEST 3.
+    #
+    # This iterated `confidence.items()`, whose key order is the DOMAINS declaration
+    # order, and sliced [:3] without sorting — so when four or more domains cleared the
+    # threshold, the three kept were whichever appear first in the DOMAINS literal
+    # (`auth`, `api-design`, `frontend`) and a stronger signal declared later was
+    # dropped. `sorted_by_hits` was computed one line above and used only for the
+    # primary; the same order decides these.
     secondaries = [
-        d for d, c in confidence.items()
-        if d != primary and c >= 0.15
+        d for d, _ in sorted_by_hits
+        if d != primary and confidence[d] >= 0.15
     ][:3]
     return primary, secondaries, confidence
 

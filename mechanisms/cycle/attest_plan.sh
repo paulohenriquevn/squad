@@ -36,6 +36,8 @@
 #   bash mechanisms/cycle/attest_plan.sh {slug}             # attest plan file by slug
 #   bash mechanisms/cycle/attest_plan.sh --all              # attest all plans in plans/
 #   bash mechanisms/cycle/attest_plan.sh --verify {slug}    # verify (read-only) without re-writing
+#   bash mechanisms/cycle/attest_plan.sh --verify-all       # verify EVERY plan; exits non-zero
+#                                                          # if any attestation is stale
 
 set -eu
 

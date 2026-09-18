@@ -17,8 +17,8 @@ The sweep runs in two directions because both hide a different defect:
 
 from __future__ import annotations
 
-import sys
 import re
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "mechanisms" / "gates"))

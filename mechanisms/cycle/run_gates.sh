@@ -85,16 +85,25 @@ run_one() {
 }
 export -f run_one
 
+# Only an INDEX crosses into the worker. The gate text used to, through
+# `line="{}"` inside a double-quoted assignment, so the shell re-parsed it and the
+# quoting was lost: `grep -q "two words" file` became `grep -q two words file`, which
+# printed `bash: words file: No such file or directory` — and the mangled worker never
+# wrote its `.rc`, so the tally below counted only the gates that reported and printed
+# "all N gate(s) passed". A gate that did not run, reported as a gate that passed.
+# The worker reads its own line from the file by number; nothing re-parses a command.
 _start=$(date +%s%N)
-nl -ba -w1 -s$'\t' "$RUNDIR/gates" \
-  | xargs -P "$JOBS" -d '\n' -I{} bash -c '
-      line="{}"; idx="${line%%'$'\t''*}"; cmd="${line#*'$'\t''}"
+seq 1 "$_total" \
+  | xargs -P "$JOBS" -I{} bash -c '
+      idx="{}"
+      cmd="$(sed -n "${idx}p" "'"$RUNDIR"'/gates")"
       run_one "$idx" "$cmd" "'"$RUNDIR"'" "'"$GATE_TIMEOUT"'"'
 _wall=$(( ( $(date +%s%N) - _start ) / 1000000 ))
 
-_failed=0; _timedout=0; _slowest=0; _slowest_cmd=""
+_failed=0; _timedout=0; _slowest=0; _slowest_cmd=""; _results=0
 for f in "$RUNDIR"/*.rc; do
   [ -f "$f" ] || continue
+  _results=$(( _results + 1 ))
   IFS=$'\t' read -r rc ms cmd < "$f"
   [ "$ms" -gt "$_slowest" ] && { _slowest="$ms"; _slowest_cmd="$cmd"; }
   if [ "$rc" = "124" ] || [ "$rc" = "137" ]; then
@@ -117,6 +126,18 @@ for f in "$RUNDIR"/*.rc; do
 done
 printf '==> wall %ss · sequential would be %ss · slowest %ss (%s)\n' \
   "$(( _wall / 1000 ))" "$(( _sum / 1000 ))" "$(( _slowest / 1000 ))" "$_slowest_cmd"
+
+# Dispatched against reported. Nothing compared them, so a worker that died before
+# writing its `.rc` simply left the tally — and the summary spoke for the gates that
+# DID report while claiming to speak for all of them. A gate with no result is not a
+# gate that passed, and this is the line that refuses to treat it as one.
+printf '==> %s result(s) for %s dispatched gate(s)\n' "$_results" "$_total"
+if [ "$_results" -ne "$_total" ]; then
+  echo "==> $(( _total - _results )) gate(s) left no result. They did not run, or died before" >&2
+  echo "    recording one. Either way nothing here measured them, and a missing result" >&2
+  echo "    must never read as a pass." >&2
+  exit 65
+fi
 
 [ "$_timedout" -gt 0 ] && { echo "==> $_timedout gate(s) hit the ${GATE_TIMEOUT}s ceiling — slow is a finding, not a pass" >&2; exit 2; }
 [ "$_failed" -gt 0 ] && { echo "==> $_failed gate(s) failed" >&2; exit 1; }

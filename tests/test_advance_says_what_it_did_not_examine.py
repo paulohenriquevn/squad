@@ -18,7 +18,6 @@ planned` is the writer, and the lane that knows why is the one that should run i
 """
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -40,7 +39,7 @@ def _registry(tmp_path: Path, *, with_plan: bool) -> Path:
 
 def _run(root: Path) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(_SCRIPT), str(root)],
-                          capture_output=True, text=True, timeout=600)
+                          capture_output=True, text=True, timeout=600, check=False)
 
 
 def test_it_names_the_divergence_it_cannot_close(tmp_path: Path) -> None:

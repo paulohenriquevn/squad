@@ -6,10 +6,16 @@ WHY THIS EXISTS
 e5527e6 deleted three advisory specialists (cap-theorem, backpressure, resilience)
 because "a fixed specialist asserts domain knowledge about repositories it has
 never read" — the deletion was documented and deliberate. However, the README.md
-table was never updated to reflect the removal. This gate catches that drift in
-both directions:
-1. README cites skills that don't exist on disk (broken promise).
-2. Skills exist on disk but aren't mentioned in README (documentation rot).
+table was never updated to reflect the removal. This gate catches that drift in ONE
+direction: a document cites a skill that does not exist on disk (broken promise).
+
+The reverse — "skills exist on disk but aren't mentioned in README" — was claimed here
+and implemented nowhere, in both this module and its test file. It is not a scoping
+oversight: the README table enumerates the ADVISORY skills and never claimed to
+enumerate the other thirty. Unscoped, the missing direction would report three quarters
+of the kit as documentation rot. The claim is deleted rather than implemented, and
+`main` now prints what each document contributed so a half that compares nothing is
+visible instead of silent.
 
 WHAT IT ASSERTS
 ===============
@@ -19,12 +25,19 @@ structure under skills/.
 
 EXIT CODES
 ==========
-0 — README and HOW-TO-USE are consistent with disk.
-1 — Inconsistency found (missing skills, orphan skills, or malformed table).
+0 — every citation names a skill that exists on disk.
+1 — a document cites a skill that is not on disk.
+2 — NOT CHECKED: neither document is present, so nothing was compared. This used to
+    be 0, and the exit code is the only part `verify_ecosystem` reads — so the
+    paragraph saying "it is NOT a pass" reached a human and never reached the chain.
 """
 import re
 from pathlib import Path
 from typing import Any
+
+#: Neither document is here, so nothing was compared. Distinct from 0 on purpose:
+#: the exit code is the only part `verify_ecosystem` reads.
+NOT_CHECKED = 2
 
 #: Regex to extract skill names from backtick-quoted names in markdown table cells.
 #: Example: "| `cap-theorem-specialist` | Consistency vs availability | "
@@ -37,66 +50,52 @@ from typing import Any
 _SKILL_NAME_RE = re.compile(r"`([a-z0-9][a-z0-9-]*(?:-specialist)?)`", re.IGNORECASE)
 
 
-def advisory_skills_in_readme(root: Path) -> set[str]:
-    """Extract advisory skill names from README.md Advisory skills table.
+README_HEADINGS = ("## Advisory skills",)
+HOW_TO_USE_HEADINGS = ("## Advisory skills", "## Skills", "## Commands")
 
-    Looks for the section "## Advisory skills" and extracts names between
-    backticks in the first column of the table.
 
-    Returns:
-        Set of skill names cited in README. Empty set if section not found.
-    """
-    readme = root / "README.md"
-    if not readme.is_file():
+def _section_start(text: str, headings: tuple[str, ...]) -> int | None:
+    for heading in headings:
+        at = text.find(heading)
+        if at != -1:
+            return at
+    return None
+
+
+def _names_in_section(doc: Path, headings: tuple[str, ...]) -> set[str]:
+    """The skill names a document's section carries. Empty when there is no section."""
+    if not doc.is_file():
         return set()
-
-    text = readme.read_text(encoding="utf-8")
-    start = text.find("## Advisory skills")
-    if start == -1:
+    text = doc.read_text(encoding="utf-8")
+    start = _section_start(text, headings)
+    if start is None:
         return set()
-
-    # Extract until the next H2 section or end of file
+    # Up to the next H2, or the end of the document.
     end = text.find("\n## ", start + 1)
-    if end == -1:
-        end = len(text)
+    return set(_SKILL_NAME_RE.findall(text[start:end if end != -1 else len(text)]))
 
-    section = text[start:end]
-    # Find all backtick-quoted names in this section
-    matches = _SKILL_NAME_RE.findall(section)
-    return set(matches)
+
+def section_present(doc: Path, headings: tuple[str, ...]) -> bool:
+    """Whether the document carries a section this gate knows how to read.
+
+    The question `_names_in_section` cannot answer: a document with no section and a
+    section naming nothing both return an empty set, so a half of this gate that had
+    stopped comparing anything looked exactly like a half that found nothing wrong.
+    HOW-TO-USE.md has been in the first state since it was restructured.
+    """
+    if not doc.is_file():
+        return False
+    return _section_start(doc.read_text(encoding="utf-8"), headings) is not None
+
+
+def advisory_skills_in_readme(root: Path) -> set[str]:
+    """The skills README.md's "Advisory skills" table names."""
+    return _names_in_section(root / "README.md", README_HEADINGS)
 
 
 def advisory_skills_in_how_to_use(root: Path) -> set[str]:
-    """Extract advisory skill names from HOW-TO-USE.md commands table.
-
-    Looks for the section that lists skills and their invocation commands,
-    and extracts names between backticks.
-
-    Returns:
-        Set of skill names cited in HOW-TO-USE. Empty set if section not found.
-    """
-    how_to_use = root / "HOW-TO-USE.md"
-    if not how_to_use.is_file():
-        return set()
-
-    text = how_to_use.read_text(encoding="utf-8")
-    # Look for a commands or skills table section
-    start = text.find("## Advisory skills")
-    if start == -1:
-        # Try alternate section names
-        start = text.find("## Skills")
-        if start == -1:
-            start = text.find("## Commands")
-    if start == -1:
-        return set()
-
-    end = text.find("\n## ", start + 1)
-    if end == -1:
-        end = len(text)
-
-    section = text[start:end]
-    matches = _SKILL_NAME_RE.findall(section)
-    return set(matches)
+    """The skills HOW-TO-USE.md's skills/commands table names."""
+    return _names_in_section(root / "HOW-TO-USE.md", HOW_TO_USE_HEADINGS)
 
 
 def existing_skills(root: Path) -> set[str]:
@@ -194,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
               if not disk else
               f"  NOT CHECKED: neither README.md nor HOW-TO-USE.md is here, so the "
               f"{len(disk)} skill(s) on disk were compared against nothing")
-        return 0
+        return NOT_CHECKED
 
     findings = check(root)
     if args.json:
@@ -204,6 +203,18 @@ def main(argv: list[str] | None = None) -> int:
 
     cited = advisory_skills_in_readme(root) | advisory_skills_in_how_to_use(root)
     print(f"README advisory skills — {root}")
+    # Per DOCUMENT, not summed. A sum cannot show a half that stopped comparing: the
+    # HOW-TO-USE side has contributed 0 names since the document was restructured, and
+    # the combined count read exactly like a document with nothing wrong in it.
+    for label, doc, headings in (("README.md", readme, README_HEADINGS),
+                                 ("HOW-TO-USE.md", how_to, HOW_TO_USE_HEADINGS)):
+        if not doc.is_file():
+            print(f"  {label}: absent")
+        elif not section_present(doc, headings):
+            print(f"  {label}: present, but carries no skills section this gate reads "
+                  f"({' / '.join(headings)}) — 0 name(s) compared")
+        else:
+            print(f"  {label}: {len(_names_in_section(doc, headings))} name(s) compared")
     print(f"  examined: {len(cited)} skill(s) cited across "
           f"{sum(1 for p in (readme, how_to) if p.is_file())} document(s), "
           f"{len(disk)} skill(s) on disk")

@@ -101,10 +101,10 @@ def test_the_runner_draws_a_different_mark_for_what_it_did_not_run(
     import subprocess
 
     script = ROOT / "mechanisms" / "gates" / "verify_ecosystem.py"
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(script), "--ecosystem-dir", str(tmp_path)],
         capture_output=True, text=True, timeout=180,
-    )
+     check=False)
     out = result.stdout
     lines = out.splitlines()
     skips = [i for i, ln in enumerate(lines) if "not installed" in ln]
@@ -116,6 +116,16 @@ def test_the_runner_draws_a_different_mark_for_what_it_did_not_run(
             f"never installed. A reader scanning marks is told this was checked."
         )
     assert "not run" in out.lower(), "the summary has to count what it could not check"
+    # The EXIT CODE and the aggregate verdict, which this test ran past. An empty tree
+    # is where every delegating check takes its skip branch, and that is exactly the
+    # state where `ALL CHECKS PASSED` + exit 0 would be the whole defect this file is
+    # about: nothing was checked, and the two things a script's caller reads said it
+    # all passed. Asserting the marks and not the verdict left the worst outcome
+    # unguarded.
+    assert result.returncode != 0, (
+        f"a run that checked nothing exited 0:\n{out[-800:]}")
+    assert "ALL CHECKS PASSED" not in out, (
+        "the aggregate claims a pass over a tree where every gate was skipped")
 
 
 def test_the_verifier_examines_the_tree_it_was_pointed_at(tmp_path: Path) -> None:
@@ -133,10 +143,10 @@ def test_the_verifier_examines_the_tree_it_was_pointed_at(tmp_path: Path) -> Non
     import subprocess
 
     script = ROOT / "mechanisms" / "gates" / "verify_ecosystem.py"
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(script), "--ecosystem-dir", str(tmp_path)],
         capture_output=True, text=True, timeout=180, cwd=str(ROOT),
-    )
+     check=False)
     assert str(tmp_path) in result.stdout, (
         f"pointed at {tmp_path} and reported on something else:\n{result.stdout[:400]}"
     )
@@ -150,11 +160,196 @@ def test_an_argument_it_does_not_understand_is_an_error(tmp_path: Path) -> None:
     import subprocess
 
     script = ROOT / "mechanisms" / "gates" / "verify_ecosystem.py"
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(script), "--not-a-real-flag"],
         capture_output=True, text=True, timeout=180, cwd=str(ROOT),
-    )
+     check=False)
     assert result.returncode == 2, (
         f"exited {result.returncode}; an unrecognised argument must not be swallowed"
     )
     assert "unrecognised" in result.stderr.lower()
+
+
+def test_a_run_where_nothing_ran_is_not_a_pass(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The aggregate verdict is the half a CALLER reads, and it said the opposite.
+
+    `all_pass` starts True and is cleared only in the `else` branch. `NOT_RUN` is
+    truthy on purpose — a falsy sentinel would turn every partial install red — so a
+    run where EVERY check took its skip branch fell through to `if all_pass:` and
+    printed `=== ALL CHECKS PASSED ===`, returning 0.
+
+    An empty directory does NOT reproduce it: the checks that read the tree directly
+    (`Python syntax`, `Mechanisms inventory`) fail there and clear the flag, which is
+    why the sibling test above passes today. The condition is every DELEGATING check
+    skipping at once — a consumer who installed the kit without `mechanisms/gates/`.
+    So this forces the state rather than hoping for it: every check is replaced with
+    one that returns `NOT_RUN`, which is exactly what the shipped ones return when
+    their script is absent.
+
+    The per-check mark was already correct (`⊘`, covered above); this is about the
+    line a script greps and the code a pipeline branches on.
+    """
+    mod = _module()
+    names = [n for n in dir(mod) if n.startswith("check_")]
+    assert len(names) > 10, f"expected the check_* family, found {names}"
+    not_run = mod.NOT_RUN
+    for name in names:
+        # `*_a`: one entry in the checks list is a closure taking two arguments, and a
+        # one-argument fake raised there instead of skipping — which cleared `all_pass`
+        # and made this test pass for the wrong reason while the defect was live.
+        setattr(mod, name, lambda *_a, **_k: (not_run, ["  forced: gate not installed"]))
+
+    code = mod.main(["--ecosystem-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert "ALL CHECKS PASSED" not in out, (
+        "every check was skipped and the run still reported a full pass:\n" + out
+    )
+    assert code != 0, (
+        f"returned {code} when no gate ran. A caller cannot tell this from a real pass.\n{out}"
+    )
+
+
+def test_cross_references_are_checked_strictly(tmp_path: Path) -> None:
+    """`--strict` is not cosmetic, and the installer already knew that.
+
+    Without it `check_xrefs.py` prints its WARN findings and exits 0, so every WARN
+    class reached this verifier as a pass. `mechanisms/distribution/install.sh` invokes the same
+    script WITH `--strict`, and `.github/workflows/ci.yml` does too — so the smoke
+    test was weaker than both callers that depend on it, and the same commit could
+    be green here and refused at install time.
+    """
+    source = (ROOT / "mechanisms" / "gates" / "verify_ecosystem.py").read_text(encoding="utf-8")
+    start = source.index("def check_xrefs(")
+    body = source[start:source.index("\ndef ", start + 1)]
+    assert "--strict" in body, (
+        "check_xrefs is spawned without --strict, so a WARN reaches this gate as exit 0"
+    )
+
+
+def test_every_cycle_rule_on_disk_is_graded_not_six_from_a_list(tmp_path) -> None:
+    """The tuple named six while fourteen were on disk, and the schema said every one.
+
+    `cycle-design.md` was one of the eight nobody graded: it carried
+    `## Why this cycle exists` instead of `## Purpose` and had no `## Anti-patterns`.
+    That is what an ungraded rule drifts into, and the drift was invisible because the
+    gate reported PASS over a list that did not contain it.
+    """
+    import verify_ecosystem as ve
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    good = "## Purpose\nx\n## Chain\nx\n## Anti-patterns\nx\n"
+    (rules / "cycle-discover.md").write_text(good, encoding="utf-8")
+    # A cycle the old tuple never named.
+    (rules / "cycle-design.md").write_text("## Why this cycle exists\nx\n## Chain\nx\n",
+                                           encoding="utf-8")
+    (rules / "cycle-rule-schema.md").write_text("## Purpose\nx\n", encoding="utf-8")
+
+    ok, issues = ve.check_cycle_rules(tmp_path)
+
+    assert ok is False
+    joined = "\n".join(issues)
+    assert "cycle-design.md" in joined, f"the ungraded cycle was still not graded: {joined}"
+    assert "cycle-rule-schema.md" not in joined, "the schema was graded as if it were a cycle"
+
+
+def test_a_rules_tree_with_no_cycle_is_not_a_pass(tmp_path) -> None:
+    import verify_ecosystem as ve
+
+    (tmp_path / "rules").mkdir()
+
+    ok, issues = ve.check_cycle_rules(tmp_path)
+
+    assert ok is ve.NOT_RUN
+    assert "nothing was graded" in "\n".join(issues)
+
+
+def test_a_not_applicable_check_is_marked_not_run_rather_than_passed(tmp_path) -> None:
+    """The module's own contract: "the skip stops being spelled True, because True is
+    what a pass looks like".
+
+    `check_chain_preconditions` returned True on both not-applicable paths while the line
+    printed beside the tick said "not applicable". Three outputs — the mark, the tally and
+    the sentence — and two of them said the check had passed.
+    """
+    import verify_ecosystem as ve
+
+    # No BACKLOG.md: no chain runs here, so the question does not apply.
+    ok, lines = ve.check_chain_preconditions(tmp_path)
+
+    assert ok is ve.NOT_RUN, "a not-applicable check reported as a pass"
+    assert any("not applicable" in ln for ln in lines)
+
+
+def test_the_not_run_footer_does_not_name_one_cause_for_two(capsys) -> None:
+    """A gate script that is not installed and a gate whose subject does not exist both
+    land in the NOT_RUN tally. The footer named only the first, so a reader saw
+    "the gate script was not installed" beside a gate that is installed and ran."""
+    import inspect
+
+    import verify_ecosystem as ve
+
+    # `_sweep`, not `main`: the sweep was split out so `--json` could capture the
+    # human text instead of racing it to stdout, and the footer went with the loop
+    # that counts the skips. Reading `main` here passed vacuously for one commit —
+    # the string was absent and the assertion was `not in`, so the check that the
+    # footer names both causes had nothing left to read.
+    footer = inspect.getsource(ve._sweep)
+
+    assert "the gate script was not installed)" not in footer, (
+        "the footer still asserts a single cause for every ⊘")
+    assert "each ⊘ above says why" in footer
+
+
+def _ve():
+    """The module itself, imported from the gates directory it lives in."""
+    import importlib
+    import sys as _sys
+
+    gates = str(ROOT / "mechanisms" / "gates")
+    if gates not in _sys.path:
+        _sys.path.insert(0, gates)
+    return importlib.import_module("verify_ecosystem")
+
+
+def test_the_json_gate_ritual_is_written_once() -> None:
+    """Eight wrappers spelled out the same five steps, and the copies had drifted.
+
+    Build the path under `mechanisms/gates/`, check it exists, run it with `--json`,
+    `json.loads` the stdout, turn a decode error into a message. Two of the eight returned
+    NOT_RUN for unparseable output where the other six returned False — the same failure
+    drew a skip in one row and a cross in another, and no test could see the difference
+    because each copy was correct on its own terms.
+    """
+    source = (ROOT / "mechanisms" / "gates" / "verify_ecosystem.py").read_text(encoding="utf-8")
+
+    assert source.count("produced no usable JSON") == 1, (
+        "the decode-failure message is spelled in more than one place again")
+    assert source.count('_gate_payload(ecosystem_dir') >= 8, (
+        "some JSON wrapper stopped going through the shared helper")
+
+
+def test_an_unparseable_gate_is_a_failure_not_a_skip(tmp_path) -> None:
+    """NOT_RUN is for the not-installed branch. A gate that RAN and produced unreadable
+    output is a gate that failed, and the two must not share a mark."""
+    gates = tmp_path / "mechanisms" / "gates"
+    gates.mkdir(parents=True)
+    (gates / "check_skill_map.py").write_text("print('not json at all')\n", encoding="utf-8")
+
+    payload, refusal = _ve()._gate_payload(tmp_path, "check_skill_map", "--root", str(tmp_path))
+
+    assert payload is None
+    verdict, lines = refusal
+    assert verdict is False, f"unparseable output marked {verdict!r}"
+    assert any("no usable JSON" in ln for ln in lines)
+
+
+def test_a_gate_that_is_not_installed_is_still_a_skip(tmp_path) -> None:
+    payload, refusal = _ve()._gate_payload(tmp_path, "check_skill_map", "--root", str(tmp_path))
+
+    assert payload is None
+    verdict, _lines = refusal
+    assert verdict is _ve().NOT_RUN

@@ -13,7 +13,7 @@ def _run_wiring(symbol: str, project_root: Path, metric: str | None = None) -> t
     args = [sys.executable, str(SCRIPT), "--symbol", symbol, "--project-root", str(project_root)]
     if metric:
         args.extend(["--metric", metric])
-    result = subprocess.run(args, capture_output=True, text=True)  # noqa: PLW1510
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
     try:
         data = json.loads(result.stdout)
     except json.JSONDecodeError:

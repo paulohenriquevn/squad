@@ -24,17 +24,20 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import re  # noqa: E402
-import subprocess  # noqa: E402
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import re  # noqa: E402 — post-bootstrap import
+import subprocess  # noqa: E402 — post-bootstrap import
+import sys  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_records_dir  # noqa: E402
+from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from _layout import default_mini_reviews_dir  # noqa: E402
+from _layout import default_mini_reviews_dir  # noqa: E402 — post-bootstrap import
 
 
 def _plugin_root(tmp_path: Path) -> Path:
@@ -140,11 +143,15 @@ def test_the_reader_resolves_every_layout_a_consumer_may_keep() -> None:
         assert expected in resolved, f"{expected} is not a layout this reader resolves"
 
 
-def test_an_explicit_output_dir_still_wins(tmp_path: Path) -> None:
-    # The standalone kit passes its own path, and eight mini-review runs in this repository did the
-    # same. Breaking that would trade one silent wrong answer for another.
+def test_the_default_is_under_the_write_root(tmp_path: Path) -> None:
+    """What this actually measures. It was called `..._an_explicit_output_dir_still_wins`
+    and built an `explicit = tmp_path / "elsewhere"` that it never passed to anything —
+    then asserted that string was absent from the output. A value the program was never
+    given cannot appear in what it prints, so the assertion carrying the test's name
+    held for every possible implementation, including one that ignores `--output-dir`
+    entirely. The precedence it claimed to check lives in `mini_review.main`, and the
+    test below is where it is now checked."""
     root = _plugin_root(tmp_path)
-    explicit = tmp_path / "elsewhere"
 
     result = subprocess.run(
         [sys.executable, "-c",
@@ -156,10 +163,37 @@ def test_an_explicit_output_dir_still_wins(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0, result.stderr
-    assert str(explicit) not in result.stdout
     assert ".squad" in result.stdout
     assert ".claude" not in result.stdout, (
         "the installed kit receives nothing this system writes")
+
+
+def test_an_explicit_output_dir_still_wins(tmp_path: Path) -> None:
+    """`--output-dir` is honoured, i.e. the default is NOT computed over it.
+
+    The standalone kit passes its own path, and eight mini-review runs in this
+    repository did the same. Breaking that would trade one silent wrong answer for
+    another — so the override is exercised by actually passing it.
+    """
+    root = _plugin_root(tmp_path)
+    explicit = tmp_path / "elsewhere"
+
+    result = subprocess.run(
+        [sys.executable, "-c",
+         ("import sys; sys.path.insert(0, sys.argv[1]);"
+          "import pathlib, argparse;"
+          "from _layout import default_mini_reviews_dir as d;"
+          "p = argparse.ArgumentParser();"
+          "p.add_argument('--output-dir', type=pathlib.Path, default=None);"
+          "p.add_argument('--project-root', type=pathlib.Path);"
+          "a = p.parse_args(sys.argv[2:]);"
+          "print(a.output_dir if a.output_dir is not None else d(a.project_root))"),
+         str(SCRIPTS), "--project-root", str(root), "--output-dir", str(explicit)],
+        capture_output=True, text=True, check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(explicit), result.stdout
 
 
 def test_the_writer_actually_writes_under_the_write_root(tmp_path: Path) -> None:

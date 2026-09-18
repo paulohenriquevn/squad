@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B-103 — has a consumer's install and this kit drifted, and which way?
+"""Has a consumer's install drifted from this kit, and which way?
 
 WHY THIS EXISTS
 ---------------
@@ -25,7 +25,7 @@ that the moment a comment is reworded — but "does one side hold work the other
     DIVERGED        BOTH hold unique lines
 
 DIVERGED is the only class that needs a human, and it is the class a blind copy destroys. Measured
-on `run_code_quality.py`: copying the install over the kit would have deleted B-092's
+on `run_code_quality.py`: copying the install over the kit would have deleted 's
 zero-detector check, the one fix that had already made it home.
 
 WHAT IT DELIBERATELY DOES NOT DO
@@ -55,7 +55,13 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+)
 
 
 class Drift(enum.Enum):
@@ -85,7 +91,7 @@ def _lines(path: Path) -> set[str]:
     return {line for line in text.split("\n") if line.strip()}
 
 
-def _historical_contents(kit_root: Path, rel: str) -> set[str]:
+def _historical_contents(kit_root: Path, rel: str) -> set[str] | None:
     """Every content this path has ever had in the kit's history.
 
     Without asking this, a consumer installed from an older version shows up as
@@ -96,20 +102,69 @@ def _historical_contents(kit_root: Path, rel: str) -> set[str]:
     false `local-change` became 119) and was not here.
     """
     try:
-        revisions = subprocess.run(  # noqa: PLW1510
+        listed = subprocess.run(
             ["git", "-C", str(kit_root), "rev-list", "--all", "--", rel],
-            capture_output=True, text=True, timeout=60,
-        ).stdout.split()
-    except (OSError, subprocess.SubprocessError):
+            capture_output=True, text=True, timeout=60, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        # None, not `set()`. An empty set makes `body in history` false for every body,
+        # so a git failure reclassified every stale file as "needs a human" — the exact
+        # false-positive class this function was written to remove. The caller now tells
+        # "no history" from "could not ask".
+        print(f"check_install_drift: could not read the history of {rel}: {exc}. "
+              f"Whether this file is an older kit version was NOT determined.",
+              file=sys.stderr)
+        return None
+    if listed.returncode != 0:
+        print(f"check_install_drift: `git rev-list` exited {listed.returncode} for {rel}: "
+              f"{(listed.stderr or '').strip()[:160]}. Staleness NOT determined.",
+              file=sys.stderr)
+        return None
+
+    revisions = listed.stdout.split()
+    if not revisions:
         return set()
+
+    # ONE process for every revision, not one process PER revision. `git show` was spawned
+    # in a loop with no cap and no early exit, so a file with forty revisions cost forty
+    # processes — per file, per consumer. `cat-file --batch` reads the same blobs over a
+    # single pipe.
+    request = "\n".join(f"{revision}:{rel}" for revision in revisions) + "\n"
+    try:
+        batch = subprocess.run(
+            ["git", "-C", str(kit_root), "cat-file", "--batch"],
+            input=request, capture_output=True, text=True, timeout=120, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"check_install_drift: could not read the blobs of {rel}: {exc}. "
+              f"Staleness NOT determined.", file=sys.stderr)
+        return None
+
+    return _blobs_from_batch(batch.stdout)
+
+
+def _blobs_from_batch(stream: str) -> set[str]:
+    """The contents in a `git cat-file --batch` answer.
+
+    Each object arrives as `<sha> <type> <size>\n<size bytes>\n`; a missing one as
+    `<name> missing\n`. Parsed by the declared size rather than by scanning for the next
+    header, because a blob may contain a line that looks exactly like one.
+    """
     contents: set[str] = set()
-    for revision in revisions:
-        blob = subprocess.run(  # noqa: PLW1510
-            ["git", "-C", str(kit_root), "show", f"{revision}:{rel}"],
-            capture_output=True, text=True,
-        )
-        if blob.returncode == 0:
-            contents.add(blob.stdout)
+    at = 0
+    while at < len(stream):
+        end_of_header = stream.find("\n", at)
+        if end_of_header == -1:
+            break
+        header = stream[at:end_of_header]
+        at = end_of_header + 1
+        parts = header.split()
+        if len(parts) != 3 or parts[1] != "blob":
+            continue  # `missing`, or an object that is not a blob
+        try:
+            size = int(parts[2])
+        except ValueError:
+            continue
+        contents.add(stream[at:at + size])
+        at += size + 1  # the trailing newline git adds after the payload
     return contents
 
 
@@ -122,7 +177,7 @@ def _is_project_owned(rel: str) -> bool:
     ownership without the declaration is worse.
     """
     try:
-        from squad.boundaries import PROJECT_OWNED  # noqa: PLC0415
+        from squad.boundaries import PROJECT_OWNED
     except ImportError:
         return False
     if not any(pattern.search(rel) for pattern in PROJECT_OWNED):
@@ -161,7 +216,13 @@ def classify_file(install_file: Path, kit_file: Path,
             body = install_file.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             return verdict
-        if body in _historical_contents(kit_root, rel):
+        history = _historical_contents(kit_root, rel)
+        if history is None:
+            # Could not ask. The verdict stands as it was — reporting STALE would claim a
+            # match nothing found, and reporting the default silently would hide that the
+            # question went unanswered. The reason is already on stderr.
+            return verdict
+        if body in history:
             return Drift.STALE
     return verdict
 
@@ -183,7 +244,11 @@ def classify_file(install_file: Path, kit_file: Path,
 #: in one day that a rule lived in one file and was missing from another.
 _CACHE_DIRS = ("__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache",
                ".hypothesis")
-_CONSUMER_LOCAL = (*_CACHE_DIRS, ".benchmarks", DATA_DIRNAME, *LEGACY_RECORDS_ROOTS)
+#: `.git` joined on 2026-09-17. When `_installed_scope` returns None the walk covers the
+#: whole install root, and a target whose `.claude/` is itself a repository — a consumer
+#: that versions its install — had every object under `.git/` walked and reported as a
+#: consumer-local file. Thousands of rows, and the signal underneath them invisible.
+_CONSUMER_LOCAL = (*_CACHE_DIRS, ".git", ".benchmarks", DATA_DIRNAME, *LEGACY_RECORDS_ROOTS)
 
 #: Files that belong to the PROJECT even while living in a directory the kit also has.
 #: `agents/<domain>.md` describes the consumer's repository — harvesting it into the kit
@@ -259,7 +324,7 @@ class DriftReport:
     def unharvested_files(self) -> list[str]:
         """Install-only files sitting in a directory this repository ALSO has.
 
-        The distinction is what keeps the check readable. B-103's `_layout.py` and
+        The distinction is what keeps the check readable. 's `_layout.py` and
         `bump_version.py` were whole files present in one tree only, under `implement/scripts/`
         and `release/scripts/` — directories the kit has — and missing them would have cost three
         items. Whereas `review-b052-…-knowledge/` is a directory the kit does not have at all,
@@ -333,8 +398,12 @@ def main(argv: list[str] | None = None) -> int:
                         help="a consumer's install root (…/.claude), or one tree inside it")
     # The kit ROOT, not its `skills/`. The old default silently narrowed every
     # invocation to one of the six trees an install carries.
-    parser.add_argument("--kit", type=Path, default=Path(__file__).resolve().parents[2],
-                        help="this repository's skills directory")
+    # `--root` is an alias for `--kit`, per the contract in `_contract.py`. This gate
+    # compares TWO trees, so it is the one place where "the tree to sweep" needed
+    # saying which: `--kit` is the reference and `--install` is the copy under test.
+    parser.add_argument("--root", "--kit", dest="kit", type=Path,
+                        default=Path(__file__).resolve().parents[2],
+                        help="this kit's root (default: the repository this file lives in)")
     # Asking is not auditing: this lists what the install owns and exits 0, so a
     # cleanup can diff against it. Folding it into the default output would put a
     # normally-healthy list in front of everyone on every run, and kit#33 argued

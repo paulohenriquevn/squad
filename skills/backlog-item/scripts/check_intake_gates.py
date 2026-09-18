@@ -4,10 +4,17 @@
 WHY THIS SCRIPT EXISTS
 ----------------------
 `rules/cycle-backlog.md` declares SEVEN hard gates and the skill shipped not a
-single script. Four of them are mechanizable and are mechanized: G1 and G2 here,
-G6 and G7 (impediment edges) in `check_backlog_structure.py`. G3 (single domain),
-G4 (verifiable DoD) and G5 (no prior-art justification) are judgement and stay
-conversational — that is the right design.
+single script. Five of them are mechanized: G1 and G2 here, G6 and G7 (impediment edges) in
+`check_backlog_structure.py`, and G5 for the items the SYSTEM creates — `g5_route`
+below answers "can this be decided without a person" and routes only the ones that can.
+
+G3 (single domain) and G4 (verifiable DoD) are judgement and stay conversational —
+that is the right design.
+
+This paragraph said G5 was conversational too, and kept saying it after `g5_route`
+shipped. `evals/evals.json` repeated it. A gate described as unmechanized is a gate
+nobody looks for in the code, so the mechanism that exists went unused by any reader
+who trusted the description.
 
 **What covers them, precisely.** `evals/evals.json` carries one case per judgement
 gate, and `tests/test_check_intake_gates.py` checks mechanically that no gate claimed
@@ -76,12 +83,18 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _sys_bootstrap.path.insert(0, str(_up))
         break
-import subprocess  # noqa: E402
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
-from typing import Any  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import subprocess  # noqa: E402 — post-bootstrap import
+import sys  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
+from typing import Any  # noqa: E402 — post-bootstrap import
 
-from squad.paths import DATA_DIRNAME, LEGACY_RECORDS_ROOTS  # noqa: E402
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+)
 
 
 #: One definition of the block format, imported from whoever already maintains it.
@@ -192,11 +205,11 @@ def _route(repo: str, project_root: Path) -> dict[str, Any]:
     # deducing its root from `Path(__file__)` — which only worked because the copy
     # install puts the mechanism inside the project being judged, and silently read
     # the wrong table anywhere else (#37).
-    result = subprocess.run(  # noqa: PLW1510
+    result = subprocess.run(
         [sys.executable, str(script), repo, "--json",
          "--project-root", str(project_root)],
         capture_output=True, text=True,
-    )
+     check=False)
     outcome, reason = _ROUTE_OUTCOME.get(
         result.returncode, ("inconclusive", f"route_domain_exit_{result.returncode}")
     )

@@ -43,7 +43,10 @@ if str(_HERE) not in sys.path:
 # One definition of "an item", shared with the structural gate. A second parser here would drift
 # from it in silence, and the two would disagree about what the registry contains — which is the
 # precise defect this index exists to make visible.
-from check_backlog_structure import (  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_backlog_structure import (  # noqa: E402 — post-bootstrap import
     _ID_IN_TEXT_RE,
     BLOCK_RE,
     LINEAGE_EDGES,

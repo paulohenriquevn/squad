@@ -155,7 +155,7 @@ Structure, in this order:
    registry`). Do **not** hand-write it; run it, even on an empty registry:
 
    ```bash
-   python3 .claude/skills/backlog-review/scripts/backlog_index.py BACKLOG.md --write
+   python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/backlog-review/scripts/backlog_index.py BACKLOG.md --write
    ```
 
    Generating it now, over zero items, is what makes the section exist before anyone has a reason

@@ -27,7 +27,13 @@ _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
-from check_xrefs import AUXILIARY_SKILLS, _is_auto_generated  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from check_xrefs import (  # noqa: E402 — post-bootstrap import
+    AUXILIARY_SKILLS,
+    _is_auto_generated,
+)
 
 
 def _orphans(existing: set[str]) -> set[str]:

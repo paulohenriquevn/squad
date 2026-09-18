@@ -87,7 +87,7 @@ Squad runs continuously, 100% autonomously, never requiring human approval for t
 - Each lane receives unit of work and generates code autonomously
 - All commits pushed to origin; lander validates before integrating
 
-**Roteamento (Fleet Router)**
+**Routing (Fleet Router)**
 - Reads work from 3 sources (in priority): Consumer Backlog (approved by PO) → Kit Issues (discovered by sweep) → VERA Proposals (IA-decided)
 - Intelligent dedup: never offers same work twice
 - Intelligent guard: never offers work in-flight

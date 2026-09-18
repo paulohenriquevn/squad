@@ -14,7 +14,7 @@ from scripts import _registry
 from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_imports_and_calls
 
-from . import BaseDetector, _arch, _mutation, _wiring
+from . import BaseDetector, _arch
 
 _ARCH_TIMEOUT_SEC = 600
 _LAYERFILE = "Layerfile.toml"
@@ -265,21 +265,6 @@ class RustDetector(BaseDetector):
                 )
             ]
         return findings
-
-    def detect_orphan_exports(self, repo_root: Path) -> list[Finding]:
-        return _wiring.detect_orphan_exports(self.language, repo_root, repo_root)
-
-    def detect_mutation_score(self, manifest_dir: Path) -> list[Finding]:
-        return _mutation.detect_mutation_score(
-            self.language,
-            manifest_dir,
-            floor_low=self.threshold("mutation.score_floor_low", _mutation.DEFAULT_FLOOR_LOW),
-            floor_high=self.threshold("mutation.score_floor_high", _mutation.DEFAULT_FLOOR_HIGH),
-            timeout_minutes=self.threshold(
-                "mutation.timeout_minutes", _mutation.DEFAULT_TIMEOUT_MINUTES),
-            max_report_age_minutes=self.threshold(
-                "mutation.max_report_age_minutes", _mutation.DEFAULT_MAX_REPORT_AGE_MINUTES),
-        )
 
     # ------------------------------------------------------------------
 

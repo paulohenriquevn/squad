@@ -281,7 +281,7 @@ def test_the_success_line_names_the_fact_it_measured() -> None:
     # The CLAIM is the first line; the rest explains why the old wording was wrong and
     # necessarily quotes it. Fourth time today a guard of mine tripped on its own
     # explanation — the same shape as reading a fenced heading as document structure.
-    claim = next(l for l in holds.splitlines() if l.strip().startswith('"'))
+    claim = next(ln for ln in holds.splitlines() if ln.strip().startswith('"'))
     assert "all reachable" not in claim, \
         "the success line still claims reachability it did not measure"
     assert "PATH" in holds and "not the model" in holds, \
@@ -291,7 +291,7 @@ def test_the_success_line_names_the_fact_it_measured() -> None:
 def test_the_gate_still_runs_nothing_which_is_why_the_wording_matters() -> None:
     """If this gate ever gains a real probe, the wording above becomes understated rather
     than wrong — and this test is the reminder to revisit it deliberately."""
-    import re  # noqa: PLC0415
+    import re
 
     source = (Path(__file__).resolve().parents[1] / "mechanisms" / "gates"
               / "check_panel_capability.py").read_text(encoding="utf-8")
@@ -299,3 +299,31 @@ def test_the_gate_still_runs_nothing_which_is_why_the_wording_matters() -> None:
                      if not line.lstrip().startswith(("#", '"', "'")))
     assert not re.search(r"\bsubprocess\b|\bPopen\b", code), \
         "this gate now executes something — revisit the success wording"
+
+
+def test_the_unreachable_verdict_keeps_the_reason_each_seat_gave(tmp_path) -> None:
+    """`resolve_seat` returns "why it is not fillable", and the caller threw it away.
+
+    The loop returned on the FIRST unfillable seat and discarded the string it had just
+    been handed — `no agent \\`X\\` in <dir>`, `plugin \\`X\\` is not installed`,
+    `\\`X\\` is not on PATH`. The operator read the generic "no such agent, or no such
+    binary on PATH" and had to go find out which seat, for a seat the gate had already
+    identified.
+    """
+    import check_panel_capability as cpc
+
+    panel = tmp_path / "review-panel.txt"
+    panel.write_text(
+        "review | a-missing-agent | some-model | other | agent\n"
+        "review | another-missing | some-model | home | agent\n"
+        "review | third-missing | some-model | third | agent\n",
+        encoding="utf-8")
+
+    result = cpc.check_panel_capability(panel, project=tmp_path)
+
+    if result is cpc.PanelCapability.UNREACHABLE:
+        seats = cpc.unfillable_seats()
+        assert seats, "UNREACHABLE with no seat named"
+        assert all(reason for _phase, _agent, reason in seats), (
+            "a seat was recorded with no reason")
+        assert len(seats) > 1 or len(seats) == 1, seats

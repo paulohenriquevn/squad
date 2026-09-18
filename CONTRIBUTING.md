@@ -96,7 +96,8 @@ Two things are worth knowing before your first commit:
   density. Prefer the smallest change that solves the problem (see
   [`rules/parsimony-ladder.md`](rules/parsimony-ladder.md)).
 - Keep modules cohesive: one clear responsibility per file; split god-files into a
-  thin orchestrator plus a `lib/` submodule (precedent in `skills/quality-init/`).
+  thin orchestrator plus a named submodule beside it — `skills/quality-init/scripts/`
+  keeps `init_quality_gates.py` thin over `gate_authoring/` and `hooks/`.
 
 ## Reporting bugs and proposing features
 

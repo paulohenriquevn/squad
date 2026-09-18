@@ -327,14 +327,35 @@ def _reachable_through_a_public_signature(symbol: str, body: str, surface_names:
     return False
 
 
+#: File bodies read during one audit, keyed by path. The whole tree used to be re-read
+#: from disk ONCE PER EXPORTED SYMBOL — on a surface of 400 exports over 900 files that
+#: is 360,000 reads of the same bytes, and the audit's own runtime is what decides
+#: whether anyone runs it before pushing. Bounded by the audit: `reset_source_cache()`
+#: is called at the top of a run so a long-lived process never serves a stale body.
+_SOURCE_CACHE: dict[Path, str | None] = {}
+
+
+def reset_source_cache() -> None:
+    """Forget every cached body. Called when an audit begins."""
+    _SOURCE_CACHE.clear()
+
+
+def _body_of(path: Path) -> str | None:
+    if path not in _SOURCE_CACHE:
+        try:
+            _SOURCE_CACHE[path] = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            _SOURCE_CACHE[path] = None
+    return _SOURCE_CACHE[path]
+
+
 def _has_consumer(symbol: str, defining: Path, sources: list[Path]) -> bool:
     pattern = re.compile(rf"\b{re.escape(symbol)}\b")
     for path in sources:
         if path == defining or _is_test_path(path):
             continue
-        try:
-            body = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        body = _body_of(path)
+        if body is None:
             continue
         if not pattern.search(body):
             continue
@@ -346,6 +367,10 @@ def _has_consumer(symbol: str, defining: Path, sources: list[Path]) -> bool:
 
 def detect_orphan_exports(language: str, manifest_dir: Path, repo_root: Path) -> list[Finding]:
     """Return one SOFT_CAP Finding per declared export that nothing consumes."""
+    # Bounded to THIS audit. The cache below turns the per-symbol re-read of the whole
+    # tree into one read per file; clearing it here means a long-lived process auditing
+    # twice never serves a body from before an edit.
+    reset_source_cache()
     entry = _SURFACE_BY_LANGUAGE.get(language)
     if entry is None:
         return _unavailable(language, f"no D3 surface model for language {language!r}")
@@ -369,10 +394,7 @@ def detect_orphan_exports(language: str, manifest_dir: Path, repo_root: Path) ->
         seen.add(key)
         if _has_consumer(symbol, defining, sources):
             continue
-        try:
-            body = defining.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            body = ""
+        body = _body_of(defining) or ""
         if _reachable_through_a_public_signature(symbol, body, surface_by_file.get(defining, set())):
             continue
         findings.append(_orphan(language, symbol, defining, repo_root))

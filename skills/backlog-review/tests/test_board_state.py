@@ -692,11 +692,44 @@ def test_the_board_and_the_drift_checker_read_the_same_blocking_list() -> None:
 
 def test_a_missing_rule_file_does_not_let_the_board_claim_nothing_is_blocked(
         tmp_path: Path) -> None:
-    """The board reports what it can read. An unreadable rule is not evidence that
-    every gate is open — the checker raises on it, and the board shows no gates
-    because it found none to check, which the empty panel already says."""
+    """None, not `frozenset()`.
+
+    This asserted the empty set, on the reasoning that "the board shows no gates because
+    it found none to check, which the empty panel already says". It does not say that:
+    an empty set makes `verdict.upper() in blocking` false for every verdict, so the
+    panel renders an empty `blocking` list — which is exactly what an item with no
+    blocking verdict renders. The two states were identical on screen, and the function's
+    own docstring promised they would not be.
+    """
     from board_state import blocking_verdicts
-    assert blocking_verdicts(tmp_path) == frozenset()
+
+    assert blocking_verdicts(tmp_path) is None
+
+
+def test_the_board_says_when_it_could_not_read_the_blocking_rule(tmp_path: Path) -> None:
+    """The payload carries the reason, so `board.html` can render it."""
+    import board_state
+
+    (tmp_path / "BACKLOG.md").write_text("## B-001\n\nstatus: planned\n", encoding="utf-8")
+    detail = board_state.item_detail(tmp_path, "B-001")
+
+    assert "blocking_unknown" in detail, sorted(detail)
+    assert "not determined" in detail["blocking_unknown"]
+
+
+def test_a_board_drawn_from_the_fallback_chain_says_so(tmp_path: Path) -> None:
+    """`PHASES` drives what the board draws and which events are placed.
+
+    A chain nobody read produced a board that looks exactly like one drawn from the
+    contract, and the eight hardcoded names are a snapshot of one moment in a file that
+    changes.
+    """
+    import board_state
+
+    assert board_state.PHASES_SOURCE in ("declared", "fallback")
+    (tmp_path / "BACKLOG.md").write_text("## B-001\n\nstatus: planned\n", encoding="utf-8")
+
+    assert board_state.build_state(tmp_path)["phases_source"] == board_state.PHASES_SOURCE
 
 
 # ── being locked out must not look like being down ───────────────────────────

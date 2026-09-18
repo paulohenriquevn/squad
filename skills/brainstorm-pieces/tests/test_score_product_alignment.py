@@ -13,16 +13,23 @@ for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
         _s.path.insert(0, str(_up))
         break
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+import sys  # noqa: E402 — post-bootstrap import
+from pathlib import Path  # noqa: E402 — post-bootstrap import
 
-import pytest  # noqa: E402
+import pytest  # noqa: E402 — post-bootstrap import
 
-from squad.paths import write_wiki_dir  # noqa: E402
+from squad.paths import write_wiki_dir  # noqa: E402 — post-bootstrap import
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from score_product_alignment import FLOOR_PCT, score, verdict  # noqa: E402
+from score_product_alignment import (  # noqa: E402 — post-bootstrap import
+    FLOOR_PCT,
+    score,
+    verdict,
+)
 
 VISION = """# Product vision
 

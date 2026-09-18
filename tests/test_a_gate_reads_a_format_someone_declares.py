@@ -42,7 +42,7 @@ def test_the_gate_says_nothing_writes_its_input(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     run = subprocess.run(
         [sys.executable, str(_GATE), "--slug", "B-001", "--project", str(tmp_path)],
-        capture_output=True, text=True, timeout=180)
+        capture_output=True, text=True, timeout=180, check=False)
     printed = " ".join((run.stdout + run.stderr).split())
     assert "NOTHING in this kit writes that file" in printed, \
         "a NO_RECORD reads as a missing step rather than a missing writer"
@@ -63,7 +63,11 @@ def test_the_claim_is_still_true_or_this_test_should_go() -> None:
             if path == _GATE:
                 continue
             body = path.read_text(encoding="utf-8", errors="replace")
-            if re.search(r"reviewed_sha", body) and "write" in body.lower():
+            # The key being ASSIGNED, not merely named. "`reviewed_sha` appears in this
+            # file and the word write appears somewhere too" matched a prose caveat that
+            # says nothing writes it — the mention and the writing are opposite claims,
+            # and the looser test read the first as the second.
+            if re.search(r"""["']reviewed_sha["']\s*:""", body):
                 writers.append(str(path.relative_to(_ROOT)))
     assert not writers, (
         "something now writes `reviewed_sha`; the gate's note that nothing does is "

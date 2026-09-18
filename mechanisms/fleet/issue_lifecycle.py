@@ -182,12 +182,44 @@ def label_in_develop(
     labeled: list[int] = []
     errors: list[str] = []
     for issue_num in sorted(issue_numbers):
-        ran = _run(["gh", "issue", "edit", str(issue_num), f"--add-label={label}"])
+        ran = _run(_scoped(["gh", "issue", "edit", str(issue_num),
+                            f"--add-label={label}"], repo))
         if ran.ok:
             labeled.append(issue_num)
         else:
             errors.append(f"issue #{issue_num}: could not label — {ran.text[:200]}")
     return {"labeled": labeled, "skipped": [], "errors": errors}
+
+
+def tracker_slug(repo: Path) -> str | None:
+    """`owner/name` from the push remote, for `gh --repo`.
+
+    Every git call here is scoped with `git -C <repo>`, and the two `gh` calls that
+    MUTATE the tracker carried no scope at all: `gh issue edit` and `gh issue close`
+    resolve the repository from the process's working directory. So `--repo` moved the
+    reads and left the writes pointing wherever the tool happened to run — an issue
+    labelled or closed in the wrong tracker, silently.
+
+    Reads the URL rather than asking `gh`, for the reason `promote_to_develop._owner_repo`
+    records: `gh` cannot resolve an SSH host alias, and the alias is the case this exists
+    for. None when the remote is absent or shaped like neither, which leaves the call
+    unscoped and the behaviour exactly as it was.
+    """
+    ran = _run(["git", "-C", str(repo), "remote", "get-url", "origin"])
+    if not ran.ok:
+        return None
+    stripped = re.sub(r"^[a-z][a-z0-9+.-]*://", "", ran.text.strip(), flags=re.IGNORECASE)
+    head, _, rest = stripped.partition("/")
+    tail = (head.split(":", 1)[1] + "/" + rest) if ":" in head else stripped
+    tail = tail.rstrip("/").removesuffix(".git")
+    parts = [p for p in tail.split("/") if p]
+    return "/".join(parts[-2:]) if len(parts) >= 2 else None
+
+
+def _scoped(argv: list[str], repo: Path) -> list[str]:
+    """`argv` with `--repo owner/name` appended when the remote names one."""
+    slug = tracker_slug(repo)
+    return [*argv, "--repo", slug] if slug else argv
 
 
 def _release_tags(repo: Path) -> list[str]:
@@ -258,9 +290,9 @@ def close_on_release(
         for issue_num in sorted(_issues_in_release(repo, tag)):
             if issue_num in closed:
                 continue
-            ran = _run(["gh", "issue", "close", str(issue_num),
-                        "--reason", "completed",
-                        "--comment", f"Shipped in {tag}."])
+            ran = _run(_scoped(["gh", "issue", "close", str(issue_num),
+                                "--reason", "completed",
+                                "--comment", f"Shipped in {tag}."], repo))
             if ran.ok:
                 closed.append(issue_num)
             else:

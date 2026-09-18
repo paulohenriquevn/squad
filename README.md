@@ -63,7 +63,7 @@ the kit that requires a person:
 /brainstorm-pieces       # PIECE-N + the gate: 90% and a PERSON's signature
 ```
 
-Four documents land in `wiki/product/`, and every backlog item afterwards traces to
+Four documents land in the governed project's `wiki/product/`, and every backlog item afterwards traces to
 an `OBJ-N`. That traceability makes two questions computable that were impressions
 before: **an objective nothing serves**, and **shipped work serving no objective**.
 Both become the agenda of the next session, which `build_agenda.py` assembles before
@@ -83,7 +83,7 @@ a `signed-by: judge/…` returns `AWAITING_REVIEW`.
 - **Prior art can never be evidence.** Gate G5 rejects "project X does it this way" as a justification. Knowing how others solved it is fine; it is simply not a measurement of our system.
 - **Pointers are verified, line included.** A cited `file:line` that does not resolve — missing file, or a line past the end of one — caps the artifact at INVALID.
 - **One registry, two producers.** `BACKLOG.md` is the single answer to "what is pending?". Humans file items; sweeps register findings with evidence attached. Orphaned findings have nowhere to hide.
-- **Eight specialists who know the terrain.** Each carries build commands verified on disk, the domain's invariants, and the false positives that domain generates.
+- **Domain specialists who know the terrain.** You derive them from your own repositories — the kit ships none — and each carries the repos it covers, build commands verified on disk, the domain's invariants, and the false positives that domain generates.
 - **A boundary that stopped working does not pass silently.** Every architecture linter goes green when a rule names a directory that moved — measured on two adopters, one Go and one TypeScript. `/arch-check` and the D5 detector report it; nothing else does.
 - **Guardrails at runtime.** Claude Code hooks enforce git safety (no `--force`, no direct-to-`main`), TDD discipline, CHANGELOG hygiene and honest public copy while you work.
 
@@ -155,7 +155,10 @@ rots once per copy, one agent per role is too coarse to hold "this RDS instance
 is a protected unit".
 
 Routing is deterministic (`mechanisms/cycle/route_domain.py`) and reads its table from
-`rules/cycle-backlog.md` — one table, one truth. A domain naming a specialist
+`rules/domain-routing.txt` — the file the project owns and the installer preserves.
+The INVARIANTS that table must satisfy stay in `rules/cycle-backlog.md`, which is the
+kit's contract: one table, one truth, and the rule that governs it kept where a
+consumer cannot edit it. A domain naming a specialist
 that is not on disk exits 3 (`BROKEN ROUTE`) rather than reporting a route to
 nobody. See [`agents/README.md`](agents/README.md).
 
@@ -218,7 +221,7 @@ Each mode defines what counts as a measurement. Evidence from one does not satis
 | `bug` | A reproduced defect | Numbered repro **plus a test that fails on the current state, executed** |
 | `evolve` | Measured cost of the status quo | A number: N round-trips, N duplicated call sites, N ms |
 
-`bug` has a hard floor: **no failing test, no bug.** A defect nobody can express as a failing test is not understood well enough to fix. `live-test` refuses on a domain with no declared target — six of eight have none, by design, because a Go library and a Terraform module have no surface a browser can probe.
+`bug` has a hard floor: **no failing test, no bug.** A defect nobody can express as a failing test is not understood well enough to fix. `live-test` refuses on a domain with no declared target, and most domains have none by design, because a Go library and a Terraform module have no surface a browser can probe.
 
 ## Finding your way — `sq`
 
@@ -253,33 +256,39 @@ nothing — a `lib/`, a `utils/`, a test filed outside a test tree.
 
 ```
 squad/
-├── wiki/product/    ← what the product IS. Four documents, agreed with a person
 ├── rules/           ← the contracts. What each cycle promises and which gates block it
-│   └── squad-map.md          ← the 360º view: every phase, who owns it, what it reads
+│   ├── squad-map.md          ← the 360º view: every phase, who owns it, what it reads
 │   ├── cycle-*.md            ← one per phase; the source of truth for that phase
 │   ├── cycle-phases.txt      ← the chain itself, declared once and machine-readable
 │   ├── records-location.md   ← where output goes, and why the split below exists
+│   ├── domain-routing.txt    ← which repositories exist here, and who owns each
 │   └── live-target.txt       ← declared live environments
 ├── skills/          ← what the agent can DO. One directory per capability
+├── commands/        ← the slash commands that are not skills
 ├── mechanisms/      ← what COMPUTES the verdicts. No verdict is asserted in prose
 │   ├── gates/                ← everything that measures the kit against its contracts
 │   ├── cycle/                ← the cycle at runtime: routing, events, status, attestation
 │   ├── fleet/                ← many sessions at once, and the line a person watches
-│   ├── dist/                 ← into a consumer, and kept in step
+│   ├── distribution/         ← into a consumer, and kept in step
 │   └── conventions/          ← where things live and what shape they have
 ├── hooks/           ← what runs in the runtime, outside the agent's turn
-│   └── environment/          ← what a hook loads before it runs
-├── agents/          ← domain specialists, derived per project (README explains routing)
-├── wiki/            ← durable KNOWLEDGE, as an OKF v0.2 bundle
-│   ├── sops/                 ← procedures performed on the kit
-│   └── decisions/            ← decisions that outlive the discussion
-├── records/         ← the TRAIL. What each run left behind, dated and immutable
-│   ├── audits/ reviews/ releases/ acceptance/ implementations/
-│   └── cycle-events.jsonl    ← one line per phase transition
+├── squad/           ← the layout and contract library the above import, plus `sq`
+├── agents/          ← the fourteen role agents, and the domain specialists you derive
+├── .squad/          ← everything this kit WRITES about itself, under one root
+│   ├── wiki/                 ← durable KNOWLEDGE, as an OKF v0.2 bundle
+│   │   ├── sops/             ← procedures performed on the kit
+│   │   └── decisions/        ← decisions that outlive the discussion
+│   └── records/              ← the TRAIL, dated and immutable
+│       └── cycle-events.jsonl  ← one line per phase transition
+├── records/         ← what a CONSUMER's cycle leaves behind (backlog/, panels/)
 ├── study-material/  ← third-party docs the project depends on. Read-only, not ours
 ├── session-state/   ← per-session checkpoints. Ephemeral, never evidence
 └── tests/           ← the proof the above works; per-slice suites live in skills/*/tests
 ```
+
+The four product documents `cycle-brainstorm` writes land under `wiki/product/` **in the
+project the kit governs**, which is why they do not appear above: this repository is the
+kit, not a consumer of it.
 
 **`wiki/` and `records/` are the same split, twice.** Knowledge evolves, has an
 owner and goes stale; a record of one execution on one day does none of those,
@@ -329,7 +338,7 @@ Squad is derived from Cycle (MIT) and inverts its centre. Cycle is greenfield an
 | Driver | a milestone in `ROADMAP.md` | an item in `BACKLOG.md` |
 | Discover asks | how did project X solve this? | what is true about *our* system? |
 | Terminal artifact | blueprint (a design to copy) | opportunity (a measured gap) |
-| Agents | generic, stack-agnostic | 8 specialists with verified build commands |
+| Agents | generic, stack-agnostic | domain specialists derived from your repos, with verified build commands |
 | Ends when | every milestone is `[x]` | never — maintenance is continuous |
 
 What Squad keeps: TDD halt-loops, the wiring triad, hard gates with derived verdicts, the orthogonal Codex jury, git-safety hooks, and an auditable `records/`.

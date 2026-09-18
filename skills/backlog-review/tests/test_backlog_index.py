@@ -165,7 +165,13 @@ class TestUnknownStatus:
 #
 # Only one direction is stored. `blocks` is derived, so the two halves cannot drift.
 
-from backlog_index import impediment_graph, lineage_chains  # noqa: E402
+# Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` and its sibling modules are importable only after sys.path is extended.
+# That is what E402 cannot see here, and why each import below suppresses it.
+from backlog_index import (  # noqa: E402 — post-bootstrap import
+    impediment_graph,
+    lineage_chains,
+)
 
 
 def _items(*blocks: str) -> list:
