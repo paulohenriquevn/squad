@@ -61,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "conventions"))
 # That is what E402 cannot see here, and why each import below suppresses it.
 from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl  # noqa: E402
 
+from squad.markdown import prose_only  # noqa: E402 — post-bootstrap import
 from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
     wiki_dir,
@@ -376,7 +377,17 @@ def broken_markdown_links(ecosystem_dir: Path) -> list[tuple[str, str]]:
             text = md.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        for match in LINK_RE.finditer(text):
+        # Links inside a fenced block are SPECIMENS, not references. A skill teaching
+        # Marp image syntax writes `![bg](image.png)` four times in a ```markdown fence;
+        # this gate resolved all four against the skill's directory and reported four
+        # broken links in a file with none. Measured on one consumer: 44 of 46 findings
+        # were specimens in two skills that document a markup language, and a gate whose
+        # output is 96% noise is a gate somebody switches off.
+        #
+        # `squad.markdown` owns the fence regex — five checkers here saw only backticks
+        # while six also saw `~~~`, so the same document scored differently depending on
+        # which one asked.
+        for match in LINK_RE.finditer(prose_only(text)):
             url = match.group(2).strip()
             if url.startswith(_NOT_A_REPO_PATH) or not url:
                 continue

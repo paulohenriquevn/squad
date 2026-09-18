@@ -7,6 +7,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The cross-reference gate read code specimens as references, and 96% of what it
+  reported was noise** (#132)
+  A skill that teaches a markup language writes that markup out. `check_xrefs` resolved
+  every link inside a fenced block against the document's own directory, so
+  ```` ```markdown ![bg](image.png) ```` — four lines teaching Marp image syntax — became
+  four broken links in a file that has none. Measured on one consumer install: **44 of 46
+  findings were specimens**, all in the two skills that document a markup language; the
+  other two were real. A gate whose output is mostly noise is a gate somebody switches
+  off, and the silence after that is indistinguishable from a clean repository — which is
+  the failure this directory exists to prevent. Links are now read from `prose_only()`,
+  so `squad/markdown.py` owns the fence regex here as it already does for the six
+  checkers that disagreed about whether `~~~` opens one.
+
 - **Three gates reported a verdict about a tree they had not read** (#129)
   `check_prose_tests --root <empty tree>` answered `no test pins the wording of shipped
   prose (394 test file(s) parsed)` — it had swept the repository it was standing in.
