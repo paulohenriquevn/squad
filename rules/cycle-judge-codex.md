@@ -85,6 +85,49 @@ The plugin's per-stage hard caps mirror the canonical golden rules. **None of th
 | `:implementation` | `rules/cycle-implement.md` + `rules/code-quality-golden-rule.md` | |
 | `:final` | `rules/cycle-review.md` | |
 
+## Where the artifacts are, and why the plugin has to ask
+
+The contract mismatch recorded above is one face of a wider one, measured on a
+consumer 2026-09-18: the plugin hard-codes
+`knowledge-base/discoveries/blueprints/<slug>-blueprint.md` for `:discover`, and
+the analogous `knowledge-base/...` path for its other three stages. This kit
+writes `.squad/records/discoveries/opportunities/<slug>-opportunity.md`.
+
+Two independent renames are stacked in that one string. `records-location.md`
+moved the root in 2026-08, keeping `knowledge-base` only as the **last** read-only
+fallback for an unmigrated project. `cycle-discover.md` renamed blueprint to
+opportunity, deliberately. Neither reached the plugin, so every seat of every
+panel answered "artifact not found", every panel came back incomplete, and the
+contract reads an incomplete panel as abstention and never as agreement — so no
+item could leave DISCOVER, PLAN or DESIGN.
+
+**The plugin was not careless; this kit gave it nothing to call.** So it hard-coded
+a path, and froze the names that were current when it did.
+
+`panel_brief.py --locate` is the answer, and it is the same table the kit's own
+panels read — no second copy, so the next rename moves one string and every
+reader follows:
+
+```
+python3 <kit>/mechanisms/cycle/panel_brief.py --locate \
+    --phase discover --slug <slug> --project <root> --json
+```
+
+```
+0   the JSON carries `artifacts`, `present`, `missing`, `contract`
+2   this kit declares no artifact path for that phase; stderr names the ones it does
+```
+
+Locating never fails on absence — `--slug`/`--phase` without `--locate` refuses a
+missing artifact, which is right for convening a panel and backwards for finding a
+file. A caller answered with a refusal for not having found the file has no option
+left but to guess, which is how this started.
+
+The table holds `design`, `discover` and `plan`. The plugin's `implementation` and
+`final` stages exit 2 rather than receiving a path composed from the pattern of the
+others — a convention invented on a caller's behalf is exactly what went wrong here
+the first time. Tracked as `usetheodev/judge-codex#2`.
+
 A `FAIL_HARD` or `INVALID` verdict at any stage **blocks downstream cycles** until either the underlying issue is fixed OR an explicit ADR dismisses it with a sunset window.
 
 ## Anti-patterns

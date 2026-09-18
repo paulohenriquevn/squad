@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **A reader outside the kit can ask where a phase's artifact goes** (#147)
+  `panel_brief.py --locate --phase <p> --slug <s>` prints the artifact path, whether it
+  is there, and the contract that grades it — without convening anything and without
+  failing on absence. `PHASE_SOURCES` already held that table and its comment already
+  said why: *"a reviewer pointed at the wrong artifact returns an honest verdict about
+  the wrong thing, which reads as coverage."* It happened anyway, to a reader that could
+  not reach it. Measured 2026-09-18: `judge-codex` hard-codes
+  `knowledge-base/discoveries/blueprints/<slug>-blueprint.md`, where this kit writes
+  `.squad/records/discoveries/opportunities/<slug>-opportunity.md` — two stacked
+  renames, `records-location.md` moving the root and `cycle-discover.md` renaming
+  blueprint to opportunity. All four of its stages missed, every panel came back
+  incomplete, and an incomplete panel is abstention and never agreement, so a full
+  registry sat at `ITEM_IN_FLIGHT`. The plugin was not careless: there was nothing to
+  call. `main` demands a slug and a phase, builds a whole brief, and REFUSES when the
+  artifact is missing — so a caller whose question is *where does this file go* was
+  answered with a refusal for not having found it, and hard-coding was the only move
+  left. Locating and judging fail on different things and are now separate. A phase the
+  table does not hold exits 2, this kit's word for could not measure, rather than
+  composing a path from the pattern of the others: a convention invented on a caller's
+  behalf is what went wrong the first time. Tracked as `usetheodev/judge-codex#2`.
+
 ### Fixed
 - **A stale report from another run counted as this run's audit coverage** (#145)
   `check_auditor_coverage` globbed the plugin's output directory and took whatever it

@@ -108,6 +108,40 @@ def assignment_path(project: Path, slug: str, phase: str) -> Path:
     return base / f"{slug}-{phase}.assignment.json"
 
 
+def locate(project: Path, slug: str, phase: str) -> dict:
+    """Where this phase's artifact and contract WOULD be, present or not.
+
+    Split out of `build` because locating and judging fail on different things.
+    `build` refuses when the artifact is missing, which is right for convening a
+    panel over nothing — and exactly backwards for a caller whose question is
+    where the file goes. Answered with a refusal, such a caller has no choice but
+    to hard-code a path, which is how a plugin ended up reading the pre-2026-08
+    root and the pre-rename filename in the same string, on all four of its
+    stages, for every item in a registry.
+
+    It adds no convention of its own. `PHASE_SOURCES` is the same table `build`
+    reads, so a later rename moves one string and every reader follows — which is
+    the whole point of the table having been written down once.
+    """
+    source = PHASE_SOURCES.get(phase)
+    if source is None:
+        return {"phase": phase, "slug": slug, "known_phases": sorted(PHASE_SOURCES)}
+    artifacts = [data_path(project, str(a).format(slug=slug))
+                 for a in source["artifacts"]]
+    contract = data_path(project, str(source["contract"]))
+    return {
+        "slug": slug,
+        "phase": phase,
+        "artifacts": [str(p) for p in artifacts],
+        "present": [str(p) for p in artifacts if p.is_file()],
+        "missing": [str(p) for p in artifacts if not p.is_file()],
+        "contract": str(contract),
+        "contract_present": contract.is_file(),
+        "context": [str(data_path(project, str(a))) for a in source["also_read"]],
+        "known_phases": sorted(PHASE_SOURCES),
+    }
+
+
 def build(project: Path, slug: str, phase: str) -> dict:
     source = PHASE_SOURCES.get(phase)
     if source is None:
@@ -187,8 +221,31 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--phase", required=True)
     ap.add_argument("--project", type=Path, default=Path("."))
     ap.add_argument("--reviewer", default="", help="print one reviewer's brief only")
+    ap.add_argument("--locate", action="store_true",
+                    help="where this phase's artifact and contract go, present or "
+                         "not, without convening anything. For a reader outside the "
+                         "kit that would otherwise hard-code the path")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
+
+    if args.locate:
+        found = locate(args.project.resolve(), args.slug, args.phase)
+        if "artifacts" not in found:
+            # 2 — could not measure. Composing a path from the pattern of the other
+            # phases would be the kit inventing a convention for a caller, which is
+            # how the wrong path became load bearing in the first place. Saying what
+            # IS known keeps the caller from guessing twice.
+            print(f"phase `{args.phase}` is not in PHASE_SOURCES, so this kit has no "
+                  f"artifact path declared for it. Declared: "
+                  f"{', '.join(found['known_phases'])}.", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(found, indent=2))
+        else:
+            for path in found["artifacts"]:
+                print(f"{'present' if path in found['present'] else 'absent '}  {path}")
+            print(f"contract  {found['contract']}")
+        return 0
 
     out = build(args.project.resolve(), args.slug, args.phase)
 
