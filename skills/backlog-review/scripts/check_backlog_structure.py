@@ -467,7 +467,7 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
                 f"suggested_mode `{mode}` is outside {sorted(LEGAL_MODES)}"))
 
         evidence = item.fields.get("evidence", "")
-        # A block can CONTRADICT its own status. Measured on a consumer 2026-09-18: fourteen items
+        # A block can CONTRADICT its own status. Measured on a consumer 2026-09-18: twelve items
         # carried `remeasured …: **closed in code.**` in their prose and every one was still
         # `triaged`, while the report read SHIPPABLE across all 44.
         #
