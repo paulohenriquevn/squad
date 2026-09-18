@@ -50,6 +50,14 @@ class DecisionClass(Enum):
     OPTION = "option"
     SPONSOR = "sponsor"          # the item names the sponsor as decider
     MEASUREMENT = "measurement"  # not a decision at all: work the system can do
+    #: Another item in the same registry. Not a decision either, and the reason it is
+    #: delegated is narrower than the others: there is nothing to decide. The answer is
+    #: "finish the blocker", which is the queue's own ordering — and
+    #: `autonomy-envelope.md § What the human owns` reserves WHAT is worth doing, never
+    #: the order the system works through it. Before this class, such a wall fell to
+    #: UNCLASSIFIED and `on_no_match = retain` addressed it to a person who had nothing
+    #: to answer.
+    DEPENDENCY = "dependency"
 
     # Neither — the fail-safe.
     UNCLASSIFIED = "unclassified"
@@ -153,6 +161,11 @@ _IMPEDIMENT_PATTERNS: list[tuple[DecisionClass, str]] = [
 #: Delegable walls must state the alternatives. "Aguardando decisão" alone is not
 #: enough — a decision whose options are not written down is not a choice this
 #: mechanism can make, it is research it would have to invent.
+#: A wall that names another item, e.g. `B-007 — …` or `blocked by B-042 until …`.
+#: Deliberately anchored on the id shape rather than on words around it: the prose
+#: varies and the id does not.
+_ITEM_ID_RE = re.compile(r"\bB-\d{3,}\b")
+
 _DELEGABLE_PATTERNS: list[tuple[DecisionClass, str]] = [
     (DecisionClass.BINARY, r"decis[ãa]o\s+bin[áa]ria"),
     (DecisionClass.BINARY, r"binary\s+(decision|choice)"),
@@ -161,6 +174,10 @@ _DELEGABLE_PATTERNS: list[tuple[DecisionClass, str]] = [
     (DecisionClass.STATUS, r"nenhuma\s+transi[çc][ãa]o\s+can[ôo]nica"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.SCOPE, r"decis[ãa]o\s+de\s+escopo"),
     (DecisionClass.SCOPE, r"scope\s+(decision|call)"),
+    #: `scope … is a decision` — the same class written the way a person writes it.
+    #: The adjacent-words pattern above missed "committed scope is a decision nobody
+    #: has taken", so the sponsor's own delegation never reached a wall it covers.
+    (DecisionClass.SCOPE, r"scope\s+is\s+a\s+decision"),
     (DecisionClass.THRESHOLD, r"decis[ãa]o\s+de\s+piso"),
     (DecisionClass.THRESHOLD, r"(threshold|floor)\s+decision"),
     (DecisionClass.OPTION, r"\bOU\b.{0,200}\bSe\s+(retire|manter)\b"),
@@ -206,6 +223,17 @@ def classify_wall(wall: str) -> WallVerdict:
         found = re.search(pattern, wall, re.IGNORECASE | re.DOTALL)
         if found:
             return WallVerdict(klass, True, found.group(0))
+
+    # Last, and only after every decision pattern has had its turn: a wall naming
+    # another item. Tested here rather than first because a wall can cite an item id
+    # while being about something else entirely — "B-007 decided the threshold" is a
+    # threshold decision that happens to mention an id, and the ordering keeps the more
+    # specific class. The evidence names the blocker, because a disposition that does
+    # not say WHICH item to work is not actionable.
+    ids = _ITEM_ID_RE.findall(wall)
+    if ids:
+        return WallVerdict(DecisionClass.DEPENDENCY, True,
+                           f"waits on {', '.join(dict.fromkeys(ids))}")
 
     return WallVerdict(DecisionClass.UNCLASSIFIED, False, "no pattern matched")
 

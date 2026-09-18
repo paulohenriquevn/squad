@@ -29,6 +29,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   did not get what it asked for.
 
 ### Fixed
+- **An item waiting on another item was sent to a person, with nothing to decide** (#140)
+  `classify_wall` had no class for a wall naming another item in the same registry, so it
+  fell to `UNCLASSIFIED` and `on_no_match = retain` addressed it to somebody who was never
+  going to answer: the answer is "finish the blocker", which is the queue's own ordering,
+  and `autonomy-envelope.md § What the human owns` reserves WHAT is worth doing rather
+  than the order the system works through it. A second defect sat beside it — the `SCOPE`
+  pattern demanded `scope decision` as adjacent words and missed *"committed scope is a
+  decision nobody has taken"*, so a class the sponsor had delegated never reached a wall
+  it covers. Measured on one consumer holding six items: **one of six was the system's
+  before, three of six after.** The three that remain are an access impediment no
+  mechanism resolves and two items whose code lives in other repositories. `on_no_match =
+  retain` is untouched: one shape stops reaching it, and `DEPENDENCY` is tested last so a
+  wall citing an id while being about something else keeps its more specific class.
+
 - **A nested registry reported every route broken, on specialists that exist** (#138)
   `check_backlog_structure` resolved `agents/<specialist>.md` against the registry's own
   directory, so a monorepo with `apps/<app>/BACKLOG.md` and one installation at the root
