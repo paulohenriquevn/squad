@@ -104,7 +104,7 @@ Fall back to generic domain analysis:
 
 ## Output (mandatory YAML format)
 
-Save to `.claude/agents/review-{SLUG}-{DATE}/findings/domain-{DOMAIN}.yml`:
+Save to `{FINDINGS_DIR}/domain-{DOMAIN}.yml`:
 
 ```yaml
 agent: review-{SLUG}-domain-{DOMAIN}

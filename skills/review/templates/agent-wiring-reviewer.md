@@ -102,7 +102,7 @@ If this branch touches Postgres / pgvector / shared cache / file system:
 
 ## Output (mandatory YAML format)
 
-Save to `.claude/agents/review-{SLUG}-{DATE}/findings/wiring.yml`:
+Save to `{FINDINGS_DIR}/wiring.yml`:
 
 ```yaml
 agent: review-{SLUG}-wiring

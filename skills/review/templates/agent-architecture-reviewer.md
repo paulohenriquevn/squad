@@ -87,7 +87,7 @@ Per `architecture.md § 3 — Module cohesion`:
 
 ## Output (mandatory YAML format)
 
-Emit findings in this format. Use `--- yaml` block. Save to `.claude/agents/review-{SLUG}-{DATE}/findings/architecture.yml`:
+Emit findings in this format. Use `--- yaml` block. Save to `{FINDINGS_DIR}/architecture.yml`:
 
 ```yaml
 agent: review-{SLUG}-architecture

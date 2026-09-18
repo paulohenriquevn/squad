@@ -100,7 +100,7 @@ For every Edge Case mentioned in the plan's Deep Dives or Acceptance Criteria se
 
 ## Output (mandatory YAML format)
 
-Save to `.claude/agents/review-{SLUG}-{DATE}/findings/tests.yml`:
+Save to `{FINDINGS_DIR}/tests.yml`:
 
 ```yaml
 agent: review-{SLUG}-tests

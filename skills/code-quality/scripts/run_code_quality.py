@@ -388,6 +388,21 @@ def main(argv: list[str] | None = None) -> int:
             languages_audited=[], languages_skipped={}, cfg=None,
             baseline=frozenset(), expired_allowlist=[])
 
+    # The phase BEGINS here, and the stream has to carry that.
+    #
+    # This emitted only `end` — as did review, implement and acceptance — and an end
+    # with no start is a phase that finished and was never running. Measured on one
+    # consumer: 37 ends, 1 start, and so no column could be drawn as working, no WIP
+    # could be counted, and no phase had a duration. `code-quality` alone emitted 29
+    # ends against one slug with no way to tell 29 runs from 29 reports of the same one.
+    #
+    # Emitted before the work rather than after the parse succeeds: a run that dies
+    # mid-phase should leave a start with no end, which is what an interrupted phase
+    # IS. Recording it only on success would draw the stream as though nothing had
+    # been attempted.
+    if args.slug:
+        _emit_phase_start(repo_root, cycle="code-quality", slug=args.slug)
+
     # Plan resolution (Mode 2)
     plan_path = None
     if args.slug:
@@ -773,6 +788,22 @@ def _emit_and_exit(
     if verdict in ("FAIL_HARD", "INVALID"):
         return 1
     return 0
+
+
+def _emit_phase_start(project_root, *, cycle: str, slug: str) -> None:
+    """Record that the phase began. Same contract as `_emit_phase_end` below: never let
+    bookkeeping fail the phase, and never swallow a real emitter bug into a silence that
+    looks like a phase nobody ran."""
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_start, project_root_for
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_start(project_root_for(project_root), cycle=cycle, slug=slug)
 
 
 def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:

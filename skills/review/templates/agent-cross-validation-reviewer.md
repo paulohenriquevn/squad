@@ -113,7 +113,7 @@ The plan's ADRs declare HOW to do things. Check if the implementation respects e
 
 ## Output (mandatory YAML format)
 
-Save to `.claude/agents/review-{SLUG}-{DATE}/findings/cross-validation.yml`:
+Save to `{FINDINGS_DIR}/cross-validation.yml`:
 
 ```yaml
 agent: review-{SLUG}-cross-validation

@@ -91,9 +91,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cycle"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "conventions"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from installed_plugins import load as load_plugins
 from select_auditors import assignment_path, parse_registry, registry_path
+
+from squad.paths import rules_dir
 
 COVERED, NOT_COVERED, UNCHECKED, NOT_INSTALLED = 0, 1, 2, 3
 
@@ -183,6 +186,26 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
         # empty result". It was inferred from an empty result, and the gate that exists
         # to prove an audit happened answered "none required" when it could not read
         # which audits are required.
+        #
+        # That argument was made for every OSError EXCEPT this one, and the exception
+        # had a hole: an absent file usually means the project declined to declare
+        # auditors, and sometimes means the gate was handed a root that is not a
+        # project. WHERE it was absent from separates the two. A tree carrying no
+        # `rules/` at all is not a project that declined — it is a root nobody should
+        # be asking, and answering "none required" for it is the same false clearance
+        # one level up.
+        #
+        # Measured on a consumer 2026-09-18: `_project_root_for` returned
+        # `<project>/.squad`, the registry was looked for under `.squad/rules/`, and
+        # `/review` emitted READY_TO_MERGE_WITH_FOLLOWUPS on a change whose two
+        # required audits had never run — with no mention of them in the report.
+        if not _looks_like_a_project(project):
+            return UNCHECKED, {
+                "status": "unchecked", "slug": slug,
+                "detail": f"{project} carries no `rules/` directory, so this is not a "
+                          f"project root and {reg} being absent proves nothing. The "
+                          f"gate was pointed at the wrong tree — it has NOT established "
+                          f"that no audit is required"}
         declared = []
     except OSError as exc:
         return UNCHECKED, {"status": "unchecked", "slug": slug,
@@ -302,6 +325,20 @@ def _finding(title: str, evidence: str, remediation: str) -> dict:
         "remediation": remediation,
         "source": "check_auditor_coverage",
     }
+
+
+def _looks_like_a_project(project: Path) -> bool:
+    """Does this tree carry the marker every squad project has?
+
+    `rules/` — the directory the installer creates and the consumer tunes. Checked
+    through `rules_dir`, which owns the order and knows the `.claude/` layout, so a
+    plugin install answers yes on the same evidence a standalone one does.
+
+    Deliberately ONE marker and a cheap one. The question is not "is this a healthy
+    project" — it is "could this plausibly be the root somebody meant", and a richer
+    check would start refusing real projects for unrelated reasons.
+    """
+    return rules_dir(project) is not None
 
 
 def auditor_coverage_findings(project: Path, slug: str,

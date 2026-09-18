@@ -291,6 +291,17 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         "skills/backlog-review/tests/test_backlog_index.py",
         "skills/backlog-review/tests/test_check_backlog_structure.py",
         "skills/backlog-review/tests/test_an_item_that_says_it_is_closed_is_not_open.py",
+        # Fixtures for the column-activity states. It names statuses to place items in
+        # lanes, never to decide what a status MEANS — the same reason its siblings
+        # above are here rather than pinned.
+        "skills/backlog-review/tests/test_each_column_says_whether_it_is_working.py",
+        # The board's own fixtures. Each names statuses to place items on a page and
+        # none decides what a status MEANS — `test_the_board_reports_delivery` counts
+        # `shipped` and `killed` because the board reports them apart, which is the
+        # contract's own distinction rather than a second reading of it.
+        "skills/backlog-review/tests/test_the_board_names_a_skipped_phase.py",
+        "skills/backlog-review/tests/test_the_board_opens_with_a_verdict.py",
+        "skills/backlog-review/tests/test_the_board_reports_delivery.py",
         "skills/backlog-review/tests/test_squad_boss.py",
         "skills/brainstorm-vision/tests/test_build_agenda.py",
         "tests/test_advance_items.py",

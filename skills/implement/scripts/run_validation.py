@@ -832,6 +832,8 @@ def main() -> int:
     # Every language whose suite the gate knows how to run. The npm check stays
     # first for report stability; test_execution consolidates all of them and is
     # what turns "nothing ran" into a FAIL instead of a silent PARTIAL.
+    _emit_phase_start(project_root, cycle="implement", slug=args.slug)
+
     touched = _files_touched_by_this_change(project_root, args.slug)
     suite_checks = [
         scope_suite_to_change(check_npm_test(project_root), touched),
@@ -938,6 +940,25 @@ def main() -> int:
     _emit_phase_end(project_root, cycle="implement", slug=args.slug, verdict=overall)
 
     return 0 if overall in ("PASS", "PARTIAL") else 1
+
+
+def _emit_phase_start(project_root, *, cycle: str, slug: str) -> None:
+    """Record that the phase began, so the pair can be timed.
+
+    Emitted before the gates run: a validation that dies mid-way leaves a start with no
+    end, which is what an interrupted phase is. Recording it only on success would draw
+    the stream as though nothing had been attempted, and 37 ends against 1 start is the
+    state that made WIP incomputable on one consumer.
+    """
+    tooling = Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_start
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_start(project_root, cycle=cycle, slug=slug)
 
 
 def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict) -> None:

@@ -170,6 +170,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # Begun once the inputs are known to exist. Before that a missing file is a bad
+    # invocation, not a phase — and a start recorded for a run that never had anything
+    # to read would leave an open phase nothing can close.
+    _emit_phase_start(args.criteria, cycle="acceptance", slug=args.milestone or "")
+
     for path in (args.criteria, args.evidence):
         if not path.exists():
             print(f"file not found: {path}", file=sys.stderr)
@@ -220,6 +225,27 @@ def main() -> int:
     )
 
     return 0 if outcome["flip_allowed"] else 1
+
+
+def _emit_phase_start(project_root, *, cycle: str, slug: str) -> None:
+    """Record that the phase began. Same contract as `_emit_phase_end`: bookkeeping
+    never fails the phase, and an ImportError is reported rather than swallowed into a
+    silence that looks like a phase nobody ran.
+
+    Emitted BEFORE the work. A run that dies mid-phase then leaves a start with no end,
+    which is what an interrupted phase is; recording it only on success would draw the
+    stream as though nothing had been attempted.
+    """
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_start, project_root_for
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_start(project_root_for(project_root), cycle=cycle, slug=slug)
 
 
 def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:

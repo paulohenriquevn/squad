@@ -61,7 +61,11 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
-from squad.paths import records_dir  # noqa: E402 — post-bootstrap import
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    LEGACY_RECORDS_ROOTS,
+    records_dir,
+)
 
 # The upstream gate lives beside this script. It runs as `__main__` (the directory
 # enters sys.path on its own) and is also imported by tests that insert the directory
@@ -290,6 +294,19 @@ def _unregistered_high(findings: list[dict[str, Any]], registered: set[str]) -> 
 
 
 
+#: Directories that CONTAIN a project's data or the kit, and are therefore never the
+#: project root themselves.
+#:
+#: Derived from the roots `squad.paths` already declares rather than typed out: the
+#: write root by name, plus the leading segment of any legacy root that has one — which
+#: is how `.claude` gets here without this file deciding that `.claude` is special.
+#: A second hand-kept list of directory names is what `check_write_containment` exists
+#: to refuse.
+_CONTAINERS = {DATA_DIRNAME} | {
+    Path(rel).parts[0] for rel in LEGACY_RECORDS_ROOTS if len(Path(rel).parts) > 1
+}
+
+
 def _project_root_for(findings_dir: Path) -> Path:
     """Walk up from the findings directory to the root carrying the records.
 
@@ -299,6 +316,25 @@ def _project_root_for(findings_dir: Path) -> Path:
     """
     current = findings_dir.resolve()
     for candidate in (current, *current.parents):
+        # The write root is never a project root, and it answers `records_dir` from
+        # inside itself: `LEGACY_RECORDS_ROOTS` carries the bare `records`, which from
+        # within `.squad/` matches `.squad/records` — the very directory whose existence
+        # makes the PARENT the root. The walk stopped one level too deep.
+        #
+        # Measured on a consumer 2026-09-18: `/review` resolved its root to
+        # `<project>/.squad`, `registry_path` looked for `.squad/rules/review-auditors.txt`,
+        # the file was not there, and `auditor_coverage_findings` returned zero findings.
+        # The review emitted READY_TO_MERGE_WITH_FOLLOWUPS on a change whose two required
+        # audits had never run, with no mention of them in the report —
+        # `cycle-review.md` requires those to enter "as BLOCKER findings so the verdict
+        # cannot be computed while ignoring it".
+        #
+        # Asked of `squad.paths`, which owns the names, rather than matched as strings.
+        # `.claude` is the same failure one layout over: `records` matches
+        # `.claude/records` from inside `.claude`, so a plugin install stopped on the
+        # kit's own directory instead of the project holding it.
+        if candidate.name in _CONTAINERS:
+            continue
         if records_dir(candidate) is not None:
             return candidate
     return current
@@ -770,6 +806,9 @@ def main() -> int:
 
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
+    # The phase begins here, once the slug is resolved and before any finding is read.
+    _emit_phase_start(args.findings_dir, cycle="review", slug=slug)
+
     all_findings, agents_run, unreadable, skipped = _collect_findings(args, slug)
     deduped, open_findings, closed = _dedupe(all_findings)
 
@@ -869,6 +908,27 @@ def main() -> int:
     if verdict == "NEEDS_DEEPER":
         return 3
     return 0
+
+
+def _emit_phase_start(project_root, *, cycle: str, slug: str) -> None:
+    """Record that the phase began. Same contract as `_emit_phase_end`: bookkeeping
+    never fails the phase, and an ImportError is reported rather than swallowed into a
+    silence that looks like a phase nobody ran.
+
+    Emitted BEFORE the work. A run that dies mid-phase then leaves a start with no end,
+    which is what an interrupted phase is; recording it only on success would draw the
+    stream as though nothing had been attempted.
+    """
+    from pathlib import Path as _Path
+    tooling = _Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"
+    if str(tooling) not in sys.path:
+        sys.path.insert(0, str(tooling))
+    try:
+        from cycle_events import emit_phase_start, project_root_for
+    except ImportError as error:
+        print(f"cycle-events: emitter unavailable ({error})", file=sys.stderr)
+        return
+    emit_phase_start(project_root_for(project_root), cycle=cycle, slug=slug)
 
 
 def _emit_phase_end(project_root, *, cycle: str, slug: str, verdict, **extra) -> None:

@@ -78,7 +78,21 @@ def _is_definition_only(path: Path, symbol: str) -> bool:
     definition_lines: set[int] = set()
     for dre in def_res:
         for match in dre.finditer(text):
-            line_idx = text.count("\n", 0, match.start())
+            # Counted from where the SYMBOL is, not from where the match begins.
+            #
+            # Every pattern opens `^\s*` under MULTILINE and `\s` includes the newline,
+            # so on `import x` / blank / `export function foo` the match starts at the
+            # newline ENDING the blank line. `count("\n", 0, match.start())` then lands
+            # one line short, the declaration's own line never enters this set, and the
+            # `export function foo` line counts as an ordinary occurrence — so the file
+            # that DECLARES the symbol is credited as a caller of it, and pillar (a)
+            # reports PASS on a symbol nobody calls. Which is the exact false PASS this
+            # function's docstring says it exists to prevent.
+            #
+            # `lstrip()` rather than a changed pattern: `^\s*` is there for indented
+            # declarations and they have to keep matching.
+            leading = len(match.group(0)) - len(match.group(0).lstrip())
+            line_idx = text.count("\n", 0, match.start() + leading)
             definition_lines.add(line_idx)
 
     return occurrence_lines.issubset(definition_lines)

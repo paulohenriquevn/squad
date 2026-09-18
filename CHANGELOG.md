@@ -7,6 +7,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **The board opens with a verdict, and every column says whether work is happening
+  there** (#143)
+  It drew ten lanes and a search box: everything true, nothing a conclusion, so the
+  reader assembled one by counting amber cards and remembering which lanes had not moved.
+  Three readings by the person it is built for found five things it could not answer.
+  There is now one band at the top — `blocked` → `at_risk` → `working` → `stalled` →
+  `idle`, ordered by urgency rather than by count, because one item waiting on a person
+  outranks nine in backlog that move on their own. Each column carries its own state and
+  idle time; each card names any phase behind it with no event on the stream, worded as
+  "no record" rather than "skipped" because a conditional phase can be legitimately
+  absent and the page cannot tell that from one that ran silently. Delivery reports
+  shipped, killed counted apart, and throughput over a stated window — rendering `—`
+  rather than `0/day` while nothing has shipped, since those are different facts and only
+  one is alarming on a young registry.
+
+- **The board classifies every column and computes WIP** (#141, #142)
+  Each lane now says whether work is happening there — `working` (a phase started and has
+  not ended, or uncarded work moved recently), `queued` (items here, something moved
+  inside the stall window), `stalled` (items here, nothing moved — or nothing ever did)
+  and `empty`. Card count told the reader how much was there and never whether anything
+  was happening: on one consumer `plan` held four cards nothing had touched in two hours
+  and looked exactly like a lane in flight. Undated counts as stalled rather than fresh,
+  because an item the stream never mentioned has not just moved. A WIP strip reports
+  items in flight, the peak over the window, and the smallest concurrency that never
+  idled — **derived, never prescribed**: when the window has an idle gap it reports no
+  minimum at all rather than the lowest level it ran at, because a system that stopped
+  was not kept fed by any concurrency, and four items waiting on an access impediment are
+  not helped by starting a fifth.
+
 - **A backlog item that declares itself closed and is filed as open is now reported**
   `check_backlog_structure` read the fields and never the prose, so a block could say
   `remeasured …: **closed in code.**` in its own body while `status: triaged` sat four lines above
@@ -49,6 +78,62 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   did not get what it asked for.
 
 ### Fixed
+- **WIP counted abandoned phases as work in flight** (#143)
+  A `brainstorm` opened 22 hours earlier and never closed held the figure at "1 in
+  flight" while no item was being worked at all — so the owner's question, *which item is
+  being worked*, returned nothing while the number said one. `_phases_running` had
+  already learned that an unclosed start is a fact about the STREAM rather than a claim
+  about the WORK; `_wip` counted raw starts and did not inherit it, which made the figure
+  grow monotonically as lanes died — the opposite of what it measures. A start past four
+  hours is now `abandoned`, named with its age and its slug so it can be closed, and
+  withdrawn from the series by removing its `+1` rather than adding a `-1`: a phantom
+  close would put a false drop on the timeline and invent an idle gap that never
+  happened, corrupting the minimum-WIP figure derived from it. Four hours and not the
+  stall window's thirty minutes, because an implement slice legitimately occupies an
+  afternoon.
+
+- **Four emitters recorded only phase ends, so nothing could be drawn as working**
+  (#142)
+  `cycle_events.emit_phase_start` has existed since the stream did and nothing called it:
+  code-quality, review, implement and acceptance each called `emit_phase_end` and none
+  called its sibling. One consumer's stream held **37 ends against 1 start**, so every
+  instant read as zero in flight — no column could be working, no phase had a duration,
+  and WIP was uncomputable by construction. `code-quality` alone emitted 29 ends against
+  one slug, with no way to tell 29 runs from 29 reports of the same one, which is exactly
+  what WIP measures. All four now emit the start **before the work**: a run that dies
+  mid-phase leaves a start with no end, which is what an interrupted phase is. This
+  measures from now on — the historical events gain no retroactive starts, and no
+  computation can invent them.
+
+- **The board discarded 37 of 38 events and rendered a blank page while the cycle was
+  working** (#141)
+  The only link between a plan and its item was the filename convention `bNNN-name`.
+  Plans called `composition-di-plan.md` and `ci-coverage-plan.md` carry no item number,
+  so every event under those slugs resolved to nothing and was dropped — and the ids were
+  inside the plans all along, where nobody looked. The owner opened the page while a
+  `review` phase ended `READY_TO_MERGE_WITH_FOLLOWUPS` and saw no work at all.
+  `item_id_of`'s docstring already recorded the smaller version of this — *"12 events, 6
+  of them plan slugs, every one invisible"* — and fixed it by teaching one more filename
+  shape; a third pattern would have postponed the next occurrence rather than ended it.
+  The link now comes from the plan's body, and **work that still cannot be attributed is
+  shown rather than dropped**: a strip naming the slug, its phases, its event count and
+  its last verdict. The board already counted these as `unplaced` and reported them as a
+  failure to place — honest, and useless, because it said something was missing without
+  saying what. Placed events went from 1 of 38 to 36 of 38.
+
+- **Eight held items drew eight identical chips, and half were the queue's own work**
+  (#141)
+  The board carried each wall's prose and never the verdict on it, so the reader's real
+  question — which of these is waiting on ME — had no answer on screen.
+  `delegated_decision.classify_wall` had answered it since the delegation file existed,
+  one import away from the view built to show it. Each blocked card now states who can
+  clear it and which class the registry puts it in. Measured on one consumer: **4 the
+  system's, 4 the person's**, where the page had shown eight of the same. The person's is
+  drawn at full strength and the system's quieted — the queue needs no prompting and the
+  person does. Nothing is decided here: an unmatched wall stays `unclassified` and belongs
+  to the person, because `on_no_match = retain` is the registry's rule and a view that
+  softened it would claim a consent nobody gave.
+
 - **An item waiting on another item was sent to a person, with nothing to decide** (#140)
   `classify_wall` had no class for a wall naming another item in the same registry, so it
   fell to `UNCLASSIFIED` and `on_no_match = retain` addressed it to somebody who was never

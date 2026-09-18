@@ -819,6 +819,25 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
             encoding="utf-8",
         )
 
+        # And the auditor registry, for the same reason one step over.
+        #
+        # This smoke passed for a while because it could not be read: `_project_root_for`
+        # returned the WRITE ROOT, `registry_path` looked for
+        # `.squad/rules/review-auditors.txt`, found nothing, and the coverage gate
+        # answered "none required". Once the root resolved correctly the gate read the
+        # kit's own registry — which declares `always | loop-code-review` — and blocked
+        # on audits this smoke never runs and never claimed to.
+        #
+        # An EMPTY registry, which is the gate's documented visible opt-out: this chain
+        # exercises detect_domain → spawn_reviewers → consolidate and asserts nothing
+        # about independent audits. Declaring none is true here; inheriting the kit's
+        # would be asserting that a smoke run satisfies them.
+        (tmp / "rules").mkdir(parents=True, exist_ok=True)
+        (tmp / "rules" / "review-auditors.txt").write_text(
+            "# The smoke chain declares no auditor: it exercises the consolidator, not\n"
+            "# the independent audits. See `verify_ecosystem.py § check_smoke_chain`.\n",
+            encoding="utf-8")
+
         report = tmp / "report.md"
         consolidate = review_skill / "scripts" / "consolidate_findings.py"
         r3 = subprocess.run(

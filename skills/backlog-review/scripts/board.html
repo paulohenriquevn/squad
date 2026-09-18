@@ -441,6 +441,65 @@ h1 {
 .pulse .warnish { color: var(--warn, #b07020); }
 .pulse.repo { margin-top: -.55rem; opacity: .92; }
 .pulse.working { margin-top: -.55rem; }
+/* The first thing on the page, and the only thing a reader with four minutes will
+   finish. One state, one sentence. Colour carries the urgency so the state is legible
+   before the words are read; the words carry where to look, because a headline that
+   summarises without pointing leaves the reader exactly where they started. */
+.headline {
+  display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap;
+  padding: .75rem 1.1rem; border-bottom: 1px solid var(--line);
+  background: var(--surface); font-size: .9rem;
+}
+.headline .state {
+  font-size: .74rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  padding: .2rem .5rem; border-radius: 4px; flex: none;
+}
+.headline .detail { color: var(--ink-2); }
+.headline.is-blocked  { background: var(--impeded-bg); }
+.headline.is-blocked  .state { background: var(--impeded); color: var(--surface); }
+.headline.is-at_risk  { background: var(--impeded-bg); }
+.headline.is-at_risk  .state { background: var(--impeded); color: var(--surface); opacity: .88; }
+.headline.is-working  .state { background: var(--shipped); color: var(--surface); }
+.headline.is-stalled  .state { background: var(--ink-3); color: var(--surface); }
+.headline.is-idle     { opacity: .72; }
+.headline.is-idle     .state { background: var(--line); color: var(--ink-2); }
+/* Column activity. Four states, and the visual weight follows how much each one wants
+   a person to look: `working` reads first, `stalled` second, `queued` sits quiet, and
+   `empty` all but disappears — an empty lane is not news. */
+.col-activity {
+  display: flex; align-items: center; gap: .35rem;
+  padding: .18rem .5rem .34rem; font-size: .68rem;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3);
+}
+.col-activity .act-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none;
+}
+.col-activity .act-detail,
+.col-activity .col-orphan {
+  text-transform: none; letter-spacing: 0; opacity: .82; margin-left: auto;
+}
+.col-activity .col-orphan { color: var(--impeded); margin-left: .4rem; }
+.col-activity.working { color: var(--shipped); font-weight: 600; }
+.col-activity.working .act-dot { animation: actbeat 1.6s ease-in-out infinite; }
+.col-activity.stalled { color: var(--impeded); }
+.col-activity.queued  { color: var(--ink-3); }
+.col-activity.empty   { opacity: .38; }
+.col-activity.empty .act-dot { background: var(--line); }
+@keyframes actbeat { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+@media (prefers-reduced-motion: reduce) {
+  .col-activity.working .act-dot { animation: none }
+}
+.col.is-working { border-color: color-mix(in srgb, var(--shipped) 40%, var(--line)); }
+.col.is-stalled .col-head .name { opacity: .82; }
+/* Who clears a wall. The person's is drawn at full strength because it is the only
+   one that needs a human to look; the system's is quieted because it is already in
+   the queue and wants no prompting. */
+.chip.wall.owner.mine { border-color: var(--impeded); color: var(--impeded); font-weight: 600; }
+.chip.wall.owner.theirs { opacity: .72; font-weight: 400; }
+/* A phase with no event behind an item that has moved past it. Dashed because it is
+   a claim about the RECORD rather than about the work — the phase may have run and
+   said nothing, and the border should not read as an accusation. */
+.chip.wall.gap { border-style: dashed; }
 .pulse .badge, .chip.working {
   background: var(--accent, #4a4ee0); color: #fff; border-radius: 3px;
   padding: .05rem .4rem; font-size: .68rem; font-weight: 700; letter-spacing: .06em; }
@@ -979,6 +1038,7 @@ button.theme:focus-visible { outline: 2px solid var(--moving); outline-offset: 1
 </head>
 <body>
 
+<div class="headline" id="headline"></div>
 <header>
   <div class="top">
     <h1>Cycle Board</h1>
@@ -1110,6 +1170,21 @@ function isAged(iso) {
   return isNaN(d) || (Date.now() - d) > FRESH_MS;
 }
 
+/* Work the stream is recording that no card can show.
+ *
+ * Measured on one consumer 2026-09-18: 37 of 38 events under slugs that resolved to no
+ * item, the page blank, and a `review` phase ending READY_TO_MERGE_WITH_FOLLOWUPS at
+ * that minute. The owner's words, verbatim: "o board não está exibindo nenhum trabalho".  english-only: quoting the report that found this, in the language it was written
+ *
+ * The board already counted these — `unplaced.without_item` — and reported them as a
+ * failure to place. That is honest and useless: it tells the reader that something is
+ * missing without telling them what. This strip names the slug, the phases it has been
+ * through, how many events it carries and its last verdict, so the next move is obvious.
+ *
+ * Hidden when the list is empty, because a permanent empty panel is furniture.
+ */
+
+
 function renderRail(lead) {
   const rail = el("rail");
   if (!lead || (!lead.watching && !(lead.decisions || []).length)) {
@@ -1207,11 +1282,45 @@ function cardHtml(it) {
   } else if (it.blocked) {
     chips.push(`<span class="chip wall">impeded</span>`);
   }
+  // WHO can clear it. Seven held items drew seven identical amber chips, and the
+  // reader's real question — which of these is waiting on ME — had no answer on the
+  // page. Measured on one consumer: three of the seven were the queue's own work.
+  // Reading "7 blocked" as "7 things I must do" is how an owner concludes the system
+  // is stuck when it is not.
+  //
+  // `mine` is the louder of the two on purpose: the system's own backlog needs no
+  // prompting, and the person's does.
+  if (it.blocked && it.blocked_owner) {
+    const mine = it.blocked_owner === "person";
+    const label = mine ? "yours to clear" : "the system's to clear";
+    const why = it.blocked_class && it.blocked_class !== "unclassified"
+      ? ` — classed ${it.blocked_class}`
+      : " — no pattern matched, so it is retained (decision-delegation.txt § on_no_match)";
+    chips.push(`<span class="chip wall owner ${mine ? "mine" : "theirs"}"` +
+      ` title="${escapeHtml(label + why)}">${escapeHtml(label)}</span>`);
+  }
   // A phase stopped on this item and wrote a report saying why. Different from
   // `impeded`, which is a person declaring it in the registry — and the board had
   // been showing the verdict token while the explanation sat unread on disk.
   if (it.halted) {
     chips.push(`<span class="chip wall" title="a phase wrote a BLOCKED report">halted — needs a person</span>`);
+  }
+  // A phase BEHIND this item that the stream never recorded. `cycle-phases.txt` states
+  // the dependency — "review | conditional | absent when implement never ran" — and the
+  // card drew an item in review with no implement event exactly like one that had both.
+  // Measured on one consumer: four items in review, no implement event anywhere, and 53
+  // lines of TypeScript on disk saying code had been written.
+  //
+  // Worded as "no record", never as "skipped": a conditional phase can be legitimately
+  // absent, and the page cannot tell that from one that ran and emitted nothing. Both
+  // are worth a reader's attention and neither is called a defect here.
+  const gaps = it.phases_without_record || [];
+  if (gaps.length) {
+    const label = gaps.length === 1 ? gaps[0] : `${gaps.length} phases`;
+    chips.push(`<span class="chip wall gap"` +
+      ` title="the stream has no event for ${escapeHtml(gaps.join(", "))} on this item —` +
+      ` either it ran without emitting, or it was legitimately skipped">` +
+      `no record: ${escapeHtml(label)}</span>`);
   }
   // The registry's own word, but only where it can disagree with the column: a
   // measured position comes from the stream and the status comes from BACKLOG.md,
@@ -1230,17 +1339,46 @@ function cardHtml(it) {
     </article>`;
 }
 
+// How long a column has been untouched, in the shortest true form.
+function idleLabel(mins) {
+  if (mins === null || mins === undefined) return "no event yet";
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${Math.round(mins)} min idle`;
+  const h = mins / 60;
+  return h < 24 ? `${h.toFixed(h < 10 ? 1 : 0)}h idle` : `${Math.round(h / 24)}d idle`;
+}
+
+//: Per-phase activity from the state file, keyed by phase. Repopulated on every
+//: render: a stale copy would draw a lane as working after the work ended, which is
+//: the class of error this whole review was about.
+let COLUMNS = {};
+
 function columnHtml(phase, items, ordinal) {
   const here = items.filter(it => (it.running_phase || it.phase) === phase);
   const liveHere = here.filter(it => it.running_phase).length;
   const terminal = SETTLED.includes(phase);
   const ord = ordinal ? `<span class="ord">${String(ordinal).padStart(2, "0")}</span>` : "";
+  // Card count told the reader how much is here and never whether anything is
+  // happening. On one consumer `plan` held four cards that nothing had touched in two
+  // hours, and the lane looked exactly like a lane in flight. Four states, because
+  // `queued` and `stalled` are the same fact read against a clock and the difference
+  // is the question an owner opens this page to ask.
+  const col = (COLUMNS[phase] || {});
+  const act = col.activity || (here.length ? "stalled" : "empty");
+  const detail = act === "working"
+    ? (col.running ? `${col.running} running` : "work with no card")
+    : act === "empty" ? "" : idleLabel(col.idle_minutes);
+  const orphan = col.uncarded
+    ? `<span class="col-orphan" title="work the stream records here under no item">+${col.uncarded} uncarded</span>`
+    : "";
   // No "nothing here" placeholder: the column head already carries the count, and
   // five identical notes across the empty phases read as five findings.
   const body = here.map(cardHtml).join("");
-  return `<section class="col ${terminal ? "terminal" : ""} ${here.length ? "" : "vacant"}">
+  return `<section class="col is-${act} ${terminal ? "terminal" : ""} ${here.length ? "" : "vacant"}">
       <div class="col-head">${ord}<span class="name">${PHASE_LABEL[phase] || phase}</span>
         <span class="n${liveHere ? " live" : ""}">${here.length}</span></div>
+      <div class="col-activity ${act}"><span class="act-dot"></span>${act}${
+        detail ? `<span class="act-detail">${escapeHtml(detail)}</span>` : ""}${orphan}</div>
       <div class="stack">${body}</div>
     </section>`;
 }
@@ -1359,6 +1497,8 @@ function render(state) {
   const killed = all.filter(i => i.status === "killed").length;
   const inCycle = all.filter(i => !SETTLED.includes(i.phase) || i.running_phase).length;
 
+  const delivery = state.delivery || {};
+  const riskCount = all.filter(i => (i.phases_without_record || []).length).length;
   el("tallies").innerHTML = [
     ["", all.length, "in the registry"],
     ["", inCycle, "in the cycle"],
@@ -1366,7 +1506,17 @@ function render(state) {
     ["is-impeded", all.filter(i => i.halted).length, "halted"],
     ["is-shipped", shipped, "done"],
     ["is-killed", killed, "killed"],
-    ["", (state.running || []).length, "running now"],
+    // WIP replaces "running now": both count work in flight and the first is derived
+    // from start/end pairs rather than from a name, so showing both invited the reader
+    // to check whether they agreed.
+    ["", (state.wip && state.wip.measured) ? state.wip.current : 0, "in flight"],
+    // `—` and not `0`: nothing shipped yet is not a rate of zero. That distinction
+    // was made in a band of its own before the consolidation and survives the move —
+    // a young registry must not read like a system that delivered none of what it
+    // finished.
+    ["", delivery.throughput_per_day === null || delivery.throughput_per_day === undefined
+        ? "—" : delivery.throughput_per_day, "per day"],
+    [riskCount ? "is-impeded" : "", riskCount, "no phase record"],
     ["", state.event_total || 0, "events read"]
   ].map(([cls, n, label]) =>
     `<div class="tally ${cls}"><b>${n}</b><span>${label}</span></div>`
@@ -1483,6 +1633,29 @@ function render(state) {
     notices.push(`<p class="notice"><b>${dropped} of ${state.event_total} event(s)
       could not be placed on this board.</b> ${parts.join("; and ")}.</p>`);
   }
+  // Work the stream records under a slug no item claims. It lived in a band of its
+  // own and joins the notices, which is where every other "this could not be placed"
+  // message already is — one place to look rather than two.
+  // A phase the stream opened and never closed. Shown with its age, because "abandoned"
+  // and "running" are the same event read against a clock, and the reader deciding which
+  // one it is needs the number. Before this the figure simply counted it as work: a
+  // brainstorm opened 22 hours earlier held the board at "1 in flight" while nothing was
+  // being worked at all.
+  for (const a of ((state.wip || {}).abandoned_detail || [])) {
+    notices.push(`<p class="notice"><b>phase never closed:</b>
+      <code class="mono">${escapeHtml(a.cycle)}</code> opened on
+      <code class="mono">${escapeHtml(a.slug)}</code> ${a.hours}h ago and no end reached
+      the stream. It is not counted as work in flight — close it, or emit the end the
+      phase owed.</p>`);
+  }
+  for (const e of (state.unattributed || [])) {
+    const phases = (e.phases || []).join(" → ") || "no phase named";
+    const verdict = e.last_verdict ? ` · last verdict ${escapeHtml(e.last_verdict)}` : "";
+    notices.push(`<p class="notice"><b>work with no card:</b>
+      <code class="mono">${escapeHtml(e.slug)}</code> — ${escapeHtml(phases)},
+      ${e.events} event(s)${verdict}. The stream records this and no item claims it;
+      name the item in the plan body, or file one.</p>`);
+  }
   el("notice").innerHTML = notices.join("");
 
   const shown = all.filter(matches);
@@ -1541,6 +1714,9 @@ function render(state) {
     renderImplementation(plannedShown);
   }
 
+  COLUMNS = {};
+  for (const c of (state.columns || [])) COLUMNS[c.phase] = c;
+  renderHeadline(state.headline);
   renderRail(state.lead);
   el("stamp").textContent = "updated " + new Date().toLocaleTimeString();
 }

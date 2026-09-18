@@ -316,6 +316,16 @@ def main() -> int:
     model_overrides: dict[str, str] = args.model_override or {}
 
     base_mapping = {
+        # The directory this script CREATES and the consolidator is pointed at, so a
+        # reviewer following its brief writes where the review will read.
+        #
+        # The templates carried `.claude/agents/review-{SLUG}-{DATE}/findings/` — a
+        # second, hand-written copy of a path only this script knows, and it was wrong.
+        # Measured on a consumer 2026-09-18: all eleven reviewers needed the path
+        # corrected by hand in their dispatch prompt, and nothing failed loudly — the
+        # reviewer writes its file, the consolidator finds an empty directory, and the
+        # review reports on the findings it could see.
+        "FINDINGS_DIR": str(output_dir / "findings"),
         "SLUG": args.slug,
         "DATE": date_str,
         "PLAN_PATH": str(args.plan),
