@@ -5,7 +5,7 @@ requires: []
 description: Put a person's signature on a document that is waiting for one — an alignment brief, the product documents, anything with a `## Sign-off` section. Use this when a scorer returned AWAITING_REVIEW, when `/brainstorm-pieces` computed 90% and stopped, or when someone asks what is waiting on them. Shows what is being signed and writes nothing until a second, deliberate command; refuses to re-sign, and refuses an author signing their own work unless they declare it, which it records in the document rather than silencing.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash
-argument-hint: "[document-path] | --list"
+argument-hint: "[document-path] | --list | --all"
 ---
 
 # `/sign` — the one act a machine may not perform
@@ -52,9 +52,45 @@ turns a signature into a stamp, which is the failure the machine's own refusal e
 prevent. `--confirm` is a second, deliberate act, and **there is no `--yes`** — adding
 one would remove the only thing this contributes over `sed`.
 
-The preview shows the sign-off section verbatim, who git says wrote the file, how many
-boxes are unticked, and — the part that matters — what your signature does and does not
-assert.
+The preview opens with what the document IS — its title, its own section headings, its
+length — then the sign-off section verbatim, who git says wrote the file, how many boxes
+are unticked, and what your signature does and does not assert.
+
+**Every line of that summary is extracted, never generated.** The title is the document's
+`# ` heading, the sections are its `## ` headings, the count is a count. A model-written
+description was the other option and is refused on purpose: a summary the reader has to
+verify is worse than none, because the signature already asserts that they read the
+document. `tests/test_a_preview_says_what_the_document_is.py` fails on any word in the
+summary that is not in the file.
+
+This does not replace reading the document, and the SOP still says so. It makes the
+preview name which document — four product documents waiting at once have near-identical
+sign-off sections, and before this they were told apart by path alone.
+
+## Signing everything that is waiting
+
+```bash
+python3 "$ECO/skills/sign/scripts/sign_document.py" --all --as paulo             # preview all
+python3 "$ECO/skills/sign/scripts/sign_document.py" --all --as paulo --confirm   # sign all
+```
+
+`--all` takes every document `--list` reports. The four product documents are written
+together and read together, and typing the same command four times is friction that buys
+nothing.
+
+**It is not a `--yes`, and the distinction is the whole design.** The default run prints
+every document's sign-off section — the same preview, in full, one after another — and
+writes nothing. What the flag removes is the repetition of the command, not the reading.
+A batch mode that skipped the previews would be the flag this skill argues against two
+sections above, wearing a different name.
+
+Three behaviours worth knowing before you use it:
+
+| | |
+|---|---|
+| A refusal stops one document, not the batch | Aborting on the first would leave the earlier ones signed and the later ones untouched, with nothing on screen saying where it stopped. Each refusal is printed against its own path |
+| Exit 1 when any document was refused | You asked for *all*. Getting some is not what you asked for, and a `0` would say otherwise |
+| `--despite-authorship` applies to every document in the batch | One reason, recorded in each file. If the documents need different reasons, they need different runs |
 
 ## What it refuses, and why none of these is an inconvenience
 
@@ -94,7 +130,9 @@ neither reads it nor stands in for it.
 
 ## What it does NOT do
 
-- **It does not decide what to sign.** `--list` reports; the choice is yours.
+- **It does not decide what to sign.** `--list` reports; the choice is yours. `--all`
+  takes that same list — it does not widen it, and it does not search anywhere `--list`
+  would not look.
 - **It does not verify the document is true.** Nothing can. It records who is willing to
   say so, which is why the signature has to be a person's.
 - **It does not run the scorer.** After signing, run the gate that governs the document
@@ -106,7 +144,9 @@ neither reads it nor stands in for it.
 ## Anti-patterns
 
 - **Signing without reading.** The preview exists for one reason; skipping past it makes
-  the signature worth what a `sed` would be worth.
+  the signature worth what a `sed` would be worth. `--all` prints every preview for
+  exactly this reason — scrolling past four of them is the same anti-pattern performed
+  faster, and the tool cannot tell the difference.
 - **Using `--despite-authorship` as the default.** It is for the case where no second
   reviewer exists, not for the case where finding one is inconvenient.
 - **Reading a signature as a pass.** A signed document below the score floor is a signed

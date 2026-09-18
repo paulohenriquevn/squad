@@ -307,8 +307,52 @@ def resolve_target(target: str, project: Path) -> Path | None:
     return None
 
 
-def preview(doc: Document, signer: str) -> str:
+#: A heading the reader is not being asked to judge: it holds the boxes, and it is
+#: printed verbatim below the summary anyway.
+_SIGNOFF_HEADINGS = ("sign-off", "reviewer sign-off", "signoff")
+
+
+def outline(doc: Document) -> tuple[str, list[str], int]:
+    """`(title, sections, lines)` — everything EXTRACTED, nothing generated.
+
+    The preview showed the box to tick and never what the document says. Four product
+    documents wait at once and their sign-off sections read alike, so a batch preview
+    distinguished them by path alone — which puts the operator in the position this gate
+    exists to prevent: ticking a box whose subject they are taking on trust.
+
+    A model-written one-line summary was the other option and is refused on purpose: a
+    summary the reader has to verify is worse than none, because the signature already
+    asserts that they read the document. What comes back is the document's own title,
+    its own headings, and a count — three things a reader can check against the file in
+    a second. `tests/test_a_preview_says_what_the_document_is.py` holds that line: any
+    word in this header that is not in the document fails it.
+    """
+    title = ""
+    sections: list[str] = []
+    for raw in doc.body.splitlines():
+        line = raw.strip()
+        if line.startswith("# ") and not title:
+            title = line[2:].strip()
+        elif line.startswith("## "):
+            heading = line[3:].strip()
+            if heading.lower() not in _SIGNOFF_HEADINGS:
+                sections.append(heading)
+    return title, sections, len(doc.body.splitlines())
+
+
+def preview(doc: Document, signer: str, *, closing: bool = True) -> str:
+    title, sections, lines = outline(doc)
     out = [f"ABOUT TO SIGN: {doc.path}", ""]
+    # Absence stated, never left blank. An empty line here reads as "nothing to see"
+    # when it means "this tool found no heading", and those are different facts — the
+    # same distinction `--list` already refuses to blur.
+    out.append(f"  {title}" if title else "  (untitled — no `# ` heading)")
+    if sections:
+        out.append(f"  {lines} lines · {len(sections)} section(s): "
+                   + " · ".join(sections))
+    else:
+        out.append(f"  {lines} lines · no section headings found")
+    out.append("")
     section = doc.body[doc.section_at:].strip()
     out.append("  The sign-off section, verbatim:")
     for line in section.splitlines()[:20]:
@@ -326,14 +370,109 @@ def preview(doc: Document, signer: str) -> str:
             "a separate claim,",
             "  and this tool neither reads it nor stands in for it.",
             "",
-            "  Nothing was written. Re-run with --confirm to sign."]
+            ]
+    if closing:
+        # Said by the single-document path, where this preview IS the whole run. The
+        # batch says it once at the end instead: repeating "re-run with --confirm" under
+        # each of four documents reads as four separate decisions to make.
+        out.append("  Nothing was written. Re-run with --confirm to sign.")
     return "\n".join(out)
+
+
+def _sign_all(args) -> int:
+    """Every document waiting, previewed together and signed on a second command.
+
+    WHY THIS IS NOT A `--yes`
+    -------------------------
+    `SKILL.md` argues that a tool making signatures frictionless turns a signature into
+    a stamp, and that there is deliberately no flag which skips the preview. This one
+    does not skip it: the default run prints EVERY document's sign-off section, exactly
+    what the single-document path prints, and writes nothing. What `--all` removes is
+    typing the same command once per document — the four product documents are written
+    together and read together — and nothing else.
+
+    A batch that stopped at the first refusal would leave the earlier documents signed
+    and the later ones untouched, with nothing on screen saying where it stopped. So a
+    refusal is reported against its own document and the run carries on; the exit code
+    says whether every one of them was signed.
+    """
+    project = args.project.resolve()
+    signer = args.signer.strip()
+    if not signer.removeprefix(HUMAN_PREFIX).strip():
+        print("REFUSED [no_signer_named]: --as must name the person signing. A "
+              "signature is worth exactly the name on it, and `human` is not a name. "
+              "Nothing was signed.", file=sys.stderr)
+        return 1
+
+    pending = waiting(project)
+    if not pending:
+        # The same distinction `--list` draws, in the same words, because they are
+        # different facts: no document is waiting, which is not everything being signed.
+        print(f"nothing is waiting for a signature under {project}\n\n"
+              "  That is not the same as everything being signed — it means no document "
+              "with an\n  unticked `## Sign-off` box was found in the places the kit "
+              "keeps them.")
+        return 0
+
+    signable: list[tuple[Path, Document]] = []
+    refused: list[tuple[Path, Refusal]] = []
+    for path in pending:
+        try:
+            doc = load(path)
+        except Unreadable as exc:
+            # Reported, never skipped: `waiting()` already refuses to let an unreadable
+            # document shorten its list, and dropping it here would undo that one step
+            # further along.
+            refused.append((path, Refusal("unreadable", str(exc))))
+            continue
+        if doc is None:
+            continue
+        doc.authors = git_authors(path)
+        refusal = check(doc, signer, despite=args.despite)
+        if refusal is not None:
+            refused.append((path, refusal))
+            continue
+        signable.append((path, doc))
+
+    for index, (path, doc) in enumerate(signable, start=1):
+        print(f"[{index}/{len(signable)}] {path}")
+        print(preview(doc, signer, closing=False))
+        print()
+
+    for path, refusal in refused:
+        print(f"REFUSED [{refusal.code}] {path}: {refusal.detail}", file=sys.stderr)
+
+    if not signable:
+        print(f"nothing signable: all {len(refused)} document(s) waiting were refused "
+              f"above. Nothing was written.", file=sys.stderr)
+        return 1
+
+    if not args.confirm:
+        print(f"Nothing written. Re-run with --confirm to sign all {len(signable)}.")
+        if refused:
+            print(f"  {len(refused)} other document(s) were refused and would stay "
+                  f"unsigned — see above.")
+        return 0
+
+    for path, doc in signable:
+        path.write_text(sign(doc, signer, despite=args.despite), encoding="utf-8")
+    print(f"SIGNED {len(signable)} document(s) by "
+          f"human/{signer.removeprefix(HUMAN_PREFIX)}:")
+    for path, _ in signable:
+        print(f"  {path}")
+    print("\n  Run the scorer that gates each document to see the verdict move. This "
+          "tool wrote\n  signatures; it did not compute anything.")
+    # Exit 1 when some were refused: a caller that asked for "all" and got some did not
+    # get what it asked for, and a 0 here would say otherwise.
+    return 1 if refused else 0
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("target", nargs="?", help="path to the document to sign")
     ap.add_argument("--list", action="store_true", help="what is waiting for a signature")
+    ap.add_argument("--all", dest="all_waiting", action="store_true",
+                    help="every document `--list` reports, previewed in one run")
     ap.add_argument("--confirm", action="store_true", help="write the signature")
     ap.add_argument("--as", dest="signer", default="", help="who is signing")
     ap.add_argument("--despite-authorship", dest="despite", default="",
@@ -355,6 +494,15 @@ def main(argv: list[str] | None = None) -> int:
         for path in pending:
             print(f"  {path}")
         return 0
+
+    if args.all_waiting:
+        if args.target:
+            # Two intentions in one command. Picking either one silently is how a tool
+            # signs something nobody asked it to, and the cost of guessing wrong here is
+            # a signature on a document the caller never named.
+            ap.error("--all signs everything that is waiting; a target names one "
+                     "document. Give one or the other, not both")
+        return _sign_all(args)
 
     if not args.target:
         ap.error("give a document to sign, or --list to see what is waiting")

@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **The signing preview now says what the document is, not just which box to tick**
+  (#133)
+  It showed the sign-off section and the path. Four product documents wait at once and
+  their sign-off sections read alike — `- [ ] Read and holds`, four times — so a batch
+  preview told them apart by filename, which puts the signer in the position the gate
+  exists to prevent: ticking a box whose subject they are taking on trust. Each preview
+  now opens with the document's own `# ` title, its own `## ` headings, and its length.
+  **Everything in it is extracted, never generated**: a model-written summary would be
+  one more thing the reader has to verify, and the signature already asserts that they
+  read the document. A test fails on any word in the summary that is not in the file.
+- **`/sign --all` signs every document that is waiting, and shows each one first** (#133)
+  `/brainstorm-pieces` stops with four product documents waiting at once — they are
+  written together and read together — and the tool took one path per invocation. `--all`
+  takes the same list `--list` reports. It is deliberately **not** a `--yes`: the default
+  run prints every document's sign-off section in full and writes nothing, so what the
+  flag removes is the repetition of the command and not the reading. A refusal stops one
+  document rather than the batch, because aborting on the first would leave the earlier
+  ones signed and the later ones untouched with nothing saying where it stopped; the run
+  exits 1 when any document was refused, since a caller that asked for *all* and got some
+  did not get what it asked for.
+
 ### Fixed
 - **A registry created exactly as `/backlog-init` instructs was born INVALID** (#136)
   Two rules of the kit contradicted each other. `backlog-init` Step 3 says *"Seed no
