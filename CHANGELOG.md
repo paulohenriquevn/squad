@@ -29,6 +29,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as `usetheodev/judge-codex#2`.
 
 ### Fixed
+- **`/review` generated skills that the kit's own gate then failed, and that Claude
+  Code could never load** (#148)
+  All five paired-knowledge templates began with an `#` heading and carried no
+  frontmatter, so every `/review` run wrote up to five `SKILL.md` files without `name`,
+  `description` or `user-invocable`. Two costs, and the second is the expensive one.
+  `validate_skill_frontmatter.py` runs as post-install validation and requires exactly
+  those three fields: measured on a consumer 2026-09-18, thirteen generated skills, and
+  `=== SOME CHECKS FAILED ===` on an install whose own files were all correct. The gate
+  was right; the kit had produced what it failed. The larger cost is that Claude Code
+  reads a skill's name and description from that frontmatter — a `SKILL.md` without it
+  is not discovered at all, so the "paired knowledge skill" the template calls
+  *auto-discovered by Claude Code* has never been loadable by the mechanism it names.
+  The reviewer agent ran; its knowledge layer did not. The `name` is now
+  `review-{SLUG}-{ROLE}-knowledge`, and `ROLE` is substituted by the function that names
+  the output directory rather than by its caller — a skill whose frontmatter name
+  disagrees with its directory is discovered under one identity and referenced under the
+  other, which surfaces as a missing skill and nothing else. Verified end to end: five
+  skills generated, five accepted by the gate, every name matching its directory.
+  Skills already written by past runs are inert and stay on disk — the kit does not
+  write into another project's repository to repair them.
+
 - **A stale report from another run counted as this run's audit coverage** (#145)
   `check_auditor_coverage` globbed the plugin's output directory and took whatever it
   found, with no date, commit or diff base behind the choice. Measured on a consumer

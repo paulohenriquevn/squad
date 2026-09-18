@@ -229,7 +229,12 @@ def write_skill_file(
         raise FileNotFoundError(f"Skill template not found: {template_path}")
 
     content = template_path.read_text(encoding="utf-8-sig")
-    substituted = substitute(content, mapping)
+    # `ROLE` is injected HERE and not by the caller, because this function is the one
+    # that names the output directory. A skill whose frontmatter `name` disagrees with
+    # its directory is discovered under one identity and referenced under the other,
+    # which surfaces as a missing skill — the failure mode with no error message. Set
+    # from the same `role` the path below is built from, the two cannot drift.
+    substituted = substitute(content, {**mapping, "ROLE": role})
 
     skill_output_dir = skills_root / f"review-{slug}-{role}-knowledge"
     skill_output_dir.mkdir(parents=True, exist_ok=True)
