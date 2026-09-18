@@ -113,26 +113,15 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def default_panel_path() -> Path:
-    """Where the roster lives, resolved against the KIT rather than the project.
+def default_panel_path(project_dir: Path | None = None) -> Path:
+    """Delegated: see `squad.layout.roster_path`.
 
-    `repo_root()` above answers a different question — where this project's records are
-    WRITTEN — and it is right for that. It was wrong here: `install.sh` copies `rules/`
-    into `<target>/.claude/`, so in a plugin install the roster is at
-    `<project>/.claude/rules/review-panel.txt` and `<project>/rules/review-panel.txt`
-    does not exist. Every consumer install therefore convened against a roster that was
-    not there, while `check_panel_capability.py` two directories away resolved it from
-    the kit and found it.
-
-    `squad.layout.kit_dir` is the answer to "where does the kit's code live", and the
-    standalone fallback below is the shape where the two coincide.
+    The reasoning that used to live here moved to the owner after a sibling gate
+    was found carrying this same name with the unfixed body.
     """
-    from squad.layout import resolve
+    from squad.layout import roster_path
 
-    layout = resolve(warn=False)
-    if layout is not None:
-        return layout.kit_dir / "rules" / "review-panel.txt"
-    return Path(__file__).resolve().parents[2] / "rules" / "review-panel.txt"
+    return roster_path(project_dir)
 
 
 def agents_dir(project: Path) -> Path:
@@ -189,7 +178,7 @@ def convene(
     config_dir: Path | None = None,
 ) -> tuple[int, dict]:
     """(exit code, the assignment or the reason there is none)."""
-    panel_path = panel_path or default_panel_path()
+    panel_path = panel_path or default_panel_path(project)
     project = project or repo_root()
     phase = phase.lower()
 

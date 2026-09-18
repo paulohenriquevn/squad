@@ -29,6 +29,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
+- **On every plugin install, a panel that convened and voted read as one that never
+  ran** (#150)
+  `convene_panel.default_panel_path()` was fixed months ago and carries the reasoning in
+  its docstring: `install.sh` copies `rules/` into `<target>/.claude/`, so the roster is
+  at `<project>/.claude/rules/review-panel.txt` and the project-root path does not
+  exist. `check_panel_approval.py` held a function of the **same name** with the unfixed
+  body. Measured on a consumer 2026-09-18, against a panel with three seats, two
+  families and a unanimous verdict on disk: `UNCHECKED: cannot read the roster:
+  .../apps/theoclaw/rules/review-panel.txt`. `UNCHECKED` reaches the opportunity scorer
+  as `ITEM_IN_FLIGHT` — *the panel could not convene* — so a panel that ran and returned
+  was indistinguishable from one that never ran, and the item stalled. Two functions
+  with one name and only one of them fixed is a shape this kit has paid for repeatedly;
+  the resolution now lives in `squad/layout.py`, which already answers where the kit is,
+  and both callers pass the project they were given rather than falling back on the
+  process directory. Verified on the same consumer: the gate now reports `RETURNED →
+  NEEDS_REVISION` with all three seats, without the `--panel` workaround.
+
 - **A third gate charged `/review`'s own output for being output** (#149)
   `check_xrefs.py` has exempted `review-{slug}-{role}-knowledge` since the day the
   predicate was hoisted out of an inline check, and its docstring closed with *"One

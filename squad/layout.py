@@ -51,6 +51,37 @@ class Layout:
     kind: str
 
 
+def roster_path(project_dir: Path | str | None = None) -> Path:
+    """Where the panel roster lives, resolved against the KIT, not the project.
+
+    `install.sh` copies `rules/` into `<target>/.claude/`, so in a plugin install
+    the roster is at `<project>/.claude/rules/review-panel.txt` and
+    `<project>/rules/review-panel.txt` does not exist. A reader resolving against
+    the project root finds nothing and has no way to tell that from a project with
+    no roster.
+
+    It lives HERE because it has been answered twice and only one of the two was
+    right. `convene_panel.default_panel_path()` was fixed, with this reasoning
+    written into it; `check_panel_approval.default_panel_path()` carried the same
+    NAME and the unfixed body. Measured by a consumer 2026-09-18 on a panel that
+    had convened, voted and returned unanimously:
+
+        UNCHECKED: cannot read the roster: .../apps/theoclaw/rules/review-panel.txt
+
+    `UNCHECKED` reaches the opportunity scorer as `ITEM_IN_FLIGHT` — "the panel
+    could not convene" — so a panel that ran was indistinguishable from one that
+    never did, on every plugin install.
+
+    The standalone branch is the shape where kit and project coincide, which is
+    how this repository tests itself.
+    """
+    layout = resolve(project_dir, warn=False)
+    if layout is not None:
+        return layout.kit_dir / "rules" / "review-panel.txt"
+    root = Path(project_dir) if project_dir else Path.cwd()
+    return root / "rules" / "review-panel.txt"
+
+
 def has_kit(directory: Path) -> bool:
     return all((directory / tree).is_dir() for tree in _KIT_TREES)
 
