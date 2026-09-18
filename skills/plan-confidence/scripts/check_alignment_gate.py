@@ -167,6 +167,41 @@ def _registry_exists(plan_path: Path) -> bool:
     return False
 
 
+
+def _depth_for(plan_path: Path, item: str | None) -> str:
+    """The alignment depth for this ITEM, from the module that decides depth.
+
+    Returns `FULL` when the item is unknown or the classifier cannot answer. FULL is the
+    safe direction: it asks for more, and a brief that clears the full rubric clears the
+    local one too. The reverse default would let an unclassifiable item be graded on the
+    shallow rubric, which is the escape hatch `alignment-threshold.md` refuses.
+    """
+    if not item:
+        return "FULL"
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "plan-alignment/scripts"))
+        from classify_alignment_depth import classify  # noqa: PLC0415
+
+        return classify(_project_root(plan_path), item).depth
+    except Exception:  # noqa: BLE001 — an unclassifiable item is scored at FULL
+        return "FULL"
+
+
+def _project_root(plan_path: Path) -> Path:
+    """Walk up from the PLAN to the project, never trusting the process's cwd.
+
+    Same reasoning as `_registry_exists` one function up, and the same stopping rule: a
+    `.git` is the repository root and walking past it reaches a sibling project whose
+    registry would answer for this one.
+    """
+    for parent in [plan_path.resolve(), *plan_path.resolve().parents]:
+        if (parent / "BACKLOG.md").is_file():
+            return parent
+        if (parent / ".git").exists():
+            return parent
+    return plan_path.resolve().parent
+
+
 def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
     """Read the alignment verdict for this plan's item and turn it into a cap."""
     if _is_kit_tooling(Path(plan_path)):
@@ -219,7 +254,13 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
 
     try:
         from score_alignment import score_alignment
-        report = score_alignment(brief)
+        # The depth is DERIVED from the item, never read from the brief. Scoring a LOCAL
+        # brief against the FULL rubric is what made the shallow path unusable: measured
+        # 2026-09-18, a LOCAL brief complete by its own contract topped out at 24/34 =
+        # 70.6% against a 90% floor, because five criteria grade the sections LOCAL
+        # removes. Fixing the scorer alone would have left this gate scoring the old way
+        # — the half-applied shape this kit has now measured three times.
+        report = score_alignment(brief, _depth_for(plan_path, cited))
     except Exception as exc:  # noqa: BLE001 — any failure here is "not measured"
         return AlignmentGateReport(
             applies=True, verdict="UNREADABLE",
