@@ -697,15 +697,26 @@ for kit_agent in kairos-product-owner.md iris-product-designer.md daedalus-tech-
     echo "    agents/$kit_agent"
   fi
 done
-# Top-level docs and manifest
-for f in HOW-TO-USE.md README.md .active_plan.example; do
+# Top-level docs and manifest.
+#
+# Declared ONCE, because two readers need the same answer: this loop, which
+# copies them, and the manifest writer, which must name them. The manifest
+# enumerated `skills/`, `rules/`, `agents/` and four directories and listed no
+# loose file at all — so at the kit root it answered by omission, which its own
+# header promises it never does. `squad/boundaries.py` reads that manifest to
+# decide who owns a path; with the root omitted it had to fall back on "inside
+# the kit directory, therefore the kit's", and claimed three files belonging to
+# other plugins (`code-review-loop.local.md` and two siblings, measured on a
+# consumer 2026-09-18). Separate lists in the two places would let the same gap
+# reopen one file at a time.
+KIT_LOOSE_FILES="HOW-TO-USE.md README.md .active_plan.example"
+for f in $KIT_LOOSE_FILES; do
   [ -f "$SRC_DIR/$f" ] && cp "$SRC_DIR/$f" "$ECO/$f"
 done
 # The manifest has ONE canonical place — `.claude-plugin/plugin.json`, where
 # Claude Code looks for it. There used to be a second copy at the root, and two
 # copies of a manifest diverge: the root one was what the README pointed at and
-# what this script
-# instalava, enquanto o mecanismo nativo lia a outra.
+# what this script installed, while the native mechanism read the other.
 [ -f "$SRC_DIR/.claude-plugin/plugin.json" ] && cp "$SRC_DIR/.claude-plugin/plugin.json" "$ECO/plugin.json"
 
 # --- settings.json (plugin install variant) ---
@@ -931,6 +942,24 @@ MANIFEST="$ECO/.kit-manifest.txt"
     ( cd "$SRC_DIR/$item" && find . -mindepth 1 \( -type f -o -type l \) \
         -not -path "*/__pycache__/*" -print ) \
     | sed "s|^\./|$item/|" | sort
+  done
+
+  # The kit root. Everything above lives in a directory the kit owns outright, so
+  # a reader could infer ownership from the first path segment; at the root there
+  # is no segment to infer from, and the kit shares that directory with every
+  # other plugin the project installs. These are the only loose files that are
+  # the kit's, and naming them is what lets `is_project_owned` answer "not mine"
+  # for the rest instead of claiming the whole directory.
+  for f in $KIT_LOOSE_FILES; do
+    [ -f "$ECO/$f" ] && echo "$f"
+  done
+  # Written from `.claude-plugin/plugin.json`, so it is not in the loose list.
+  [ -f "$ECO/plugin.json" ] && echo "plugin.json"
+  # Provenance the installer itself writes: what the kit SHIPPED last time, which
+  # `merge_settings.py` needs to tell a retired rule from a project's own. Not
+  # copied from the source, and not the project's to edit either.
+  for f in .kit-hooks.json .kit-permissions.json; do
+    [ -f "$ECO/$f" ] && echo "$f"
   done
 } > "$MANIFEST"
 echo "==> Manifest written: $(grep -vc '^#' "$MANIFEST") paths from the kit"

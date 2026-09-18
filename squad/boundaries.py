@@ -31,22 +31,49 @@ PROJECT_OWNED = (
 )
 
 
+def _claimed(kit_dir: Path) -> set[str] | None:
+    """What the install manifest says the kit brought, or `None` if it cannot say."""
+    manifest = kit_dir / ".kit-manifest.txt"
+    if not manifest.is_file():
+        return None
+    try:
+        text = manifest.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        return None
+    return {line.split("#", 1)[0].strip() for line in text.splitlines()} - {""}
+
+
 def is_project_owned(rel: str, kit_dir: Path) -> bool:
-    """Is this kit-relative path the consumer's to change?"""
+    """Is this kit-relative path the consumer's to change?
+
+    The manifest's own header states the rule — "Anything not here is the
+    project's" — and this function used to apply it to `skills/` alone. So a path
+    the kit never installed was refused anyway, on the grounds that it sat in the
+    kit's directory. That directory is shared: every plugin a project installs
+    writes into `.claude/`. Measured on a consumer 2026-09-18, the boundary
+    claimed `code-review-loop.local.md`, `code-review-loop.completed.md` and
+    `test-audit-loop.local.md` — three files belonging to two other plugins, one
+    of which must be deleted to cancel a run, by that plugin's documented
+    procedure. The refusal was not merely inconvenient, it was FALSE about why:
+    a guard that misstates its own reason teaches people to route around it.
+
+    The manifest lists things at three granularities — `skills/<name>` by
+    directory, `rules/<file>` and the rest by file — so the question asked is
+    whether ANY prefix of the path is claimed. One rule covers all three, and a
+    fourth granularity added later needs no change here.
+
+    No manifest means the kit cannot MEASURE ownership, so it concedes nothing
+    and the old refusal stands. Treating an unreadable manifest as a blanket
+    unlock would be this kit's most-repeated defect, inverted: a check that could
+    not measure its subject, reporting the answer nobody verified.
+    """
     if any(pattern.search(rel) for pattern in PROJECT_OWNED):
         return True
-    # A skill the install manifest does not claim is the project's own, and the
-    # kit has no standing to call it read-only.
-    if rel.startswith("skills/"):
-        manifest = kit_dir / ".kit-manifest.txt"
-        if manifest.is_file():
-            claimed = {
-                line.split("#", 1)[0].strip()
-                for line in manifest.read_text(encoding="utf-8-sig",
-                                               errors="replace").splitlines()
-            }
-            return f"skills/{rel.split('/')[1]}" not in claimed
-    return False
+    claimed = _claimed(kit_dir)
+    if claimed is None:
+        return False
+    parts = rel.split("/")
+    return not any("/".join(parts[:i]) in claimed for i in range(1, len(parts) + 1))
 
 
 def kit_relative(target: Path, layout: Layout) -> str | None:

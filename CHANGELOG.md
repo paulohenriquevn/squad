@@ -6,6 +6,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+- **A stale report from another run counted as this run's audit coverage** (#145)
+  `check_auditor_coverage` globbed the plugin's output directory and took whatever it
+  found, with no date, commit or diff base behind the choice. Measured on a consumer
+  2026-09-18: it reported COVERED with "2 blocking findings" from a report written
+  **2h45 earlier by a different run**, while the audit of the change actually under
+  review sat in a sibling directory with four. The assignment file records when the
+  audit was *commissioned*, so a report older than it cannot be the audit that was
+  asked for — an ordering fact the gate already held both sides of and never compared.
+  It now refuses a report that predates its assignment. It deliberately does **not**
+  claim the converse: a newer report may still describe the wrong change, and proving
+  otherwise needs a `diff_base` only the plugin can declare. A report the gate cannot
+  date is still accepted, because a gate that refused everything it could not measure
+  would be routed around.
+
+- **The kit refused writes to files belonging to other plugins** (#146)
+  `.claude/` is shared — every plugin a project installs writes there — and the boundary
+  treated the whole directory as the kit's. Measured on a consumer 2026-09-18 it claimed
+  `code-review-loop.local.md`, `code-review-loop.completed.md` and
+  `test-audit-loop.local.md`; deleting the first is `loop-code-review`'s own documented
+  way to cancel a run. The refusal was not just inconvenient, it was **false about why**,
+  and a guard that misstates its reason teaches people to route around it.
+  `.kit-manifest.txt` already answered the question — its header reads "Anything not here
+  is the project's" — but the boundary consulted it for `skills/` alone. It now asks
+  whether any prefix of the path is claimed, which covers all three granularities the
+  manifest uses at once. That widening had a precondition: the manifest enumerated
+  `skills/`, `rules/`, `agents/` and four directories and named **no loose file at all**,
+  so at the kit root it answered by omission — exactly what its header promises it never
+  does. The installer now lists the files it copies there, declared once and read by both
+  the copy loop and the manifest writer so the two cannot drift. With no manifest the
+  boundary concedes nothing and the old refusal stands, because treating an unreadable
+  manifest as a blanket unlock is this kit's most-repeated defect wearing the other face.
+
 ### Added
 - **The board opens with a verdict, and every column says whether work is happening
   there** (#143)

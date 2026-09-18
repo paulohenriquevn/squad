@@ -157,7 +157,33 @@ def validate_with_plugin(install_path: Path, report: Path) -> tuple[bool, str]:
     return False, f"the plugin's own checker rejected the report: {detail[:400]}"
 
 
-def find_report(project: Path, output_dir: str, glob: str) -> Path | None:
+def find_report(project: Path, output_dir: str, glob: str,
+                *, commissioned_at: float | None = None) -> Path | None:
+    """The audit report for this run, or None.
+
+    `commissioned_at` is when the ASSIGNMENT was written — when somebody asked for the
+    audit. A report older than that cannot be the audit that was asked for: it existed
+    before the request. That is an ordering fact this gate already holds both sides of.
+
+    It was globbing a directory and taking a hit, with no mtime, no commit and no diff
+    base. Measured on a consumer 2026-09-18: the gate reported COVERED with "2 blocking
+    findings" by reading a report written **2h45 earlier** by a different run, while the
+    audit for the change under review sat in a sibling directory with 4.
+
+    `cycle-review.md` names the neighbouring risk exactly — "an independent report about
+    the wrong thing is worse than no report, because it reads as coverage". This is that
+    sentence with the axis swapped: right report, wrong change.
+
+    WHAT THIS DOES NOT CLAIM. A report newer than the assignment may still be about the
+    wrong change, and proving otherwise needs a `diff_base` the plugin would have to
+    declare — and the report contract is the plugin's, which `cycle-review.md` protects
+    on purpose. The gate verifies the half it can and reports that half, rather than the
+    stronger claim it cannot support.
+
+    `commissioned_at=None` keeps the old behaviour for callers that have no assignment
+    time. A gate that started refusing every report it could not date would be routed
+    around, and routed-around is worse than narrow.
+    """
     # The assignment carries an absolute path derived from the write root; a relative
     # one is still accepted so an older assignment on disk keeps resolving.
     base = Path(output_dir)
@@ -166,7 +192,17 @@ def find_report(project: Path, output_dir: str, glob: str) -> Path | None:
     if not base.is_dir():
         return None
     hits = sorted(base.glob(glob))
-    return hits[-1] if hits else None
+    if not hits:
+        return None
+    report = hits[-1]
+    if commissioned_at is None:
+        return report
+    try:
+        written = report.stat().st_mtime
+    except OSError:
+        # Cannot date it, so cannot refuse it on age. Same reasoning as the None case.
+        return report
+    return report if written >= commissioned_at else None
 
 
 def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[int, dict]:
@@ -230,6 +266,12 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
         }
     try:
         assignment = json.loads(path.read_text(encoding="utf-8"))
+        # When the audit was COMMISSIONED. A report older than this existed before
+        # anyone asked for it, so it cannot be the audit the assignment describes.
+        try:
+            commissioned_at = path.stat().st_mtime
+        except OSError:
+            commissioned_at = None
     except (OSError, ValueError) as exc:
         return UNCHECKED, {"status": "unchecked", "slug": slug,
                            "detail": f"cannot read {path}: {exc}"}
@@ -254,12 +296,15 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
             results.append(entry)
             continue
 
-        report = find_report(project, req["output_dir"], req.get("report_glob", "final_report.md"))
+        report = find_report(project, req["output_dir"],
+                             req.get("report_glob", "final_report.md"),
+                             commissioned_at=commissioned_at)
         if report is None:
             entry.update(state="no_report",
                          expected=str(project / req["output_dir"] / req.get("report_glob", "final_report.md")),
-                         detail="the audit was required and left no report. It did not "
-                                "pass — it did not run")
+                         detail="the audit was required and left no report from this "
+                                "run. It did not pass — it did not run, or what is "
+                                "there predates the assignment that asked for it")
             failing.append(name)
             results.append(entry)
             continue
