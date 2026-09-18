@@ -29,6 +29,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
+- **A block could carry another item's evidence and stand at `triaged` on it** (#151)
+  `duplicate_field` reported `status` and nothing else, and the narrowing was reasoned:
+  `partial_progress` four times is an append-per-increment log a team keeps on purpose,
+  and `evidence: none-yet` followed by a pointer is an item advancing. That holds while
+  the second line is about the same item. Measured on a consumer 2026-09-18 it was not —
+  B-001 carried a second `evidence:` and a second `blocked_by:` describing **B-006**,
+  its authorization work and its line count, while B-006's own block read `evidence:
+  none-yet, status: raw`. Seventeen blocks read, one finding, and it was `index_stale`.
+  B-001 stood at `triaged` on another item's evidence; removing the foreign lines made
+  `triaged_without_evidence` fire immediately, which was the honest state all along. The
+  two extra lines also shifted every pointer below them by exactly 2, breaking three
+  `BACKLOG.md:N` citations in a scored opportunity that three reviewers then spent a
+  round on. A placeholder replaced by a real value is still silent — that is the case
+  the narrowing existed for — but two substantive values are two claims, and `blocked_by`
+  is reported on any repeat because it names the whole edge set rather than adding to
+  it, so every line but the last leaves the dependency graph without a trace.
+
 - **On every plugin install, a panel that convened and voted read as one that never
   ran** (#150)
   `convene_panel.default_panel_path()` was fixed months ago and carries the reasoning in

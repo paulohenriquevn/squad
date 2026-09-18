@@ -456,6 +456,43 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
                 f"`status` is declared {len(values)} times ({' then '.join(values)}). "
                 "Every reader takes the last one; the block has to say one thing."))
 
+        # The narrowing above holds while the second line is about the SAME item. On a
+        # consumer 2026-09-18 it was not: B-001 carried a second `evidence:` and a second
+        # `blocked_by:` describing B-006 — its authorization work, its piece, its line
+        # count — while B-006's own block read `evidence: none-yet, status: raw`. Someone
+        # had pasted one block's fields into another. Seventeen blocks, and the only
+        # finding was `index_stale`.
+        #
+        # B-001 stood at `triaged` on another item's evidence, and removing the foreign
+        # lines made `triaged_without_evidence` fire at once — the honest state, and
+        # always the state. The two extra lines also shifted every pointer below them by
+        # exactly 2, breaking three `BACKLOG.md:N` citations in a scored opportunity.
+        #
+        # So: a placeholder followed by a real value is an ADVANCE and stays silent. Two
+        # substantive values are two CLAIMS, and the block does not say which is the
+        # item's. That keeps `evidence: none-yet` → pointer quiet, which is the case the
+        # narrowing was reasoned for.
+        if "evidence" in item.duplicated:
+            claims = [v for v in item.duplicated["evidence"]
+                      if v and v.lower() not in _NO_IMPEDIMENT]
+            if len(claims) > 1:
+                findings.append(Finding("duplicate_field", "deterministic", "blocker", iid,
+                    f"`evidence` carries {len(claims)} substantive values "
+                    f"({' / '.join(c[:60] for c in claims)}). A placeholder replaced by a "
+                    "pointer is an item advancing; two pointers are two claims, and every "
+                    "reader takes one of them while the other is invisible."))
+
+        # `blocked_by` has no append semantics at all — it declares the edge SET, so a
+        # second line does not add edges, it replaces them. The first line's blockers
+        # leave the dependency graph without leaving a trace, which is a hole in what
+        # `_check_impediment_edges` and the cycle detector are reading.
+        if "blocked_by" in item.duplicated:
+            values = item.duplicated["blocked_by"]
+            findings.append(Finding("duplicate_field", "deterministic", "blocker", iid,
+                f"`blocked_by` is declared {len(values)} times "
+                f"({' then '.join(values)}). It names the whole edge set rather than "
+                "adding to it, so every line but the last is dropped silently."))
+
         status = item.fields.get("status", "")
         if status and status not in LEGAL_STATUS:
             findings.append(Finding("illegal_status", "deterministic", "blocker", iid,
