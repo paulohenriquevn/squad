@@ -7,6 +7,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A registry created exactly as `/backlog-init` instructs was born INVALID** (#136)
+  Two rules of the kit contradicted each other. `backlog-init` Step 3 says *"Seed no
+  items — an item nobody filed is a placeholder that will be inherited as though it were
+  a decision"*, and `check_backlog_structure.py` blocked on `content.strip() and not
+  items`, true of every freshly-seeded registry: the scaffold has a header, an `## Index`
+  and an `## Items` section, and zero items. Measured over a registry built to the letter
+  of Step 3: BLOCKER `registry_parses`, verdict INVALID — obeying the kit produced a
+  non-conformant artifact. The check stays, because an unparseable registry reporting
+  SHIPPABLE is what it was written for; what it gained is the ability to tell the two
+  apart. A registry declaring `## Items` and holding none is empty; one with no such
+  section, or with headings under it the parser cannot place, is unreadable and blocks.
+
+- **A registry one directory down had its routing silently unchecked** (#136)
+  `_routing_table_path` looked in `.squad/`, `rules/` and `.claude/rules/` relative to
+  the registry's own directory and did not climb, so a monorepo with `apps/<app>/BACKLOG.md`
+  and `.claude/` at the root never had routing checked — on a table present and valid two
+  directories above. The search now walks up, stopping at the repository boundary, and
+  the nearer table still wins: a sub-project with its own routing answers a different
+  question than the umbrella's. The warning also said *"routing table unreadable"* for
+  three different facts — tooling absent, no table found, table found and unparseable —
+  so an operator looking at a valid table read it as a false alarm and read the next real
+  one the same way. Each cause now names itself.
+
 - **The cross-reference gate read code specimens as references, and 96% of what it
   reported was noise** (#132)
   A skill that teaches a markup language writes that markup out. `check_xrefs` resolved

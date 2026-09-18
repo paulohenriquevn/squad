@@ -156,6 +156,17 @@ def _title_overlap(a: str, b: str) -> float:
     return len(wa & wb) / min(len(wa), len(wb))
 
 
+#: Why the routing check did not run, set by `_routing` and read by `main`.
+#:
+#: A LIST, not a bool: `_routing` returned bare `None` for three different facts — the
+#: tool could not be imported, no table was found, a table was found and would not parse
+#: — and `main` printed "routing table unreadable" for all three. An operator who can see
+#: the table, valid, in `.claude/rules/` reads that as a false alarm, and reads the next
+#: real one the same way. The check that could not measure said so in terms too vague to
+#: act on, which costs the same as not saying it.
+_routing_gap: list[str] = []
+
+
 def _routing(backlog_dir: Path) -> dict[str, dict] | None:
     """Repos the routing table knows. None when the table cannot be read.
 
@@ -177,14 +188,34 @@ def _routing(backlog_dir: Path) -> dict[str, dict] | None:
         )
     except ImportError:
         # The routing tool is genuinely unavailable — report inability, never a violation.
+        _routing_gap.append("`route_domain` could not be imported, so no routing tool "
+                            "was available to ask")
         return None
 
-    rule = _routing_table_path(backlog_dir)
+    # Walk UP. `_routing_table_path` looks beside the directory it is given and does not
+    # climb, so a monorepo whose registry sits in `apps/<app>/BACKLOG.md` while `.claude/`
+    # is at the root had its routing silently unchecked — every run, on a table present
+    # and valid two directories above. The nearer table still wins: a sub-project with
+    # its own routing is answering a different question than the umbrella's, and this
+    # stops at the first one it finds.
+    rule = None
+    for candidate_root in (backlog_dir, *backlog_dir.parents):
+        rule = _routing_table_path(candidate_root)
+        if rule is not None:
+            break
+        if (candidate_root / ".git").exists():
+            # The repository boundary. Climbing past it would read a table belonging to
+            # whatever tree happens to contain this one on this machine.
+            break
     if rule is None:
+        _routing_gap.append(
+            f"no `domain-routing.txt` found in `.squad/`, `rules/` or `.claude/rules/` "
+            f"from {backlog_dir} up to the repository root")
         return None
     try:
         table = parse_routing_table(rule)
-    except ValueError:
+    except ValueError as exc:
+        _routing_gap.append(f"{rule} could not be parsed: {exc}")
         # A malformed table is a real problem, but it is `backlog-review`'s job to review
         # items, not the rule. Decline to judge routing rather than blame every item.
         return None
@@ -567,6 +598,37 @@ def _check_lineage_edges(items: list[Item]) -> list[Finding]:
     return findings
 
 
+#: `## Items` — the section `backlog-init` Step 3 prescribes, declared empty.
+_ITEMS_SECTION_RE = re.compile(r"^##\s+Items\s*$", re.MULTILINE)
+
+
+def declares_an_empty_items_section(content: str) -> bool:
+    """Does this registry SAY it holds no items, rather than merely yielding none?
+
+    "Correctly empty" had no way to be expressed, and two rules of this kit
+    contradicted each other over it. `backlog-init/SKILL.md` Step 3 says **"Seed no
+    items"** — an item nobody filed is a placeholder that gets inherited as a decision —
+    while `registry_parses` fired on `content.strip() and not items`, true of every
+    freshly-seeded registry. A registry created exactly as instructed was born INVALID.
+
+    The check itself is right and stays: an unparseable registry reporting SHIPPABLE is
+    the defect it was written for. What was missing is the file's ability to say which
+    of the two it is. A registry that declares `## Items` and holds none is empty; one
+    with no such section, or with text under it this parser cannot place, is unreadable
+    — and those still block.
+    """
+    match = _ITEMS_SECTION_RE.search(content)
+    if match is None:
+        return False
+    rest = content[match.end():]
+    # Another `## ` heading ends the section. Everything between is what it holds.
+    following = re.search(r"^##\s+\S", rest, re.MULTILINE)
+    body = rest[:following.start()] if following else rest
+    # A placeholder line is prose about the absence, not an item this parser lost.
+    # Anything that looks like a heading under Items is content it could not place.
+    return not re.search(r"^#{2,4}\s+\S", body, re.MULTILINE)
+
+
 def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, Any]:
     today = today or date.today()
     content = backlog_path.read_text(encoding="utf-8-sig")
@@ -578,7 +640,7 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     # findings list, and no items means no findings — so counts were all zero, the
     # verdict was SHIPPABLE and `main` returned 0 over a registry nothing had parsed.
     # No branch asked whether the file it just read produced anything.
-    if content.strip() and not items:
+    if content.strip() and not items and not declares_an_empty_items_section(content):
         findings.append(Finding(
             item="(file)", check="registry_parses", severity="blocker",
             kind="deterministic",
@@ -707,7 +769,8 @@ def main() -> int:
         print(f"Backlog : {report['backlog']}")
         print(f"Items   : {report['items_total']}  {report['items_by_status']}")
         if not report["routing_table_read"]:
-            print("WARN    : routing table unreadable — repo routing was NOT checked")
+            reason = _routing_gap[-1] if _routing_gap else "no reason recorded"
+            print(f"WARN    : repo routing was NOT checked — {reason}")
         for f in report["findings"]:
             print(f"  [{f['severity'].upper()}/{f['kind'][:4]}] {f['item']} {f['check']}: {f['message']}")
         print(f"\nVerdict : {report['verdict']}  {report['severity_counts']}")
