@@ -51,6 +51,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   three different facts — tooling absent, no table found, table found and unparseable —
   so an operator looking at a valid table read it as a false alarm and read the next real
   one the same way. Each cause now names itself.
+- **The merge-autonomy premise was never once verified, on any repository that reaches
+  GitHub through an SSH host alias** (#134)
+  `check_merge_autonomy` asked `gh api repos/{owner}/{repo}/...` and left the placeholders
+  for `gh` to expand. `gh` refuses any host it does not recognise, so a remote of the form
+  `git@git-alias:owner/name.git` failed with "none of the git remotes ... point to a known
+  GitHub host" and the gate returned UNCHECKED. Measured on one consumer ecosystem: 16 of
+  17 repositories, every one of them, permanently — while the answer was one call away and
+  the slug sat in the remote URL in plain text.
+
+  `UNCHECKED` was never a pass and the file said so at length, which was right. What was
+  wrong is that it also grouped this cause with the private-repository 403 as one that
+  "NEVER resolves", and that sentence is what stopped anyone fixing it. The slug is now
+  read from `origin` and the placeholder form is only the fallback; the 403 keeps its
+  permanent status because it genuinely does not resolve.
 
 - **The cross-reference gate read code specimens as references, and 96% of what it
   reported was noise** (#132)

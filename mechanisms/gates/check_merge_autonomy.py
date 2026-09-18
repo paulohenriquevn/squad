@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from enum import Enum
@@ -71,7 +72,8 @@ _UNPROTECTED_MARKERS = ("branch not protected", "http 404")
 #: And these when it could not answer at all.
 _UNAUTHENTICATED_MARKERS = ("auth login", "authentication", "not logged", "http 401", "bad credentials")
 
-#: Causes that NEVER resolve on their own, and were absent from this gate's stated three.
+#: Causes the two stated remediations do not reach — they were absent from this gate's
+#: stated three.
 #:
 #: Measured on a consumer 2026-09-16: `gh auth status` logged in, and the endpoint still
 #: refused —
@@ -81,8 +83,13 @@ _UNAUTHENTICATED_MARKERS = ("auth login", "authentication", "not logged", "http 
 #:
 #: The stated remediations were "install gh" and "log in", and both were already true. An
 #: absent `gh` gets installed and an unauthenticated one logs in; a PRIVATE repository on
-#: a plan that does not expose branch protection stays UNCHECKED forever, and so does one
-#: reached through an SSH host alias `gh` cannot resolve.
+#: a plan that does not expose branch protection stays UNCHECKED forever.
+#:
+#: The SSH-alias case was listed here too, and it was the wrong list: it resolves. Since
+#: 2026-09-18 `remote_slug` reads `owner/name` out of the remote URL, where it always sat
+#: in plain text, so `gh`'s host table is not consulted at all. What can still reach that
+#: marker is a remote naming no slug — no `origin`, or a URL shaped like nothing known —
+#: which is a different fact, so it now says a different thing.
 #:
 #: It matters beyond the wording. `git-safety.md` says the PR requirement is enforced
 #: "server-side, unbypassable" BY branch protection. A 403 on that endpoint is strong
@@ -93,7 +100,7 @@ _UNAUTHENTICATED_MARKERS = ("auth login", "authentication", "not logged", "http 
 _PERMANENT_MARKERS = (
     ("upgrade to github pro", "this repository's plan does not expose branch protection"),
     ("http 403", "the API refused the protection endpoint (403)"),
-    ("known github host", "the git remote is an SSH host alias `gh` cannot resolve"),
+    ("known github host", "`origin` names no `owner/name` this gate could read"),
 )
 
 
@@ -133,6 +140,35 @@ def detect_trunk(root: Path | None = None) -> str:
     return name or "main"
 
 
+#: `git@git-alias:acme/widget.git`, `git-alias:acme/widget`,
+#: `https://github.com/acme/widget.git` — the slug is the last two path segments,
+#: minus any `.git`. Deliberately host-agnostic: the whole point is that the host is an
+#: alias `gh` does not recognise, so matching on the host would reintroduce the failure.
+_SLUG = re.compile(r"[:/]([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+?)(?:\.git)?/*$")
+
+
+def remote_slug(runner: GhRunner) -> str | None:
+    """`owner/name` read from `origin`, or None when the remote does not name one.
+
+    `gh api repos/{owner}/{repo}/...` asks `gh` to resolve the remote, and `gh` refuses any
+    host it does not know — which is every SSH host alias. Measured across a consumer
+    ecosystem on 2026-09-18: 16 of 17 repositories reach GitHub through one, so this gate
+    answered UNCHECKED on all of them and the premise floor 2 rests on was never verified.
+
+    The slug sits in the URL in plain text either way, so reading it here removes the
+    dependency on `gh`'s host table rather than extending it. Run through the injected
+    runner so a test can answer for `git` and `gh` with one fake.
+    """
+    try:
+        code, out, _ = runner(["git", "remote", "get-url", "origin"])
+    except (FileNotFoundError, OSError):
+        return None
+    if code != 0:
+        return None
+    found = _SLUG.search(out.strip())
+    return f"{found.group(1)}/{found.group(2)}" if found else None
+
+
 def check_merge_autonomy(*, trunk: str, gh: GhRunner | None = None) -> PremiseResult:
     """Does the remote let the system merge into `trunk` without a human approval?
 
@@ -154,7 +190,8 @@ def check_merge_autonomy_detail(
     indistinguishable from an absent `gh`, whose stated remediation is to install it.
     """
     runner = gh or _default_runner
-    endpoint = f"repos/{{owner}}/{{repo}}/branches/{trunk}/protection"
+    slug = remote_slug(runner) or "{owner}/{repo}"
+    endpoint = f"repos/{slug}/branches/{trunk}/protection"
 
     try:
         code, out, err = runner(["gh", "api", endpoint])
@@ -221,10 +258,9 @@ _MESSAGES = {
         "This is not a pass. The premise may hold or may not; nothing here tested it. "
         "`gh`, authenticated, is a declared requirement of the kit (README § Quick start)."
         "\n"
-        "\nSome causes NEVER resolve, and the two remediations above do not reach them: a "
+            "\nOne cause NEVER resolves, and the two remediations above do not reach it: a "
         "PRIVATE repository on a plan that does not expose branch protection (HTTP 403, "
-        "\"Upgrade to GitHub Pro\"), and a remote reached through an SSH host alias `gh` "
-        "cannot resolve. Both were measured on a consumer whose `gh auth status` was "
+            "\"Upgrade to GitHub Pro\"). It was measured on a consumer whose `gh auth status` was "
         "already logged in."
         "\n"
         "\nWhen the cause is the 403: `git-safety.md` enforces the PR requirement "
