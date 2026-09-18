@@ -290,6 +290,13 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # them, and enumerating them here would pin the pins.
         "skills/backlog-review/tests/test_backlog_index.py",
         "skills/backlog-review/tests/test_check_backlog_structure.py",
+        # Same category: it names statuses to build the blocks a duplicated field is
+        # found in, never to decide what one MEANS.
+        "skills/backlog-review/tests/test_a_second_claim_is_not_an_advance.py",
+        # Tests the transition table itself, so it names most of the chain by
+        # necessity. Pinning it would pin the pins — the same reason its siblings
+        # here are exempted rather than enumerated.
+        "tests/test_a_withdrawal_is_recorded_not_silent.py",
         "skills/backlog-review/tests/test_an_item_that_says_it_is_closed_is_not_open.py",
         # Fixtures for the column-activity states. It names statuses to place items in
         # lanes, never to decide what a status MEANS — the same reason its siblings
