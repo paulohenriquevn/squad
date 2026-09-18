@@ -29,6 +29,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as `usetheodev/judge-codex#2`.
 
 ### Fixed
+- **A third gate charged `/review`'s own output for being output** (#149)
+  `check_xrefs.py` has exempted `review-{slug}-{role}-knowledge` since the day the
+  predicate was hoisted out of an inline check, and its docstring closed with *"One
+  definition, two consumers: that is what stops the next half from escaping."*
+  `check_skill_map.py` never learned it, and warns about that exact shape in its own
+  prose while being it. Measured on a consumer 2026-09-18: 13 `missing_from_map`
+  findings plus `missing_sop` and a disagreeing count, every one about a file `/review`
+  had just written, on an install whose own files were correct. The only exemption
+  available was `rules/auxiliary-skills.txt`, maintained by hand — so the remedy on
+  offer was to re-list, after every review, the artifacts the kit generates by itself.
+  The predicate now lives in `squad/paths.py` with the rest of what the kit knows about
+  its own produced data, and both gates import it, so a fourth sweep inherits the answer
+  rather than re-deriving it.
+
 - **`/review` generated skills that the kit's own gate then failed, and that Claude
   Code could never load** (#148)
   All five paired-knowledge templates began with an `#` heading and carried no

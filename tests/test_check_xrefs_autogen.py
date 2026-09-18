@@ -12,7 +12,7 @@ effect showed up far from the cause: every consumer that ran `/review` started
 failing `--strict` — measured on the three consumers 2026-08-03, 26 WARN and no
 real defect.
 
-These tests call `_is_auto_generated` from the real module instead of reproducing
+These tests call `is_cycle_generated_skill` through the real module instead of reproducing
 the rule. The previous version reproduced it, and the price showed: the exemption
 was applied to one of the two checks and the suite stayed green, because it
 validated the copy. A test that reimplements what it should protect protects
@@ -32,12 +32,12 @@ if str(_SCRIPTS) not in sys.path:
 # That is what E402 cannot see here, and why each import below suppresses it.
 from check_xrefs import (  # noqa: E402 — post-bootstrap import
     AUXILIARY_SKILLS,
-    _is_auto_generated,
+    is_cycle_generated_skill,
 )
 
 
 def _orphans(existing: set[str]) -> set[str]:
-    auto = {s for s in existing if _is_auto_generated(s)}
+    auto = {s for s in existing if is_cycle_generated_skill(s)}
     return existing - AUXILIARY_SKILLS - auto
 
 
@@ -68,7 +68,7 @@ def test_generated_is_also_exempt_from_the_cycle_contract() -> None:
     consumer stayed in FAIL over a defect that did not exist. The predicate is a
     single one precisely so the two checks cannot diverge.
     """
-    assert _is_auto_generated("review-m0-walking-skeleton-tests-knowledge")
-    assert _is_auto_generated("promptly-sepa-knowledge")
-    assert not _is_auto_generated("skill-writer")
-    assert not _is_auto_generated("records-helper")
+    assert is_cycle_generated_skill("review-m0-walking-skeleton-tests-knowledge")
+    assert is_cycle_generated_skill("promptly-sepa-knowledge")
+    assert not is_cycle_generated_skill("skill-writer")
+    assert not is_cycle_generated_skill("records-helper")

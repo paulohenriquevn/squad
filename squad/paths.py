@@ -100,6 +100,40 @@ DURABLE_LEAVES: dict[str, str] = {
 }
 
 
+def is_cycle_generated_skill(name: str) -> bool:
+    """A skill the CYCLES wrote, not a phase anybody maintains.
+
+    `/review` emits `review-{slug}-{role}-knowledge` per reviewer, per run. These
+    are output. Asking one for a row in the kit's map, a cycle contract, or an
+    `SOP.md` asks an artifact to behave like an input.
+
+    It lives HERE, with the rest of what this kit knows about its own produced
+    data, because it has been hoisted once already and the hoist was not far
+    enough. `check_xrefs.py` pulled it out of an inline check after a first
+    version exempted `no_orphan_skills` and left `skill_has_cycle_contract`
+    charging — 26 WARN traded for 3, which looked like a fix. Its docstring closed
+    with "One definition, two consumers: that is what stops the next half from
+    escaping." A third sweep, `check_skill_map.py`, never learned it, and warned
+    about this exact shape in its own prose while doing it: measured on a consumer
+    2026-09-18, 13 `missing_from_map` plus `missing_sop` and a disagreeing count,
+    every finding about a file `/review` had just written. The only exemption on
+    offer was a hand-maintained list, so the remedy was to re-list after every
+    review what the kit generates by itself.
+
+    Two consumers inside one directory was the ceiling. From here a fourth sweep
+    inherits the answer rather than re-deriving it.
+
+    `*-sepa-knowledge` is BACKWARD COMPATIBILITY and has no producer any more.
+    `/implement` generated one per plan until 2026-09-01 and now routes to the
+    project's own domain specialist. The pattern stays because consumers still
+    hold what was written to their disks, and dropping it would turn those files
+    into orphans and fail repositories that did nothing wrong. Remove it once no
+    consumer carries one.
+    """
+    return name.endswith("-knowledge") and (name.startswith("review-")
+                                            or "-sepa-" in name)
+
+
 def data_root(project_root: Path | str) -> Path:
     """`<project>/.squad` — where every write goes, whether or not it exists yet."""
     return Path(project_root) / DATA_DIRNAME

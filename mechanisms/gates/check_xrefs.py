@@ -64,6 +64,7 @@ from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl  # no
 from squad.markdown import prose_only  # noqa: E402 — post-bootstrap import
 from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
+    is_cycle_generated_skill,
     wiki_dir,
 )
 from squad.paths import WIKI as WIKI_FALLBACK  # noqa: E402 — post-bootstrap import
@@ -189,26 +190,6 @@ def _kit_shipped_paths(ecosystem_dir: Path) -> set[str] | None:
     return shipped or None
 
 
-def _is_auto_generated(skill: str) -> bool:
-    """Skills the cycles THEMSELVES write, not phases anyone maintains.
-
-    `/review` emits `review-{slug}-{dimension}-knowledge`: these are run artifacts.
-    Demanding a cycle contract or a reference in some cycle-*.md asks the output to
-    behave like an input.
-
-    `*-sepa-knowledge` is kept as BACKWARD COMPATIBILITY and has no producer any more.
-    `/implement` used to generate one per plan; on 2026-09-01 it stopped generating
-    agents and skills entirely and now routes to the project's own domain specialist.
-    The pattern stays because consumers still hold what was already written to their
-    disk, and dropping it would turn those files into orphans and fail the check in
-    repositories that did nothing wrong. Remove it once no consumer carries one.
-
-    It lives here rather than inline in a check because the first version exempted
-    only `no_orphan_skills` and left `skill_has_cycle_contract` still charging — a half
-    exemption that traded 26 WARN for 3 and looked like a fix. One definition, two
-    consumers: that is what stops the next half from escaping.
-    """
-    return skill.endswith("-knowledge") and (skill.startswith("review-") or "-sepa-" in skill)
 
 
 # Patterns to detect file references in markdown
@@ -658,7 +639,7 @@ def _check_skills_name_an_existing_cycle(ctx: "_Xrefs") -> list[dict[str, Any]]:
         ctx.skill_to_cycle[skill] = cycle_ref
 
         if (cycle_ref is None and skill not in AUXILIARY_SKILLS
-                and skill not in ctx.project_auxiliary and not _is_auto_generated(skill)):
+                and skill not in ctx.project_auxiliary and not is_cycle_generated_skill(skill)):
             findings.append({
                 "severity": "WARN",
                 "check": "skill_has_cycle_contract",
@@ -1123,7 +1104,7 @@ def _check_no_orphan_skills(ctx: "_Xrefs") -> list[dict[str, Any]]:
     # started failing --strict, and the failure surfaced far from its cause.
     # Measured 2026-08-03: the three monitored consumers failed in exactly this way
     # after running review, with 26 WARN and no real defect.
-    auto_generated = {s for s in ctx.existing_skills if _is_auto_generated(s)}
+    auto_generated = {s for s in ctx.existing_skills if is_cycle_generated_skill(s)}
     ctx.orphan_skills = (ctx.existing_skills - skills_in_cycles - AUXILIARY_SKILLS
                          - ctx.project_auxiliary - auto_generated)
     for skill in sorted(ctx.orphan_skills):
