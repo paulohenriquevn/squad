@@ -290,6 +290,7 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # them, and enumerating them here would pin the pins.
         "skills/backlog-review/tests/test_backlog_index.py",
         "skills/backlog-review/tests/test_check_backlog_structure.py",
+        "skills/backlog-review/tests/test_an_item_that_says_it_is_closed_is_not_open.py",
         "skills/backlog-review/tests/test_squad_boss.py",
         "skills/brainstorm-vision/tests/test_build_agenda.py",
         "tests/test_advance_items.py",

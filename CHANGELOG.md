@@ -29,6 +29,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   did not get what it asked for.
 
 ### Fixed
+- **A nested registry reported every route broken, on specialists that exist** (#138)
+  `check_backlog_structure` resolved `agents/<specialist>.md` against the registry's own
+  directory, so a monorepo with `apps/<app>/BACKLOG.md` and one installation at the root
+  looked in `apps/<app>/agents/` and found nothing. Resolution now starts from the
+  directory the routing TABLE was read from — `agents/` hangs off that tree, not off
+  wherever the registry sits — with the registry's directory kept as a fallback so a
+  registry beside its own `agents/` keeps working. A sub-project with its own table still
+  points at its own specialists, and a domain routing to nothing is still a blocker.
+
+- **Refusals that hid the list sent their reader to the gate's source** (#139)
+  Measured over one 20-hour consumer session: **64 of 676 commands — 9% — were the agent
+  reading a gate's `.py` with grep or sed to discover the shape it wanted.** The gates
+  were honest about what failed and silent about what would pass, which is a different
+  property. `check_opportunity_completeness` named three missing sections out of ten, so a
+  reader fixed three, re-ran, and met the next three. `check_concurrency_tests` carried a
+  hand-written parenthetical naming six accepted signals while its matcher held
+  thirty-nine, and the two could drift. Both now render the whole list, derived from the
+  constant the matcher actually uses rather than restated beside it.
+
 - **A consumer's own cycles and verdicts had nowhere to be registered that survived an
   update** (#137)
   The gates require every cycle to be placed in `rules/squad-map.md` and every verdict to

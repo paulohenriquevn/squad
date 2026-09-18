@@ -84,6 +84,7 @@ they read, and moving them would separate them from the parser they share.
 | `unroutable_repo_closed` | minor | The same on a `shipped` or `killed` item. History, not an impediment: the contract forbids renumbering it and forbids an impediment on closed work, so a blocker there is permanent and unfixable |
 | `raw_with_evidence` | major | Measurement happened and the status was never advanced — the rot the loop exists to prevent |
 | `killed_without_reason` | major | Indistinguishable from an abandoned run (gate G-K) |
+| `status_contradicts_body` | major | The block declares itself closed in its own prose and is filed as open. Measured on a consumer 2026-09-18: twelve items said `closed in code` and every one was still `triaged`, while the report read SHIPPABLE |
 | `missing_field` | major | A required field absent |
 | `invalid_mode` | major | `suggested_mode` outside the four |
 | `duplicate_field` | blocker | One block declaring a field twice. `fields` keeps the LAST value, so without this the earlier answer vanishes and nothing says the block held two |

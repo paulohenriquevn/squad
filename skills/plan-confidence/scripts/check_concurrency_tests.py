@@ -128,6 +128,29 @@ CONCURRENCY_SIGNALS = (
     r"\bSharedArrayBuffer\b",
 )
 
+def _accepted_signals() -> str:
+    """The signals this module matches, rendered for a person to read.
+
+    DERIVED from `CONCURRENCY_SIGNALS`, never restated. The refusal used to carry a
+    hand-written parenthetical naming six — "(race/loom/concurrent/parallel/
+    atomic-counter/cancellation)" — while the matcher held thirty-nine. The two could
+    drift, and a reader who grepped `^ACCEPTABLE` in this file to find the real list was
+    right to: measured over one 20-hour session, that grep and its siblings were 9% of
+    every command run.
+
+    Thirty-nine short tokens fit in a message. Fifty-five raw regexes would not, which is
+    why this strips the regex syntax rather than printing the constant.
+    """
+    words = set()
+    for pattern in CONCURRENCY_SIGNALS:
+        word = (pattern.replace(r"\b", "").replace(r"\s*", "")
+                .replace(r"\(", "").replace("\\", "").strip())
+        if word:
+            words.add(word)
+    return " · ".join(sorted(words))
+
+
+
 # Acceptable race-aware test signals — these are what the task's
 # `#### Concurrency tests` subsection MUST contain to pass.
 RACE_TEST_SIGNALS = (
@@ -284,8 +307,11 @@ def check_concurrency_tests(plan_path: Path) -> ConcurrencyReport:
             failing.append(task_id)
             reasons.append(
                 f"{task_id} `#### Concurrency tests` does not contain an acceptable "
-                "race-aware signal (race/loom/concurrent/parallel/atomic-counter/cancellation) "
-                "nor the explicit '(none — single-threaded)' escape"
+                f"race-aware signal nor the explicit '(none — single-threaded)' escape. "
+                # Rendered from the list the matcher actually uses. It was a frozen
+                # parenthetical naming six signals while the module matched many more,
+                # so the two could drift and a reader grepping the source was right to.
+                f"Accepted signals: {_accepted_signals()}"
             )
 
     return ConcurrencyReport(

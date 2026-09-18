@@ -20,6 +20,7 @@ What it checks instead — the ways a maintenance registry actually rots:
     missing_field           a required field absent
     illegal_status          a status outside the declared set
     killed_without_reason   killed with no kill_reason (gate G-K, after the fact)
+    status_contradicts_body  the block's prose declares it closed and its status says open
     triaged_without_evidence  triaged but evidence is still none-yet
     raw_with_evidence       raw but carrying evidence — status never advanced
     unroutable_repo         repo in no domain, on an OPEN item (gate G1)
@@ -57,6 +58,16 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+
+#: Statuses from which an item does not move again.
+TERMINAL_STATUSES = frozenset({"shipped", "killed"})
+
+#: A block saying, in its own words, that the work is done. Deliberately narrow: it matches the
+#: remedy being NAMED (`closed in code`, `closed by deletion`), not the bare word "closed", which
+#: appears in ordinary prose about closing an endpoint or a connection.
+_DECLARES_CLOSED_RE = re.compile(
+    r"\*{0,2}closed\s+(?:in\s+code|by\s+deletion|by\s+removal)\*{0,2}", re.IGNORECASE
+)
 
 BLOCK_RE = re.compile(r"^##\s+(B-\d+)\s+—\s+(.+?)\s*(?:\[( |x)\])?\s*$", re.MULTILINE)
 FIELD_RE = re.compile(r"^([a-z_]+):\s*(.*)$", re.MULTILINE)
@@ -98,6 +109,9 @@ class Item:
     #: Fields declared more than once in the block. `fields` keeps the LAST value, so without
     #: this the earlier ones vanish and nothing says the block held two answers.
     duplicated: dict[str, list[str]] = field(default_factory=dict)
+    #: The block's prose, kept because a block can CONTRADICT its own status field and the fields
+    #: alone cannot see it. See `status_contradicts_body`.
+    body: str = ""
 
 
 def _parse_items(content: str) -> list[Item]:
@@ -111,6 +125,7 @@ def _parse_items(content: str) -> list[Item]:
         item = Item(
             item_id=match.group(1),
             title=match.group(2).strip(),
+            body=body,
             line=content[: match.start()].count("\n") + 1,
         )
         seen_values: dict[str, list[str]] = {}
@@ -166,6 +181,13 @@ def _title_overlap(a: str, b: str) -> float:
 #: act on, which costs the same as not saying it.
 _routing_gap: list[str] = []
 
+#: The directory the routing table was read from, or None. The table's `agents/…` paths
+#: are relative to THIS, not to wherever the registry happens to sit: a table at
+#: `<root>/.claude/rules/` names `<root>/.claude/agents/`. Resolving against the
+#: registry's own directory reported every domain of a nested `apps/<app>/BACKLOG.md` as
+#: a broken route, on specialist files that were on disk (kit#138).
+_routing_home: list[Path] = []
+
 
 def _routing(backlog_dir: Path) -> dict[str, dict] | None:
     """Repos the routing table knows. None when the table cannot be read.
@@ -180,6 +202,14 @@ def _routing(backlog_dir: Path) -> dict[str, dict] | None:
     `except Exception` around the import would swallow that into a silent None. The check
     would then never run while the report looked healthy.
     """
+    # Cleared per call. These are module-level lists, and left accumulating they carry
+    # one run's answer into the next: a suite where an earlier case had the specialist on
+    # disk made a later case find it under the earlier case's tmpdir, and the missing-file
+    # blocker silently stopped firing. Caught by `test_backlog_broken_route` the first
+    # time the whole suite ran — a defect introduced by the fix above it.
+    _routing_gap.clear()
+    _routing_home.clear()
+
     _add_cycle_tooling_to_path()
     try:
         from route_domain import (
@@ -212,6 +242,10 @@ def _routing(backlog_dir: Path) -> dict[str, dict] | None:
             f"no `domain-routing.txt` found in `.squad/`, `rules/` or `.claude/rules/` "
             f"from {backlog_dir} up to the repository root")
         return None
+    # `rules/domain-routing.txt` means the tree is its parent's parent; `.squad/` and any
+    # other location means the parent itself. The table's `agents/…` hang off that tree.
+    _routing_home.append(
+        rule.parent.parent if rule.parent.name == "rules" else rule.parent)
     try:
         table = parse_routing_table(rule)
     except ValueError as exc:
@@ -433,6 +467,22 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
                 f"suggested_mode `{mode}` is outside {sorted(LEGAL_MODES)}"))
 
         evidence = item.fields.get("evidence", "")
+        # A block can CONTRADICT its own status. Measured on a consumer 2026-09-18: fourteen items
+        # carried `remeasured …: **closed in code.**` in their prose and every one was still
+        # `triaged`, while the report read SHIPPABLE across all 44.
+        #
+        # The cause is structural, not careless: `backlog_status.py` refuses `triaged -> shipped`
+        # and `approved` is a human decision, so a remeasurement that finds an item DONE has
+        # nowhere legal to put that. It goes in the prose, and the two halves disagree from then
+        # on. The registry reports finished work as pending — the rot the maintenance loop exists
+        # to prevent, arriving through the door the state machine left open.
+        #
+        # This asserts nothing about whether the item is really done; nothing here can measure
+        # that. It asserts that a reader has two answers and no way to choose.
+        if status not in TERMINAL_STATUSES and _DECLARES_CLOSED_RE.search(item.body):
+            findings.append(Finding("status_contradicts_body", "deterministic", "major", iid,
+                f"the block declares itself closed in its own prose and is filed as `{status}`. "
+                "One of the two is wrong, and a reader cannot tell which."))
         if status == "killed" and not item.fields.get("kill_reason"):
             findings.append(Finding("killed_without_reason", "deterministic", "major", iid,
                 "killed with no kill_reason — indistinguishable from an abandoned run (gate G-K)"))
@@ -680,7 +730,15 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
                 findings.append(Finding("broken_route", "deterministic", "blocker", domain,
                     f"domain `{domain}` names no specialist — every item it routes reaches nobody"))
                 continue
-            if not (project_root / agent).exists() and not (project_root / ".claude" / agent).exists():
+            # Resolved against the tree the TABLE came from, not the registry's own
+            # directory. `agents/x.md` in a table at `<root>/.claude/rules/` means
+            # `<root>/.claude/agents/x.md`, and a registry at `apps/<app>/BACKLOG.md`
+            # resolving it against `apps/<app>/` reported every domain broken on files
+            # that were on disk (kit#138). `project_root` stays in the list so a
+            # registry that sits beside its own `agents/` keeps working.
+            homes = [*_routing_home, project_root]
+            if not any((h / agent).exists() or (h / ".claude" / agent).exists()
+                       for h in homes):
                 findings.append(Finding("broken_route", "deterministic", "blocker", domain,
                     f"domain `{domain}` routes to `{agent}`, which is not on disk"))
 

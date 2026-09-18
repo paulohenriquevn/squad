@@ -189,7 +189,11 @@ def check_opportunity_completeness(
         )
         contributors.append(detractors_note)
 
-    detractors: list[str] = [f"Missing section: {m}" for m in missing[:3]]
+    # Every missing section, not the first three. Truncating told a reader three of N
+    # and nothing about the rest, so they fixed three, re-ran, and met the next three —
+    # and the session measured at 2026-09-18 went to this file's source to read
+    # `MANDATORY_SECTIONS` instead. The document is fixed once when the list is whole.
+    detractors: list[str] = [f"Missing section: {m}" for m in missing]
     if adr_missing:
         detractors.append(
             f"Blast radius reaches {', '.join(foreign_repos)} but no ADR is recorded"
