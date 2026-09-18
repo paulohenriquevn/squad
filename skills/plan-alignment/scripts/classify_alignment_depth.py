@@ -50,6 +50,7 @@ Any one of them means FULL. The default is FULL, not LOCAL: shallower is the
 irreversible direction, because a brief nobody wrote cannot be consulted later, and a
 brief nobody needed only cost time.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -57,6 +58,30 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+#: The rubric criteria the LOCAL depth removes, by their id in `score_alignment.py`.
+#:
+#: Declared HERE and not in the scorer, because this module is what decides what a depth
+#: MEANS. Two lists would disagree on the first change, and the disagreement is the defect
+#: this constant exists to end: measured 2026-09-18, the classifier said "DROPPED: the
+#: prose sections and the walkthrough HTML" in prose, the scorer graded all seventeen
+#: criteria, and a LOCAL brief complete by its own contract topped out at 24/34 = 70.6%
+#: against a 90% floor. The classifier told an author to remove ten points and the scorer
+#: required them.
+#:
+#: These five and no others. The criteria the gates downstream READ — requirements with
+#: ids, acceptance criteria that execute, traceability, out-of-scope, closed questions,
+#: the signature — are kept at every depth, because dropping one of those would make the
+#: depth a way to pass rather than a way to write less.
+LOCAL_DROPS = frozenset(
+    {
+        "flows",
+        "scenario_classes",
+        "system_diagram",
+        "interaction_model",
+        "interactive_artefact",
+    }
+)
 
 CODE_EXT = frozenset({
     "go", "py", "ts", "tsx", "js", "jsx", "mjs", "yaml", "yml", "json", "md", "sh",

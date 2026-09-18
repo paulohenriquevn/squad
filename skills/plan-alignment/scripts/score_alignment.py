@@ -821,6 +821,19 @@ def _criterion_interactive_artefact(body: str, brief_path: Path) -> Criterion:
         else f"cited but missing on disk: {cited}" if cited
         else "no .html referenced")
 
+def _local_drops() -> frozenset[str]:
+    """The criterion ids the LOCAL depth removes, read from the module that DEFINES depth.
+
+    Imported rather than restated. Two copies of this set would disagree on the first
+    change, and a scorer that disagreed with the classifier is the defect this whole
+    parameter exists to close.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from classify_alignment_depth import LOCAL_DROPS  # noqa: PLC0415
+
+    return LOCAL_DROPS
+
+
 def _score_criteria(body: str, brief_path: Path) -> tuple[list[Criterion], list[str]]:
     """The seventeen rubric criteria, scored — one function each, driven by this list.
 
@@ -910,16 +923,32 @@ def _read_declarations(body: str):
     return split, withdrawn, restored
 
 
-def score_alignment(brief_path: Path) -> AlignmentReport:
+def score_alignment(brief_path: Path, depth: str = "FULL") -> AlignmentReport:
     """Score one alignment brief against the rubric.
 
     An assembler: the scoring, the reviewer's half and the declaration markers are
     three independent readings of one document, and each is now answered where it is
     asked.
+
+    `depth` comes from `classify_alignment_depth.py`, and the criteria it removes are
+    dropped from the total as well as from the score. Grading a document against
+    criteria its own depth deleted made the shallow path unusable: measured 2026-09-18,
+    a LOCAL brief complete by its own contract topped out at 24/34 = 70.6% against a 90%
+    floor, so every item had to take the FULL brief the classifier measured as waste.
+
+    Scored out of the criteria IN FORCE, never out of a constant. Awarding the dropped
+    ones full marks would also reach the floor and would be a lie — 34/34 for a document
+    that answered twelve questions.
+
+    The depth is a PARAMETER and is never read from the brief. A document that could
+    declare its own depth would let an author reach the floor by typing a word, which is
+    the "reaching 90% by rewording" path `alignment-threshold.md` refuses.
     """
     body = Path(brief_path).read_text(encoding="utf-8-sig")
 
     criteria, ac = _score_criteria(body, brief_path)
+    if depth.upper() == "LOCAL":
+        criteria = [c for c in criteria if c.key not in _local_drops()]
     pending, box_count, signed_by = _read_signoff(body)
     split, withdrawn, restored = _read_declarations(body)
 
@@ -952,10 +981,16 @@ def main(argv: list[str] | None = None) -> int:
         "--machine-only", action="store_true",
         help="exit on the structural score alone, so the agent can iterate before "
              "asking a human to review. NEVER the gate on building the item.")
+    parser.add_argument(
+        "--depth", choices=("FULL", "LOCAL"), default="FULL",
+        help="the depth `classify_alignment_depth.py` derived for this ITEM. LOCAL "
+             "removes the criteria that depth drops from the score AND from the total. "
+             "Derived by the caller and never read from the brief: a document that "
+             "declared its own depth would grade itself.")
     args = parser.parse_args(argv)
 
     try:
-        report = score_alignment(args.brief)
+        report = score_alignment(args.brief, args.depth)
     except OSError as exc:
         print(f"FATAL: {exc}", file=sys.stderr)
         return 2

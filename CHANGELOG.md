@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+
+### Fixed
+
+- **The LOCAL alignment depth can now reach the floor it is scored against.**
+  `classify_alignment_depth.py` returns `LOCAL` for a small item and names what it removes —
+  "DROPPED: the prose sections and the walkthrough HTML" — while `score_alignment.py` graded all
+  seventeen criteria, five of which measure exactly those sections. Measured on a real item
+  (`B-001`, theokit): a LOCAL brief complete by its own contract scored 22/34 = 64.7%, and closing
+  both remaining authoring gaps reaches 24/34 = 70.6% — **19.4 points below the 90% floor**. An
+  author who followed the classifier wrote a brief that could not pass, and `check_alignment_gate.py`
+  hard-caps an unaligned plan at 49 with no `--skip` and no dismissing ADR. The scorer now takes
+  `--depth`, and a dropped criterion leaves the total as well as the score: scored out of the
+  criteria in force, never out of a constant. The depth is a parameter derived from the ITEM and is
+  never read from the brief — a document that declared its own depth would grade itself, which is the
+  "reaching 90% by rewording" path `alignment-threshold.md` refuses.
+
 ### Added
 - **A reader outside the kit can ask where a phase's artifact goes** (#147)
   `panel_brief.py --locate --phase <p> --slug <s>` prints the artifact path, whether it
