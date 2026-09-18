@@ -279,6 +279,10 @@ The run record is what makes the loop auditable after the fact: which items were
 
 An item advanced in error is moved back with a note recording the advance and why it was withdrawn — never silently reset. An item whose `shipped` was withdrawn carries information a fresh-looking `triaged` item does not.
 
+`backlog_status.py --withdraw-reason` is what enforces this, and it held neither half until 2026-09-18: the two backward moves the transition table allowed were accepted with no note at all, leaving exactly the fresh-looking item this clause names, and `triaged -> raw` — the same move one step down — was refused outright. A move to an earlier entry of the open chain now requires the reason, holds it to the bar `--kill-reason` holds a committed item to (who withdrew it and what changed, not what the evidence showed), and writes `withdrawn_from` beside it, because after the move the status line cannot say what the item used to be.
+
+`shipped` remains terminal. The sentence above is the argument for why the note matters and not a licence to reopen a shipped item: doing so changes what `shipped` means to every reader that counts delivery, which is a decision for a person.
+
 ## Cross-references
 
 - Schema for cycle rules: `rules/cycle-rule-schema.md`

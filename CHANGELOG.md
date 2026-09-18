@@ -29,6 +29,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
+- **A rollback was either silent or impossible, and the rule asked for neither** (#152)
+  `cycle-maintenance.md § Rollback` says an item advanced in error "is moved back with a
+  note recording the advance and why it was withdrawn — never silently reset."
+  `backlog_status.py` implemented half of that and implemented the half without the
+  note: measured 2026-09-18, `approved -> triaged` was accepted and left the block
+  reading `status: triaged` and nothing else — the fresh-looking item the rule names as
+  the thing to avoid — so an item could be walked back through the whole open chain
+  leaving no trace. Meanwhile `triaged -> raw`, the same move one step down, was refused
+  outright, which is the gap a consumer actually hit. A move to an earlier entry of the
+  open chain is now a withdrawal: it requires `--withdraw-reason`, held to the bar
+  `--kill-reason` already holds a committed item to — who withdrew the call and what
+  changed, not what the evidence showed — and writes `withdrawn_from` beside it, since
+  after the move the status line cannot say what the item used to be. The chain is
+  ordered rather than enumerated as legal pairs, because a list of rollbacks is a list
+  somebody extends the table without updating, which is how this half arrived.
+  `shipped` stays terminal: reopening it changes what shipped means to every reader that
+  counts delivery, and that is a person's call.
+
 - **A block could carry another item's evidence and stand at `triaged` on it** (#151)
   `duplicate_field` reported `status` and nothing else, and the narrowing was reasoned:
   `partial_progress` four times is an append-per-increment log a team keeps on purpose,

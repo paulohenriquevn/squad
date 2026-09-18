@@ -79,18 +79,30 @@ def test_planned_is_sent_back_to_approved_not_to_triaged():
     A plan that failed review did not un-decide the work. Sending it to `triaged`
     would discard the approval along with the plan, and someone would have to
     approve the same item twice for one bad draft.
+
+    The reason is passed because a backward move is a withdrawal and
+    `cycle-maintenance.md § Rollback` says it is never silent. What this test pins
+    is the DESTINATION, which the note does not change.
     """
     content = _backlog(("B-001", "planned", ""))
-    assert _status(advance(content, "B-001", "approved"), "B-001") == "approved"
+    sent_back = advance(content, "B-001", "approved",
+                        withdraw_reason="Paulo withdrew the plan: the measurement changed")
+    assert _status(sent_back, "B-001") == "approved"
 
     with pytest.raises(Refused, match="not a legal transition"):
         advance(content, "B-001", "triaged")
 
 
 def test_approved_can_be_sent_back_to_triaged():
-    """Withdrawing the decision itself, before any plan existed, is a real move."""
+    """Withdrawing the decision itself, before any plan existed, is a real move.
+
+    It now carries its reason: the move IS a withdrawal, and the rule has always
+    said a withdrawal is recorded. What this test pins is that the move exists.
+    """
     content = _backlog(("B-001", "approved", ""))
-    assert _status(advance(content, "B-001", "triaged"), "B-001") == "triaged"
+    withdrawn = advance(content, "B-001", "triaged",
+                        withdraw_reason="Paulo reversed the approval: the driver moved")
+    assert _status(withdrawn, "B-001") == "triaged"
 
 
 def test_shipped_is_terminal():

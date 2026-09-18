@@ -67,7 +67,7 @@ LEGAL_STATUS = ("raw", "triaged", "approved", "planned", "shipped", "killed")
 #: plans rather than at the stage that decides.
 ALLOWED: dict[str, set[str]] = {
     "raw": {"triaged", "killed"},
-    "triaged": {"approved", "killed"},
+    "triaged": {"approved", "raw", "killed"},
     "approved": {"planned", "triaged", "killed"},
     "planned": {"approved", "shipped", "killed"},
     "shipped": set(),
@@ -75,6 +75,28 @@ ALLOWED: dict[str, set[str]] = {
 }
 
 OPEN_STATUS = {"raw", "triaged", "approved", "planned"}
+
+#: The open chain in order. A move to an EARLIER entry is a withdrawal, which
+#: `cycle-maintenance.md § Rollback` says is never silent: "An item advanced in error
+#: is moved back with a note recording the advance and why it was withdrawn."
+#:
+#: The rule was unimplemented on the two backward moves the table already allowed.
+#: Measured 2026-09-18: `approved -> triaged` was accepted and left the block reading
+#: `status: triaged` and nothing else — a fresh-looking item, the exact outcome the
+#: rule names as the thing to avoid. An item could be walked back through the whole
+#: chain leaving no trace, while `triaged -> raw`, the same move one step down, was
+#: refused outright.
+#:
+#: Ordered rather than enumerated as pairs: a list of legal rollbacks is a list
+#: somebody extends the table without updating, which is how this half arrived.
+OPEN_CHAIN = ("raw", "triaged", "approved", "planned")
+
+
+def is_withdrawal(current: str, to: str) -> bool:
+    """Does this move walk an item BACK down the open chain?"""
+    if current not in OPEN_CHAIN or to not in OPEN_CHAIN:
+        return False
+    return OPEN_CHAIN.index(to) < OPEN_CHAIN.index(current)
 
 #: Past this line an item stopped being a hypothesis. `killed` from here is a decision
 #: being reversed rather than a measurement coming back negative, and `--kill-reason`
@@ -103,6 +125,7 @@ BLOCK_HEADER_RE = re.compile(r"^##\s+(B-\d+)\s+—\s+.*$", re.MULTILINE)
 STATUS_LINE_RE = re.compile(r"^status:[ \t]*(\S*)[ \t]*$", re.MULTILINE)
 BLOCKED_BY_LINE_RE = re.compile(r"^blocked_by:[ \t]*(.*)$", re.MULTILINE)
 KILL_REASON_RE = re.compile(r"^kill_reason:[ \t]*(.+)$", re.MULTILINE)
+WITHDRAW_REASON_RE = re.compile(r"^withdraw_reason:[ \t]*(.+)$", re.MULTILINE)
 _ID_IN_TEXT_RE = re.compile(r"\bB-\d{3,}\b")
 
 
@@ -287,7 +310,7 @@ def _drop_field(body: str, key: str) -> str:
 
 
 def advance(content: str, item_id: str, to: str, kill_reason: str = "",
-            approved_by: str = "") -> str:
+            approved_by: str = "", withdraw_reason: str = "") -> str:
     """Move one item to `to`, refusing anything the contract forbids.
 
     `approved_by` is written when the move is to `approved`, and it is the only way to
@@ -316,6 +339,31 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "",
     if to not in ALLOWED.get(current, set()):
         allowed = ", ".join(sorted(ALLOWED.get(current, set()))) or "nothing — it is terminal"
         raise Refused(f"{item_id}: {current} -> {to} is not a legal transition; from {current} it may go to {allowed}")
+
+    if is_withdrawal(current, to):
+        # `cycle-maintenance.md § Rollback` requires the note, and held the same bar
+        # `--kill-reason` holds a committed item to — for the same reason, stated there:
+        # "a reason that only restates the evidence is what a hypothesis gets; a
+        # commitment gets a person and a change of mind." Somebody decided this item
+        # would advance; walking it back reverses that decision, and what the next reader
+        # cannot reconstruct is WHO changed their mind, never what the evidence said.
+        reason = withdraw_reason or (WITHDRAW_REASON_RE.search(body).group(1)
+                                     if WITHDRAW_REASON_RE.search(body) else "")
+        if not reason:
+            raise Refused(
+                f"{item_id}: {current} -> {to} walks the item back, which requires "
+                f"--withdraw-reason. A rollback with no note leaves a fresh-looking "
+                f"`{to}` item, and an item whose `{current}` was withdrawn carries "
+                f"information a fresh-looking one does not.")
+        if not _names_a_reversal(reason):
+            raise Refused(
+                f"{item_id}: --withdraw-reason must name WHO withdrew the `{current}` "
+                f"call and WHAT changed — not only what the evidence showed. Write it "
+                f"as e.g. 'reversed by <who> <when>: <what changed>'.")
+        # `withdrawn_from` records the advance itself, which the status line cannot:
+        # after the move the block says `{to}` and nothing says it was ever `{current}`.
+        body = _write_field(body, "withdrawn_from", current, after="status")
+        body = _write_field(body, "withdraw_reason", reason, after="status")
 
     if to == "killed":
         if not kill_reason and not KILL_REASON_RE.search(body):
@@ -468,6 +516,9 @@ def main() -> int:
     group.add_argument("--unblock", nargs="*", metavar="B-NNN", help="clear some, or with no ids every, impediment")
     parser.add_argument("--because", default="", help="state a non-item impediment (a decision, an external action)")
     parser.add_argument("--kill-reason", default="", help="required when --to killed")
+    parser.add_argument("--withdraw-reason", default="",
+                        help="required when --to walks the item BACK down the open "
+                             "chain; must name who withdrew the advance and what changed")
     parser.add_argument("--approved-by", default="", metavar="WHO",
                         help="who made the commitment, written when --to approved: "
                              "`human/<name>` or `system/autonomous-sweep`. A bare "
@@ -503,7 +554,8 @@ def _apply_under_lock(args: argparse.Namespace) -> int:
     try:
         if args.to:
             updated = advance(content, args.item, args.to, args.kill_reason,
-                              args.approved_by)
+                              args.approved_by,
+                              withdraw_reason=args.withdraw_reason)
             action = f"{args.item} -> {args.to}"
         elif args.block_on is not None:
             updated = block(content, args.item, args.block_on, args.because)
