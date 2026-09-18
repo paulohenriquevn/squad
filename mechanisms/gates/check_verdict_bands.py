@@ -55,7 +55,11 @@ sys.path.insert(0, str(_HERE.parent / "cycle"))
 # That is what E402 cannot see here, and why each import below suppresses it.
 import importlib.util  # noqa: E402 — post-bootstrap import
 
-from verdict_bands import BandEntry, load_bands  # noqa: E402 — post-bootstrap import
+from verdict_bands import (  # noqa: E402 — post-bootstrap import
+    BandEntry,
+    load_bands,
+    load_local_bands,
+)
 
 _spec = importlib.util.spec_from_file_location(
     "_orphan_verdicts", _HERE / "check_orphan_verdicts.py")
@@ -81,6 +85,14 @@ class BandReport:
     classified: int = 0
     unclassified: list[str] = field(default_factory=list)
     blocking_unclassified: list[str] = field(default_factory=list)
+    #: How many of `classified` came from the consumer's own registry. Reported, because
+    #: a reader debugging a classification otherwise has two files to search and no hint
+    #: which one to open.
+    locally_classified: int = 0
+    #: Verdicts the local registry tried to reclassify. The kit's file is authoritative
+    #: for the kit's own entries — a silent override is the drift a single registry
+    #: existed to prevent, and two files must not buy the extension at that price.
+    overrides_the_kit: list[str] = field(default_factory=list)
     detail: str = ""
 
     def as_dict(self) -> dict:
@@ -130,6 +142,16 @@ def check_verdict_bands(repo_root: Path) -> BandReport:
         report.detail = str(exc)
         return report
 
+    try:
+        local, clashes = load_local_bands(repo_root / "rules" / "verdict-bands.txt")
+    except (OSError, ValueError) as exc:
+        report.coverage = BandCoverage.UNREADABLE
+        report.detail = f"rules/verdict-bands.local.txt: {exc}"
+        return report
+    report.locally_classified = len(local)
+    report.overrides_the_kit = clashes
+    entries.update(local)
+
     report.classified = len(entries)
     declared = _declared_verdicts(repo_root)
     report.swept = len(declared)
@@ -137,7 +159,7 @@ def check_verdict_bands(repo_root: Path) -> BandReport:
     report.unclassified = sorted(declared - set(entries))
     report.blocking_unclassified = sorted(_blocking_verdicts(repo_root) - set(entries))
 
-    if report.unclassified or report.blocking_unclassified:
+    if report.unclassified or report.blocking_unclassified or report.overrides_the_kit:
         report.coverage = BandCoverage.DRIFTED
 
     return report
@@ -163,7 +185,18 @@ def main(argv: list[str] | None = None) -> int:
         print("  This is NOT a pass — nothing was verified.")
         return report.coverage.exit_code
 
-    print(f"  {report.swept} declared in rules, {report.classified} classified")
+    if report.locally_classified:
+        # Which file, said out loud. A reader debugging a classification otherwise has
+        # two registries to search and no hint which one carries the row.
+        print(f"  {report.swept} declared in rules, {report.classified} classified "
+              f"({report.locally_classified} of them in rules/verdict-bands.local.txt)")
+    else:
+        print(f"  {report.swept} declared in rules, {report.classified} classified")
+    for v in report.overrides_the_kit:
+        print(f"  [overrides the kit] {v} is classified in rules/verdict-bands.txt and "
+              f"again in rules/verdict-bands.local.txt. The kit's file is authoritative "
+              f"for the kit's own verdicts — the local row was NOT applied. Remove it, "
+              f"or open an issue if the kit's band is wrong")
     for v in report.unclassified:
         print(f"  [unclassified] {v} — declared in a rule, in no band")
     for v in report.blocking_unclassified:

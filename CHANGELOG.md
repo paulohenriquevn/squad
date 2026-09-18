@@ -29,6 +29,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   did not get what it asked for.
 
 ### Fixed
+- **A consumer's own cycles and verdicts had nowhere to be registered that survived an
+  update** (#137)
+  The gates require every cycle to be placed in `rules/squad-map.md` and every verdict to
+  be banded in `rules/verdict-bands.txt`, and `install.sh` overwrites both. A project with
+  a cycle of its own could register it, watch its gates go green, and have the edit
+  reverted by the next install — with no action on its side that lasts longer. Measured on
+  one consumer: one cycle and four verdicts, registered by hand, gone after the next
+  `--merge`. Two files now carry the extension and are preserved like every other
+  `rules/*.txt`: `auxiliary-cycles.txt`, the sibling of `auxiliary-skills.txt` and read
+  the same way, and `verdict-bands.local.txt`. The verdict file needed a different shape —
+  a skill or a cycle can be EXCLUDED from a sweep when the project claims it, but a
+  verdict cannot, because `check_phase_drift` has to classify every verdict that reaches
+  the event stream or an unclassified one silently disables the check. So the local file
+  adds rows, and the kit's file stays authoritative: a local row naming a verdict the kit
+  already classifies is reported and **not applied**, because quietly reclassifying `PASS`
+  is the drift a single registry existed to prevent. The reports name which file an entry
+  came from. `skills/map.md` needed no change — `rules/auxiliary-skills.txt` has answered
+  this for skills since 2026-09-02, and the consumer had edited the wrong file.
+
 - **A registry created exactly as `/backlog-init` instructs was born INVALID** (#136)
   Two rules of the kit contradicted each other. `backlog-init` Step 3 says *"Seed no
   items — an item nobody filed is a placeholder that will be inherited as though it were

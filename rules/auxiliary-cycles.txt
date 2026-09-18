@@ -1,0 +1,23 @@
+# CONSUMER PROJECT cycles that run alongside the kit's chain.
+#
+# This file arrives empty on purpose. `rules/squad-map.md` is the KIT's 360º view of
+# its own chain: it places the kit's cycles, their phases, gates and roles, and it
+# cannot know what a project built next to them. `check_squad_map.py` sweeps
+# `rules/cycle-*.md` and reports any cycle the map never names — correct for the kit's
+# own, and wrong for the project's.
+#
+# The shape is `rules/auxiliary-skills.txt`, its sibling, for the same reason and with
+# the same guarantee: both are `rules/*.txt`, so `install.sh` preserves them across
+# updates. `squad-map.md` is not — it is the kit's file and is overwritten — so a
+# registration written THERE survives exactly until the next update, and the consumer
+# that discovers this discovers it by watching its gates go red again.
+#
+# Measured on one consumer, 2026-09-18: one cycle of its own, registered by hand in
+# `squad-map.md`, reverted by the next `install.sh --merge`. There was no other file to
+# put it in, which is what this one fixes (kit#137).
+#
+# One cycle name per line, `cycle-` prefix included, `#` starts a comment.
+#
+# A cycle NOT listed here and absent from the map is still a finding. The kit's own
+# cycles have to be placed, and silence about one is a stage of the chain nobody
+# documented — which is what the sweep exists to catch.

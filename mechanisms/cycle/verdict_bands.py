@@ -128,6 +128,29 @@ def load_bands(path: Path | None = None) -> dict[str, BandEntry]:
     return entries
 
 
+def load_local_bands(registry: Path) -> tuple[dict[str, BandEntry], list[str]]:
+    """The consumer's own classifications, and the names it tried to take from the kit.
+
+    A project with a cycle of its own emits verdicts of its own, and `check_verdict_bands`
+    blocks until every declared verdict names a band. The only registry was the kit's, and
+    `install.sh` overwrites it — so the consumer could classify, go green, and have the
+    edit reverted by the next update. Measured on one consumer: four verdicts, registered
+    by hand, gone after `--merge`.
+
+    The kit's file stays authoritative for the kit's own entries. A local row naming a
+    verdict the kit already classifies is returned as a CLASH rather than applied: quietly
+    reclassifying `PASS` is the drift a single registry was protecting against, and moving
+    to two files must not buy the extension at that price.
+    """
+    local = registry.with_name(registry.stem + ".local" + registry.suffix)
+    if not local.is_file():
+        return {}, []
+    entries = load_bands(local)
+    kit = load_bands(registry)
+    clashes = sorted(name for name in entries if name in kit)
+    return {k: v for k, v in entries.items() if k not in kit}, clashes
+
+
 def band_of(verdict: str, path: Path | None = None) -> Band:
     """The band `verdict` belongs to. Raises KeyError if it is not classified."""
     entries = load_bands(path)

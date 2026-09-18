@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at sixty-one files is
-not one — a model told to read sixty-one files before an architectural decision
+That makes the pointer the whole interface, and a pointer at sixty-three files is
+not one — a model told to read sixty-three files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
@@ -108,6 +108,7 @@ Each `cycle-{name}.md` defines:
 | `acceptance-target.txt` | Where `/acceptance` exercises the released delivery |
 | `domain-routing.txt` | Which repositories exist here and who owns each — **the project's**, derived from disk |
 | `auxiliary-skills.txt` | Skills bound to no cycle, so the orphan sweep does not report them |
+| `auxiliary-cycles.txt` | Cycles the project built alongside the kit's chain, so `check_squad_map` does not ask the kit's map to place them. Its sibling above, for the index one level up |
 | `retired-permissions.txt` | Permissions withdrawn, kept so a reinstall does not reintroduce them |
 | `notifications.txt` | Where the kit sends what a person must see |
 | `skills/_kit-rules/review-model-routing.txt` | Agent model routing for review — **not here**: kit-owned, replaced on update |
@@ -123,7 +124,8 @@ Each `cycle-{name}.md` defines:
 | `autonomy-envelope.md` | What runs unattended, and the floors that make it defensible |
 | `decision-delegation.txt` | What a consumer may delegate, and what delegation can never authorize |
 | `write-exemptions.txt` | The files the Squad produces OUTSIDE `<project>/.squad/`, each with a class (`platform` / `tool` / `human`) and what forces it. **The kit's**: the classes are about Claude Code's own discovery rules and about conventions older than this kit, not about one project. `check_produced_files.py` refuses a row missing either field — "we made an exception" and "the platform gave us no choice" are different claims, and only the second survives review |
-| `verdict-bands.txt` | Which band each verdict is in — clean, caveats, redo, structural, orthogonal. **The kit's**, like the phase chain and the blocking list: the consumer never edits it, and a frozen copy means an unclassified verdict that silently disables the drift check. Where a band is COMPUTED; `cycle-rule-schema.md` is where it is argued |
+| `verdict-bands.txt` | Which band each verdict is in — clean, caveats, redo, structural, orthogonal. **The kit's**, like the phase chain and the blocking list: it classifies the verdicts the kit's own cycles emit, and a frozen copy means an unclassified verdict that silently disables the drift check. Where a band is COMPUTED; `cycle-rule-schema.md` is where it is argued |
+| `verdict-bands.local.txt` | The same table for verdicts the PROJECT'S own cycles emit — preserved across updates, where its sibling is replaced. It ADDS rows rather than excluding names: a verdict cannot be claimed out of the sweep, because the drift check has to classify every one that reaches the event stream. The kit's file stays authoritative for the kit's own, and a local row naming one of those is reported rather than applied |
 | `review-panel.txt` | Who judges a DISCOVER opportunity and a PLAN plan — **the project's own specialist agents**, because which agents it has and which models it can reach is not the kit's business. The kit imposes only the rule: three seats per gated phase, 2 of 3 to advance, never all from one model family, and the author never sits |
 | `review-auditors.txt` | Which `loop-*` plugin audits which domain at REVIEW — **the project's**, because which plugins it has and what they cost it are not the kit's business. The kit imposes only that the selection is DERIVED from the domain rather than chosen by the reviewing agent, and that a declared auditor which did not run blocks. Removing a row is a visible decision to stop requiring that audit; the installer preserves this file so the decision survives an upgrade |
 | `records-location.md` | Where run output goes, and why `wiki/` and `records/` are two directories |

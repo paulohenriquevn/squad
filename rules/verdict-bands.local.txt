@@ -1,0 +1,29 @@
+# CONSUMER PROJECT verdict classifications.
+#
+# This file arrives empty on purpose. `verdict-bands.txt` beside it is the KIT's
+# registry — it bands the verdicts the kit's own cycles emit — and `install.sh`
+# overwrites it on every update. A project with a cycle of its own emits verdicts of
+# its own, `check_verdict_bands` blocks until every declared verdict names a band, and
+# before this file the only place to put that band was the file the installer replaces.
+#
+# Measured on one consumer, 2026-09-18: four verdicts of its own cycle, banded by hand
+# in `verdict-bands.txt`, reverted by the next `install.sh --merge`. This file is
+# `rules/*.txt` and is preserved (kit#137).
+#
+# Format, identical to its sibling:
+#
+#     VERDICT_NAME                  | band       | why it is in that band
+#
+# Bands: clean · caveats · redo · structural · orthogonal. The reason is required — a
+# classification nobody can argue with is a table, not a decision.
+#
+# THE KIT'S FILE IS AUTHORITATIVE FOR THE KIT'S OWN VERDICTS. A row here naming a
+# verdict `verdict-bands.txt` already classifies is REPORTED and NOT APPLIED. That is
+# deliberate: quietly reclassifying `PASS` is exactly the drift a single registry was
+# protecting against, and splitting into two files must not buy the extension at that
+# price. If the kit's band for a verdict is wrong, that is an issue against the kit.
+#
+# Unlike `auxiliary-skills.txt` and `auxiliary-cycles.txt`, this file ADDS rather than
+# excludes. A skill or a cycle the project claims owes the kit's map nothing; a verdict
+# cannot be claimed out of the sweep, because `check_phase_drift` has to classify every
+# verdict that reaches the event stream — an unclassified one silently disables it.
