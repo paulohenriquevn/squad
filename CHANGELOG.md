@@ -7,6 +7,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Added
+- **A backlog item that declares itself closed and is filed as open is now reported**
+  `check_backlog_structure` read the fields and never the prose, so a block could say
+  `remeasured …: **closed in code.**` in its own body while `status: triaged` sat four lines above
+  it, and the report still read SHIPPABLE. Measured on a consumer 2026-09-18: twelve items in that
+  state across a registry of 44, with the gate clean on every one.
+
+  The cause is structural rather than careless. `backlog_status.py` refuses `triaged -> shipped` —
+  from triaged an item may go to `approved` or `killed` — and `approved` is a human decision an
+  agent may not make. A remeasurement that finds an item DONE therefore has nowhere legal to put
+  that. It goes in the prose, and the two halves of the block disagree from then on.
+
+  `status_contradicts_body` asserts nothing about whether the item is really done; nothing here can
+  measure that. It asserts that a reader has two answers and no way to choose. The pattern is
+  deliberately narrow — the remedy must be NAMED (`closed in code`, `closed by deletion`), never the
+  bare word, which appears in ordinary prose about closing a connection. On that consumer it
+  correctly excludes two blocks saying `three of five closed` and `two fresh instances`.
+
+  The comment shipped saying **fourteen**, which was the first draft's count before the narrow
+  pattern was written; the code it describes measures twelve. Corrected here.
+
 - **The signing preview now says what the document is, not just which box to tick**
   (#133)
   It showed the sign-off section and the path. Four product documents wait at once and
