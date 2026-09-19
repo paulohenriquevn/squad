@@ -186,6 +186,40 @@ def build(project: Path, slug: str, phase: str) -> dict:
     }
 
 
+def _kit_root_note(contract: Path) -> str:
+    """Where this project keeps the kit, so a reviewer can resolve a `rules/...` citation.
+
+    Every rule file, every skill and every plan in this ecosystem cites `rules/foo.md` —
+    the kit's own convention, and `check_evidence_citations.py` knows the prefix. A
+    reviewer handed the plan and nothing else does not, and an EXTERNAL seat has no other
+    way to learn it.
+
+    Measured 2026-09-18: the `openai` seat of a PLAN panel returned a plan on exactly this
+    — "those paths do not resolve, while only `.claude/rules/...` exists" — while the kit's
+    own checker reported 3 citations and 0 unresolved on the same file. The reviewer was
+    right about the literal path and wrong about the defect, and the brief is what withheld
+    the difference.
+
+    The cost is not one wasted round. A seat that cannot resolve a project's paths returns
+    on EVERY plan, so the cross-family requirement stops being the correlated-failure guard
+    it is bought to be and becomes a permanent block — and the obvious way out is to stop
+    seating the outside reviewer, which is the one seat that catches what two Claudes agree
+    on.
+    """
+    parent = contract.resolve().parent
+    if parent.name != "rules" or parent.parent.name != ".claude":
+        return ""
+    root = parent.parent
+    return (
+        f"\nHOW PATHS IN THIS PROJECT RESOLVE:\n"
+        f"  The kit is installed at `{root}`. A citation written `rules/foo.md` — the\n"
+        f"  convention every rule file and every plan here uses — resolves to\n"
+        f"  `{root}/rules/foo.md`. That is not a broken path.\n"
+        f"  `skills/plan-confidence/scripts/check_evidence_citations.py` decides the question\n"
+        f"  mechanically; run it before returning a plan on an unresolved citation.\n"
+    )
+
+
 def _brief(seat: dict, slug: str, phase: str, contract: Path,
            artifacts: list[Path], context: list[Path], author: str) -> str:
     reads = "\n".join(f"  - {p}" for p in artifacts if p.is_file())
@@ -194,7 +228,7 @@ def _brief(seat: dict, slug: str, phase: str, contract: Path,
 
 READ FIRST — the contract you judge against:
   - {contract}
-
+{_kit_root_note(contract)}
 THE ARTIFACT UNDER REVIEW:
 {reads}
 
