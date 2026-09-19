@@ -85,6 +85,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   composing a path from the pattern of the others: a convention invented on a caller's
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
+### Changed
+- **DISCOVER is optional, and the evidence it produces is not** (#161)
+  `cycle-phases.txt` declared `discover | required` while `cycle-plan.md` said the
+  opposite in its own pre-conditions — *"A feature has a defined goal and known prior
+  art (otherwise, run DISCOVER first)"*. **Otherwise.** `cycle-discover.md` agreed with
+  the second reading and always had: it triggers on `status: raw`, and an item already
+  `triaged` is in its own do-NOT-trigger list. One word in the chain declaration was the
+  outlier, and it was not decoration — `check_phase_drift --expect-complete` reports
+  `phase_declared_never_ran` for a required phase that left no event, so every item that
+  arrived already measured was filed as an incomplete run. It is `conditional` now, with
+  a note naming when it is absent, as every other conditional phase carries.
+  **What did not change is the part that protects anything.** The guard against planning
+  on a hunch was never the phase declaration: it is `triaged_without_evidence`, a BLOCKER
+  in `check_backlog_structure.py`, which asks for the EVIDENCE rather than for the
+  ceremony that usually produces it. An item at `status: triaged` with `evidence:
+  none-yet` is still refused, and the tests that assert the relaxation assert that
+  refusal in the same file — a relaxation whose companion protection is not pinned is one
+  nobody can audit later. Optional is not skipped-by-default: an unmeasured item is
+  exactly what this cycle exists to pick up, and the selector still hands it out.
+  `backlog` remains the one `required` phase, so the drift report still has something to
+  measure — `phase_declared_never_ran` now fires for it alone.
+
 ### Fixed
 - **Six hard gates named a mechanism the reader could not run** (#160)
   `check_gate_mechanisms.py` asks whether a gate line says what enforces it, and is

@@ -332,13 +332,27 @@ def test_this_repository_declares_a_readable_phase_plan() -> None:
     assert [p.name for p in phases][:5] == ["brainstorm", "design", "backlog", "discover", "plan"]
     assert any(p.required for p in phases), "a plan where nothing is required checks nothing"
 
-    # `brainstorm` is deliberately `conditional` while the two after it are `required`,
-    # and the asymmetry is the contract rather than an oversight: the kit is adopted
-    # into repositories that predate the cycle, and reporting every one of them as
-    # missing a phase is how a drift report teaches its reader to ignore it.
+    # The asymmetry is the contract rather than an oversight. `brainstorm` is
+    # `conditional` because the kit is adopted into repositories that predate the
+    # cycle, and reporting every one of them as missing a phase is how a drift
+    # report teaches its reader to ignore it.
+    #
+    # `backlog` stays `required`: every unit of maintenance enters through it, so a
+    # run with no backlog event is a run whose subject is unaccounted for.
+    #
+    # `discover` was `required` here until 2026-09-19 and is now `conditional`, for
+    # the same reason `brainstorm` is: an item arriving with the evidence the phase
+    # would produce — a reproduced bug with a failing test — has nothing to gain
+    # from it, and `cycle-plan.md` already said so in its own pre-conditions
+    # ("otherwise, run DISCOVER first"). The guard against planning on a hunch was
+    # never this word; it is `triaged_without_evidence`, a BLOCKER that asks for
+    # the evidence rather than for the ceremony that usually produces it.
     by_name = {p.name: p for p in phases}
     assert not by_name["brainstorm"].required
-    assert by_name["backlog"].required and by_name["discover"].required
+    assert by_name["backlog"].required, (
+        "nothing would be required, and a plan where nothing is required checks "
+        "nothing")
+    assert not by_name["discover"].required
 
 
 # ── going back is not going out of order ──────────────────────────────────────

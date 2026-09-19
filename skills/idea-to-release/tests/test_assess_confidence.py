@@ -78,9 +78,13 @@ def test_prior_art_is_reported_and_scores_nothing(tmp_path: Path) -> None:
     """The fix: a peer project cannot buy its way past the measurement.
 
     `records/references/` holds projects SIMILAR to ours. `README.md` — "Prior art
-    can never be evidence" — and `cycle-phases.txt` declares `discover` required, so
-    a signal gate G5 refuses as grounds for an item existing must not be what skips
-    measuring it.
+    can never be evidence" — and `check_backlog_structure` refuses `triaged` without
+    it, so a signal gate G5 refuses as grounds for an item existing must not be what
+    skips measuring it.
+
+    That second citation used to read "`cycle-phases.txt` declares `discover`
+    required". It no longer does — DISCOVER became conditional on 2026-09-19 — and
+    the argument is unharmed, because the guard was never the phase declaration.
     """
     refs = tmp_path / "records" / "references" / "some-cache-project"
     refs.mkdir(parents=True)

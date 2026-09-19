@@ -26,6 +26,10 @@ Do NOT trigger DISCOVER for:
 - Anything answerable by reading our own `README.md` / `CLAUDE.md`.
 - An item already `triaged`, `planned` or `shipped`. Re-measuring a closed item is how duplicate work enters.
 
+**This phase is `conditional` in `cycle-phases.txt`, and the list above is why.** An item that arrives carrying the evidence this cycle would produce — a reproduced bug with a failing test, an item filed with a measured pointer — has nothing to gain from it, and a run that skips it is complete rather than short. The phase was declared `required` until 2026-09-19, which made every such run report a missing step. What refuses an unmeasured item is `triaged_without_evidence` (BLOCKER in `check_backlog_structure.py`): it asks for the evidence, not for the ceremony that usually produces it, so the guard holds whether or not this cycle ran.
+
+Optional is not skipped-by-default. An item at `status: raw` with `evidence: none-yet` is exactly what this cycle exists to pick up, and the selector still hands it out.
+
 ## Chain
 
 ```
