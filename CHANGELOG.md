@@ -45,6 +45,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
+- **The origin-name gate could not see a file until after it was committed** (#158)
+  It enumerated `git ls-files` — tracked paths only — so a file not in the index yet was
+  invisible, and the author got a pass at exactly the moment they made the mistake.
+  Measured 2026-09-19: a session wrote a new test carrying ten occurrences of a
+  consumer's app and scope names, ran the gate, and it passed; the file was `??`. On a
+  branch two sessions share, the finding then lands on whoever commits next. Scanning
+  untracked files sounds expensive and is not — `--exclude-standard` honours
+  `.gitignore`, and measured in this repository at the same moment that is **1 path**
+  against **2277** for the unfiltered form. So the repository's own ignore rules draw the
+  line and the gate carries no second list of what to skip. `--cached` was the other
+  candidate and sees the file one step later, at `git add`, which is still after the
+  author has stopped looking at it. A tracked path deleted from disk is dropped, because
+  reading it would be reading nothing.
+
 - **A `touch` on four filenames scored 35% of a product brainstorm** (#156)
   `score_product_alignment` asked the filesystem whether each cascade document existed
   and never asked what was in it. The line below that cap already scored a MISSING

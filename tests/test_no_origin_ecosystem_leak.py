@@ -116,18 +116,44 @@ def _leaks(text: str) -> list[str]:
     return sorted(set(ORIGIN_RE.findall(text)))
 
 
-def _versioned_files() -> list[Path]:
-    out = subprocess.run(
-        ["git", "-C", str(REPO), "ls-files"],
-        capture_output=True,
-        text=True,
-     check=False)
-    assert out.returncode == 0, out.stderr
-    return [
-        REPO / line
-        for line in out.stdout.splitlines()
-        if line and not SKIP_PARTS.intersection(Path(line).parts)
-    ]
+def committable_files(repo: Path | None = None) -> list[Path]:
+    """Everything a commit from this tree would carry: tracked, plus not-yet-added.
+
+    It read `git ls-files` — tracked only — so a file not in the index yet was
+    invisible. Somebody writing a new test in this kit got a pass at exactly the
+    moment they made the mistake, and the finding arrived one commit later, on a
+    branch two sessions share.
+
+    Measured 2026-09-19: a peer wrote a new test carrying ten occurrences of a
+    consumer's app and scope names, ran this gate, and it passed. The file was `??`.
+
+    Scanning untracked files sounds expensive and is not, because
+    `--exclude-standard` honours `.gitignore`. Measured here at the same moment:
+
+        --others --exclude-standard      1 path — the one about to land
+        --others                      2277 paths — scratch, caches, venvs
+
+    So the repository's own ignore rules draw the line and this function carries no
+    second list of what to skip. `--cached` was the other candidate: it sees the
+    file one step later, at `git add`, which is still after the author has stopped
+    looking at it.
+
+    A tracked path deleted from disk is dropped — reading it would be reading
+    nothing.
+    """
+    root = REPO if repo is None else repo
+    paths: list[Path] = []
+    for args in (["ls-files"], ["ls-files", "--others", "--exclude-standard"]):
+        out = subprocess.run(["git", "-C", str(root), *args],
+                             capture_output=True, text=True, check=False)
+        assert out.returncode == 0, out.stderr
+        for line in out.stdout.splitlines():
+            if not line or SKIP_PARTS.intersection(Path(line).parts):
+                continue
+            path = root / line
+            if path.is_file():
+                paths.append(path)
+    return paths
 
 
 def test_no_versioned_file_names_the_origin_ecosystem():
@@ -138,7 +164,7 @@ def test_no_versioned_file_names_the_origin_ecosystem():
     that this kit maintains somebody else's product.
     """
     dirty: dict[str, list[str]] = {}
-    for path in _versioned_files():
+    for path in committable_files():
         rel = str(path.relative_to(REPO))
         if rel in GUARD_FILES:
             continue
@@ -179,7 +205,7 @@ def test_the_external_dependency_exemption_does_not_widen():
 def test_no_versioned_path_names_the_origin_ecosystem():
     """A fixture DIRECTORY carries the name just as loudly as a line of prose."""
     dirty = [
-        str(p.relative_to(REPO)) for p in _versioned_files() if ORIGIN_RE.search(str(p))
+        str(p.relative_to(REPO)) for p in committable_files() if ORIGIN_RE.search(str(p))
     ]
     assert not dirty, f"paths naming the origin ecosystem: {dirty}"
 
@@ -281,7 +307,7 @@ def test_no_versioned_file_carries_a_workstation_path():
     string is long, which that rule does not.
     """
     dirty: dict[str, list[str]] = {}
-    for path in _versioned_files():
+    for path in committable_files():
         rel = str(path.relative_to(REPO))
         if rel in GUARD_FILES or rel == "CHANGELOG.md":
             continue  # released entries record what was true on their day
