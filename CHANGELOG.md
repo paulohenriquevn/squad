@@ -9,6 +9,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The TypeScript symbol detector reported every workspace package as a fabricated npm
+  import.** `_find_workspace_package_names` collected member names with two fixed globs —
+  `*/package.json` and `*/*/package.json` — while its own docstring claimed to walk "the
+  declared workspace globs". It read no declaration. A consumer declaring `apps/*/packages/*`
+  keeps its manifests at depth 4, so every import of them fell through to the npm registry and
+  took a 404: **98 HARD findings, one message shape, none of them in the change being audited**.
+  D2 carries the `symbol_fabrication_typescript` hard cap, so `/code-quality` returned
+  `FAIL_HARD` for the whole language whatever the change did, and that blocks `/review`.
+
+  The defect ran both ways. A `package.json` at depth 2 that NO pattern names was collected
+  anyway, so a genuinely fabricated import from such a directory would never have been reported
+  either.
+
+  The collector now reads what the project DECLARES — `pnpm-workspace.yaml#packages`,
+  `package.json#workspaces` as an array or as `{packages: [...]}`, `deno.json#workspace` — and
+  filters one pruned walk by the declared pattern set. A repository declaring nothing keeps the
+  previous behaviour, and that is the only path that does.
+
+  Three things this required that are worth stating, because each is a trap measured rather
+  than reasoned about:
+
+  * **Neither `Path.glob` nor `fnmatch` can execute pnpm's dialect.** `Path.glob` raises an
+    uncaught `ValueError` on the documented `!**/test/**` — a crashing detector, which halts
+    the cycle — and descends `node_modules` on `**`. `fnmatch`'s `*` crosses `/`. Negation is a
+    property of the SET, so no per-pattern loop expresses it. The matcher is ~20 lines here.
+  * **`pathspec` implements the OTHER dialect.** It is gitignore's last-match-wins, under which
+    two of pnpm's four documented rows re-include. Adopting it would have swapped a matcher
+    that crashes for one that silently disagrees — and it is not a declared dependency.
+  * **The root marker had to change with it.** pnpm 10 moved non-workspace settings into
+    `pnpm-workspace.yaml`, so stopping the upward walk at the filename now finds a file that
+    declares nothing. Reading the declaration is what makes the old marker unsound.
+
+  A missing PyYAML is reported and falls back to the previous behaviour, never to "this
+  workspace declares no members" — an absent parser must not read like a repository with no
+  workspace.
+
+  Extracted to `detectors/_workspace.py` alongside the existing `_arch`, `_wiring` and
+  `_mutation` helpers, so `typescript.py` stays under its row budget without the reasoning
+  being cut to fit.
+
+
 - **The LOCAL alignment depth can now reach the floor it is scored against.**
   `classify_alignment_depth.py` returns `LOCAL` for a small item and names what it removes —
   "DROPPED: the prose sections and the walkthrough HTML" — while `score_alignment.py` graded all

@@ -7,11 +7,14 @@ D3/D4 report explicit capability caps until their external runners are integrate
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
 
 from scripts import _registry
+
+from ._workspace import declared, find_workspace_roots, manifests_under, read_workspace_declaration
 from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_checked
 
@@ -118,36 +121,66 @@ class TypescriptDetector(BaseDetector):
         return self._cached_self_name
 
     def _find_workspace_package_names(self, changed_files: list[Path]) -> frozenset[str]:
-        """Every package name declared INSIDE this repo — not just the root's.
+        """Every package name the project DECLARES as a workspace member.
 
-        Patch 2026-08-03. `_find_self_package_name` resolves the OUTERMOST package.json#name,
-        which in a monorepo is the private root (`promptly`) that nobody imports. Every
-        sibling import (`@scope/promptly` from packages/api) therefore fell through to the
-        npm registry, took a 404 and was reported as `Fabricated npm package` — 60 HARD
-        findings on a repo whose build and tests are green. A workspace dependency declared
-        `workspace:*` resolves perfectly; it is simply not published, by design.
+        A workspace dependency declared `workspace:*` resolves perfectly; it is simply not
+        published, by design. Reported as a fabricated npm import it produces a HARD finding
+        on a repository whose build and tests are green — 98 of them in one consumer, measured
+        2026-09-19, one message shape, none of them in the change being audited. A gate that
+        returns the same verdict whatever the change does has stopped measuring.
 
-        Bounded walk: from each changed file up to the repo root, then one level down over the
-        declared workspace globs. Cached per detector instance.
+        WHY THE DECLARATION AND NOT A DEPTH
+        -----------------------------------
+        This collected names with two fixed globs — `*/package.json` and `*/*/package.json` —
+        while its own docstring claimed to walk "the declared workspace globs". It read no
+        globs. A consumer declaring `apps/*/packages/*` keeps its manifests at depth 4, so
+        every one of them fell through to the registry; and a `package.json` at depth 2 that
+        NO pattern names was collected anyway, so a genuinely fabricated import from such a
+        directory would never have been reported either. Wrong in both directions, from the
+        same cause.
+
+        `typescript.py`'s own note on three OTHER false-positive families in this file states
+        the rule: they shared the root of resolving names "without consulting what the project
+        itself declares (workspaces, exports, paths)", and the fix "reads the declaration
+        instead of guessing". Workspaces were named there and were the family still guessing.
+
+        THE DIALECT, AND WHY THE STANDARD LIBRARY CANNOT BE HANDED THESE PATTERNS
+        ------------------------------------------------------------------------
+        Measured on Python 3.10.12 against pnpm's four documented example patterns:
+
+            Path.glob("!**/test/**/package.json")  ValueError, uncaught -> the detector CRASHES
+            Path.glob("components/**/package.json")  descends node_modules
+            fnmatch("packages/a/node_modules/dep", "packages/*")  True — `*` crosses `/`
+            any negation, either matcher  a silent no-op
+
+        And negation is a property of the SET, so no per-pattern loop can express it whatever
+        it does per call. `pathspec` implements the dialect — and the GITIGNORE one,
+        last-match-wins, under which two of the four documented rows re-include; adopting it
+        would swap a matcher that crashes for one that silently disagrees, and it is not a
+        declared dependency of this kit besides.
+
+        So: one walk, pruning `node_modules`, then the collected set filtered by the declared
+        patterns — positives include, negations exclude, evaluated as a set. Order-independent,
+        which is what "as a set" means, verified against `tinyglobby` 0.2.17, the matcher the
+        `@manypkg/tools` resolver behind `changesets` actually uses.
         """
         if hasattr(self, "_cached_ws_names"):
             return self._cached_ws_names
         names: set[str] = set()
-        roots: set[Path] = set()
-        for src_file in changed_files:
-            try:
-                cur = src_file.resolve().parent if src_file.exists() else Path.cwd()
-            except OSError:
+        for root in find_workspace_roots(changed_files):
+            patterns = read_workspace_declaration(root)
+            if patterns is None:
+                # No declaration here: the pre-2026-09 behaviour, and the ONLY path that keeps
+                # it. A repository that declares nothing is not a repository we may guess about
+                # more confidently than before.
+                for pkg_json in root.glob("*/*/package.json"):
+                    self._read_pkg_name(pkg_json, names)
+                for pkg_json in root.glob("*/package.json"):
+                    self._read_pkg_name(pkg_json, names)
                 continue
-            for parent in [cur, *cur.parents]:
-                if (parent / ".git").exists() or (parent / "pnpm-workspace.yaml").is_file():
-                    roots.add(parent)
-                    break
-        for root in roots:
-            for pkg_json in root.glob("*/*/package.json"):
-                self._read_pkg_name(pkg_json, names)
-            for pkg_json in root.glob("*/package.json"):
-                self._read_pkg_name(pkg_json, names)
+            for pkg_json in manifests_under(root):
+                if declared(pkg_json.parent.relative_to(root).as_posix(), patterns):
+                    self._read_pkg_name(pkg_json, names)
         self._cached_ws_names = frozenset(names)
         return self._cached_ws_names
 
