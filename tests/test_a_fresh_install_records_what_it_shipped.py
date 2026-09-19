@@ -79,7 +79,7 @@ def test_the_first_removal_after_a_fresh_install_is_respected(tmp_path: Path) ->
     settings.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     proc = subprocess.run(["bash", str(_INSTALL), str(target), "--force"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, check=False)
     after = json.loads(settings.read_text(encoding="utf-8"))
     assert "UserPromptSubmit" not in after["hooks"], (
         "the first reinstall after a fresh install put back what the project removed")

@@ -45,6 +45,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
+- **A `touch` on four filenames scored 35% of a product brainstorm** (#156)
+  `score_product_alignment` asked the filesystem whether each cascade document existed
+  and never asked what was in it. The line below that cap already scored a MISSING
+  document from `""`, so missing and empty ran the identical scoring path and only the
+  cap separated them — on the wrong question. Measured 2026-09-19 with four files holding
+  one heading each: `NEEDS_REVISION`, 35.3%, `hard_caps: []`. The 35.3% is six criteria
+  that are vacuously true of emptiness — `no placeholder` ×4 and `0 dangling citation(s)`
+  ×2 — which stay as they are, because a real document can fail them and presence is
+  already a separate criterion. What could not stand is a recoverable verdict asking
+  somebody to revise what nobody had written. Reported as `empty_document`, never folded
+  into `missing_document`: one sends a person to create a file and the other to open one
+  they already have. "Empty" is drawn narrowly — whitespace and headings only — because a
+  heading AND a paragraph is a partial document, and partial is what `NEEDS_REVISION` is
+  for; the wider rule would call a badly structured but genuinely written document absent.
+
+- **The 90% alignment floor was stated three times and read none** (#157)
+  `cycle-brainstorm.md` G-B4 claimed the cycle "reuses them rather than choosing a second
+  number for the same purpose". It did not: `alignment-threshold.md` carried the prose,
+  `score_alignment.py` carried `THRESHOLD = 0.90`, and `score_product_alignment.py`
+  carried `FLOOR_PCT = 90.0` — not even the same type, so a change to one could not be
+  made mechanically in the other and nothing would report the disagreement. They agreed
+  by coincidence. The figure now lives in `squad/rubric.py`, whose docstring already
+  carried this argument for the rubric PARSE — *"three copies of one convention are three
+  places for it to drift, and the drift would be silent"* — and both scorers read it, the
+  ratio derived from the percentage rather than written again. The reasoning stays in
+  `alignment-threshold.md`: a constant cannot hold an argument and a rule file cannot be
+  imported, so each keeps the half it can carry.
+
 - **Removing a Squad hook from `settings.json` now sticks** (#154)
   `settings.json` is Claude Code's own configuration and the kit writes its hooks into
   it — the same shape `spec-kit` uses, where an integration's events go into the agent's

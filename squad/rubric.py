@@ -21,6 +21,33 @@ import yaml
 
 _FENCE = "```yaml"
 
+#: The bar a rubric score is held to, as a percentage. Stated ONCE, here, for the
+#: reason the docstring above gives about the parse: three copies of one convention
+#: are three places for it to drift, and the drift is silent.
+#:
+#: It had three statements and no reuse. Measured 2026-09-19:
+#:
+#:     skills/_kit-rules/alignment-threshold.md              prose, the reasoning
+#:     plan-alignment/scripts/score_alignment.py:80          THRESHOLD = 0.90
+#:     brainstorm-pieces/.../score_product_alignment.py:67   FLOOR_PCT = 90.0
+#:
+#: Not even the same type — a fraction against a percentage — so a change to one
+#: could not be made mechanically in the other and nothing would report the
+#: disagreement. `cycle-brainstorm.md` G-B4 already claimed this worked: "this
+#: cycle reuses them rather than choosing a second number for the same purpose."
+#: It did not; the numbers agreed by coincidence.
+#:
+#: WHAT DID NOT MOVE. `alignment-threshold.md` keeps the REASONING — why 90, and
+#: why a score at all. A constant cannot hold an argument and a rule file cannot be
+#: imported, so each keeps the half it can carry.
+ALIGNMENT_FLOOR_PCT = 90.0
+
+#: The same bar as a ratio, DERIVED rather than written again — the two spellings
+#: existed in the two scorers and that is how a fraction and a percentage came to
+#: be maintained separately.
+ALIGNMENT_FLOOR_RATIO = ALIGNMENT_FLOOR_PCT / 100
+
+
 
 def load_rubric(rubric_path: Path) -> dict[str, Any]:
     """Extract the ```yaml block from a rubric `.md` and parse it.

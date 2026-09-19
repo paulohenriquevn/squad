@@ -38,7 +38,7 @@ def test_absence_is_not_the_signal_a_red_criterion_looks_the_same() -> None:
     """The check cannot key on the string being missing: that is what a RED criterion IS.
     It keys on the NAME being one the project refuses, which is decidable from the plan
     alone and needs no repository scan."""
-    from check_symbol_naming import _TICKET_IN_SYMBOL  # noqa: PLC0415 — local by design
+    from check_symbol_naming import _TICKET_IN_SYMBOL  # local by design
 
     assert _TICKET_IN_SYMBOL.search("TestB069_RetryReleaseActivation")
     assert _TICKET_IN_SYMBOL.search("test_b004_english_only")

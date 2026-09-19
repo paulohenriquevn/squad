@@ -77,7 +77,7 @@ def test_both_gates_ask_the_owner_rather_than_carrying_a_copy() -> None:
 
 def test_the_map_gate_leaves_generated_skills_alone(tmp_path: Path) -> None:
     """The finding, end to end: a tree whose only unmapped skills are run artifacts."""
-    from check_skill_map import check  # noqa: PLC0415
+    from check_skill_map import check
 
     skills = tmp_path / "skills"
     (skills / "review").mkdir(parents=True)

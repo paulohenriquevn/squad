@@ -180,7 +180,7 @@ def _depth_for(plan_path: Path, item: str | None) -> str:
         return "FULL"
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "plan-alignment/scripts"))
-        from classify_alignment_depth import classify  # noqa: PLC0415
+        from classify_alignment_depth import classify
 
         return classify(_project_root(plan_path), item).depth
     except Exception:  # noqa: BLE001 — an unclassifiable item is scored at FULL

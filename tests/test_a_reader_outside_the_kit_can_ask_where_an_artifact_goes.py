@@ -43,7 +43,7 @@ def _locate(project: Path, phase: str, slug: str) -> tuple[int, str]:
     proc = subprocess.run(
         [sys.executable, str(_BRIEF), "--locate", "--phase", phase,
          "--slug", slug, "--project", str(project), "--json"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, check=False,
     )
     return proc.returncode, proc.stdout or proc.stderr
 
@@ -76,7 +76,7 @@ def test_an_absent_artifact_is_located_and_not_refused(tmp_path: Path) -> None:
 
 def test_a_present_artifact_is_reported_present(tmp_path: Path) -> None:
     sys.path.insert(0, str(_REPO))
-    from squad.paths import write_records_dir  # noqa: PLC0415
+    from squad.paths import write_records_dir
 
     plans = write_records_dir(tmp_path, "plans")
     plans.mkdir(parents=True)

@@ -76,8 +76,16 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-#: The bar. 90% of the maximum, per the Definition-of-Ready scoring convention.
-THRESHOLD = 0.90
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from squad.rubric import ALIGNMENT_FLOOR_RATIO
+
+#: The bar, read rather than restated. The reasoning — why 90% of the maximum, and
+#: why a score at all — is `skills/_kit-rules/alignment-threshold.md`; the figure
+#: is `squad.rubric`, which the product-level scorer reads too. This line held its
+#: own `0.90` while that one held `90.0`, so the same bar was maintained in two
+#: types and nothing would have reported them disagreeing.
+THRESHOLD = ALIGNMENT_FLOOR_RATIO
 
 #: A requirement is measurable when it carries a number and a unit, or an
 #: explicit comparison. "Fast" is a wish; "p95 under 200ms at 1000 rps" is a
@@ -829,7 +837,7 @@ def _local_drops() -> frozenset[str]:
     parameter exists to close.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from classify_alignment_depth import LOCAL_DROPS  # noqa: PLC0415
+    from classify_alignment_depth import LOCAL_DROPS
 
     return LOCAL_DROPS
 

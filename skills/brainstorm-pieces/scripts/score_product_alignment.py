@@ -63,8 +63,28 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from squad.paths import write_wiki_dir  # noqa: E402 — post-bootstrap import
+from squad.rubric import ALIGNMENT_FLOOR_PCT  # noqa: E402 — post-bootstrap import
 
-FLOOR_PCT = 90.0
+#: Read rather than restated — `squad.rubric` owns the figure and the item-level
+#: scorer reads the same one. G-B4 in `cycle-brainstorm.md` always said this cycle
+#: reuses the number; until 2026-09-19 it declared its own.
+FLOOR_PCT = ALIGNMENT_FLOOR_PCT
+
+
+def is_empty(text: str) -> bool:
+    """Nothing here but the shape a scaffold leaves behind.
+
+    Whitespace and heading lines only. Drawn narrowly ON PURPOSE: a heading AND a
+    paragraph is a PARTIAL document, and partial is exactly what `NEEDS_REVISION`
+    exists for. The wider rule — "scores zero on every criterion" — would call a
+    badly structured but genuinely written document absent, which is a worse lie
+    than the one being fixed.
+    """
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            return False
+    return True
 
 VISION = "product-vision.md"
 OBJECTIVES = "objectives.md"
@@ -110,6 +130,10 @@ class Report:
     #: one point of thirty-four and still scores 97%. Scoring alone would have let
     #: the gate read as enforced while passing exactly what it names.
     floor_caps: list[str] = field(default_factory=list)
+    #: Present on disk and holding nothing a reader could act on. Kept apart from
+    #: `missing_docs` because the two send a person to different places.
+    empty_docs: list[str] = field(default_factory=list)
+    unreadable_docs: list[str] = field(default_factory=list)
     missing_docs: list[str] = field(default_factory=list)
     dangling: list[str] = field(default_factory=list)
     signers: list[str] = field(default_factory=list)
@@ -340,11 +364,34 @@ def score(root: Path) -> Report:
         if not path.is_file():
             rep.missing_docs.append(name)
             texts[name] = ""
-        else:
+            continue
+        try:
             texts[name] = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            # Present and unreadable is not present. Scoring it from `""` would
+            # award the six criteria that are vacuously true of emptiness.
+            rep.unreadable_docs.append(f"{name}: {exc}")
+            texts[name] = ""
+            continue
+        # The line above USED to be the whole story, and the cap below asked the
+        # filesystem rather than the document. A missing document has already been
+        # scored from `""` two lines up, so missing and empty ran the identical
+        # scoring path and only the cap separated them — on the wrong question.
+        # Measured 2026-09-19 with four files holding one heading each:
+        # NEEDS_REVISION, 35.3%, `hard_caps: []`. `touch` turned INVALID into a
+        # recoverable verdict and published "a third of this is done" over nothing.
+        if is_empty(texts[name]):
+            rep.empty_docs.append(name)
 
     if rep.missing_docs:
         rep.hard_caps.append("missing_document")
+    if rep.empty_docs:
+        # A separate cap, not `missing_document`: `missing_documents` must keep
+        # meaning the file is not there, or the report sends somebody to create a
+        # file they already have.
+        rep.hard_caps.append("empty_document")
+    if rep.unreadable_docs:
+        rep.hard_caps.append("unreadable_document")
 
     _gate_vision(rep, texts)
     obj_ids = _gate_objectives(rep, texts)
@@ -393,6 +440,8 @@ def main(argv: list[str] | None = None) -> int:
         "hard_caps": rep.hard_caps,
         "floor_caps": rep.floor_caps,
         "missing_documents": rep.missing_docs,
+        "empty_documents": rep.empty_docs,
+        "unreadable_documents": rep.unreadable_docs,
         "dangling_citations": rep.dangling,
         "signers": rep.signers,
         "unticked_boxes": rep.unticked,
@@ -416,6 +465,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  DANGLING: {d}")
     if rep.missing_docs:
         print(f"  MISSING:  {', '.join(rep.missing_docs)}")
+    # Worded so the two never read the same. "Missing" sends a person to create a
+    # file; "empty" sends them to open one they already have, and a reader handed
+    # the wrong one of those loses the time it takes to find out.
+    if rep.empty_docs:
+        print(f"  EMPTY:    {', '.join(rep.empty_docs)} — the file is there and "
+              f"holds nothing but headings")
+    if rep.unreadable_docs:
+        print(f"  UNREADABLE: {', '.join(rep.unreadable_docs)}")
     if tok == "AWAITING_REVIEW":
         print("  The structure is complete and nobody has signed. This script cannot sign it.")
     print("\nNot scored, and no script can decide them:")

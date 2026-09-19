@@ -88,7 +88,7 @@ def test_both_mechanisms_ask_the_owner_rather_than_carrying_a_copy() -> None:
 
 def test_the_approval_gate_reads_a_roster_it_can_reach(tmp_path: Path) -> None:
     """End to end: the gate no longer answers UNCHECKED over a roster that is there."""
-    from check_panel_approval import default_panel_path  # noqa: PLC0415
+    from check_panel_approval import default_panel_path
 
     project = _plugin_install(tmp_path)
     found = default_panel_path(project)
