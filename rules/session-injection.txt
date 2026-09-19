@@ -1,0 +1,31 @@
+# How loud this kit is in a session. PROJECT-OWNED: a reinstall preserves it.
+#
+# The kit speaks three times per turn without being asked — the parsimony ladder in
+# front of every prompt, the chain at session start, advisory warnings at the end.
+# That is right for a session writing code and wrong for one that is not: a reader
+# who sees doctrine attached to every question learns to skip doctrine.
+#
+# Format:  key = value        (one per line; `#` comments)
+#
+#   quiet = false   (default) the kit injects doctrine, the plan pointer and the
+#                   advisory warnings, exactly as it always has
+#   quiet = true    it holds all three until you invoke it
+#
+# `SQUAD_QUIET=1` overrides this for ONE session, and `SQUAD_QUIET=0` overrides it
+# the other way — so a quiet project can have the doctrine back for an afternoon
+# without editing a versioned file to get it.
+#
+# WHAT quiet = true DOES NOT TURN OFF. It is a volume control, never a kill switch:
+#
+#   * PreToolUse — writing into the installed kit is still refused, and a dangerous
+#     git command is still stopped. A guard a config can silence is a guard that
+#     gets silenced on the day it would have mattered.
+#   * Stop's BLOCKERS — a secret in the diff, production source with no changelog
+#     entry. Only the [WARN] half is advisory, and only the advisory half is noise.
+#   * PostToolUse lints, which already say nothing when there is nothing to say.
+#
+# `STOP_VALIDATION_WARN_ONLY=1` is the opposite axis: it downgrades blockers to
+# warnings, where this suppresses warnings and never reaches blockers. Neither one
+# is a route to the other.
+
+quiet = false
