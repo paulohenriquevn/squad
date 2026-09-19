@@ -67,10 +67,20 @@ def _rules(tmp_path: Path, name: str, body: str) -> Path:
     return tmp_path
 
 
-def _with_script(root: Path, relative: str) -> Path:
+def _with_script(root: Path, relative: str, *, runnable: bool = True) -> Path:
+    """A stub standing in for a real mechanism, invocable by default.
+
+    The stub was `# stub` alone, which is a file that exists and cannot be run —
+    the exact shape `not_runnable` reports. A fixture that is unrealistic in the
+    direction a new check looks makes that check fail against ten tests about
+    something else. `runnable=False` is kept for the tests that mean it.
+    """
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("# stub\n", encoding="utf-8")
+    body = "# stub\n"
+    if runnable and path.suffix == ".py":
+        body += 'if __name__ == "__main__":\n    raise SystemExit(0)\n'
+    path.write_text(body, encoding="utf-8")
     return path
 
 
@@ -789,3 +799,38 @@ def test_a_rule_the_sweep_did_not_read_is_not_called_not_a_defect(tmp_path: Path
 
     assert "not a defect" not in done.stdout
     assert "NOT READ" in done.stdout
+
+
+def test_a_gate_naming_only_a_library_is_reported(tmp_path: Path) -> None:
+    """Exists is not runnable, and the difference is what a reader hits.
+
+    Measured 2026-09-19 across the nine cycle rules: 22 mechanisms named under
+    `## Hard gates`, six of them modules with no entry point. Each was genuinely
+    enforced by a runner that imports it — so this is not a hole in coverage — but
+    a reader following the rule to the mechanism and running it got no output and
+    exit 0, which is what a passing gate looks like.
+    """
+    root = _rules(tmp_path, "cycle-demo.md",
+        "# Cycle: DEMO\n\n## Hard gates\n\n"
+        "- Corners are populated — `check_corners.py`.\n")
+    _with_script(root, "skills/demo/scripts/check_corners.py", runnable=False)
+
+    findings = check_gate_mechanisms(root).findings
+    kinds = [f.kind for f in findings]
+    assert kinds == ["not_runnable"], findings
+    assert "entry point" in findings[0].detail
+
+
+def test_naming_the_runner_beside_the_library_satisfies_it(tmp_path: Path) -> None:
+    """The fix the finding asks for, pinned so it cannot regress into a CLI per library.
+
+    Six libraries each given an entry point would be six second ways into a score
+    that is only meaningful composed. What the reader needs is the invocable name.
+    """
+    root = _rules(tmp_path, "cycle-demo.md",
+        "# Cycle: DEMO\n\n## Hard gates\n\n"
+        "- Corners are populated — `check_corners.py` (run by `run_score.py`).\n")
+    _with_script(root, "skills/demo/scripts/check_corners.py", runnable=False)
+    _with_script(root, "skills/demo/scripts/run_score.py")
+
+    assert check_gate_mechanisms(root).findings == []

@@ -113,7 +113,7 @@ for a long time this list said so about none of them. A mechanized gate whose
 rule names no mechanism reads exactly like a gate nobody enforces — so it gets
 re-run by hand, or quietly ignored. The mechanism is now part of the line.
 
-- Failing tests on the working branch — `suite_runners.py`, invoked upstream by
+- Failing tests on the working branch — `suite_runners.py` (run by `run_validation.py`), invoked upstream by
   `run_validation.py` at the end of `/implement`, and again by `ci.yml` on every
   push. **No hook executes the suite**, so a branch that never ran `/implement`
   reaches `/review` with this gate resting on CI alone.

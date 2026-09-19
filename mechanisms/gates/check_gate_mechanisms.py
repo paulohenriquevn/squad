@@ -291,6 +291,41 @@ def _executables(repo_root: Path) -> set[str]:
     return names
 
 
+def _invocable(repo_root: Path) -> set[str]:
+    """Basenames a reader can actually RUN, as opposed to merely find.
+
+    `_executables` above answers "does this file exist", and its docstring says so:
+    it proves reachability, not location. Between that and the question this gate
+    refuses — whether a `.py` implements an English sentence, which no text scan
+    can decide — sits one that IS decidable and was not asked: can the named thing
+    be run at all?
+
+    Measured 2026-09-19 across the nine cycle rules: 22 mechanisms named under
+    `## Hard gates`, six of them modules with no `__main__`. Every one is genuinely
+    enforced — each is imported by a runner that does have an entry point — but a
+    reader who follows the rule to the mechanism and runs it gets no output and
+    exit 0, which is what a passing gate looks like. This gate exists so "the
+    reader of a rule can reach the mechanism", and reaching a library that exits 0
+    is reaching something indistinguishable from a pass.
+
+    A `.sh` is invocable by definition. A `.py` needs the entry point, and the
+    string is looked for rather than the file imported: importing 200 modules to
+    audit them would make this the slowest gate here, and a module that spells its
+    guard differently is rarer than one this would break on.
+    """
+    names: set[str] = set()
+    skip = {".git", "node_modules", "__pycache__", ".venv", "dist", "build"}
+    for path in repo_root.rglob("*"):
+        if not path.is_file() or path.suffix not in (".py", ".sh"):
+            continue
+        if skip & set(path.relative_to(repo_root).parts):
+            continue
+        if path.suffix == ".sh" or "__main__" in path.read_text(
+                encoding="utf-8", errors="replace"):
+            names.add(path.name)
+    return names
+
+
 def _gates_without_root_flag(repo_root: Path) -> list[str]:
     """Every `mechanisms/gates/check_*.py` that does not declare `--root`.
 
@@ -345,6 +380,7 @@ def check_gate_mechanisms(repo_root: Path, *, max_debt_age_days: int | None = No
     repo_root = Path(repo_root)
     report = GateReport()
     executables = _executables(repo_root)
+    invocable = _invocable(repo_root)
     report.gates_without_root_flag = _gates_without_root_flag(repo_root)
     rules_dir = repo_root / "rules"
     if not rules_dir.is_dir():
@@ -398,7 +434,7 @@ def check_gate_mechanisms(repo_root: Path, *, max_debt_age_days: int | None = No
                 report.total_gates += 1
                 is_row = gate.startswith("|")
                 finding = _classify(
-                    rule_path, gate, executables, rules_dir, report,
+                    rule_path, gate, executables, invocable, rules_dir, report,
                     inherited=inherited if is_row else [],
                     inherited_exemption=inherited_exemption and is_row,
                     max_debt_age_days=max_debt_age_days,
@@ -433,6 +469,7 @@ def _classify(
     rule_path: Path,
     gate: str,
     executables: set[str],
+    invocable: set[str] | None,
     rules_dir: Path,
     report: GateReport,
     inherited: list[str],
@@ -508,6 +545,18 @@ def _classify(
             return GateFinding(
                 rule_path.name, _excerpt(gate), "fabricated_mechanism",
                 f"names {', '.join(missing)}, which does not exist in this repository",
+            )
+        # Exists is not the same as runnable. Reported per LINE and not per script,
+        # because a line naming a library ALONGSIDE its runner has told the reader
+        # what to run; one naming only libraries has sent them to a file that
+        # prints nothing and exits 0.
+        if invocable is not None and not any(
+                Path(name).name in invocable for name in cited):
+            return GateFinding(
+                rule_path.name, _excerpt(gate), "not_runnable",
+                f"names only {', '.join(cited)}, and none of them has an entry "
+                f"point. Running one prints nothing and exits 0, which is what a "
+                f"passing gate looks like. Name the runner that composes it too",
             )
         report.named += 1
         return None

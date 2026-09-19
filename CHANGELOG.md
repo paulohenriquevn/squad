@@ -45,6 +45,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
+- **Six hard gates named a mechanism the reader could not run** (#160)
+  `check_gate_mechanisms.py` asks whether a gate line says what enforces it, and is
+  explicit about the question it refuses — *"proving that a given `.py` implements a
+  given English sentence is not something a text scan can do"*. Between that refusal and
+  what it does check sat a question that IS decidable and was not asked: **can the named
+  thing be run at all?** Measured 2026-09-19 across the nine cycle rules: 22 mechanisms
+  named under `## Hard gates`, six of them modules with no `__main__`. Every one is
+  genuinely enforced — each is imported by a runner that has an entry point, so this was
+  never a hole in coverage — but a reader following the rule to the mechanism got:
+  ```
+  $ python3 .../check_evidence_pointers.py --root .
+  $                      (no output, exit 0)
+  ```
+  Silence and zero are what a passing gate looks like, reached through the document that
+  exists so "the reader of a rule can reach the mechanism". The gate now reports
+  `not_runnable`, per line rather than per script, because a line naming a library
+  ALONGSIDE its runner has told the reader what to run. The six lines in
+  `cycle-discover.md`, `cycle-implement.md`, `cycle-backlog.md` and `cycle-review.md` now
+  name both. **Not a CLI per library**: six entry points into scores that are only
+  meaningful composed would be six second ways to reach a partial answer.
+
 - **The selector handed out work from a registry its own gate called INVALID** (#159)
   `select_backlog_item` imports `_parse_items`, `Item` and three helpers from
   `check_backlog_structure` — the parser, never a verdict — so the two read the same
