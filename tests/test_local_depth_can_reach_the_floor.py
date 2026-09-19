@@ -7,7 +7,7 @@ removes in its own output: *"DROPPED: the prose sections and the walkthrough HTM
 `score_alignment.py` then scores the resulting brief against all seventeen criteria,
 five of which grade exactly those dropped sections.
 
-Measured 2026-09-18 on a real item (`B-001` in the `theokit` consumer), by running both
+Measured 2026-09-18 on a real item (`B-001` in a consumer registry), by running both
 halves of the kit against one brief:
 
     classify_alignment_depth.py . B-001   ->  LOCAL

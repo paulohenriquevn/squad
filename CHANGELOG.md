@@ -13,7 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   `classify_alignment_depth.py` returns `LOCAL` for a small item and names what it removes —
   "DROPPED: the prose sections and the walkthrough HTML" — while `score_alignment.py` graded all
   seventeen criteria, five of which measure exactly those sections. Measured on a real item
-  (`B-001`, theokit): a LOCAL brief complete by its own contract scored 22/34 = 64.7%, and closing
+  (`B-001`, on a consumer): a LOCAL brief complete by its own contract scored 22/34 = 64.7%, and closing
   both remaining authoring gaps reaches 24/34 = 70.6% — **19.4 points below the 90% floor**. An
   author who followed the classifier wrote a brief that could not pass, and `check_alignment_gate.py`
   hard-caps an unaligned plan at 49 with no `--skip` and no dismissing ADR. The scorer now takes
