@@ -74,6 +74,26 @@ FIELD_RE = re.compile(r"^([a-z_]+):\s*(.*)$", re.MULTILINE)
 DOD_BULLET_RE = re.compile(r"^\s*-\s+(.+)$", re.MULTILINE)
 REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 
+#: Findings that break the registry's IDENTITY: after one of these, an id no longer
+#: names exactly one item. Everything else a blocker reports is about an item's
+#: CONTENT, which is the condition the pipeline exists to improve.
+#:
+#: The distinction exists because `select_backlog_item.py` returns an id. With an
+#: identity finding standing, the id it returns does not identify one block and the
+#: caller cannot tell which it was handed — so there is no honest answer to give.
+#: With a content finding standing there is: the item is weak, and saying so is what
+#: the later phases are for.
+#:
+#: Measured 2026-09-19: the first draft of that refusal keyed on `verdict == INVALID`
+#: and took every blocker with it, so a single `triaged_without_evidence` stopped the
+#: whole registry from handing out work. Three existing tests caught it. A gate that
+#: blocks the machine over its own purpose is a gate people learn to route around.
+#:
+#: Declared HERE rather than in the selector: a second list of what counts as
+#: identity is a second place the classification drifts, and a check added later
+#: would join one of them.
+IDENTITY_CHECKS = frozenset({"duplicate_id", "renumbered"})
+
 REQUIRED_FIELDS = ("domain", "repo", "suggested_mode", "source", "evidence", "why_now", "status")
 LEGAL_STATUS = {"raw", "triaged", "approved", "planned", "shipped", "killed"}
 LEGAL_MODES = {"review", "live-test", "bug", "evolve"}

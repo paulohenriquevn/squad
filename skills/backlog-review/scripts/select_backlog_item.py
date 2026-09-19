@@ -65,10 +65,12 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from check_backlog_structure import (  # noqa: E402 — post-bootstrap import
+    IDENTITY_CHECKS,
     OPEN_STATUS,
     Item,
     _parse_items,
     carries_prose,
+    check_backlog,
     declares_impediment,
     parse_blocked_by,
 )
@@ -148,7 +150,7 @@ NOT_SELECTABLE = {
 
 @dataclass
 class Selection:
-    verdict: str                      # ITEM_SELECTED · BACKLOG_EMPTY · BACKLOG_BLOCKED
+    verdict: str  # ITEM_SELECTED · BACKLOG_EMPTY · BACKLOG_BLOCKED · BACKLOG_INVALID
                                       # · ITEM_IN_FLIGHT · ITEM_SHIPPED · ITEM_KILLED
                                       # · ITEM_HALTED
     item_id: str | None = None
@@ -637,7 +639,37 @@ def main() -> int:
             print(f"halt detection unavailable ({error}); proceeding without it",
                   file=sys.stderr)
 
-    result = select(text, args.check, halted, unblocking, root=Path(args.backlog).resolve().parent)
+    # ASK THE GATE FIRST, about IDENTITY only. This script and
+    # `check_backlog_structure` read the same file with the same parser — the
+    # imports above are the checker's — and they disagreed in the one direction
+    # that matters: the gate refused the file and this served from it. Measured
+    # 2026-09-19 on a registry holding `B-001` twice, the checker returned INVALID
+    # with "ids are the audit trail; two blocks sharing one destroys it", and this
+    # returned ITEM_SELECTED -> B-001 with a queue of ['B-001', 'B-001']. The caller
+    # cannot tell which of the two blocks it was handed.
+    #
+    # `IDENTITY_CHECKS`, not `verdict == "INVALID"`. The first draft took the whole
+    # verdict and with it every blocker, so one `triaged_without_evidence` stopped
+    # the registry from handing out any work — which is this gate blocking the
+    # machine over the very thing the machine exists to fix. Three existing tests
+    # caught it. What remains is the narrow case: this script RETURNS an id, and
+    # after a duplicate or a reused one that id does not name a single item, so
+    # there is no honest answer to give.
+    structure = check_backlog(args.backlog)
+    broken = [f for f in structure["findings"] if f["check"] in IDENTITY_CHECKS]
+    if broken:
+        # NAMED, not counted. "1 blocker" sends a person to run a second command to
+        # find out which one.
+        detail = "; ".join(f"{f.get('item') or '—'} {f['check']}: {f['message']}"
+                           for f in broken)
+        result = Selection(
+            "BACKLOG_INVALID", None,
+            f"the registry's ids do not identify one item each: {detail} Nothing "
+            f"may be selected until that is fixed — every id this would return is "
+            f"ambiguous.")
+    else:
+        result = select(text, args.check, halted, unblocking,
+                        root=Path(args.backlog).resolve().parent)
 
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, ensure_ascii=False))

@@ -45,6 +45,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
+- **The selector handed out work from a registry its own gate called INVALID** (#159)
+  `select_backlog_item` imports `_parse_items`, `Item` and three helpers from
+  `check_backlog_structure` — the parser, never a verdict — so the two read the same
+  file and disagreed in the one direction that matters. Measured 2026-09-19 on a
+  registry holding `B-001` twice: the checker returned `INVALID` with *"ids are the
+  audit trail; two blocks sharing one destroys it"*, and the selector returned
+  `ITEM_SELECTED → B-001` with a queue of `['B-001', 'B-001']`. The caller cannot tell
+  which of the two blocks it was handed, and the loop would run the id twice. Nothing in
+  the selector's output named the structure. It now refuses with `BACKLOG_INVALID`,
+  naming the findings rather than counting them.
+  **Identity only, and the first draft got this wrong.** Keying on `verdict == INVALID`
+  took every blocker with it, so one `triaged_without_evidence` stopped the registry from
+  handing out any work — this gate blocking the machine over the very condition the
+  machine exists to fix, and a gate that does that is one people route around. Three
+  existing tests caught it. The line is now `IDENTITY_CHECKS` — `duplicate_id` and
+  `renumbered`, the two the checker itself describes as making a reference ambiguous —
+  declared in the checker so a third one joins both readers at once. A content blocker
+  leaves the id intact and the item selectable. The lead needed no change: its branch is
+  generic on anything that is not `ITEM_SELECTED`, and the comment beside it now names
+  the third verdict rather than telling a reader only two arrive there.
+
 - **The origin-name gate could not see a file until after it was committed** (#158)
   It enumerated `git ls-files` — tracked paths only — so a file not in the index yet was
   invisible, and the author got a pass at exactly the moment they made the mistake.

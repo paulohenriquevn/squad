@@ -900,7 +900,11 @@ class Lead:
             return None, f"SELECT returned no usable answer ({error})"
         verdict = answer.get("verdict", "")
         if verdict != "ITEM_SELECTED":
-            # BACKLOG_BLOCKED and BACKLOG_EMPTY are both cases only a person clears.
+            # Generic on purpose: any verdict that is not ITEM_SELECTED stops the
+            # lead and is reported verbatim. BACKLOG_BLOCKED, BACKLOG_EMPTY and
+            # BACKLOG_INVALID are all cases only a person clears, and a new one
+            # arrives here already handled rather than falling through as an
+            # unrecognised answer the loop carries on past.
             return None, f"{verdict}: {answer.get('reason', '')}"
         item = answer.get("item_id") or ""
         if not _VALID_ITEM_RE.match(item):
