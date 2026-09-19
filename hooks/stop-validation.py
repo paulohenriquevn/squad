@@ -45,7 +45,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import StopContext, create_context
-from squad.injection import is_quiet
 from squad.layout import resolve
 from squad.public_copy import is_public
 from squad.public_copy import warnings as public_copy_warnings
@@ -109,19 +108,6 @@ _EXPECTED_ABSENCE = (
     "does not have an upstream",
     "ambiguous argument 'head~1",
 )
-
-
-def kit_dir_for_quiet() -> Path | None:
-    """Where to look for the volume setting, or `None` when there is no kit.
-
-    Resolved separately from the validation's own root: this hook grades the
-    PROJECT's diff and the setting belongs to the kit installed in it, and in a
-    plugin install those are one directory apart.
-    """
-    from squad.layout import resolve
-
-    layout = resolve(warn=False)
-    return layout.kit_dir if layout is not None else None
 
 
 def git(*args: str) -> str:
@@ -538,15 +524,6 @@ def main() -> None:
         print("-" * 44, file=sys.stderr)
         print("Resolve every BLOCK above before stopping. To override for a documented "
               "reason, re-run with STOP_VALIDATION_WARN_ONLY=1.", file=sys.stderr)
-    # The advisory half is the noise a project can ask not to hear; the blocking
-    # half above is a gate and is never reachable from here. `squad/injection.py`
-    # carries why the two are separated by construction rather than by a comment:
-    # a guard a config can silence is a guard that gets silenced by somebody who
-    # only wanted less text. Suppression happens at the REPORT and not at the
-    # checks, so `--json` and every caller reading the structured output still
-    # receive what was found.
-    if warnings and is_quiet(kit_dir_for_quiet()):
-        warnings = []
     if warnings and second_pass:
         warnings.append(
             "This is the second stop attempt (stop_hook_active), so the gates above "

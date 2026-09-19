@@ -103,25 +103,74 @@ def _matcher_of(group: dict) -> str:
 
 def merge_hooks(
     mine: dict, kit: dict, previous: dict[str, list[str]],
-) -> tuple[dict, list[str], list[str]]:
+) -> tuple[dict, list[str], list[str], list[str]]:
     """Per-entry merge of the `hooks` key.
 
-    Returns the merged mapping, the consumer commands kept, and the kit commands
-    retired. A hook is identified by its `command`: two entries with the same
-    command are the same gate however their timeout or matcher was written.
+    Returns the merged mapping, the consumer commands kept, the kit commands
+    retired, and the kit hooks this install respected as removed by the project.
+
+    Four values rather than a flag that changes what the third one means: a
+    parameter which re-points a return position gives one function two shapes, and
+    a caller reading the third list has no way to know which it received.
+
+    A hook is identified by its `command`: two entries with the same command are
+    the same gate however their timeout or matcher was written.
+
+    `settings.json` is Claude Code's own configuration file, so a hook the project
+    deleted from it is a decision and not drift to repair. This function placed
+    "the kit's groups first, verbatim", which made a removal invisible: measured
+    2026-09-19, a project removed `UserPromptSubmit`, reinstalled, and the hook was
+    back. The file only LOOKED like configuration, and a configuration surface that
+    does not hold is why somebody ends up asking for a flag instead — which would
+    give one system two behaviours and two sets of gates.
+
+    `merge_permissions` below already holds the reasoning, for the same record one
+    directory over: a rule present in the consumer and absent from the kit is
+    "either something the kit retired or something the project added, and those
+    must never share an outcome". `.kit-hooks.json` answers the same question for
+    hooks and was read in one direction only.
+
+    With no baseline nothing is respected, so a first install wires everything —
+    the same "with no record nothing is removed" the permissions merge states, and
+    what keeps a fresh consumer from being silenced by an absent file.
+
+    A hook the kit never shipped before is NOT a removal: there is no record of the
+    project dropping it. Without that, every gate added since a consumer's last
+    install would read as something they deleted, and the kit would stop shipping
+    gates to the consumers furthest behind.
     """
     mine_hooks = mine.get("hooks") or {}
     kit_hooks = kit.get("hooks") or {}
     kit_commands = {c for commands in hook_baseline(kit).values() for c in commands}
+    mine_commands = {c for commands in hook_baseline(mine).values() for c in commands}
 
     kept: list[str] = []
     retired: list[str] = []
+    removed_by_project: list[str] = []
     merged: dict[str, list[dict]] = {}
 
+    def _project_removed(command: str | None, event: str) -> bool:
+        if command is None or not previous:
+            return False
+        return command in (previous.get(event) or []) and command not in mine_commands
+
     for event in list(kit_hooks) + [e for e in mine_hooks if e not in kit_hooks]:
-        # The kit's groups first, verbatim: refreshing them is the whole reason
-        # the installer touches this file.
-        groups: list[dict] = [dict(group) for group in (kit_hooks.get(event) or [])]
+        # The kit's groups, minus anything this project took out of its own config.
+        # Refreshing the kit's groups is why the installer touches this file at all;
+        # reinstating what somebody deleted is not refreshing, it is overruling.
+        groups = []
+        for group in kit_hooks.get(event) or []:
+            survivors = []
+            for hook in (group or {}).get("hooks", []):
+                command = _command_of(hook)
+                if _project_removed(command, event):
+                    removed_by_project.append(f"{event}: {command}")
+                    continue
+                survivors.append(hook)
+            if survivors:
+                kept_group = {k: v for k, v in (group or {}).items() if k != "hooks"}
+                kept_group["hooks"] = survivors
+                groups.append(kept_group)
         by_matcher = {_matcher_of(group): group for group in groups}
 
         for group in mine_hooks.get(event) or []:
@@ -154,7 +203,7 @@ def merge_hooks(
         if groups:
             merged[event] = groups
 
-    return merged, kept, retired
+    return merged, kept, retired, removed_by_project
 
 
 # ── permissions ───────────────────────────────────────────────────────────────
@@ -248,7 +297,7 @@ def merge_with_report(
         if key in kit:
             merged[key] = kit[key]
 
-    hooks, kept, retired = merge_hooks(merged, kit, hook_previous or {})
+    hooks, kept, retired, project_removed = merge_hooks(merged, kit, hook_previous or {})
     if hooks:
         merged["hooks"] = hooks
 
@@ -259,6 +308,10 @@ def merge_with_report(
     return merged, {
         "hooks_kept": kept,
         "hooks_retired": retired,
+        # Reported rather than silent: an install that quietly declines to wire a
+        # gate is one nobody can audit, and "the kit stopped shipping it" and "this
+        # project removed it" must never arrive looking the same.
+        "hooks_removed_by_project": project_removed,
         "permissions_retired": permissions_retired,
     }
 
@@ -338,6 +391,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"    kept your hook — {kept}")
     for gone in report["hooks_retired"]:
         print(f"    removed a hook the kit retired — {gone}")
+    # Worded so the two reasons a kit hook is absent never read the same. "The kit
+    # stopped shipping it" is the kit's decision; this is the project's, and the
+    # line says how to undo it, because a gate that is off and unexplained is one
+    # somebody rediscovers by being bitten.
+    for respected in report["hooks_removed_by_project"]:
+        print(f"    left out — you removed it from settings.json — {respected}")
+    if report["hooks_removed_by_project"]:
+        print(f"    ({len(report['hooks_removed_by_project'])} kit hook(s) not wired. "
+              f"Delete the entry from .claude/.kit-hooks.json to take them back.)")
     if report["permissions_retired"]:
         print(f"    {report['permissions_retired']} permission rule(s) retired by "
               f"the kit were removed")

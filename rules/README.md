@@ -111,7 +111,6 @@ Each `cycle-{name}.md` defines:
 | `auxiliary-cycles.txt` | Cycles the project built alongside the kit's chain, so `check_squad_map` does not ask the kit's map to place them. Its sibling above, for the index one level up |
 | `retired-permissions.txt` | Permissions withdrawn, kept so a reinstall does not reintroduce them |
 | `notifications.txt` | Where the kit sends what a person must see |
-| `session-injection.txt` | How loud the kit is in a session. `quiet = true` holds the parsimony ladder, the session-start chain and the advisory warnings until it is invoked; `SQUAD_QUIET=1`/`=0` overrides it for one session either way. A volume control and never a kill switch — the `PreToolUse` guards and `Stop`'s blockers are unreachable from it |
 | `skills/_kit-rules/review-model-routing.txt` | Agent model routing for review — **not here**: kit-owned, replaced on update |
 
 ## Other Rules

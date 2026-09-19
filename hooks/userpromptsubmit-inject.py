@@ -24,7 +24,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import UserPromptSubmitContext, create_context
-from squad.injection import is_quiet
 from squad.layout import resolve
 from squad.paths import SESSION_STATE, write_state_dir
 from squad.plan import attestation, goal_line
@@ -98,11 +97,6 @@ def main() -> None:
     layout = resolve()
     if layout is None:
         # The ladder is the kit's, so a project without the kit hears nothing.
-        return
-    if is_quiet(layout.kit_dir):
-        # The project asked for volume, not for the kit to go away: the guards and
-        # the Stop blockers are untouched. See `squad/injection.py` for why the two
-        # are kept apart by construction.
         return
     extra = plan_context(layout.eco, layout.kit_dir)
     c.output.add_context(f"{LADDER}\n{extra}" if extra else LADDER)

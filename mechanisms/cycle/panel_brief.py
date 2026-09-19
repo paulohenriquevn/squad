@@ -189,7 +189,7 @@ def build(project: Path, slug: str, phase: str) -> dict:
 def _kit_root_note(contract: Path) -> str:
     """Where this project keeps the kit, so a reviewer can resolve a `rules/...` citation.
 
-    Every rule file, every skill and every plan in this ecosystem cites `rules/foo.md` —
+    Every rule file, every skill and every plan in this ecosystem cites `rules/<name>.md` —
     the kit's own convention, and `check_evidence_citations.py` knows the prefix. A
     reviewer handed the plan and nothing else does not, and an EXTERNAL seat has no other
     way to learn it.
@@ -212,9 +212,9 @@ def _kit_root_note(contract: Path) -> str:
     root = parent.parent
     return (
         f"\nHOW PATHS IN THIS PROJECT RESOLVE:\n"
-        f"  The kit is installed at `{root}`. A citation written `rules/foo.md` — the\n"
+        f"  The kit is installed at `{root}`. A citation written `rules/<name>.md` — the\n"
         f"  convention every rule file and every plan here uses — resolves to\n"
-        f"  `{root}/rules/foo.md`. That is not a broken path.\n"
+        f"  `{root}/rules/<name>.md`. That is not a broken path.\n"
         f"  `skills/plan-confidence/scripts/check_evidence_citations.py` decides the question\n"
         f"  mechanically; run it before returning a plan on an unresolved citation.\n"
     )

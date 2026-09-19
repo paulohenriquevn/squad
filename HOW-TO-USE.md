@@ -168,6 +168,16 @@ The table is derived from your project — `detect_domains.py --write` reads the
 
 ## Common questions
 
+### "The kit talks too much. How do I turn a part of it off?"
+
+Edit `.claude/settings.json` and delete the hook you do not want. That file is Claude Code's own configuration, not the kit's, and the kit has no second switch of its own — no flag, no environment variable, no mode. There is one place a hook is on or off, and it is the place Claude Code already reads.
+
+The noisiest entry is `UserPromptSubmit` (the parsimony ladder, in front of every prompt). `SessionStart` is the chain summary, once. `Stop` carries the advisory warnings AND the changelog and secret blockers, so removing it removes both.
+
+A deletion sticks. `.kit-hooks.json` records what the kit shipped, so the next install can tell "you removed this" from "the kit never shipped it", and the install prints `left out — you removed it from settings.json` for each one rather than re-wiring it in silence. To take a hook back, delete its entry from `.kit-hooks.json` and reinstall.
+
+There is no exemption for the guards. Removing `PreToolUse` removes the refusal to write into the installed kit and the dangerous-git-command check, and nothing will put them back for you. One mechanism means one meaning — the alternative is a file whose lines behave differently depending on which one you edited, with nothing on the page saying which.
+
 ### "The item is a one-line fix. Do I still file it?"
 
 Yes. Squad's ancestor refused hotfixes and refactors at intake and routed them elsewhere; those are the core workload of a maintenance team, and the door is open for them here.

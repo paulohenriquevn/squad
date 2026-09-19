@@ -730,32 +730,40 @@ if [ ! -f "$SRC_DIR/mechanisms/distribution/merge_settings.py" ]; then
   echo "  hooks and permissions. Refusing rather than overwriting." >&2
   exit 1
 fi
-if [ -f "$ECO/settings.json" ]; then
-  # One file, two owners — and replacing it wholesale was wrong in both
-  # directions. `boundary-check.py` allowlists `settings.json` as "this project's
-  # wiring", so the kit invites the consumer to edit it; then `--force` copied
-  # its own over the top. Measured across four npm consumers: `deny:
-  # Read(**/.env*)` gone, along with their `vitest`/`tsc` allowances. The kit
-  # widened what an agent may read in someone else's repository, silently.
-  #
-  # Keeping the consumer's file whole — what `--merge` did — has the opposite
-  # failure: `hooks` points at the kit's scripts, and a stale hook stops
-  # enforcing without ever saying so.
-  #
-  # So ownership is split by key. The kit owns its wiring; the project owns its
-  # permissions; a key the kit does not know is the consumer's and survives.
-  # The merge itself lives in `merge_settings.py`, not in a heredoc here. It was
-  # 100 lines inside this file, so nothing could run it and nothing did — and it
-  # shipped a wholesale `mine["hooks"] = kit["hooks"]` that deleted a consumer's
-  # own hook wiring on every run while carefully preserving the hook's FILE (#34).
-  # A gate present on disk and wired to nothing reads as installed to everyone.
-  python3 "$SRC_DIR/mechanisms/distribution/merge_settings.py" \
-      "$ECO/settings.json" "$SRC_DIR/settings.plugin.json"
-  echo "==> settings.json merged (kit wiring refreshed; your hooks and permissions kept)"
-else
-  cp "$SRC_DIR/settings.plugin.json" "$ECO/settings.json"
-  echo "==> settings.json written (plugin install variant)"
-fi
+# ONE path, not two. The fresh-install branch used to `cp settings.plugin.json` and
+# skip the merge — which also skipped the two baselines the merge writes, because
+# they are written by it. So a freshly installed consumer had no record of what the
+# kit shipped, and the FIRST hook it removed from settings.json came back on the
+# next install; the install after that respected the removal, once a merge had
+# finally written the baseline. A rule that starts working on the second attempt is
+# one nobody can rely on and nobody can explain.
+#
+# Seeding `{}` and merging produces the kit's settings exactly — measured: same 108
+# deny rules, same hooks, differing only in the order of `deny`, and the merge is
+# idempotent, so a fresh consumer now holds byte-for-byte what a reinstalled one
+# holds. Before this they differed, and nothing said so.
+[ -f "$ECO/settings.json" ] || printf '{}\n' > "$ECO/settings.json"
+# One file, two owners — and replacing it wholesale was wrong in both
+# directions. `boundary-check.py` allowlists `settings.json` as "this project's
+# wiring", so the kit invites the consumer to edit it; then `--force` copied
+# its own over the top. Measured across four npm consumers: `deny:
+# Read(**/.env*)` gone, along with their `vitest`/`tsc` allowances. The kit
+# widened what an agent may read in someone else's repository, silently.
+#
+# Keeping the consumer's file whole — what `--merge` did — has the opposite
+# failure: `hooks` points at the kit's scripts, and a stale hook stops
+# enforcing without ever saying so.
+#
+# So ownership is split by key. The kit owns its wiring; the project owns its
+# permissions; a key the kit does not know is the consumer's and survives.
+# The merge itself lives in `merge_settings.py`, not in a heredoc here. It was
+# 100 lines inside this file, so nothing could run it and nothing did — and it
+# shipped a wholesale `mine["hooks"] = kit["hooks"]` that deleted a consumer's
+# own hook wiring on every run while carefully preserving the hook's FILE (#34).
+# A gate present on disk and wired to nothing reads as installed to everyone.
+python3 "$SRC_DIR/mechanisms/distribution/merge_settings.py" \
+    "$ECO/settings.json" "$SRC_DIR/settings.plugin.json"
+echo "==> settings.json merged (kit wiring refreshed; your hooks and permissions kept)"
 
 # --- records scaffold (empty, idempotent) ---
 # Mirrors the SEMANTIC structure of the source's records/ — every

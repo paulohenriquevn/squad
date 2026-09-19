@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import SessionStartContext, create_context
-from squad.injection import is_quiet
 from squad.layout import Layout, has_kit, resolve
 from squad.plan import resolve as resolve_plan
 
@@ -254,8 +253,6 @@ def main() -> None:
     if layout is None:
         # No kit here, or a broken install that already said so. Injecting the
         # chain into a project that does not run it would be noise.
-        return
-    if is_quiet(layout.kit_dir):
         return
     c.output.add_context(build_context(layout))
 

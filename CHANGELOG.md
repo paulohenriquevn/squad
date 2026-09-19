@@ -45,6 +45,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   behalf is what went wrong the first time. Tracked as issue #2 in the plugin's own tracker.
 
 ### Fixed
+- **Removing a Squad hook from `settings.json` now sticks** (#154)
+  `settings.json` is Claude Code's own configuration and the kit writes its hooks into
+  it — the same shape `spec-kit` uses, where an integration's events go into the agent's
+  native config and are removable through it. That is the one configuration surface, and
+  it did not hold: measured 2026-09-19, a project removed `UserPromptSubmit`,
+  reinstalled, and the hook was back. `merge_hooks` placed *"the kit's groups first,
+  verbatim"*, so a removal was invisible to it and the file only looked like
+  configuration. A surface that does not hold is why somebody ends up asking for a flag
+  instead — and a flag would give one system two behaviours and two sets of gates.
+  `.kit-hooks.json` already recorded what the kit shipped and was read in one direction
+  only, to retire what the kit dropped, never to respect what the project dropped —
+  while `merge_permissions` one function below states the rule verbatim: a rule present
+  in the consumer and absent from the kit is *"either something the kit retired or
+  something the project added, and those must never share an outcome"*. The install now
+  prints `left out — you removed it from settings.json` for each rather than re-wiring
+  in silence, and a hook the kit never shipped before is not read as a removal, so gates
+  added since a consumer's last install still arrive. **No exemption for the guards** —
+  removing `PreToolUse` removes the refusal to write into the installed kit, and nothing
+  puts it back. One mechanism, one meaning.
+
+- **A first install left no record of what it shipped** (#155)
+  `.kit-hooks.json` and `.kit-permissions.json` were written only by the merge path, and
+  a fresh install took the other branch — `cp settings.plugin.json`, because the target
+  had no settings yet. Measured on a clean target: both absent. So on a freshly
+  installed consumer the first removal was not respected, and the install after THAT one
+  was, because by then a merge had finally written the baseline. A rule that starts
+  working on the second attempt is one nobody can rely on and nobody can explain. The
+  branch is gone rather than patched: `{}` is seeded and the merge always runs, which
+  produces the kit's settings exactly — same 108 deny rules, same hooks, differing only
+  in the order of `deny`, and the merge is idempotent. A freshly installed consumer now
+  holds byte-for-byte what a reinstalled one holds; before this they differed and
+  nothing said so.
+
 - **A rollback was either silent or impossible, and the rule asked for neither** (#152)
   `cycle-maintenance.md § Rollback` says an item advanced in error "is moved back with a
   note recording the advance and why it was withdrawn — never silently reset."
