@@ -126,7 +126,7 @@ If no such skill is installed (the default), the `## Baseline Context` table fro
 
 You will need to build or modify. Actively look for opportunities to extract deep modules (lots of functionality behind a simple, testable interface that rarely changes). Check with the user that these modules match their expectations and which modules need tests.
 
-**Compliance discipline:** for each module decision, justify against the rules read in Step 0. Example: "We split `foo.ts` into 3 files because it would exceed 500 LoC per `architecture.md`" or "We use interface `Foo` over concrete `FooImpl` per DIP (per `architecture.md`)".
+**Compliance discipline:** for each module decision, justify against the rules read in Step 0. Example: "We split `foo.ts` into 3 files because it would exceed the 500-line budget in `skills/plan-confidence/defaults/loc-limits.md`" or "We use interface `Foo` over concrete `FooImpl` per DIP (per `architecture.md`)".
 
 ### Step 4 — Write the plan
 
