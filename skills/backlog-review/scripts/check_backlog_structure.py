@@ -17,7 +17,10 @@ What it checks instead — the ways a maintenance registry actually rots:
   DETERMINISTIC (a machine can be sure)
     duplicate_id            two blocks share a B-NNN — the audit trail is broken
     duplicate_field         one field written twice in a block, with two values
+    malformed_id            an id below three digits — nothing can cite it or move it
     missing_field           a required field absent
+    approval_unattributed   approved or past it with no approved_by
+    objective_link_missing  objectives are declared and the item names none
     illegal_status          a status outside the declared set
     killed_without_reason   killed with no kill_reason (gate G-K, after the fact)
     status_contradicts_body  the block's prose declares it closed and its status says open
@@ -59,6 +62,14 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap, like every loose script in this kit: `squad` is importable
+# only after sys.path is extended, which is what E402 cannot see here.
+from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
+
 #: Statuses from which an item does not move again.
 TERMINAL_STATUSES = frozenset({"shipped", "killed"})
 
@@ -69,7 +80,11 @@ _DECLARES_CLOSED_RE = re.compile(
     r"\*{0,2}closed\s+(?:in\s+code|by\s+deletion|by\s+removal)\*{0,2}", re.IGNORECASE
 )
 
-BLOCK_RE = re.compile(r"^##\s+(B-\d+)\s+—\s+(.+?)\s*(?:\[( |x)\])?\s*$", re.MULTILINE)
+#: Imported since 2026-09-20, not compiled. Six readers each carried one and they
+#: disagreed about the separator — see `squad/backlog.py`. Re-exported here because
+#: four modules already import `BLOCK_RE` from this file, and moving the definition
+#: must not move the name they reach for.
+BLOCK_RE = _shared_backlog.BLOCK_RE
 FIELD_RE = re.compile(r"^([a-z_]+):\s*(.*)$", re.MULTILINE)
 DOD_BULLET_RE = re.compile(r"^\s*-\s+(.+)$", re.MULTILINE)
 REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
@@ -95,6 +110,25 @@ REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4
 IDENTITY_CHECKS = frozenset({"duplicate_id", "renumbered"})
 
 REQUIRED_FIELDS = ("domain", "repo", "suggested_mode", "source", "evidence", "why_now", "status")
+
+#: Statuses at or past the commitment. `rules/cycle-backlog.md` requires `approved_by`
+#: from here on: "`human/<name>` or `system/autonomous-sweep`. Who made the commitment.
+#: A bare `approved` with no attribution predates this field; it is not evidence that a
+#: person decided."
+#:
+#: Nothing asked for it. Measured 2026-09-20: `backlog_status.py … --to approved`
+#: returned `OK` and wrote a block with no attribution, and this check reported nothing
+#: — while `rules/cycle-maintenance.md` prescribed that very command without the flag.
+#: A registry where every commitment is unattributed is one nobody has read, which the
+#: contract calls a legitimate state to be in and an illegitimate one to be in
+#: unknowingly. This is what makes it knowable.
+COMMITTED_STATUSES = ("approved", "planned", "shipped")
+
+#: Where `/brainstorm-objectives` writes what the work is for. `traces_to` is required
+#: once this exists and unenforced before it — a project that never declared objectives
+#: has nothing to trace to, and calling every item an orphan against a standard it never
+#: adopted is the failure `check_objective_coverage.py` refuses by name.
+OBJECTIVES_REL = "product/objectives.md"
 LEGAL_STATUS = {"raw", "triaged", "approved", "planned", "shipped", "killed"}
 LEGAL_MODES = {"review", "live-test", "bug", "evolve"}
 OPEN_STATUS = {"raw", "triaged", "approved", "planned"}
@@ -209,6 +243,20 @@ _routing_gap: list[str] = []
 _routing_home: list[Path] = []
 
 
+def _objectives_declared(project_root: Path) -> bool:
+    """Has this project run `/brainstorm-objectives`?
+
+    Resolved through `squad.paths.wiki_dir`, the one owner of where the bundle lives,
+    rather than by joining `.squad/wiki` here — a local copy of that literal is what
+    `check_write_containment.py` refuses, and it is how six lists in four orders came
+    to exist.
+    """
+    from squad.paths import wiki_dir
+
+    wiki = wiki_dir(project_root)
+    return bool(wiki) and (wiki / OBJECTIVES_REL).is_file()
+
+
 def _routing(backlog_dir: Path) -> dict[str, dict] | None:
     """Repos the routing table knows. None when the table cannot be read.
 
@@ -276,7 +324,9 @@ def _routing(backlog_dir: Path) -> dict[str, dict] | None:
     return table
 
 
-_ID_IN_TEXT_RE = re.compile(r"\bB-\d{3,}\b")
+#: The mention pattern, from the same owner. Three digits minimum, and that is a
+#: different rule from the header's on purpose — see `squad/backlog.py`.
+_ID_IN_TEXT_RE = _shared_backlog.ID_IN_TEXT_RE
 _NO_IMPEDIMENT = {"none", "-", "none-yet", "nothing"}
 
 #: The two lineage edges, and the terminal status each one asserts about its target.
@@ -428,7 +478,8 @@ def _effective_counts(items: list[Item]) -> dict[str, int]:
 
 
 def _check_each_item(items: list[Item], known_repos: set[str] | None,
-                     today: date) -> tuple[list[Finding], list[int]]:
+                     today: date,
+                     objectives_declared: bool = False) -> tuple[list[Finding], list[int]]:
     """Every per-item check, in the order the registry's own contract lists them.
 
     Extracted from `check_backlog`, which measured cyclomatic complexity 82 across 297
@@ -454,10 +505,33 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
         seen_ids[iid] = item
         numeric_ids.append(int(iid.split("-")[1]))
 
+        if not _shared_backlog.is_well_formed_id(iid):
+            findings.append(Finding("malformed_id", "deterministic", "blocker", iid,
+                f"`{iid}` carries fewer than {_shared_backlog.MIN_ID_DIGITS} digits. The "
+                f"block parses, and nothing can reach it: `blocked_by: {iid}` names no "
+                f"edge and the writer refuses the id on the command line. Pad it to "
+                f"`B-{int(iid.split('-')[1]):03d}` — that is the same number written "
+                f"correctly, not a renumbering"))
+
         for required in REQUIRED_FIELDS:
             if required not in item.fields:
                 findings.append(Finding("missing_field", "deterministic", "major", iid,
                     f"`{required}` is absent"))
+
+        status_now = item.fields.get("status", "")
+        if status_now in COMMITTED_STATUSES and not item.fields.get("approved_by", "").strip():
+            findings.append(Finding("approval_unattributed", "deterministic", "major", iid,
+                f"`status: {status_now}` and no `approved_by`. Somebody committed to this "
+                "and the registry cannot say who — `human/<name>` if a person decided, "
+                "`system/autonomous-sweep` if the loop filed it under a standing "
+                "authorisation. The two are not worth the same"))
+
+        if objectives_declared and not item.fields.get("traces_to", "").strip():
+            findings.append(Finding("objective_link_missing", "deterministic", "major", iid,
+                "this project declares objectives and the item names none. Reading the "
+                "items tells you whether you want each of them; only the link tells you "
+                "which objective nothing serves, because an item nobody wrote is "
+                "invisible to any report rendered from the items"))
 
         # `status` twice leaves the block with two answers, and every reader — this gate, the
         # index generator, a human skimming — silently takes the last one. Measured on db-engine:
@@ -802,7 +876,8 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
 
     # The per-item half. `numeric_ids` comes back because the monotonicity check below
     # reads the order the ids appeared in.
-    item_findings, numeric_ids = _check_each_item(items, known_repos, today)
+    item_findings, numeric_ids = _check_each_item(
+        items, known_repos, today, objectives_declared=_objectives_declared(project_root))
     findings.extend(item_findings)
 
 

@@ -92,7 +92,9 @@ def test_a_reason_that_only_restates_the_evidence_is_refused() -> None:
 
 def test_a_forward_move_is_untouched() -> None:
     """Advancing is not a withdrawal and must not start demanding one."""
-    out = advance(_block("triaged"), "B-001", "approved")
+    # `approved_by` is required on triaged -> approved, which is a different rule
+    # from the withdrawal note this test is about.
+    out = advance(_block("triaged"), "B-001", "approved", approved_by="human/paulo")
     assert "status: approved" in out
 
 

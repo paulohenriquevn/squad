@@ -77,6 +77,71 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **Six readers of `BACKLOG.md`, two ideas of what an item block is — and the item that
+  fell in the gap corrupted its neighbour.** Measured 2026-09-20 on `## B-003 - Title`,
+  written with a plain hyphen instead of the schema's em dash:
+
+  ```
+  check_backlog_structure.BLOCK_RE   (the canonical one)   did NOT see it
+  backlog_status.BLOCK_HEADER_RE     (the WRITER)          did NOT see it
+  detect_domains, phase_coverage                           did NOT see it
+  build_approval_brief.ITEM_HEAD_RE                        saw it
+  check_objective_coverage.ITEM_RE                         saw it
+  apply_delegated_decisions.ITEM_RE                        saw it
+  ```
+
+  So an item could enter the approval brief, be ticked and signed, and be invisible to
+  the only module allowed to write its status. And because a header no parser recognises
+  does not OPEN a block, the unseen item's fields were read as the PREVIOUS item's.
+  Measured with two items, the second written with a hyphen:
+
+  ```
+  Items   : 1                                  ← there are two
+  [BLOCKER] B-001 duplicate_field: `status` is declared 2 times
+  [BLOCKER] B-001 self_block: `B-001` names itself in `blocked_by`
+  [BLOCKER] B-001 blocker_cycle: B-001 -> B-001
+  ```
+
+  Three blockers, all false, all on the wrong item, and one real item gone from the
+  count. `check_intake_gates.py` had already reasoned this out and imports the parser
+  rather than writing one — *"A second regex here would diverge silently, and the two
+  would disagree about what the registry contains"* — and five other readers had not.
+  `squad/backlog.py` owns it now: the header (all three separators), the id patterns,
+  the block spans and the split. The contract states the header shape, which it never
+  did.
+
+- **An id of one or two digits was half-valid.** `## B-15` parses as a block, and
+  `ITEM_ID_RE` and the mention pattern both want three digits — so the item exists, the
+  writer refuses it on the command line, and `blocked_by: B-15` names no edge. The
+  parser deliberately still matches it (a skipped header takes the next item's fields
+  with it) and `malformed_id` now reports it, saying the fix is zero-padding rather than
+  renumbering.
+
+- **A commitment nobody was attached to.** `rules/cycle-backlog.md` requires
+  `approved_by` from `approved` onward and calls a bare `approved` *"not evidence that a
+  person decided"*. Nothing asked for it: `backlog_status.py … --to approved` returned
+  `OK` and wrote a block with no attribution, `check_backlog_structure.py` reported
+  nothing, and `rules/cycle-maintenance.md` prescribed that very command without the
+  flag. The writer now refuses the move, the structure check reports
+  `approval_unattributed`, and the documented command carries `--approved-by`.
+
+- **`traces_to` was required by the contract and by nothing else.** *"Required once
+  `.squad/wiki/product/objectives.md` exists"* — and with an objectives document present
+  and an item carrying no link, the structure check said nothing.
+  `check_objective_coverage.py` does measure it, correctly, but it is a report run beside
+  the approval brief rather than a gate on the path that writes. `objective_link_missing`
+  now fires, and only where objectives exist: a project that never ran
+  `/brainstorm-objectives` has nothing to trace to, and calling every item an orphan
+  against a standard it never adopted is the failure that same script refuses by name.
+
+- **A refusal that named the wrong cause.** `REFUSED: B-14 is not in this backlog` was
+  printed about a block sitting in the file, whose header the writer's parser did not
+  recognise — sending the reader to look for a missing item that was right there. One
+  parser removes the case; the message now distinguishes an absent item from a heading
+  that does not parse, and says what the shape is.
+
+  18 tests.
+
 - **A commit touching two areas could not say so.** `fix(gates,boundary):` and
   `fix(board,gates):` were refused as `header_shape` — not for the scope's content but
   for the comma, which the header pattern had no room for. That left three bad options

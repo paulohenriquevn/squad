@@ -40,8 +40,11 @@ from delegated_decision import (  # noqa: E402 — post-bootstrap
 )
 
 from squad import shared_file  # noqa: E402 — post-bootstrap import
+from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
 
-_ITEM_RE = re.compile(r"(?m)^#{2,3}\s+(B-\d+)\s")
+#: Imported, not compiled — `squad/backlog.py` owns what an item header is.
+#: Six readers each carried one and they disagreed about the separator.
+_ITEM_RE = _shared_backlog.BLOCK_RE
 _WALL_RE = re.compile(r"(?m)^blocked_by:(?P<wall>.*)$")
 
 

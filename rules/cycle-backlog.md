@@ -110,6 +110,20 @@ the number is in front of whoever starts the next run.
 
 Every item is one `## B-NNN` block. Ids are monotonic, never reused, never renumbered — a killed item keeps its number so the audit trail survives.
 
+**The header, exactly.** `## B-NNN — Title`, where the separator may be an em dash, an
+en dash or a plain hyphen — all three are accepted, because six readers each carried
+their own pattern and three of them refused the hyphen. An item written that way entered
+the approval brief and was invisible to `backlog_status.py`, the only module allowed to
+write its status; worse, a header no parser recognises does not OPEN a block, so the
+unseen item's fields were read as the previous item's and produced three false blockers
+on its neighbour. `squad/backlog.py` is the one parser now.
+
+**The id carries at least three digits.** `B-015`, not `B-15`. The block parses either
+way on purpose — a header skipped takes the next item's fields with it — but a shorter
+id is unreachable: `blocked_by: B-15` names no edge, and the writer refuses it on the
+command line. `check_backlog_structure.py` reports `malformed_id`, and the fix is
+zero-padding, which is the same number written correctly rather than a renumbering.
+
 ```markdown
 ## B-014 — Reduce the trace explorer p95   [ ]
 

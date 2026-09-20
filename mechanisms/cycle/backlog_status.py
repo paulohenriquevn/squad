@@ -49,6 +49,7 @@ for _up in Path(__file__).resolve().parents:
         break
 
 # Post-bootstrap, like the loop above requires: the kit ships as loose scripts.
+from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
 from squad import shared_file  # noqa: E402 — post-bootstrap import
 
 LEGAL_STATUS = ("raw", "triaged", "approved", "planned", "shipped", "killed")
@@ -120,13 +121,16 @@ def _names_a_reversal(reason: str) -> bool:
     return any(verb in lowered for verb in _REVERSAL_VERBS)
 
 
-ITEM_ID_RE = re.compile(r"\AB-\d{3,}\Z")
-BLOCK_HEADER_RE = re.compile(r"^##\s+(B-\d+)\s+—\s+.*$", re.MULTILINE)
+#: Imported, not compiled. This module and the structure check each carried one
+#: and disagreed about the separator, so an item could be approved in the brief
+#: and invisible to the only thing allowed to write its status.
+ITEM_ID_RE = _shared_backlog.ITEM_ID_RE
+BLOCK_HEADER_RE = _shared_backlog.BLOCK_RE
 STATUS_LINE_RE = re.compile(r"^status:[ \t]*(\S*)[ \t]*$", re.MULTILINE)
 BLOCKED_BY_LINE_RE = re.compile(r"^blocked_by:[ \t]*(.*)$", re.MULTILINE)
 KILL_REASON_RE = re.compile(r"^kill_reason:[ \t]*(.+)$", re.MULTILINE)
 WITHDRAW_REASON_RE = re.compile(r"^withdraw_reason:[ \t]*(.+)$", re.MULTILINE)
-_ID_IN_TEXT_RE = re.compile(r"\bB-\d{3,}\b")
+_ID_IN_TEXT_RE = _shared_backlog.ID_IN_TEXT_RE
 
 
 class Refused(Exception):
@@ -141,6 +145,24 @@ def _blocks(content: str) -> dict[str, tuple[int, int]]:
         end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
         spans[match.group(1)] = (match.end(), end)
     return spans
+
+
+def _absent_reason(content: str, item_id: str) -> str:
+    """Why is `item_id` not among the blocks — and is that even the true reason?
+
+    `REFUSED: B-14 is not in this backlog` was printed about a block sitting in the
+    file, whose header this parser did not recognise. The reader goes looking for a
+    missing item and it is right there. Since 2026-09-20 one parser serves every
+    reader, so the mismatch that produced that message is gone — and the message
+    stays honest about which of the two it is, because a header can still be
+    malformed in a way no pattern should silently accept.
+    """
+    if re.search(rf"^##.*{re.escape(item_id)}\b", content, re.MULTILINE):
+        return (f"{item_id} has a heading in this backlog that does not parse as an "
+                f"item block. The shape is `## {item_id} — Title`; the separator may "
+                f"be an em dash, an en dash or a hyphen, and the id needs "
+                f"{_shared_backlog.MIN_ID_DIGITS} digits")
+    return f"{item_id} is not in this backlog"
 
 
 def _status_of(body: str) -> str | None:
@@ -327,7 +349,7 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "",
         raise Refused(f"{to!r} is not a status; the set is {', '.join(LEGAL_STATUS)}")
     spans = _blocks(content)
     if item_id not in spans:
-        raise Refused(f"{item_id} is not in this backlog")
+        raise Refused(_absent_reason(content, item_id))
 
     start, end = spans[item_id]
     body = content[start:end]
@@ -392,7 +414,29 @@ def advance(content: str, item_id: str, to: str, kill_reason: str = "",
         if kill_reason:
             body = _write_field(body, "kill_reason", kill_reason, after="status")
 
-    if to == "approved" and approved_by:
+    if to == "approved":
+        # Demanded on the move that MAKES the decision, and only there.
+        #
+        # `triaged -> approved` is somebody committing to the work, and
+        # `cycle-backlog.md` requires the attribution from that point on — it calls a
+        # bare `approved` "not evidence that a person decided", which is exactly what
+        # this function accepted until 2026-09-20 while `cycle-maintenance.md`
+        # prescribed the command without the flag.
+        #
+        # `planned -> approved` is the send-back, and demanding it there would be
+        # wrong: `test_planned_is_sent_back_to_approved_not_to_triaged` states the
+        # reason — "a plan that failed review did not un-decide the work… someone
+        # would have to approve the same item twice for one bad draft." The first
+        # cut of this refusal did exactly that and four tests said so. An item that
+        # reaches the send-back carrying no attribution is inherited debt, and
+        # `check_backlog_structure.approval_unattributed` is what reports it.
+        if current == "triaged" and not approved_by.strip():
+            raise Refused(
+                "--approved-by is required to approve. `human/<name>` if a person read "
+                "the item and committed to it, `system/autonomous-sweep` if the loop "
+                "filed it under a standing authorisation. The two are not worth the "
+                "same, and a reader must be able to tell them apart without opening "
+                "another file")
         body = _write_field(body, "approved_by", approved_by, after="status")
 
     # An item cannot ship while something still blocks it. `live_blockers`
@@ -421,7 +465,7 @@ def block(content: str, item_id: str, blockers: list[str], note: str = "") -> st
         raise Refused("an impediment needs either an item id or a stated reason")
     spans = _blocks(content)
     if item_id not in spans:
-        raise Refused(f"{item_id} is not in this backlog")
+        raise Refused(_absent_reason(content, item_id))
     for b in blockers:
         if not ITEM_ID_RE.match(b):
             raise Refused(f"{b!r} is not an item id (expected B-NNN)")
@@ -453,7 +497,7 @@ def unblock(content: str, item_id: str, blockers: list[str] | None = None) -> st
     """Drop some (or every) impediment edge from `item_id`."""
     spans = _blocks(content)
     if item_id not in spans:
-        raise Refused(f"{item_id} is not in this backlog")
+        raise Refused(_absent_reason(content, item_id))
     start, end = spans[item_id]
     body = content[start:end]
     current = blocked_by_of(body)

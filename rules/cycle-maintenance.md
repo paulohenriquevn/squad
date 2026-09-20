@@ -63,7 +63,7 @@ DELEGATE:
      ↓                   ├── opportunity → status triaged → continue below
      ↓                   └── ITEM_KILLED → status killed → LOOP BACK to SELECT
      ↓ status triaged  → the DECISION to do the work, recorded:
-     ↓                   backlog_status.py {backlog} B-NNN --to approved --because "…"
+     ↓                   backlog_status.py {backlog} B-NNN --to approved --approved-by human/<who> --because "…"
      ↓                   └── not approved → status unchanged, LOOP BACK to SELECT
      ↓ status approved → /idea-to-release B-NNN
      ↓                   (cycle-plan → implement → code-quality → review → release)

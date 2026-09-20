@@ -69,6 +69,7 @@ for _up in Path(__file__).resolve().parents:
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from squad.paths import write_routing_table as _write_root_table  # noqa: E402
+from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
 
 #: Directories that are never an architectural unit, in any ecosystem.
 _IGNORED_DIRS = {
@@ -277,7 +278,9 @@ def detect_domains(root: Path) -> list[Domain]:
     return domains
 
 
-_ITEM_BLOCK_RE = re.compile(r"^##\s+(B-\d+)\s+—", re.MULTILINE)
+#: Imported, not compiled — `squad/backlog.py` owns what an item header is.
+#: Six readers each carried one and they disagreed about the separator.
+_ITEM_BLOCK_RE = _shared_backlog.BLOCK_RE
 _FIELD_RE = re.compile(r"^(domain|repo):\s*`?([^`\n]+?)`?\s*$", re.MULTILINE)
 
 

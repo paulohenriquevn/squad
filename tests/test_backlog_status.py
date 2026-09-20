@@ -55,7 +55,10 @@ def test_triaged_advances_to_approved_and_not_straight_to_planned():
     be recorded. `approved` is that place.
     """
     content = _backlog(("B-001", "triaged", ""))
-    assert _status(advance(content, "B-001", "approved"), "B-001") == "approved"
+    # The attribution is required on this move since 2026-09-20: it is the one that
+    # MAKES the decision. What this test pins is the transition, not the field.
+    assert _status(advance(content, "B-001", "approved",
+                           approved_by="human/paulo"), "B-001") == "approved"
 
     with pytest.raises(Refused, match="not a legal transition"):
         advance(content, "B-001", "planned")
