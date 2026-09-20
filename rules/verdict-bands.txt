@@ -98,6 +98,7 @@ VALIDATED                     | clean      | the acceptance run established the 
 # ---- caveats ----------------------------------------------------------------
 ACCEPTED_WITH_CAVEATS         | caveats    | accepted, and every caveat is a filed issue rather than a note
 ITEM_IN_FLIGHT                | caveats    | held on a material impediment; the work stands and the queue moves on
+ITEM_EXTERNALLY_BLOCKED       | caveats    | the id names a constraint nobody here can clear — a sponsor decision, a ratification, a vendor fix. The same band as ITEM_IN_FLIGHT and for the same reason: the work stands, the queue moves on, and the impediment is real rather than a defect in the item
 PASS_WITH_CAVEATS             | caveats    | passed with soft caps recorded
 PARTIAL                       | caveats    | `run_validation.py` exits 0 with checks it could not run; the verdict covers what ran and says so
 PRE_RELEASED                  | caveats    | an -rc.N batch: installable, scope unfinished. The caveat is permanent for that tag — an rc never becomes a release, it is superseded by one

@@ -144,7 +144,7 @@ dod:
 | `domain` | yes | routes to the specialist; must be a registered domain (G1) |
 | `repo` | yes | must exist in the umbrella inventory (G1) |
 | `suggested_mode` | yes | **a suggestion, not a decision** — DISCOVER may reclassify |
-| `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` |
+| `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` \| `external-blocker` — the last one is not work, see § An impediment nobody here can clear |
 | `evidence` | yes | `none-yet` at intake; a pointer once DISCOVER measures |
 | `why_now` | yes | what changed **in our system**; subject to G5 |
 | `approved_by` | when `status` is `approved` or past it | `human/<name>` or `system/autonomous-sweep`. Who made the commitment. A bare `approved` with no attribution predates this field; it is not evidence that a person decided |
@@ -269,6 +269,39 @@ called seven honest impediments malformed.
 | `the sponsor must decide` | none | a human clears the line |
 | `none` (or an absent line) | none | already unblocked |
 
+#### An impediment nobody here can clear
+
+Row three is the common case and the weak one. Measured: **seven of the eight items
+carrying `blocked_by` named a sponsor decision, a ratification, or a revocation in a
+hosting panel** — none of them an id. `parse_blocked_by` says what that costs in its own
+words: *"nothing in this repository can tell you whether a sponsor has decided."* Such an
+impediment resolves only when somebody remembers to delete the line, is invisible to G6
+and G7 because there is no edge to verify, and appears in no report as a thing that is
+itself pending.
+
+**File the constraint as an item.** `source: external-blocker` registers it as an
+ordinary `B-NNN`, so `blocked_by: B-900` is a verifiable edge and closing the stub frees
+every item naming it **with no second edit** — the property prose could never have.
+
+| | An external blocker |
+|---|---|
+| What it is | a constraint outside this repository: a sponsor decision, a ratification, a vendor fix, a regulatory hold |
+| What closes it | somebody outside acting. Then it goes `shipped` (they did it) or `killed` (they will not) |
+| Selected as work | **never.** `select_backlog_item.py` skips it, and asking for it by name returns `ITEM_EXTERNALLY_BLOCKED` |
+| `suggested_mode` | not required — it never reaches DISCOVER |
+| `traces_to` | not required — it is not work, so it serves no objective |
+| Everything else | an ordinary item: an id, a `why_now`, a `dod` naming what would close it, and a place in the index |
+
+The shape is adapted from [`gringolito/github-backlog-management`](https://github.com/gringolito/github-backlog-management-skill)
+(cross-read 2026-09-20), whose `/add-external-blocker` files the constraint as a stub
+issue — on the board, never milestoned, skipped by execution — and registers it as a real
+dependency. The mechanism here is ours, because the registry is a file rather than the
+GitHub API.
+
+**A stub still closes honestly.** `shipped` means the outside thing happened; `killed`
+means it will not, and the items it held need another way through. Leaving it open
+forever is the same lie as prose, with a number attached.
+
 An item may not ship while an impediment is live. `backlog_status.py` refuses it, and
 `check_backlog_structure.py` reports the ones that got in by hand.
 
@@ -361,6 +394,7 @@ Both paragraphs were inside the span once. Running the command this very file pr
 | `ITEM_REGISTERED` | Item written to `BACKLOG.md` as `raw` | Available for `cycle-discover` |
 | `ITEM_MERGED` | Dedup gate matched an open item; the new context was folded into it | No new id; the existing `B-NNN` proceeds |
 | `ITEM_REJECTED` | Outside the ecosystem, or G5 refused it | Nothing written; the reason is surfaced to the human |
+| `ITEM_EXTERNALLY_BLOCKED` | The id asked for records a constraint nobody here can clear (`source: external-blocker`) | Nothing to do here. It closes when whoever owns it acts, and every item naming it is freed with no second edit |
 
 There is no "with caveats" band: an item is either in the registry or it is not.
 

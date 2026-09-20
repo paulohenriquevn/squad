@@ -39,6 +39,36 @@ DO NOT invoke when:
 
 Unlike its Cycle ancestor `/roadmap-feature`, this skill **does not refuse hotfixes, one-line fixes, or refactors with no user-visible change.** Those are the Squad's core workload, not exceptions routed elsewhere.
 
+## An impediment nobody here can clear is also an item
+
+A sponsor decision, a ratification, a vendor fix, a regulatory hold. Filing it as
+`blocked_by: the sponsor must decide` is prose no graph resolves — measured, seven of
+eight impediments were exactly that, and each one freed its item only when somebody
+remembered to delete the line.
+
+File the constraint itself, with `source: external-blocker`:
+
+```markdown
+## B-900 — The sponsor must ratify the data-retention change
+
+domain: data-plane-ts
+repo: promptly
+source: external-blocker
+evidence: none-yet
+why_now: the retention window cannot change until legal signs the policy off
+status: raw
+dod:
+  - legal has signed the retention policy, or has refused it in writing
+```
+
+Then the blocked item names it: `blocked_by: B-900`. The edge is verifiable, and closing
+the stub frees every item naming it **with no second edit**.
+
+Three things differ from an ordinary item, and nothing else does: no `suggested_mode`
+(it never reaches DISCOVER), no `traces_to` (it is not work, so it serves no objective),
+and SELECT never hands it out — asking for it by name returns `ITEM_EXTERNALLY_BLOCKED`.
+The contract is `rules/cycle-backlog.md § An impediment nobody here can clear`.
+
 ## Process
 
 ### Step 0 — Pre-flight (MANDATORY, fail-fast)

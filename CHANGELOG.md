@@ -9,6 +9,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **An impediment nobody here can clear now gets a number.** `blocked_by` is prose that
+  MAY name ids, and the contract records what that measured: **seven of the eight items
+  carrying it named a sponsor decision, a ratification, or a revocation in a hosting
+  panel** — none of them an id. Accepting prose was right; a parser demanding `B-NNN`
+  would have called seven honest impediments malformed. What it cost is in
+  `parse_blocked_by`'s own words: *"nothing in this repository can tell you whether a
+  sponsor has decided."* Such an impediment resolves only when somebody remembers to
+  delete the line, is invisible to G6 and G7 because there is no edge to verify, and
+  appears in no report as a thing that is itself pending.
+
+  `source: external-blocker` files the constraint as an ordinary `B-NNN`. `blocked_by:
+  B-900` becomes a verifiable edge, and closing the stub frees every item naming it
+  **with no second edit** — the property prose could never have, and the one the
+  impediment model was built around.
+
+  Three things differ from an ordinary item and nothing else does: no `suggested_mode`
+  (it never reaches DISCOVER), no `traces_to` (it is not work, so it serves no
+  objective), and `select_backlog_item.py` never hands it out — asking for it by name
+  returns `ITEM_EXTERNALLY_BLOCKED`, in the same band as `ITEM_IN_FLIGHT` and for the
+  same reason: the work stands, the queue moves on, and the impediment is real rather
+  than a defect in the item.
+
+  Four of the seven tests passed before a line of this was written, which is the
+  argument for the shape: the edge, the resolution with no second edit, and the report
+  all fell out of machinery the registry already had. What was missing was permission to
+  give the constraint an id.
+
+  Imported from a cross-read of
+  [`gringolito/github-backlog-management`](https://github.com/gringolito/github-backlog-management-skill)
+  (2026-09-20), whose `/add-external-blocker` files the constraint as a stub issue — on
+  the board, never milestoned, skipped by execution — and registers it as a real
+  dependency. The mechanism here is ours, because the registry is a file rather than the
+  GitHub API. 7 tests.
+
+
+### Added
+
 - **BRAINSTORM has eval batteries, which is where its two most expensive gates were
   measured by nothing.** `score_product_alignment.py` can see that `## Who it is for`
   holds 80 characters; it cannot see that those characters say `developers`, which is a

@@ -103,6 +103,17 @@ def _records_by_item(root: Path, sub: str, suffix: str) -> dict:
 
 #: The chain's filter. `planned` is open but already has a plan — SELECT hands work
 #: to `/discover-plan` or `/idea-to-release`, and an item that has one is in flight.
+#: An item recording a constraint nobody HERE can clear — a sponsor decision, a
+#: ratification, a vendor fix, a regulatory hold. It is a `B-NNN` like any other, so
+#: `blocked_by` can point at it and the edge is verifiable; it is never handed out as
+#: work, because what closes it is somebody outside this repository acting.
+#:
+#: `cycle-backlog.md` measured the alternative: seven of eight impediments named a
+#: decision rather than an item, so they resolved only when a human remembered to
+#: delete the line, were invisible to G6 and G7, and appeared in no report as a thing
+#: that was itself pending. Giving the constraint a number buys all three back.
+EXTERNAL_BLOCKER_SOURCE = "external-blocker"
+
 SELECTABLE = ("triaged", "raw")
 
 #: Triaged before raw: a triaged item carries measured evidence, so its cost to finish
@@ -329,7 +340,9 @@ def _read_queue(text: str, halted: set[str], unblocking: set[str]) -> tuple:
     by_id = {i.item_id: i for i in items}
     statuses = {i.item_id: i.fields.get("status", "") for i in items}
 
-    selectable = [i for i in items if i.fields.get("status", "") in SELECTABLE]
+    selectable = [i for i in items
+                  if i.fields.get("status", "") in SELECTABLE
+                  and i.fields.get("source", "").strip() != EXTERNAL_BLOCKER_SOURCE]
     walls: dict[str, list[str]] = {}
     free: list[Item] = []
     stopped: list[str] = []
@@ -469,6 +482,17 @@ def select(text: str, requested: str | None = None,
     if requested:
         if requested not in by_id:
             return Selection("BACKLOG_BLOCKED", reason=f"{requested} is not in this backlog",
+                             walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                             awaiting_plan=awaiting_plan, in_flight=in_flight,
+                             in_flight_implemented=[i for i in in_flight if i in implemented],
+                             plan_written=plan_written,
+                             approved_implemented=approved_implemented)
+        if by_id[requested].fields.get("source", "").strip() == EXTERNAL_BLOCKER_SOURCE:
+            return Selection("ITEM_EXTERNALLY_BLOCKED", item_id=requested,
+                             reason=f"{requested} records a constraint outside this "
+                                    f"repository. Nothing here closes it: it closes "
+                                    f"when whoever owns it acts, and then every item "
+                                    f"naming it stops being blocked with no second edit",
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
                              in_flight_implemented=[i for i in in_flight if i in implemented],

@@ -124,6 +124,17 @@ REQUIRED_FIELDS = ("domain", "repo", "suggested_mode", "source", "evidence", "wh
 #: unknowingly. This is what makes it knowable.
 COMMITTED_STATUSES = ("approved", "planned", "shipped")
 
+#: An item recording a constraint nobody here can clear. It exists so `blocked_by` has
+#: something verifiable to point at, and two required fields do not apply to it:
+#: `suggested_mode` routes an item to DISCOVER and a stub never goes there, and
+#: `traces_to` says which objective the WORK serves — a stub is not our work. Demanding
+#: either would teach filers to write a mode nobody will read, which is the shape of an
+#: answer given to satisfy a form.
+EXTERNAL_BLOCKER_SOURCE = "external-blocker"
+
+#: Required of every item EXCEPT the stub, for the reason above.
+_NOT_REQUIRED_OF_A_STUB = ("suggested_mode",)
+
 #: Where `/brainstorm-objectives` writes what the work is for. `traces_to` is required
 #: once this exists and unenforced before it — a project that never declared objectives
 #: has nothing to trace to, and calling every item an orphan against a standard it never
@@ -513,7 +524,10 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
                 f"`B-{int(iid.split('-')[1]):03d}` — that is the same number written "
                 f"correctly, not a renumbering"))
 
-        for required in REQUIRED_FIELDS:
+        is_stub = item.fields.get("source", "").strip() == EXTERNAL_BLOCKER_SOURCE
+        required_here = tuple(f for f in REQUIRED_FIELDS
+                              if not (is_stub and f in _NOT_REQUIRED_OF_A_STUB))
+        for required in required_here:
             if required not in item.fields:
                 findings.append(Finding("missing_field", "deterministic", "major", iid,
                     f"`{required}` is absent"))
@@ -526,7 +540,8 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
                 "`system/autonomous-sweep` if the loop filed it under a standing "
                 "authorisation. The two are not worth the same"))
 
-        if objectives_declared and not item.fields.get("traces_to", "").strip():
+        if (objectives_declared and not is_stub
+                and not item.fields.get("traces_to", "").strip()):
             findings.append(Finding("objective_link_missing", "deterministic", "major", iid,
                 "this project declares objectives and the item names none. Reading the "
                 "items tells you whether you want each of them; only the link tells you "
