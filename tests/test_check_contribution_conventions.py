@@ -205,3 +205,44 @@ def test_the_rule_file_no_longer_documents_it() -> None:
     keys_section = text.split("# Keys:", 1)[1].split("# TWO THINGS", 1)[0]
     assert "branch_trunk    =" not in keys_section, (
         "the rule file still lists branch_trunk among the keys a project may set")
+
+
+# ------------------------------------------------------- a scope may name two areas
+#
+# `fix(gates,boundary):` and `fix(board,gates):` were refused as `header_shape` — not
+# for the scope's content but for the comma, which the header pattern had no room for.
+# A change genuinely touching two areas then has three options: name one and be
+# incomplete, invent a portmanteau nobody greps for, or drop the scope. All three lose
+# the information the field exists to carry.
+#
+# Each segment is still validated on its own, so the rule that a scope is lowercase
+# kebab-case is unchanged — what changed is that there may be more than one of them.
+
+
+@pytest.mark.parametrize("header", [
+    "fix(gates,boundary): a report from another run",
+    "fix(board,gates): the board showed no work",
+    "feat(a,b,c): three areas, one change",
+])
+def test_a_compound_scope_is_a_scope(header: str) -> None:
+    assert _codes(header + BODY) == set()
+
+
+@pytest.mark.parametrize("header", [
+    "fix(gates, boundary): a space is not a separator",
+    "fix(gates,): a trailing comma names no second area",
+    "fix(,gates): nor does a leading one",
+    "fix(Gates,boundary): segments are still lowercase",
+])
+def test_a_compound_scope_does_not_loosen_the_segment_rule(header: str) -> None:
+    assert "header_shape" in _codes(header + BODY)
+
+
+def test_a_declared_scope_list_is_checked_segment_by_segment() -> None:
+    """`commit_scopes = gates, board` must accept `fix(gates,board):` and refuse a
+    compound carrying one nobody declared — otherwise declaring scopes would silently
+    stop applying the moment a commit named two."""
+    conv = Conventions(scopes=("gates", "board"))
+
+    assert _codes("fix(gates,board): both declared" + BODY, conv) == set()
+    assert "unknown_scope" in _codes("fix(gates,ghost): one is not" + BODY, conv)

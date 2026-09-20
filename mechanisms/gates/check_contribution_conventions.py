@@ -77,7 +77,19 @@ DEFAULT_BODY_REQUIRED = ("feat", "fix")
 COAUTHOR_RE = re.compile(r"^\s*co[-_ ]?authored[-_ ]?by\s*:", re.IGNORECASE | re.MULTILINE)
 
 #: `<type>(<scope>): <subject>` — scope optional, `!` allowed for a breaking change.
-HEADER_RE = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[a-z0-9][a-z0-9-]*)\))?(?P<bang>!)?: (?P<subject>.+)$")
+#:
+#: A scope may name MORE THAN ONE AREA, comma-separated and no space: `fix(gates,board):`.
+#: The single-segment pattern refused those as `header_shape` — not for the scope's
+#: content but for the comma — which left a change genuinely touching two areas with
+#: three bad options: name one and be incomplete, invent a portmanteau nobody greps for,
+#: or drop the scope. All three lose what the field exists to carry. Each segment is
+#: still lowercase kebab-case, so the rule about a scope did not loosen; there may now
+#: be more than one of them.
+_SCOPE_SEGMENT = r"[a-z0-9][a-z0-9-]*"
+HEADER_RE = re.compile(
+    rf"^(?P<type>[a-z]+)"
+    rf"(?:\((?P<scope>{_SCOPE_SEGMENT}(?:,{_SCOPE_SEGMENT})*)\))?"
+    rf"(?P<bang>!)?: (?P<subject>.+)$")
 
 #: Overrides a project may set. An unknown key is refused: a typo that is ignored is a
 #: convention the project thinks it declared and did not.
@@ -197,9 +209,14 @@ def check_message(sha: str, message: str, conv: Conventions) -> list[Finding]:
                            f"`{ctype}` is not a declared type. Declared: "
                            f"{', '.join(conv.types)}. Add it to "
                            "`rules/contribution-overrides.txt` if this project uses it"))
-    if conv.scopes and scope and scope not in conv.scopes:
+    # Segment by segment, because a scope may name two areas. Comparing the whole
+    # string would make a declared scope list stop applying the moment a commit named
+    # two of them — the check would pass `gates,ghost` while refusing `ghost`.
+    undeclared = [s for s in (scope or "").split(",") if s and s not in conv.scopes]
+    if conv.scopes and undeclared:
         out.append(Finding(sha, "unknown_scope",
-                           f"`{scope}` is not in the declared scopes: {', '.join(conv.scopes)}"))
+                           f"`{', '.join(undeclared)}` is not in the declared scopes: "
+                           f"{', '.join(conv.scopes)}"))
     if len(subject) > conv.subject_max:
         out.append(Finding(sha, "subject_too_long",
                            f"{len(subject)} characters; the declared limit is {conv.subject_max}"))

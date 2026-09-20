@@ -34,3 +34,16 @@
 # Example:
 #   commit_types = fix,feat,docs,test,chore,perf,build,ci,revert,refactor,deps
 #   subject_max  = 80
+
+# ── this project's declarations ──────────────────────────────────────────────
+#
+# `change` — for a commit that alters an existing contract without fixing a defect
+# and without adding a capability. `change(phases): DISCOVER is conditional, and the
+# evidence guard is not` is the shape: nothing was broken and nothing is new, a
+# declaration now says something different. `fix` would claim a defect that did not
+# exist and `refactor` promises behaviour did not move, which is the opposite of what
+# such a commit does.
+#
+# REPLACES the kit's set, so every default is restated here. Dropping one silently
+# would refuse commits this project has always written.
+commit_types = fix,feat,docs,test,refactor,chore,perf,build,ci,revert,style,merge,change

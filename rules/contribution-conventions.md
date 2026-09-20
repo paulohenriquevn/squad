@@ -29,7 +29,7 @@ or **declared unenforceable** with the reason. Nothing sits in between.
 | Field | Rule |
 |---|---|
 | `type` | one of the declared set; a consumer extends it in the overrides file |
-| `scope` | optional, lowercase, kebab-case. The area, not the file |
+| `scope` | optional, lowercase, kebab-case. The area, not the file. **More than one is allowed**, comma-separated with no space — `fix(gates,board):` — because a change that genuinely touches two areas otherwise has to name one and be incomplete, invent a portmanteau nobody greps for, or drop the scope. Each segment is validated on its own, and a declared `commit_scopes` list is checked segment by segment |
 | `subject` | imperative mood, no trailing period, at most **85** characters — the p90 of this repository's own 300-subject history, not the 50 or 72 every style guide repeats. A limit that fails 44% of what a repository has always done teaches people to ignore the checker |
 | `body` | separated by a blank line. Required for `feat` and `fix` |
 

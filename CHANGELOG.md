@@ -77,6 +77,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A commit touching two areas could not say so.** `fix(gates,boundary):` and
+  `fix(board,gates):` were refused as `header_shape` — not for the scope's content but
+  for the comma, which the header pattern had no room for. That left three bad options
+  for a change that genuinely spans two areas: name one and be incomplete, invent a
+  portmanteau nobody greps for, or drop the scope, and all three lose what the field
+  exists to carry. A scope may now name several areas, comma-separated with no space.
+  Each segment is still lowercase kebab-case, so the rule about a scope did not loosen —
+  there may be more than one of them — and a declared `commit_scopes` list is checked
+  segment by segment, because comparing the whole string would have passed
+  `gates,ghost` while refusing `ghost`.
+
+  With `change` declared in `rules/contribution-overrides.txt` alongside it — for a
+  commit that alters an existing contract without fixing a defect and without adding a
+  capability — `verify_ecosystem` returns 0 for the first time in this branch, and the
+  kit stops failing the gate it ships. 8 tests.
+
 - **The DESIGN gate agreed a design the agent had signed, and refused the one a person
   signed.** Both measured 2026-09-20 against a complete, covered set of five drawings:
 
