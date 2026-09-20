@@ -119,16 +119,22 @@ reads them by name:
 - ...
 ```
 
-Then `CHANGELOG.md`, one line under `[Unreleased] § Added`, and the phase event:
+Then `CHANGELOG.md`, one line under `[Unreleased] § Added`.
 
-```bash
-python3 "$ECO/mechanisms/cycle/cycle_events.py" end --cycle brainstorm --slug {scope} --verdict AWAITING_REVIEW
-```
+**Do not emit a phase end here.** `brainstorm` is ONE declared phase in
+`rules/cycle-phases.txt`, opened by `/brainstorm-vision` and closed by
+`/brainstorm-pieces` with the gate's verdict. A step that closes it mid-cascade
+reports the phase finished three times before it did, and a stream holding four
+closes against one open tells nobody how long the session took or whether one is
+running right now. Until phase 4 emits its end, this scope is correctly WIP.
+
+The phase start from Step 2 stays open across phases 2 and 3 — that is what makes
+an abandoned cascade visible as WIP rather than as a phase nobody began.
 
 ### Step 5 — Report and hand off
 
 ```
-AWAITING_REVIEW  .squad/wiki/product/product-vision.md
+WRITTEN  .squad/wiki/product/product-vision.md   (phase 1 of 4 — brainstorm still open)
   for:       {the named user}
   problem:   {one line}
   non-goals: {n} recorded

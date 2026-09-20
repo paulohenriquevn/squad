@@ -9,6 +9,71 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The product-alignment gate passed a cascade nobody wrote and a signature no person
+  gave.** Two measurements on 2026-09-20, both against `score_product_alignment.py`, the
+  gate the entire unattended chain rests on.
+
+  **The four shipped templates, copied into `wiki/product/` and not edited, scored
+  100.0% — 34/34, every one of the seventeen criteria green.** G-B0 was written to stop
+  `touch` from buying 35% and it asked whether a file held anything but headings; a
+  template holds instructions, and an instruction is text. A 132-character guide comment
+  satisfied "this section is complete", `metric:` found its required number in the words
+  "Gate G-B2", the template's two bare `- ` bullets counted as two non-goals, and
+  `serves: OBJ-<!-- … -->` was non-empty enough to count as a citation while matching no
+  `OBJ-\d+` — so it was not dangling either, and a requirement walked through G-B3 by
+  being unreadable. Guide comments are now stripped before anything is scored, a bullet
+  must carry a non-goal, a citation must match the id pattern it claims to be, and a
+  surviving `{{SCOPE}}` is its own hard cap (`unfilled_template`) rather than a low score
+  — "revise this" is the wrong instruction for a document nobody has started. The same
+  copy now returns `INVALID`, 29.4%.
+
+  **A cascade signed `<!-- signed-by: iris-product-designer -->`, with the four
+  checkboxes DELETED, returned `PRODUCT_ALIGNED`, exit 0** — the agent that writes these
+  documents signing them under its own name. Two independent holes: `verdict()` refused
+  the single prefix `judge/`, which is a denylist of one against an open set of names,
+  and `TICKED_RE` was defined in the module and read nowhere, so a checklist with no
+  boxes satisfied "nothing is unticked". The gate now requires ticked boxes, a signer,
+  and `human/{who}` on every signature — the allowlist `score_alignment.py` has applied
+  at item level all along, reporting the weakest signer so one human tick cannot launder
+  an agent's. `SIGNED_BY_RE` also stopped at the first space, dropping the route from
+  `human/paulo (approved in session)` (the defect the item-level scorer records having
+  fixed in its own pattern) and capturing a signer called `" "` from the unsigned marker
+  the template ships.
+
+  Two more defects fell out of the same read. `_field` used `\s*` after the colon, which
+  matches a newline: an empty `horizon:` reached across the blank line and returned the
+  NEXT field's value, so a field with nothing in it was reported as carried. And
+  `_gate_signature` was annotated `-> None` while returning the report.
+
+  Templates, SOP, SKILL.md and `cycle-brainstorm.md` now state the signature format where
+  the reviewer reads it — being refused for the format is a confusing way to learn it.
+  13 tests.
+
+- **Eight skills decided where the kit lives by testing a directory the installer
+  deletes.** Thirteen call sites used `[ -d .claude/scripts ]`, and
+  `mechanisms/distribution/install.sh` removes `.claude/scripts/` on every install — the
+  migration to `mechanisms/<family>/` says so in its own echo. In any consumer installed
+  since that rename the probe is false by construction, the branch falls through to `.`,
+  and the command becomes `./mechanisms/cycle/cycle_events.py` — a path that exists only
+  in the kit's own repository. The phase event was simply never written, and nothing said
+  so: `cycle_events` is fail-open by design, and a missing event reads exactly like a
+  phase that was skipped. Three of the four brainstorm skills carried the broken probe
+  two lines below a correct `[ -d .claude/skills ]` for the scorer, in the same file.
+  Invisible here, which is why it survived: in this repository neither directory exists
+  and both branches resolve to `.`. 2 tests, parametrised over every SKILL.md.
+
+- **`brainstorm` recorded four phase ends against one start, and `design` recorded an end
+  against none.** `tests/test_a_phase_that_ends_also_began.py` holds the pair for the four
+  programmatic emitters and defers skills to "its own prose test", which did not exist —
+  and the stream it quotes (37 ends, 1 start) names `brainstorm` as the one open start.
+  All four cascade skills then emitted `end --cycle brainstorm --slug {scope}` for a phase
+  `rules/cycle-phases.txt` declares once, so WIP, lead time and "is a session running right
+  now" were uncomputable for the only cycle a person attends. The cascade's middle phases
+  hand off instead of closing; `/brainstorm-vision` opens the phase and `/brainstorm-pieces`
+  closes it with the gate's verdict, and an abandoned cascade correctly leaves an open start.
+  `design` gained the Step 0 it never had. 3 tests, parametrised over every cycle a
+  skill emits for.
+
 - **The TypeScript symbol detector reported every workspace package as a fabricated npm
   import.** `_find_workspace_package_names` collected member names with two fixed globs —
   `*/package.json` and `*/*/package.json` — while its own docstring claimed to walk "the

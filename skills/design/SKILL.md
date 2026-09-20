@@ -62,6 +62,19 @@ and each drawing earns its place by the error it prevents:
 
 ## Process
 
+### Step 0 — Emit the phase start
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+    --cycle design --slug {scope}
+```
+
+Step 6 closed this phase and nothing opened it. An end says something finished; it
+does not say when it began or that it was ever running, so WIP right now, lead time
+and a column marked `working` are all uncomputable from ends alone — the defect
+`tests/test_a_phase_that_ends_also_began.py` measured across the whole stream
+(37 ends, 1 start) and fixed for the programmatic emitters only.
+
 ### Step 1 — Interrogate before drawing
 
 **A diagram of a misunderstanding is a confident misunderstanding** —
@@ -175,7 +188,7 @@ the second.
 ### Step 6 — Emit and hand off
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle design --slug {scope} --verdict {DESIGN_AGREED|AWAITING_REVIEW|NEEDS_REVISION|INVALID}
 ```
 

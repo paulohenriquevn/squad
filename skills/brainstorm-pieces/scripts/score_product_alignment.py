@@ -36,10 +36,16 @@ prevent, arriving through the door that amendment opened.
 So `AWAITING_REVIEW` is terminal for this script. It can compute the 90%; it
 cannot supply the signature, and there is no flag that makes it.
 
+A signature reads `human/{who}` and nothing else is accepted — an ALLOWLIST, the
+same one `score_alignment.py` applies at item level. Refusing only `judge/` is a
+denylist of one against an open set of names, and it let this cascade's own author
+sign it.
+
 Exit codes:
   0 — PRODUCT_ALIGNED (>= 90% and signed by a person)
   1 — NEEDS_REVISION or AWAITING_REVIEW (recoverable; the report says which)
-  2 — INVALID (a document is missing, or a citation has no referent)
+  2 — INVALID (a document is missing or empty, one is still the unfilled
+      template, or a citation has no referent)
 """
 from __future__ import annotations
 
@@ -71,16 +77,36 @@ from squad.rubric import ALIGNMENT_FLOOR_PCT  # noqa: E402 — post-bootstrap im
 FLOOR_PCT = ALIGNMENT_FLOOR_PCT
 
 
+#: A guide comment in a shipped template: `<!-- what to write here -->`.
+#:
+#: Stripped before ANYTHING is scored, and that is the single fix behind four of
+#: this file's criteria. Measured 2026-09-20 with the four templates copied into
+#: `wiki/product/` and not edited: 100.0%, 34/34, every criterion green. The
+#: instructions ARE the document as far as a length check, a `\d` search or a
+#: non-empty field test can tell — `metric:` scored a number on the `2` in the
+#: words "Gate G-B2", and "Who it is for" scored complete on 132 characters of
+#: advice about what to put there.
+#:
+#: Non-greedy and DOTALL: the templates wrap their guidance across lines, and a
+#: greedy match would swallow everything between the first `<!--` and the last `-->`.
+COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def strip_comments(text: str) -> str:
+    """The document as a reader would act on it, with the scaffold's advice removed."""
+    return COMMENT_RE.sub("", text)
+
+
 def is_empty(text: str) -> bool:
     """Nothing here but the shape a scaffold leaves behind.
 
-    Whitespace and heading lines only. Drawn narrowly ON PURPOSE: a heading AND a
-    paragraph is a PARTIAL document, and partial is exactly what `NEEDS_REVISION`
-    exists for. The wider rule — "scores zero on every criterion" — would call a
-    badly structured but genuinely written document absent, which is a worse lie
-    than the one being fixed.
+    Whitespace and heading lines only, AFTER the guide comments are gone. Drawn
+    narrowly ON PURPOSE: a heading AND a paragraph is a PARTIAL document, and
+    partial is exactly what `NEEDS_REVISION` exists for. The wider rule — "scores
+    zero on every criterion" — would call a badly structured but genuinely written
+    document absent, which is a worse lie than the one being fixed.
     """
-    for line in text.splitlines():
+    for line in strip_comments(text).splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("#"):
             return False
@@ -96,7 +122,25 @@ DOCS = (VISION, OBJECTIVES, TRD, PIECES)
 
 #: Anything that means "not decided yet". A placeholder surviving into an agreed
 #: document is a decision nobody made, which the next reader resolves by guessing.
-PLACEHOLDER_RE = re.compile(r"\b(TBD|TODO|FIXME|XXX|\?\?\?|<[a-z-]+>|LOREM)\b", re.IGNORECASE)
+#:
+#: The word forms keep their `\b`; the symbol forms must not have one. `\b` needs a
+#: word character on one side, and neither `<` nor `?` is one — so for most of this
+#: file's life `<who-it-is-for>` and `???` were in the pattern and unmatchable, and
+#: `{{SCOPE}}`, which every shipped template carries, was not in it at all.
+PLACEHOLDER_RE = re.compile(
+    r"\b(?:TBD|TODO|FIXME|XXX|LOREM)\b"
+    r"|\?\?\?"
+    r"|\{\{[^}]*\}\}"
+    r"|<[a-z][a-z0-9-]*>",
+    re.IGNORECASE)
+
+#: `{{SCOPE}}`, `{{TITLE}}`, `{{DATE}}` — the substitution markers every shipped
+#: template carries. Their own hard cap, separate from `PLACEHOLDER_RE`: a `TODO`
+#: in a written document is a gap the author knows about and the criterion scores
+#: it, but a surviving `{{…}}` means the scaffold was copied and never filled in.
+#: That is a structural fact about the file, and `NEEDS_REVISION` would send
+#: somebody to improve a document nobody has started.
+TEMPLATE_TOKEN_RE = re.compile(r"\{\{[^}]*\}\}")
 
 OBJ_RE = re.compile(r"^##\s+(OBJ-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 REQ_RE = re.compile(r"^##\s+(REQ-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
@@ -105,9 +149,32 @@ PIECE_RE = re.compile(r"^##\s+(PIECE-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 #: `signed-by:` names WHO signed, so a person's agreement and a machine's are
 #: different claims a reader tells apart without opening the file. The kit's
 #: item-level scorer reports the weakest signer for the same reason.
-SIGNED_BY_RE = re.compile(r"<!--\s*signed-by:\s*([^\s>]+)\s*-->")
+#:
+#: Captures to the closing marker, spaces included, because the ROUTE is part of
+#: the provenance: `human/paulo (approved in session)` says more than `human/paulo`.
+#: `[^\s>]+` stopped at the first space and dropped exactly that — the defect
+#: `score_alignment.py:189` records having fixed in its own pattern, reintroduced
+#: here by a narrower character class.
+#: The name must start and end on a non-space: the UNSIGNED marker the template
+#: ships is `<!-- signed-by: -->`, and a pattern needing merely "one character
+#: that is not `>`" captured the single space between the colon and the closing
+#: marker — an empty signature read back as a signer called " ".
+SIGNED_BY_RE = re.compile(r"<!--\s*signed-by:\s*([^>\s](?:[^>]*[^>\s])?)\s*-->")
 TICKED_RE = re.compile(r"^\s*-\s*\[[xX]\]\s+\S", re.MULTILINE)
 UNTICKED_RE = re.compile(r"^\s*-\s*\[\s*\]\s+\S", re.MULTILINE)
+
+
+def signed_by_is_human(signer: str) -> bool:
+    """A NAMED human is still a human — `score_alignment.py:289`, verbatim rule.
+
+    An ALLOWLIST, and the difference is the whole gate. This used to refuse the one
+    prefix `judge/` and accept everything else, which is a denylist of one against
+    an open set of names: measured 2026-09-20, `<!-- signed-by: iris-product-designer -->`
+    returned `PRODUCT_ALIGNED`, exit 0 — the agent that WRITES these documents
+    signing them under its own name, through the only gate the unattended chain
+    rests on.
+    """
+    return signer == "human" or signer.startswith("human/")
 
 
 @dataclass
@@ -133,11 +200,19 @@ class Report:
     #: Present on disk and holding nothing a reader could act on. Kept apart from
     #: `missing_docs` because the two send a person to different places.
     empty_docs: list[str] = field(default_factory=list)
+    #: Still carrying `{{SCOPE}}` and friends: the template, copied, not filled in.
+    unfilled_docs: list[str] = field(default_factory=list)
     unreadable_docs: list[str] = field(default_factory=list)
     missing_docs: list[str] = field(default_factory=list)
     dangling: list[str] = field(default_factory=list)
     signers: list[str] = field(default_factory=list)
     unticked: int = 0
+    #: Boxes a reviewer actually marked. Counted because "nothing is unticked" is
+    #: also true of a checklist with NO boxes — `TICKED_RE` was defined here and
+    #: read nowhere, and a sign-off section with its four boxes DELETED scored
+    #: `PRODUCT_ALIGNED`. The template forbids removing one in prose; this is the
+    #: half a script can hold.
+    ticked: int = 0
 
     @property
     def earned(self) -> int:
@@ -172,7 +247,15 @@ def _blocks(text: str, pattern: re.Pattern[str]) -> list[tuple[str, str, str]]:
 
 
 def _field(body: str, name: str) -> str:
-    m = re.search(rf"^\s*{re.escape(name)}\s*:\s*(.+)$", body, re.MULTILINE | re.IGNORECASE)
+    r"""The value on the field's OWN line, or nothing.
+
+    `\s*` matches a newline, so an empty `horizon:` reached across the blank that
+    followed it and returned the NEXT line's text — `why: …` became the horizon.
+    An empty field that borrows its neighbour's value is worse than an absent one:
+    the gate reports it as carried. `[ \t]*` cannot leave the line.
+    """
+    m = re.search(rf"^[ \t]*{re.escape(name)}[ \t]*:[ \t]*(.+)$",
+                  body, re.MULTILINE | re.IGNORECASE)
     return m.group(1).strip() if m else ""
 
 
@@ -202,7 +285,11 @@ def _gate_vision(rep: Report, texts: dict[str, str]) -> None:
             key, VISION, 2 if len(body) >= 80 else (1 if body else 0),
             f"'{header}' {'present' if body else 'absent'} ({len(body)} chars)"))
 
-    nongoals = [ln for ln in _section(v, "What it is NOT").splitlines() if ln.strip().startswith("-")]
+    # `- ` with nothing after it is the shape the template ships, twice. Counting
+    # the bullet rather than what is on it awarded the section to a file nobody
+    # had written in.
+    nongoals = [ln for ln in _section(v, "What it is NOT").splitlines()
+                if ln.strip().startswith("-") and ln.strip().lstrip("-").strip()]
     rep.criteria.append(Criterion(
         "vision_nongoals", VISION, 2 if len(nongoals) >= 2 else (1 if nongoals else 0),
         f"{len(nongoals)} non-goal(s) — the half that is always omitted"))
@@ -271,7 +358,11 @@ def _gate_trd(rep: Report, texts: dict[str, str], obj_ids: set[str]) -> tuple[li
         "req_present", TRD, 2 if reqs else 0, f"{len(reqs)} requirement(s)"))
 
     cited = [(rid, _field(body, "serves")) for rid, _, body in reqs]
-    with_cite = [c for c in cited if c[1]]
+    # Matched against the ID PATTERN, not against emptiness. `serves: OBJ-<!-- … -->`
+    # was non-empty, so it counted as a citation — and matched no `OBJ-\d+`, so it
+    # was not dangling either. A requirement escaped G-B3 by being unreadable, which
+    # is the one way past a gate that checks referents.
+    with_cite = [c for c in cited if re.search(r"OBJ-\d+", c[1])]
     rep.criteria.append(Criterion(
         "req_cites", TRD,
         2 if reqs and len(with_cite) == len(reqs) else (1 if with_cite else 0),
@@ -305,7 +396,8 @@ def _gate_pieces(rep: Report, texts: dict[str, str], reqs: list, req_ids: set[st
         "piece_present", PIECES, 2 if pieces else 0, f"{len(pieces)} piece(s)"))
 
     p_cited = [(pid, _field(body, "realises")) for pid, _, body in pieces]
-    p_with = [c for c in p_cited if c[1]]
+    # Same rule as `serves:` above, and for the same reason.
+    p_with = [c for c in p_cited if re.search(r"REQ-\d+", c[1])]
     rep.criteria.append(Criterion(
         "piece_cites", PIECES,
         2 if pieces and len(p_with) == len(pieces) else (1 if p_with else 0),
@@ -346,13 +438,17 @@ def _gate_signature(rep: Report, product: Path) -> None:
     # ---- the signature (G-B5) ------------------------------------------------
     align = product / ALIGNMENT
     if align.is_file():
+        # NOT stripped of comments: here the comment IS the payload. `signed-by:`
+        # travels in one, so that a signature cannot be typed by accident and a
+        # reader sees who gave it without opening anything else.
         body = align.read_text(encoding="utf-8")
         rep.signers = SIGNED_BY_RE.findall(body)
         rep.unticked = len(UNTICKED_RE.findall(body))
+        rep.ticked = len(TICKED_RE.findall(body))
     else:
-        rep.unticked = -1  # no checklist at all: an absent gate is not a passed one
-
-    return rep
+        # No checklist at all: an absent gate is not a passed one.
+        rep.unticked = -1
+        rep.ticked = -1
 
 
 def score(root: Path) -> Report:
@@ -366,7 +462,11 @@ def score(root: Path) -> Report:
             texts[name] = ""
             continue
         try:
-            texts[name] = path.read_text(encoding="utf-8")
+            # Stripped of guide comments HERE, once, so every criterion below reads
+            # the document a person wrote rather than the instructions they were
+            # given. Doing it per-criterion is what let four of them disagree about
+            # what the document contained.
+            texts[name] = strip_comments(path.read_text(encoding="utf-8"))
         except OSError as exc:
             # Present and unreadable is not present. Scoring it from `""` would
             # award the six criteria that are vacuously true of emptiness.
@@ -382,6 +482,14 @@ def score(root: Path) -> Report:
         # recoverable verdict and published "a third of this is done" over nothing.
         if is_empty(texts[name]):
             rep.empty_docs.append(name)
+        elif TEMPLATE_TOKEN_RE.search(texts[name]):
+            # Measured 2026-09-20: the four templates copied in and not edited scored
+            # 100.0%, 34/34. Their guide comments are gone by the time anything is
+            # scored now, but `{{SCOPE}}` in a heading is not a comment and a heading
+            # is not "empty" — so the copy would have come back low rather than
+            # structurally refused, and "revise this" is the wrong instruction for a
+            # file nobody has written in.
+            rep.unfilled_docs.append(name)
 
     if rep.missing_docs:
         rep.hard_caps.append("missing_document")
@@ -390,6 +498,8 @@ def score(root: Path) -> Report:
         # meaning the file is not there, or the report sends somebody to create a
         # file they already have.
         rep.hard_caps.append("empty_document")
+    if rep.unfilled_docs:
+        rep.hard_caps.append("unfilled_template")
     if rep.unreadable_docs:
         rep.hard_caps.append("unreadable_document")
 
@@ -408,9 +518,16 @@ def verdict(rep: Report) -> tuple[str, int]:
     if rep.floor_caps or rep.pct < FLOOR_PCT:
         return "NEEDS_REVISION", 1
     # A judge may not stand in here — see the module docstring.
-    if rep.unticked != 0 or not rep.signers:
+    #
+    # Three conditions, and each one was a hole. `ticked > 0`: a checklist whose
+    # boxes were DELETED has nothing unticked. `signers`: an unsigned gate is not a
+    # passed one. `all(signed_by_is_human)`: an ALLOWLIST, because refusing only
+    # `judge/` accepted every other name an agent could sign under — and reporting
+    # the WEAKEST signer is what stops one human tick from laundering the rest,
+    # exactly as `score_alignment.py` does at item level.
+    if rep.ticked <= 0 or rep.unticked != 0 or not rep.signers:
         return "AWAITING_REVIEW", 1
-    if any(s.startswith("judge/") for s in rep.signers):
+    if not all(signed_by_is_human(s) for s in rep.signers):
         return "AWAITING_REVIEW", 1
     return "PRODUCT_ALIGNED", 0
 
@@ -441,10 +558,14 @@ def main(argv: list[str] | None = None) -> int:
         "floor_caps": rep.floor_caps,
         "missing_documents": rep.missing_docs,
         "empty_documents": rep.empty_docs,
+        "unfilled_documents": rep.unfilled_docs,
         "unreadable_documents": rep.unreadable_docs,
         "dangling_citations": rep.dangling,
         "signers": rep.signers,
+        "signed_by_is_human": bool(rep.signers) and all(
+            signed_by_is_human(s) for s in rep.signers),
         "unticked_boxes": rep.unticked,
+        "ticked_boxes": rep.ticked,
         "criteria": [c.__dict__ for c in rep.criteria],
         "not_scored": list(NOT_SCORED),
     }
@@ -471,10 +592,27 @@ def main(argv: list[str] | None = None) -> int:
     if rep.empty_docs:
         print(f"  EMPTY:    {', '.join(rep.empty_docs)} — the file is there and "
               f"holds nothing but headings")
+    if rep.unfilled_docs:
+        print(f"  UNFILLED: {', '.join(rep.unfilled_docs)} — still carrying the "
+              f"template's {{{{…}}}} markers; the scaffold was copied, not written")
     if rep.unreadable_docs:
         print(f"  UNREADABLE: {', '.join(rep.unreadable_docs)}")
     if tok == "AWAITING_REVIEW":
-        print("  The structure is complete and nobody has signed. This script cannot sign it.")
+        non_human = [s for s in rep.signers if not signed_by_is_human(s)]
+        if non_human:
+            # Named, not merely refused: a person who signed as `paulo` and a
+            # judge that signed as itself get the same verdict for different
+            # reasons, and only one of the two is a typo away from passing.
+            print(f"  Signed by {', '.join(non_human)} — not a person. A signature "
+                  f"reads `human/{{who}}`; anything else is an agent, and an agent "
+                  f"may not sign this one.")
+        elif rep.ticked == 0:
+            print("  The sign-off section has no checkboxes. They are not ticked by "
+                  "being deleted — restore the four from the template and ask for "
+                  "the review.")
+        else:
+            print("  The structure is complete and nobody has signed. "
+                  "This script cannot sign it.")
     print("\nNot scored, and no script can decide them:")
     for n in NOT_SCORED:
         print(f"  - {n}")

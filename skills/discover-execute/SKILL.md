@@ -128,7 +128,7 @@ On `<promise>ITEM_KILLED</promise>`, verify instead that the `B-NNN` block carri
 Emit the START of this phase before doing the work:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle discover --slug {B-NNN}
 ```
 
@@ -149,14 +149,14 @@ The status change is written by the writer that owns it, which refuses the
 transitions the contract forbids:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/backlog_status.py" \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/backlog_status.py" \
     BACKLOG.md B-NNN --to triaged            # or --to killed --kill-reason "<what was measured>"
 ```
 
 Then record the transition in the stream, carrying the outcome above as the verdict:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle discover --slug B-NNN --verdict AWAITING_REVIEW
 ```
 

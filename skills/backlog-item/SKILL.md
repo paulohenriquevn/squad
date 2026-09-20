@@ -157,7 +157,7 @@ Record the decision (`g5_reformulated` / `g5_false_positive` / `g5_rejected`) in
 Emit the START of this phase before doing the work:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle backlog --slug {B-NNN}
 ```
 
@@ -179,7 +179,7 @@ Only after Steps 2–5 pass. Four writes, in this order:
 4. **The phase event** — the transition, into the stream rather than a file someone reconstructs later:
 
    ```bash
-   python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+   python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
        --cycle backlog --slug B-NNN --verdict ITEM_REGISTERED
    ```
 

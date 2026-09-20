@@ -79,9 +79,18 @@ Write `.squad/wiki/product/alignment.md` with the checklist **always unticked**:
 ```
 
 **The agent generates this section and may never tick a box, remove one, or delete
-the section.** That rule is `skills/_kit-rules/alignment-threshold.md`, and it is
-the half a script cannot enforce. Ticking a reviewer's box fabricates a judgement
-nobody made — a Rule 3 violation, not a shortcut.
+the section.** That rule is `skills/_kit-rules/alignment-threshold.md`, and it used
+to be entirely the half a script cannot enforce. Two thirds of it are mechanical now:
+the scorer counts TICKED boxes, so a section whose boxes were deleted has nothing
+unticked and is still `AWAITING_REVIEW`, and it accepts only `human/{who}` as a
+signer, so no agent name reaches `PRODUCT_ALIGNED`. Ticking a reviewer's box is
+still yours alone to refuse — and it fabricates a judgement nobody made, a Rule 3
+violation rather than a shortcut.
+
+**The signature reads `human/{who}`.** That prefix is the kit's vocabulary for "a
+person gave this", the same one `score_alignment.py` reads at item level. Tell the
+reviewer the form when you ask — a bare name is refused, and being refused for the
+format is a confusing way to learn it.
 
 The four boxes are exactly the three things the scorer reports as **not scored**,
 plus coverage. That is deliberate: the checklist covers what the number cannot, so
@@ -98,7 +107,7 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/brainstorm-pi
 | `PRODUCT_ALIGNED` | 0 | ≥ 90%, every citation resolves, signed by a person | `/backlog-init` — the chain below may run unattended |
 | `AWAITING_REVIEW` | 1 | Structure complete, nobody signed | **Ask for the review.** Not a failure, not a pass |
 | `NEEDS_REVISION` | 1 | Below the floor, or a floor cap fired | Re-enter at the phase the report names |
-| `INVALID` | 2 | A document is missing, or a citation has no referent | Re-run that phase; editing cannot fix it |
+| `INVALID` | 2 | A document is missing or empty, a template was never filled in, or a citation has no referent | Re-run that phase; editing cannot fix it |
 
 ### Step 5 — The signature is a person's, and only a person's
 
@@ -106,10 +115,15 @@ python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/brainstorm-pi
 **item's** brief, because the judge reads the item's evidence — something that
 exists independently of the brief and can contradict it.
 
-**That amendment does not reach here, and the scorer enforces it**: a
-`signed-by: judge/…` returns `AWAITING_REVIEW`. At product level there is no
+**That amendment does not reach here, and the scorer enforces it**: only
+`signed-by: human/{who}` aligns the product. At product level there is no
 independent evidence — the vision is what everything else is measured against, so a
 judge scoring it grades the document against itself.
+
+It is an allowlist, not a ban on one name. Refusing `judge/` and accepting anything
+else was measured on 2026-09-20 as `PRODUCT_ALIGNED`, exit 0, signed
+`iris-product-designer` — this skill's own author, through the only gate the
+unattended chain rests on.
 
 The two rules point at opposite signers for the same reason. At item level the judge
 signs *because nobody is coming*. Here the person signs *because this is the one
@@ -118,7 +132,7 @@ place they come*. Remove this signature and the kit has no human input at all.
 ### Step 6 — Emit and hand off
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle brainstorm --slug {scope} --verdict {PRODUCT_ALIGNED|AWAITING_REVIEW|NEEDS_REVISION|INVALID}
 ```
 

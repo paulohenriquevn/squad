@@ -45,7 +45,9 @@ run without anyone watching.
 3. **Write** `.squad/wiki/product/technical-pieces.md` using `## PIECE-N — title` blocks with `realises:` and `responsibility:`.
 4. **Generate** `.squad/wiki/product/alignment.md` with the sign-off checklist **always unticked**. Never tick a box.
 5. **Run** the gate — `python3 skills/brainstorm-pieces/scripts/score_product_alignment.py --root .`.
-6. **Ask** the person to review and sign, replacing `<!-- signed-by: -->` with their name.
+6. **Ask** the person to review, tick the four boxes, and sign — replacing
+   `<!-- signed-by: -->` with `human/{their name}`. The prefix is what tells a person's
+   sign-off from an agent's; a bare name is refused, and deleting a box is not ticking it.
 7. **Emit** the verdict event, including `AWAITING_REVIEW` — a phase that stopped at a human gate ended, it did not skip.
 
 ## Decisions
@@ -80,5 +82,5 @@ flowchart TD
 
 | Competency | Who may perform | How it is verified |
 |---|---|---|
-| Signing the alignment | the product owner, never the agent | `signed-by:` names a person, and the scorer reports it |
+| Signing the alignment | the product owner, never the agent | `signed-by: human/{who}` — the scorer allows that prefix and nothing else |
 | Cutting pieces at the right granularity | anyone on the kit | responsibilities differ between pieces |

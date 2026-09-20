@@ -19,6 +19,15 @@ seeing no event concludes the command never landed.
 
 The refusal is right; the instruction is what is wrong, and nothing read it until a
 person ran it.
+
+**Where those three instructions went, 2026-09-20.** Naming the contract's verdict fixed
+the refusal and left phases 1-3 each CLOSING a phase that `rules/cycle-phases.txt`
+declares once — four ends against the single start `/brainstorm-vision` emits, from which
+neither WIP nor lead time can be derived. The three intermediate ends are gone; the start
+carries the session instead, and an open start is exactly the "somebody is working on
+this" the paragraph above wanted. `/brainstorm-pieces` still closes the phase with the
+contract's verdict, `AWAITING_REVIEW` included. See
+`tests/test_a_cycle_a_skill_ends_is_a_cycle_a_skill_starts.py`.
 """
 
 from __future__ import annotations

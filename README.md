@@ -73,8 +73,10 @@ stalled on a decision only a person can make.
 **A judge may not sign this one.** `alignment_judge.py` signs an item's alignment
 brief when nobody is coming, because it reads the item's evidence. A product vision
 has no independent evidence — it is what everything else is measured against — so a
-judge scoring it would grade the document against itself. The scorer enforces that:
-a `signed-by: judge/…` returns `AWAITING_REVIEW`.
+judge scoring it would grade the document against itself. The scorer enforces that by
+allowlist: only `signed-by: human/{who}`, on a checklist whose boxes a reviewer actually
+ticked, returns `PRODUCT_ALIGNED`. Refusing the single prefix `judge/` and accepting
+every other name is what let the cascade's own author sign it.
 
 ## What you get
 

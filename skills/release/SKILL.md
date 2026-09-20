@@ -293,7 +293,7 @@ rather than duplicating it. Staying is not the same as being called: **nothing i
 Emit the START of this phase before doing the work:
 
 ```bash
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \
     --cycle release --slug {B-NNN}
 ```
 
@@ -346,7 +346,7 @@ Then record the transition in the stream, which is what a later phase reads:
 
 ```bash
 # PRE_RELEASED for an -rc.N cut; RELEASED only for a final one.
-python3 "$([ -d .claude/scripts ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
     --cycle release --slug {item-or-milestone} --verdict "${VERDICT:-PRE_RELEASED}"
 ```
 
