@@ -10,6 +10,7 @@ verified. A gate whose execution depends on the agent remembering is not a gate.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -351,6 +352,37 @@ def test_an_appeal_to_another_project_stays_with_a_person(tmp_path: Path) -> Non
 
     assert g5("project X does it this way", tmp_path)["outcome"] == "human"
     assert g5("", tmp_path)["outcome"] == "human"
+
+
+def test_g2_declares_how_far_it_could_see(tmp_path: Path) -> None:
+    """An empty candidate list must not read as "no duplicate exists".
+
+    `_dedup` searches the registry FILE. An id whose block was deleted from it is invisible
+    here however loudly the rest of the project cites it — measured on a consumer 2026-09-20:
+    64 blocks against 187 distinct `B-NNN` cited elsewhere, leaving 138 unreachable. The gate
+    cannot close that gap without making intake pay for a project-wide walk on every filed
+    item, so it declares the horizon instead. This test exists because a reported horizon with
+    nothing asserting it is a field the next refactor drops in silence.
+    """
+    backlog = _backlog(tmp_path)
+    expected_blocks = len(re.findall(r"^## B-\d+", BACKLOG, re.M))
+    assert expected_blocks > 0, "the fixture carries no blocks — this test would prove nothing"
+
+    rc, data = _run(backlog, "alpha-rag", ["a term that matches nothing at all"])
+
+    assert rc == 0, f"expected GATES_PASS, got {rc}: {data}"
+    assert data["g2"]["candidates"] == [], "the probe term was chosen to match nothing"
+
+    g2 = data["g2"]
+    assert g2["searched_blocks"] == expected_blocks, (
+        f"the gate says it searched {g2.get('searched_blocks')} block(s) in a "
+        f"{expected_blocks}-block registry — the reach it reports is not the reach it had"
+    )
+    reach = " ".join(g2["not_searched"]).lower()
+    assert "not that none exists" in reach, (
+        "G2 reported an empty result without saying an absent block is unreachable, which is "
+        f"exactly the silence this field exists to break: {g2.get('not_searched')!r}"
+    )
 
 
 def test_no_stream_on_disk_is_not_a_confirmation(tmp_path: Path) -> None:
