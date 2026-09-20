@@ -135,3 +135,4 @@ NOT_VALIDATED                 | structural | the run could not establish either 
 AWAITING_HUMAN                | orthogonal | the phase ran and stopped at a material impediment; no artifact was scored
 AWAITING_REVIEW               | orthogonal | the structure is complete and the judgement has not been made; not a failure and not a pass
 BACKLOG_EMPTY                 | orthogonal | nothing raw or triaged. A prompt to sweep, not a finish line — a backlog is not a scope
+BACKLOG_INVALID               | structural | an id does not name exactly one item — `duplicate_id` or `renumbered`. SELECT returns nothing because every id it could return is ambiguous, and no phase below it can run against an id that resolves to two blocks. Structural rather than redo: the registry's ids are the contract every citation rests on, and a `traces_to` or a `blocked_by` pointing at an ambiguous id is the same broken pointer INVALID names one level down

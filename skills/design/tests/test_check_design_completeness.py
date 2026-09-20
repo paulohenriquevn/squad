@@ -12,6 +12,7 @@ states.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -473,3 +474,156 @@ def test_the_rendered_line_says_absent_rather_than_ok(tmp_path: Path) -> None:
     line = next(ln for ln in rendered.splitlines() if optional.key in ln)
     assert "ok " not in line, f"a drawing nobody wrote reads as done: {line!r}"
     assert "absent" in line, line
+
+
+# ---------------------------------------------- the gate accepted the wrong signer
+#
+# Measured 2026-09-20 against a complete, covered set of five drawings. The gate
+# failed in BOTH directions at once — it agreed a design the agent that draws them
+# signed, and refused the one a person signed with their route recorded:
+#
+#   <!-- signed-by: daedalus-tech-lead -->                    DESIGN_AGREED  exit 0
+#   <!-- signed-by: human/paulo (approved in session) -->     AWAITING_REVIEW
+#
+# `verdict_of` refused the single prefix `judge/`, which is a denylist of one against
+# an open set of names; and the local `([^\s>]+)` pattern stopped at the first space,
+# so a signature carrying its route captured nothing at all. Both are gone: the gate
+# reads `squad.signoff`, which every other gate in the kit now reads too.
+
+
+def test_the_agent_that_draws_the_design_may_not_agree_it(tmp_path: Path) -> None:
+    """`cycle-design.md`: "the signature claims 'I read this and am willing to say it
+    holds' — a person, and only a person"."""
+    signed = SIGNOFF.replace("- [ ]", "- [x]") + "\n<!-- signed-by: daedalus-tech-lead -->\n"
+
+    rep = check(_project(tmp_path, signoff=signed))
+
+    assert rep.verdict == "AWAITING_REVIEW"
+
+
+def test_a_signature_keeps_the_route_it_was_given(tmp_path: Path) -> None:
+    signed = (SIGNOFF.replace("- [ ]", "- [x]")
+              + "\n<!-- signed-by: human/paulo (approved in session) -->\n")
+
+    rep = check(_project(tmp_path, signoff=signed))
+
+    assert rep.signers == ["human/paulo (approved in session)"]
+    assert rep.verdict == "DESIGN_AGREED"
+
+
+def test_deleting_the_checklist_is_not_ticking_it(tmp_path: Path) -> None:
+    """Zero boxes is zero unticked boxes, and it is not a review."""
+    rep = check(_project(tmp_path, signoff="# Sign-off\n\n## Sign-off\n\n"
+                                           "<!-- signed-by: human/paulo -->\n"))
+
+    assert rep.verdict == "AWAITING_REVIEW"
+
+
+# ------------------------------------------------------------------ coverage
+#
+# `PIECE-1 not in map_body` is a SUBSTRING test, and `PIECE-1` is a substring of
+# `PIECE-10`. Measured 2026-09-20 with eleven pieces and a map naming only PIECE-10
+# and PIECE-11: "11 declared, 3 covered by the map". It fails only in the permissive
+# direction, and it fires on any product with ten or more pieces.
+
+
+def test_a_piece_is_not_covered_by_a_longer_id_that_contains_it(tmp_path: Path) -> None:
+    pieces = "# Pieces\n\n" + "\n".join(
+        f"## PIECE-{i} — thing {i}\n" for i in range(1, 12))
+    files = dict(GOOD)
+    files["system-map.md"] = ("# D5\n```mermaid\nflowchart TB\n"
+                              "    a[PIECE-10 ten]\n    b[PIECE-11 eleven]\n    a --> b\n```\n")
+
+    rep = check(_project(tmp_path, files=files, pieces=pieces))
+
+    assert "PIECE-1" in rep.uncovered, "PIECE-1 is absent from the map; PIECE-10 is not it"
+    assert sorted(rep.uncovered) == sorted(f"PIECE-{i}" for i in range(1, 10))
+
+
+# ------------------------------------------------------------------ the two minors
+
+
+def test_a_question_mark_placeholder_is_a_placeholder(tmp_path: Path) -> None:
+    """`\\b` before `?` needs a word character beside it, and `?` is not one — so
+    `???` sat in the pattern and could not match. Same defect as the product scorer's."""
+    files = dict(GOOD)
+    files["states.md"] = GOOD["states.md"].replace("# D1", "# D1\n\nowner: ???")
+
+    rep = check(_project(tmp_path, files=files))
+
+    assert any(f.code == "placeholder_in_drawing" for f in rep.findings)
+
+
+def test_a_drawing_that_cannot_be_READ_is_not_a_drawing_that_is_ABSENT(tmp_path: Path) -> None:
+    """`_read` swallowed OSError into `""`, so a present-but-unreadable file was
+    reported MISSING — which sends a person to draw what they already have."""
+    project = _project(tmp_path)
+    unreadable = project / ".squad" / "wiki" / "design" / "trust.md"
+    unreadable.chmod(0o000)
+    try:
+        rep = check(project)
+    finally:
+        unreadable.chmod(0o644)
+
+    assert "trust" not in rep.missing, "it is on disk; it could not be opened"
+    assert any(f.code == "drawing_unreadable" for f in rep.findings)
+
+
+# -------------------------------------------- the phase had no way to reach its end
+#
+# Three defects that met in one place, measured 2026-09-20:
+#
+#   1. nothing in the kit writes `design/sign-off.md`. The gate reads it, the SOP says
+#      to sign it, and `/sign` refuses what does not exist: "is neither a path that
+#      exists nor a slug of any document waiting for a signature. Nothing was signed."
+#   2. `$ECO` is used by Step 5 and Step 5b of SKILL.md and assigned nowhere in the
+#      file, so both expand to `/skills/...` and `/mechanisms/...` — absolute paths
+#      from the filesystem root. The two steps affected are "run the gate" and
+#      "convene the panel".
+#   3. G-D8 declares a 2-of-3 panel and nothing in the flow ran `check_panel_approval`.
+#
+# These are prose and template tests. `prompt-text-is-not-behaviour.md` draws the line
+# at wording versus structure: an assigned shell variable, a shipped template file and
+# a named script invocation are structure.
+
+
+def test_the_skill_ships_the_checklist_it_asks_a_person_to_sign() -> None:
+    template = (Path(__file__).resolve().parents[1] / "templates" / "sign-off.template.md")
+
+    assert template.is_file(), (
+        "the gate reads design/sign-off.md and the SOP says to sign it; nothing wrote "
+        "one, so DESIGN_AGREED was unreachable")
+    body = template.read_text(encoding="utf-8")
+    assert "<!-- signed-by: -->" in body, "the unsigned marker a reviewer replaces"
+    assert body.count("- [ ] ") >= 3, "a checklist with nothing to tick is not a gate"
+    assert "- [x]" not in body, "shipped ticked is shipped signed"
+
+
+def test_every_shell_variable_the_skill_uses_is_one_it_assigned() -> None:
+    """`$ECO` expanded to nothing, and `python3 "/skills/..."` is not a path."""
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+
+    used = set(re.findall(r'"\$(\w+)/', skill))
+    assigned = set(re.findall(r'^\s*(\w+)=', skill, re.MULTILINE))
+
+    assert not (used - assigned), (
+        f"{sorted(used - assigned)} used and never assigned — the step expands to an "
+        f"absolute path from the filesystem root and the command does not run")
+
+
+def test_the_flow_runs_the_panel_gate_it_declares() -> None:
+    """G-D8 is declared in `cycle-design.md`'s gate table. A gate nothing invokes is a
+    claim, and `check_panel_approval.py` exists precisely to refuse an absent record."""
+    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+    sop = (Path(__file__).resolve().parents[1] / "SOP.md").read_text(encoding="utf-8")
+
+    # prose-test: the INVOCATION is the subject here, not the wording around it. G-D8
+    # names a script; whether the flow runs it is the question, and a named command in
+    # the procedure is the only place that fact lives. `check_gate_mechanisms.py` asks
+    # the other half — that a declared gate names an enforcer — and passed throughout,
+    # because naming is what it checks.
+    assert "check_panel_approval.py" in skill, (  # prose-test: the invocation IS the subject
+        "SKILL.md convenes the panel and never checks its verdict, so DESIGN_AGREED "
+        "was emitted with no panel record at all")
+    assert "check_panel_approval.py" in sop, (  # prose-test: same invocation, operator side
+        "the operator's procedure skipped the panel gate entirely")

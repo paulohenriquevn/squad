@@ -78,6 +78,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from squad import signoff as _shared_signoff
 from squad.rubric import ALIGNMENT_FLOOR_RATIO
 
 #: The bar, read rather than restated. The reasoning — why 90% of the maximum, and
@@ -189,7 +190,13 @@ _CHECKBOX_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s*(.+?)\s*$", re.MULTILINE)
 # Captures to the closing marker, spaces included: the ROUTE is part of the
 # provenance. `human/paulo (approved in session)` says more than `human`, and
 # a pattern that stopped at the first space silently dropped exactly that.
-_SIGNED_BY_RE = re.compile(r"<!--\s*signed-by:\s*([^>]+?)\s*-->")
+#: Imported rather than compiled here since 2026-09-20. Three gates read this marker
+#: and each carried its own spelling; the product and design scorers stopped at the
+#: first space and dropped the route this one was careful to keep, while deciding the
+#: signer by refusing a single prefix. `squad.signoff` is the one reader, and the shape
+#: it fixes beyond this file's own is `<!-- signed-by: -->` — the unsigned marker every
+#: template ships, which `([^>]+?)` captured as a signer called `" "`.
+_SIGNED_BY_RE = _shared_signoff.SIGNED_BY_RE
 
 #: A reviewer declaring the item is not one item. The scorer TRANSPORTS this rather
 #: than inferring it: deciding that a description spans independent subsystems is
@@ -294,8 +301,7 @@ class AlignmentReport:
         recording WHO signed would have downgraded a person's signature to an
         agent's. The `human/` prefix keeps both the route and the meaning.
         """
-        return bool(self.signed_by) and (
-            self.signed_by == "human" or self.signed_by.startswith("human/"))
+        return _shared_signoff.is_human(self.signed_by or "")
 
     # ── the machine half: structure the agent can and should reach ──────────
     @property

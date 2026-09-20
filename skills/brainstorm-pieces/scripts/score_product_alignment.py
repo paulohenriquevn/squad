@@ -69,6 +69,7 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from squad.paths import write_wiki_dir  # noqa: E402 — post-bootstrap import
+from squad.signoff import SignOff, is_human, read as read_signoff  # noqa: E402 — post-bootstrap import
 from squad.rubric import ALIGNMENT_FLOOR_PCT  # noqa: E402 — post-bootstrap import
 
 #: Read rather than restated — `squad.rubric` owns the figure and the item-level
@@ -146,35 +147,16 @@ OBJ_RE = re.compile(r"^##\s+(OBJ-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 REQ_RE = re.compile(r"^##\s+(REQ-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 PIECE_RE = re.compile(r"^##\s+(PIECE-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 
-#: `signed-by:` names WHO signed, so a person's agreement and a machine's are
-#: different claims a reader tells apart without opening the file. The kit's
-#: item-level scorer reports the weakest signer for the same reason.
+#: Who signed and how many boxes carry a mark — read by `squad.signoff`, the one
+#: reader every gate in this kit shares. This file compiled its own pattern and its
+#: own rule until 2026-09-20, and the three copies disagreed: see that module for what
+#: each spelling let through.
 #:
-#: Captures to the closing marker, spaces included, because the ROUTE is part of
-#: the provenance: `human/paulo (approved in session)` says more than `human/paulo`.
-#: `[^\s>]+` stopped at the first space and dropped exactly that — the defect
-#: `score_alignment.py:189` records having fixed in its own pattern, reintroduced
-#: here by a narrower character class.
-#: The name must start and end on a non-space: the UNSIGNED marker the template
-#: ships is `<!-- signed-by: -->`, and a pattern needing merely "one character
-#: that is not `>`" captured the single space between the colon and the closing
-#: marker — an empty signature read back as a signer called " ".
-SIGNED_BY_RE = re.compile(r"<!--\s*signed-by:\s*([^>\s](?:[^>]*[^>\s])?)\s*-->")
-TICKED_RE = re.compile(r"^\s*-\s*\[[xX]\]\s+\S", re.MULTILINE)
-UNTICKED_RE = re.compile(r"^\s*-\s*\[\s*\]\s+\S", re.MULTILINE)
-
-
-def signed_by_is_human(signer: str) -> bool:
-    """A NAMED human is still a human — `score_alignment.py:289`, verbatim rule.
-
-    An ALLOWLIST, and the difference is the whole gate. This used to refuse the one
-    prefix `judge/` and accept everything else, which is a denylist of one against
-    an open set of names: measured 2026-09-20, `<!-- signed-by: iris-product-designer -->`
-    returned `PRODUCT_ALIGNED`, exit 0 — the agent that WRITES these documents
-    signing them under its own name, through the only gate the unattended chain
-    rests on.
-    """
-    return signer == "human" or signer.startswith("human/")
+#: The POLICY stays here, because it differs by level. At product level every signer
+#: must be a person: `alignment-threshold.md § Amended 2026-09-01` admits a judge for
+#: an ITEM because the judge reads evidence that exists independently of the brief, and
+#: a product vision has no such evidence — it is what everything else is measured
+#: against.
 
 
 @dataclass
@@ -441,14 +423,14 @@ def _gate_signature(rep: Report, product: Path) -> None:
         # NOT stripped of comments: here the comment IS the payload. `signed-by:`
         # travels in one, so that a signature cannot be typed by accident and a
         # reader sees who gave it without opening anything else.
-        body = align.read_text(encoding="utf-8")
-        rep.signers = SIGNED_BY_RE.findall(body)
-        rep.unticked = len(UNTICKED_RE.findall(body))
-        rep.ticked = len(TICKED_RE.findall(body))
+        sheet = read_signoff(align.read_text(encoding="utf-8"))
     else:
         # No checklist at all: an absent gate is not a passed one.
-        rep.unticked = -1
-        rep.ticked = -1
+        sheet = SignOff(absent=True, ticked=-1, unticked=-1)
+    rep.signers = sheet.signers
+    rep.unticked = sheet.unticked
+    rep.ticked = sheet.ticked
+    rep.sheet = sheet
 
 
 def score(root: Path) -> Report:
@@ -525,9 +507,9 @@ def verdict(rep: Report) -> tuple[str, int]:
     # `judge/` accepted every other name an agent could sign under — and reporting
     # the WEAKEST signer is what stops one human tick from laundering the rest,
     # exactly as `score_alignment.py` does at item level.
-    if rep.ticked <= 0 or rep.unticked != 0 or not rep.signers:
+    if not rep.sheet.complete or not rep.sheet.signers:
         return "AWAITING_REVIEW", 1
-    if not all(signed_by_is_human(s) for s in rep.signers):
+    if not rep.sheet.human_signed:
         return "AWAITING_REVIEW", 1
     return "PRODUCT_ALIGNED", 0
 
@@ -562,8 +544,7 @@ def main(argv: list[str] | None = None) -> int:
         "unreadable_documents": rep.unreadable_docs,
         "dangling_citations": rep.dangling,
         "signers": rep.signers,
-        "signed_by_is_human": bool(rep.signers) and all(
-            signed_by_is_human(s) for s in rep.signers),
+        "signed_by_is_human": rep.sheet.human_signed,
         "unticked_boxes": rep.unticked,
         "ticked_boxes": rep.ticked,
         "criteria": [c.__dict__ for c in rep.criteria],
@@ -598,7 +579,7 @@ def main(argv: list[str] | None = None) -> int:
     if rep.unreadable_docs:
         print(f"  UNREADABLE: {', '.join(rep.unreadable_docs)}")
     if tok == "AWAITING_REVIEW":
-        non_human = [s for s in rep.signers if not signed_by_is_human(s)]
+        non_human = rep.sheet.non_human_signers
         if non_human:
             # Named, not merely refused: a person who signed as `paulo` and a
             # judge that signed as itself get the same verdict for different

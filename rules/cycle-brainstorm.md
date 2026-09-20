@@ -137,6 +137,15 @@ already in `rules/blocking-verdicts.txt`, so an artifact resting on it is held e
 by the same list. Introducing a synonym would have created a second name for one state
 and a second thing to keep in step.
 
+**What the wait forbids, and what it leaves open.** Blocked: `/backlog-init` and every
+phase below it, and any edit to the four documents that would need re-signing without the
+signer knowing. Open: reading the repository, drafting the session record, and preparing
+what the reviewer will need — the agenda, the list of what changed since they last looked.
+The general form of this distinction lives in `rules/blocking-verdicts.txt § WHAT A BLOCK
+FORBIDS`. It is written down because an agent that reads the block as total waits idle for
+a person who may be days away, and one that reads it as advisory starts the chain the
+signature exists to hold.
+
 ## Hard gates
 
 | # | Gate | Blocks on |
@@ -166,6 +175,29 @@ same reason. At item level the judge signs **because nobody is coming**. At prod
 the person signs **because this is the one place they come**. Remove that signature and the
 kit has no human input at all — every downstream gate would be measuring conformance to a
 document nobody agreed to.
+
+## Red flags — the thought, and what is actually true
+
+The anti-patterns below name the ERROR. This table names the **thought that produces
+it**, because that is what the reader is holding at the moment the gate is about to be
+skipped, and an error they have not made yet is easy to agree with and easy to walk
+past.
+
+The form is imported from [`obra/superpowers`](https://github.com/obra/superpowers)
+`skills/brainstorming` (cross-read 2026-09-20), whose Red Flags table is written in the
+voice of the rationalisation — *"I'll call it bounded and skip the spec" → "Reaching for
+a label to skip work IS the doubt"*. The rows are this cycle's own.
+
+| Thought | Reality |
+|---|---|
+| "The vision is obvious — everyone here already knows it" | Then writing it costs a paragraph. And if two people write it separately, you find out today that they disagreed, instead of finding out during the first re-scope |
+| "I'll add the non-goals once we know more" | The section exists to be uncomfortable NOW. Later is after the code exists, when the argument costs a re-scope rather than a sentence |
+| "This objective is qualitative — no metric fits" | Then it is a value, and values belong in the vision, where nothing traces to them. An objective no measurement could ever report as unmet is one nobody can be wrong about |
+| "They're busy — I'll sign and they'll confirm next week" | A signature is the claim that somebody read it. Confirmation afterwards approves what already passed, which is not a review. `human/{who}` is the only signer this gate accepts, and no flag changes that |
+| "94% — that's basically aligned" | The score measures structure. `AWAITING_REVIEW` at 94% and at 100% are the same state: the machine finished, the person has not started |
+| "They approved the vision, so the objectives follow from it" | Each artifact carries its own approval. An approval quoted from a conversation about a different document is a signature nobody gave — `alignment-threshold.md § A reply approves the artifact it was shown` |
+| "Re-running the cascade is safer than editing one objective" | The cascade is the order things are FIRST decided. Re-running it to move a horizon produces three tired documents and one edited line |
+| "This scope can reuse the vision from the other repo" | An inherited vision is an inherited routing table wearing prose. `agents/README.md` records what that cost when it was measured |
 
 ## Anti-patterns
 

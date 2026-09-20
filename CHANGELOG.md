@@ -7,7 +7,151 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 
+### Added
+
+- **BRAINSTORM has eval batteries, which is where its two most expensive gates were
+  measured by nothing.** `score_product_alignment.py` can see that `## Who it is for`
+  holds 80 characters; it cannot see that those characters say `developers`, which is a
+  category and settles no trade-off. The rubric says so on every run — three things it
+  does not score — and until now nothing else looked either, while four other skills
+  (`backlog-item`, `discover-plan`, `discover-edge-cases`, `discover-execute`) had
+  batteries and the one cycle a person attends had none.
+
+  `skills/brainstorm-vision/evals/evals.json` (5 cases) exercises the conversational half
+  of G-B1: a category offered as the named user, a problem stated as the absence of the
+  solution, and a session trying to close with no non-goal. Two are negative — a single
+  feature, and an aligned scope asking for a re-cascade — because a FALSE trigger here
+  costs a human session, the most expensive thing this kit spends.
+
+  `skills/brainstorm-pieces/evals/evals.json` (4 cases) covers what a script cannot reach
+  even now that the gate refuses a forged signature: being ASKED to tick the reviewer's
+  boxes, reporting a copied template as unwritten rather than as low-scoring, what is
+  legitimately available while the gate is closed, and refusing to file backlog items from
+  a cycle that has no write access to the registry.
+
+  `run_eval.py` measures only whether the skill triggered; the `assertions` are the
+  judgement a human or a judge makes on the transcript. That split is stated in both
+  batteries rather than implied, because a coverage claim resting on something nothing
+  runs is the defect `tests/test_eval_batteries_are_runnable.py` was written to close.
+
+### Changed
+
+- **Three imports from a cross-read of `obra/superpowers` `skills/brainstorming`
+  (2026-09-20).** Its gate is prose where ours is an exit code, and its tests cover the
+  visual companion's server and whether the skill triggers — not the gate. But it holds
+  three things this kit had left implicit.
+
+  **A reply approves the artifact it was shown, and no other**
+  (`alignment-threshold.md`). The kit had the signature and not the rule, which leaves
+  the most common way past a human gate unaddressed: not forging a signature, but
+  CARRYING one forward from a conversation about a different document. Approval is now
+  per artifact, an enthusiastic yes is not a wider yes, work resumes at the earliest
+  unapproved artifact rather than the furthest one the conversation reached, and editing
+  a signed document withdraws the signature it carried.
+
+  **What a block forbids, and what it does not** (`rules/blocking-verdicts.txt`, applied
+  in `cycle-brainstorm.md`). A blocking verdict stops the item from ADVANCING; it does
+  not stop the agent from reading. Written down because the two readings fail in opposite
+  directions — an agent treating the block as total sits idle until a person who may be
+  days away returns, and one treating it as advisory starts the chain the signature
+  exists to hold. Upstream states the permission rather than only the prohibition:
+  *"Read-only project exploration is allowed while those prerequisites remain
+  incomplete."*
+
+  **Red flags written in the voice of the rationalisation** (`cycle-brainstorm.md`). The
+  anti-patterns name the error; the table names the thought that produces it, which is
+  what the reader is holding at the moment the gate is about to be skipped. Eight rows,
+  this cycle's own — "94% — that's basically aligned", "they're busy, I'll sign and
+  they'll confirm next week", "I'll add the non-goals once we know more".
+
+  **Not imported, and why.** Upstream announces its spike/bounded/architectural
+  classification so the human can override it. This kit DERIVES depth instead —
+  `classify_alignment_depth.py`, and `cycle-plan.md` says "Derived, never chosen" after
+  measuring 2,740 KB of briefs signed zero times. An announced classification a person
+  can override is also one an agent can argue for, and the derivation exists precisely to
+  remove that conversation. The half that does not collide — complexity discovered
+  mid-task raises the path and never lowers it — is not imported either, because nothing
+  here re-derives depth mid-item and saying so in prose without the mechanism is the
+  contract-without-mechanism shape this kit refuses.
+
+
 ### Fixed
+
+- **The DESIGN gate agreed a design the agent had signed, and refused the one a person
+  signed.** Both measured 2026-09-20 against a complete, covered set of five drawings:
+
+  ```
+  <!-- signed-by: daedalus-tech-lead -->                 DESIGN_AGREED    exit 0
+  <!-- signed-by: human/paulo (approved in session) -->  AWAITING_REVIEW
+  ```
+
+  `verdict_of` refused the single prefix `judge/`, which is a denylist of one against an
+  open set of names, so the tech lead who draws the diagrams could agree them; and the
+  local `([^\s>]+)` pattern stopped at the first space, so a signature carrying its route
+  captured nothing at all. `cycle-design.md` says of this gate: *"a person, and only a
+  person"*. A gate that accepts the author and rejects the reviewer is worse than no
+  gate — it returns the wrong answer confidently. A checklist whose boxes were DELETED
+  also passed, because nothing counted TICKED boxes.
+
+  The root cause was three copies: `score_alignment.py`, `score_product_alignment.py` and
+  `check_design_completeness.py` each compiled their own `signed-by` pattern and each
+  decided for itself what the captured name meant. `squad/signoff.py` is now the one
+  reader — pattern, both checkbox counts, and `is_human` as an allowlist — and
+  `tests/test_one_signature_reader_for_every_gate.py` refuses a second. The POLICY stays
+  per gate, because it genuinely differs: a judge may sign an ITEM's brief and may not
+  sign a product vision or a system design.
+
+- **`DESIGN_AGREED` was unreachable by the documented path, and the panel gate it
+  declares was never run.** Three defects meeting in one phase:
+
+  * **Nothing wrote `design/sign-off.md`.** The gate reads it, the SOP says to sign it,
+    and `/sign` refuses what does not exist — *"is neither a path that exists nor a slug
+    of any document waiting for a signature. Nothing was signed."* `brainstorm-pieces`
+    generates its equivalent from a template at step 3; this phase had neither step nor
+    template. Both now exist.
+  * **`$ECO` was used by two steps and assigned by none.** Step 5 and Step 5b expanded to
+    `/skills/...` and `/mechanisms/...` — absolute paths from the filesystem root. The two
+    commands that did not run were "score the drawings" and "convene the panel". Step 0
+    now assigns it, and a test refuses a shell variable the file never set.
+  * **G-D8 was declared and never invoked.** The gate table names
+    `check_panel_approval.py`; nothing in SKILL.md, SOP.md or the verdict asked it, and
+    `DESIGN_AGREED` was measured against a project with no panel record at all. The gate
+    itself is sound — exit 2 with no roster, exit 1 on `NO_RECORD` — it was simply never
+    called. Step 5b now reads its verdict, and the SOP has the step it was missing.
+
+- **A drawing that could not be READ was reported as ABSENT, and a piece was covered by a
+  longer id that contained it.** `_read` swallowed `OSError` into `""`, so a
+  present-but-unreadable file came back `MISSING` and `INVALID` — "draw it", about a file
+  the person already has; `FileNotFoundError` still returns `""`, because absent and shut
+  are different facts and only the second one was missing a name. And coverage tested
+  `piece_id not in map_body`, a substring: measured with eleven pieces and a map naming
+  only PIECE-10 and PIECE-11, the report read **"11 declared, 3 covered"** — `PIECE-1`
+  passed inside `PIECE-10`. It fails only in the permissive direction and it fires on any
+  product with ten or more pieces. Also `\?\?\?` sat in the placeholder pattern behind a
+  `\b` that can never match beside a `?`, the same defect the product scorer carried in
+  the same expression.
+
+- **`BACKLOG_INVALID` was declared and named no band, and that failed the install.**
+  `rules/cycle-maintenance.md` declares it; `rules/verdict-bands.txt` did not classify it,
+  so `check_verdict_bands` reported `DRIFTED`, `verify_ecosystem` failed, the post-install
+  validation failed, `install.sh` exited 1 — and 43 tests across `test_clean_install`,
+  `test_kit_manifest`, `test_permissions_retirement` and their siblings fell with it.
+  Classified `structural`: SELECT returns nothing because every id it could return is
+  ambiguous, and a `traces_to` pointing at an ambiguous id is the same broken pointer
+  `INVALID` names one level down.
+
+- **Every eval battery failed in the root suite and passed alone, and the batteries were
+  not what failed.** `run_eval.py` reached its helper with `from scripts.utils import
+  parse_skill_md`, which resolves through whatever `sys.modules["scripts"]` already holds
+  — and nine slices ship a directory called `scripts`, eight of them with an
+  `__init__.py`. Whichever one a wide pytest process imported first owned the name, and
+  the import then died on `ModuleNotFoundError: No module named 'scripts.utils'` about a
+  file sitting beside it. Measured 2026-09-20: 12 failures in `tests/` and 13 passes from
+  `pytest tests/test_eval_batteries_are_runnable.py`. A test that passes alone and fails
+  in company reports the import order rather than its subject — which is exactly the
+  collision `run_slice_tests.sh` exists to keep out of the slices, arriving through the
+  root suite instead. The helper is now loaded by path under a unique module name, so no
+  other slice can take it.
 
 - **The product-alignment gate passed a cascade nobody wrote and a signature no person
   gave.** Two measurements on 2026-09-20, both against `score_product_alignment.py`, the

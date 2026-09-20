@@ -390,7 +390,7 @@ def test_every_placeholder_form_is_detected(tmp_path: Path, marker: str) -> None
 
 def test_the_unsigned_marker_is_not_a_signer(tmp_path: Path) -> None:
     """`<!-- signed-by: -->` is what the template ships. It named a signer called " "."""
-    from score_product_alignment import SIGNED_BY_RE
+    from squad.signoff import SIGNED_BY_RE  # the one reader, since 2026-09-20
 
     assert SIGNED_BY_RE.findall("<!-- signed-by: -->") == []
     product = _product(tmp_path)

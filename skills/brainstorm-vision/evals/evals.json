@@ -1,0 +1,75 @@
+{
+  "skill_name": "brainstorm-vision",
+  "notes": "BRAINSTORM is the only cycle a person attends, and its two most expensive gates are the ones no script reaches. `score_product_alignment.py` can see that `## Who it is for` holds 80 characters; it cannot see that those characters say `developers`, which is a category and settles no trade-off. It can see a `## What it is NOT` section with two bullets; it cannot see that both were invented to satisfy the section. The rubric says so on every run — three things it does not score — and until this battery existed nothing else looked either. Cases 0-2 exercise the conversational half of G-B1. Cases 3-4 are negative: a false trigger here costs a human session, which is the most expensive thing this kit spends, and the pre-conditions in `cycle-brainstorm.md` name both refusals — a single feature is a `B-NNN`, and a scope that is already aligned is revised rather than re-cascaded. Imported from a cross-read of obra/superpowers `skills/brainstorming` (2026-09-20), whose Red Flags table is written in the voice of the rationalisation rather than the error: what the agent will THINK in order to skip the gate. Every prompt below is the thought, phrased the way a person actually types it.",
+  "evals": [
+    {
+      "id": 0,
+      "name": "refuses-a-category-as-the-named-user",
+      "prompt": "let's write the product vision. it's for developers who need better observability. the problem is that debugging distributed systems is hard.",
+      "expected_output": "The skill accepts neither answer as given. `developers` is a category, not someone whose situation can be pictured, and `debugging distributed systems is hard` is a condition of the world rather than an observation about this person. It asks — one question per turn — for a role in a situation, and for what that person does today and what it costs them. It does NOT write product-vision.md with the answers as supplied.",
+      "files": [],
+      "assertions": [
+        "The skill named `developers` as a category rather than a user, and said why a category settles no trade-off",
+        "It asked for someone whose situation can be pictured, one question in that turn and not three",
+        "It treated `debugging is hard` as not yet a problem statement, and asked what the person does instead and what that costs",
+        "No .squad/wiki/product/product-vision.md was written from the answers as supplied",
+        "The refusal states what WOULD be an acceptable answer, rather than only rejecting"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "refuses-the-problem-stated-as-the-missing-solution",
+      "prompt": "the user is the on-call engineer at 3am who gets paged and has no idea which service regressed. the problem is we don't have a unified dashboard.",
+      "expected_output": "The named user is accepted — that is a situation a reader can picture. The problem is not: `we don't have a unified dashboard` is the proposed solution, negated. The skill asks what the on-call engineer does today instead and what it costs, and derives the problem from that.",
+      "files": [],
+      "assertions": [
+        "The named user was accepted without re-asking, so the session does not re-litigate an answer already given",
+        "The skill identified that the problem was stated as the absence of a solution",
+        "It asked what the person does TODAY and what that costs, rather than proposing the dashboard",
+        "It did not propose an implementation, a stack or a tool in this phase"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "will-not-close-the-vision-without-a-non-goal",
+      "prompt": "great, that covers it. the user is the on-call engineer, the problem is that answering 'is this normal?' takes 12 minutes and needs the one person who remembers last month, and the product is one place that answers it for any service. write the file and let's move on to objectives.",
+      "expected_output": "The skill refuses to close the phase: `## What it is NOT` has no content, and G-B1 makes it a floor cap rather than a lost point. It asks question 4 — at least two non-goals — and says why that section is the one that settles arguments after the code exists. It does not write a file with an empty or invented non-goals section.",
+      "files": [],
+      "assertions": [
+        "The skill asked for at least two non-goals before writing the document",
+        "It did not invent non-goals on the user's behalf to satisfy the section",
+        "It explained that everything is in scope until somebody writes down what is not",
+        "It did not hand off to /brainstorm-objectives with the vision incomplete",
+        "It resisted `write the file and let's move on` without being rude about it"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "a-single-feature-is-not-a-product-vision",
+      "prompt": "we need to add a CSV export button to the runs table. can you run the product vision session for it?",
+      "should_trigger": false,
+      "expected_output": "The unit of this cycle is the product, not a feature. `cycle-brainstorm.md` refuses it in its pre-conditions and names where it belongs: a `B-NNN` through /backlog-item, which takes it in four questions. The skill declines and routes, rather than running a four-phase cascade over an export button.",
+      "files": [],
+      "assertions": [
+        "The four-phase cascade was NOT started",
+        "The skill named /backlog-item as where this belongs",
+        "It explained that the unit here is the product and a feature is an item",
+        "It did not require the user to justify the refusal before routing them"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "an-aligned-scope-is-revised-not-re-cascaded",
+      "prompt": "I want to change OBJ-2 — the horizon slipped, it's 2027-Q2 now not 2027-Q1. run brainstorm again",
+      "should_trigger": false,
+      "expected_output": "Re-running the cascade to change one objective is the anti-pattern `cycle-brainstorm.md` names: the cascade is the order things are FIRST decided, not a ritual. The skill routes to editing objectives.md, re-scoring, and re-signing, and notes that OBJ-2 keeps its id.",
+      "files": [],
+      "assertions": [
+        "The cascade was NOT re-run from phase 1",
+        "The skill said to revise objectives.md, re-score and re-sign",
+        "It said the id is not renumbered, because backlog items cite it",
+        "It named score_product_alignment.py as what re-scores, rather than describing the check in prose"
+      ]
+    }
+  ]
+}

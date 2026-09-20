@@ -57,8 +57,13 @@ Force the four decisions that cannot be retrofitted, while they are still cheap.
    drawing — the render is never edited back into it.
 5. **Score** —
    `python3 skills/design/scripts/check_design_completeness.py --project .`
-6. **Sign** the checklist — `/sign .squad/wiki/design/sign-off.md --as <you>`.
-7. **Emit** the verdict, then `/backlog-init`.
+6. **Convene the panel and read its verdict** — `/panel design {scope}`, then
+   `python3 mechanisms/gates/check_panel_approval.py --slug {scope} --phase design --project .`
+   Gate G-D8. A missing record is not an approval, and the completeness score does not
+   ask for it: both gates have to pass.
+7. **Sign** the checklist — `/sign .squad/wiki/design/sign-off.md --as human/<you>`.
+   `/design` wrote it unticked at Step 3b; the `human/` prefix is what the gate accepts.
+8. **Emit** the verdict, then `/backlog-init`.
 
 ## What each drawing must let you answer
 
