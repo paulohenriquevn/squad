@@ -98,6 +98,23 @@ def cited_ids(root: Path) -> set[int]:
     return {int(m[2:]) for m in proc.stdout.split()}
 
 
+def _git(repo: Path, *args: str) -> str | None:
+    """`git` output, or `None` when the question could not be asked.
+
+    One wrapper for both queries below. Each used to carry its own `try/except OSError` and its own
+    returncode check — two occurrences of the same tolerated-failure shape, found by the audit of
+    this change and deleted rather than rearranged.
+
+    `None` is not an empty result. It says git was absent or the command failed, which the caller
+    reports as `history unavailable` rather than as `0 recovered`.
+    """
+    try:
+        proc = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    return proc.stdout if proc.returncode == 0 else None
+
+
 def ids_ever_blocked(repo: Path, registry_name: str) -> set[int] | None:
     """Every id that ever had a block, read from the registry's whole history in ONE call.
 
@@ -108,32 +125,22 @@ def ids_ever_blocked(repo: Path, registry_name: str) -> set[int] | None:
     Reading every added block header answers the question directly, and costs one `git log` instead
     of one per candidate — which also removes the plan's MEDIUM risk about a registry with thousands
     of spent ids.
-
-    `None` means the question could not be asked, which is not the same as "nothing was found".
     """
-    try:
-        proc = subprocess.run(
-            ["git", "log", "--all", "-p", "--unified=0", "--format=", "--", registry_name],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except OSError:
+    out = _git(repo, "log", "--all", "-p", "--unified=0", "--format=", "--", registry_name)
+    if out is None:
         return None
-    if proc.returncode != 0:
-        return None
-    return {int(n) for n in re.findall(r"^\+## B-(\d{3})\b", proc.stdout, re.MULTILINE)}
+    return {int(n) for n in re.findall(r"^\+## B-(\d{3})\b", out, re.MULTILINE)}
 
 
 def _has_history(repo: Path) -> bool:
-    try:
-        proc = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=False
-        )
-    except OSError:
-        return False
-    return proc.returncode == 0
+    """Is there a commit to read at all?
+
+    NOT redundant with `ids_ever_blocked` returning `None`, and the difference was measured: in a
+    repository with 0 commits `git log` exits 0 with EMPTY output, so the recovery would report
+    `0 recovered` — "git looked and found nothing" — where the truth is "git could not be asked".
+    Outside a repository `git log` exits 128. Only `rev-parse HEAD` separates the two.
+    """
+    return _git(repo, "rev-parse", "HEAD") is not None
 
 
 def next_backlog_id(registry: Path) -> Allocation:
