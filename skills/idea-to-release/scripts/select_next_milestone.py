@@ -33,14 +33,17 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Matches `### M<N> — [<status>] <name>` (em-dash is U+2014, also accept ASCII --)
-HEADER_RE = re.compile(r"^###\s+M(\d+)\s+[—\-]{1,2}\s+\[([x\s\-])\]\s+(.+?)\s*$", re.MULTILINE)
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "roadmap.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad import roadmap as _roadmap  # noqa: E402 — post-bootstrap import
 
-OBJECTIVE_RE = re.compile(r"^\*\*Objective:\*\*\s*(.+?)\s*$", re.MULTILINE)
-DOD_BLOCK_RE = re.compile(r"\*\*Definition of done[^*]*\*\*\s*\n((?:- \[[ x]\] .+\n?)+)", re.MULTILINE)
-DOD_BULLET_RE = re.compile(r"^- \[[ x]\]\s+(.+?)\s*$", re.MULTILINE)
-DEPS_LINE_RE = re.compile(r"^\*\*Dependencies:\*\*\s*(.+?)\s*$", re.MULTILINE)
-DEP_ID_RE = re.compile(r"\bM(\d+)\b")
+# The header, DoD and dependency patterns used to live here. They were one of three
+# copies that disagreed — this one alone could spell `[-]`, and alone knew it meant
+# CANCELLED. `squad/roadmap.py` owns them now; `tests/test_one_reader_of_the_roadmap.py`
+# records what the disagreement cost the other two.
 
 
 @dataclass
@@ -70,41 +73,34 @@ class Milestone:
 
 def parse_roadmap(text: str) -> list[Milestone]:
     """Parse a ROADMAP.md text into an ordered list of Milestone records."""
-    headers = list(HEADER_RE.finditer(text))
-    if not headers:
+    parsed = _roadmap.parse(text)
+    if not parsed:
         raise ValueError("no milestone headers found (expected `### M<N> — [<status>] <name>`)")
 
-    milestones: list[Milestone] = []
-    for idx, match in enumerate(headers):
-        start = match.end()
-        end = headers[idx + 1].start() if idx + 1 < len(headers) else len(text)
-        body = text[start:end]
-
-        ms = Milestone(
-            id=f"M{match.group(1)}",
-            n=int(match.group(1)),
-            status=match.group(2),
-            name=match.group(3).strip(),
+    milestones = [
+        Milestone(
+            id=m.id,
+            n=int(m.id[1:]),
+            status=m.status.value,
+            name=m.name,
+            objective=m.objective,
+            dod=list(m.dod),
+            # `**Dependencies:** none.` declares the ABSENCE of one, and the shared
+            # reader cannot collapse that to `[]` for everyone: a caller may want to
+            # tell "declared none" from "declared nothing". This one does not, so the
+            # word is dropped here.
+            depends_on=[] if m.dependency_label and "none" in _depends_line(m).lower()
+            else sorted(set(m.depends_on)),
         )
-
-        obj = OBJECTIVE_RE.search(body)
-        if obj:
-            ms.objective = obj.group(1).strip()
-
-        dod_block = DOD_BLOCK_RE.search(body)
-        if dod_block:
-            ms.dod = [b.strip() for b in DOD_BULLET_RE.findall(dod_block.group(1))]
-
-        deps_line = DEPS_LINE_RE.search(body)
-        if deps_line:
-            raw = deps_line.group(1)
-            if "none" not in raw.lower():
-                ms.depends_on = sorted({f"M{m}" for m in DEP_ID_RE.findall(raw)})
-
-        milestones.append(ms)
-
+        for m in parsed
+    ]
     milestones.sort(key=lambda m: m.n)
     return milestones
+
+
+def _depends_line(milestone: "_roadmap.Milestone") -> str:
+    match = _roadmap.DEPENDS_RE.search(milestone.body)
+    return match.group(2) if match else ""
 
 
 def select(milestones: list[Milestone], prefer: str | None = None) -> dict:

@@ -6,6 +6,88 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+
+- **The normative `ROADMAP.md` block in `cycle-acceptance.md` was one no parser accepted.**
+  Copying the rule's own example produced a milestone that could never be accepted.
+  Measured on that example, verbatim:
+
+  ```
+  extract_acceptance_criteria  ->  NOT_VALIDATED, "no `- [ ]` bullets"
+  select_next_milestone        ->  {"dod": [], "depends_on": []}
+  ```
+
+  Two details were wrong. The DoD bullets were shown without the `- [ ]` checkbox every
+  parser requires and every fixture in the repository has. And the dependency line was
+  shown as `**Depends on:**` while the parsers read `**Dependencies:**`.
+
+  The two are corrected differently, on purpose. The bullet shape is the parsers' — they
+  are what runs, and the rule now matches them, the same way `code-quality-allowlist.txt`
+  was corrected when its header documented a four-field shape `load_allowlist` never
+  accepted. The dependency spelling is read BOTH ways, because that mismatch failed in
+  **silence**: a bullet mismatch exits 1 and names what is missing, while `depends_on: []`
+  is indistinguishable from a milestone that declared no prerequisite. A milestone whose
+  dependency was never delivered read as one with no dependency at all.
+
+- **`[-]` meant CANCELLED in one script and nothing in the other two.** `select_next_milestone`
+  alone had the character in its class and alone acted on it. To `extract` and to the flip
+  script a cancelled milestone was not cancelled — it was absent: `Milestones present: (none)`
+  over a file holding one, and `WARN … not found — skipping flip`. A state one reader can
+  spell and two cannot is worse than a state nobody supports, because the two that cannot
+  each invent their own story about the silence. All three read it now and each refuses it
+  by name.
+
+- **A flip that did not happen exited 0.** A milestone whose header sits at `##` instead of
+  `###` printed `WARN roadmap-checkbox: M1 not found — skipping flip` and returned success,
+  so a caller running `flip || exit 1` was told the milestone closed while the checkbox
+  stayed `[ ]`. The rule DOCUMENTED that silence — *"never closes, and never says why"* —
+  and left it standing. It exits 1 now and names the header shape it expected.
+
+- **`ACCEPTED` over evidence that does not exist.** The phase-contract table gates the
+  `record` phase on *"evidence files exist at the cited paths"*, and the skill repeats
+  *"the paths must resolve"*. The check asked whether the list held a non-empty string:
+
+  ```
+  evidence=[""]          ->  NOT_VALIDATED
+  evidence=["   "]       ->  NOT_VALIDATED
+  evidence=["e/x.png"]   ->  ACCEPTED        <- no such file
+  ```
+
+  This is the gate the rule says the whole cycle rests on — *"with the human sign-off
+  deliberately out of scope, recorded evidence is the only thing standing between a real
+  validation and a confident sentence"* — and it was satisfied by typing a plausible
+  filename. Paths now resolve against the evidence record's own directory
+  (`--evidence-root` overrides), and a **zero-byte file counts as unresolved**: a failed
+  screen capture leaves one, and it reads downstream as a successful capture. An evidence
+  root that is not a directory is `NOT_VALIDATED`, never an unchecked pass.
+
+- **The flip script had never heard the word `verdict`.** `grep -c verdict` returned 0,
+  while `cycle-acceptance.md § Hard gates` has required a green one since the flip moved
+  there — carried as an open regression note since 2026-08-31, when the skill that used to
+  catch a wrong flip after the fact was cut. Nothing between "the script computed
+  `NOT_VALIDATED`" and "the checkbox is now `[x]`" would have objected. `--verdict` is now
+  required and checked against `ACCEPTED` / `ACCEPTED_WITH_CAVEATS`.
+
+- **The cycle's verdict had no mechanical consumer, and the rule said it had one.**
+  *"a verdict that `cycle-maintenance` consumes"* — `advance_items.py` selects on
+  `event.get("verdict") == "RELEASED"`, and no `.py` outside this slice reads `ACCEPTED`.
+  The verdict was computed, written to a record, and read by nobody. Passing it into the
+  flip gives it exactly one consumer, and § Purpose now says which one rather than naming
+  a cycle that never looked.
+
+### Changed
+
+- **One reading of `ROADMAP.md`.** `cycle-acceptance.md` claimed *"Three scripts parse it
+  and all three agree"*; the table under that sentence listed two, and the three disagreed
+  about the checkbox — the field the whole cycle turns on. `squad/roadmap.py` owns the
+  header, the DoD block and the dependency line now, alongside `squad/semver.py` and
+  `squad/rubric.py`, and a test refuses a fourth private regex.
+
+- **`records/` → `.squad/records/` in `cycle-acceptance.md`.** `records-location.md`
+  declares one write root and the skill already used it; the rule named the legacy path in
+  four places. Same class of defect as the install message corrected in the previous entry
+  — a document pointing a reader at a directory nothing writes.
+
 
 ### Fixed
 

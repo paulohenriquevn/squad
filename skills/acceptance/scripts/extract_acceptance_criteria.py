@@ -29,23 +29,22 @@ import re
 import sys
 from pathlib import Path
 
-#: Same header shape the flip script matches.
-#: Normative source: `rules/cycle-acceptance.md` § The ROADMAP.md contract.
-_HEADER_RE = re.compile(
-    r"^###\s+(M\d+)\s+[—\-]{1,2}\s+\[([ x])\]\s+(.+?)$",
-    re.MULTILINE,
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "roadmap.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.roadmap import (  # noqa: E402 — post-bootstrap import
+    MILESTONE_ID_RE as _MILESTONE_ID_RE,
+    Status,
+    find as _find_milestone,
+    has_dod_heading as _has_dod_heading,
+    parse as _parse_roadmap,
 )
 
-#: `**Definition of done (all must hold):**` — the parenthetical is optional.
-_DOD_HEADING_RE = re.compile(r"^\*\*Definition of done[^*]*:\*\*\s*$", re.MULTILINE)
-
-#: A checkbox bullet inside the DoD block.
-_DOD_BULLET_RE = re.compile(r"^-\s+\[([ x])\]\s+(.+?)\s*$", re.MULTILINE)
-
-#: Any other `**Bold label:**` line — marks the end of the DoD block.
-_NEXT_LABEL_RE = re.compile(r"^\*\*[^*]+:\*\*", re.MULTILINE)
-
-_MILESTONE_ID_RE = re.compile(r"^M\d+$")
+# The header, the DoD heading and the bullet shape used to live here, in a third copy
+# that disagreed with the other two about `[-]`. `squad/roadmap.py` owns them now —
+# `tests/test_one_reader_of_the_roadmap.py` records what the disagreement cost.
 
 
 class GateViolation(Exception):
@@ -54,14 +53,25 @@ class GateViolation(Exception):
 
 def _milestone_block(roadmap_text: str, milestone_id: str) -> tuple[str, str]:
     """Return (milestone_name, block_text) for the requested milestone."""
-    matches = list(_HEADER_RE.finditer(roadmap_text))
-    for index, match in enumerate(matches):
-        if match.group(1) != milestone_id:
-            continue
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(roadmap_text)
-        return match.group(3).strip(), roadmap_text[match.end():end]
+    milestone = _find_milestone(roadmap_text, milestone_id)
+    if milestone is not None and milestone.status is not Status.CANCELLED:
+        # `[x]` is read, deliberately. Extraction is not the pre-condition check — the
+        # bullet's state is not the verdict, and `test_it_reads_the_definition_of_done_
+        # of_an_already_released_milestone` holds that. Whether the checkbox is still
+        # open is `cycle-acceptance.md` § Pre-conditions, upstream of here.
+        return milestone.name, milestone.body
 
-    known = ", ".join(m.group(1) for m in matches) or "(none)"
+    if milestone is not None:
+        # Named for what it IS. A cancelled milestone was unmatchable by this script's
+        # private header pattern, so it came back as "Milestones present: (none)" over
+        # a file holding it — sending a reader to look for a section sitting right
+        # there. A cancelled milestone has no live promise to exercise.
+        raise GateViolation(
+            f"{milestone_id} is cancelled (`[-]`) and has no promise left to validate. "
+            f"Reopen it to `[ ]` first if the work resumed."
+        )
+
+    known = ", ".join(m.id for m in _parse_roadmap(roadmap_text)) or "(none)"
     raise GateViolation(
         f"{milestone_id} is not in the roadmap. Milestones present: {known}."
     )
@@ -74,23 +84,21 @@ def extract(roadmap_text: str, milestone_id: str) -> dict[str, object]:
 
     name, block = _milestone_block(roadmap_text, milestone_id)
 
-    heading = _DOD_HEADING_RE.search(block)
-    if heading is None:
+    if not _has_dod_heading(block):
         raise GateViolation(
             f"{milestone_id} has no `**Definition of done:**` section. "
             "Acceptance has nothing to validate against — the milestone's promise was never written. "
             "Add it to ROADMAP.md before releasing."
         )
 
-    tail = block[heading.end():]
-    next_label = _NEXT_LABEL_RE.search(tail)
-    dod_block = tail[: next_label.start()] if next_label else tail
-
-    bullets = [text.strip() for _state, text in _DOD_BULLET_RE.findall(dod_block)]
+    bullets = [text.strip() for text in _find_milestone(roadmap_text, milestone_id).dod]
     if not bullets:
         raise GateViolation(
             f"{milestone_id} declares a Definition of done with no `- [ ]` bullets. "
-            "An empty promise cannot be accepted or rejected."
+            "An empty promise cannot be accepted or rejected. Each bullet needs the "
+            "checkbox:\n\n"
+            "    **Definition of done (all must hold):**\n"
+            "    - [ ] one user-visible promise, exercisable against the release\n"
         )
 
     return {

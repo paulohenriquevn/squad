@@ -74,6 +74,7 @@ def test_cli_runs_against_real_file(roadmap_pre_flip: Path, tmp_path: Path) -> N
             "--roadmap", str(roadmap_pre_flip),
             "--milestone-id", "M2",
             "--version", "0.5.0",
+            "--verdict", "ACCEPTED",
             "--roadmap-runs-dir", str(runs_dir),
         ],
         capture_output=True,
@@ -100,7 +101,7 @@ def test_cli_returncode_1_on_multi_flip(tmp_path: Path) -> None:
     )
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
     result = subprocess.run(
-        ["python3", str(script), "--roadmap", str(bad_roadmap), "--milestone-id", "M2", "--version", "0.1.0"],
+        ["python3", str(script), "--roadmap", str(bad_roadmap), "--milestone-id", "M2", "--version", "0.1.0", "--verdict", "ACCEPTED"],
         capture_output=True,
         text=True,
      check=False)
@@ -111,7 +112,7 @@ def test_cli_returncode_1_on_multi_flip(tmp_path: Path) -> None:
 def test_cli_returncode_2_on_invalid_milestone_id(roadmap_pre_flip: Path) -> None:
     script = Path(__file__).parent.parent / "scripts" / "flip_milestone_checkbox.py"
     result = subprocess.run(
-        ["python3", str(script), "--roadmap", str(roadmap_pre_flip), "--milestone-id", "not-valid", "--version", "0.1.0"],
+        ["python3", str(script), "--roadmap", str(roadmap_pre_flip), "--milestone-id", "not-valid", "--version", "0.1.0", "--verdict", "ACCEPTED"],
         capture_output=True,
         text=True,
      check=False)

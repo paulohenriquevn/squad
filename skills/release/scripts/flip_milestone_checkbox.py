@@ -54,6 +54,13 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
+from squad.roadmap import Status, find as _find_milestone  # noqa: E402 — post-bootstrap import
+
+#: The only verdicts that may close a milestone. `rules/cycle-acceptance.md` § Hard
+#: gates has said so since the flip moved there; until 2026-09-21 this script had never
+#: heard the word `verdict` — the gate was honoured by discipline at both ends, and the
+#: rule said so in an open regression note rather than pretending otherwise.
+GREEN_VERDICTS = ("ACCEPTED", "ACCEPTED_WITH_CAVEATS")
 
 
 def _header_re(milestone_id: str) -> re.Pattern[str]:
@@ -65,9 +72,17 @@ def _header_re(milestone_id: str) -> re.Pattern[str]:
 
 
 def flip(roadmap_text: str, milestone_id: str) -> tuple[str, str]:
-    """Return (new_text, status) where status ∈ {flipped, already-x, not-found, multi-flip}."""
+    """Return (new_text, status) ∈ {flipped, already-x, not-found, cancelled, multi-flip}.
+
+    `cancelled` is separated from `not-found` because they were the same answer and are
+    not the same fact. The header pattern cannot match `[-]`, so a cancelled milestone
+    reported as absent sent a reader hunting a section that was sitting in the file.
+    """
     matches = list(_header_re(milestone_id).finditer(roadmap_text))
     if not matches:
+        milestone = _find_milestone(roadmap_text, milestone_id)
+        if milestone is not None and milestone.status is Status.CANCELLED:
+            return roadmap_text, "cancelled"
         return roadmap_text, "not-found"
     if len(matches) > 1:
         return roadmap_text, "multi-flip"
@@ -169,6 +184,10 @@ def main() -> int:
     parser.add_argument("--roadmap", type=Path, default=Path("ROADMAP.md"))
     parser.add_argument("--milestone-id", required=True, help="Milestone to flip (e.g. M3).")
     parser.add_argument("--version", required=True, help="Semver string without leading 'v'.")
+    parser.add_argument(
+        "--verdict", required=True,
+        help="the verdict compute_acceptance_verdict.py emitted; only "
+             f"{' / '.join(GREEN_VERDICTS)} may flip a checkbox")
     parser.add_argument("--plan", type=Path, help="Path to the plan file (recorded in roadmap-runs).")
     parser.add_argument("--release-log", type=Path, help="Path to the release log (recorded in roadmap-runs).")
     parser.add_argument(
@@ -191,14 +210,44 @@ def main() -> int:
         print(f"invalid milestone_id (expected M<N>): {args.milestone_id!r}", file=sys.stderr)
         return 2
 
+    # `[x]` claims a user-visible promise was met and was WATCHED being met. Only the
+    # script that computed the verdict can say that, so the token travels here and is
+    # checked, rather than the caller being trusted to have looked at it.
+    if args.verdict not in GREEN_VERDICTS:
+        print(
+            f"FAILS roadmap-checkbox: refusing to flip {args.milestone_id} on verdict "
+            f"{args.verdict!r}. Only {' / '.join(GREEN_VERDICTS)} may close a "
+            f"milestone (rules/cycle-acceptance.md § Hard gates). REJECTED and "
+            f"NOT_VALIDATED both leave the checkbox at `[ ]`.",
+            file=sys.stderr,
+        )
+        return 1
+
     runs_dir = args.roadmap_runs_dir or _default_runs_dir(args.roadmap.resolve().parent)
 
     text = args.roadmap.read_text(encoding="utf-8")
     new_text, status = flip(text, args.milestone_id)
 
     if status == "not-found":
-        print(f"WARN roadmap-checkbox: {args.milestone_id} not found in {args.roadmap} — skipping flip")
-        return 0
+        # NOT exit 0. This printed a WARN and returned success until 2026-09-21, so a
+        # caller running `flip || exit 1` was told the flip happened. A milestone whose
+        # header sits at `##` instead of `###` never closed and never said why — the
+        # silence `rules/cycle-acceptance.md` documented and left standing.
+        print(
+            f"FAILS roadmap-checkbox: {args.milestone_id} not found in {args.roadmap}. "
+            f"The header must be `### {args.milestone_id} — [ ] <name>` — a `##` header "
+            f"does not match, and neither does a missing em-dash. Nothing was flipped.",
+            file=sys.stderr,
+        )
+        return 1
+    if status == "cancelled":
+        print(
+            f"FAILS roadmap-checkbox: {args.milestone_id} is cancelled (`[-]`). A "
+            f"cancelled milestone is not accepted into done; reopen it to `[ ]` first "
+            f"if the work resumed.",
+            file=sys.stderr,
+        )
+        return 1
     if status == "already-x":
         print(f"INFO roadmap-checkbox: {args.milestone_id} already [x] — no-op")
         return 0
