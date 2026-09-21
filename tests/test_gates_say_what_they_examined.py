@@ -53,6 +53,10 @@ NEEDS_MORE_THAN_A_ROOT = {
     # and only the one being cut is the subject; sweeping them all would report on
     # history nobody is releasing.
     "check_tag_integrity",
+    # `check_release_reachable --tag` asks the remote about ONE published release, for
+    # the same reason: the subject is the release this run just cut, not every release
+    # the repository ever had.
+    "check_release_reachable",
 }
 
 

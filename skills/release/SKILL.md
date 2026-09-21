@@ -259,7 +259,17 @@ gh release create "v${NEXT_VERSION}" \
   --title "v${NEXT_VERSION}" \
   --notes "$RELEASE_NOTES" \
   --target "$MERGE_SHA"
+
+# Confirm what was just published. The chain used to end at the line above and emit
+# RELEASED — so a draft release, or a `gh` call that failed AFTER the tag was pushed,
+# produced a verdict over an artifact no consumer could fetch. That verdict is what
+# ADVANCE reads to write `shipped`. Exit 2 means it could not be checked.
+python3 "$ECO/mechanisms/gates/check_release_reachable.py" --tag "v${NEXT_VERSION}" || exit 1
 ```
+
+This runs for **every** item, with or without a `milestone_id`. `/acceptance` exercises a
+milestone's declared promises and an off-roadmap item has none — but "did it ship at all"
+has an answer for both, and until 2026-09-21 nothing asked it for either.
 
 ### Step 7.5 — Hand off to `/acceptance` (this cycle does NOT flip the checkbox)
 

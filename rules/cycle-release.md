@@ -226,6 +226,11 @@ means, never whether something is breaking at all.
 
   Every correct release would have failed its own gate. Nobody found out because neither clause was mechanised: one demanded the impossible, the other was carried as debt with the note that "nothing inspects the tag object's type or the branch it was cut from". Two unmechanised clauses about one object, and the contradiction between them survived because no code ever had to hold both.
 - **CHANGELOG must have content** — `changelog_section_nonempty.py` refuses if `[Unreleased]` is empty after stripping headers.
+- **The published release must exist and be public** — `mechanisms/gates/check_release_reachable.py --tag v{version}`, run in Step 7 immediately after `gh release create`. It confirms a release exists for the tag, is not a DRAFT, and names the tag that was cut.
+
+  **The chain used to end at `gh release create` and emit `RELEASED`.** A draft release, or a `gh` call that failed after the tag was already pushed, produced that verdict over an artifact no consumer can fetch — and `RELEASED` is what `cycle-maintenance`'s ADVANCE reads to write `shipped` into the registry. Three ways the last step half-succeeds, none of them looked at.
+
+  It runs for **every** item, with or without a `milestone_id`. What it does NOT claim: that a package is installable from a registry, or that the delivery works. The first needs the network and a registry; the second is `cycle-acceptance`, against declared criteria.
 - **Single-flip invariant** — owned by [`cycle-acceptance § Hard gates`](cycle-acceptance.md), which is where the flip moved (see § Post-merge ROADMAP.md checkbox flip). This cycle no longer flips anything; the clause stays as a pointer so nobody re-adds a flip here.
 - **No silent flip** — `flip_milestone_checkbox.py --commit`, which writes the run-file and aborts the whole operation (restoring the checkbox) when the commit fails. The roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.
 
@@ -244,6 +249,8 @@ means, never whether something is breaking at all.
 - Cutting a release while `cycle-code-quality` reports unaddressed `FAIL_HARD` findings. The review gate already enforces this; never bypass.
 - **Flipping the ROADMAP checkbox from this cycle.** It moved to `cycle-acceptance` (see § Post-merge ROADMAP.md checkbox flip). The flip anti-patterns themselves — fuzzy matching, multi-flip, flipping without a roadmap-runs entry — live there, with the flip.
 - **Blocking the release if `milestone_id` is missing.** Ad-hoc work (hotfixes, off-roadmap fixes) is by design — emit INFO, continue as RELEASED, skip the acceptance handoff.
+
+  **What skipping the handoff does NOT skip**, since 2026-09-21: `check_release_reachable.py`. An external review read the milestone-only rule as leaving every off-roadmap item unverified, and half of that reading was right. `cycle-acceptance.md` argues that an item nobody promised a user has no user-visible promise to exercise, and for PRODUCT acceptance the argument holds. It says nothing about whether the thing shipped — a question with an answer for every item — and that question now gets asked for all of them.
 
 ## Output
 

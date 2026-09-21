@@ -6,6 +6,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+
+- **The chain now confirms that what it published exists.** `cycle-release` ended at
+  `gh release create` and emitted `RELEASED`. Nothing looked afterwards — so a release
+  left as a DRAFT, a `gh` call that failed *after* the tag was already pushed, or a tag
+  that never propagated each produced `RELEASED` over an artifact no consumer can fetch.
+  That verdict is what `cycle-maintenance`'s ADVANCE reads to write `shipped` into the
+  registry.
+
+  `mechanisms/gates/check_release_reachable.py` runs in Step 7, immediately after the
+  publish, and checks three ways the last step half-succeeds: a release exists for the
+  tag, it is not a draft, and it names the tag that was cut. It runs for **every** item,
+  with or without a `milestone_id`.
+
+  **What it deliberately does not claim.** That a package is installable from npm, PyPI
+  or crates.io — that needs the network and a registry. And that the delivery works —
+  `/acceptance` exercises that, against declared criteria. Saying so in the gate keeps
+  it from being read as the stronger check it is not. An absent or unauthenticated `gh`
+  exits 2: an inability to look is not a look that found nothing. 6 tests.
+
+  This came from an external review, which read the milestone-only acceptance rule as
+  leaving every off-roadmap item unverified. Half of that reading was right.
+  `cycle-acceptance.md` argues that an item nobody promised a user has no user-visible
+  promise to exercise, and for the PRODUCT question the argument holds — it was
+  answering a different question from the one being asked. Whether the thing shipped at
+  all has an answer for every item, and nobody was asking it.
+
 ### Fixed
 
 - **Two allowlists exempted nothing, and one of them was printed as the remedy.**
