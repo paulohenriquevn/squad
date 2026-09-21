@@ -226,7 +226,27 @@ def check_approved(project: Path) -> Check:
         return Check("approved work", None,
                      "no BACKLOG.md, so nothing can be approved either", "")
     text = path.read_text(encoding="utf-8-sig")
-    approved = len(re.findall(r"^status:\s*approved\s*$", text, re.M))
+    # B-197 — both sides of the subtraction counted over the SAME blocks.
+    #
+    # The first version counted the population as `^status: approved` and the attributions as
+    # every `^approved_by:` line in the FILE. Different domains, so the moment a registry
+    # advanced past `approved` the remainder went negative: measured on a consumer
+    # 2026-09-21, `11 approved · 41 by the loop · -30 unattributed`, printed as `[ok]`.
+    #
+    # Widening the population to the committed statuses was a HALF-MEASURE, recorded here
+    # because the number proved it: the same registry then read `-3`, since a `killed` item
+    # approved before it died still carries the field. Widening one side of a subtraction does
+    # not make two populations the same population; counting both over one set of blocks does.
+    #
+    # The committed set is the honest population for the question the split answers — "has
+    # anyone read this registry?" — because an item that shipped was read by whoever committed
+    # to it. Same set `check_backlog_structure.py` fires `approval_unattributed` over, so the
+    # two instruments agree about who owes an attribution.
+    _committed_re = re.compile(r"^status:\s*(?:approved|planned|shipped)\s*$", re.M)
+    _blocks = [b for b in re.split(r"(?m)^(?=## B-\d{3} )", text) if _committed_re.search(b)]
+    approved = len(_blocks)
+    committed_by_human = sum(1 for b in _blocks if re.search(r"^approved_by:\s*human/", b, re.M))
+    committed_by_system = sum(1 for b in _blocks if re.search(r"^approved_by:\s*system/", b, re.M))
     triaged = len(re.findall(r"^status:\s*triaged\s*$", text, re.M))
     if approved:
         # WHO approved, not just how many. Since 2026-09-14 a sweep finding is born
@@ -234,8 +254,7 @@ def check_approved(project: Path) -> Check:
         # to answer "has anyone read this registry?" — and a loop that approves its own
         # findings can feed itself. The split is reported at the one moment it can still
         # change a decision: before the next run starts.
-        by_human = len(re.findall(r"^approved_by:\s*human/", text, re.M))
-        by_system = len(re.findall(r"^approved_by:\s*system/", text, re.M))
+        by_human, by_system = committed_by_human, committed_by_system
         unattributed = approved - by_human - by_system
         parts = [f"{approved} item(s) approved"]
         if by_human or by_system:

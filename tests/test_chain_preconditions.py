@@ -191,6 +191,51 @@ def test_one_approved_item_is_enough_to_start(tmp_path):
     assert pre.measure(project).failed == []
 
 
+def test_the_unattributed_count_is_never_negative(tmp_path):
+    """B-197. The line claims to PARTITION the committed set, and it was subtracting two
+    populations counted over different domains.
+
+    `approved` counted `^status: approved` only; `by_human`/`by_system` counted every
+    `^approved_by:` line in the file. An item that is `planned` or `shipped` still carries
+    the field — it was approved on its way there — so the moment a registry advanced past
+    `approved` the subtraction went negative.
+
+    Measured on a consumer 2026-09-21, after 14 items were attributed: `11 item(s) approved
+    · 0 by a person, 41 by the loop itself · -30 with no attribution`. Printed as `[ok]`,
+    which is the part that matters: a gate that runs BEFORE the first item is selected and
+    reports an impossible number teaches a careful reader to stop reading it.
+    """
+    project = _project(tmp_path)
+    (project / "BACKLOG.md").write_text(
+        "# Backlog\n\n## Items\n\n"
+        "## B-001 — t\n\nstatus: approved\napproved_by: human/someone\n\n"
+        "## B-002 — t\n\nstatus: planned\napproved_by: system/autonomous-sweep\n\n"
+        "## B-003 — t\n\nstatus: shipped\napproved_by: system/autonomous-sweep\n",
+        encoding="utf-8")
+
+    detail = _by_name(pre.measure(project), "approved work").detail
+
+    assert "-" not in detail.split("with no attribution")[0].split("·")[-1], (
+        f"the unattributed count went negative: {detail}"
+    )
+    # And the partition is over the COMMITTED set, which is the population the field
+    # belongs to — 3 items, 1 by a person and 2 by the loop, 0 unattributed.
+    assert "3 item(s) approved" in detail, detail
+    assert "1 by a person, 2 by the loop itself" in detail, detail
+
+
+def test_an_item_past_approved_still_counts_as_committed(tmp_path):
+    """The counter-case, asserted beside the one above so the fix cannot be 'achieved' by
+    counting nothing: a registry whose only committed item is `shipped` still satisfies the
+    gate, because somebody committed to it on the way there."""
+    project = _project(tmp_path)
+    (project / "BACKLOG.md").write_text(
+        "# Backlog\n\n## Items\n\n## B-001 — t\n\nstatus: shipped\n"
+        "approved_by: human/someone\n", encoding="utf-8")
+
+    assert _by_name(pre.measure(project), "approved work").ok is True
+
+
 def test_with_no_registry_approval_is_unmeasurable_not_failed(tmp_path):
     """Two questions, and the second only exists if the first has an answer."""
     project = _project(tmp_path, backlog=False)
