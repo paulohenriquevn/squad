@@ -84,6 +84,7 @@ they read, and moving them would separate them from the parser they share.
 | `unroutable_repo_closed` | minor | The same on a `shipped` or `killed` item. History, not an impediment: the contract forbids renumbering it and forbids an impediment on closed work, so a blocker there is permanent and unfixable |
 | `raw_with_evidence` | major | Measurement happened and the status was never advanced — the rot the loop exists to prevent |
 | `killed_without_reason` | major | Indistinguishable from an abandoned run (gate G-K) |
+| `checkbox_contradicts_status` | minor | The heading's `[x]`/`[ ]` disagrees with the `status:` line. The box is a RENDERING of the status and nothing reads it, so it drifts: measured on a consumer 2026-09-21, 46 of 95 headings disagreed. A heading with no box is not reported — absence is not disagreement (B-200). |
 | `status_contradicts_body` | major | The block declares itself closed in its own prose and is filed as open. Measured on a consumer 2026-09-18: twelve items said `closed in code` and every one was still `triaged`, while the report read SHIPPABLE |
 | `missing_field` | major | A required field absent |
 | `malformed_id` | blocker | An id below three digits. The block parses and nothing can reach it: `blocked_by: B-15` names no edge and `backlog_status.py` refuses the id on the command line. The fix is zero-padding, which is the same number written correctly rather than a renumbering |

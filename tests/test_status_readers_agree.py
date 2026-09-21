@@ -298,6 +298,11 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # here are exempted rather than enumerated.
         "tests/test_a_withdrawal_is_recorded_not_silent.py",
         "skills/backlog-review/tests/test_an_item_that_says_it_is_closed_is_not_open.py",
+        # Fixtures for the checkbox gate. It names `shipped`/`killed`/`triaged` to BUILD the
+        # four cases — box agrees, box disagrees in each direction, no box at all — never to
+        # decide what a status means; the meaning is `TERMINAL_STATUSES`, read from the contract
+        # by the checker under test.
+        "tests/test_the_checkbox_agrees_with_the_status.py",
         # Fixtures for the column-activity states. It names statuses to place items in
         # lanes, never to decide what a status MEANS — the same reason its siblings
         # above are here rather than pinned.

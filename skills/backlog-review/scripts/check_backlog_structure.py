@@ -23,6 +23,7 @@ What it checks instead — the ways a maintenance registry actually rots:
     objective_link_missing  objectives are declared and the item names none
     illegal_status          a status outside the declared set
     killed_without_reason   killed with no kill_reason (gate G-K, after the fact)
+    checkbox_contradicts_status  the heading's `[x]`/`[ ]` disagrees with `status:`
     status_contradicts_body  the block's prose declares it closed and its status says open
     triaged_without_evidence  triaged but evidence is still none-yet
     raw_with_evidence       raw but carrying evidence — status never advanced
@@ -197,6 +198,9 @@ class Item:
     #: The block's prose, kept because a block can CONTRADICT its own status field and the fields
     #: alone cannot see it. See `status_contradicts_body`.
     body: str = ""
+    #: The heading's `[x]`/`[ ]`, which `BLOCK_RE` already captures and nothing kept. `None` when
+    #: the heading has no box — absence is not disagreement. See `checkbox_contradicts_status`.
+    checkbox: str | None = None
 
 
 def _parse_items(content: str) -> list[Item]:
@@ -211,6 +215,7 @@ def _parse_items(content: str) -> list[Item]:
             item_id=match.group(1),
             title=match.group(2).strip(),
             body=body,
+            checkbox=match.group(3) if match.re.groups >= 3 else None,
             line=content[: match.start()].count("\n") + 1,
         )
         seen_values: dict[str, list[str]] = {}
@@ -650,6 +655,27 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
             findings.append(Finding("status_contradicts_body", "deterministic", "major", iid,
                 f"the block declares itself closed in its own prose and is filed as `{status}`. "
                 "One of the two is wrong, and a reader cannot tell which."))
+        # B-200 — the `[x]` on the heading is a RENDERING of `status:`, not a second source.
+        #
+        # Nothing reads it: measured across the kit 2026-09-19, a grep over every `.py`/`.sh`/`.ts`
+        # returns only alignment-brief sign-off boxes. So it drifted — measured on a consumer
+        # 2026-09-21, **46 of 95** headings disagreed with their own status line, items filed
+        # `shipped` and `killed` still carrying `[ ]`.
+        #
+        # A marker that looks like state and is not is worse than no marker: a reader who trusts it
+        # reads the OPPOSITE of the truth. Absence of a box is NOT disagreement — a registry may
+        # predate the shape, and reporting that would push authors to add a marker this finding
+        # exists to distrust.
+        if item.checkbox is not None:
+            ticked = item.checkbox.strip() == "x"
+            closed = status in TERMINAL_STATUSES
+            if ticked != closed:
+                findings.append(Finding("checkbox_contradicts_status", "deterministic", "minor",
+                    iid,
+                    f"the heading carries `[{item.checkbox}]` and the status is `{status}`. The box "
+                    "is a rendering of the status; nothing reads it, so it drifts, and a reader who "
+                    "trusts it reads the opposite of the truth."))
+
         if status == "killed" and not item.fields.get("kill_reason"):
             findings.append(Finding("killed_without_reason", "deterministic", "major", iid,
                 "killed with no kill_reason — indistinguishable from an abandoned run (gate G-K)"))

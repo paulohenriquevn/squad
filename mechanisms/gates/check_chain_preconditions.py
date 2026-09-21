@@ -243,7 +243,8 @@ def check_approved(project: Path) -> Check:
     # to it. Same set `check_backlog_structure.py` fires `approval_unattributed` over, so the
     # two instruments agree about who owes an attribution.
     _committed_re = re.compile(r"^status:\s*(?:approved|planned|shipped)\s*$", re.M)
-    _blocks = [b for b in re.split(r"(?m)^(?=## B-\d{3} )", text) if _committed_re.search(b)]
+    # `\d+`, not `\d{3}`: a registry that crosses B-999 must not vanish from this count.
+    _blocks = [b for b in re.split(r"(?m)^(?=## B-\d+ )", text) if _committed_re.search(b)]
     approved = len(_blocks)
     committed_by_human = sum(1 for b in _blocks if re.search(r"^approved_by:\s*human/", b, re.M))
     committed_by_system = sum(1 for b in _blocks if re.search(r"^approved_by:\s*system/", b, re.M))
