@@ -201,8 +201,18 @@ def test_the_repository_is_named_rather_than_inferred_by_gh() -> None:
     """
     source = (Path(__file__).resolve().parents[1] / "mechanisms" / "cycle"
               / "promote_to_develop.py").read_text(encoding="utf-8")
-    for call in ('"pr", "list"', '"pr", "create"'):
-        line = next(ln for ln in source.splitlines() if call in ln)
+    # DERIVED from the source, never enumerated. The first version of this assertion
+    # listed `"pr", "list"` and `"pr", "create"` by hand and was green for as long as it
+    # existed, while `"pr", "merge"` — the third of the three, added later and absent from
+    # the tuple — stayed unscoped. Observed twice on 2026-09-21 promoting a consumer: the
+    # PR opened and then could not be merged, which is the exact failure the docstring
+    # above describes, passing through the one call the test was not looking at.
+    #
+    # A hand-written list of call sites is a claim about the file that stops being true
+    # the next time somebody adds a call. Reading them out of the file cannot go stale.
+    sites = [ln for ln in source.splitlines() if "call(gh" in ln]
+    assert len(sites) >= 3, f"expected at least the three known gh calls, found {len(sites)}"
+    for line in sites:
         assert "*scoped" in line, f"this gh call is still unscoped: {line.strip()}"
 
 

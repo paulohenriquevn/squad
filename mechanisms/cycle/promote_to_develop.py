@@ -374,7 +374,13 @@ def promote(
 
     report.detail["pr"] = str(number)
 
-    merged = call(gh, ["pr", "merge", str(number), "--merge"])
+    # `*scoped` here too. It was built above and applied to `pr list` and `pr create` and
+    # not to this call, so behind an SSH host alias the promotion opened a PR it could not
+    # then merge — the one outcome the comment above calls "one flag away" from working.
+    # Observed twice on 2026-09-21 promoting usetheokit/theokit: `opened PR #NNN` followed
+    # by "none of the git remotes configured for this repository point to a known GitHub
+    # host", and the operator merging by hand.
+    merged = call(gh, ["pr", "merge", *scoped, str(number), "--merge"])
     if merged is None:
         report.exit_code = UNMEASURED
         return report
