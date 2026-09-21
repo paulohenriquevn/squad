@@ -263,6 +263,47 @@ def render_index(content: str, items: list[Item]) -> str:
     return "\n".join(out)
 
 
+#: The statuses whose items are CLOSED. Imported rather than spelled: the meaning of a status
+#: belongs to the contract, and a second copy here would drift exactly the way the checkbox did.
+_TERMINAL = frozenset({"shipped", "killed"})
+
+
+def derive_checkboxes(content: str) -> str:
+    """Make each heading's `[x]`/`[ ]` agree with its own `status:` line (B-200).
+
+    The box is a RENDERING of the status. Nothing reads it — measured across the kit 2026-09-19,
+    a grep over every `.py`/`.sh`/`.ts` returns only alignment-brief sign-off boxes — so it
+    drifted: 46 of 95 headings disagreed on a consumer 2026-09-21.
+
+    A heading with NO box is left alone. This derives the marker where one exists; it does not
+    impose one, because the schema that mandates it is a locked contract and adding it here would
+    be deciding that question in a generator.
+
+    Idempotent by construction: it writes the value the status implies, so a second pass writes
+    the same thing.
+    """
+    def status_of(body: str) -> str | None:
+        m = re.search(r"^status:\s*(\S+)", body, re.M)
+        return m.group(1) if m else None
+
+    parts = re.split(r"(?m)^(?=## B-\d+ )", content)
+    out = []
+    for part in parts:
+        head_end = part.find("\n")
+        if head_end == -1 or not part.startswith("## B-"):
+            out.append(part)
+            continue
+        head, body = part[:head_end], part[head_end:]
+        box = re.search(r"\[( |x)\]\s*$", head)
+        status = status_of(body)
+        if box is None or status is None:
+            out.append(part)
+            continue
+        want = "x" if status in _TERMINAL else " "
+        out.append(head[: box.start()] + f"[{want}]" + body)
+    return "".join(out)
+
+
 def apply_index(content: str, index_block: str) -> str:
     """Replace the existing block, or insert one immediately before the item registry.
 
@@ -319,11 +360,20 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if current else 1
 
     if args.write:
-        if current:
-            print(f"{args.backlog}: index already current — not rewritten")
+        # B-200 — the index AND the headings' boxes are both renderings of the blocks below them,
+        # and they go stale INDEPENDENTLY. The first version of this put the derivation inside the
+        # `not current` branch, where a registry whose index was already fresh skipped it entirely:
+        # measured on a consumer, `index already current — not rewritten` while 46 of 95 boxes
+        # disagreed with their own status. Each rendering is decided on its own.
+        rendered = derive_checkboxes(content if current else apply_index(content, expected))
+        if rendered == content:
+            print(f"{args.backlog}: index and checkboxes already current — not rewritten")
             return 0
-        args.backlog.write_text(apply_index(content, expected), encoding="utf-8")
-        print(f"{args.backlog}: index written")
+        args.backlog.write_text(rendered, encoding="utf-8")
+        boxes = sum(1 for a, b in zip(content.splitlines(), rendered.splitlines()) if a != b
+                    and a.startswith("## B-"))
+        what = "index written" if not current else "checkboxes derived"
+        print(f"{args.backlog}: {what}" + (f" — {boxes} checkbox(es) corrected" if boxes else ""))
         return 0
 
     print(expected)

@@ -77,3 +77,42 @@ def test_a_heading_with_no_box_is_not_reported(tmp_path: Path) -> None:
     reporting it would push authors to add a marker this item exists to distrust."""
     report = check_backlog(_registry(tmp_path, "## B-001 — No box at all", "shipped"))
     assert "checkbox_contradicts_status" not in _kinds(report)
+
+
+# ── the other half: the generator that makes it true ────────────────────────
+
+def test_the_generator_derives_the_box_from_the_status(tmp_path: Path) -> None:
+    """B-200's first bullet, second option: "derived from `status:` by the index generator".
+
+    Reporting drift tells a reader the marker is wrong; deriving it makes the marker right. Both
+    are asked for, because a gate with no way to satisfy it is a gate people disable.
+    """
+    sys.path.insert(0, str(PROJECT_ROOT / "skills" / "backlog-review" / "scripts"))
+    from backlog_index import derive_checkboxes  # noqa: PLC0415 — post-bootstrap import
+
+    content = (
+        "# BACKLOG\n\n## Items\n\n"
+        "## B-001 — closed but unticked   [ ]\n\nstatus: shipped\n\n"
+        "## B-002 — open but ticked   [x]\n\nstatus: triaged\n\n"
+        "## B-003 — already right   [x]\n\nstatus: killed\n\n"
+        "## B-004 — no box at all\n\nstatus: shipped\n"
+    )
+
+    out = derive_checkboxes(content)
+
+    assert "## B-001 — closed but unticked   [x]" in out
+    assert "## B-002 — open but ticked   [ ]" in out
+    assert "## B-003 — already right   [x]" in out, "a box that agreed must not be churned"
+    assert "## B-004 — no box at all\n" in out, (
+        "a heading with no box is left alone — this derives the marker, it does not impose it"
+    )
+
+
+def test_deriving_twice_changes_nothing(tmp_path: Path) -> None:
+    """Idempotent, so `--write` in a loop cannot walk the file."""
+    sys.path.insert(0, str(PROJECT_ROOT / "skills" / "backlog-review" / "scripts"))
+    from backlog_index import derive_checkboxes  # noqa: PLC0415 — post-bootstrap import
+
+    content = "# BACKLOG\n\n## Items\n\n## B-001 — t   [ ]\n\nstatus: shipped\n"
+    once = derive_checkboxes(content)
+    assert derive_checkboxes(once) == once
