@@ -231,7 +231,7 @@ a label to skip work IS the doubt"*. The rows are this cycle's own.
 - `wiki/product/objectives.md` — `OBJ-N`, each with a metric and a horizon
 - `wiki/product/trd.md` — `REQ-N`, each citing the objective it serves
 - `wiki/product/technical-pieces.md` — `PIECE-N`, each citing the requirements it realises
-- `records/brainstorms/{date}-session.md` — the trail: what was discussed, what was
+- `.squad/records/brainstorms/{date}-session.md` — the trail: what was discussed, what was
   discarded, and why
 
 The split follows `rules/records-location.md`. The four documents are **knowledge**: they

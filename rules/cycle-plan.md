@@ -48,7 +48,7 @@ interview already happened wherever the work actually is.
 
 ```
 /plan-alignment {slug}                       [Phase 0 — grill + draw, scored]
-     ↓ (produces: records/alignment/{slug}-alignment.md + {slug}-walkthrough.html)
+     ↓ (produces: .squad/records/alignment/{slug}-alignment.md + {slug}-walkthrough.html)
      ↓ verdict:
      ↓   ALIGNED          → machine >= 90% AND a non-author reviewer signed → /plan-write
      ↓   AWAITING_REVIEW  → structure done, nobody signed off yet; ask for the review
@@ -56,7 +56,7 @@ interview already happened wherever the work actually is.
      ↓   NEEDS_SPLIT      → split into items that each align on their own
 /plan-write "{one-sentence feature description}"
      ↓ (Step 0 auto-discovers rules/ + skills/*-patterns/ + grill output if present)
-     ↓ (produces: records/plans/{slug}-plan.md)
+     ↓ (produces: .squad/records/plans/{slug}-plan.md)
 /plan-edge-cases {slug}
      ↓ (MUST-FIX absorbed into the plan)
 /deps-audit {slug}

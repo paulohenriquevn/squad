@@ -8,8 +8,8 @@ Re-validate quality gates with stricter thresholds before merge. Catches issues 
 
 ## Pre-conditions
 
-- Implementation output exists at `records/implementations/{slug}-implementation.md`.
-- Code-quality audit exists at `records/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} — or `FAIL_SOFT` accompanied by an ADR dismissing each soft cap (per `code-quality-golden-rule.md` § 1). `FAIL_HARD` and `INVALID` block this cycle.
+- Implementation output exists at `.squad/records/implementations/{slug}-implementation.md`.
+- Code-quality audit exists at `.squad/records/audits/{slug}-code-quality-*.md` with verdict ∈ {`PASS`, `PASS_WITH_CAVEATS`} — or `FAIL_SOFT` accompanied by an ADR dismissing each soft cap (per `code-quality-golden-rule.md` § 1). `FAIL_HARD` and `INVALID` block this cycle.
 
   **Enforced, not remembered.** `skills/review/scripts/check_upstream_gate.py` reads the newest audit for the slug and emits a BLOCKER when it is missing, unreadable, `FAIL_HARD`/`INVALID`, or `FAIL_SOFT` with any soft cap that no ADR names. `consolidate_findings.py` folds those findings into the same verdict computation as every other finding, so a `/review` verdict cannot be produced without the check having run. Until 2026-08-26 this was prose plus a `test -f` in `SKILL.md`, and the ADR — the artefact that makes a soft cap dismissible — was never looked for: asserting it existed was enough. "Each soft cap" is the strict reading: with two caps and one ADR, the loose reading approves the cap nobody examined as a passenger of the one that was.
 - Working branch has commits ahead of the base branch.
@@ -132,7 +132,7 @@ re-run by hand, or quietly ignored. The mechanism is now part of the line.
 
 ## Output
 
-- `records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix, opening with a frontmatter declaring the item it covered. `check_record_scope.py` reads that declaration, and it measured why: 2 of 48 reviews named a reviewed range and 3 of 16 audits named a scope, so *"a review that covered seven items and one that covered a single item are indistinguishable from the file"*. The past stays unrecoverable; what the frontmatter stops is the same hole opening again. The report also names every findings file it could NOT parse — an empty findings list and a file that failed to load are different facts, and only the JSON carried that distinction until 2026-09-21.
+- `.squad/records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix, opening with a frontmatter declaring the item it covered. `check_record_scope.py` reads that declaration, and it measured why: 2 of 48 reviews named a reviewed range and 3 of 16 audits named a scope, so *"a review that covered seven items and one that covered a single item are indistinguishable from the file"*. The past stays unrecoverable; what the frontmatter stops is the same hole opening again. The report also names every findings file it could NOT parse — an empty findings list and a file that failed to load are different facts, and only the JSON carried that distinction until 2026-09-21.
 - `.squad/records/reviews/review-{slug}-{YYYY-MM-DD}/` — per-agent audit trail. Generated per-item files are output; `agents/` holds the kit's DECLARED specialists, and mixing the two put a run's trail where a reader looks for a roster.
 
 ## Anti-patterns

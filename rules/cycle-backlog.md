@@ -460,7 +460,7 @@ index and the items to move together, so the gate is what keeps them honest.
 ## Output
 
 - `BACKLOG.md` at the umbrella root — the single registry, spanning all repos in the inventory.
-- `records/backlog/{slug}-intake.md` — the intake grill log (one entry per answered question, with the G5 decision recorded).
+- `.squad/records/backlog/{slug}-intake.md` — the intake grill log (one entry per answered question, with the G5 decision recorded).
 
 The registry lives at the root of the governed SCOPE and not scattered below it, because a maintenance team asking "what is pending?" must have exactly one place to look. Per-directory backlogs inside one scope re-create the orphaned-findings problem the single-registry rule exists to solve.
 

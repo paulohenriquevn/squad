@@ -10,7 +10,7 @@ Take an approved implementation from `READY_TO_MERGE` to a released, tagged vers
 
 ## Pre-conditions
 
-- `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `records/reviews/{slug}-review-{date}.md`).
+- `cycle-review` emitted verdict `READY_TO_MERGE` (audit at `.squad/records/reviews/{slug}-review-{date}.md`).
 - Working branch is `workspace` (never `develop` or `main` directly — see `git-safety.md` § 1). The release commits are authored on `workspace` and reach `develop` through the promotion PR, like every other change.
 - No uncommitted changes (`git status --porcelain` empty).
 - CHANGELOG `[Unreleased]` section has ≥ 1 entry — otherwise the release has nothing to announce.
@@ -232,7 +232,7 @@ means, never whether something is breaking at all.
 ## Stop conditions
 
 - `gh pr create` fails → halt; surface stderr.
-- PR is closed without merge → halt; record the rationale in `records/releases/{version}-release.md`.
+- PR is closed without merge → halt; record the rationale in `.squad/records/releases/{version}-release.md`.
 - Tag already exists for the computed version → the computed version is already cut, so the chain advances to the next free patch level and records that it did. It halts only if that level is taken too, which means the tag series disagrees with the CHANGELOG — a broken record rather than a version choice, registered as its own item.
 
 ## Anti-patterns
@@ -247,7 +247,7 @@ means, never whether something is breaking at all.
 
 ## Output
 
-- `records/releases/{version}-release.md` — record of the release run: input verdict, computed version, PR URL, merge commit, tag, GitHub release URL.
+- `.squad/records/releases/{version}-release.md` — record of the release run: input verdict, computed version, PR URL, merge commit, tag, GitHub release URL.
 - `[Unreleased]` empty (until the next change lands).
 - `git tag v{version}` annotated, pushed.
 - GitHub release published.

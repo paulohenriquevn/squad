@@ -170,13 +170,13 @@ keeps only its own deviations.
 A golden rule is LOCKED. Changing it requires ALL of:
 
 1. An ADR in `docs/ADR/` proposing the change — **versioned, because the record has to
-   reach whoever clones**. This step named `records/adrs/` until 2026-09-07, and
+   reach whoever clones**. This step named `.squad/records/adrs/` until 2026-09-07, and
    `.gitignore` excludes `records/` wholesale, so the justification for changing the
    kit's most locked contracts went to a directory that travels nowhere. The
    contradiction was already load-bearing: `plan-confidence-golden-rule.md` extended a
    gate on 2026-08-26 and had to write its reasoning into the golden rule instead,
    saying so in the file — somebody following the protocol had to break it to be
-   useful. A **consumer's** run-local ADRs stay under `records/adrs/`; that is their
+   useful. A **consumer's** run-local ADRs stay under `.squad/records/adrs/`; that is their
    repository and their trail, and it is what `code-quality-allowlist.txt` and
    `deps-audit-allowlist.txt` mean when they require one for an exemption.
 2. A CHANGELOG entry under `[Unreleased] § Changed`.

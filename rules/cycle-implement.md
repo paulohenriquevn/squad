@@ -8,8 +8,8 @@ Execute a confidence-approved plan into code, tests, and commits. TDD-discipline
 
 ## Pre-conditions
 
-- A plan exists at `records/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
-- The item the plan implements scored `ALIGNED` — `records/alignment/{slug}-alignment.md` exists and `score_alignment.py` exits 0 on it, which needs BOTH a machine score >= 90% and a tick in every `## Reviewer sign-off` box by a reviewer **who is not the author** — a person, or `alignment_judge.py` when none is coming. `AWAITING_REVIEW` is not a pass, and the agent that wrote the brief may never tick a box. This line said *a human's tick* until 2026-09-01, contradicting the very file it cites: [`alignment-threshold.md § Amended 2026-09-01`](../skills/_kit-rules/alignment-threshold.md) requires a reviewer who is not the author, which a judge can be, and `score_alignment.py` had already implemented it — the verdict turns on `reviewer_signed_off`, with `signed_by_is_human` reported beside it so a judge's `ALIGNED` reads as the weaker claim it is. Honoured literally, the stale wording re-froze every unattended run at `AWAITING_REVIEW`, which is the halt that amendment exists to end.
+- A plan exists at `.squad/records/plans/{slug}-plan.md` with verdict ≥ SHIPPABLE_WITH_CAVEATS.
+- The item the plan implements scored `ALIGNED` — `.squad/records/alignment/{slug}-alignment.md` exists and `score_alignment.py` exits 0 on it, which needs BOTH a machine score >= 90% and a tick in every `## Reviewer sign-off` box by a reviewer **who is not the author** — a person, or `alignment_judge.py` when none is coming. `AWAITING_REVIEW` is not a pass, and the agent that wrote the brief may never tick a box. This line said *a human's tick* until 2026-09-01, contradicting the very file it cites: [`alignment-threshold.md § Amended 2026-09-01`](../skills/_kit-rules/alignment-threshold.md) requires a reviewer who is not the author, which a judge can be, and `score_alignment.py` had already implemented it — the verdict turns on `reviewer_signed_off`, with `signed_by_is_human` reported beside it so a judge's `ALIGNED` reads as the weaker claim it is. Honoured literally, the stale wording re-froze every unattended run at `AWAITING_REVIEW`, which is the halt that amendment exists to end.
 - The repository is on `workspace` (per Unbreakable Rule 4 — work is born on `workspace` and promoted to `develop` via PR; see `git-safety.md` § 1).
 - The project bootstrapped its language toolchain (e.g., `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`).
 
@@ -194,9 +194,9 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
 ## Output
 
 - Commits on the working branch.
-- `records/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
-- `records/implementations/{slug}/` — per-iteration logs.
-- `records/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
+- `.squad/records/implementations/.progress-{slug}.json` — the runtime checkpoint (gitignored) the halt-loop writes each iteration and every gate reads. Schema: `skills/implement/templates/progress-schema.json`.
+- `.squad/records/implementations/{slug}/` — per-iteration logs.
+- `.squad/records/implementations/{slug}-implementation.md` — final summary with wiring triad checklist per task.
 
 ## Cross-references
 
@@ -213,5 +213,5 @@ The promise `VALIDATION_GATE_PASSED` is emitted EXCLUSIVELY when `run_validation
   - Orchestrator: `skills/implement/scripts/mini_review.py`
   - Phase completeness: `skills/implement/scripts/check_phase_completeness.py`
   - Diff cohesion: `skills/implement/scripts/check_diff_cohesion.py`
-  - Reports persisted at: `records/mini-reviews/{slug}-phase{N}-review-{date}.md`
+  - Reports persisted at: `.squad/records/mini-reviews/{slug}-phase{N}-review-{date}.md`
   - Companion to `cycle-review.md` (final review): mini review runs per-phase; cycle-review runs once at the end. Both must pass for handoff.

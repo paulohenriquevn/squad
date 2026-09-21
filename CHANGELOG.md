@@ -42,6 +42,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   plan", the code for a plan it could not read. The waiver deliberately does not cover
   exit 2 — exempting it would turn "unreadable" into "passed".
 
+- **`records-location.md` sent readers to a directory nothing writes, in the section
+  that verifies such claims.** The rule declares **"`<project>/.squad/` is the one write
+  root. Always, in every layout"** and **"There is no layout exception"**. Its
+  *Enforcement* section opens: *"Measured 2026-09-05, because this section named three
+  mechanisms and two of them do not exist. A rule that lists enforcement a reader cannot
+  find is worse than one that lists none: it stops them looking."*
+
+  The third item — the only one marked **This one holds**, with line numbers — claimed
+  `install.sh` and `patch_install.sh` scaffold `.claude/records/{…}`. Measured on a clean
+  install: `.squad/records/{acceptance,audits,backlog,brainstorms,discoveries,…}` is
+  created, `.claude/records/` is not created at all, and `install.sh:772` is a comment
+  about `merge_settings.py`. The one item that said HOLDS had aged into the same defect
+  as the two it struck through. It now names the real lines, and points out that neither
+  shell script spells the root — both ask `squad/paths.py` — so the claim cannot drift
+  the same way twice.
+
+- **39 records paths across 11 cycle rules pointed outside the write root.** Measured:
+
+  ```
+  rules/cycle-*.md    22 paths `records/…`      1 `.squad/records/…`
+  the skills           0                       35 `.squad/records/…`
+  ```
+
+  A clean split: what EXECUTES uses the write root, what DOCUMENTS sends the reader
+  where nothing is written — and `records-location.md` opens by naming that exact cost,
+  *"a reader who checks the wrong one reports absence where evidence exists."* Same
+  defect as the install message corrected two entries above, at seven times the size.
+  `tests/test_a_rule_points_at_the_write_root.py` holds every `cycle-*.md` to it, with
+  one narrow exemption: the rule ABOUT the move must still be able to write the old path
+  in order to say it is old.
+
 ### Changed
 
 - **One sunset policy for every allowlist.** `squad/allowlist.py` owns the window, what

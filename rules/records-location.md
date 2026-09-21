@@ -80,7 +80,7 @@ rule its consumers read as optional.
 
 ## Autonomy
 
-Consumers do **not** share a records. Each project owns its `ROADMAP.md` and its `.claude/records/`, and no cycle artifact in one project may reference another's. A goal, a gate or a report pointing outside the project couples two autonomous repositories and makes one milestone's completion depend on another repository's state.
+Consumers do **not** share a records. Each project owns its `ROADMAP.md` and its own `.squad/`, and no cycle artifact in one project may reference another's. A goal, a gate or a report pointing outside the project couples two autonomous repositories and makes one milestone's completion depend on another repository's state.
 
 Nothing enforces this today. `install_goal_hook.py` did — it refused a `--roadmap` or `--acceptance-dir` resolving outside the project root — and it was deleted in `77501b0` with the `session-goal` skill it belonged to. The rule survived the deletion still describing it in the present tense. Measured 2026-09-05: the file exists in no commit's worktree and in no tracked path.
 
@@ -90,8 +90,19 @@ Measured 2026-09-05, because this section named three mechanisms and two of them
 A rule that lists enforcement a reader cannot find is worse than one that lists none: it stops them
 looking.
 
-- `install.sh` and `patch_install.sh` scaffold `.claude/records/{acceptance,acceptance/evidence,roadmap-runs}`.
-  **This one holds** — `install.sh:772` and `patch_install.sh:386`.
+- `install.sh` and `patch_install.sh` scaffold the records tree under the write root.
+  **This one holds** — `install.sh:842` (`mkdir -p "$DATA_ROOT/records/$d"`) and
+  `patch_install.sh:403`. Neither shell script spells the root: both ask `squad/paths.py`
+  for it, so this line cannot drift from the code the way the two below did.
+
+  **Re-measured 2026-09-21, because it had drifted anyway** — in the direction this
+  section exists to catch. It read `.claude/records/{acceptance,acceptance/evidence,
+  roadmap-runs}` with line numbers `install.sh:772` / `patch_install.sh:386`. Measured on
+  a clean install: `.squad/records/{acceptance,audits,backlog,brainstorms,discoveries,…}`
+  is created and `.claude/records/` is not created at all, while `install.sh:772` is a
+  comment about `merge_settings.py`. The one item marked **HOLDS** was pointing a reader
+  at a directory nothing writes and a line that does nothing — the same failure as the
+  two struck-through items, arriving through a verification that aged.
 - ~~`install_goal_hook.py` refuses paths outside the project.~~ **GONE.** Deleted in `77501b0`
   with the `session-goal` skill. No replacement was written, so the constraint above is a
   convention now, not a gate.

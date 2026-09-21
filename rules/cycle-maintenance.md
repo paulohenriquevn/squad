@@ -56,7 +56,7 @@ ROUTE:
      ↓ unroutable → ITEM_UNROUTABLE, surface to the human (gate G1)
      ↓
 LOCK item:
-     ↓ record records/maintenance-runs/{B-NNN}-{date}.md (status: in_progress)
+     ↓ record .squad/records/maintenance-runs/{B-NNN}-{date}.md (status: in_progress)
      ↓
 DELEGATE:
      ↓ status raw      → /discover-plan B-NNN --mode {suggested_mode}, then the chain
@@ -125,7 +125,7 @@ LOOP BACK to SELECT
 |---|---|---|---|
 | select | `BACKLOG.md` | one `B-NNN`, or `BACKLOG_EMPTY` | exactly one item in flight |
 | route | the item's `repo` | domain + specialist | the repo resolves (G1) |
-| lock | `B-NNN` | run record under `records/maintenance-runs/` | no other run `in_progress` |
+| lock | `B-NNN` | run record under `.squad/records/maintenance-runs/` | no other run `in_progress` |
 | delegate | `B-NNN` + status | opportunity, killed item, or release | the sub-cycle's own gates |
 | advance | sub-cycle verdict | updated `B-NNN` block | status transition is legal |
 
@@ -272,7 +272,7 @@ the item that wrote it ended up in the very state it invented.
 ## Output
 
 - `BACKLOG.md` — status transitions on `B-NNN` blocks
-- `records/maintenance-runs/{B-NNN}-{date}.md` — one record per run: what was selected, why, which specialist, what the sub-cycles returned
+- `.squad/records/maintenance-runs/{B-NNN}-{date}.md` — one record per run: what was selected, why, which specialist, what the sub-cycles returned
 
 The run record is what makes the loop auditable after the fact: which items were picked, in what order, and what happened. Without it, a backlog whose items all say `shipped` cannot be distinguished from one somebody edited.
 
