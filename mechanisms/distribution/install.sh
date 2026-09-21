@@ -510,15 +510,21 @@ done
 # makes `/backlog-item` refuse items, which is correct while nobody has said who
 # owns what.
 migrate_routing_table() {
-  local target="$ECO/rules/domain-routing.txt"
-  python3 - "${LEGACY_TABLE:-}" "$target" "$SRC_DIR" "$TARGET" <<'PYEOF'
+  # B-198 — the destination is RESOLVED inside the heredoc, from `squad.paths`, never composed
+  # here. It used to be `"$ECO/rules/domain-routing.txt"`, which `rules/records-location.md`
+  # retired: a reinstall then recreated the legacy path in a project that had already migrated,
+  # and while both files exist the routing is silently correct — `.squad/` is read first — so
+  # nothing reports the copy that will be read the day the newer one is removed.
+  python3 - "${LEGACY_TABLE:-}" "$SRC_DIR" "$TARGET" <<'PYEOF'
 import sys
 from pathlib import Path
 
-legacy_arg, target, kit, project = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])
+legacy_arg, kit, project = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 sys.path.insert(0, str(kit / "mechanisms" / "cycle"))
 sys.path.insert(0, str(kit / "skills" / "backlog-init" / "scripts"))
 
+sys.path.insert(0, str(kit))
+from squad.paths import write_routing_table as _owner_destination  # noqa: E402
 from route_domain import count_candidate_rows, parse_routing_table  # noqa: E402 — post-bootstrap
 from detect_domains import (  # noqa: E402 — post-bootstrap
     Domain,
@@ -560,6 +566,7 @@ def rows_from(path):
 
 
 # Already migrated? The consumer's file wins; never overwrite a derived table.
+target = _owner_destination(project)
 if rows_from(target):
     raise SystemExit(0)
 

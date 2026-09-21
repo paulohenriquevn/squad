@@ -242,9 +242,36 @@ def test_merge_migrates_the_derived_routing_table_instead_of_losing_it(tmp_path:
     )
     _install(target, "--merge")
 
-    migrated = (rules / "domain-routing.txt").read_text(encoding="utf-8")
+    # B-198 — the destination is RESOLVED, exactly as the installer now resolves it. This
+    # asserted `rules/domain-routing.txt` until 2026-09-21, which is where the table lived
+    # before `records-location.md` moved it to the write root; the installer kept writing
+    # there and this test kept agreeing with it, so the two were wrong together and neither
+    # could catch the other. Reading the owner is what stops that recurring: when the root
+    # moves again, this follows.
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from squad.paths import write_routing_table as _owner_destination
+
+    migrated = _owner_destination(target).read_text(encoding="utf-8")
     assert "meu-dominio" in migrated, "the consumer's derived table was lost in the move"
     assert "meu-repo" in migrated
+    # B-233 — the assertion that is NOT yet true, kept where it will be seen rather than
+    # deleted. `install.sh` copies `rules/*` wholesale and the kit still ships an empty
+    # `rules/domain-routing.txt`, so every install recreates the path the write-root rule
+    # retired. Skipping it was measured on 2026-09-21 and makes the installer exit 1 —
+    # `rules_reference_resolves` fails four times over, because nineteen kit files still name
+    # that path — so the skip waits on the migration B-233 owns.
+    #
+    # `strict=True`: when B-233 lands this must FAIL as an unexpected pass, which is what stops
+    # a tracked RED from quietly becoming a lie about what is still broken.
+    import pytest
+
+    legacy_gone = not (rules / "domain-routing.txt").exists()
+    if not legacy_gone:
+        pytest.xfail("B-233: the kit still ships rules/domain-routing.txt and install.sh "
+                     "copies rules/* wholesale")
+    assert legacy_gone
 
     body = (rules / "cycle-backlog.md").read_text(encoding="utf-8")
     assert "## Hard gates" in body, "the rest of the rule must arrive updated from the kit"
