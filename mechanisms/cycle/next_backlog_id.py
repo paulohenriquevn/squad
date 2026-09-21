@@ -48,6 +48,10 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from squad.paths import DATA_DIRNAME  # noqa: E402 — after the path bootstrap above
+
 #: A block header. The trailing space matters for the history query — `## B-016 ` cannot match
 #: `## B-0161`, and an id is three digits by convention everywhere this runs.
 BLOCK_RE = re.compile(r"^## B-(\d{3})\b", re.MULTILINE)
@@ -57,7 +61,11 @@ CITATION_RE = re.compile(r"\bB-(\d{3})\b")
 
 #: Where a citation may live. Narrower than the whole tree, because `node_modules` and build output
 #: carry no decisions and searching them costs minutes.
-SEARCH_ROOTS = (".squad", "docs", ".claude", "packages", "apps", "CHANGELOG.md")
+#:
+#: The data root is asked of `squad.paths` rather than spelled here. `check_write_containment.py`
+#: refused the literal and it was right to: a second module that can spell a root is how six lists in
+#: four different orders happened, and with a copy in play no scan can prove where the writers write.
+SEARCH_ROOTS = (DATA_DIRNAME, "docs", ".claude", "packages", "apps", "CHANGELOG.md")
 
 
 @dataclass(frozen=True)
