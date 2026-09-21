@@ -390,7 +390,15 @@ def test_a_consumer_with_a_markdown_table_is_migrated_once(
 
     subprocess.run(["bash", *install, "--force"], capture_output=True, check=True)
 
-    migrated = (rules / "domain-routing.txt").read_text(encoding="utf-8")
+    # The destination is RESOLVED, not composed — `squad/paths.py` owns it, and B-198
+    # moved it out of `rules/`. This test read the old path until 2026-09-21 and failed
+    # on the placeholder the install recreates there, reporting a lost table when the
+    # table was written correctly one directory away. The install's own message said
+    # `rules/domain-routing.txt` too, which is what made the wrong path look right.
+    sys.path.insert(0, str(REPO))
+    from squad.paths import write_routing_table
+
+    migrated = write_routing_table(target).read_text(encoding="utf-8")
     assert "api" in migrated and "svc-a" in migrated and "svc-b" in migrated, (
         "the consumer's derived table did not survive the migration"
     )

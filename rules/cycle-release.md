@@ -50,7 +50,7 @@ Do NOT trigger when:
 | bump | parsed version + bump-level | next version string | bump-level ∈ {patch, minor, major} OR derivable from CHANGELOG |
 | changelog-rewrite | CHANGELOG.md | CHANGELOG with [Unreleased] empty and a new versioned section | [Unreleased] had ≥ 1 entry before the rewrite |
 | pr-open | release branch state | PR URL | `gh pr create` exit 0; PR body = release notes |
-| tag-cut (post-merge) | merged commit on main | annotated tag + GitHub release | `git tag --verify` resolves AND tag points at the merge commit |
+| tag-cut (post-merge) | merged commit on main | annotated tag + GitHub release | `check_tag_integrity.py` — the tag object is annotated AND the commit it names is contained in the trunk |
 
 ## Post-merge ROADMAP.md checkbox flip — MOVED to cycle-acceptance
 
@@ -164,9 +164,9 @@ When the user does not pass `{bump-level}` explicitly:
 - `minor` — `[Unreleased] § Added` is non-empty AND no major triggers.
 - `patch` — only `[Unreleased] § Fixed` / `Security` entries.
 
-- `minor` — only `### Changed` / `### Fixed` / `### Security`, with at least one `Changed` entry.
-
 The rule always picks. There is no ambiguous outcome and no pause.
+
+`compute_next_version.py` evaluates these in the order written, and the order is load-bearing: `Added` is consulted before `Changed` so that a section carrying both derives `minor` once, from the first rule that matches, rather than depending on which clause a reader reaches first.
 
 ### Why a `Changed`-only release resolves to `minor`
 
@@ -214,7 +214,17 @@ means, never whether something is breaking at all.
 
 - **Gates-passed gate (LOCKED)** — _(not mechanized as one check: composed — it reads the verdicts the chain already emitted — `/review` `READY_TO_MERGE`, `/code-quality` not `FAIL_HARD`, no BLOCKED report standing)_ The merge step merges ONLY a PR whose full chain passed. Merging anything else, or moving a threshold so that it passes, violates envelope floor 2 and floor 3. **This replaced a human-approval gate on 2026-09-01**; what it does not replace is the topology — the PR itself is still mandatory. Branch protection is what makes it mandatory on the remote, and since 2026-09-08 it may enforce the PR **without requiring a human reviewer**: a remote that requires one makes the chain unrunnable and is reported by `check_merge_autonomy.py` at intake.
 - **No direct commits to `main`** — `validate-command.py`, which resolves the real trunk rather than matching the literal name. Even from this skill: every change reaches `main` via the PR opened above. **Unchanged by the amendment** — merging a PR and committing to the trunk are different acts, and only the first moved.
-- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. _(not mechanized: debt since 2026-09-01 — nothing inspects the tag object's type or the branch it was cut from; `validate-command.py` blocks the commit paths, not the tag)_
+- **Tag must be annotated** (`git tag -a`) and pushed only after merge to `main` — never on `develop` or `workspace`. `mechanisms/gates/check_tag_integrity.py --tag v{version} --trunk main` reads the tag object's type (`git cat-file -t` answers `tag` for annotated, `commit` for lightweight) and whether the commit it names is contained in the trunk (`git merge-base --is-ancestor`, not a branch-name match). An absent tag exits 2: not a passing tag.
+
+  **This clause replaced `git tag --verify` on 2026-09-21, and the replacement is the point.** The phase-contract table above demanded that `--verify` resolve, while Step 7 of the skill cuts the tag with `git tag -a`. `--verify` checks a GPG **signature**, so an unsigned annotated tag — the only kind this kit produces — fails it:
+
+  ```
+  $ git tag -a v1.0.0 -m "release" && git tag --verify v1.0.0
+  error: no signature found
+  exit=1
+  ```
+
+  Every correct release would have failed its own gate. Nobody found out because neither clause was mechanised: one demanded the impossible, the other was carried as debt with the note that "nothing inspects the tag object's type or the branch it was cut from". Two unmechanised clauses about one object, and the contradiction between them survived because no code ever had to hold both.
 - **CHANGELOG must have content** — `changelog_section_nonempty.py` refuses if `[Unreleased]` is empty after stripping headers.
 - **Single-flip invariant** — owned by [`cycle-acceptance § Hard gates`](cycle-acceptance.md), which is where the flip moved (see § Post-merge ROADMAP.md checkbox flip). This cycle no longer flips anything; the clause stays as a pointer so nobody re-adds a flip here.
 - **No silent flip** — `flip_milestone_checkbox.py --commit`, which writes the run-file and aborts the whole operation (restoring the checkbox) when the commit fails. The roadmap-runs file MUST be appended with the flip commit SHA. A flip without a run-file entry is forbidden.

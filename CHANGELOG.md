@@ -6,6 +6,110 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+
+### Fixed
+
+- **The release cycle could not read the releases it had itself cut.** `cycle-release.md`
+  makes `--pre` the default because *"most cuts are pre-releases"*, and the first step of
+  the chain matched `^v?(\d+)\.(\d+)\.(\d+)$` — no pre-release at all. Measured on a
+  repository holding `v0.2.0`, `v0.3.0-rc.1`, `v0.3.0-rc.2`:
+
+  ```
+  detect_current_version  ->  0.2.0        "note: 2 tag(s) not semver, skipped"
+  compute --mode pre      ->  0.3.0-rc.1   ← a tag that already exists
+  ```
+
+  The rc series never reached `rc.3`; every cut collided with `rc.1` and fell into the
+  "tag already exists" stop condition. Worse, a repository whose ONLY tags were rc was
+  refused outright as having "no semver tag" — and `test_detect_current_version.py`
+  PINNED that refusal, so the defect had a test protecting it. The tag it used to build
+  its "unreadable" case is now `-beta.1`, which is what that refusal was always about.
+
+  The note also lied: `0.3.0-rc.1` **is** semver. It is simply not a version this kit
+  cuts, and saying "not semver" sent people looking for a typo in a tag spelled
+  correctly. (#R-1, #R-5)
+
+- **Every pre-release published an empty body.** The rule says *"an rc reads
+  `[Unreleased]` for its release notes and leaves it in place"*. Nothing implemented the
+  first half: the chain rendered notes by version, and on an rc no such section exists
+  because `promote_unreleased.py` has not run and must not. Measured:
+
+  ```
+  $ render_release_notes.py --version 0.3.0-rc.1
+  version section [0.3.0-rc.1] not found in CHANGELOG.md
+  exit=1   RELEASE_NOTES=[]
+  ```
+
+  stderr, not stdout — so `RELEASE_NOTES=$(...)` captured the empty string and the shell
+  carried on. The PR and the GitHub release both opened with nothing in them, silently,
+  in the one place a reader goes to find out what shipped. An rc now falls back to
+  `[Unreleased]` and SAYS it did, because those notes are a snapshot of a section that
+  keeps growing. A final with no section still fails loudly: falling back there would
+  publish the right text under a version whose record was never written. An empty body
+  is refused rather than printed. (#R-3)
+
+- **The tag-cut gate could not be passed by a correct release.** The phase-contract table
+  demanded `git tag --verify` resolve; Step 7 cuts the tag with `git tag -a`. `--verify`
+  checks a GPG **signature**:
+
+  ```
+  $ git tag -a v1.0.0 -m "release" && git tag --verify v1.0.0
+  error: no signature found
+  exit=1
+  ```
+
+  Beside it sat a second clause — *"Tag must be annotated … pushed only after merge to
+  `main`"* — carried as declared debt since 2026-09-01 with the note that "nothing
+  inspects the tag object's type or the branch it was cut from". Two unmechanised
+  clauses about one object, and the contradiction between them survived precisely
+  because no code ever had to hold both. `mechanisms/gates/check_tag_integrity.py` now
+  asks the question that is worth asking — annotated (`git cat-file -t`), and contained
+  in the trunk (`git merge-base --is-ancestor`, not a branch-name match) — and the skill
+  runs it in Step 7 BEFORE the push, while a wrong tag is still local. Signature is
+  deliberately not checked. An absent tag exits 2. (#R-2, #R-4)
+
+- **A gate accused a compliant file of having no docstring.** `check_semantic_names.py`
+  matched a triple quote only at the start of a line, so a docstring carrying a string
+  prefix — `r"""`, the form any module explaining itself with a regex needs — read as no
+  docstring at all. It reported an 18-line one as `purpose_not_stated`. Found when it
+  fired on a file written in this same change. A gate that accuses a compliant file
+  teaches its readers to ignore it.
+
+  The kit already knew the answer in another file: `tests/test_every_gate_is_reachable.py`
+  carries `_PY_TRIPLE`, whose comment reads *"Match a Python triple-quoted string in its
+  four flavours … optional string prefix"*. The gate and the test each solved the same
+  parsing problem, independently, and only one of them got it right — which is the case
+  for one reader that this release keeps finding. (#R-7)
+
+- **The install reported migrating a routing table to a path it had not written.**
+  B-198 moved the write to whatever `squad.paths` resolves and left the message naming
+  the old `rules/domain-routing.txt`. A reader who went to check found the placeholder
+  the install recreates there, read "(no domain yet)", and concluded their table was
+  lost — which is exactly what `tests/test_clean_install.py` concluded, failing for the
+  same reason on a migration that was working. The path is now printed from the value it
+  was written to.
+
+### Changed
+
+- **One reading of a version, for the whole release slice.** Three scripts parsed semver
+  three ways — no pre-release, `-rc.N` only, any pre-release — and the disagreement
+  landed on the default path. `squad/semver.py` now owns it, alongside `squad/rubric.py`
+  and `squad/backlog.py`, and a test refuses a fourth regex appearing in the slice.
+
+  It also mechanises a rule that was only ever prose: `promote_unreleased.py` refuses to
+  run under a pre-release. *"The CHANGELOG moves once, at the final"* has been written
+  in `cycle-release.md` from the start, and the loosest of the three patterns accepted
+  any pre-release suffix — so emptying `[Unreleased]` at `-rc.1`, which leaves `-rc.2`
+  and the final nothing to publish, was one flag away and nothing stopped it.
+
+- **The bump-derivation rule is stated once.** It was written twice in `cycle-release.md`,
+  the second time as an orphaned line outside the list with different wording from the
+  script it describes. Same outcome today; it is the shape that diverges later. What
+  replaced it is the fact the prose was missing — that `Added` is consulted before
+  `Changed`, so a section carrying both derives `minor` from the first rule that matches
+  rather than from whichever clause a reader reaches first. (#R-6)
+
+
 ### Changed
 
 - **This project's review panel runs three Anthropic seats, and says what that costs.**

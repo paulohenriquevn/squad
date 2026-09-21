@@ -246,6 +246,12 @@ MERGE_SHA=$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid')
 
 # Annotated tag pointing at the merge commit
 git tag -a "v${NEXT_VERSION}" "$MERGE_SHA" -m "Release v${NEXT_VERSION}"
+
+# The tag-cut hard gate, BEFORE the push. A lightweight tag or one cut off the trunk
+# is recoverable while it is local and permanent once it is pushed and a release
+# points at it. Exit 2 means the tag could not be measured — not that it passed.
+python3 "$ECO/mechanisms/gates/check_tag_integrity.py" --tag "v${NEXT_VERSION}" --trunk main || exit 1
+
 git push origin "v${NEXT_VERSION}"
 
 # Publish GitHub release with the rendered notes
@@ -397,7 +403,11 @@ Next: nothing — release is published. Start a new cycle with /backlog-item, or
 
 1. **`/review` verdict is not `READY_TO_MERGE`** → refuse. Re-run `/review` first.
 2. **The chain must have passed** — merge ONLY a PR whose `/review` returned `READY_TO_MERGE`, whose `/code-quality` is not `FAIL_HARD`, and against whose item no BLOCKED report stands. Merging anything else violates envelope floor 2; moving a threshold to get there violates floor 3. **Never `gh pr merge --admin`** — bypassing branch protection is the same act under a different name.
-3. **Tag must be annotated** (`git tag -a`) — never lightweight tags.
+3. **Tag must be annotated** (`git tag -a`) — never lightweight tags. Checked by
+   `mechanisms/gates/check_tag_integrity.py` in Step 7, before the push, along with
+   whether the commit is contained in the trunk. It does NOT check a signature: the
+   rule used to declare `git tag --verify`, which demands one, and would have refused
+   every tag this procedure produces.
 4. **CHANGELOG [Unreleased] non-empty** — empty releases are forbidden.
 5. **No duplicate version tags** — if `v{X}` already exists, halt.
 6. **This cycle flips no checkbox** — the single-flip invariant is owned by [`cycle-acceptance § Hard gates`](../../rules/cycle-acceptance.md). The gate stays listed here so nobody re-adds a flip to `cycle-release`.

@@ -25,7 +25,12 @@ CATEGORY_ORDER = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Securit
 
 #: Keep-a-Changelog headings carry a plain semver, no leading `v`. The optional
 #: suffix covers the `-rc.N` cuts this kit makes.
-_SEMVER_RE = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?")
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "semver.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.semver import parse as _parse_version  # noqa: E402 — post-bootstrap import
 
 
 def main() -> int:
@@ -40,9 +45,23 @@ def main() -> int:
     # the permanent record, and the reader was then told "version section [1.2.0] not
     # found" — pointing at their argument instead of at the malformed heading three
     # commits back. This is the last writer before the record hardens.
-    if not _SEMVER_RE.fullmatch(args.version):
-        print(f"not a semver version: {args.version!r}. Expected MAJOR.MINOR.PATCH with "
-              f"an optional pre-release suffix, and no leading 'v'.", file=sys.stderr)
+    version = _parse_version(args.version)
+    if version is None or args.version.startswith("v"):
+        print(f"not a version this kit cuts: {args.version!r}. Expected MAJOR.MINOR.PATCH, "
+              f"optionally -rc.N, and no leading 'v'.", file=sys.stderr)
+        return 2
+
+    # `cycle-release.md § The CHANGELOG moves once, at the final` has always said an rc
+    # must NOT run this, and until 2026-09-21 nothing enforced it — the old pattern
+    # accepted ANY pre-release suffix. Promoting at `-rc.1` empties `[Unreleased]`, so
+    # `-rc.2` and the final have nothing to publish, and the entries end up filed under
+    # a version that was still a candidate. The section is the milestone's changelog and
+    # it moves ONCE.
+    if version.is_prerelease:
+        print(f"refusing to promote under a pre-release: {args.version}. An rc reads "
+              f"[Unreleased] for its notes and LEAVES IT IN PLACE; only the final cut "
+              f"promotes it (rules/cycle-release.md § The CHANGELOG moves once, at the "
+              f"final).", file=sys.stderr)
         return 2
     try:
         date.fromisoformat(args.date)

@@ -131,7 +131,7 @@ Skipping this step is a G2 violation. The single-registry decision only holds if
 Run the allocator. Do NOT read the file and take `max(N) + 1`:
 
 ```bash
-python3 "$([ -d .claude/mechanisms ] && echo .claude || echo .)/mechanisms/cycle/next_backlog_id.py" BACKLOG.md
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/next_backlog_id.py" BACKLOG.md
 ```
 
 `BACKLOG.md` is unversioned by policy (`rules/records-location.md`), so a checkout can hold a

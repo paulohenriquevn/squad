@@ -190,6 +190,32 @@ def test_an_executable_with_no_stated_purpose_is_reported(tmp_path: Path) -> Non
     assert "purpose_not_stated" in _kinds(check_semantic_names(tmp_path))
 
 
+def test_a_raw_docstring_states_a_purpose(tmp_path: Path) -> None:
+    r"""A docstring with a STRING PREFIX is still a docstring.
+
+    The pattern matched a triple quote only when it opened the line, so the `r`, `f`
+    and `b` prefixed forms read as no docstring at all. That is not a rare spelling:
+    any module whose
+    purpose is explained with a regex — which is most of this directory — needs the
+    raw prefix to write `\d` without an escape warning. Measured on
+    `tests/test_a_release_tag_is_what_the_rule_promised.py`, whose docstring is 18
+    lines long: reported `purpose_not_stated`.
+
+    A gate that accuses a compliant file teaches its readers to ignore it.
+    """
+    script = tmp_path / "cut_release.py"
+    script.write_text('r"""Cut a release, matching \\d+ in the tag."""\n', encoding="utf-8")
+
+    assert "purpose_not_stated" not in _kinds(check_semantic_names(tmp_path))
+
+
+def test_a_file_that_really_says_nothing_is_still_caught(tmp_path: Path) -> None:
+    """Widening the pattern must not turn the check into decoration."""
+    (tmp_path / "helper.py").write_text("x = 1\n", encoding="utf-8")
+
+    assert "purpose_not_stated" in _kinds(check_semantic_names(tmp_path))
+
+
 def test_a_shell_script_stating_its_purpose_in_a_header_comment_passes(tmp_path: Path) -> None:
     path = tmp_path / "mechanisms" / "distribution" / "install.sh"
     path.parent.mkdir(parents=True)

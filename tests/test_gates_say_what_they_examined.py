@@ -49,6 +49,10 @@ _GATES = Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
 NEEDS_MORE_THAN_A_ROOT = {
     "check_auditor_coverage", "check_install_drift",
     "check_panel_approval", "check_review_binding",
+    # `check_tag_integrity --tag` inspects ONE git object. A repository holds many tags
+    # and only the one being cut is the subject; sweeping them all would report on
+    # history nobody is releasing.
+    "check_tag_integrity",
 }
 
 

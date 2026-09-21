@@ -186,7 +186,14 @@ def _check_purpose_stated(path: Path, relative: Path, report: NameReport) -> Non
         return
 
     if path.suffix == ".py":
-        stated = bool(re.search(r'^\s*(?:from __future__[^\n]*\n\s*)?["\']{3}', head, re.M))
+        # `[rRbBuUfF]{0,2}` — a docstring may carry a string prefix, and the common one
+        # here is `r`: a module explaining itself with a regex needs the raw form to
+        # write `\d` without a DeprecationWarning. Without this the pattern read every
+        # such file as having NO docstring, and reported an 18-line one as
+        # `purpose_not_stated`. A gate that accuses a compliant file teaches its
+        # readers to ignore it.
+        stated = bool(re.search(
+            r'^\s*(?:from __future__[^\n]*\n\s*)?[rRbBuUfF]{0,2}["\']{3}', head, re.M))
     else:
         # A shell script states its purpose in a comment above the first command.
         body = re.sub(r"^#!.*\n", "", head)

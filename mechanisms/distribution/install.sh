@@ -624,7 +624,14 @@ if not rows:
     raise SystemExit(0)
 
 write_routing_table(target, rows)
-print(f"    migrated: rules/domain-routing.txt — {len(rows)} domain(s) recovered from {origin}")
+# The destination is PRINTED from the same value it was written to, never spelled again
+# here. B-198 moved the write to whatever `squad.paths` resolves and left this line
+# naming the old path, so the migration reported `rules/domain-routing.txt` while
+# writing `.squad/domain-routing.txt`. A reader who went to check found the legacy
+# placeholder the install had just recreated, read "(no domain yet)", and concluded the
+# migration had lost their table — which is also exactly what
+# `tests/test_clean_install.py` concluded, for the same reason.
+print(f"    migrated: {target.relative_to(project)} — {len(rows)} domain(s) recovered from {origin}")
 # A derived table routes to `agents/<domain>.md`, and route_domain exits 3 while
 # that file is absent. "The migration found data" and "routing works" are
 # different questions; say which one this answered.
