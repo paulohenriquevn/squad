@@ -6,6 +6,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+
+- **The panel waiver named a reason that was false on this machine, and nothing re-read
+  it.** `rules/review-panel.txt` declared `single_family_reason = no non-Anthropic
+  provider is configured for this project` while `codex` sat on PATH at `/usr/bin/codex`,
+  `~/.codex/auth.json` existed, and the `judge-codex` plugin was installed supplying the
+  `discover-judge` / `plan-judge` / `final-judge` seats that `cycle-discover.md` and
+  `cycle-plan.md` both name. The panel is genuinely single-family — the installed CLI
+  (0.120.0) is refused by every model the account exposes, `400: gpt-5.5 requires a newer
+  version of Codex` — but the file named the wrong cause, which is the difference between
+  a cost somebody chose and one nobody could see. The reason now states what was measured
+  and carries the upgrade path, and `check_panel_capability.py` grew `waiver_contradicted()`
+  so a waiver claiming "no provider is configured" is refuted when a provider binary is on
+  PATH. Only that class of reason is checkable: a broken CLI or a refused model is a claim
+  about behaviour, and probing it would cost a live call on every gate run.
+
+### Added
+
+- **Commissioned audits now carry a cost ceiling.** `select_auditors.py` built
+  `/{plugin} {target} --output-dir … [scope]` and stopped, so every auditor ran at its own
+  default — 60 global iterations for the `always` one, 80 for most, 200 for
+  `loop-performance-audit`. A change touching `security` and `testing` commissions three of
+  them: up to 220 halt-loop iterations for one backlog item, at a depth nobody in the chain
+  chose and no reader of the assignment could see. `rules/review-auditors.txt` gains one
+  `max_iterations` key, `parse_ceiling()` refuses anything that is not a positive integer,
+  and the value reaches every commissioned command as `--max-iterations N`. Declaring none
+  omits the flag entirely — the kit does not invent a depth the project never chose. The
+  shipped value (40) is a chosen floor, not a measured one, and says so where it is
+  declared.
+
 ### Changed
 
 - **The read-only study zone moved into the write root: `study-material/` →

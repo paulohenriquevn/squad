@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from enum import Enum
@@ -100,6 +101,38 @@ unfillable: list[tuple[str, str, str]] = []
 def unfillable_seats() -> list[tuple[str, str, str]]:
     """`(phase, agent, reason)` for every seat the last check could not fill."""
     return list(unfillable)
+
+
+#: CLIs that put a non-Anthropic family within reach. Deliberately short: each entry
+#: is a binary whose presence REFUTES "no provider is configured", so a wrong one turns
+#: an honest waiver into a false alarm — and a gate that cries wolf gets deleted.
+PROVIDER_BINARIES = ("codex", "gemini", "ollama")
+
+#: The one waiver reason that is a checkable claim about THIS MACHINE. Anything else —
+#: a broken CLI, an expired key, a model the account refuses — is a claim about the
+#: provider's BEHAVIOUR, and probing that costs a live call on every gate run.
+_CLAIMS_NO_PROVIDER = re.compile(r"\bno\s+(?:\S+\s+){0,3}provider\b", re.IGNORECASE)
+
+
+def waiver_contradicted(reason: str, *, which=shutil.which) -> str:
+    """The binary that refutes this waiver reason, or "" when nothing refutes it.
+
+    A waiver carries a reason so a reader can weigh it. Nothing re-read that reason, so
+    it outlived the fact it named: it said no non-Anthropic provider was configured for
+    nine days while `codex` sat on PATH, authenticated, with `judge-codex` installed
+    (measured 2026-09-21). The panel was single-family for a real reason the whole time
+    — the CLI is too old for every model the account exposes — and the file named the
+    wrong one, which is the difference between a cost somebody chose and one nobody saw.
+
+    Only the "no provider" class is decided here. A reason naming a broken CLI is not
+    refuted by that CLI being present: its presence is the reason's own premise.
+    """
+    if not _CLAIMS_NO_PROVIDER.search(reason or ""):
+        return ""
+    for binary in PROVIDER_BINARIES:
+        if which(binary):
+            return binary
+    return ""
 
 
 def check_panel_capability(
@@ -275,6 +308,15 @@ def main(argv: list[str] | None = None) -> int:
             "carries the same note into every outcome. Remove both keys from the roster "
             "the day a second provider is reachable."
         )
+        _refuted_by = waiver_contradicted(_reason)
+        if _refuted_by:
+            message += (
+                f"\n\n  THE DECLARED REASON IS REFUTED HERE: it claims no provider is "
+                f"configured, and `{_refuted_by}` is on PATH. The panel may still be "
+                "single-family for a real reason — but this file no longer names it, so "
+                "nobody can weigh what the waiver costs. Re-measure and rewrite the "
+                "reason, or fill the seat."
+            )
 
     if result is PanelCapability.UNREACHABLE and unfillable_seats():
         message += "\n\nWhich seats, and why:\n" + "\n".join(

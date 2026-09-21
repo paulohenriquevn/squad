@@ -99,3 +99,62 @@ def test_without_the_waiver_one_family_still_cannot_carry() -> None:
 
     with pytest.raises(PanelInvalid, match="outside"):
         panel.tally()
+
+
+# ---------------------------------------------------------------------------
+# A waiver that names a FACT must be refuted when the fact is false.
+#
+# The reason read "no non-Anthropic provider is configured for this project" until
+# 2026-09-21, while `codex` sat on PATH, authenticated, with `judge-codex` installed.
+# It had been false for as long as nobody re-read it — which is the whole failure mode
+# of a claim nothing checks. `check_panel_capability.py` already refuses to let the
+# waiver pass SILENTLY; what it could not do is notice the waiver was lying.
+#
+# Only the "no provider" CLASS of reason is checkable. A waiver naming a broken CLI, an
+# expired key or a refused model is a fact about the provider's BEHAVIOUR, and probing
+# that means spending a call on every gate run — so those stay a human claim, and this
+# check says nothing about them rather than guessing.
+# ---------------------------------------------------------------------------
+
+def test_a_waiver_claiming_no_provider_is_refuted_by_a_provider_on_path() -> None:
+    from check_panel_capability import waiver_contradicted
+
+    on_path = {"codex": "/usr/bin/codex"}.get
+
+    assert waiver_contradicted(
+        "no non-Anthropic provider is configured for this project", which=on_path), (
+        "the waiver claims no provider is configured while `codex` is on PATH — a "
+        "reason nothing re-reads is a reason that outlives the fact it names")
+
+
+def test_a_waiver_naming_a_broken_provider_is_not_refuted_by_the_binary() -> None:
+    """The binary being present is the PREMISE of this reason, not a refutation."""
+    from check_panel_capability import waiver_contradicted
+
+    on_path = {"codex": "/usr/bin/codex"}.get
+
+    assert not waiver_contradicted(
+        "codex CLI 0.120.0 is installed and authenticated but refuses every model "
+        "this account exposes (400: gpt-5.5 requires a newer CLI)", which=on_path)
+
+
+def test_no_provider_on_path_leaves_the_no_provider_waiver_standing() -> None:
+    from check_panel_capability import waiver_contradicted
+
+    assert not waiver_contradicted(
+        "no non-Anthropic provider is configured for this project",
+        which=lambda _name: None)
+
+
+def test_this_projects_declared_reason_is_not_self_contradictory() -> None:
+    """The roster on disk, checked against this machine."""
+    import shutil
+
+    from check_panel_capability import waiver_contradicted
+    from review_panel import single_family_waived
+
+    waived, reason = single_family_waived(ROSTER.read_text(encoding="utf-8"))
+    if not waived:
+        pytest.skip("this project declares no waiver")
+    assert not waiver_contradicted(reason, which=shutil.which), (
+        f"the declared reason is refuted on this machine: {reason}")

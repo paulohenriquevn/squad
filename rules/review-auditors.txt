@@ -61,6 +61,29 @@
 #               kit tells where to write is a tool the kit is responsible for.
 # [report glob] only where a plugin does not write `final_report.md`.
 
+# THE COST CEILING
+# ----------------
+# Every `loop-*` plugin ships its own default global-iteration cap — 60 for the
+# `always` auditor, 80 for most, 200 for `loop-performance-audit` — and their stop-hooks
+# end the loop on `max_global_iterations` read from the state file. Until 2026-09-21 the
+# assignment passed `--output-dir` and the scope and nothing else, so a change touching
+# `security` and `testing` commissioned three auditors at up to 220 halt-loop iterations
+# for ONE backlog item, at a depth nobody in this chain chose.
+#
+# One number, declared once, applied to every commissioned auditor. A per-domain ceiling
+# would be a judgement about each domain's depth, and there is no measurement here to
+# make it with.
+#
+# THIS VALUE IS A CHOSEN FLOOR, NOT A MEASURED ONE. Nothing here has measured how many
+# iterations a diff-scoped audit actually needs; 40 sits below the lowest plugin default
+# so the ceiling is EFFECTIVE rather than decorative. An auditor that halts on it reports
+# what it did not finish in `## What Was NOT Analyzed`, which is the section the coverage
+# gate carries out verbatim — so a truncated audit is visible, never silent. Raise it
+# when a report says the ceiling is what stopped it.
+#
+# Delete the line to hand each plugin back its own default.
+max_iterations = 40
+
 auditor = always         | loop-code-review        | analysis-scoped 
 auditor = security       | loop-security-audit     | analysis-scoped 
 auditor = auth           | loop-security-audit     | analysis-scoped 
@@ -86,3 +109,16 @@ auditor = cli-tooling    | loop-surface-closure    | report-filtered
 # `loop-reference-compare` are absent because no domain here derives them from a
 # change. They are worth running, and the honest place for them is a deliberate sweep
 # rather than a per-item gate whose cost nobody chose.
+#
+# ONE OF THEM WAS ALSO UNMAPPABLE, AND THAT HAS BEEN FIXED. Measured 2026-09-21:
+# `loop-license-audit` rejected the invocation this file's own contract produces —
+# `ERROR: unknown option: --output-dir` — so the row somebody added would have broken
+# on its first run rather than at review time. It now accepts `--output-dir` and
+# `--max-iterations` like its sixteen siblings. What still keeps it out of the table is
+# the honest reason above and only that: `detect_domain.py` derives no licensing or
+# dependency domain, and inventing one to justify a mapping would be the choice this
+# file refuses to let an agent make.
+#
+# `loop-deadcode-audit` overlaps the D1 detector of `/code-quality`, which already runs
+# vulture / knip / cargo-udeps on the same question. Mapping it here would commission a
+# second answer to a question the chain already asks, one phase earlier.

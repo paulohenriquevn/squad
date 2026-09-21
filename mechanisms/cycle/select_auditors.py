@@ -148,6 +148,41 @@ def parse_registry(text: str) -> list[Auditor]:
     return out
 
 
+#: One number, declared once. A per-auditor ceiling would be a judgement about each
+#: domain's depth that nobody here has the evidence to make; one floor a project raises
+#: when it wants a deeper audit is the honest shape.
+_CEILING_KEY = "max_iterations"
+
+
+def parse_ceiling(text: str) -> int | None:
+    """The declared iteration ceiling, or None when the project declared none.
+
+    Every `loop-*` plugin defaults to between 60 and 200 global iterations, and their
+    stop-hooks end the loop on `max_global_iterations` from the state file. Commissioning
+    three auditors therefore committed up to 220 halt-loop iterations per item at a
+    ceiling nobody in the chain chose and the assignment never recorded.
+
+    None is NOT zero and not a default: with no declaration the flag is omitted entirely
+    and each plugin keeps its own. Inventing a depth the project never chose would be the
+    same overreach as guessing a diff base.
+    """
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line.startswith(_CEILING_KEY):
+            continue
+        _, sep, value = line.partition("=")
+        if not sep:
+            continue
+        value = value.strip()
+        if not value.isdigit() or int(value) < 1:
+            raise ValueError(
+                f"{_CEILING_KEY} must be a positive integer, got {value!r}. A ceiling of "
+                "zero commissions an audit that cannot run a single pass, and a "
+                "non-numeric one reaches the plugin as an unparseable flag")
+        return int(value)
+    return None
+
+
 def required_for(auditors: list[Auditor], domains: list[str]) -> list[Auditor]:
     """The auditors this change must face: its domains, plus the always-on ones.
 
@@ -179,10 +214,12 @@ def scope_flag(scope: dict) -> str:
     return ""
 
 
-def command_for(a: Auditor, *, target: str, scope: dict, project: Path) -> str:
+def command_for(a: Auditor, *, target: str, scope: dict, project: Path,
+                max_iterations: int | None = None) -> str:
     """The exact invocation, so nobody has to reconstruct it from prose."""
+    ceiling = f" --max-iterations {max_iterations}" if max_iterations else ""
     return (f"/{a.plugin} {target} --output-dir {a.output_dir(project)}"
-            f"{scope_flag(scope)}")
+            f"{scope_flag(scope)}{ceiling}")
 
 
 def select(
@@ -208,7 +245,9 @@ def select(
 
     path = registry_path(project)
     try:
-        auditors = parse_registry(path.read_text(encoding="utf-8"))
+        registry_text = path.read_text(encoding="utf-8")
+        auditors = parse_registry(registry_text)
+        ceiling = parse_ceiling(registry_text)
     except OSError as exc:
         return UNREADABLE, {"status": "unreadable", "detail": f"{path}: {exc}"}
     except ValueError as exc:
@@ -236,7 +275,7 @@ def select(
             "install_path": str(p.install_path) if p else None,
             "version": p.version if p else None,
             "command": command_for(a, target=target, scope=scope_spec,
-                                   project=project),
+                                   project=project, max_iterations=ceiling),
         }
 
     rows = [row(a, installed.get(a.plugin)) for a in required]
@@ -252,7 +291,7 @@ def select(
 
     body = {
         "status": "selected", "slug": slug, "domains": sorted(set(domains)),
-        "scope": scope, "required": rows,
+        "scope": scope, "required": rows, "max_iterations": ceiling,
         "missing_plugins": missing,
         "derived_by": "rules/review-auditors.txt — widening is allowed, narrowing is not",
     }

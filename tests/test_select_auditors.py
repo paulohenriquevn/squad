@@ -191,3 +191,54 @@ def test_naming_the_change_twice_is_refused(tmp_path: Path) -> None:
 
     assert code == INVALID
     assert "named twice" in result["detail"]
+
+
+# ---------------------------------------------------------------------------
+# The assignment must carry a COST CEILING, not just a scope.
+#
+# `command_for` built `/{plugin} {target} --output-dir … [scope]` and stopped there, so
+# every auditor ran at its own default: 60 iterations for the `always` one, 80 for most,
+# 200 for `loop-performance-audit`. A change touching `security` and `testing` commissions
+# three of them — up to 220 halt-loop iterations for ONE backlog item, at a ceiling nobody
+# in this kit chose and no reader of the assignment could see.
+#
+# 16 of the 17 loop plugins accept `--max-iterations`, and their stop-hooks read
+# `max_global_iterations` out of the state file to end the loop. The ceiling is therefore
+# mechanical where it is passed, and absent where it is not.
+#
+# It is declared ONCE, in the registry, rather than per row: a per-auditor ceiling is a
+# judgement about each domain's depth that nobody has evidence to make, and the honest
+# floor is one number a project can raise when it wants a deeper audit.
+# ---------------------------------------------------------------------------
+
+REGISTRY_WITH_CEILING = "max_iterations = 25\n" + REGISTRY
+
+
+def test_a_declared_ceiling_reaches_every_commissioned_command(tmp_path: Path) -> None:
+    code, result = select("B-014", ["security"], project=_project(
+        tmp_path, REGISTRY_WITH_CEILING), config_dir=_config(tmp_path, *ALL_PLUGINS))
+
+    assert code == OK
+    assert result["max_iterations"] == 25
+    assert all("--max-iterations 25" in r["command"] for r in result["required"]), (
+        "a ceiling the assignment records and the command omits is a ceiling nobody applies")
+
+
+def test_no_declared_ceiling_passes_no_flag(tmp_path: Path) -> None:
+    """Silence stays silence: the kit does not invent a depth the project never chose."""
+    code, result = select("B-014", ["security"], project=_project(tmp_path),
+                          config_dir=_config(tmp_path, *ALL_PLUGINS))
+
+    assert code == OK
+    assert result["max_iterations"] is None
+    assert all("--max-iterations" not in r["command"] for r in result["required"])
+
+
+def test_a_ceiling_that_is_not_a_positive_int_is_refused(tmp_path: Path) -> None:
+    """`--max-iterations 0` would commission an audit that cannot run a single pass."""
+    for bad in ("0", "-5", "many", "12.5"):
+        code, result = select("B-014", ["security"], project=_project(
+            tmp_path, f"max_iterations = {bad}\n" + REGISTRY),
+            config_dir=_config(tmp_path, *ALL_PLUGINS))
+        assert code == INVALID, f"{bad!r} was accepted as an iteration ceiling"
+        assert "max_iterations" in result["detail"]

@@ -126,20 +126,50 @@ reviewer = design   | argus-pattern-analyst      | claude-opus-5   | builtin
 #
 # The kit's rule stands and the argument above stands with it: three Claudes asked three
 # times share their failure modes, and a plausible fabrication that survives one tends to
-# survive its siblings. Nothing here disputes that. What this project does not have is a
-# non-Anthropic provider configured, so the honest options were two — run no panel, or
-# run one and say what it is worth. This is the second.
+# survive its siblings. Nothing here disputes that. The honest options were two — run no
+# panel, or run one and say what it is worth. This is the second.
 #
-# The waiver is DECLARED, never inferred from the roster: a panel that happens to be one
-# family and a panel that was meant to be reads the same on disk, and only one of them is
-# a decision. `check_panel_capability.py` accepts it and reports it; `review_panel.tally()`
-# carries it into every outcome, so `APPROVED` under this waiver reads as what it is —
-# a weaker claim than `APPROVED` across two families.
+# WHY, MEASURED 2026-09-21 — AND NOT "NO PROVIDER IS CONFIGURED"
+# --------------------------------------------------------------
+# This reason read "no non-Anthropic provider is configured for this project" until
+# 2026-09-21, and that was false on this machine in three separate ways:
 #
-# Remove both lines the day a second provider is reachable. The seat is still there:
-# `argus-pattern-analyst` holds the orthogonal chair, and it is orthogonal by LENS rather
-# than by family, which is less than the rule asks for and more than nothing.
+#   codex CLI 0.120.0 is on PATH at /usr/bin/codex
+#   ~/.codex/auth.json exists — the account is authenticated
+#   judge-codex v0.1.0 is installed and supplies discover-judge, plan-judge, final-judge
+#
+# So the seat LOOKED fillable, and `cycle-discover.md` and `cycle-plan.md` both name
+# `judge-codex:*` as the orthogonal chair. What stops it is one version behind the CLI:
+#
+#   $ codex exec --model gpt-5-codex …
+#   400 invalid_request_error: The 'gpt-5-codex' model is not supported when using
+#                              Codex with a ChatGPT plan
+#   $ codex exec …                       # account default
+#   400 invalid_request_error: The 'gpt-5.5' model requires a newer version of Codex.
+#                              Please upgrade to the latest app or CLI
+#
+# Every model this account exposes is refused by this CLI. npm publishes 0.155.1; the
+# installed build is 0.120.0, and it is a root-owned global install.
+#
+# THIS IS THE FAILURE THE CAPABILITY GATE ALREADY RECORDED. `check_panel_capability.py`
+# probes with `shutil.which` and says so in its own output: "a seat whose CLI resolves
+# and whose model is unavailable reads as reachable here and terminates when dispatched
+# — measured on a consumer 2026-09-16". Declaring the seat on the strength of the binary
+# would have reproduced that, spending two sibling seats before the third terminated.
+#
+# TO REMOVE THE WAIVER, in this order — do not skip the third step:
+#   1. sudo npm install -g @openai/codex@latest     # 0.120.0 -> 0.155.1+
+#   2. codex exec "Reply with exactly: SEAT_OK"     # must PRINT SEAT_OK, not 400
+#   3. swap one `argus-pattern-analyst` row per phase for the judge-codex seat, e.g.
+#        reviewer = plan | judge-codex:plan-judge | gpt-5.5 | builtin
+#      with the model spelled as the one step 2 actually answered on — `review_panel`
+#      derives the family from that string by prefix (`gpt` -> openai), so a stale
+#      spelling buys the family label without the reviewer behind it.
+#   4. delete both keys below.
+#
+# Until then `argus-pattern-analyst` holds the orthogonal chair, and it is orthogonal by
+# LENS rather than by family — less than the rule asks for, and more than nothing.
 single_family_panel = accepted
-single_family_reason = no non-Anthropic provider is configured for this project
+single_family_reason = codex CLI 0.120.0 is installed and authenticated but refuses every model this account exposes (400: gpt-5.5 requires a newer CLI); measured 2026-09-21, see the block above for the upgrade path
 
 panel_phases = discover, plan, design
