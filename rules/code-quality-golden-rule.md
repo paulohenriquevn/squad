@@ -138,7 +138,7 @@ Detectors run in fixed order. Each detector MUST be subprocess-isolated, never m
 
 | Detector | Tool family | Languages | What it asserts |
 |---|---|---|---|
-| D1 — Dead code | vulture, knip, cargo-udeps, deadcode | Python, TS, Rust, Go | No exported symbol unreachable from a caller or a test |
+| D1 — Dead code | vulture, knip, cargo-udeps, deadcode | Python, TS, Rust, Go | No exported symbol unreachable from a caller or a test — **at the configured confidence**. `vulture.min_confidence` defaults to 80 and `vulture` scores an unused function, class or variable at 60, so the default reports the 90%-confidence class (unused imports) and not the orphan symbol this row describes. Measured 2026-09-21 on one file: 0 findings at 80, 2 at 60, both real orphans. The default stands — § 5 argues it directly, and turning D1 up before the debt is paid *"is how a gate becomes something people work around"* — and `--write-baseline` is the path for a project that decides to. Every run now reports `thresholds_applied`, so a clean D1 carries the number it was clean at |
 | D2 — Symbol fabrication | tree-sitter + registry introspection | All enabled | Every imported symbol resolves to a real definition |
 | D3 — Cross-package wiring | `detectors/_wiring.py` | All enabled | Every DECLARED export has a production consumer (soft cap) |
 | D4 — Mutation testing | mutmut, Stryker via `detectors/_mutation.py` | Python, TS (Rust+Go deferred) | Mutation score ≥ floor, scoped by the project's own runner config |

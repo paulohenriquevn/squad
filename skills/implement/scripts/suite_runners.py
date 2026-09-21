@@ -336,6 +336,41 @@ def scope_suite_to_change(outcome: dict[str, Any],
                        f"it so.")}
 
 
+#: Extensions whose presence means this repository holds code a suite could exercise.
+#: Kept to the four languages this module knows how to run, so the check never reports
+#: a precondition it could not have satisfied anyway.
+_SOURCE_SUFFIXES = (".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".go", ".rs")
+
+#: Directories whose contents are not the repository's own code.
+_NOT_SOURCE = ("/.git/", "/node_modules/", "/vendor/", "/target/", "/dist/",
+               "/build/", "/.venv/", "/__pycache__/")
+
+
+def _source_files(project_root: Path, limit: int = 200) -> list[str]:
+    """Committed source files, as repo-relative paths. Empty for a genuine pre-code tree.
+
+    Read from `git ls-files` rather than a walk: an untracked scratch file is not this
+    repository's code, and the walk would have counted it.
+    """
+    try:
+        out = subprocess.run(["git", "ls-files"], cwd=project_root,
+                             capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if out.returncode != 0:
+        return []
+    found: list[str] = []
+    for line in out.stdout.splitlines():
+        if not line.endswith(_SOURCE_SUFFIXES):
+            continue
+        if any(part in f"/{line}" for part in _NOT_SOURCE):
+            continue
+        found.append(line)
+        if len(found) >= limit:
+            break
+    return found
+
+
 def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]]) -> dict[str, Any]:
     """Did ANY test suite actually execute?
 
@@ -360,13 +395,38 @@ def check_test_execution(project_root: Path, suite_checks: list[dict[str, Any]])
     ]
 
     if not languages:
+        # "Pre-code" was measured by the absence of a MANIFEST, and a repository can
+        # hold plenty of code without one — this kit describes itself as shipping
+        # "loose scripts". Measured 2026-09-21: with `src/thing.py` committed and no
+        # `pyproject.toml`, this returned SKIP and the validation exited 0; adding a
+        # two-line `pyproject.toml`, touching no code, turned it into FAIL. What
+        # separated proceed from refuse was a metadata file.
+        #
+        # Sources present and no suite runnable is a missing precondition, not a
+        # phase where tests do not yet apply. It is reported as such rather than as a
+        # FAIL, because the honest next step is "declare the manifest this repo needs"
+        # and not "your tests failed".
+        sources = _source_files(project_root)
+        if sources:
+            return {
+                "name": "test_execution",
+                "status": "SKIP",
+                "skip_kind": "precondition_missing",
+                "languages_detected": [],
+                "source_files_seen": sources[:5],
+                "reason": (f"no language manifest at the repo root, and {len(sources)} "
+                           f"source file(s) are committed (e.g. {sources[0]}). A repo "
+                           f"with code and no manifest is not a pre-code phase: no "
+                           f"suite could be run, so nothing here was tested"),
+            }
         return {
             "name": "test_execution",
             "status": "SKIP",
+            "skip_kind": "not_applicable",
             "languages_detected": [],
             "reason": ("no language manifest at the repo root for any suite this gate "
-                       "knows how to run — nothing to run, which is not the same as "
-                       "nothing to test"),
+                       "knows how to run, and no source file committed — nothing to "
+                       "run, which is not the same as nothing to test"),
         }
     if executed:
         return {

@@ -116,6 +116,11 @@ def _resolve_plan_path(slug: str, repo_root: Path) -> Path:
     )
 
 
+#: The value `PythonDetector` uses when no project threshold is declared. Named here so
+#: the report can state it rather than leaving "D1 clean" without a number.
+_DEFAULT_MIN_CONFIDENCE = 80
+
+
 def _build_detector(language: str, thresholds: dict | None = None):
     cls = _DETECTOR_CLASSES.get(language)
     if cls is None:
@@ -386,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         return _emit_and_exit(
             [allowlist_malformed_finding], args, repo_root, plan_path=None,
             languages_audited=[], languages_skipped={}, cfg=None,
-            baseline=frozenset(), expired_allowlist=[])
+            baseline=frozenset(), expired_allowlist=[], thresholds={})
 
     # The phase BEGINS here, and the stream has to carry that.
     #
@@ -472,7 +477,8 @@ def main(argv: list[str] | None = None) -> int:
                           languages_skipped=languages_skipped,
                           cfg=cfg,
                           baseline=load_baseline(baseline_path),
-                          expired_allowlist=[f.allowlist_key for f in expired_hits])
+                          expired_allowlist=[f.allowlist_key for f in expired_hits],
+                          thresholds=thresholds)
 
 
 def _apply_allowlist(findings: list[Finding], allowlist: list, repo_root: Path,
@@ -662,6 +668,10 @@ def _emit_and_exit(
     #: that an audit which never started audited nothing.
     languages_audited: list[str],
     languages_skipped: dict[str, str],
+    #: The knobs this run applied, so the report can say what a clean detector was
+    #: clean AT. Required for the same reason as the four above: a default here would
+    #: let a caller report a threshold it did not use.
+    thresholds: dict,
     #: The language table, so the guard below asks what is on disk rather than what the
     #: gate happened to look at.
     cfg: dict | None,
@@ -777,6 +787,33 @@ def _emit_and_exit(
     summary["allowlist_active"] = sum(
         1 for f in findings if "[allowlisted]" in (f.message or ""))
     summary["skip_reasons"] = languages_skipped or {}
+    #: Every detector that RAN, per language. Derived from `languages_audited` because
+    #: the audit loop runs all five for every language it audits — the derivation is the
+    #: loop's own contract rather than a second list to keep in step.
+    #:
+    #: `findings_by_detector` lists only detectors that FOUND something, so a clean D1
+    #: and an absent D1 were the same report. Measured 2026-09-21: D1 ran over a
+    #: committed orphan function, reported nothing at its threshold, and appeared in
+    #: neither `findings_by_detector` nor `skip_reasons` — the detector the golden rule
+    #: lists first, invisible in both directions.
+    summary["detectors_run"] = {
+        det: list(languages_audited or [])
+        for det in ("d1_dead_code", "d2_symbol_fab", "d3_orphan_export",
+                    "d4_mutation", "d5_architecture")
+    }
+    #: The numbers this run applied. "D1 clean" is only a complete claim WITH the
+    #: threshold beside it: the golden rule defines D1 as "no exported symbol
+    #: unreachable from a caller or a test", and `vulture` scores exactly that class —
+    #: unused function, class, variable — at 60% confidence while the default is 80.
+    #: Measured on one file: 0 findings at 80, 2 at 60, both real orphans.
+    #:
+    #: The default is NOT changed here. The golden rule argues for it directly — turning
+    #: D1 up before the debt is paid "is how a gate becomes something people work
+    #: around" — and `--write-baseline` exists for the day a project decides to. What
+    #: changes is that a clean D1 now carries the number it was clean AT.
+    summary["thresholds_applied"] = dict(sorted(
+        (key, value) for key, value in (thresholds or {}).items()
+    )) or {"vulture.min_confidence": _DEFAULT_MIN_CONFIDENCE}
     summary["mode"] = "plan-bound" if plan_path else "standalone"
     if plan_path:
         summary["plan_path"] = str(plan_path.relative_to(repo_root))

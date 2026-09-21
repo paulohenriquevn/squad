@@ -253,6 +253,7 @@ def wiring_summary(project_root: Path, slug: str) -> dict[str, Any]:
             "name": "wiring_triad",
             "status": "SKIP",
             "reason": "no progress file found — implement may not have been invoked",
+            "skip_kind": _checkpoint_skip_kind(project_root, slug),
         }
 
     tasks = progress.get("tasks", []) if isinstance(progress, dict) else progress
@@ -646,7 +647,8 @@ def check_checkpoint_consistency_gate(project_root: Path, slug: str) -> dict[str
     plan = _find_plan(project_root, slug)
     if path is None:
         return {"name": "checkpoint_consistency", "status": "SKIP",
-                "reason": "no progress checkpoint — implement may not have run"}
+                "reason": "no progress checkpoint — implement may not have run",
+                "skip_kind": _checkpoint_skip_kind(project_root, slug)}
     if plan is None:
         return {"name": "checkpoint_consistency", "status": "SKIP",
                 "reason": f"plan not found for slug '{slug}' — cannot map task ids"}
@@ -729,7 +731,8 @@ def check_phase_review_gate(project_root: Path, slug: str) -> dict[str, Any]:
     progress = _read_progress(project_root, slug)
     if progress is None:
         return {"name": "phase_review", "status": "SKIP",
-                "reason": "no progress checkpoint — implement may not have run"}
+                "reason": "no progress checkpoint — implement may not have run",
+                "skip_kind": _checkpoint_skip_kind(project_root, slug)}
     from check_phase_review import check_phase_review
 
     review_dirs = [
@@ -864,15 +867,37 @@ def main() -> int:
         check_code_quality(project_root, args.slug, skip=args.no_code_quality),
     ]
 
+    # A SKIP that names no kind is `not_applicable`: the checks that KNOW they are
+    # missing a precondition say so, and silence means the check simply has no subject
+    # here. Defaulting the other way would turn every honest SKIP into a failure on the
+    # day this landed.
+    for check in checks:
+        if check.get("status") == "SKIP":
+            check.setdefault("skip_kind", SKIP_NOT_APPLICABLE)
+
     fails = [c for c in checks if c.get("status") == "FAIL"]
+    #: A precondition that is absent is not a check that does not apply. Counted with
+    #: the failures, because "the work did not happen" and "this gate has no subject
+    #: here" reached the same verdict and the same exit code — and the first one is the
+    #: thing this gate exists to catch.
+    blocked = [c for c in checks
+               if c.get("status") == "SKIP"
+               and c.get("skip_kind") == SKIP_PRECONDITION_MISSING]
+    # Every SKIP, for the summary buckets — `test_summary_buckets_account_for_every_check`
+    # asserts they sum to the total, and pulling the blocked ones out of this list made
+    # two checks vanish from the arithmetic. The distinction belongs to the VERDICT, not
+    # to the census.
     skips = [c for c in checks if c.get("status") == "SKIP"]
-    overall = "FAIL" if fails else ("PARTIAL" if skips else "PASS")
+    overall = "FAIL" if (fails or blocked) else ("PARTIAL" if skips else "PASS")
 
     report: dict[str, Any] = {
         "slug": args.slug,
         "project_root": str(project_root),
         "validated_at": datetime.now(timezone.utc).isoformat(),
         "overall_status": overall,
+        #: Named separately from `fails` so a reader can tell a gate that FAILED from a
+        #: gate that could not run at all.
+        "preconditions_missing": [c["name"] for c in blocked],
         "checks": checks,
         "summary": {
             # Every status bucket is counted so pass+fail+skip+warn+partial+n_a == total.
@@ -940,6 +965,38 @@ def main() -> int:
     _emit_phase_end(project_root, cycle="implement", slug=args.slug, verdict=overall)
 
     return 0 if overall in ("PASS", "PARTIAL") else 1
+
+
+#: Why a check did not run. The two are opposite facts and were one status.
+#:
+#: `not_applicable` — the check has no subject here: `npm test` in a Go repository.
+#: `precondition_missing` — the check has a subject and the thing it reads is absent,
+#: which is a fact about the WORK rather than about the repository.
+#:
+#: Measured 2026-09-21 on a repository holding a plan and no checkpoint: 16 SKIPs,
+#: `overall_status: PARTIAL`, exit 0 — "proceed" — while four of those SKIPs said, in
+#: their own reason strings, that `/implement` may not have run. The kit had already
+#: argued the correct shape twice, in the comments of `tdd_shape` and `test_execution`,
+#: and fixed it one check at a time. This is the general form.
+SKIP_NOT_APPLICABLE = "not_applicable"
+SKIP_PRECONDITION_MISSING = "precondition_missing"
+
+
+def _checkpoint_skip_kind(project_root: Path, slug: str) -> str:
+    """Is a missing checkpoint a fact about the WORK, or about the phase?
+
+    Only when a plan exists for this slug. Without one, `/implement` was never supposed
+    to run and its absent checkpoint is the honest state of a pre-code tree — the first
+    cut ignored that and turned `test_pre_code_phase_all_skip` red, which was the test
+    saying so.
+
+    With a plan on disk the reading flips: the work was planned, the gate that closes it
+    is running, and the record it reads is not there. That is the fact the four
+    checkpoint-dependent checks were reporting in prose while returning SKIP, and SKIP
+    exits 0.
+    """
+    return (SKIP_PRECONDITION_MISSING if _find_plan(project_root, slug) is not None
+            else SKIP_NOT_APPLICABLE)
 
 
 def _emit_phase_start(project_root, *, cycle: str, slug: str) -> None:

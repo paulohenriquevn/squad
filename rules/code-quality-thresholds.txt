@@ -1,10 +1,17 @@
 # Code-quality thresholds — per-project overrides for detector floors + behavioral knobs.
 #
 # Authoritative source: rules/code-quality-golden-rule.md § 6 (Per-project tuning).
-# Defaults shipped with the skill: skills/code-quality/defaults/thresholds.txt.
+# Defaults live in the detector constructors (e.g. `PythonDetector(min_confidence=80)`).
 #
 # This file sits between the locked golden rule and the per-project reality.
-# When unset, the value falls back to skills/code-quality/defaults/thresholds.txt.
+# When a key is unset, the detector uses its own built-in value. There is no defaults
+# FILE to fall back to, and there must not be: `skills/code-quality/defaults/` carried
+# copies of this file until 2026-09-01 and NOTHING fell back to them —
+# `run_code_quality.py` reads `rules/code-quality-*.txt` and exits 2 when one is
+# missing, which is the honest behaviour. The copies served nothing and drifted anyway
+# (80 lines here, 83 in `rules/templates/`, 37 there), so they were deleted and
+# `test_no_dead_fallback_copies_of_the_project_config` keeps them deleted. These three
+# lines went on describing the fallback for three weeks after the mechanism was gone.
 # Project-specific overrides go here and are CHANGELOG-tracked.
 #
 # Format (one entry per line):
@@ -32,7 +39,7 @@
 # Adding/changing entries:
 #   - Document the project-specific motivation in a comment above the line.
 #   - Add a CHANGELOG entry under `[Unreleased] § Changed`.
-#   - Defaults remain in skills/code-quality/defaults/thresholds.txt for portability.
+#   - A fresh consumer gets this file from `rules/templates/`, which the installer copies in.
 
 # D1 — Dead code
 # Defaults inherited; override only when project's call-graph review is unusual.

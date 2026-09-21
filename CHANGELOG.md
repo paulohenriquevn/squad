@@ -114,6 +114,143 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The allowlist's own example was in the format the file warns against.**
+  `code-quality-allowlist.txt` opens by recording the fix for #343 — *"this header used
+  to document a FOUR-field format … that `load_allowlist` has never accepted … so
+  following the documentation produced a WORSE outcome (FAIL_HARD, cap 49) than adding
+  nothing at all"* — and closed, eight lines later, with a four-field example. Measured
+  2026-09-21, uncommenting it: `malformed entry (expected 6 pipe-separated fields, got
+  4)`, which is `allowlist_malformed_entry`: HARD, and it aborts allowlist processing for
+  the whole run. #343 corrected the header and left the example, so the obvious way to
+  write a first entry — copy the example — was the worst available move. A test now
+  parses every example under the `# Example` marker.
+
+- **The mandatory sunset window was checked by nothing.** Two documents call it
+  mandatory — the golden rule's `| Sunset window | ≤ 90 days from entry creation date |`
+  and the file's own "MUST be ≤ 90 days" — and `load_allowlist` validated the ISO shape
+  and stopped. A sunset in 2029 was accepted: a permanent exemption with a date on it,
+  which § anti-patterns names as *"allowlists growing stale forever"*. Measured against
+  today rather than the creation date, which nothing on disk records — an approximation
+  strictly tighter than the contract, since a sunset beyond today+90 could not have
+  satisfied the rule on any creation date. A sunset already PAST still parses: the
+  contract is that an expired entry is ignored at scoring time and REPORTED as expired,
+  and refusing to parse it would hide the expiry instead of surfacing it.
+
+- **A detector that ran and found nothing was indistinguishable from one that did not
+  run.** Measured on a repository with a committed orphan function, `vulture` installed
+  and D1 clean at its threshold:
+
+  ```
+  findings_by_detector: {'d3_orphan_export_skipped': …, 'd4_mutation': …,
+                         'd2_symbol_fab': …, 'd5_architecture': …}
+  skip_reasons: {}
+  ```
+
+  D1 — the detector the golden rule lists first — appeared in neither, nor in
+  `languages_skipped`. `detectors_run` now names every detector per language, derived
+  from `languages_audited` because the audit loop runs all five for every language it
+  audits. Same defect this session fixed in `/implement`, where a SKIP meant two
+  opposite things.
+
+- **"D1 clean" was a claim with a number missing.** The golden rule defines D1 as *"No
+  exported symbol unreachable from a caller or a test"*; `vulture` scores exactly that
+  class — unused function, class, variable — at **60%** confidence, and the default
+  `min_confidence` is **80**. Measured on one file: 0 findings at 80, 2 at 60, both real
+  orphans. So the default D1 reports the 90% class (unused imports) and not the orphan
+  symbol its own definition describes.
+
+  The default is NOT changed. The golden rule argues for it directly — turning D1 up
+  before the debt is paid *"is how a gate becomes something people work around"* — and
+  `--write-baseline` exists for the day a project decides to. What changed is that every
+  run reports `thresholds_applied`, so a clean D1 carries the number it was clean AT, and
+  the D1 row now says which class the default covers. Counting the below-threshold
+  findings would have meant running the detector twice for the same answer.
+
+- **The thresholds rule documented a fallback that a test forbids.**
+  `code-quality-thresholds.txt` pointed three times at
+  `skills/code-quality/defaults/thresholds.txt` — *"Defaults shipped with the skill"*,
+  *"When unset, the value falls back to …"*, *"Defaults remain in … for portability"*.
+  The directory does not exist, and `test_no_dead_fallback_copies_of_the_project_config`
+  requires that it does not, with the reasoning intact: *"**Nothing fell back.**
+  `run_code_quality.py` reads `rules/code-quality-*.txt` and, when one is missing, prints
+  an error and exits 2 … the copies served nothing and drifted anyway: 80 lines in
+  `rules/`, 83 in `rules/templates/`, 37 here."* The copies were deleted on 2026-09-01
+  and the rule went on describing them for three weeks. The defaults live in the detector
+  constructors, and the file says so now.
+
+- **The final gate of IMPLEMENT said "proceed" about a repository where `/implement` had
+  not run.** `run_validation.py` consolidates twenty checks with `overall = "FAIL" if
+  fails else ("PARTIAL" if skips else "PASS")`, and `PARTIAL` exits 0. Every SKIP counted
+  the same, and SKIPs have two opposite natures. Measured 2026-09-21 on a tree holding a
+  plan and no checkpoint:
+
+  ```
+  overall_status: PARTIAL   exit 0
+  2 pass · 16 skip · 1 warn · 0 fail
+  SKIP checkpoint_consistency: no progress checkpoint — implement may not have run
+  SKIP wiring_triad:           no progress file found — implement may not have been invoked
+  ```
+
+  The check writes the suspicion in its own reason string and returns SKIP. A SKIP now
+  declares its kind — `not_applicable` when the check has no subject here, which is
+  honest, or `precondition_missing` when it has one and the thing it reads is absent —
+  and the second is counted with the failures. The kit had argued exactly this twice
+  before, in the comments of the two checks it fixed one at a time: *"FAIL, not SKIP. The
+  plan FILE exists… As a SKIP it counted into `skips`, `overall` became PARTIAL, and
+  PARTIAL exits 0, so IMPLEMENTATION_COMPLETE could be emitted with the TDD shape never
+  verified."*
+
+  A missing checkpoint counts only when a plan for the slug exists. Without one,
+  `/implement` was never supposed to run and its absent checkpoint is the honest state of
+  a pre-code tree — the first cut ignored that and turned `test_pre_code_phase_all_skip`
+  red, which was the test saying so.
+
+- **"Pre-code phase" was measured by the absence of a manifest, not of code.**
+  `test_execution` SKIPs only for *"a repo with no language manifest at all (genuine
+  pre-code phase)"*. Measured with `src/thing.py` committed and no `pyproject.toml`:
+
+  ```
+  SKIP test_execution: no language manifest at the repo root        PARTIAL, exit 0
+  ```
+
+  Adding a two-line `pyproject.toml` and touching no code:
+
+  ```
+  FAIL test_execution: manifest(s) for python present but no suite executed   exit 1
+  ```
+
+  What separated proceed from refuse was a metadata file. A repository with sources and
+  no manifest is not in a pre-code phase — this kit describes itself as shipping *"loose
+  scripts"* — so sources present with no runnable suite is a missing precondition, read
+  from `git ls-files` rather than a walk, because an untracked scratch file is not the
+  repository's code. It is reported as a precondition rather than as a FAIL: the honest
+  next step is "declare the manifest this repo needs", not "your tests failed".
+
+  The test that carried the old behaviour is named `test_pre_code_phase_all_skip` and its
+  fixture holds `src/` — the name asserting a phase the fixture contradicts.
+
+- **Pulling the blocked checks out of the skip list broke the census.** The first cut
+  removed them from `skips`, which the summary counts, so two checks vanished from
+  `pass + fail + skip + warn + partial + n_a == total` —
+  `test_summary_buckets_account_for_every_check` caught it on the next run. The
+  distinction belongs to the verdict, not to the census: every SKIP is counted, and the
+  blocked ones are listed separately under `preconditions_missing` so a reader can tell a
+  gate that failed from one that could not run at all.
+
+  Writing that up reintroduced the very shape another gate exists to refuse:
+  `test_no_procedure_concludes_a_project_phase_from_a_missing_file` caught the new
+  paragraph concluding "pre-code phase" from an absent manifest — the defect whose
+  docstring records that it *"landed in code and not in what invokes it … eight
+  occurrences across four files, after the code was fixed"*. The rule says what was
+  looked for and not found instead.
+
+  Four checks verified by sampling before any of this was changed, all of them sound:
+  `check_wiring` (orphan symbol → HALT on pillar a), `check_tdd_shape` (prose-only TDD →
+  BLOCKED), `check_test_obligations` (plan promises failure scenarios, tree has none →
+  FAIL), `test_execution` with a manifest and no suite → FAIL. IMPLEMENT is the most
+  mechanised phase in the kit; these three findings are the edges its own two earlier
+  fixes did not reach.
+
 - **Four skills used `$ECO` as a path prefix and assigned it nowhere, and the test
   written for the first one could only ever see the first one.** An empty expansion makes
   the command an absolute path from the filesystem root, so the step silently does not

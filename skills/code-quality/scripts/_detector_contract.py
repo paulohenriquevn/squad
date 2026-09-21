@@ -17,7 +17,7 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -181,6 +181,16 @@ _VALID_FINDING_TYPES = frozenset(
 )
 
 
+#: The sunset window `code-quality-golden-rule.md` § 4 declares. Stated here because
+#: this is the module that enforces it; the rule keeps the reasoning.
+_MAX_SUNSET_DAYS = 90
+
+
+def _TODAY() -> date:
+    """Indirection so a test can pin the day without touching the clock."""
+    return date.today()
+
+
 def load_allowlist(rule_file: Path) -> list[AllowlistEntry]:
     """Parse pipe-separated allowlist with strict sunset date validation.
 
@@ -224,6 +234,28 @@ def load_allowlist(rule_file: Path) -> list[AllowlistEntry]:
             raise ValueError(
                 f"allowlist.txt line {line_num}: malformed sunset date {sunset_str!r}: {e}"
             ) from e
+        # The window two documents call mandatory and nothing checked. The golden rule:
+        # `| Sunset window | ≤ 90 days from entry creation date |`; this file's own
+        # header: "MUST be ≤ 90 days from entry". `load_allowlist` validated the ISO
+        # shape and stopped, so `2029-09-01` was accepted (measured 2026-09-21) — a
+        # permanent waiver wearing a temporary one's clothes, which is exactly what
+        # § anti-patterns calls "allowlists growing stale forever".
+        #
+        # Measured against TODAY rather than the entry's creation date, which nothing on
+        # disk records. The approximation is strictly tighter than the contract: an
+        # entry written 30 days ago with a 90-day window has 60 days left, and a sunset
+        # beyond today+90 could not have satisfied the rule on any creation date.
+        #
+        # A sunset already PAST is accepted and parsed: the file's contract is that an
+        # expired entry is ignored at scoring time and REPORTED as expired, and refusing
+        # to parse it would hide the expiry instead of surfacing it.
+        if sunset > _TODAY() + timedelta(days=_MAX_SUNSET_DAYS):
+            raise ValueError(
+                f"allowlist.txt line {line_num}: sunset {sunset_str} is more than "
+                f"{_MAX_SUNSET_DAYS} days out. `code-quality-golden-rule.md` § 4 sets "
+                f"the window at {_MAX_SUNSET_DAYS} days from entry creation; a longer "
+                f"one is a permanent exemption with a date on it"
+            )
         entries.append(
             AllowlistEntry(
                 ecosystem=ecosystem,

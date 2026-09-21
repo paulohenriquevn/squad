@@ -40,5 +40,12 @@
 # Empty allowlist is the default. Add entries only when the underlying issue
 # cannot be fixed within the iteration AND the risk is documented.
 
-# Example (commented):
-# dead_code_unallowlisted_python | src/legacy/migrator.py:128 | 2026-09-01 | Legacy migration helper retained for v0.9 rollback path; remove after v1.0 release.
+# Example (commented) — SIX fields, in the order the parser reads them:
+# python | src/legacy/migrator.py | dead_code | migrate_v09 | legacy migration helper retained for the v0.9 rollback path; remove after v1.0 | 2026-11-30
+#
+# This example carried the FOUR-field shape until 2026-09-21 — the very shape the note
+# above records as one `load_allowlist` has never accepted. #343 corrected the header
+# and left the example, so the obvious way to write a first entry (copy the example)
+# produced `allowlist_malformed_entry`: HARD, and it aborts allowlist processing for the
+# whole run. `tests/test_the_allowlist_example_is_one_the_parser_accepts.py` now parses
+# every example under this marker.

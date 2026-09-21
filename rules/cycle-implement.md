@@ -125,6 +125,26 @@ Skipping mini review on phase boundary is a documented anti-pattern: design prob
 - **Test-obligation gate** — `check_test_obligations.py`. Declared concurrency tests / failure scenarios must have at least one matching test in the tree; total absence when the plan promised them is a FAIL (a generic green suite never exercised them).
 - **`/code-quality` verdict ∉ {FAIL_HARD, INVALID}** — `cq_invoke.py`, called internally by `run_validation.py`. FAIL_SOFT and PASS_WITH_CAVEATS surface as WARN in the report but do not block. Override only with `--no-code-quality` (pre-code phase or CQ not installed).
 
+**A SKIP declares which kind it is.** `not_applicable` — the check has no subject here,
+`npm test` in a Go repository — is honest and counts as a skip. `precondition_missing` —
+the check has a subject and the thing it reads is absent — is a fact about the WORK and
+is counted with the failures. Measured 2026-09-21: a repository holding a plan and no
+checkpoint produced 16 SKIPs, `PARTIAL`, exit 0 — *proceed* — while four of those SKIPs
+said in their own words that `/implement` may not have run. The two checks this was
+already fixed for, one at a time, were `tdd_shape` and `test_execution`; this is the
+general form, and a missing checkpoint counts only when a plan for the slug exists,
+because without one `/implement` was never supposed to run.
+
+The same distinction reaches `test_execution`, which used to SKIP whenever it found no
+language manifest at the repo root. Measured 2026-09-21: a tree with committed Python
+sources and no manifest skipped every suite and exited 0, and adding a two-line manifest
+without touching a line of code turned the same tree into FAIL. What it reports now is
+what it looked for and did not find — a manifest, with committed sources beside it — and
+that pair is a missing precondition rather than a repository with nothing to test. The
+kit describes itself as shipping *"loose scripts"*, so sources with no manifest is a
+shape it produces on purpose; a suite that could not run over them is still a suite that
+did not run.
+
 Exit codes: `0` = `PASS` or `PARTIAL` (proceed); `1` = `FAIL` (trigger validation halt-loop — see below); `2` = invocation error — the check itself could not run, which is a broken contract rather than a failing slice: register it as its own item and return this one to the registry.
 
 ## Validation halt-loop (mandatory when `run_validation.py` exits 1)
