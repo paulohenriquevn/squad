@@ -6,6 +6,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Changed
+
+- **This project's review panel runs three Anthropic seats, and says what that costs.**
+  The kit imposes one composition rule — *"At least one counted vote must come from a
+  recognised family outside the one the kit itself runs on. Three Claudes asked three
+  times share their failure modes: a plausible fabrication that survives one tends to
+  survive its siblings"* — enforced at intake by `check_panel_capability.py` ("three
+  seats from one family. Fails everywhere, CI included") and at tally by
+  `review_panel.tally()` ("APPROVED on a majority that spans two recognised families;
+  RETURNED otherwise").
+
+  This project has no non-Anthropic provider configured, so swapping the `judge-codex`
+  seats for Anthropic ones without more would have stopped DISCOVER, PLAN and DESIGN
+  outright: the capability gate failing at intake and every document returning at the
+  tally. The honest options were two — run no panel, or run one and say what it is worth
+  — and this is the second.
+
+  `rules/review-panel.txt` now declares the waiver with its reason, on the layer the
+  installer PRESERVES, because which models a project can reach is not the kit's
+  business. The kit's rule and its argument are untouched for every other consumer.
+
+  **Declared, never inferred.** A roster that happens to be one family and one that was
+  meant to be read identically on disk, and only one of them is a decision — so the
+  mechanisms read the keys rather than counting families and guessing. And the waiver is
+  never silent: `check_panel_capability` appends `SINGLE FAMILY, BY DECLARATION` with the
+  reason to its HOLDS line, and `Panel.outcome_note` carries the same into every outcome,
+  so an APPROVED under the waiver reads as the weaker claim it is. Both keys come out the
+  day a second provider is reachable.
+
+  The third seat is `argus-pattern-analyst`, which reads many cases together and decides
+  what is common to them — orthogonal by LENS rather than by family. That is less than
+  the rule asks for, and more than nothing, and this entry says so rather than letting
+  the roster imply otherwise. 4 tests.
+
+  A fourth reader of the two-family rule turned up afterwards, in
+  `skills/design/tests`, counting families directly and failing on the new roster. It
+  reads the declaration now, like the other three. Found by `run_slice_tests.sh` — the
+  slice suites are the only thing that runs it, and a check scoped to the changed area
+  had not.
+
 
 ### Added
 

@@ -389,17 +389,39 @@ def test_design_is_a_panel_phase() -> None:
     assert phases and "design" in phases[0]
 
 
-def test_the_design_panel_spans_two_model_families() -> None:
+def test_the_design_panel_spans_two_model_families_or_says_why_not() -> None:
     """Correlated models share failure modes: a plausible fabrication that survives one
     tends to survive its siblings. The seat outside the home family is what the panel
-    is for."""
+    is for.
+
+    A project that cannot reach a second provider has two honest options — run no panel,
+    or run one and say what it is worth — and the second requires a DECLARED waiver in
+    `rules/review-panel.txt`, on the layer the installer preserves. A roster that happens
+    to be one family and one that was MEANT to be read identically on disk, so this test
+    reads the declaration rather than counting families and inferring intent. Without the
+    keys, three seats from one family still fails here, in `check_panel_capability.py`
+    and at `Panel.tally()`.
+    """
     panel = (Path(__file__).resolve().parents[3] / "rules" / "review-panel.txt")
-    seats = [ln for ln in panel.read_text(encoding="utf-8").splitlines()
+    text = panel.read_text(encoding="utf-8")
+    seats = [ln for ln in text.splitlines()
              if ln.startswith("reviewer") and "design" in ln.split("|")[0]]
 
     assert len(seats) == 3, seats
     families = {ln.split("|")[3].strip() for ln in seats}
-    assert len(families) >= 2, families
+    if len(families) >= 2:
+        return
+
+    waiver = [ln.split("=", 1)[1].strip() for ln in text.splitlines()
+              if ln.startswith("single_family_panel")]
+    reason = [ln.split("=", 1)[1].strip() for ln in text.splitlines()
+              if ln.startswith("single_family_reason")]
+    assert waiver and waiver[0] == "accepted", (
+        f"the design panel is one family ({families}) and nothing declares that as a "
+        f"decision. Add a second family, or declare `single_family_panel = accepted` "
+        f"with `single_family_reason`."
+    )
+    assert reason and reason[0], "a waiver with no reason is not a waiver"
 
 
 def test_the_cycle_separates_the_panel_from_the_signature() -> None:

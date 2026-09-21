@@ -51,6 +51,7 @@ from review_panel import (
     PANEL_SIZE,
     Seat,
     parse_panel_phases,
+    single_family_waived,
     parse_roster,
     seats_for,
 )
@@ -135,11 +136,19 @@ def check_panel_capability(
     if not gated:
         return PanelCapability.VIOLATED
 
+    # A project may declare, in the roster the installer preserves, that it runs a
+    # one-family panel and what that costs it. The kit's rule does not move: which
+    # models a project can reach is not the kit's business, and a project with no
+    # second provider chooses between running no panel and running one that says what
+    # it is worth. DECLARED, never inferred — a roster that happens to be one family
+    # and one that was meant to be read the same on disk, and only one is a decision.
+    waived, _reason = single_family_waived(text)
+
     for seats in by_phase.values():
         if len(seats) != PANEL_SIZE:
             return PanelCapability.VIOLATED
         families = {s.family for s in seats}
-        if not (families - {HOME_FAMILY, "unknown"}):
+        if not (families - {HOME_FAMILY, "unknown"}) and not waived:
             return PanelCapability.VIOLATED
 
     # Reachability is checked LAST and reported separately, because it is the only
@@ -247,6 +256,25 @@ def main(argv: list[str] | None = None) -> int:
         size=PANEL_SIZE,
         home=HOME_FAMILY,
     )
+
+    # The waiver never passes silently. A panel of one family HOLDS only because this
+    # project declared it does, and the line that reports HOLDS has to carry that or a
+    # reader takes it for a panel that spans families.
+    _waived, _reason = (False, "")
+    try:
+        _waived, _reason = single_family_waived(text)
+    except (OSError, ValueError, NameError):  # pragma: no cover - text may be unread
+        pass
+    if _waived and result is PanelCapability.HOLDS:
+        message += (
+            "\n\n  SINGLE FAMILY, BY DECLARATION. `rules/review-panel.txt` waives the "
+            f"cross-family requirement: {_reason}.\n"
+            "  Correlated reviewers share failure modes — a plausible fabrication that "
+            "survives one tends to survive its siblings — so an APPROVED from this panel "
+            "is a weaker claim than one spanning two families, and `review_panel.tally()` "
+            "carries the same note into every outcome. Remove both keys from the roster "
+            "the day a second provider is reachable."
+        )
 
     if result is PanelCapability.UNREACHABLE and unfillable_seats():
         message += "\n\nWhich seats, and why:\n" + "\n".join(

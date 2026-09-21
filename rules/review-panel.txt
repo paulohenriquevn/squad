@@ -108,11 +108,11 @@
 
 reviewer = discover | nemesis-claim-auditor      | claude-opus-5   | builtin
 reviewer = discover | leonardo-researcher        | claude-sonnet-5 | builtin
-reviewer = discover | judge-codex:discover-judge | gpt-5-codex     | codex
+reviewer = discover | argus-pattern-analyst    | claude-opus-5   | builtin
 
 reviewer = plan     | vera-technical-arbiter     | claude-opus-5   | builtin
 reviewer = plan     | nemesis-claim-auditor      | claude-sonnet-5 | builtin
-reviewer = plan     | judge-codex:plan-judge     | gpt-5-codex     | codex
+reviewer = plan     | argus-pattern-analyst      | claude-opus-5   | builtin
 
 # The phases a panel gates. A phase not listed here advances on its own verdict.
 # CODE-QUALITY and RELEASE are deliberately absent: both already derive their
@@ -120,6 +120,26 @@ reviewer = plan     | judge-codex:plan-judge     | gpt-5-codex     | codex
 # deterministically adds cost and no information.
 reviewer = design   | vera-technical-arbiter     | claude-opus-5   | builtin
 reviewer = design   | nemesis-claim-auditor      | claude-sonnet-5 | builtin
-reviewer = design   | judge-codex:judge-codex-jury | gpt-5-codex   | codex
+reviewer = design   | argus-pattern-analyst      | claude-opus-5   | builtin
+
+# THIS PROJECT waives the cross-family requirement, and says what that costs.
+#
+# The kit's rule stands and the argument above stands with it: three Claudes asked three
+# times share their failure modes, and a plausible fabrication that survives one tends to
+# survive its siblings. Nothing here disputes that. What this project does not have is a
+# non-Anthropic provider configured, so the honest options were two — run no panel, or
+# run one and say what it is worth. This is the second.
+#
+# The waiver is DECLARED, never inferred from the roster: a panel that happens to be one
+# family and a panel that was meant to be reads the same on disk, and only one of them is
+# a decision. `check_panel_capability.py` accepts it and reports it; `review_panel.tally()`
+# carries it into every outcome, so `APPROVED` under this waiver reads as what it is —
+# a weaker claim than `APPROVED` across two families.
+#
+# Remove both lines the day a second provider is reachable. The seat is still there:
+# `argus-pattern-analyst` holds the orthogonal chair, and it is orthogonal by LENS rather
+# than by family, which is less than the rule asks for and more than nothing.
+single_family_panel = accepted
+single_family_reason = no non-Anthropic provider is configured for this project
 
 panel_phases = discover, plan, design
