@@ -114,6 +114,67 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **Two of the review phase's own mechanisms were invoked by nothing.** A sweep of
+  `skills/`, `rules/`, `mechanisms/` and `hooks/` on 2026-09-21, excluding each script
+  and its tests, found no caller for either:
+
+  ```
+  check_finding_continuity.py   173 lines · tested · in squad-map · invoked by: (nothing)
+  check_record_scope.py         165 lines · tested · in squad-map · invoked by: (nothing)
+  ```
+
+  The first is the worse one, because its docstring says what it was for: *"`consolidate_findings.py`
+  scores from OPEN findings. A re-review that deletes a finding, or lowers a BLOCKER to
+  MEDIUM, therefore passes — and until now the only thing standing against either was a
+  sentence in `skills/review/SKILL.md`, guarded by a test asserting `"delete" in text`. A
+  grep over a contract is not a guard … **This is the mechanised half.**"* The mechanised
+  half was written and never connected, so the guarantee stayed the prose it was meant to
+  replace — for three weeks, a re-review could delete a BLOCKER and score from what
+  remained.
+
+  It enters `consolidate_findings.py` the way `check_upstream_gate` already does, at
+  **HIGH** rather than BLOCKER: the checker refuses to rule on intent — *"an honest
+  re-scope and a quiet deletion look identical on disk"* — and a BLOCKER would assert the
+  judgement it declines to make. HIGH reaches the reader and, through
+  `unregistered_high`, has to be named and owned before the review hands off.
+
+  `check_record_scope` measured the other hole — 2 of 48 reviews declared a reviewed
+  range, 3 of 16 audits a scope — and concluded *"the past is permanently unrecoverable,
+  and the only honest move left is to stop the same hole opening again."* Wiring it as a
+  finding about somebody else's old record would not have stopped anything; the report
+  this phase writes now opens with a frontmatter declaring the item it covered, and the
+  checker runs against that record. The gate verifying the artifact its own phase
+  produced.
+
+- **The report a person reads omitted the auditors it could not read.**
+  `_read_findings_file` returns `None` for a malformed file and promises the caller
+  "lists the file under `unreadable`, by name, **in the report and in the JSON**".
+  Measured with three findings files, one carrying broken YAML:
+
+  ```
+  JSON:      unreadable: ['perf-auditor.yaml']
+  report.md: "**Reviewers (spawned agents):** 2 (quiet-auditor, security-auditor)"
+             grep -ci "unreadable|perf-auditor" -> 0
+  ```
+
+  `_render_markdown` even declared an `unreadable` parameter and the call site passed it;
+  the body never rendered it. The JSON kept the promise, the markdown did not, and the
+  markdown is the phase's declared Output — a count of two, alone, reads as the whole
+  roster.
+
+- **A BLOCKER whose evidence said `looked in None`.** `records_dir()` returns `None` when
+  the directory is absent and `check_upstream_gate.py` interpolated the result straight
+  into the sentence. It told nobody where it looked and conflated two facts: the audit is
+  missing from a records directory that exists, and there is no records directory at all.
+  The sibling BLOCKER in the same report writes the honest form — *"the gate was pointed
+  at the wrong tree — it has NOT established that no audit is required"* — and this one
+  does now.
+
+  Checked and found correct, recorded because it nearly became a false finding: the
+  decision that a `None` edge-case ratio does NOT reach `NEEDS_DEEPER` is deliberate and
+  its promise is kept — the report header carries `**Edge-case coverage:** NOT MEASURED —
+  the band below was not applied, so this verdict says nothing about edge-case coverage.`
+
 - **The allowlist's own example was in the format the file warns against.**
   `code-quality-allowlist.txt` opens by recording the fix for #343 — *"this header used
   to document a FOUR-field format … that `load_allowlist` has never accepted … so

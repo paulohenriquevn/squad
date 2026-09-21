@@ -71,9 +71,11 @@ from squad.paths import (  # noqa: E402 — post-bootstrap import
 # enters sys.path on its own) and is also imported by tests that insert the directory
 # by hand — the fallback covers the case where neither happened.
 try:
+    from check_finding_continuity import check_finding_continuity
     from check_upstream_gate import check_upstream_gate
 except ImportError:  # pragma: no cover - alternative import path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from check_finding_continuity import check_finding_continuity
     from check_upstream_gate import check_upstream_gate
 
 # The independent auditors are the kit's, not this skill's, so their coverage gate
@@ -385,6 +387,17 @@ def _classify_verdict(
     return "READY_TO_MERGE"
 
 
+def _item_id_of(slug: str) -> str | None:
+    """`b033-prometheus-url` -> `B-033`. None when the slug names no item.
+
+    Same normalisation `board_state.item_id_of` performs on a stream slug, and for the
+    same reason: the phases downstream of BACKLOG carry the PLAN slug, and a reader
+    looking for `B-033` must find it.
+    """
+    match = re.search(r"\bb-?(\d{3,})\b", slug, re.IGNORECASE)
+    return f"B-{match.group(1)}" if match else None
+
+
 def _render_markdown(
     slug: str,
     date: str,
@@ -398,6 +411,25 @@ def _render_markdown(
     unreadable: list[str] | None = None,
 ) -> str:
     md = [
+        # The scope, declared where `check_record_scope.py` reads it.
+        #
+        # That checker measured 2 of 48 reviews declaring a reviewed range and 3 of 16
+        # audits mentioning a scope, and concluded: "the past is permanently
+        # unrecoverable, and the only honest move left is to stop the same hole opening
+        # again." It was invoked by nothing — 165 lines, tested, in the map, never run —
+        # so the hole went on opening. Wiring it as a finding about somebody else's old
+        # record would not have closed it; emitting the declaration in the record THIS
+        # run writes does, and `test_the_report_declares_which_item_it_covered` runs the
+        # checker against it.
+        "---",
+        # The id, not the slug. `check_record_scope._as_items` reads `B-NNN`, and a
+        # review slug carries it in the kit's convention (`b033-prometheus-url`); the
+        # bare slug is kept beside it so a record whose slug names no item still says
+        # what it was about.
+        f"item: {_item_id_of(slug) or slug}",
+        f"slug: {slug}",
+        "---",
+        "",
         f"# Review: {slug}",
         "",
         f"**Date:** {date}",
@@ -406,6 +438,25 @@ def _render_markdown(
         f"**Total findings:** {total_findings}",
         "",
     ]
+    # The promise `_read_findings_file` makes — "lists the file under `unreadable`, by
+    # name, in the report AND in the JSON" — was kept by the JSON alone. This parameter
+    # was declared, passed at the call site, and never rendered.
+    #
+    # Measured 2026-09-21 with three findings files, one carrying broken YAML: the JSON
+    # named it, and the report said "Reviewers (spawned agents): 2" with no mention that
+    # a third had written and could not be read. The report is the phase's declared
+    # Output, so that is the copy where the gap has to be visible — a count of two,
+    # alone, reads as the whole roster.
+    if unreadable:
+        md += [
+            f"**Unreadable ({len(unreadable)}):** " + ", ".join(f"`{name}`" for name in unreadable),
+            "",
+            "> These agents wrote a findings file this run could not parse. They are NOT "
+            "counted among the reviewers above, and whatever they found is not in this "
+            "report — an empty findings list and a file that failed to load are "
+            "different facts.",
+            "",
+        ]
     if coverage_ratio is not None:
         md.append(f"**Edge-case coverage:** {coverage_ratio:.0%}")
     else:
@@ -702,6 +753,44 @@ def _collect_findings(args, slug: str) -> tuple[list[dict], list[str], list[str]
         _normalize_finding(f, "check_upstream_gate")
         for f in check_upstream_gate(_project_root_for(args.findings_dir), slug)
     )
+
+    # A finding that was here last time and is not here now enters the same way.
+    #
+    # `check_finding_continuity` was written to replace a sentence in `SKILL.md` guarded
+    # by a test asserting `"delete" in text` — its own docstring calls itself "the
+    # mechanised half" — and a sweep on 2026-09-21 found nothing invoking it. The
+    # mechanised half existed and was never connected, so the guarantee stayed the prose
+    # it was meant to replace: a re-review that deletes a BLOCKER or lowers it to MEDIUM
+    # scores from what remains and passes.
+    #
+    # HIGH and not BLOCKER, deliberately. The script refuses to rule on intent — "an
+    # honest re-scope and a quiet deletion look identical on disk" — so a BLOCKER would
+    # assert the judgement it declines to make. HIGH reaches the reader and, through
+    # `unregistered_high`, has to be named and owned before the review hands off.
+    _continuity = check_finding_continuity(_project_root_for(args.findings_dir), slug)
+    if _continuity.compared and not _continuity.is_clean:
+        for _ident in _continuity.vanished:
+            all_findings.append(_normalize_finding({
+                "severity": "HIGH",
+                "title": f"finding {_ident} vanished between reviews",
+                "evidence": (f"present in {_continuity.earlier} and absent from "
+                             f"{_continuity.later}. This does not say which it was: an "
+                             f"honest re-scope and a quiet deletion look identical on "
+                             f"disk, and naming which one applies is the reviewer's"),
+                "recommendation": (f"say in the later review why {_ident} is gone, or "
+                                   f"restore it. A review scores from OPEN findings, so "
+                                   f"a deleted one costs nothing unless somebody looks"),
+            }, "check_finding_continuity"))
+        for _ident in _continuity.downgraded:
+            all_findings.append(_normalize_finding({
+                "severity": "HIGH",
+                "title": f"finding {_ident} was downgraded between reviews",
+                "evidence": (f"carried a higher severity in {_continuity.earlier} than "
+                             f"in {_continuity.later}"),
+                "recommendation": ("record the evidence that lowered it. A severity that "
+                                   "fell without a reason is a cheaper verdict, not a "
+                                   "smaller problem"),
+            }, "check_finding_continuity"))
 
     # The independent audits enter the same way, for the same reason. `/review` spawns
     # Claude sub-agents with ad-hoc prompts; the `loop-*` plugins audit the same domains

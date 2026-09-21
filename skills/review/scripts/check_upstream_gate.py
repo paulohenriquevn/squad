@@ -115,14 +115,32 @@ def _dismissal_corpus(project_root: Path, slug: str) -> str:
     return "\n".join(chunks)
 
 
+def _where_it_looked(project_root: Path, slug: str) -> str:
+    """Where the audit was sought — and, when there is nowhere, say THAT instead.
+
+    `records_dir()` returns `None` when the directory is absent, and this evidence
+    interpolated the result straight into the sentence: `looked in None for
+    demo-code-quality-*.md`. That tells nobody where it looked, and it collapses two
+    different facts into one line — the audit is missing from a records directory that
+    exists, and there is no records directory at all. The second is a statement about
+    the TREE this gate was pointed at, which is the shape `check_auditor_coverage`
+    already writes correctly in the same report.
+    """
+    audits = records_dir(project_root, "audits")
+    if audits is None:
+        return (f"no records directory under {project_root} to look in, so the absence "
+                f"of `{slug}-code-quality-*.md` proves nothing about whether the audit "
+                f"ran — this gate was pointed at a tree that carries no records root")
+    return f"looked in {audits} for `{slug}-code-quality-*.md`"
+
+
 def check_upstream_gate(project_root: Path, slug: str) -> list[dict[str, Any]]:
     """Return BLOCKER findings when the `/code-quality` verdict does not admit `/review`."""
     audit = _latest_audit(project_root, slug)
     if audit is None:
         return [_finding(
             f"no /code-quality audit for `{slug}`",
-            f"looked in {records_dir(project_root, 'audits')} for "
-            f"`{slug}-code-quality-*.md`",
+            _where_it_looked(project_root, slug),
             f"run `/code-quality {slug}` STANDALONE before `/review`. 'No audit' here "
             f"means no audit FILE: `run_validation.py` already ran this phase nested and "
             f"passed it `--no-audit-write`, so it returned a verdict and wrote nothing. "

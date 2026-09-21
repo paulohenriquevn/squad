@@ -76,6 +76,26 @@ TERMINAL_STATUSES = frozenset({"shipped", "killed"})
 #: A block saying, in its own words, that the work is done. Deliberately narrow: it matches the
 #: remedy being NAMED (`closed in code`, `closed by deletion`), not the bare word "closed", which
 #: appears in ordinary prose about closing an endpoint or a connection.
+#: The author's answer to `status_contradicts_body`, and the ONLY way to clear it.
+#:
+#: `rules/english-only.md` solved the identical shape — "a detector naming what it detects" is one
+#: of its three legitimate exemptions — with a line-level marker carrying a mandatory reason. This
+#: detector had none, so the only way to clear the finding was to delete prose that was true.
+#:
+#: Three parts, and each is load-bearing. The literal `backlog-structure:` is something nobody
+#: writes by accident, which a looser MATCHER could never be: one that stops firing on the words
+#: "resolved" or "superseded" is disarmed by ordinary prose, and a check ordinary prose disarms
+#: reports clean while the condition holds. The DATE says when the two halves were reconciled. The
+#: REASON — at least four words — says which half is superseded, which is the whole of what the
+#: finding asserts is missing: the reader now has one answer and a record of the other.
+#:
+#: A marker with no date or no reason is refused, for the reason `english-only.md` gives about its
+#: own: a silent opt-out is the thing being prevented.
+_CONTRADICTION_RESOLVED_RE = re.compile(
+    r"backlog-structure:\s*status_contradicts_body\s+"
+    r"\d{4}-\d{2}-\d{2}\s*[-—:]*\s*(?:\S+\s+){3,}\S+",
+)
+
 _DECLARES_CLOSED_RE = re.compile(
     r"\*{0,2}closed\s+(?:in\s+code|by\s+deletion|by\s+removal)\*{0,2}", re.IGNORECASE
 )
@@ -625,7 +645,8 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
         #
         # This asserts nothing about whether the item is really done; nothing here can measure
         # that. It asserts that a reader has two answers and no way to choose.
-        if status not in TERMINAL_STATUSES and _DECLARES_CLOSED_RE.search(item.body):
+        if (status not in TERMINAL_STATUSES and _DECLARES_CLOSED_RE.search(item.body)
+                and not _CONTRADICTION_RESOLVED_RE.search(item.body)):
             findings.append(Finding("status_contradicts_body", "deterministic", "major", iid,
                 f"the block declares itself closed in its own prose and is filed as `{status}`. "
                 "One of the two is wrong, and a reader cannot tell which."))

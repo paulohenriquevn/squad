@@ -127,11 +127,12 @@ re-run by hand, or quietly ignored. The mechanism is now part of the line.
   Rule 6) — `stop-validation.py`, which accepts a package `CHANGELOG.md` or a
   `.changeset/` entry as the record.
 
+- A finding that was in the previous review of this slug and is not in this one — `check_finding_continuity.py`, entering `consolidate_findings.py` as HIGH findings. HIGH and not BLOCKER because the checker refuses to rule on intent — *"an honest re-scope and a quiet deletion look identical on disk"* — so the disappearance has to be named and owned through `unregistered_high` rather than judged here. Written on 2026-08-30 to replace a sentence in `SKILL.md` guarded by a test asserting `"delete" in text`, and invoked by nothing until 2026-09-21: a review scores from OPEN findings, so deleting one cost nothing while the mechanised half sat unwired.
 - A required independent audit that did not happen — `check_auditor_coverage.py`, entering `consolidate_findings.py` as BLOCKER findings so the verdict cannot be computed while ignoring it, the shape `check_upstream_gate.py` established. It fires on a report that is missing, one the plugin's own checker rejects, or a plugin this machine does not have. A project that declares no auditor is **not** blocked: that opt-out is a visible edit to a file the installer preserves, never a silence.
 
 ## Output
 
-- `records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix.
+- `records/reviews/{slug}-review-{YYYY-MM-DD}.md` — consolidated findings with severity matrix, opening with a frontmatter declaring the item it covered. `check_record_scope.py` reads that declaration, and it measured why: 2 of 48 reviews named a reviewed range and 3 of 16 audits named a scope, so *"a review that covered seven items and one that covered a single item are indistinguishable from the file"*. The past stays unrecoverable; what the frontmatter stops is the same hole opening again. The report also names every findings file it could NOT parse — an empty findings list and a file that failed to load are different facts, and only the JSON carried that distinction until 2026-09-21.
 - `.squad/records/reviews/review-{slug}-{YYYY-MM-DD}/` — per-agent audit trail. Generated per-item files are output; `agents/` holds the kit's DECLARED specialists, and mixing the two put a run's trail where a reader looks for a roster.
 
 ## Anti-patterns
