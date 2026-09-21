@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
-from check_corner_coverage import check_corner_coverage
+from check_corners_questioned import check_corners_questioned
 from check_measurement_targets import check_measurement_targets
 from check_plan_completeness import check_plan_completeness
 from check_spec_smells import check_spec_smells
@@ -171,7 +171,7 @@ def main() -> int:
     text = plan_path.read_text(encoding="utf-8-sig")
 
     # Run all four checkers
-    coverage = check_corner_coverage(plan_path)
+    coverage = check_corners_questioned(plan_path)
     targets = check_measurement_targets(plan_path)
     completeness = check_plan_completeness(plan_path)
     smells = check_spec_smells(plan_path, rubric_path)

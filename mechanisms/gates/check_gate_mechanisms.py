@@ -392,6 +392,10 @@ def check_gate_mechanisms(repo_root: Path, *, max_debt_age_days: int | None = No
             continue
         heading_spans = [(m.start(), m.end()) for m in _SECTION_RE.finditer(text)]
         sections = _SECTION_RE.findall(text)
+        # Computed once per rule: the gate ids this file declares AND backs with a
+        # mechanism, so a phase-contract row citing one is covered by it.
+        mechanised_ids = frozenset(
+            _mechanised_gate_ids(text, rules_dir, executables))
         phase_tables: list[tuple[str, str]] = []
         # A `Hard gate` COLUMN declares gates as surely as a `## Hard gates` heading.
         # The table is swept WITH the prose of the section it lives in, because that is
@@ -438,6 +442,7 @@ def check_gate_mechanisms(repo_root: Path, *, max_debt_age_days: int | None = No
                     inherited=inherited if is_row else [],
                     inherited_exemption=inherited_exemption and is_row,
                     max_debt_age_days=max_debt_age_days,
+                    mechanised_ids=mechanised_ids,
                 )
                 if finding is not None:
                     if is_phase_table:
@@ -465,6 +470,50 @@ def _prose_of(section_body: str) -> str:
     )
 
 
+#: A gate id as a phase-contract row cites it: `(G-B2)`, `(G-B4, G-B5)`, `G1–G5`.
+#: Matched against the ids the SAME RULE declares, never against a shape, so a row
+#: citing something nobody defined is still a row with no enforcer.
+_GATE_ID_RE = re.compile(r"\bG-?[A-Z]{0,2}\d*\b")
+
+
+def _mechanised_gate_ids(text: str, rules_dir: Path, executables: set[str]) -> set[str]:
+    """The ids this rule declares in a `## Hard gates` table AND backs with a mechanism.
+
+    A phase-contract table is a SUMMARY — one line per phase — and the gate itself is
+    declared below with an id and an executor. `cycle-brainstorm.md` is the clearest
+    case: G-B1 to G-B5 each name `score_product_alignment.py`, and the five summary rows
+    above cite `(G-B1)` … `(G-B4, G-B5)`. The executor is named once, where the gate is
+    defined, and this follows the reference rather than reporting the summary as
+    unenforced.
+
+    Measured 2026-09-21: 42 phase rows were reported as naming no enforcer, and most of
+    them cited a gate that does. Burying the rows that really have none among rows that
+    do is what made `--strict-phase-rows` unusable — a flag that fails the build on 42
+    findings, most of them false, is a flag nobody turns on.
+
+    Laundering is what this must not do, so the id has to be declared here AND the gate
+    carrying it has to pass on its own terms.
+    """
+    ids: set[str] = set()
+    for match in _SECTION_RE.finditer(text):
+        for line in _gate_lines(match.group(2)):
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if not cells:
+                continue
+            candidate = cells[0].strip("` ")
+            if not _GATE_ID_RE.fullmatch(candidate):
+                continue
+            names_executable = any(
+                Path(name).name in executables for name in _EXECUTABLE_RE.findall(line))
+            points_at_rule = any(
+                (rules_dir / Path(target).name).is_file()
+                for target in _RULE_POINTER_RE.findall(line))
+            exempt = _UNMECHANIZED_RE.search(line)
+            if names_executable or points_at_rule or exempt:
+                ids.add(candidate)
+    return ids
+
+
 def _classify(
     rule_path: Path,
     gate: str,
@@ -475,6 +524,7 @@ def _classify(
     inherited: list[str],
     inherited_exemption: bool = False,
     max_debt_age_days: int | None = None,
+    mechanised_ids: frozenset[str] = frozenset(),
 ) -> GateFinding | None:
     exemption = _UNMECHANIZED_RE.search(gate)
     cited = _EXECUTABLE_RE.findall(gate)
@@ -574,6 +624,15 @@ def _classify(
             )
         report.named += 1
         return None
+
+    # A summary row may cite the gate that owns it. Following the reference is the
+    # difference between "this phase's gate is declared below" and "nothing computes
+    # this" — see `_mechanised_gate_ids`.
+    if gate.startswith("|") and mechanised_ids:
+        for token in _GATE_ID_RE.findall(gate):
+            if token in mechanised_ids:
+                report.named += 1
+                return None
 
     return GateFinding(
         rule_path.name, _excerpt(gate), "gate_without_mechanism",

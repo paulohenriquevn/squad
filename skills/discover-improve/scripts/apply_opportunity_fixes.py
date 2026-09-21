@@ -41,7 +41,7 @@ as measured fact.
 
 A pointer that does not resolve means someone invented it, or the code moved. Both need a
 human or a re-measurement, never a marker applied in bulk. So this script REPORTS them and
-changes nothing. `test_apply_fixes.py::test_never_writes_a_blocked_marker` locks it shut.
+changes nothing. `test_apply_opportunity_fixes.py::test_never_writes_a_blocked_marker` locks it shut.
 """
 from __future__ import annotations
 
@@ -51,6 +51,14 @@ import re
 import sys
 import sys as _sys
 from pathlib import Path
+
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "blocked_marker.py").is_file():
+        import sys as _sys
+        _sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.blocked_marker import is_blocked_at  # noqa: E402 — post-bootstrap import
 from pathlib import Path as _P
 from typing import Any
 
@@ -79,7 +87,6 @@ LOOPHOLES_RE = re.compile(
 #: six readers and read as prose by the other five, so the same document scored
 #: differently depending on which checker asked.
 FENCED_CODE_RE = _FENCED_CODE_OWNER
-BLOCKED_MARKER_RE = re.compile(r"<!--\s*BLOCKED:.*?-->", re.IGNORECASE | re.DOTALL)
 
 REPLACEMENT_MAP = {"should": "must", "could": "can"}
 
@@ -171,7 +178,7 @@ def _report_unresolvable_pointers(content: str, opportunity_path: Path) -> list[
         seen.add(pointer)
         # An already-BLOCKED pointer was marked by a human or by the measurement; it is a
         # documented gap, not a finding for this script to re-raise.
-        if BLOCKED_MARKER_RE.search(content[match.end() : match.end() + 80]):
+        if is_blocked_at(content, match.end()):
             continue
 
         path = project_root / match.group(1)
@@ -191,7 +198,7 @@ def _report_unresolvable_pointers(content: str, opportunity_path: Path) -> list[
     return findings
 
 
-def apply_fixes(opportunity_path: Path, dry_run: bool = False) -> dict[str, Any]:
+def apply_opportunity_fixes(opportunity_path: Path, dry_run: bool = False) -> dict[str, Any]:
     original = opportunity_path.read_text(encoding="utf-8-sig")
 
     new_content, weak_count, loop_count = _rewrite_recommendation(original)
@@ -223,7 +230,7 @@ def main() -> int:
         print(f"Opportunity not found: {args.opportunity}", file=sys.stderr)
         return 2
 
-    result = apply_fixes(args.opportunity, dry_run=args.dry_run)
+    result = apply_opportunity_fixes(args.opportunity, dry_run=args.dry_run)
 
     if args.json:
         print(_json.dumps(result, indent=2))

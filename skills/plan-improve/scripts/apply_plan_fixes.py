@@ -1,4 +1,4 @@
-"""apply_fixes.py — deterministic fixes that improve a plan's M2 score.
+"""apply_plan_fixes.py — deterministic fixes that improve a plan's M2 score.
 
 Three fix categories (all SAFE, deterministic):
 
@@ -13,12 +13,12 @@ ALL fixes:
 
 A 4th category, ADR alternatives, is INTENTIONALLY out of scope here —
 that requires semantic understanding and is handled by the LLM inside the
-ralph-loop iteration. apply_fixes covers the deterministic 80%.
+ralph-loop iteration. apply_plan_fixes covers the deterministic 80%.
 
 Usage:
-    python3 apply_fixes.py <plan-path>             # apply all fixes
-    python3 apply_fixes.py <plan-path> --dry-run   # report without modifying
-    python3 apply_fixes.py <plan-path> --json      # JSON output for tooling
+    python3 apply_plan_fixes.py <plan-path>             # apply all fixes
+    python3 apply_plan_fixes.py <plan-path> --dry-run   # report without modifying
+    python3 apply_plan_fixes.py <plan-path> --json      # JSON output for tooling
 """
 from __future__ import annotations
 

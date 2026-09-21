@@ -34,6 +34,26 @@ This skill is **phase 1** of [`cycle-discover`](../../rules/cycle-discover.md). 
 
 ## Process
 
+### Step 0 — Emit the phase start
+
+```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)
+
+python3 "$ECO/mechanisms/cycle/cycle_events.py" start --cycle discover --slug {B-NNN}
+```
+
+**The phase opens here, where the chain opens.** It used to open in
+`/discover-execute`, which is phase 4 of 6 — so the lead time for DISCOVER measured the
+execution of the measurement and not the three phases that produce and approve the
+measurement plan. A chain that stalls at `/discover-plan-confidence` (INVALID returns to
+this skill) had no open start at all, so nothing showed it as work in flight.
+
+`/discover-execute` closes the phase with the verdict. It still emits the start itself in
+the **fast lane** — `--mode bug` entering there directly — because in that path this
+skill never ran.
+
+
+
 ### Step 0 — Read project rules (MANDATORY)
 
 ```bash

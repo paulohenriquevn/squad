@@ -184,7 +184,7 @@ writes the routing table, and scaffolds one agent file per domain it names.
 |---|---|
 | Skills | `/discover-plan` → `/discover-edge-cases` → `/discover-plan-confidence` → `/discover-execute` → `/discover-confidence` → `/discover-improve` |
 | Rules | [`cycle-discover.md`](cycle-discover.md) · [`discover-opportunity-golden-rule.md`](discover-opportunity-golden-rule.md) · [`skills/_kit-rules/discover-plan-golden-rule.md`](../skills/_kit-rules/discover-plan-golden-rule.md) · [`live-target.txt`](live-target.txt), [`discover-web-allowlist.txt`](discover-web-allowlist.txt) — **the project's** |
-| Computes | `run_measurement_plan_score.py`, `run_opportunity_score.py`, `check_evidence_pointers.py`, `check_measurement_targets.py`, `check_corner_coverage.py`, `check_opportunity_completeness.py`, `check_spec_smells.py` |
+| Computes | `run_measurement_plan_score.py`, `run_opportunity_score.py`, `check_evidence_pointers.py`, `check_measurement_targets.py`, `check_corners_populated.py`, `check_corners_questioned.py`, `check_opportunity_completeness.py`, `check_spec_smells.py` |
 | Modes | `review` · `live-test` · `bug` (hard floor: no failing test, no bug) · `evolve` |
 
 This is where the specialist matters most, and the reason is literal: a reviewer

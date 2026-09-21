@@ -36,7 +36,7 @@ Four deterministic checkers, four dimensions:
 
 | Dimension | Checker script | Hard cap | Weight |
 |---|---|---|---|
-| **corner_coverage** | `check_corner_coverage.py` | ≤49 if any of the 4 corners is empty | 0.30 |
+| **corner_coverage** | `check_corners_populated.py` | ≤49 if any of the 4 corners is empty | 0.30 |
 | **evidence_pointers** | `check_evidence_pointers.py` | ≤49 if ANY code pointer fails to resolve | 0.30 |
 | **opportunity_completeness** | `check_opportunity_completeness.py` | ≤70 if a mandatory section is missing | 0.25 |
 | **structural_risk** (smells) | `check_spec_smells.py` | penalty only (no hard cap) | 0.15 |

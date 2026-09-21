@@ -133,7 +133,7 @@ def test_a_task_id_outside_the_canonical_shape_is_invisible(tmp_path: Path) -> N
 
 
 def test_both_scripts_that_ask_if_a_plan_is_a_bugfix_use_the_same_answer() -> None:
-    """`apply_fixes.py` decides whether to INSERT a TDD block; this gate decides
+    """`apply_plan_fixes.py` decides whether to INSERT a TDD block; this gate decides
     whether to REQUIRE one. Same question, same plan, two hand-kept lists.
 
     A keyword in one and not the other means a plan gets a TDD section it is
@@ -156,7 +156,7 @@ def test_both_scripts_that_ask_if_a_plan_is_a_bugfix_use_the_same_answer() -> No
 
     kit = Path(__file__).resolve().parents[3]
     gate = keywords(kit / "skills" / "plan-confidence" / "scripts" / "check_tdd_in_bugfix.py")
-    writer = keywords(kit / "skills" / "plan-improve" / "scripts" / "apply_fixes.py")
+    writer = keywords(kit / "skills" / "plan-improve" / "scripts" / "apply_plan_fixes.py")
 
     assert gate == writer, (
         f"the gate and the writer disagree about what a bugfix is: {sorted(gate ^ writer)}")

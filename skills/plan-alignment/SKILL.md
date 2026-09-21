@@ -435,6 +435,8 @@ look at, and none was opened.
 deleting an unreferenced package crossed the same phases as redesigning the data plane.
 
 ```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)
+
 python3 "$ECO/skills/plan-alignment/scripts/classify_alignment_depth.py" . B-NNN
 ```
 

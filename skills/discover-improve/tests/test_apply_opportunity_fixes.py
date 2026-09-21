@@ -1,4 +1,4 @@
-"""Tests for apply_fixes.py — deterministic fixes, and the two things it must never do."""
+"""Tests for apply_opportunity_fixes.py — deterministic fixes, and the two things it must never do."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT = Path(__file__).parent.parent / "scripts" / "apply_fixes.py"
+SCRIPT = Path(__file__).parent.parent / "scripts" / "apply_opportunity_fixes.py"
 
 
 def _run(opportunity: Path, dry_run: bool = False) -> tuple[int, dict]:

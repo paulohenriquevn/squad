@@ -36,6 +36,70 @@ MANDATORY_SECTIONS = [
 ]
 
 ADR_HEADER_RE = re.compile(r"^###\s+D\d+\s*(?:—|-)", re.MULTILINE)
+
+#: The declared mode, so the mode's own evidence contract can be held to.
+MODE_DECL_RE = re.compile(r"^\*\*Mode:\*\*\s*`?(review|live-test|bug|evolve)\b",
+                          re.MULTILINE | re.IGNORECASE)
+
+#: `**Failing test:** path/to/test_file.py::test_name` — the floor `cycle-discover.md`
+#: sets for `bug`: *"no failing test, no bug"*.
+#:
+#: STRUCTURAL rather than a hunt through prose, and deliberately so. A regex looking for
+#: "the test fails" would produce verdicts about language, which is the thing G3, G4 and
+#: G5 are left conversational to avoid. The marker is declared the way a signature is,
+#: and the checker asks two questions it can answer: is it there, and does the file
+#: resolve. Whether the test genuinely fails is what `/discover-execute` runs and what
+#: the panel judges.
+#:
+#: Measured 2026-09-21, before this existed: an opportunity declaring `**Mode:** bug`
+#: whose Corner 1 said "No test written yet — the shape is obvious enough from the
+#: repro" scored `opportunity_completeness: 100.0`, `weighted_avg: 100.0`, no cap. G-M
+#: named this checker and the checker only asked whether the word `bug` was on the line.
+FAILING_TEST_RE = re.compile(
+    r"^\*\*Failing test:\*\*\s*`?([^`\s]+?)(?:::[^`\s]+)?`?\s*$",
+    re.MULTILINE | re.IGNORECASE)
+
+#: Which modes carry a structural evidence floor this checker can verify. `review`,
+#: `live-test` and `evolve` state their contracts in `cycle-discover.md` too — a
+#: `file:line`, a `METHOD URL -> status`, a measured number — and those are already
+#: what `check_evidence_pointers` counts. Only `bug` names an artifact that either
+#: exists on disk or does not.
+MODE_FLOORS = {"bug": "a failing test"}
+
+#: The item this opportunity is about — already mandatory as a section, captured here so
+#: the id can be resolved against the registry.
+ITEM_DECL_RE = re.compile(r"^\*\*Item:\*\*\s*`?(B-\d+)", re.MULTILINE)
+
+
+def _registry_of(project_root: Path) -> Path | None:
+    """`BACKLOG.md` at the project root, or `None` when there is none to read."""
+    candidate = project_root / "BACKLOG.md"
+    return candidate if candidate.is_file() else None
+
+
+def _item_is_registered(project_root: Path, item_id: str) -> bool | None:
+    """Is `item_id` a block in the registry? `None` when no registry was reachable.
+
+    `None` is not `False`, and the distinction is the whole discipline: without a
+    registry the question is unanswered, and reporting every opportunity as an orphan
+    would assert a violation the evidence does not support — the same rule
+    `check_measurement_targets` states about `live-target.txt` and
+    `check_objective_coverage` about the objectives document.
+
+    Parsed with `squad.backlog.BLOCK_RE`, the registry's one parser, so an item written
+    with a hyphen separator is seen here exactly as the writer and the structure check
+    see it.
+    """
+    registry = _registry_of(project_root)
+    if registry is None:
+        return None
+    try:
+        content = registry.read_text(encoding="utf-8-sig")
+    except OSError:
+        return None
+    from squad.backlog import BLOCK_RE
+
+    return any(m.group(1) == item_id for m in BLOCK_RE.finditer(content))
 # `/` is in the class because a routing table addresses a monorepo module by PATH
 # (`cmd/service-ops`, `infra/tests`). Without it the capture stopped at the first segment,
 # so a document whose repo is `cmd/service-ops` matched no routing entry, counted ITSELF
@@ -98,6 +162,18 @@ def _section_body(content: str, header_pattern: str) -> str:
     return content[start : start + next_h2.start()] if next_h2 else content[start:]
 
 
+def _find_project_root(start: Path) -> Path:
+    """Walk up from `start` looking for `.claude/` or `.git/` — the same walk
+    `check_evidence_pointers` performs, so a mode's artifact and an evidence pointer
+    resolve against one root rather than two."""
+    current = start.resolve().parent if start.is_file() else start.resolve()
+    while current != current.parent:
+        if (current / ".claude").exists() or (current / ".git").exists():
+            return current
+        current = current.parent
+    return start.resolve().parent if start.is_file() else start.resolve()
+
+
 def check_opportunity_completeness(
     opportunity_path: Path,
     *,
@@ -114,6 +190,40 @@ def check_opportunity_completeness(
             present.append(name)
         else:
             missing.append(name)
+
+    # ---- the mode's own floor (G-M) -----------------------------------------
+    mode_match = MODE_DECL_RE.search(content)
+    mode = mode_match.group(1).lower() if mode_match else None
+    mode_contract_unmet = ""
+    if mode in MODE_FLOORS:
+        test_match = FAILING_TEST_RE.search(content)
+        if not test_match:
+            mode_contract_unmet = (
+                f"`**Mode:** {mode}` and no `**Failing test:**` line. "
+                f"`cycle-discover.md` sets the floor in four words — no failing test, "
+                f"no bug — because a defect nobody can express as a failing test is not "
+                f"yet understood well enough to fix, and the test is what proves the fix "
+                f"later. Declare it as `**Failing test:** path/to/test.py::test_name`")
+        else:
+            root = project_root or _find_project_root(opportunity_path)
+            rel = test_match.group(1)
+            if not (root / rel).is_file() and not (root / ".claude" / rel).is_file():
+                mode_contract_unmet = (
+                    f"`**Failing test:** {rel}` names a file that is not on disk. A test "
+                    f"nobody wrote is the fabricated-evidence shape, one field along")
+
+    # ---- the finding reached the registry ------------------------------------
+    #
+    # `cycle-discover.md` calls "Sweeping without registering" an anti-pattern — "the
+    # orphaned-finding failure the single registry exists to prevent" — and nothing
+    # asked. The kit's own `good-opportunity.md` fixture is an opportunity ABOUT this
+    # gap, shipped as the example of a good one: "The gate that the anti-pattern
+    # implies does not exist." It does now.
+    item_match = ITEM_DECL_RE.search(content)
+    declared_item = item_match.group(1) if item_match else None
+    root_for_registry = project_root or _find_project_root(opportunity_path)
+    item_registered = (_item_is_registered(root_for_registry, declared_item)
+                       if declared_item else None)
 
     adrs_body = _section_body(content, r"^##\s+ADRs\b")
     adr_count = len(ADR_HEADER_RE.findall(adrs_body))
@@ -211,6 +321,11 @@ def check_opportunity_completeness(
         "cross_repo_determinable": cross_repo is not None,
         "adr_required": adr_required,
         "adr_missing": adr_missing,
+        "mode": mode,
+        "mode_contract_unmet": mode_contract_unmet,
+        "declared_item": declared_item,
+        "item_registered": item_registered,
+        "item_registration_checked": item_registered is not None,
         "contributors": contributors,
         "detractors": detractors,
     }

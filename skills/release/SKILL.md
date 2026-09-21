@@ -201,6 +201,8 @@ PR URL is captured and reported.
 verdicts the chain already emitted, and nowhere else:
 
 ```bash
+ECO=$([ -d .claude/skills ] && echo .claude || echo .)
+
 # /review returned READY_TO_MERGE, /code-quality is not FAIL_HARD,
 # and no BLOCKED report stands against this item.
 python3 "$ECO/mechanisms/cycle/cycle_events.py" verdicts --slug "$SLUG"

@@ -103,7 +103,7 @@ def good_opportunity(fixtures_dir: Path) -> Path:
 def synthetic_opportunity(tmp_path: Path) -> Path:
     """Minimal valid opportunity for negative-path tests.
 
-    Each corner carries >50 chars to clear MIN_CONTENT_CHARS in check_corner_coverage.
+    Each corner carries >50 chars to clear MIN_CONTENT_CHARS in check_corners_populated.
     Deliberately repo-local in its blast radius, so no ADR is required — the ADR
     conditional is exercised explicitly in test_check_opportunity_completeness.
     """

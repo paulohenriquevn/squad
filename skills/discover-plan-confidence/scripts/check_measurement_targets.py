@@ -23,6 +23,14 @@ import re
 from pathlib import Path
 from typing import Any
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "blocked_marker.py").is_file():
+        import sys as _sys
+        _sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.blocked_marker import is_blocked_at  # noqa: E402 — post-bootstrap import
+
 # Backticked path: `web-console/src/` or `web-console/src/trace.ts`. Requires a slash so
 # that prose words in backticks are not mistaken for targets.
 # `@` belongs inside a target, not outside it. The previous class excluded it, so a scoped npm
@@ -31,7 +39,6 @@ from typing import Any
 # the same thing, treated oppositely, for no reason anyone chose.
 PATH_TARGET_RE = re.compile(r"`((?:@?\.?[A-Za-z0-9_.\-]+/)+[A-Za-z0-9_.\-]*)`")
 URL_TARGET_RE = re.compile(r"https?://[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-/]*)?")
-BLOCKED_MARKER_RE = re.compile(r"<!--\s*BLOCKED:.*?-->", re.IGNORECASE | re.DOTALL)
 WORD_RE = re.compile(r"\b\w+\b")
 
 
@@ -129,9 +136,6 @@ def _declared_live_targets(project_root: Path) -> set[str] | None:
     return None
 
 
-def _is_explicitly_blocked(raw: str, match_end: int) -> bool:
-    return bool(BLOCKED_MARKER_RE.search(raw[match_end : match_end + 80]))
-
 
 def check_measurement_targets(plan_path: Path) -> dict[str, Any]:
     raw = plan_path.read_text(encoding="utf-8-sig")
@@ -144,7 +148,7 @@ def check_measurement_targets(plan_path: Path) -> dict[str, Any]:
 
     for match in PATH_TARGET_RE.finditer(raw):
         target = match.group(1)
-        if _is_explicitly_blocked(raw, match.end()):
+        if is_blocked_at(raw, match.end()):
             blocked.add(target)
             continue
         if _target_exists(project_root, target) or _resolves_as_module(project_root, target):

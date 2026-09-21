@@ -1,153 +1,32 @@
-"""Spec-smell detector for /plan-write plans (M2 deterministic, regex + dictionary).
+"""Re-export of the one spec-smell detector, so this skill's scripts keep their import.
 
-Reads rubric-v1.md to get the list of smell categories with patterns and penalties.
-For each category, scans the plan for matches with word-boundary regex.
-Returns a SmellReport with hits, by_category counts, total_penalty.
+The implementation moved to `squad/spec_smells.py`. It existed three times — here,
+``discover-confidence` and `discover-plan-confidence`` — and the three syntax trees differed in **four lines of 89, all of them the
+name of one parameter**. Each copy said "same algorithm" in its own header, and nothing
+made that true; a smell fixed in one scorer left the other two detecting the old shape.
 
-v1.1 EC-13 known limitation: English-only dictionaries.
+Same move `_rubric_loader.py` made when it became `squad/rubric.py`. What stays local is
+the RUBRIC this skill reads — `rubric-v1.md` — because the categories, patterns and penalties
+are the skill's. Only the scan is shared.
 """
 from __future__ import annotations
 
-import re
-import sys as _sys
-from dataclasses import dataclass, field
+import sys
 from pathlib import Path
-from pathlib import Path as _P
-from typing import Any
 
-for _up in _P(__file__).resolve().parents:
-    if (_up / "squad" / "markdown.py").is_file():
-        _sys.path.insert(0, str(_up))
+_HERE = Path(__file__).resolve()
+for _up in _HERE.parents:
+    if (_up / "squad" / "spec_smells.py").is_file():
+        sys.path.insert(0, str(_up))
         break
-from _rubric_loader import load_rubric  # noqa: E402 — post-bootstrap import
-from squad.markdown import (  # noqa: E402 — post-bootstrap import
-    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+
+# Import below the bootstrap, not at the top: the kit ships as loose scripts, so
+# `squad` is importable only after sys.path is extended.
+from squad.spec_smells import (  # noqa: E402 — post-bootstrap import
+    CONTEXT_WINDOW,
+    SmellHit,
+    SmellReport,
+    check_spec_smells,
 )
 
-CONTEXT_WINDOW = 20  # chars on each side of a match
-#: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
-#: their own, in two forms that do not mask the same input: five saw only backtick
-#: fences, six also saw `~~~`. A plan whose example block used tildes was masked by
-#: six readers and read as prose by the other five, so the same document scored
-#: differently depending on which checker asked.
-FENCED_CODE_RE = _FENCED_CODE_OWNER
-INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
-
-
-def _strip_code(content: str) -> str:
-    """Remove code blocks (v1.1 EC-9 follow-up).
-
-    Smells inside ```code``` or `inline` are typically examples or test names
-    (e.g., 'RED: test_should_handle_empty'), not prose. Replace with whitespace
-    of equal length to preserve line numbers.
-    """
-    def blank_keeping_lines(m: re.Match[str]) -> str:
-        return re.sub(r"[^\n]", " ", m.group(0))
-
-    no_fenced = FENCED_CODE_RE.sub(blank_keeping_lines, content)
-    no_inline = INLINE_CODE_RE.sub(blank_keeping_lines, no_fenced)
-    return no_inline
-
-
-@dataclass(frozen=True)
-class SmellHit:
-    category: str
-    pattern_matched: str
-    line: int
-    context: str
-
-
-@dataclass(frozen=True)
-class SmellReport:
-    total_hits: int
-    by_category: dict[str, int] = field(default_factory=dict)
-    hits: tuple[SmellHit, ...] = field(default_factory=tuple)
-    total_penalty: int = 0
-
-
-def _build_category_regex(spec: dict[str, Any]) -> re.Pattern[str]:
-    """Build a compiled regex for one smell category."""
-    pattern_type = spec.get("pattern_type")
-    if pattern_type == "regex":
-        return re.compile(spec["pattern"], re.IGNORECASE | re.UNICODE)
-    if pattern_type == "dictionary":
-        entries = spec.get("words") or spec.get("phrases") or []
-        if not entries:
-            return re.compile(r"$.^")  # match nothing
-        # Sort by length desc so multi-word phrases match first.
-        sorted_entries = sorted(entries, key=len, reverse=True)
-        escaped = [re.escape(e) for e in sorted_entries]
-        # Use word boundaries; multi-word phrases naturally include spaces.
-        joined = "|".join(escaped)
-        return re.compile(rf"(?<!\w)({joined})(?!\w)", re.IGNORECASE | re.UNICODE)
-    raise ValueError(f"Unknown pattern_type: {pattern_type!r}")
-
-
-def _line_of(text: str, offset: int) -> int:
-    return text.count("\n", 0, offset) + 1
-
-
-def _context_around(text: str, start: int, end: int) -> str:
-    ctx_start = max(0, start - CONTEXT_WINDOW)
-    ctx_end = min(len(text), end + CONTEXT_WINDOW)
-    snippet = text[ctx_start:ctx_end].replace("\n", " ")
-    return snippet.strip()
-
-
-def check_spec_smells(plan_path: Path, rubric_path: Path) -> SmellReport:
-    """Scan plan for smells defined in rubric. Returns SmellReport.
-
-    v1.1 EC-9 follow-up: smells inside code blocks are skipped (examples, not prose).
-    """
-    raw = plan_path.read_text(encoding="utf-8-sig")
-    content = _strip_code(raw)
-    rubric = load_rubric(rubric_path)
-    smells_spec = rubric.get("smells", {})
-
-    # Penalty weights live under node id=4 in the rubric.
-    penalty_weights: dict[str, int] = {}
-    for node in rubric.get("nodes", []):
-        if node.get("detector") == "spec_smells":
-            penalty_weights = node.get("penalty_weights", {})
-            break
-
-    hits: list[SmellHit] = []
-    by_category: dict[str, int] = {}
-
-    for category, spec in smells_spec.items():
-        try:
-            regex = _build_category_regex(spec)
-        except (re.error, KeyError) as exc:
-            # Malformed rubric entry — skip but record
-            raise ValueError(f"Invalid pattern for {category}: {exc}") from exc
-
-        for match in regex.finditer(content):
-            matched_text = match.group(0)
-            line_no = _line_of(content, match.start())
-            ctx = _context_around(content, match.start(), match.end())
-            hits.append(
-                SmellHit(
-                    category=category,
-                    pattern_matched=matched_text,
-                    line=line_no,
-                    context=ctx,
-                )
-            )
-
-    # Aggregate
-    for hit in hits:
-        by_category[hit.category] = by_category.get(hit.category, 0) + 1
-
-    total_penalty = sum(
-        penalty_weights.get(cat, 0) * count for cat, count in by_category.items()
-    )
-
-    # Sort hits for determinism
-    hits.sort(key=lambda h: (h.line, h.category, h.pattern_matched))
-
-    return SmellReport(
-        total_hits=len(hits),
-        by_category=dict(sorted(by_category.items())),
-        hits=tuple(hits),
-        total_penalty=total_penalty,
-    )
+__all__ = ["check_spec_smells", "SmellReport", "SmellHit", "CONTEXT_WINDOW"]

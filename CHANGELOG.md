@@ -114,6 +114,197 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **Four skills used `$ECO` as a path prefix and assigned it nowhere, and the test
+  written for the first one could only ever see the first one.** An empty expansion makes
+  the command an absolute path from the filesystem root, so the step silently does not
+  run:
+
+  ```
+  $ python3 "$ECO/skills/plan-alignment/scripts/classify_alignment_depth.py" . B-001
+  python3: can't open file '/skills/plan-alignment/scripts/classify_alignment_depth.py'
+  ```
+
+  That one matters most: `cycle-plan.md` describes `classify_alignment_depth.py` as
+  **"Derived, never chosen"**, and with it unrunnable the depth is chosen — with the
+  document's own default being FULL, the outcome the script exists to prevent after a
+  consumer produced 2,740 KB of alignment briefs signed zero times. `release` and
+  `issue-confidence` carried the same defect.
+
+  `test_every_shell_variable_the_skill_uses_is_one_it_assigned` was written for this on
+  2026-09-20 and lived in `skills/design/tests/`, reading one SKILL.md. It has moved to
+  `tests/test_a_skill_assigns_the_variables_it_uses.py`, which reads all forty — the only
+  scope that could have caught the other three. A test scoped to one slice catches the
+  defect in one slice.
+
+- **`plan-write` told the reader to close the phase before opening it.** The `end` block
+  sat on line 145 and the `start` block on line 161, under the instruction *"Emit the
+  START of this phase before doing the work"* — by which point the work was done. A
+  SKILL.md is executed in the order it is read, so the outcome is either an `end` before
+  its `start` in the stream, which `check_phase_drift` reads as disorder, or no start at
+  all. Swept across every SKILL.md: one file had them in that order and seven had them
+  the right way round. A test keeps it that way.
+
+- **The gate auditor reported 42 phase rows as naming no enforcer, and most of them
+  named it by id.** A phase-contract table is a summary — one line per phase — and the
+  gate itself is declared below with an id and a mechanism. `cycle-brainstorm.md` is the
+  clearest case: G-B1 to G-B5 each name `score_product_alignment.py`, and the five rows
+  above cite `(G-B1)` … `(G-B4, G-B5)`. The auditor did not follow the reference, so
+  seven honest rows were reported as unenforced.
+
+  Burying the rows that really have no mechanism among rows that do is also what made
+  `--strict-phase-rows` unusable: a flag that fails the build on 42 findings, most of
+  them false, is a flag nobody turns on. `check_gate_mechanisms.py` now resolves an id
+  the same rule declares — and refuses to launder one, so a row citing an id nobody
+  declared, or a gate that is itself unmechanised, is still reported.
+
+  42 → 35 from the resolution, → **31** after `cycle-plan.md`'s own four rows were fixed:
+  `check_coverage_matrix.py` and `check_deps_audit.py` now name the runner that composes
+  them, `plan-confidence` names what derives its verdict, and `plan-edge-cases` carries
+  the exemption it always needed — *judgement*, because whether an owner is the right
+  owner and whether a criterion closes the edge case is the call G3, G4 and G5 are left
+  conversational for. A regex would pass `owner: TBD, criterion: it works`, which is
+  worse than no check: it reads as enforced.
+
+  The 31 that remain are in eight other cycle rules and are declared debt, reported by a
+  gate that exits 0 until somebody passes `--strict-phase-rows`.
+
+- **Two `apply_fixes.py`, 328 lines of code apart.** `plan-improve` fixes weak
+  imperatives, loopholes and missing TDD blocks in a PLAN; `discover-improve` fixes prose
+  smells inside an opportunity's `## Recommendation`. Comparing the syntax trees without
+  docstrings: 223 lines against 151, and 328 differing — the same name for two programs,
+  which is the collision `run_slice_tests.sh` isolates processes to survive. Now
+  `apply_plan_fixes.py` and `apply_opportunity_fixes.py`, named for what each one fixes.
+
+- **G-M named a checker that only read the word `bug`.** `cycle-discover.md` is
+  categorical — *"`bug` has a hard floor: no failing test, no bug"* — and G-M promised to
+  block *"the mode's mandatory evidence is incomplete, most often `bug` without a failing
+  test"*. `check_opportunity_completeness.py` verified that the line `**Mode:**` existed
+  and carried one of four tokens. Measured 2026-09-21 on an opportunity declaring
+  `**Mode:** bug` whose Corner 1 says, in words, *"No test written yet — the shape is
+  obvious enough from the repro"*: `opportunity_completeness: 100.0`, `weighted_avg:
+  100.0`, no mode cap.
+
+  The floor is declared structurally now — `**Failing test:** path/to/test.py::test_name`
+  — and the gate asks two questions it can answer: is the line there, and does the file
+  resolve. A regex hunting for "the test fails" in prose would produce verdicts about
+  language, which is precisely why G3, G4 and G5 are left conversational. Whether the
+  test genuinely fails is what `/discover-execute` runs and what the panel judges.
+
+- **The BLOCKED marker's defect lived in three files and was fixed in one.** The
+  proximity window was ~80 characters and crossed newlines, so a marker on one list item
+  absolved the item above it. That was corrected in `check_evidence_pointers` and the
+  same rule sat untouched in `check_measurement_targets` (a character-for-character copy
+  of the helper) and `apply_fixes` (the window, inlined). Measured on the untouched one:
+
+  ```
+  `src/real/thing.ts` alone                        -> verified=1
+  the same, with a BLOCKED item on the next line   -> verified=0, blocked=2
+  ```
+
+  `squad/blocked_marker.py` owns the convention — the pattern and the rule that a marker
+  excuses what is on its own line — and a test refuses a second definition. Three
+  readers of one convention is three places for it to drift, and this one had already
+  drifted by being fixed once.
+
+- **DISCOVER opened its phase at step 4 of 6.** Only `/discover-execute` emitted events,
+  so the lead time measured the execution of the measurement and not the three phases
+  that produce and approve the measurement plan — and a chain stalling at
+  `/discover-plan-confidence`, whose INVALID returns to `/discover-plan`, had no open
+  start at all and showed as work nobody had begun. `/discover-plan` opens the phase now
+  and `/discover-execute` closes it with the verdict; the fast lane still emits its own
+  start, because there `/discover-plan` never ran.
+
+- **"Sweeping without registering" was an anti-pattern with no gate, and the kit had
+  already measured that.** `grep BACKLOG` across every DISCOVER scorer returned nothing;
+  `phase_coverage.py` walks only the other direction and says so in its own source —
+  *"two entry paths and only one writes an opportunity file"*. Gate G-R resolves
+  `**Item:** B-NNN` against the registry through `squad.backlog.BLOCK_RE`, so a finding
+  that never reached `BACKLOG.md` is capped rather than scored. With no registry at the
+  project root it reports NOT CHECKED, because `None` is not an empty set and calling
+  every opportunity an orphan would assert a violation the evidence does not support.
+
+  The kit knew. `skills/discover-confidence/fixtures/good-opportunity.md` — shipped as
+  the EXAMPLE of a good opportunity — is an opportunity about this exact gap, ending
+  *"The gate that the anti-pattern implies does not exist."* Measured, written up, used
+  to teach, never closed. The fixture now records that the gap it measured is closed,
+  because a fixture describing a live defect teaches a reader that the defect is live.
+
+  Two of the kit's own gates caught this change while it was being written:
+  `check_gate_mechanisms` refused G-R for naming a checker with no entry point without
+  naming the runner that composes it, and `check_xrefs` refused a citation of
+  `good-opportunity.md` that read as if the file were under `rules/`.
+
+- **The evidence gate scored 100 for evidence nobody could verify, and a BLOCKED marker
+  absolved the pointer above it.** G-E is the cycle's cardinal gate —
+  `cycle-discover.md` calls fabricated evidence *"the one unrecoverable defect in this
+  cycle: everything downstream trusts it"* — and it promised to block *"a URL never
+  actually fetched, a trace id never observed"*. Measured 2026-09-21 against an
+  opportunity whose entire Corner 1 was three HTTP calls nobody made:
+
+  ```
+  evidence_pointers_score: 100.0
+  weighted_avg:            100.0
+  hard_caps_triggered:     []
+  ```
+
+  `check_evidence_pointers` is honest about why — an HTTP observation is not
+  re-verifiable on disk, so no code pointer could have failed — but `100.0` in a
+  dimension named `evidence_pointers` reads as "every pointer resolved". The dimension
+  now reports itself **unmeasured** and drops out of the weighted average, which is
+  what `active_dimensions` and `weight_normalization_factor` were shaped for: both were
+  hardcoded, the list naming all four unconditionally and the factor the literal `1.0`,
+  so a reader could not tell a full score from a partial one. G-E now states what it
+  cannot check instead of promising it, and names the panel as what judges a recorded
+  observation.
+
+  The `<!-- BLOCKED: … -->` marker had a worse defect than the one first reported. Its
+  proximity window was ~80 characters and it crossed newlines, so a marker on one list
+  item absolved the item ABOVE it:
+
+  ```
+  src/real/thing.ts:3  alone                            -> verified=1
+  the same, with a BLOCKED item on the next line        -> verified=0, blocked=2
+  the same, with 100 chars of prose between them        -> verified=1, blocked=1
+  ```
+
+  A Corner 1 is written as a list, so this fired on the ordinary shape — one declared
+  gap erased the verified pointer above it, and an unmarked fabrication beside a marked
+  one was absolved by its neighbour. The marker now has to sit on the pointer's own
+  line, and a blocked pointer counts in the denominator: a declared gap is not a
+  fabrication (no cardinal cap) and not a verification either (it costs proportion).
+  Without that, an author cleared their own unresolvable pointers with a comment —
+  1 real + 4 marked scored 100.0.
+
+- **`check_spec_smells.py` existed three times, and the three were the same file.**
+  `plan-confidence`, `discover-confidence` and `discover-plan-confidence` each carried
+  one, and each said so: *"Copy of plan-confidence/scripts/check_spec_smells.py — same
+  algorithm"*. Measured by comparing the three syntax trees with docstrings and comments
+  stripped: **89 lines of code, 4 of them different, and all four were the name of one
+  parameter** (`plan_path` against `artifact_path`). A smell fixed in one scorer left
+  the other two detecting the old shape, silently. `squad/spec_smells.py` is the
+  implementation; the three are documented re-exports, exactly what `_rubric_loader.py`
+  became when it turned into `squad/rubric.py`. What stays local is the rubric each
+  skill reads — the categories and penalties are the skill's, only the scan is shared.
+
+- **One name for two different questions.** `check_corner_coverage.py` existed in
+  `discover-confidence`, where it asks whether the four corners of a finished
+  opportunity are POPULATED, and in `discover-plan-confidence`, where it asks whether
+  each corner is COVERED by a Measurement Question or excused by a `DEFER-CORNER`
+  marker — 80 of ~50 lines of code different. That is the collision `run_slice_tests.sh`
+  isolates processes to survive, and the G-C row named only one of the two. Now
+  `check_corners_populated.py` and `check_corners_questioned.py`, with the gate table
+  naming both and `conftest.py`'s worked example pointing at `apply_fixes.py`, a
+  collision that still exists.
+
+  Renaming broke a pointer in the kit's own `good-opportunity.md` fixture, and G-E
+  caught it on the next run — `fabricated_evidence`, one citation, exact line. Then the
+  paragraph recording the rename named the retired file, and
+  `test_rules_cite_mechanisms_that_exist` refused it: *"a rule is read as instruction —
+  naming a gate that does not exist tells the reader the constraint is enforced and stops
+  them looking."* The retired name lives here instead, which is where a name that no
+  longer resolves belongs. Two gates catching their own author inside one change is the
+  most useful thing that happened in it.
+
 - **Six readers of `BACKLOG.md`, two ideas of what an item block is — and the item that
   fell in the gap corrupted its neighbour.** Measured 2026-09-20 on `## B-003 - Title`,
   written with a plain hyphen instead of the schema's em dash:

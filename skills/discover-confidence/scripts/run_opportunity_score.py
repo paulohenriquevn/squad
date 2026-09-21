@@ -25,7 +25,7 @@ import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
 from _rubric_loader import load_rubric
-from check_corner_coverage import check_corner_coverage
+from check_corners_populated import check_corners_populated
 from check_evidence_pointers import check_evidence_pointers
 from check_opportunity_completeness import check_opportunity_completeness
 from check_spec_smells import check_spec_smells
@@ -172,7 +172,7 @@ def main() -> int:
         args.thresholds, opportunity_path)
     bands = _parse_thresholds(thresholds_path)
 
-    coverage = check_corner_coverage(opportunity_path)
+    coverage = check_corners_populated(opportunity_path)
     evidence = check_evidence_pointers(opportunity_path)
     # Resolved from the artifact, the same walk `_resolve_thresholds` performs:
     # cross-repo detection reads the project's routing table, and a scorer run from
@@ -198,15 +198,34 @@ def main() -> int:
     # which technique / where in the system", and that answer can be written entirely
     # as prose about an external technique, with no pointer anywhere.
     #
-    # The runtime-only case is deliberately left at 100.0: an HTTP observation is not
-    # re-verifiable on disk (see check_evidence_pointers' module docstring), so no code
-    # pointer could have failed. That is a real distinction, not a loophole.
+    # THE RUNTIME-ONLY CASE IS NOT SCORED, because there is nothing to score.
+    #
+    # It was 100.0, on the reasoning that an HTTP observation is not re-verifiable on
+    # disk so no code pointer could have failed. The reasoning is sound and the number
+    # is not: 100.0 in a dimension called `evidence_pointers` reads as "every pointer
+    # resolved". Measured 2026-09-21 — an opportunity whose whole Corner 1 was three
+    # HTTP calls nobody made scored `evidence_pointers_score: 100.0`, `weighted_avg:
+    # 100.0`, `hard_caps_triggered: []`.
+    #
+    # A dimension with an empty denominator reports itself UNMEASURED and drops out of
+    # the weighted average, which is what `active_dimensions` and
+    # `weight_normalization_factor` were shaped for — both were hardcoded and neither
+    # ever varied. The observations are still reported, and still counted as evidence
+    # for `no_evidence_cited`: recorded-but-not-verifiable is a third state, and saying
+    # so is the honest half of what this checker can do.
+    #
+    # `blocked` is in the denominator. A pointer marked `<!-- BLOCKED: … -->` is a
+    # declared gap rather than a fabrication — it does not trip the cardinal cap — but
+    # it is not a verification either, and leaving it out of the count let an author
+    # clear their own unresolvable pointers with a comment.
+    ep_measurable = evidence["total"] + evidence["explicitly_blocked"]
+    ep_score: float | None
     if evidence["evidence_total"] == 0:
         ep_score = 0.0
-    elif evidence["total"] == 0:
-        ep_score = 100.0
+    elif ep_measurable == 0:
+        ep_score = None
     else:
-        ep_score = 100.0 * evidence["verified"] / evidence["total"]
+        ep_score = 100.0 * evidence["verified"] / ep_measurable
 
     oc_score = 100.0 * completeness["found"] / completeness["total_required"]
     sr_score = max(0.0, 100.0 + smells.total_penalty)  # penalty is negative
@@ -217,12 +236,21 @@ def main() -> int:
         "opportunity_completeness": 0.25,
         "structural_risk": 0.15,
     }
-    weighted = (
-        weights["corner_coverage"] * cc_score
-        + weights["evidence_pointers"] * ep_score
-        + weights["opportunity_completeness"] * oc_score
-        + weights["structural_risk"] * sr_score
-    )
+    scores = {
+        "corner_coverage": cc_score,
+        "evidence_pointers": ep_score,
+        "opportunity_completeness": oc_score,
+        "structural_risk": sr_score,
+    }
+    # A dimension that measured nothing does not vote. Renormalising over the rest is
+    # the only alternative to inventing a number for it, and the two fields that report
+    # this were emitted hardcoded — `active_dimensions` listed all four unconditionally
+    # and `weight_normalization_factor` was the literal 1.0, so a reader could not tell
+    # a full score from a partial one.
+    active_dimensions = [name for name, value in scores.items() if value is not None]
+    active_weight = sum(weights[name] for name in active_dimensions)
+    normalization = (1.0 / active_weight) if active_weight else 0.0
+    weighted = normalization * sum(weights[n] * scores[n] for n in active_dimensions)
 
     hard_caps_triggered: list[str] = []
     cap_value: float = 100.0
@@ -245,6 +273,24 @@ def main() -> int:
     if completeness["missing_mandatory"]:
         hard_caps_triggered.append("mandatory_section_missing")
         cap_value = min(cap_value, 70.0)
+
+    # G-M, which the gate table has always named and nothing enforced. `bug` is the one
+    # mode whose contract names an artifact that is on disk or is not — "no failing
+    # test, no bug" — and an opportunity declaring the mode without naming one scored
+    # 100.0 across the board (measured 2026-09-21).
+    if completeness.get("mode_contract_unmet"):
+        hard_caps_triggered.append("mode_contract_unmet")
+        cap_value = min(cap_value, 49.0)
+
+    # The opportunity exists and the item it is about does not. For a `--sweep` finding
+    # that is the orphaned-finding failure by definition: the measurement was made, the
+    # document written, and nothing reached the registry anybody reads.
+    #
+    # `item_registered is False` and not `not item_registered`: `None` means no registry
+    # was reachable, which is unanswered rather than violated.
+    if completeness.get("item_registered") is False:
+        hard_caps_triggered.append("item_not_registered")
+        cap_value = min(cap_value, 49.0)
 
     # ADR is required only when the blast radius reaches beyond the opportunity's own
     # repo. A repo-local fix carries no cap; a cross-repo change without a recorded
@@ -344,17 +390,19 @@ def main() -> int:
         "thresholds_origin": thresholds_origin,
         "scored_at": datetime.now(timezone.utc).isoformat(),
         "corner_coverage_score": round(cc_score, 1),
-        "evidence_pointers_score": round(ep_score, 1),
+        "evidence_pointers_score": None if ep_score is None else round(ep_score, 1),
         "opportunity_completeness_score": round(oc_score, 1),
         "structural_risk_score": round(sr_score, 1),
-        "active_dimensions": [
-            "corner_coverage",
-            "evidence_pointers",
-            "opportunity_completeness",
-            "structural_risk",
-        ],
-        "weight_normalization_factor": 1.0,
+        "active_dimensions": active_dimensions,
+        "weight_normalization_factor": round(normalization, 4),
         "weighted_avg": round(weighted, 1),
+        "registry_check": (
+            "not checked — no BACKLOG.md at the project root, so whether this finding "
+            "reached the registry is unanswered"
+            if not completeness.get("item_registration_checked")
+            else f"{completeness.get('declared_item')} is in the registry"
+            if completeness.get("item_registered")
+            else f"{completeness.get('declared_item')} is NOT in the registry"),
         "hard_caps_triggered": hard_caps_triggered,
         "final_score_after_caps": round(final_score, 1),
         "panel": panel,

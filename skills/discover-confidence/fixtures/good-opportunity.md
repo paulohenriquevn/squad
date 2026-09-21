@@ -26,7 +26,7 @@ anti-pattern near the end of the same rule. The output contract naming
 `source: discover-{mode}` is at `rules/cycle-discover.md:150`.
 
 The checker that scores a finished opportunity is
-`skills/discover-confidence/scripts/check_corner_coverage.py:78` — it reads the
+`skills/discover-confidence/scripts/check_corners_populated.py:78` — it reads the
 opportunity file and nothing else. `skills/discover-confidence/scripts/check_evidence_pointers.py:95`
 resolves pointers against the project root, again touching only the document.
 
@@ -60,6 +60,14 @@ Tied to the item's DoD:
 Where the limit plausibly moves next: once registration is enforced, `BACKLOG.md` becomes
 the contended artifact. Two concurrent sweeps appending to it will collide, and id
 allocation (`B-NNN` monotonic, never reused) becomes the next thing to protect.
+
+<!--
+  STATUS, 2026-09-21: the gap this opportunity measured is CLOSED. Gate G-R resolves
+  `**Item:** B-NNN` against the registry, so an opportunity whose finding never reached
+  `BACKLOG.md` is capped rather than scored. This document is kept as the fixture
+  because it is a good opportunity — measured, cited, falsifiable — and a fixture that
+  described a live defect would teach a reader that the defect is still live.
+-->
 
 ## Recommendation
 

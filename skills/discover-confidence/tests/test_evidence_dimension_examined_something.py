@@ -42,13 +42,25 @@ def test_an_opportunity_that_cites_nothing_does_not_score_perfectly(tmp_path: Pa
         "citing nothing reached the same band as citing correctly"
 
 
-def test_a_runtime_only_opportunity_keeps_its_score(tmp_path: Path) -> None:
+def test_a_runtime_only_opportunity_is_not_caught_by_the_no_evidence_cap(tmp_path: Path) -> None:
     """An HTTP observation is not re-verifiable on disk, so no code pointer could have
     failed. That distinction is the checker's own design, not a loophole — the cap must
-    not swallow it."""
+    not swallow it.
+
+    This test asserted `evidence_pointers_score == 100.0` until 2026-09-21, and the cap
+    is the half it was right about. The number was the other half: 100.0 in a dimension
+    named `evidence_pointers` reads as "every pointer resolved", and an opportunity
+    whose entire Corner 1 was three HTTP calls nobody made scored exactly that, with a
+    `weighted_avg` of 100.0 and no cap. A dimension with an empty denominator now
+    reports itself unmeasured and drops out of the weighted average rather than voting
+    a number it did not measure.
+    """
     result = _score(
         tmp_path,
         "# Observed at runtime\n\nGET https://example.test/health -> 200\n",
     )
-    assert result["evidence_pointers_score"] == 100.0
-    assert "no_evidence_cited" not in result["hard_caps_triggered"]
+    assert result["evidence_pointers_score"] is None, \
+        "nothing was verifiable, so the dimension must not report a score"
+    assert "evidence_pointers" not in result["active_dimensions"]
+    assert "no_evidence_cited" not in result["hard_caps_triggered"], \
+        "a recorded observation is evidence; it is simply not re-verifiable here"

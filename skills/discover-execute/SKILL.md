@@ -125,7 +125,7 @@ On `<promise>OPPORTUNITY_BLOCKED</promise>` the check still runs, plus the block
 On `<promise>ITEM_KILLED</promise>`, verify instead that the `B-NNN` block carries a `kill_reason` naming what was measured and what it showed (gate G-K). An unexplained kill is indistinguishable from an abandoned run.
 
 
-Emit the START of this phase before doing the work:
+Emit the START of this phase before doing the work — **only in the fast lane**, where `--mode bug` entered here directly and `/discover-plan` never ran. On the full chain the phase was opened there, and a second start would report one measurement as two:
 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" start \

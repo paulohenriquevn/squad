@@ -24,6 +24,14 @@ import re
 from pathlib import Path
 from typing import Any
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "blocked_marker.py").is_file():
+        import sys as _sys
+        _sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.blocked_marker import is_blocked_at  # noqa: E402 — post-bootstrap import
+
 # `dir/file.ext:LINE` (optionally `:COL`). Requires a slash and an extension so that
 # prose like "step 3:12" or "Ratio 4:1" is not mistaken for a pointer.
 # `@` and a leading `.` are part of a path, not boundaries around one.
@@ -44,7 +52,6 @@ CODE_POINTER_RE = re.compile(
 RUNTIME_OBS_RE = re.compile(
     r"\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(\S+)\s*(?:->|→)\s*(\d{3})\b"
 )
-BLOCKED_MARKER_RE = re.compile(r"<!--\s*BLOCKED:.*?-->", re.IGNORECASE | re.DOTALL)
 WORD_RE = re.compile(r"\b\w+\b")
 
 
@@ -60,15 +67,6 @@ def _find_project_root(start: Path) -> Path:
 
 def _word_count(content: str) -> int:
     return len(WORD_RE.findall(content))
-
-
-def _is_explicitly_blocked(raw: str, match_end: int) -> bool:
-    """Return True when a BLOCKED marker follows the pointer within ~80 chars.
-
-    Pointers explicitly marked `<!-- BLOCKED: ... -->` are documented gaps, not
-    fabrications. They belong to the honest blocked-questions audit trail.
-    """
-    return bool(BLOCKED_MARKER_RE.search(raw[match_end : match_end + 80]))
 
 
 def _resolve_code_pointer(project_root: Path, rel_path: str, line: int) -> tuple[bool, str]:
@@ -117,7 +115,7 @@ def check_evidence_pointers(opportunity_path: Path) -> dict[str, Any]:
 
     for match in CODE_POINTER_RE.finditer(raw):
         pointer = match.group(0)
-        if _is_explicitly_blocked(raw, match.end()):
+        if is_blocked_at(raw, match.end()):
             blocked.add(pointer)
             continue
         ok, reason = _resolve_code_pointer(project_root, match.group(1), int(match.group(2)))

@@ -7,7 +7,7 @@ marker.
 An uncovered corner (no Q mapped AND no DEFER-CORNER marker) triggers an
 empty_corner_{name} hard cap (<=49) in the orchestrator.
 
-Sibling of `skills/discover-confidence/scripts/check_corner_coverage.py`, but adapted
+Sibling of `skills/discover-confidence/scripts/check_corners_populated.py`, but adapted
 for plans: it inspects the Measurement Questions TABLE rather than prose sections. The
 plan declares how each corner WILL be filled; the opportunity checker later verifies
 that it was.
@@ -58,7 +58,7 @@ def _parse_question_corners(questions_section: str) -> list[str]:
     return corners
 
 
-def check_corner_coverage(plan_path: Path) -> dict[str, Any]:
+def check_corners_questioned(plan_path: Path) -> dict[str, Any]:
     content = plan_path.read_text(encoding="utf-8-sig")
     mapped = _parse_question_corners(_extract_questions_section(content))
 

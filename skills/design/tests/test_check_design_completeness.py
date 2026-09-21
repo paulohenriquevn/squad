@@ -599,16 +599,13 @@ def test_the_skill_ships_the_checklist_it_asks_a_person_to_sign() -> None:
     assert "- [x]" not in body, "shipped ticked is shipped signed"
 
 
-def test_every_shell_variable_the_skill_uses_is_one_it_assigned() -> None:
-    """`$ECO` expanded to nothing, and `python3 "/skills/..."` is not a path."""
-    skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
-
-    used = set(re.findall(r'"\$(\w+)/', skill))
-    assigned = set(re.findall(r'^\s*(\w+)=', skill, re.MULTILINE))
-
-    assert not (used - assigned), (
-        f"{sorted(used - assigned)} used and never assigned — the step expands to an "
-        f"absolute path from the filesystem root and the command does not run")
+# `test_every_shell_variable_the_skill_uses_is_one_it_assigned` lived here and read
+# `skills/design/SKILL.md` alone. It caught the defect in this slice and missed it in
+# three others — `plan-alignment`, `release` and `issue-confidence` carried the same
+# unassigned `$ECO`, and the one in `plan-alignment` made `classify_alignment_depth.py`
+# unrunnable: the script `cycle-plan.md` calls "Derived, never chosen". A test scoped to
+# one slice catches the defect in one slice, so it moved to
+# `tests/test_a_skill_assigns_the_variables_it_uses.py`, which reads every SKILL.md.
 
 
 def test_the_flow_runs_the_panel_gate_it_declares() -> None:

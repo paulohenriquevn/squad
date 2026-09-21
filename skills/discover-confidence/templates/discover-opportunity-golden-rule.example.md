@@ -33,7 +33,7 @@ The rule closes this gap by forcing minimum structural state PRESENT before the 
 
 | Rule | Enforcement |
 |---|---|
-| All 4 coverage corners populated | M2 — `run_opportunity_score.py` via `check_corner_coverage.py` |
+| All 4 coverage corners populated | M2 — `run_opportunity_score.py` via `check_corners_populated.py` |
 | All `.claude/records/references/{...}` citations exist | M2 — `check_evidence_pointers.py` (path.exists() check) |
 | Mandatory opportunity sections present | M2 — `check_opportunity_completeness.py` (cap 70) |
 | ADRs section present with at least one ADR | M2 — `check_opportunity_completeness.py` (cap 70) |

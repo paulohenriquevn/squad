@@ -73,7 +73,7 @@ def _is_populated(section_content: str, corner: str) -> bool:
     return len(no_fences.strip()) >= MIN_CONTENT_CHARS
 
 
-def check_corner_coverage(opportunity_path: Path) -> dict[str, Any]:
+def check_corners_populated(opportunity_path: Path) -> dict[str, Any]:
     content = opportunity_path.read_text(encoding="utf-8-sig")
     corners_status: list[dict[str, Any]] = []
     empty_corners: list[str] = []

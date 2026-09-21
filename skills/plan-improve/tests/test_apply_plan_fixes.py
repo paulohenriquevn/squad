@@ -1,9 +1,9 @@
-"""TDD for apply_fixes.py — deterministic plan-improve fixes."""
+"""TDD for apply_plan_fixes.py — deterministic plan-improve fixes."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from apply_fixes import (
+from apply_plan_fixes import (
     FixReport,
     _split_with_state,
     apply_all_fixes,
