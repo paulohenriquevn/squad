@@ -8,6 +8,55 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **Two allowlists exempted nothing, and one of them was printed as the remedy.**
+  Three files in `rules/` document the same exemption contract — pipe-separated fields,
+  an ISO sunset within 90 days, expired entries ignored, malformed entries refused. One
+  of the three was read by anything:
+
+  ```
+  code-quality-allowlist.txt     load_allowlist()   parsed and enforced
+  deps-audit-allowlist.txt       -                  no reader anywhere
+  plan-confidence-allowlist.txt  -                  no reader anywhere
+  ```
+
+  `check_deps_audit.py` is the worse case, because its HARD cap TELLS a reader to use
+  the file nothing opened: *"Bump the dependency, or allowlist the CVE in
+  `rules/deps-audit-allowlist.txt` with rationale and sunset."* Following that
+  instruction wrote an entry, changed nothing, and produced the same message on the next
+  run — a gate teaching a remedy it had not implemented. Both allowlists are now read.
+  A waived CVE is stated in the reason rather than waved through in silence: an
+  exemption a reader cannot see is indistinguishable from a CVE that was never there.
+
+  `plan-confidence-allowlist.txt` promises *"Plans listed here are permitted to return
+  verdict=INVALID without failing CI"* in the file itself, in `PORTABLE.md` § 4 and in
+  `plan-confidence-golden-rule.md`. `setup.sh` installed it and `test_portability.py`
+  asserted it EXISTS — a test that attests presence and never behaviour, which is how a
+  dead allowlist looks alive. The waiver now applies **to the exit code alone**: the
+  verdict still prints `INVALID`, because rewriting it would hide the plan's state from
+  every reader, which is a different and worse thing than not failing CI.
+
+  **One thing the allowlist still cannot do, stated rather than discovered.** Its own
+  example — `my-followup-plan|…|Follow-up note (not a full plan); no Coverage Matrix by
+  design` — describes a plan with no Coverage Matrix section, and that never reaches
+  `INVALID`: `run_structural.py` exits **2**, "No '## Coverage Matrix' section found in
+  plan", the code for a plan it could not read. The waiver deliberately does not cover
+  exit 2 — exempting it would turn "unreadable" into "passed".
+
+### Changed
+
+- **One sunset policy for every allowlist.** `squad/allowlist.py` owns the window, what
+  an expired entry means, and that a malformed line is refused rather than silently
+  dropped — the knowledge three files documented and one enforced. The FIELDS stay with
+  their consumers: a CVE exemption names a package and an advisory, a plan exemption
+  names a slug. What was duplicated was never the shape; it was the policy.
+
+  `check_deps_audit.py` also stopped hand-rolling `rules/` vs `.claude/rules/` and asks
+  `squad.paths.rules_dir`, whose own docstring records nine sites resolving that pair by
+  hand — six in one order, three in the other — so a table edited in one place was
+  invisible to half its readers. This would have been the tenth.
+
+### Fixed
+
 - **The normative `ROADMAP.md` block in `cycle-acceptance.md` was one no parser accepted.**
   Copying the rule's own example produced a milestone that could never be accepted.
   Measured on that example, verbatim:

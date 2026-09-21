@@ -54,7 +54,12 @@ for _up in Path(__file__).resolve().parents:
 # Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
-from squad.paths import rules_dir, write_records_dir  # noqa: E402 — post-bootstrap import
+from squad.allowlist import (  # noqa: E402 — post-bootstrap import
+    MalformedEntry,
+    active as _active_entries,
+    parse as _parse_allowlist,
+)
+from squad.paths import DATA_DIRNAME, rules_dir, write_records_dir  # noqa: E402 — post-bootstrap import
 
 SKILL_ROOT = Path(__file__).parent.parent
 DEFAULT_RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"
@@ -814,6 +819,70 @@ def run_structural(
 PANEL_VERDICTS: tuple[str, ...] = ("AWAITING_REVIEW", "NEEDS_REVISION", "ITEM_IN_FLIGHT")
 
 
+#: `<plan-slug>|<sunset-date>|<reason>`, the shape
+#: `rules/plan-confidence-allowlist.txt` has documented since it was written.
+_PLAN_ALLOWLIST_NAME = "plan-confidence-allowlist.txt"
+_PLAN_ALLOWLIST_FIELDS = 3
+_PLAN_ALLOWLIST_SUNSET_INDEX = 1
+
+
+def _plan_project_root(plan_path: Path) -> Path:
+    """The project the PLAN belongs to, which is not `PROJECT_ROOT`.
+
+    `PROJECT_ROOT` walks up from the SCRIPT, so in a plugin install it is the consumer
+    and in the kit's own checkout it is the kit — but a plan handed to this script by
+    absolute path can live in neither. An exemption is the decision of the project that
+    owns the plan, so it is looked up from the plan.
+    """
+    for parent in plan_path.resolve().parents:
+        if (parent / DATA_DIRNAME).is_dir() or rules_dir(parent) is not None:
+            return parent
+    return PROJECT_ROOT
+
+
+def _plan_waiver(project_root: Path, slug: str) -> tuple[str | None, list[str]]:
+    """`(reason, problems)` — why this plan may return INVALID without failing CI.
+
+    WHY THIS EXISTS. Three documents promised this waiver and nothing implemented it:
+    the allowlist file itself ("Plans listed here are permitted to return
+    verdict=INVALID without failing CI"), `PORTABLE.md` § 4, and
+    `plan-confidence-golden-rule.md`. `setup.sh` installed the file and
+    `test_portability.py` asserted it EXISTS — a test that attests presence and never
+    behaviour, which is how a dead allowlist looks alive.
+
+    The waiver is on the EXIT CODE alone. The verdict stays INVALID in the report,
+    because rewriting it would hide the plan's state from every reader — a different
+    and worse thing than not failing CI.
+    """
+    rules = rules_dir(project_root)
+    if rules is None:
+        return None, []
+    try:
+        entries = _parse_allowlist(
+            rules / _PLAN_ALLOWLIST_NAME,
+            field_count=_PLAN_ALLOWLIST_FIELDS,
+            sunset_index=_PLAN_ALLOWLIST_SUNSET_INDEX,
+            where=_PLAN_ALLOWLIST_NAME,
+        )
+    except MalformedEntry as error:
+        # Refused, not skipped, and it waives nothing: a dropped line is an exemption
+        # somebody believes they have and does not.
+        return None, [str(error)]
+    except OSError as error:
+        return None, [f"{_PLAN_ALLOWLIST_NAME} could not be read: {error}"]
+
+    expired = [e for e in entries if e.expired and e.fields[0] == slug]
+    for entry in _active_entries(entries):
+        if entry.fields[0] == slug:
+            return entry.fields[2], []
+    if expired:
+        return None, [
+            f"{_PLAN_ALLOWLIST_NAME}: the entry for {slug!r} expired on "
+            f"{expired[0].sunset.isoformat()} and no longer waives anything"
+        ]
+    return None, []
+
+
 def _exit_code(verdict: str) -> int:
     if verdict in ("SHIPPABLE", "SHIPPABLE_WITH_CAVEATS"):
         return 0
@@ -1065,7 +1134,23 @@ def main(argv: list[str] | None = None) -> int:
             out["code_quality"] = {"verdict": "UNAVAILABLE", "reason": "invocation failed or skipped"}
 
     print(json.dumps(out, indent=2, ensure_ascii=False))
-    return _exit_code(out.get("verdict", report.verdict))
+    final_verdict = out.get("verdict", report.verdict)
+    code = _exit_code(final_verdict)
+
+    # The allowlist waives the FAILURE, never the finding. A waived plan still prints
+    # INVALID above; what changes is that CI does not stop on it.
+    if code == 1:
+        slug = plan_path.stem.removesuffix("-plan")
+        reason, problems = _plan_waiver(_plan_project_root(plan_path), slug)
+        for problem in problems:
+            print(f"NOTE: {problem}", file=sys.stderr)
+        if reason:
+            print(f"NOTE: {final_verdict} waived for {slug!r} by "
+                  f"`rules/{_PLAN_ALLOWLIST_NAME}`: {reason}. The verdict above is "
+                  f"unchanged — the waiver is on the exit code, and it expires.",
+                  file=sys.stderr)
+            return 0
+    return code
 
 
 if __name__ == "__main__":
