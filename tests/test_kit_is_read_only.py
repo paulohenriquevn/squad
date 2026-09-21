@@ -5,7 +5,7 @@ THE DEFECT THIS FIXES
 Installed by copy, the kit lives in `<project>/.claude/`, and
 `settings.plugin.json` allows `Edit`, `Write` and `Bash(*)`. No hook covered that
 path: `boundary-check` once protected only `records/references/` and
-`study-material/`, and `validate-command.py` mentioned neither
+`.squad/study-material/`, and `validate-command.py` mentioned neither
 `.claude/skills`, nor `.claude/rules`, nor `.claude/hooks`. The
 `.kit-manifest.txt`, written by the installer precisely to say what came from the
 kit, was read by no hook at all.
@@ -159,7 +159,7 @@ def test_native_plugin_root_is_read_only(tmp_path: Path):
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "rel",
-    ["study-material/argo-cd.md", "study-material/vendor/lib.py"],
+    [".squad/study-material/argo-cd.md", ".squad/study-material/vendor/lib.py"],
 )
 def test_study_zone_stays_read_only(copy_install: Path, rel: str):
     assert _run(str(copy_install / ".claude" / rel), copy_install) == BLOCK

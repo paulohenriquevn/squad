@@ -8,6 +8,57 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Changed
 
+- **The read-only study zone moved into the write root: `study-material/` →
+  `.squad/study-material/`.** `rules/reference-provenance.md` guards third-party material
+  for a legal reason, not a stylistic one — *"a literal copy carries the original licence
+  into this repository"* — and the zone was a TOP-LEVEL directory, kept out of the index
+  by a single `study-material/**` line in `.gitignore`.
+
+  One deletable line stood between a cloned peer project's licence and this repository's
+  history. Inside `.squad/` the question does not arise: the write root is ignored whole,
+  so nothing under it can reach the index at all. The guard is unchanged — nothing is
+  written into the zone, nothing leaves it by command, no commit message cites it — and
+  the path it guards can no longer be committed by accident.
+
+  **The cost, stated rather than discovered.** A consumer still holding material at the
+  old top-level path is no longer guarded: writes into it are allowed, copies out of it
+  are allowed, and the leakage detector does not read it. `reference-provenance.md` § 1
+  says so and says to move it, the same way it already stated the cost of retiring
+  `records/references/`.
+
+- **The zone is spelled once.** It was written three times, in three shapes:
+
+  ```
+  hooks/boundary-check.py       (^|/)(\.claude/)?study-material/
+  hooks/validate-command.py     (\./)?(\.claude/)?study-material/
+  check_reference_leakage.py    ZONE_DIRS = ("study-material",)
+  ```
+
+  `squad/boundaries.py` owns it now, which is where its own docstring already argued it
+  belonged: *"a rule living in one file and missing from another is how the gap
+  reopens"* — recorded there about the previous instance, where `boundary-check` refused
+  `Edit`/`Write` into an installed kit while `validate-command` knew nothing about it,
+  so `sed -i` reached the file `Edit` had just refused.
+
+### Fixed
+
+- **A checker mis-read the prose it audits, and blamed the code.**
+  `test_boundary_check_prose_agrees` extracts every backticked zone path from
+  `SECURITY.md` and `hooks/README.md` and asserts the hook blocks each one. Its pattern
+  required a zone to start with a LETTER, so when the prose began saying
+  `.squad/study-material/` it extracted `squad/study-material/` — and reported the hook
+  failing to block a path the prose had never named. A checker that mis-reads its own
+  input accuses the code of the checker's bug. It reads a leading dot now.
+
+- **The zone pattern was anchored too tightly for the text the guards actually feed it.**
+  The first version required start-of-string or a slash before `.squad/`, which is right
+  for a clean path and wrong for the free text these hooks receive: a shell command line
+  and a `-m` body. `git commit -m "see .squad/study-material/x"` stopped being blocked.
+  A lookbehind gives the same protection without the anchor — `mine.squad/study-material/`
+  still does not match, and neither does the `squad/` PACKAGE, which has no leading dot.
+
+### Changed
+
 - **`.squad/` in this repository now means what it means in a consumer: one machine's
   run data, ignored whole.** The kit kept its own eleven ADRs and SOPs at `.squad/wiki/`,
   versioned through a `!.squad/wiki/` negation in `.gitignore`, on the argument that

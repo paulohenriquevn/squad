@@ -49,9 +49,12 @@ REPO = Path(__file__).resolve().parents[1]
 #: Anchored so `theorem` and `theory` never match. See the module docstring.
 ORIGIN_RE = re.compile(r"theo-[a-z]|theokit|usetheo|Theo[A-Z]")
 
-#: Generated, vendored or historical trees. `study-material/` is third-party and
-#: read-only by contract (`hooks/boundary-check.py` blocks writes to it), and the
-#: caches hold compiled copies of files this sweep already reads at source.
+#: Generated, vendored or historical trees. The study zone is third-party and read-only
+#: by contract (`hooks/boundary-check.py` blocks writes to it), and the caches hold
+#: compiled copies of files this sweep already reads at source.
+#:
+#: These are path PARTS, matched by directory name, so `study-material` covers the zone
+#: at `.squad/study-material/` and at the retired top-level path both.
 SKIP_PARTS = {
     ".git",
     "__pycache__",

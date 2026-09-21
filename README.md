@@ -308,21 +308,30 @@ squad/
 ├── hooks/           ← what runs in the runtime, outside the agent's turn
 ├── squad/           ← the layout and contract library the above import, plus `sq`
 ├── agents/          ← the fourteen role agents, and the domain specialists you derive
-├── .squad/          ← everything this kit WRITES about itself, under one root
-│   ├── wiki/                 ← durable KNOWLEDGE, as an OKF v0.2 bundle
-│   │   ├── sops/             ← procedures performed on the kit
-│   │   └── decisions/        ← decisions that outlive the discussion
-│   └── records/              ← the TRAIL, dated and immutable
-│       └── cycle-events.jsonl  ← one line per phase transition
-├── records/         ← what a CONSUMER's cycle leaves behind (backlog/, panels/)
-├── study-material/  ← third-party docs the project depends on. Read-only, not ours
+├── docs/wiki/       ← durable KNOWLEDGE people wrote, as an OKF v0.2 bundle
+│   ├── sops/                 ← procedures performed on the kit
+│   ├── decisions/            ← decisions that outlive the discussion
+│   └── references/           ← arguments worth keeping
 ├── session-state/   ← per-session checkpoints. Ephemeral, never evidence
 └── tests/           ← the proof the above works; per-slice suites live in skills/*/tests
 ```
 
-The four product documents `cycle-brainstorm` writes land under `wiki/product/` **in the
-project the kit governs**, which is why they do not appear above: this repository is the
-kit, not a consumer of it.
+**`.squad/` is not in that tree, and its absence is the point.** It is the write root
+**of the project being maintained** — the dated trail, the event stream, the project's
+own OKF bundle, and the read-only `study-material/` study zone. A cycle run here creates
+it, exactly as in any consumer, and `.gitignore` ignores it whole: nothing under it is
+ever committed.
+
+The kit kept its own eleven ADRs and SOPs there until 2026-09-21, versioned through a
+`.gitignore` negation, on the argument that this kit's durable knowledge IS its source.
+The argument was true and the location made one path mean two things — authored product
+here, run data in a consumer. They are at `docs/wiki/` now, versioned like the rest of
+the product, and `squad/paths.py` answers for the two kinds separately: `wiki_dir()` for
+a project's bundle, `authored_wiki_dir()` for one people wrote.
+
+The four product documents `cycle-brainstorm` writes land under `.squad/wiki/product/`
+**in the project the kit governs**, which is why they do not appear above: this
+repository is the kit, not a consumer of it.
 
 **`wiki/` and `records/` are the same split, twice.** Knowledge evolves, has an
 owner and goes stale; a record of one execution on one day does none of those,

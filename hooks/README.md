@@ -25,8 +25,8 @@ environment variable for another to read.
 |---|---|---|---|
 | `sessionstart-context.py` | SessionStart | Injects git branch, active plan, loop state | 0 always |
 | `userpromptsubmit-inject.py` | UserPromptSubmit | Injects active plan excerpt + SHA256 attestation check | 0 always |
-| `validate-command.py` | PreToolUse (Bash) | Blocks destructive git ops, deletion of a permanent branch, rm -rf on system paths, shell reads of credential paths, and shell writes into study-material/ or the installed kit | 0=allow, 2=block |
-| `boundary-check.py` | PreToolUse (Edit/Write) | Blocks writes to study-material/ and into the installed kit — the same line `validate-command` holds against the shell | 0=allow, 2=block |
+| `validate-command.py` | PreToolUse (Bash) | Blocks destructive git ops, deletion of a permanent branch, rm -rf on system paths, shell reads of credential paths, and shell writes into `.squad/study-material/` or the installed kit | 0=allow, 2=block |
+| `boundary-check.py` | PreToolUse (Edit/Write) | Blocks writes to `.squad/study-material/` and into the installed kit — the same line `validate-command` holds against the shell | 0=allow, 2=block |
 | `post-edit-check.py` | PostToolUse (Edit/Write) | Multi-language linter feedback | 0 always |
 | `public-copy-lint.py` | PostToolUse (Edit/Write) | Bans unverified production claims in README | 0 always (advisory) |
 | `english-only-check.py` | PostToolUse (Edit/Write) | Reports non-English prose in the edited file (rules/english-only.md) | 0 always (advisory) |

@@ -52,14 +52,18 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
+from squad.boundaries import STUDY_ZONE, study_zone_re  # noqa: E402 — post-bootstrap import
 from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
     RECORDS,
 )
 
 # ── the read-only zone (rules/reference-provenance.md § 1) ────────────────────
-ZONE = r"(\./)?(\.claude/)?study-material/"
-ZONE_RE = re.compile(ZONE)
+# The pattern is `squad.boundaries`'s, not this file's. It used to be spelled here in a
+# third shape, and two hooks knowing one boundary differently is the defect that
+# module's docstring records.
+ZONE = STUDY_ZONE
+ZONE_RE = study_zone_re()
 
 # ── git ───────────────────────────────────────────────────────────────────────
 #: Any option token between `git` and its subcommand. The list this replaced named
@@ -489,7 +493,7 @@ def check_zone(command: str, project_dir: Path) -> str | None:
         return None  # the documented escape hatch, for initial population only
 
     if ZONE_WRITE_RE.search(command):
-        return ("BLOCKED: 'study-material/' is read-only third-party material. Capture "
+        return (f"BLOCKED: {STUDY_ZONE}/ is read-only third-party material. Capture "
                 f"findings in '{DATA_DIRNAME}/{RECORDS}/discoveries/blueprints/'. For "
                 "initial bootstrap, "
                 "create '.references-bootstrap' at project root AND cite the source in "
@@ -502,7 +506,7 @@ def check_zone(command: str, project_dir: Path) -> str | None:
             continue
         if (EXPORT_VERB_RE.search(segment) or EXPORT_REDIRECT_RE.search(segment)
                 or EXPORT_PIPE_RE.search(segment)):
-            return ("BLOCKED: copying content OUT of 'study-material/' is forbidden — "
+            return (f"BLOCKED: copying content OUT of {STUDY_ZONE}/ is forbidden — "
                     "that is third-party study material and a literal copy carries its "
                     "licence into this project. Read it, learn from it, and write your "
                     f"own version; record the finding in "
@@ -542,7 +546,7 @@ def check_commit_message(command: str) -> str | None:
         return None
     text = commit_text(command)
     if ZONE_RE.search(text):
-        return ("BLOCKED: the commit message cites a path under 'study-material/'. That "
+        return (f"BLOCKED: the commit message cites a path under {STUDY_ZONE}/. That "
                 "zone is third-party study material and must not be referenced in this "
                 "repository's public history. Describe the behaviour you implemented, "
                 "not the material you studied.")

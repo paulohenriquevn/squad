@@ -3,7 +3,7 @@
 
 Two boundaries, one hook, because both answer the same question about one path:
 
-  the study zone   `study-material/**` holds third-party material. A literal copy
+  the study zone   `.squad/study-material/**` holds third-party material. A literal copy
                    carries its licence into this repository, which is a legal
                    problem rather than a stylistic one (`rules/reference-provenance.md`).
   the installed kit  under a copy install the kit sits in a writable directory
@@ -76,14 +76,16 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
+from squad.boundaries import STUDY_ZONE, study_zone_re  # noqa: E402 — post-bootstrap import
 from squad.paths import DATA_DIRNAME, RECORDS  # noqa: E402 — post-bootstrap import
 
-#: `rules/reference-provenance.md` § 1. `records/references/` was retired on
-#: 2026-09-01 with the practice that filled it; the rule records what that costs.
-ZONE_RE = re.compile(r"(^|/)(\.claude/)?study-material/")
+#: `rules/reference-provenance.md` § 1, read from the one module that owns it.
+#: `records/references/` was retired on 2026-09-01 with the practice that filled it;
+#: the rule records what that costs.
+ZONE_RE = study_zone_re()
 
 ZONE_REASON = (
-    "BOUNDARY VIOLATION: study-material/ holds third-party material we depend on "
+    f"BOUNDARY VIOLATION: {STUDY_ZONE}/ holds third-party material we depend on "
     "and is read-only. Never edit or create files there — a literal copy carries "
     "its licence into this repository. Capture findings in "
     f"{DATA_DIRNAME}/{RECORDS}/discoveries/blueprints/."

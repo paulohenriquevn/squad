@@ -31,11 +31,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "boundaries.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.boundaries import STUDY_ZONE  # noqa: E402 — post-bootstrap import
+
 #: The zone, as `rules/reference-provenance.md` § 1 declares it.
 #: `records/references/` was retired on 2026-09-01 with the practice that
 #: filled it; scanning a directory nothing writes to costs a walk and finds
 #: nothing, and listing it here would say the zone is wider than it is.
-ZONE_DIRS = ("study-material",)
+ZONE_DIRS = (STUDY_ZONE,)
 
 # Trees a peer-project clone brings along that are not that project's code.
 ZONE_SKIP_DIRS = frozenset({
@@ -97,7 +104,14 @@ def is_candidate(path: Path) -> bool:
 
 
 def in_zone(rel: str) -> bool:
-    rel = rel.lstrip("./")
+    # `removeprefix("./")`, never `lstrip("./")`. `lstrip` strips a SET of characters,
+    # so it ate the leading dot of every path as well as the slash: once the zone moved
+    # under `.squad/` on 2026-09-21, `.squad/study-material/x` arrived here as
+    # `squad/study-material/x`, matched no zone, and the gate compared a zone file
+    # against itself and reported a SUSPECTED COPY of third-party material by us.
+    #
+    # It was harmless while the zone was top-level and dotless, which is why it stood.
+    rel = rel.removeprefix("./")
     rel = rel.removeprefix(".claude/")
     return any(rel.startswith(z + "/") for z in ZONE_DIRS)
 

@@ -305,7 +305,7 @@ agent remembering. Declared in `hooks/hooks.json`.
 | SessionStart | `sessionstart-context.py` | git state, active plan, loop state, **and the compact form of this map** |
 | UserPromptSubmit | `userpromptsubmit-inject.py` | parsimony ladder + a lean pointer to the active plan, SHA256-attested |
 | PreToolUse (Bash) | `validate-command.py` | **blocks** destructive git and commits on the trunk — exit 2 |
-| PreToolUse (Edit/Write) | `boundary-check.py` | **blocks** writes to `study-material/` and into an installed kit |
+| PreToolUse (Edit/Write) | `boundary-check.py` | **blocks** writes to `.squad/study-material/` and into an installed kit |
 | PostToolUse | `post-edit-check.py` · `public-copy-lint.py` · `english-only-check.py` | linting, honest copy, repository language — advisory |
 | Stop | `stop-validation.py` | **blocks**: CHANGELOG and secret-leak are hard gates; TDD is a warning |
 | PreCompact | `precompact-preserve.py` | snapshots plan and progress before compaction |

@@ -9,6 +9,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import sys as _bootstrap_sys
+_bootstrap_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from squad.boundaries import STUDY_ZONE  # noqa: E402 — post-bootstrap import
+
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -47,7 +51,9 @@ def _init_repo(tmp_path: Path) -> Path:
 
 
 def _add_zone_file(repo: Path, relative: str, content: str) -> None:
-    path = repo / "study-material" / relative
+    # `STUDY_ZONE`, not a literal: the zone moved into the write root on 2026-09-21 and
+    # a fixture spelling it itself is a fourth copy of the thing that just moved.
+    path = repo / STUDY_ZONE / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
@@ -247,8 +253,8 @@ def test_a_tree_git_cannot_describe_is_not_a_clean_bill(tmp_path: Path) -> None:
 
     gate = (Path(__file__).resolve().parent.parent / "mechanisms" / "gates"
             / "check_reference_leakage.py")
-    zone = tmp_path / "study-material"
-    zone.mkdir()
+    zone = tmp_path / STUDY_ZONE
+    zone.mkdir(parents=True)  # the zone is two levels deep since it moved under the write root
     (zone / "third-party.txt").write_text("\n".join(f"line {n}" for n in range(40)),
                                           encoding="utf-8")
 

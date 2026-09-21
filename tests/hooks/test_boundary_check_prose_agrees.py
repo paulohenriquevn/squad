@@ -30,12 +30,18 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 
-# A zone token looks like `slug/` or `nested/slug/`. The trailing `/` is what
-# makes it a directory claim; `(?!\w)` refuses tokens whose trailing `/` is
-# followed by another word — `Edit/Write` (event name) fails because `Write`
-# comes right after the slash. Backticks are optional, because
-# `hooks/README.md`'s table cell writes the paths bare.
-_ZONE_RE = re.compile(r"`?([A-Za-z][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)*/)`?(?!\w)")
+# A zone token looks like `slug/`, `nested/slug/` or `.dotted/slug/`. The trailing `/`
+# is what makes it a directory claim; `(?!\w)` refuses tokens whose trailing `/` is
+# followed by another word — `Edit/Write` (event name) fails because `Write` comes right
+# after the slash. Backticks are optional, because `hooks/README.md`'s table cell writes
+# the paths bare.
+#
+# The first character may be a DOT. It could not until 2026-09-21, and the omission bit
+# the moment a zone moved under `.squad/`: the prose said `.squad/study-material/`, this
+# read `squad/study-material/` out of it, and the test reported the hook failing to
+# block a path the prose had never named. A checker that mis-reads the prose it audits
+# accuses the code of the checker's own bug.
+_ZONE_RE = re.compile(r"`?(\.?[A-Za-z][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]+)*/)`?(?!\w)")
 
 
 def _hook_boundary_check() -> Path:

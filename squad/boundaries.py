@@ -18,6 +18,41 @@ import re
 from pathlib import Path
 
 from .layout import Layout
+from .paths import DATA_DIRNAME
+
+#: The read-only study zone, as `rules/reference-provenance.md` § 1 declares it.
+#:
+#: WHY IT LIVES IN THE WRITE ROOT. The zone was a top-level `study-material/`, which put
+#: third-party code in the tree the project versions — so `.gitignore` had to carry
+#: `study-material/**` to keep a literal copy, and the licence it brings with it, out of
+#: the index. Inside `.squad/` the question does not arise: the write root is the
+#: project's own run area, ignored whole, and nothing under it is ever committed. The
+#: guard is unchanged; what changed is that it now guards a path nobody can commit by
+#: accident.
+#:
+#: WHY IT LIVES HERE. It was spelled three times in three shapes — `(^|/)(\.claude/)?…`
+#: in `boundary-check`, `(\./)?(\.claude/)?…` in `validate-command`, and a bare
+#: directory name in `check_reference_leakage`. This module's own docstring records what
+#: that costs: two hooks knowing one boundary differently is how `sed -i` reached a file
+#: `Edit` had just refused.
+#: The literal comes from `squad.paths`, which owns every data-root spelling — writing
+#: `.squad` here was refused by `test_no_kit_module_outside_the_owner_spells_a_data_root`
+#: within the hour, which is the gate working.
+STUDY_ZONE = f"{DATA_DIRNAME}/study-material"
+
+
+def study_zone_re() -> re.Pattern[str]:
+    """Matches a path inside the study zone, in every shape a caller passes one.
+
+    Absolute, `./`-prefixed, nested under an installed kit's `.claude/`, or sitting mid
+    sentence in a commit message. The guards feed this free text — a shell command line,
+    a `-m` body — not just a clean path, so anchoring it to start-or-slash silently
+    stopped matching `git commit -m "see .squad/study-material/x"`. A lookbehind gives
+    the same protection without the anchor: `mine.squad/study-material/` does not match,
+    and neither does the `squad/` PACKAGE, which has no leading dot.
+    """
+    return re.compile(rf"(?<![\w.-]){re.escape(STUDY_ZONE)}/")
+
 
 #: Paths inside an installed kit that belong to the PROJECT, not the kit. A
 #: consumer tunes these and the installer preserves them across an update.

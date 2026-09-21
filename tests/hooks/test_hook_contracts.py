@@ -92,8 +92,12 @@ def test_english_only_skips_what_is_not_prose(tmp_path: Path, name: str) -> None
 
 
 def test_english_only_skips_third_party_material(tmp_path: Path) -> None:
-    """`study-material/` is not ours to rewrite."""
-    target = tmp_path / "study-material" / "vendor.md"
+    """The study zone is not ours to rewrite.
+
+    `check_english_only` skips it by directory NAME, so it holds wherever the zone
+    sits — the path below is the real one since the zone moved under the write root.
+    """
+    target = tmp_path / ".squad" / "study-material" / "vendor.md"
     target.parent.mkdir(parents=True)
     target.write_text(
         "isto nao esta em ingles e voce nao deveria fazer isso\n",  # english-only: Portuguese on purpose — the point is that it is SKIPPED
