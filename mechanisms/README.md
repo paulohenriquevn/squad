@@ -85,6 +85,7 @@ which is why the rule is now computed rather than requested.
 | `advance_items.py` | Close the items a release actually shipped, from the stream rather than a guess |
 | `backlog_status.py` | Mechanize the BACKLOG.md status transitions — and the impediment edges |
 | `cycle_events.py` | The cycle's phase transitions, as a stream instead of an excavation |
+| `next_backlog_id.py` | The next free `B-NNN`, from every id ever spent rather than from the registry's own contents |
 | `route_domain.py` | Route a repo (or a B-NNN item) to its domain specialist |
 | `verdict_bands.py` | Which band each verdict is in — clean, caveats, redo, structural, or orthogonal — read from `rules/verdict-bands.txt`. Replaces a frozenset that lived inside `check_phase_drift.py` with no owner: 23 of 47 verdicts were classified nowhere, and the unclassified ones silently disabled that checker's out-of-order detection |
 | `review_panel.py` | Tallies the three reviewers that judge a DISCOVER opportunity and a PLAN plan: 2 of 3 advances the document, below that it returns as `NEEDS_REVISION`. The counting is trivial and is not the point — what it REFUSES is: the author on their own panel, three votes from one model family, an abstention read as agreement, a verdict with no reasoning, one reviewer voting twice, and a voter the assignment never named |
