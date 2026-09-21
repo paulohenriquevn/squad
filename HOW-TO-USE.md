@@ -9,13 +9,22 @@ BRAINSTORM → DESIGN → BACKLOG → DISCOVER → PLAN → IMPLEMENT → CODE-Q
  a person's  (hunch)    OUR code           tests       fabrication/  tighter  PR + semver
  signature                  ↓                          wiring
     ↑                  ITEM_KILLED ✔
- the ONLY phase        (chain ends — a successful outcome)
- a human attends
+ the only phase        (chain ends — a successful outcome)
+ that WAITS for
+ a human
 ```
 
-Each arrow is an **unbreakable chain** — you do not skip a phase, and you do not advance past an INVALID verdict. Unlike a roadmap pipeline, this one has no end state: `cycle-maintenance` loops for as long as the ecosystem is maintained.
+Each arrow is an **unbreakable chain** — you do not advance past an INVALID verdict, and you do not skip a phase except by one of the three transitions named below. Unlike a roadmap pipeline, this one has no end state: `cycle-maintenance` loops for as long as the ecosystem is maintained.
 
-**Two registries, two axes.** `BACKLOG.md` holds `B-NNN` items — *what should we look at next* — and is created by `/backlog-init`. `ROADMAP.md` holds `M<N>` milestones — *what did we promise a user* — and is **hand-authored; no skill generates it** (see [`rules/cycle-acceptance.md`](rules/cycle-acceptance.md) § The ROADMAP.md contract). Only a milestone has a checkbox, so only a milestone reaches ACCEPTANCE. A `B-NNN` released without a milestone ends at `RELEASED`, and that is correct.
+**The three conditional transitions.** They are part of the chain, not exceptions to it: a chain called unbreakable while three documented paths go around it teaches its readers that the word is decorative, and the next shortcut gets taken without one.
+
+| Transition | When it is taken | What it costs |
+|---|---|---|
+| **DESIGN skipped** | the system is already drawn — a `.squad/wiki/` map exists and the item fits it | nothing, when the premise holds. An item filed against a system nobody drew is an item nobody can scope, so the premise is the gate |
+| **Enter at DISCOVER** | `--mode bug` with a test that already fails on the current state | nothing: a failing test IS a measurement plan, and a stronger one than a document describing one. BRAINSTORM and DESIGN answer *what should exist*, which a reproduced bug has already answered |
+| **No ACCEPTANCE** | the item declares no `milestone_id` | the product question goes unasked, and correctly — nobody promised a user anything. The SHIPPING question is asked for every item by `check_release_reachable.py` (`cycle-release.md § Hard gates`) |
+
+**Two registries, two axes.** `BACKLOG.md` holds `B-NNN` items — *what should we look at next* — and is created by `/backlog-init`. `ROADMAP.md` holds `M<N>` milestones — *what did we promise a user* — and is **hand-authored; no skill generates it** (see [`rules/cycle-acceptance.md`](rules/cycle-acceptance.md) § The ROADMAP.md contract). Only a milestone has a checkbox, so only a milestone reaches ACCEPTANCE. A `B-NNN` released without a milestone ends at `RELEASED`, and that is correct for the PRODUCT question — nobody promised a user anything, so there is no promise to exercise. The SHIPPING question is separate and is asked for every item: `check_release_reachable.py` confirms the published release exists and is not a draft (`rules/cycle-release.md` § Hard gates).
 
 ## Which phase, when
 
@@ -60,8 +69,15 @@ them. The map is never drawn first: drawn first it looks like design happened an
 forces no choice.
 
 It refuses to close while a `PIECE-N` from the brainstorm has no place in the map, and
-ends at `AWAITING_REVIEW` until a person signs. **Skip it only if the system is already
+ends at `AWAITING_REVIEW` until it is signed. **Skip it only if the system is already
 drawn** — an item filed against a system nobody drew is an item nobody can scope.
+
+**"Signed" does not mean "signed by a human", and the difference is the whole reason
+an unattended run finishes.** `skills/_kit-rules/alignment-threshold.md` § 80 lets
+`alignment_judge.py` sign when no person is coming; `score_alignment.py` turns on
+`reviewer_signed_off` and reports `signed_by_is_human` beside it, so a judge's approval
+reads as the weaker claim it is. Read literally, "until a person signs" re-freezes every
+unattended run at `AWAITING_REVIEW` — the halt that amendment exists to end.
 
 The mermaid it writes IS the drawing: the gate reads it, git versions it, and an agent
 reads it back later. To look at one as a picture — optional, and nothing depends on it:

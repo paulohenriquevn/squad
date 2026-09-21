@@ -21,6 +21,7 @@ A development squad that keeps a running ecosystem healthy: domain specialists y
 ## Table of contents
 
 - [Why this exists](#why-this-exists)
+- [Where this ends](#where-this-ends)
 - [The one phase with a human in it](#the-one-phase-with-a-human-in-it)
 - [What you get](#what-you-get)
 - [How it works](#how-it-works)
@@ -46,6 +47,37 @@ Maintaining a live multi-repo ecosystem fails in ways that building a new one do
 5. **Generic agents.** A reviewer that does not know a root `go build ./...` covers almost nothing in a multi-module repo reports "builds clean" and has measured nothing.
 
 Squad addresses each with a phase, a gate, or a specialist who knows the difference.
+
+## Where this ends
+
+**Squad takes a maintenance item from hunch to a published release, and stops there.**
+This section exists because the boundary was never written down, and a system that does
+not say where it ends is read as claiming everything up to the end of software.
+
+Inside: the loop from `BRAINSTORM` to `RELEASE`, plus `ACCEPTANCE` for work that promised
+a user something. Falsification before implementation, evidence that must resolve, gates
+that fail rather than warn.
+
+Outside, and deliberately:
+
+| Not here | Why, and what stands in for it |
+|---|---|
+| **Deploy** — environment promotion, progressive rollout, operational rollback | The chain ends at a merge, a semver tag and a published GitHub release. `check_release_reachable.py` confirms the release exists and is public; nothing here promotes it anywhere, and `rollback` in these rules means reverting a plan or an install, never a production deploy |
+| **Operation** — monitoring, alerting, SLI/SLO, incidents, post-mortems, backup and restore | Absent entirely. `/acceptance` exercises a released delivery ONCE, against the milestone's declared criteria. That is a verification, not an operating practice |
+| **Security beyond dependencies** — SAST/DAST, SBOM, licence audit, threat modelling, secret scanning | One mechanised gate exists and it is narrow: `check_deps_audit.py` caps a plan at INVALID when a declared dependency carries a CRITICAL/HIGH CVE (`deps_audit_insecure`). `hooks/boundary-check.py` constrains where the system may write. Everything else on that list is not here |
+| **Deprecation and end-of-life** — sunsetting a component, migration paths, shutdown | Absent. The loop has no end state by design (`cycle-maintenance` runs as long as the ecosystem is maintained), and nothing models a component leaving it |
+| **Product discovery** — users, outcomes, prioritisation against business value | `BRAINSTORM` shapes an idea and `DISCOVER` falsifies a hypothesis about THE CODE. Neither asks who the user is or what the business gets |
+
+**Why these are absences and not gaps.** Each needs infrastructure this kit does not have
+and must not assume: a deploy target, a metrics backend, a scanner suite, a product
+context. A phase that pretended to cover one would produce the failure this whole system
+is built to refuse — a green verdict over something nobody measured. Adding any of them
+is a real option; inventing a gate for them is not.
+
+**One consequence worth stating.** `RELEASED` means merged, tagged, and published. It
+does not mean deployed, and it does not mean working in production. `cycle-acceptance` is
+the only phase that touches a real artifact, it runs for milestones, and one run is not
+operation.
 
 ## The one phase with a human in it
 

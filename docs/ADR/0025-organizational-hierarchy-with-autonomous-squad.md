@@ -295,7 +295,7 @@ Theo uses **14 AI agents** (Lane 1/2/3, Router, Lander, VERA, Sweep, and support
 ## References
 
 - AIDLC Workflows: https://github.com/awslabs/aidlc-workflows
-- Squad Agent Manifest: `docs/SQUAD_AGENTS.md`
+- Squad Agent Manifest: `docs/SQUAD_AGENTS-HISTORICAL.md` (renamed 2026-09-21 — the name is what a reader sees before the HISTORICAL banner inside it)
 - Squad Fleet Implementation: `mechanisms/fleet/`
 
 ---

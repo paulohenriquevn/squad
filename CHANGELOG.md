@@ -33,6 +33,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   answering a different question from the one being asked. Whether the thing shipped at
   all has an answer for every item, and nobody was asking it.
 
+- **`README.md` § Where this ends.** The system never said where it stopped, so every
+  outside reading had to assume it meant to cover the whole life of software — and
+  report the absences as failures. Deploy, operation, security beyond dependencies,
+  deprecation and product discovery are now named as absent, each with what stands in
+  for it and why a phase pretending to cover it would produce the exact failure this kit
+  refuses: a green verdict over something nobody measured.
+
+  The security row is the one worth reading precisely. One mechanised gate exists and it
+  is narrow — `check_deps_audit.py` caps a plan at INVALID on a CRITICAL/HIGH CVE in a
+  declared dependency — plus `hooks/boundary-check.py` on write paths. SAST, DAST, SBOM,
+  licence audit, threat modelling and secret scanning are not here, and the row says so
+  rather than letting two mechanisms imply a practice.
+
+### Changed
+
+- **The three conditional transitions are part of the chain, not exceptions to it.**
+  `HOW-TO-USE.md` called the chain unbreakable and then documented three ways around it
+  — DESIGN skipped when the system is drawn, entry at DISCOVER for a `--mode bug` with a
+  failing test, no ACCEPTANCE without a `milestone_id`. Each is correct and each was
+  written as an exception. A chain called unbreakable while three documented paths go
+  around it teaches its readers that the word is decorative, and the next shortcut gets
+  taken without one. They are a table now, with the condition and the cost of each.
+
+- **"Until a person signs" was re-freezing unattended runs.** `HOW-TO-USE.md` said DESIGN
+  ends at `AWAITING_REVIEW` until a person signs, while
+  `skills/_kit-rules/alignment-threshold.md` § 80 lets `alignment_judge.py` sign when no
+  person is coming, and `score_alignment.py` reports `signed_by_is_human` beside
+  `reviewer_signed_off` so a judge's approval reads as the weaker claim it is. Read
+  literally, the sentence promised a human block the system does not enforce — the same
+  stale wording `cycle-implement.md` records having re-frozen every unattended run at
+  `AWAITING_REVIEW`. The diagram's "the ONLY phase a human attends" is now "the only
+  phase that WAITS for a human", which is what is true.
+
+- **`SQUAD_AGENTS.md` → `docs/SQUAD_AGENTS-HISTORICAL.md`.** The file has carried a
+  `Status: HISTORICAL` banner since 2026-09-08, explaining in its first paragraph that
+  its "14 agents" mixes agents with the scripts they run and that only VERA is on disk.
+  An external review read it anyway as a live roster and reported "two competing truths".
+  The banner was not the problem: the NAME is what a reader meets first — in a directory
+  listing, in a search result, in a link — and a file whose name claims to be the
+  manifest is read as the manifest whatever its first paragraph says.
+
 ### Fixed
 
 - **Two allowlists exempted nothing, and one of them was printed as the remedy.**
