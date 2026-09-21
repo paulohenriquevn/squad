@@ -128,7 +128,23 @@ Skipping this step is a G2 violation. The single-registry decision only holds if
 
 ### Step 3 — Detect next id
 
-Extract every `## B-(\d+)` from `BACKLOG.md`, take `max(N) + 1`, format as `B-{N:03d}`.
+Run the allocator. Do NOT read the file and take `max(N) + 1`:
+
+```bash
+python3 "$([ -d .claude/mechanisms ] && echo .claude || echo .)/mechanisms/cycle/next_backlog_id.py" BACKLOG.md
+```
+
+`BACKLOG.md` is unversioned by policy (`rules/records-location.md`), so a checkout can hold a
+registry that lost blocks another checkout still has — and `max(N) + 1` then hands out an id
+somebody already used. Observed 2026-09-18 in a consumer: a second session registered `B-016`, an id
+that registry had already spent; 138 of its cited ids carried no block.
+
+The script reads the blocks present, recovers every id that ever HAD a block from the registry's git
+history, and rejects ids that never did — a template placeholder, a test fixture, an example in
+prose. It prints the three counts, so the id it hands you is auditable rather than asserted.
+
+With no history it falls back to the present blocks and says `history unavailable`, which is a
+different claim from `0 recovered`.
 
 ```
 Existing items: 27 (18 shipped, 4 planned, 3 triaged, 2 killed)
