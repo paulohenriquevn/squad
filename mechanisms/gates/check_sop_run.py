@@ -48,6 +48,7 @@ from sop_format import (
     section,
     split_frontmatter,
 )
+from squad.paths import authored_wiki_dir  # noqa: E402 — post-bootstrap import
 
 #: The status vocabulary. A status nobody recognises cannot be counted, and a
 #: record that cannot be counted is prose.
@@ -104,6 +105,7 @@ def _sop_steps(sops_dir: Path | None, slug: str) -> set[int] | None:
 
 
 def _sop_version(sops_dir: Path | None, slug: str) -> str | None:
+    """`sops_dir` is resolved from BOTH bundles by the caller — see `_sops_dir_for`."""
     if sops_dir is None:
         return None
     path = sops_dir / f"{slug}.md"
@@ -120,9 +122,15 @@ def check_sop_runs(project_root: Path) -> RunReport:
     # The trail stays in the records; the procedures may have moved to
     # the bundle. Two different resolutions on purpose — a record of one
     # execution is not a concept, and the split is the decision this migration
-    # rests on (.squad/wiki/decisions/where-knowledge-lives.md).
+    # rests on (docs/wiki/decisions/where-knowledge-lives.md).
     runs_dir = knowledge_base_dir(project_root, "sop-runs")
-    sops_dir = resolve_knowledge_dir(project_root, "sops")
+    # Both bundles, in the order a project's own comes first. The kit's authored SOPs
+    # left the write root on 2026-09-21 and `resolve_knowledge_dir` answers from the
+    # write root alone — so a run-file naming one of them resolved to nothing, and a
+    # step-count mismatch against a SOP that could not be found reads exactly like a
+    # SOP with no steps.
+    sops_dir = (resolve_knowledge_dir(project_root, "sops")
+                or authored_wiki_dir(project_root, "sops"))
     if runs_dir is None:
         return report
 

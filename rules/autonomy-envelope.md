@@ -139,7 +139,7 @@ agent moves them.
    It was amended once `cycle-brainstorm` existed, because autonomy over merging is only
    defensible downstream of a product a person signed for. The reasoning, the
    alternatives rejected and what it costs are in
-   [`.squad/wiki/decisions/merge-is-inside-the-envelope.md`](../.squad/wiki/decisions/merge-is-inside-the-envelope.md).
+   [`docs/wiki/decisions/merge-is-inside-the-envelope.md`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/merge-is-inside-the-envelope.md).
 
    **Merging to the trunk is a PREMISE, not a capability the project may withhold**
    (decided 2026-09-08). Branch protection that requires a human reviewer does not
@@ -334,7 +334,7 @@ heartbeat and re-reports a stall. Both run INSIDE the controller. **If the contr
 itself dies, nothing brings it back** — a checkpoint on disk does not restart a process,
 and re-examining an impediment does not clear it.
 
-The kit deliberately ships no daemon (`.squad/wiki/decisions/the-cli-navigates-mechanisms-compute.md`
+The kit deliberately ships no daemon (`docs/wiki/decisions/the-cli-navigates-mechanisms-compute.md`
 rejects one for `sq`, and the reasoning holds here). So supervision is the operator's:
 a unit file, a cron, a wrapper that restarts. **If the run stops because it is waiting
 for somebody to open another session, autonomy ended at that point** — and saying so is

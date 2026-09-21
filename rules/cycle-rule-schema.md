@@ -78,7 +78,7 @@ summed into one number:
 
 | Class | Claims | Dated? |
 |---|---|---|
-| `judgement` | automating it would grade LANGUAGE, not the work. Permanent by decision, and pressure-tested across model tiers ([judgement-gates-are-insurance](../.squad/wiki/references/judgement-gates-are-insurance.md)) | no |
+| `judgement` | automating it would grade LANGUAGE, not the work. Permanent by decision, and pressure-tested across model tiers ([judgement-gates-are-insurance](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/references/judgement-gates-are-insurance.md)) | no |
 | `debt` | it is missing, and the line says what | **yes** — `since YYYY-MM-DD` |
 | `regression` | a mechanism **existed and was withdrawn**. Lost coverage, not debt never paid | **yes** |
 | `external` | a third-party plugin enforces it; this kit states the wiring and cannot verify it | no |

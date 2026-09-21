@@ -56,6 +56,7 @@ from sop_format import (
     section,
     split_frontmatter,
 )
+from squad.paths import authored_wiki_dir  # noqa: E402 — post-bootstrap import
 
 _SOPS_DIR = "sops"
 
@@ -115,13 +116,20 @@ class SopReport:
 
 
 
-def _sop_files(project_root: Path, bundle: Path | None) -> list[Path]:
-    """Every SOP this project keeps, from both places one can live.
+def _sop_files(project_root: Path, bundles: tuple[Path, ...]) -> list[Path]:
+    """Every SOP this project keeps, from all three places one can live.
 
-    The bundle at `.squad/wiki/sops/` holds procedures ABOUT the kit — installing it into
-    a consumer, propagating a delta, porting a fix between the sibling kits. A
-    skill's `SOP.md` holds the procedure for OPERATING that skill: what must be
-    true before invoking it, what comes back, and what each verdict obliges.
+    A bundle holds procedures ABOUT the kit — installing it into a consumer,
+    propagating a delta, porting a fix between the sibling kits. There are two: the
+    project's own at `.squad/wiki/sops/`, written by a cycle, and the AUTHORED one at
+    `docs/wiki/sops/`, written by people and shipped with the product. A skill's
+    `SOP.md` holds the procedure for OPERATING that skill: what must be true before
+    invoking it, what comes back, and what each verdict obliges.
+
+    Both bundles are swept because the kit's own moved out of the write root on
+    2026-09-21 and the sweep did not follow it: `read 39 SOPs`, down from 43, with
+    nothing in the output saying four had left. A sweep that covers less and reads
+    identically is the defect this kit names more often than any other.
 
     Both are procedures under the same schema, and the reason to sweep both is the
     reason the schema exists. A SOP carries `last_reviewed` and a review interval;
@@ -130,8 +138,8 @@ def _sop_files(project_root: Path, bundle: Path | None) -> list[Path]:
     four of them would be that defect at scale.
     """
     found: list[Path] = []
-    if bundle is not None:
-        found.extend(sorted(bundle.glob("*.md")))
+    for directory in bundles:
+        found.extend(sorted(directory.glob("*.md")))
     skills = Path(project_root) / "skills"
     if not skills.is_dir():
         skills = Path(project_root) / ".claude" / "skills"
@@ -144,11 +152,12 @@ def check_sop_structure(project_root: Path, *, today: str | None = None) -> SopR
     """Sweep every procedure this project keeps and report structural defects."""
     project_root = Path(project_root)
     report = SopReport()
-    directory = resolve_knowledge_dir(project_root, _SOPS_DIR)
+    bundles = tuple(d for d in (resolve_knowledge_dir(project_root, _SOPS_DIR),
+                                authored_wiki_dir(project_root, _SOPS_DIR)) if d is not None)
 
     reference = date.fromisoformat(today) if today else date.today()
 
-    for path in _sop_files(project_root, directory):
+    for path in _sop_files(project_root, bundles):
         # `index.md` and `log.md` are OKF reserved filenames at any level of the
         # hierarchy — a directory listing and a change history, never concepts.
         # Reading them as SOPs reported the bundle's own navigation as a

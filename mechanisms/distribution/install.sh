@@ -834,7 +834,7 @@ DATA_ROOT="$TARGET/$DATA_ROOT_NAME"
 echo "==> Scaffolding the write root at $DATA_ROOT"
 
 # The OKF bundle: durable knowledge, separate from the dated trail above.
-# `rules/sop-schema.md` and .squad/wiki/decisions/where-knowledge-lives.md say why.
+# `rules/sop-schema.md` and docs/wiki/decisions/where-knowledge-lives.md say why.
 for d in sops decisions references opportunities product; do
   mkdir -p "$DATA_ROOT/wiki/$d"
 done

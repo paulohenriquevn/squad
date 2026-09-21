@@ -149,12 +149,24 @@ def test_the_bundle_still_wins_over_a_legacy_path(tmp_path: Path) -> None:
     assert resolve_knowledge_dir(tmp_path, "decisions") == tmp_path / "wiki" / "decisions"
 
 
-def test_this_repository_resolves_its_sops_to_the_bundle() -> None:
-    """The kit itself migrated, so its own SOPs must come from `wiki/`."""
-    resolved = resolve_knowledge_dir(REPO_ROOT, "sops")
+def test_this_repository_keeps_its_sops_out_of_the_write_root() -> None:
+    """The kit's own SOPs are AUTHORED documents and no longer resolve from `.squad/`.
 
-    assert resolved is not None
-    assert resolved.parent.name == "wiki", f"resolved to {resolved}"
+    They did until 2026-09-21, and that is what the previous version of this test
+    pinned. The write root belongs to the project being maintained; the kit keeping its
+    four SOPs there meant one path held product in this repository and run data in every
+    consumer. `authored_wiki_dir` answers for the first, `resolve_knowledge_dir` for the
+    second, and `check_sop_structure` sweeps both — 43 SOPs, the same number as before
+    the move.
+    """
+    from squad.paths import authored_wiki_dir
+
+    assert resolve_knowledge_dir(REPO_ROOT, "sops") is None, (
+        "the write root holds authored documents again"
+    )
+    authored = authored_wiki_dir(REPO_ROOT, "sops")
+    assert authored is not None and authored.parent.name == "wiki", f"got {authored}"
+    assert len(list(authored.glob("*.md"))) >= 5
 
 
 def test_the_old_records_root_still_answers(tmp_path: Path) -> None:

@@ -20,6 +20,25 @@ Everything this system produces goes there and nowhere else:
 the installer put it (`<project>/.claude/` in a plugin install, the repository root in
 the standalone kit). `.squad/` holds output.
 
+**And nothing AUTHORS into `.squad/` either — including this kit, since 2026-09-21.**
+The write root belongs to the project being maintained. What a cycle writes there is run
+output: dated, per-execution, and per-machine. A document somebody sat down and wrote is
+a different kind of thing, and it belongs with the product that ships it.
+
+The kit broke its own rule here for twelve days. Its eleven ADRs and SOPs lived at
+`.squad/wiki/`, versioned through a `!.squad/wiki/` negation in `.gitignore`, on the
+argument that *"this kit's durable knowledge IS its source"*. The argument was true and
+the location was the problem: one path meant product in this repository and run data in
+every consumer, and the kit had a worked example in its own tree of writing authored
+documents into the write root. They are at [`docs/wiki/`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki) now, versioned
+like the rest of the product, and `tests/test_write_root_is_versioned_correctly.py`
+refuses a tracked file under `.squad/` in this repository at all.
+
+**This changes nothing for a consumer.** A project maintained by the kit still keeps its
+OKF bundle at `<project>/.squad/wiki/` — that IS its write root, and `wiki_dir()` still
+resolves there. The distinction is between a project's own knowledge, which the kit
+writes for it, and the kit's, which people write and git ships.
+
 There is **no layout exception**. There used to be: `.claude/records/` for a plugin
 install, `<repo>/records/` for the kit's own repository. Two answers meant two ways to
 be wrong, and the exception is what the first instrumented run tripped over — it

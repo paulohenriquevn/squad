@@ -363,6 +363,37 @@ def wiki_dir(project_root: Path | str, leaf: str = "") -> Path | None:
     return _first_existing(root, LEGACY_WIKI_ROOTS, leaf)
 
 
+#: Where a project keeps documents PEOPLE wrote, versioned with the product. Distinct
+#: from the write root on purpose, and kept a separate function rather than a third
+#: entry in `LEGACY_WIKI_ROOTS`: making it a fallback of `wiki_dir()` would put authored
+#: documents and run output back behind one name, which is the ambiguity the 2026-09-21
+#: move removed.
+AUTHORED_WIKI_ROOT = "docs/wiki"
+
+
+def authored_wiki_dir(project_root: Path | str, leaf: str = "") -> Path | None:
+    """The project's AUTHORED bundle for `leaf`, or None when it keeps none.
+
+    WHY THIS IS NOT `wiki_dir`. `wiki_dir` answers from `.squad/`, the write root — what
+    a cycle produced for this project. This answers from `docs/wiki/`, where a person
+    sat down and wrote something that ships with the product.
+
+    The kit is the case that made the distinction necessary: it is itself a product, so
+    its eleven ADRs and SOPs are authored documents, and they lived in the write root
+    until 2026-09-21 on the argument that "this kit's durable knowledge IS its source".
+    The argument was true and the location taught, by example, that writing authored
+    documents into a consumer's write root was normal.
+
+    A project with no `docs/wiki/` gets None, which is not an error: most projects keep
+    no authored bundle, and their `.squad/wiki/` is the only one they have.
+    """
+    root = Path(project_root)
+    candidate = root / AUTHORED_WIKI_ROOT
+    if leaf:
+        candidate = candidate / leaf
+    return candidate if candidate.is_dir() else None
+
+
 def resolve_knowledge_dir(project_root: Path | str, leaf: str) -> Path | None:
     """Where this project's `leaf` knowledge lives — bundle first, then the trail.
 

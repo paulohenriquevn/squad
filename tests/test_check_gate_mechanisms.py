@@ -531,7 +531,7 @@ def test_the_cli_reports_the_count_it_swept(tmp_path: Path, verb: str) -> None:
 #               the work. Permanent by decision, and measured: four of them were
 #               pressure-tested across model tiers on 2026-08-28 — redundant on
 #               Opus, and one caught a fabricated justification on Haiku
-#               (`.squad/wiki/references/judgement-gates-are-insurance.md`).
+#               (`docs/wiki/references/judgement-gates-are-insurance.md`).
 #   debt        it is missing, and the line says what is missing.
 #   regression  a mechanism EXISTED and was withdrawn. This is lost coverage, not
 #               debt that was never paid, and reading it as debt hides that the

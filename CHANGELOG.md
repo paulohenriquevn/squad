@@ -6,6 +6,59 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Changed
+
+- **`.squad/` in this repository now means what it means in a consumer: one machine's
+  run data, ignored whole.** The kit kept its own eleven ADRs and SOPs at `.squad/wiki/`,
+  versioned through a `!.squad/wiki/` negation in `.gitignore`, on the argument that
+  *"this kit's durable knowledge IS its source"*.
+
+  The argument was true and the location was the problem. `records-location.md` declares
+  `.squad/` the write root **of the project being maintained**, so one path meant two
+  things — authored product here, run output in every consumer — and the kit carried a
+  worked example in its own tree of writing authored documents into a write root.
+
+  The bundle moved to `docs/wiki/`, versioned like the rest of the product. `.squad/` was
+  deleted, `.gitignore` ignores it whole, and
+  `tests/test_write_root_is_versioned_correctly.py` now refuses a TRACKED file under it
+  at all. A `.squad/` appearing here from a cycle run is not an error — that is what the
+  directory is for.
+
+  **Nothing changes for a consumer.** A project maintained by the kit still keeps its OKF
+  bundle at `<project>/.squad/wiki/`, and `wiki_dir()` still resolves there. The new
+  `authored_wiki_dir()` answers for the other kind — documents people wrote, shipped with
+  the product — and is deliberately a separate function rather than a third fallback
+  inside `wiki_dir()`: making it a fallback would put both kinds back behind one name,
+  which is the ambiguity this move removed.
+
+### Fixed
+
+- **The move silently narrowed a sweep, and the sweep read the same.** `check_sop_structure`
+  covers the OKF bundle plus every skill's `SOP.md`. It finds the bundle through
+  `resolve_knowledge_dir`, which answers from the write root — so the moment the kit's
+  four SOPs left it, they stopped being swept:
+
+  ```
+  before the move:  read 43 SOPs: 237 step(s), 167 decision branch(es)
+  after the move:   read 39 SOPs: 209 step(s), 142 decision branch(es)   ← unreported
+  ```
+
+  Four procedures carrying `last_reviewed` and a review interval, with nothing reading
+  those dates any more, and a gate reporting a clean sweep of the remainder. That is the
+  defect this kit names more often than any other, caused by the move rather than found
+  by it. Both gates sweep both bundles now, and `check_sop_run` resolves a run-file's SOP
+  from either — a step-count mismatch against a SOP that cannot be found reads exactly
+  like a SOP with no steps. Back to 43.
+
+- **Rules cited documents a consumer never receives, and nothing said so.** Six links
+  in `rules/`, `skills/` and `README.md` pointed at the kit's own ADRs with a relative
+  path. In an install those resolved to `.claude/../.squad/wiki/…` — outside the tree
+  `check_xrefs` walks, so the gate never looked and every install reported zero broken
+  links. Moving the bundle to `docs/wiki/` brought the same links INSIDE that tree and
+  the warnings appeared at once: not a regression, an exposure. They are repository URLs
+  now, which resolve for whoever installed the kit. A clean install reports **0**
+  markdown-link warnings, measured.
+
 ### Added
 
 - **The chain now confirms that what it published exists.** `cycle-release` ended at

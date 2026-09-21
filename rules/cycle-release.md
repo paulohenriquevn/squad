@@ -6,7 +6,7 @@ Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READ
 
 Take an approved implementation from `READY_TO_MERGE` to a released, tagged version on `main`. Eliminates the manual release ritual: merge, version bump, tag, push, GitHub release notes.
 
-**The merge is the system's, and it is gated rather than supervised.** `rules/autonomy-envelope.md` floor 2 permits merging a pull request whose full chain passed, and forbids merging anything else — the reasoning is [`.squad/wiki/decisions/merge-is-inside-the-envelope.md`](../.squad/wiki/decisions/merge-is-inside-the-envelope.md). The branching topology is untouched: nothing commits to the trunk directly, everything arrives by PR with a semver tag, and `hooks/validate-command.py` still enforces both.
+**The merge is the system's, and it is gated rather than supervised.** `rules/autonomy-envelope.md` floor 2 permits merging a pull request whose full chain passed, and forbids merging anything else — the reasoning is [`docs/wiki/decisions/merge-is-inside-the-envelope.md`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/merge-is-inside-the-envelope.md). The branching topology is untouched: nothing commits to the trunk directly, everything arrives by PR with a semver tag, and `hooks/validate-command.py` still enforces both.
 
 ## Pre-conditions
 

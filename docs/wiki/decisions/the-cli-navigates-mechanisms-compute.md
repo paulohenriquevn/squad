@@ -235,5 +235,5 @@ fail-safe direction the delegation rules take.
   `cli/` is not a sixth.
 - [`rules/squad-map.md`](../../../rules/squad-map.md) — the answer to *where am I and who
   decides this*; `sq` is its executable half.
-- [`.squad/wiki/decisions/where-knowledge-lives.md`](where-knowledge-lives.md) — the same
+- [`docs/wiki/decisions/where-knowledge-lives.md`](where-knowledge-lives.md) — the same
   question asked of documents rather than of commands.

@@ -68,14 +68,17 @@ def _mirror_repo(real_root: Path, tmp_path: Path) -> Path:
     # A real `.git` would make the mirror look like the same repository to anything that
     # walks up looking for one; an empty marker directory is enough for root detection.
     (mirror / ".git").mkdir()
-    real_data = real_root / ".squad"
-    if real_data.is_dir():
-        for entry in real_data.iterdir():
-            target = mirror / ".squad" / entry.name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.symlink_to(entry)
-    else:
-        (mirror / ".squad").mkdir()
+    # The write root is a REAL directory in the mirror, never symlinks into the
+    # checkout's own `.squad/`. It used to mirror each entry, and that quietly undid
+    # the isolation this fixture exists for: `_find_project_root` calls `resolve()`,
+    # which follows symlinks, so the script walked out of the mirror and into the
+    # repository — and the panel record this test writes landed in the real tree.
+    #
+    # It went unnoticed while the kit had a `.squad/` of its own. The kit stopped
+    # having one on 2026-09-21 (the bundle moved to `docs/wiki/`), the `else` branch
+    # started running for the first time, and this test failed — reporting the
+    # fixture's dependency on the checkout rather than any defect in the gate.
+    (mirror / ".squad").mkdir()
     return mirror
 
 
@@ -190,7 +193,17 @@ def test_the_panel_carries_a_good_opportunity_to_shippable(
                  "verdict": "approve", "reason": why},
             ]}), encoding="utf-8")
 
-        rc, data = _run(good_opportunity, mirror)
+        # The artifact must live INSIDE the mirror. `_find_project_root` resolves from
+        # the artifact's own path, so passing the checkout's fixture made the script
+        # look for the panel record in the KIT's `.squad/records/panels/` — which is
+        # where the old symlinking mirror happened to put it, and why this passed while
+        # writing into the repository it was written to stay out of.
+        staged_artifact = base.parent / "discoveries" / "opportunities" / good_opportunity.name
+        staged_artifact.parent.mkdir(parents=True, exist_ok=True)
+        staged_artifact.write_text(good_opportunity.read_text(encoding="utf-8"),
+                                   encoding="utf-8")
+
+        rc, data = _run(staged_artifact, mirror)
 
         assert data["panel"]["status"] == "approved"
         assert data["verdict"] == "SHIPPABLE"

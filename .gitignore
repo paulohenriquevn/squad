@@ -54,18 +54,22 @@ deadcode-output/
 
 # Study material, kept local (not part of the shipped cycle)
 specs/
-# The write root. Run data never travels; the OKF bundle does, because this kit's
-# durable knowledge IS its source.
+# The write root, ignored WHOLE. Nothing this kit produces at runtime travels, and as
+# of 2026-09-21 nothing the kit AUTHORS lives here either.
 #
-# `.squad/*` and not `.squad/`: git does not descend into an excluded DIRECTORY, so a
-# negation under one never fires. Excluding the CONTENTS leaves the directory visible
-# and lets `!.squad/wiki/` re-include the bundle.
+# It used to be `.squad/*` with `!.squad/wiki/` re-including the OKF bundle, on the
+# argument that "this kit's durable knowledge IS its source". The argument was true and
+# the location was the problem: `records-location.md` declares `.squad/` the write root
+# OF THE PROJECT BEING MAINTAINED, and the kit kept its own eleven ADRs and SOPs in the
+# very directory every consumer fills with run output. One path meant two things —
+# product here, run data in a consumer — and the ambiguity taught by example that
+# writing into `.squad/` inside this repository was normal.
 #
-# Without this, a new ADR here is ignored and `git status` says nothing. The bundle's 11
-# files survived the move only because they were already tracked — luck, not a rule, and
-# `tests/test_write_root_is_versioned_correctly.py` is what turns it into one.
-.squad/*
-!.squad/wiki/
+# The bundle moved to `docs/wiki/`, which is versioned like the rest of the product.
+# `.squad/` in this repository now means exactly what it means in a consumer: one
+# machine's run data, ignored. `tests/test_write_root_is_versioned_correctly.py` holds
+# both halves.
+.squad/
 # Nested repository with its own remote — never a submodule of the cycle
 codex-plugin-cc/
 

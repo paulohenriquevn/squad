@@ -5,7 +5,7 @@
 
 WHY THIS EXISTS
 ---------------
-`rules/records-location.md` and `.squad/wiki/decisions/where-knowledge-lives.md` split
+`rules/records-location.md` and `docs/wiki/decisions/where-knowledge-lives.md` split
 one directory into two kinds of artifact: durable knowledge into the OKF bundle
 at `wiki/`, the dated trail left in `records/`. Readers fall back — bundle
 first, records second — because a hard cut would break every consumer that
