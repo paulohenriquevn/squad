@@ -8,6 +8,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`check_plugin_freshness.py` — a premise the kit depended on and never checked: is the
+  plugin it audits WITH the one that was committed?** Claude Code installs a plugin into
+  `~/.claude/plugins/cache/…` and records the `gitCommitSha` it was built from;
+  `installed_plugins.py` resolves by `installPath`, so every commissioned audit runs that
+  snapshot rather than the repository. Measured 2026-09-22 by the session maintaining those
+  plugins, walking the commission → audit → read chain end to end for the first time:
+  **17 of 18 installed plugins were behind their repositories**, and the contract under
+  test — `compute-verdict --emit-to` — did not exist in the tree that actually ran. The
+  repository was right, this kit's reader was right, and what executed was neither: each
+  half honest, the joint wrong, and no test positioned to look at the joint. Asked once
+  before the first item, for `check_merge_autonomy.py`'s reason — discovering it per-audit
+  costs the run, because the audit completes and only a missing field says anything was
+  wrong. Scope is `rules/review-auditors.txt` rather than the machine: drift in a plugin no
+  REVIEW commissions is somebody else's finding, and reporting it here trains people to
+  skip the output. `unverifiable` — source not a local directory, no `gitCommitSha`, plugin
+  absent — is reported apart from `aligned` and is never a failure, since treating *I could
+  not ask* as *nothing is wrong* is the defect one layer down. Seven tests, every one
+  driving the STALE case from a fixture: this machine currently reads 7 of 7 aligned, which
+  is precisely the condition under which a gate gets written and never exercised where its
+  defect can occur.
+
 - **A written way back for a checkout that has no registry.** `BACKLOG.md` is unversioned
   by policy, so a fresh clone and a second worktree both reach that state normally — and
   nothing said what to do in it. Measured in a consumer 2026-09-21: 93 blocks present

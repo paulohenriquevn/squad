@@ -56,6 +56,21 @@ ARTIFACTS; this extends it to the CODE.
 | Selects | [`mechanisms/cycle/select_auditors.py`](../mechanisms/cycle/select_auditors.py), from the domain [`detect_domain.py`](../skills/review/scripts/detect_domain.py) already derives |
 | **Blocks** | [`mechanisms/gates/check_auditor_coverage.py`](../mechanisms/gates/check_auditor_coverage.py), entering `consolidate_findings.py` as BLOCKER findings |
 | Where plugins are found | [`mechanisms/conventions/installed_plugins.py`](../mechanisms/conventions/installed_plugins.py) |
+| **Premise, asked once** | [`mechanisms/gates/check_plugin_freshness.py`](../mechanisms/gates/check_plugin_freshness.py) — is the installed plugin the one that was committed? |
+
+**An audit runs the CACHE, not the repository.** Claude Code installs a plugin into
+`~/.claude/plugins/cache/…` and records the `gitCommitSha` it was built from;
+`installed_plugins.py` resolves by `installPath`, so what runs is that snapshot. Measured
+2026-09-22 by the session maintaining those plugins, walking the commission → audit → read
+chain for the first time: **17 of 18 installed plugins were behind their repositories**,
+and the contract under test did not exist in the tree that actually ran. The repository was
+right and this kit's reader was right; what executed was neither.
+
+It is asked BEFORE the first item, for `check_merge_autonomy.py`'s reason: discovering it
+per-audit costs the run — the audit completes, the report is written, and only a missing
+field says anything was wrong. `unverifiable` — a source that is not a local directory, an
+entry with no sha, a plugin absent here — is reported apart from `aligned` and is never a
+failure, because treating *I could not ask* as *nothing is wrong* is the defect itself.
 
 **The selection is derived, not chosen.** The reviewing agent does not pick its own
 auditor — the same rule the review panel enforces when it refuses to seat an author,
