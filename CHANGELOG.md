@@ -106,6 +106,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A review finding pointed at a path nobody could open, and the report said nothing.**
+  `consolidate_findings` carried each finding's `file`, deduped on it, rendered it and
+  computed the verdict from the set — without ever opening it. Probed 2026-09-22: one
+  BLOCKER at `src/this/path/does/not/exist.py:42` produced `NEEDS_FIXES` with no field,
+  line or heading saying the path was gone. The argument for why that matters was already
+  written one gate over, for the backlog's evidence pointers: *the next reader follows the
+  pointer, finds nothing, and cannot tell whether the finding moved or was never real.* It
+  applies verbatim to a review finding and had been applied to neither. Same shape as the
+  Coverage Matrix counting a row without opening the task it named — **an identifier
+  counted rather than resolved** — found by looking for more of that class. Resolved
+  against the same roots `check_evidence_freshness` uses, asked of its owner rather than
+  re-listed, because one root reported 41 dead pointers where 22 were dead. **Reported,
+  never blocking**: a backlog item's evidence points at something that WAS measured, while
+  a review finding may legitimately cite a path that does not exist — *the file is missing*
+  is a defect somebody can report — so the caller keeps the judgement.
+
+- **An empty `file:` became the four-character path `None`.** `_normalize_finding` used
+  `str(f.get("file", ""))`, and a YAML `file:` with nothing after it parses to `None` with
+  the key PRESENT — so the default never fired and `str(None)` produced a path that
+  resolves nowhere and looks like one that could. Found by the pointer check above
+  reporting a file nobody had written.
+
 - **The Coverage Matrix gate counted a row and never opened the task it named.** It checked
   the TASK relation in both directions — a row naming no task is unmapped, a task no row
   names is an orphan — and checked the rest of the row in neither. A row reading

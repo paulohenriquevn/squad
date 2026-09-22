@@ -164,7 +164,11 @@ def _normalize_finding(f: dict[str, Any], agent_role: str) -> dict[str, Any]:
         # the field, and reinterpreting them would silently rescore every past review.
         "status": str(f.get("status", "")).upper(),
         "severity": severity,
-        "file": str(f.get("file", "")),
+        # `or ""`, not a default: `file:` with nothing after it parses to None, the key
+        # EXISTS, and `str(None)` is the four-character path "None". A finding then
+        # carried a path that resolves nowhere and looks like one that could — which the
+        # pointer check below would report as a dead pointer, naming a file nobody wrote.
+        "file": str(f.get("file") or ""),
         "line": f.get("line"),
         "plan_ref": str(f.get("plan_ref", "")),
         # `title` is what the GATE findings carry — `check_upstream_gate` writes
@@ -424,6 +428,7 @@ def _render_markdown(
     closed: list[dict[str, Any]] | None = None,
     contamination: dict[str, Any] | None = None,
     reviewer_trees: dict[str, Any] | None = None,
+    unresolved: list[dict] | None = None,
     unreadable: list[str] | None = None,
 ) -> str:
     md = [
@@ -522,6 +527,22 @@ def _render_markdown(
                  "read: " + ", ".join(f"`{a}`" for a in reviewer_trees["undeclared"]) + "."),
                 "",
             ]
+
+    if unresolved:
+        md += [
+            "## \u26a0 A finding points at a path that could not be opened",
+            "",
+            ("Resolved against the same roots `check_evidence_freshness` uses. A finding "
+             "whose path no reader can open is not wrong on its face — *the file is "
+             "missing* is a defect somebody can report — but it cannot be verified by "
+             "following it, and that is what the reader was about to do."),
+            "",
+            "| Reviewer | Finding | Path |",
+            "|---|---|---|",
+        ]
+        for row in unresolved:
+            md.append(f"| `{row['agent']}` | `{row['id']}` | `{row['file']}` |")
+        md.append("")
 
     md.append("## Findings summary by severity")
     md.append("")
@@ -832,6 +853,50 @@ def check_reviewer_trees(repo_root: Path, findings_dir: Path) -> dict[str, Any] 
 
 
 
+def unresolved_pointers(findings: list[dict], repo_root: Path) -> list[dict]:
+    """Findings whose `file` no reader can open, resolved rather than counted.
+
+    Each finding carries a path; this module rendered it, deduped on it and computed a
+    verdict from the set without ever opening it. Probed 2026-09-22: one BLOCKER at
+    `src/this/path/does/not/exist.py:42` produced NEEDS_FIXES with nothing saying the path
+    was gone.
+
+    The argument is already written in this repository, one gate over, for the backlog's
+    evidence pointers (`check_evidence_freshness`): *the next reader follows the pointer,
+    finds nothing, and cannot tell whether the finding moved or was never real.* It applies
+    verbatim here and had been applied to neither.
+
+    RESOLVED THE WAY THAT GATE RESOLVES, against several roots rather than the repository
+    root alone — items cite paths relative to a package source root, and one root reported
+    41 dead pointers where 22 were dead. The owner of that list is asked for it.
+
+    REPORTED, NEVER BLOCKING. A backlog item's evidence points at something that WAS
+    measured, so a dead pointer means the measurement cannot be re-read. A review finding
+    may legitimately cite a path that does not exist — *the file is missing* is a defect
+    somebody can report — so the caller who can tell those apart keeps the judgement.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "mechanisms" / "gates"))
+    try:
+        from check_evidence_freshness import resolution_roots
+        roots = resolution_roots(repo_root)
+    except Exception:  # noqa: BLE001 — a resolver we cannot load reports nothing, loudly
+        roots = [repo_root]
+
+    out: list[dict] = []
+    for f in findings:
+        rel = str(f.get("file") or "").strip()
+        if not rel:
+            continue  # a finding about the change as a whole carries no path
+        if any((root / rel).exists() for root in roots):
+            continue
+        # `found_by`, not `agent`: `_normalize_finding` writes the reviewer's role under
+        # that name, and a key that is simply absent yields "" — a row naming nobody,
+        # which is the shape of a report a reader cannot act on.
+        out.append({"agent": str(f.get("found_by") or ""), "id": str(f.get("id") or ""),
+                    "file": rel})
+    return out
+
+
 def _collect_findings(args, slug: str) -> tuple[list[dict], list[str], list[str], list[str]]:
     """Read every findings file, plus the gate and audit findings that enter the same way.
 
@@ -1071,6 +1136,7 @@ def main() -> int:
 
     contamination = check_tree_contamination(args.repo_root, args.findings_dir)
     reviewer_trees = check_reviewer_trees(args.repo_root, args.findings_dir)
+    unresolved = unresolved_pointers(deduped, args.repo_root)
 
     # Write the markdown report
     md_content = _render_markdown(
@@ -1084,6 +1150,7 @@ def main() -> int:
         closed=closed,
         contamination=contamination,
         reviewer_trees=reviewer_trees,
+        unresolved=unresolved,
         unreadable=unreadable,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -1107,6 +1174,7 @@ def main() -> int:
         # the JSON alone, which is what a downstream gate reads. Comparing two SHAs by eye
         # is what the two reviewers who caught this did, and it is not a mechanism.
         **({"reviewer_trees": reviewer_trees} if reviewer_trees else {}),
+        **({"unresolved_pointers": unresolved} if unresolved else {}),
         **({"unreadable": unreadable} if unreadable else {}),
         **({"skipped": skipped} if skipped else {}),
         "total_findings": len(deduped),
