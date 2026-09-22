@@ -217,8 +217,10 @@ No. `BACKLOG_EMPTY` means nobody has looked recently. Run `/discover-execute --s
 ### "How do I adapt this to another ecosystem?"
 
 Derive the domain routing table with `detect_domains.py --write` — the flag resolves
-its own destination, which is why no document repeats the path (`rules/domain-routing.txt`
-in the kit repo, `.squad/domain-routing.txt` under an install), write one specialist per domain in `agents/`, and declare your live environments in `rules/live-target.txt`. All three ship empty on purpose: the phases, gates and evidence contracts are ecosystem-agnostic; a routing table, a specialist and a live target never are.
+its own destination, which is why no document repeats it. The table is written to
+`.squad/domain-routing.txt` — the project's write root, the same in every layout since
+`records-location.md` removed the layout exception. Write one specialist per domain in
+`agents/`, and declare your live environments in `rules/live-target.txt`. All three ship empty on purpose: the phases, gates and evidence contracts are ecosystem-agnostic; a routing table, a specialist and a live target never are.
 
 ## Maintenance notes
 

@@ -47,6 +47,13 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 #: Anchored so `theorem` and `theory` never match. See the module docstring.
+#:
+#: THIS LINE IS THE DEFINITION, and a sweep that rewrites the origin name across the
+#: tree must exclude this file. Rewritten here on 2026-09-21 by exactly such a sweep,
+#: the pattern became the replacement text and then matched 200+ files — the checker
+#: turned into an accusation of everything, which reads the same as a checker that
+#: found nothing real. A pattern that edits itself is not a narrower bug than a bad
+#: pattern; it is the same bug with the evidence destroyed.
 ORIGIN_RE = re.compile(r"theo-[a-z]|theokit|usetheo|Theo[A-Z]")
 
 #: Generated, vendored or historical trees. The study zone is third-party and read-only

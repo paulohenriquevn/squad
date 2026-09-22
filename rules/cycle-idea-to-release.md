@@ -1,4 +1,5 @@
 # Cycle: AUTO-PLAN (sub-cycle of cycle-maintenance)
+<!-- rule-id: SQ-CYC-08 -->
 
 Source of Truth for the end-to-end autonomous orchestrator. Sits **below** `cycle-maintenance` in the cycle hierarchy: `cycle-maintenance` selects the next milestone and delegates one full `cycle-idea-to-release` run per milestone.
 

@@ -12,10 +12,26 @@ import pytest
 
 from squad.allowlist import MAX_SUNSET_DAYS, MalformedEntry, active, parse
 
-SOON = (date.today() + timedelta(days=30)).isoformat()
-PAST = (date.today() - timedelta(days=1)).isoformat()
-TODAY = date.today().isoformat()
-FAR = (date.today() + timedelta(days=MAX_SUNSET_DAYS + 1)).isoformat()
+#: One reading of "now" for the whole module, pinned into `squad.allowlist.today` by the
+#: fixture below.
+#:
+#: These were computed from `date.today()` at IMPORT and compared against a `date.today()`
+#: the code called later. Measured on 2026-09-22: the day turned between the two, `TODAY`
+#: described yesterday, and two tests failed on a suite that had been green minutes
+#: earlier. A test about a date boundary must not straddle one.
+NOW = date(2026, 6, 15)
+SOON = (NOW + timedelta(days=30)).isoformat()
+PAST = (NOW - timedelta(days=1)).isoformat()
+TODAY = NOW.isoformat()
+FAR = (NOW + timedelta(days=MAX_SUNSET_DAYS + 1)).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def _pinned_clock(monkeypatch):
+    """`squad.allowlist.today` exists as an indirection for exactly this."""
+    import squad.allowlist as allowlist
+
+    monkeypatch.setattr(allowlist, "today", lambda: NOW)
 
 
 def _file(tmp_path: Path, body: str) -> Path:

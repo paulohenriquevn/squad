@@ -1,4 +1,5 @@
 # The Squad map — every phase, who owns it, and what it reads
+<!-- rule-id: SQ-MAP-01 -->
 
 **The 360º view.** `skills/map.md` answers *which skill do I reach for*; this file
 answers *where am I, who decides this, and what governs it*. The two are
@@ -171,7 +172,7 @@ gap as BLOCKER findings, so the verdict cannot be computed while ignoring it.
 | | |
 |---|---|
 | Skills | `/backlog-init` · `/backlog-item` · `/backlog-review` |
-| Rules | [`cycle-backlog.md`](cycle-backlog.md) · [`domain-routing.txt`](domain-routing.txt) — **the project's** |
+| Rules | [`cycle-backlog.md`](cycle-backlog.md) · `.squad/domain-routing.txt` — **the project's**, in the write root rather than under `rules/` |
 | Computes | `detect_domains.py`, `scaffold_specialists.py`, `check_intake_gates.py`, `select_backlog_item.py`, `check_backlog_structure.py`, `backlog_index.py`, `squad_boss.py`, `board_server.py` |
 | Gates | G1 route · G2 dedup · G3 single domain · G4 verifiable DoD · G5 no prior-art · G6/G7 impediment edges. **G1, G2, G6, G7 mechanised; G3, G4, G5 are judgement by decision** |
 

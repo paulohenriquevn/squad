@@ -1,3 +1,4 @@
+# rule-id: SQ-ALW-04
 # Plan-Confidence Allowlist (TEMPLATE)
 #
 # Copy this file to `.claude/rules/plan-confidence-allowlist.txt` in your project.

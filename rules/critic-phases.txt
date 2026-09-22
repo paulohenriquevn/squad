@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-04
 # Which phases get a critic, what it reads, and what it is asked.
 #
 # WHY NOT EVERY PHASE

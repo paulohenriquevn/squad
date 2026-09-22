@@ -202,23 +202,38 @@ def test_empty_table_raises(tmp_path: Path) -> None:
         parse_routing_table(rule)
 
 
-def test_the_shipped_routing_file_parses_to_zero_rows() -> None:
+def test_the_routing_file_a_consumer_is_born_with_parses_to_zero_rows(tmp_path) -> None:
     """The routing file the consumer receives must carry no domain of the kit's.
 
-    It used to be a section template with a placeholder ROW — `_(empty — run …)_`
-    — kept table-shaped so the section still read as a table. The file replaced
-    it: `rules/domain-routing.txt` ships with a header and no data line, which
-    means the same thing without needing a fake row to say it.
+    If it parsed to a domain, every consumer would be born with a ghost that accepts no
+    item and reports success — the defect measured on an adopter in 2026-08-18, where 88
+    items were refused as `unroutable_repo` against a map from another ecosystem.
 
-    Either way the assertion is the one that matters: if the shipped file parsed
-    to a domain, every consumer would be born with a ghost that accepts no item
-    and reports success — the defect measured on an adopter in 2026-08-18, 88
-    items refused as `unroutable_repo` against a map from another ecosystem.
+    THE ASSERTION MOVED WITH THE FILE, 2026-09-21. It used to open
+    `<kit>/rules/domain-routing.txt`, because that is where the kit shipped a placeholder
+    from. `squad.paths` had been writing the table to the project's write root since
+    2026-09-11, so the kit was copying a placeholder into the one directory no writer
+    fills, and recreating it on every reinstall.
+
+    Checking the artifact the CONSUMER receives is the stronger test anyway: the old one
+    held a file in this repository to a property that mattered somewhere else.
     """
-    shipped = PROJECT_ROOT / "rules" / "domain-routing.txt"
-    assert shipped.is_file(), "the kit must ship the routing file, empty"
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    done = subprocess.run(
+        ["bash", str(PROJECT_ROOT / "mechanisms" / "distribution" / "install.sh"),
+         str(tmp_path)],
+        capture_output=True, text=True, timeout=600)
+    assert done.returncode == 0, done.stdout + done.stderr
+
+    sys.path.insert(0, str(PROJECT_ROOT))
+    from squad.paths import write_routing_table
+
+    born_with = write_routing_table(tmp_path)
+    assert born_with.is_file(), "the consumer received no routing table at all"
     with pytest.raises(ValueError, match="no routing row"):
-        parse_routing_table(shipped)
+        parse_routing_table(born_with)
 
 
 def test_a_domain_naming_a_missing_specialist_exits_3(tmp_path, capsys) -> None:

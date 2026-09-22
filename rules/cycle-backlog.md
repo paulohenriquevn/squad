@@ -1,4 +1,5 @@
 # Cycle: BACKLOG
+<!-- rule-id: SQ-CYC-03 -->
 
 Source of Truth for the intake cycle. Skills consume this; do not duplicate content into SKILL.md.
 
@@ -341,8 +342,9 @@ knowingly and doing it because nobody looked.
 ## Domain routing
 
 `domain` is what assigns an item to a specialist. The table itself is **not in
-this file** — it lives in `rules/domain-routing.txt`, and that separation is the
-point.
+this file** — it lives at `.squad/domain-routing.txt`, resolved by
+`squad.paths.write_routing_table` rather than spelled by each reader, and that
+separation is the point.
 
 This file is the kit's contract: fifteen sections describing what the intake
 cycle produces and which gates block it, identical in every install. The routing
@@ -399,6 +401,9 @@ Both paragraphs were inside the span once. Running the command this very file pr
 There is no "with caveats" band: an item is either in the registry or it is not.
 
 ## Hard gates
+
+- **An open item's cited pointers must resolve** — `mechanisms/gates/check_evidence_freshness.py`. Evidence AGE is reported and never fails: a measurement taken a while ago about something nobody has touched is still true, and failing on age trains people to re-measure on a calendar rather than on a reason. A cited path that resolves nowhere is a different fact — the next reader follows it, finds nothing, and cannot tell whether the finding moved or was never real. Scoped to `triaged` and `approved`, the items about to be planned against; a settled item's pointers are history and may name a tree that has since moved.
+
 
 | # | Gate | Blocks on |
 |---|---|---|

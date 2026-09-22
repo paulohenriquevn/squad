@@ -1,4 +1,5 @@
 # Code-Quality Golden Rule
+<!-- rule-id: SQ-GLD-01 -->
 
 Locked unbreakable contract that `/code-quality` reads to score findings, decide verdicts, and gate handoff to `/review`. **This file is the Source of Truth for the severity rubric, the allowlist mechanism, and the verdict score caps.** It mirrors the dogfood-golden-rule pattern: locked sections that require an ADR to change, and per-project sections for tuning.
 

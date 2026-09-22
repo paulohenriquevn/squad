@@ -1,3 +1,4 @@
+# rule-id: SQ-CYC-12
 # The declared phase plan — the pipeline's `meta.phases`.
 #
 # WHY THIS FILE EXISTS

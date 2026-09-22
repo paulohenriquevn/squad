@@ -1,4 +1,5 @@
 # Error Handling
+<!-- rule-id: SQ-ERR-01 -->
 
 Source of Truth for error-handling discipline (Unbreakable Rule 8). Stack-agnostic.
 Fail fast, fail loud, fail clear — a swallowed error is the most dangerous bug.

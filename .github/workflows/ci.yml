@@ -50,6 +50,14 @@ jobs:
       - name: Skill frontmatter validator
         run: python3 mechanisms/gates/validate_skill_frontmatter.py
 
+      # A rule's only handle used to be its path, and paths move: 1209 citations of
+      # `rules/<name>.md` in this kit, and on one consumer's registry 5 of 6 dead
+      # pointers were paths that had MOVED. The id is the handle now, and this step is
+      # what stops the index from drifting back into decoration.
+      - name: Every rule has an identity a rename cannot break
+        run: python3 mechanisms/gates/check_rule_identity.py
+
+
       # Every declared hard gate names what computes it. Measured before this
       # gate existed: 59 gates, 11 naming a script. The other 48 were mostly
       # enforced and said so nowhere, which reads to a reader exactly like a

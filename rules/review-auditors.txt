@@ -1,3 +1,4 @@
+# rule-id: SQ-PNL-01
 # Independent auditors — which plugin audits which domain at REVIEW
 #
 # WHY THIS FILE EXISTS

@@ -1,4 +1,5 @@
 # Loop Engine Convention
+<!-- rule-id: SQ-ENG-01 -->
 
 Decision rule for picking between Skill, Agent (subagent), and ralph-loop (halt-loop). Use the smallest tool that does the job.
 

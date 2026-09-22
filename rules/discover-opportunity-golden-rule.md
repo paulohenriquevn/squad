@@ -1,4 +1,5 @@
 # Discover-Opportunity Golden Rule
+<!-- rule-id: SQ-GLD-04 -->
 
 Locked unbreakable contract that `/discover-confidence` reads to score opportunities and decide verdicts. This file is the per-project Source of Truth promoted from `skills/discover-confidence/templates/discover-opportunity-golden-rule.example.md`.
 

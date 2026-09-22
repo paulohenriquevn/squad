@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-01
 # CONSUMER PROJECT skills that are a phase of no cycle.
 #
 # This file arrives empty on purpose: the KIT's auxiliary skills live in the

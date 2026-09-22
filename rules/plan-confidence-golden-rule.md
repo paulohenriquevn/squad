@@ -1,4 +1,5 @@
 # Plan-Confidence Golden Rule (UNBREAKABLE) 
+<!-- rule-id: SQ-GLD-06 -->
 
 > Promoted from skill template; per-project Source of Truth.
 

@@ -1,3 +1,4 @@
+# rule-id: SQ-THR-04
 # Discover-Plan Score Thresholds — per-project tuning.
 #
 # Authoritative source: skills/_kit-rules/discover-plan-golden-rule.md

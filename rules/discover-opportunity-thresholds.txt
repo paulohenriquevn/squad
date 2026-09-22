@@ -1,3 +1,4 @@
+# rule-id: SQ-THR-03
 # Discover-Blueprint Score Thresholds
 #
 # Per-project Source of Truth for /discover-confidence thresholds.

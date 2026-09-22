@@ -1,4 +1,5 @@
 # Convention: where the records lives
+<!-- rule-id: SQ-LOC-01 -->
 
 Every cycle writes a dated artifact — plans, implementation logs, review reports, releases, acceptance records, roadmap runs. They are the project's audit trail, and an audit trail split across two directories is worse than none: a reader who checks the wrong one reports absence where evidence exists.
 

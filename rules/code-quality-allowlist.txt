@@ -1,3 +1,4 @@
+# rule-id: SQ-ALW-01
 # Code-quality allowlist — explicit exemptions with mandatory sunset.
 #
 # Authoritative source: rules/code-quality-golden-rule.md § 4 (Allowlist mechanism).

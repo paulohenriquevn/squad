@@ -1,4 +1,5 @@
 # Cycle: JUDGE-CODEX (orthogonal LLM jury)
+<!-- rule-id: SQ-CYC-10 -->
 
 Source of Truth for the orthogonal-LLM judge cycle. **Optional but recommended** addition to the canonical pipeline that breaks the Claude-only monoculture in `cycle-review`.
 

@@ -1,4 +1,5 @@
 # Cycle: MAINTENANCE (macro super-loop)
+<!-- rule-id: SQ-CYC-11 -->
 
 Source of Truth for the macro super-loop that runs from a `BACKLOG.md` item all the way back to the same `BACKLOG.md` with the item's status advanced. Sits **above** `cycle-idea-to-release`: where `cycle-idea-to-release` orchestrates one item end-to-end, `cycle-maintenance` orchestrates the ongoing work — item by item — for as long as the ecosystem is maintained.
 

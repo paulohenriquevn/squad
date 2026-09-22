@@ -1,3 +1,4 @@
+# rule-id: SQ-VRD-01
 # Verdicts that stop an item where it is.
 #
 # WHY THIS FILE EXISTS

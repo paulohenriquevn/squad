@@ -322,6 +322,14 @@ for item in skills rules hooks commands mechanisms squad; do
         if [ "$base" = "domain-routing.md" ]; then
           continue  # SECTION template, applied by apply_routing_template
         fi
+        if [ "$base" = "domain-routing.txt" ]; then
+          # The kit stopped carrying this file on 2026-09-21. `squad.paths` has written
+          # the table to the project's write root since 2026-09-11, and copying a
+          # placeholder under `rules/` shipped it to the one directory no writer fills —
+          # then recreated it on every reinstall, which is the copy B-198's own comment
+          # calls "silently correct" and therefore invisible.
+          continue
+        fi
         if [ -f "$SRC_DIR/rules/templates/$base" ]; then
           cp "$SRC_DIR/rules/templates/$base" "$ECO/rules/$base"
         else
@@ -842,9 +850,49 @@ for d in "${KB_DIRS[@]}"; do
   mkdir -p "$DATA_ROOT/records/$d"
 done
 
-# agents/ holds only the README above. The routing table ships empty alongside it,
-# so route_domain.py has nothing to resolve until the project derives both — a table
-# with rows and no specialist on disk is what exit 3 (BROKEN ROUTE) exists to catch.
+# agents/ holds only the README above. The routing table is born empty beside the rest
+# of the write root, so route_domain.py has nothing to resolve until the project derives
+# both — a table with rows and no specialist on disk is what exit 3 (BROKEN ROUTE)
+# exists to catch.
+#
+# AT THE DESTINATION, not under `rules/`. `squad.paths` has written the table to the
+# write root since 2026-09-11 while this script went on copying a placeholder to
+# `rules/domain-routing.txt` — the one directory no writer fills — and recreating it on
+# every reinstall. The path is RESOLVED from the owner rather than spelled here, for the
+# reason B-198 gave when the migration made the same mistake: a literal here is a copy,
+# and a copy is how the two answers drift apart.
+if [ ! -f "$DATA_ROOT/domain-routing.txt" ]; then
+  python3 - "$TARGET" <<'ROUTEEOF'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+project = Path(sys.argv[1])
+for up in [project, *project.parents]:
+    if (up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(up))
+        break
+else:
+    sys.path.insert(0, str(Path.cwd()))
+try:
+    from squad.paths import write_routing_table
+except ImportError:
+    raise SystemExit(0)
+target = write_routing_table(project)
+target.parent.mkdir(parents=True, exist_ok=True)
+if not target.exists():
+    target.write_text(
+        "# Domain routing — WHICH REPOSITORIES EXIST HERE, and who owns each.\n"
+        "#\n"
+        "# This file is the PROJECT'S, not the kit's: the installer never overwrites it.\n"
+        "# Derive it with `detect_domains.py --write`, which resolves this destination\n"
+        "# itself rather than being told where to put it.\n"
+        "#\n"
+        "# Format: domain | repos (comma-separated) | specialist agent file\n"
+        "\n"
+        "# (no domain yet — run detect_domains.py --write)\n",
+        encoding="utf-8")
+ROUTEEOF
+fi
 
 
 # --- What the overwrite actually took ---
@@ -996,7 +1044,13 @@ VALIDATION_LOG="$ECO/.install-backups/validation-$(date -u +%Y%m%dT%H%M%SZ).log"
 mkdir -p "$(dirname "$VALIDATION_LOG")"
 VALIDATION_FAILED=0
 
-for _gate in "check_xrefs.py --strict" "verify_ecosystem.py"; do
+# `check_wired_hooks.py` joined on 2026-09-21, routed by a consumer whose install
+# predated `260892f`: it still had `hooks/validate-command.sh` WIRED, and that retired
+# shell hook diverges from the live Python one in 2 of 36 payloads — both permissively,
+# allowing `git stash` and `--force-with-lease` on the workspace. `.kit-hooks.json` could
+# not withdraw it because that baseline only exists from 2026-09-02; a missing FILE needs
+# no baseline.
+for _gate in "check_xrefs.py --strict" "verify_ecosystem.py" "check_wired_hooks.py --root .claude"; do
   # shellcheck disable=SC2086
   # Unquoted on purpose: `$_gate` carries the script name AND its flag.
   if (cd "$TARGET" && python3 .claude/mechanisms/gates/$_gate) >> "$VALIDATION_LOG" 2>&1; then

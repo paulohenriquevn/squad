@@ -1,4 +1,5 @@
 # Testing
+<!-- rule-id: SQ-TST-01 -->
 
 Source of Truth for test discipline. Stack-agnostic.
 
@@ -58,6 +59,32 @@ Two distinct lenses. Cover **both** — not just whichever is easier to imagine.
 - **Edge cases test boundaries; negative cases test error handling.** They fail differently: an unhandled edge produces a *wrong answer*; an unhandled negative produces a *crash or a silent swallow*.
 - Negative cases are where **Error Handling** is proven (fail-fast, fail-clear, **typed errors**, validate at the boundary). A negative-case test asserts the *specific typed error and message* — not merely "it throws".
 - For every input boundary, ask both questions: "what is the largest/smallest **valid** value?" (edge) **and** "what is the first **invalid** value past it?" (negative).
+
+### When you are FIXING, the lens you skip is the one you just moved
+
+Measured over four rounds on `hooks/validate-command.py`, 2026-09-21/22. The guard was
+refusing prose that merely CITED a forbidden git command — `echo "…git checkout main"`,
+a heredoc carrying the phrase, a `grep` searching for it. The fix worked: seven false
+blocks became zero. It also opened **six bypasses of an unbreakable rule**, and then
+three more, and then five more, because each round was measured only in the direction
+being corrected.
+
+Every one was found by a second session running the same payloads in BOTH directions.
+Not because that reviewer was more careful — because it had not just built the thing.
+
+    round 1   7 false blocks fixed      6 bypasses opened     found by the reviewer
+    round 2   6 bypasses fixed          3 bypasses left       found by the reviewer
+    round 3   3 bypasses fixed          5 remaining           found by the reviewer
+    round 4   0 / 0, 54 payloads, both directions
+
+The rule above already said to cover both lenses, and both sessions knew it. Knowing it
+was not what was missing. **A fix changes a boundary, and the half of that boundary you
+were not looking at is the half you moved.** So the discipline is not "remember § 4.1";
+it is: when a change is a FIX, the must-not-regress set is written before the fix and run
+after it, in the same command, or the fix ships with a hole the author cannot see.
+
+The corollary is about review, not testing: external verification is worth more than
+rereading your own work, and the reason is structural rather than a matter of diligence.
 
 ## § 5 — Test pairing convention
 

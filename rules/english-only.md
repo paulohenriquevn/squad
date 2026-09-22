@@ -1,4 +1,5 @@
 # English only
+<!-- rule-id: SQ-LNG-01 -->
 
 **Skill:** every skill · **Mechanised by:** `mechanisms/gates/check_english_only.py`
 

@@ -38,13 +38,25 @@ def _gh(responses: dict[str, tuple[int, str, str]]):
     return run
 
 
-def _git(branch: str = "workspace", dirty: str = "", ahead: str = "3"):
+def _git(branch: str = "workspace", dirty: str = "", ahead: str = "3",
+         unpushed: str = "0"):
+    """`unpushed` is the count of commits HEAD has that `origin/<branch>` does not.
+
+    It defaults to "0" — pushed — because every test written before 2026-09-21 assumed
+    it without saying so, and that assumption is exactly what went unchecked in the
+    tool itself.
+    """
     def run(argv: list[str]) -> tuple[int, str, str]:
         joined = " ".join(argv)
         if "rev-parse --abbrev-ref" in joined:
             return 0, branch + "\n", ""
         if "status --porcelain" in joined:
             return 0, dirty, ""
+        # The two counts are DIFFERENT questions and the fake must tell them apart:
+        # `origin/<target>..HEAD` is how much this promotion carries, and
+        # `origin/<branch>..HEAD` is how much of it the remote has never seen.
+        if f"origin/{branch}..HEAD" in joined:
+            return 0, unpushed + "\n", ""
         if "rev-list --count" in joined:
             return 0, ahead + "\n", ""
         return 0, "", ""
@@ -289,3 +301,42 @@ def test_a_pr_whose_number_reads_is_still_merged() -> None:
     }))
 
     assert "opened PR #12" in "\n".join(report.lines)
+
+
+
+# ── the count is local and the action is remote ──────────────────────────────
+
+def test_it_refuses_when_head_has_not_reached_the_remote() -> None:
+    r"""Routed by a consumer session, 2026-09-21, and reproduced here.
+
+    `rev-list --count origin/develop..HEAD` counts LOCAL commits, and nothing verified
+    that HEAD had reached `origin/<branch>` before `gh pr create`. The consumer saw the
+    tool print **"33 commit(s) ahead"** and GitHub answer **"No commits between develop
+    and workspace"** — the success message and the failure describing one state from
+    opposite sides, because all 33 were local.
+
+    A PR carries what the REMOTE has. Counting what the local HEAD has and then acting
+    on the remote is the same shape as a gate that measures one thing and reports
+    another, and the reader is left with two sentences that cannot both be true.
+    """
+    report = promote.promote(ROOT, git=_git(unpushed="33"), gh=_gh({}))
+
+    assert report.exit_code != 0, "a PR opened on unpushed commits cannot contain them"
+    blob = " ".join(report.lines).lower()
+    assert "push" in blob, f"the refusal must name the move that fixes it: {report.lines}"
+    assert "33" in " ".join(report.lines), "say how many are held back, not just that some are"
+
+
+def test_it_proceeds_once_head_is_on_the_remote() -> None:
+    """The guard must not block a promotion that is genuinely ready."""
+    report = promote.promote(ROOT, git=_git(unpushed="0"), gh=_gh({
+        "pr list": (0, "[]", ""),
+        "pr create": (0, "https://github.com/o/r/pull/1\n", ""),
+        "pr merge": (0, "", ""),
+    }))
+
+    # The assertion is about the NEW guard, not about the whole chain: everything after
+    # it needs a repository this fake does not stand in for. What must hold is that the
+    # push check did not fire and the run reached the PR.
+    assert not any("push origin" in line for line in report.lines), report.lines
+    assert report.detail.get("pr"), report.lines

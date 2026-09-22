@@ -1,4 +1,5 @@
 # Cycle: RELEASE
+<!-- rule-id: SQ-CYC-14 -->
 
 Source of Truth for the release-cut cycle. Runs after `cycle-review` emits `READY_TO_MERGE`; produces a merge of `develop` into `main` and a semver tag. Fully automated: the system merges a PR whose whole chain passed, and stops only where branch protection requires a reviewer it cannot be.
 

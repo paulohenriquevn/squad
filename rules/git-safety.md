@@ -1,4 +1,5 @@
 # Git Safety
+<!-- rule-id: SQ-SAF-01 -->
 
 Source of Truth for the forbidden git commands and their safe substitutes
 (Unbreakable Rule 4). The list lives here as a document so the corpus states the

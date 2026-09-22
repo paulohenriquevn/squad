@@ -1,4 +1,5 @@
 # The autonomy envelope — what the system decides, and what it never touches
+<!-- rule-id: SQ-ENV-01 -->
 
 A maintenance cycle that runs unattended reaches decisions. This file says which of
 them belong to the system, which belong to a person, and — for the ones that belong to

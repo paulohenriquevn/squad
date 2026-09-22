@@ -1,4 +1,5 @@
 # Cycle: PLAN
+<!-- rule-id: SQ-CYC-13 -->
 
 Source of Truth for the planning cycle.
 

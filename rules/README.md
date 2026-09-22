@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at sixty-three files is
-not one — a model told to read sixty-three files before an architectural decision
+That makes the pointer the whole interface, and a pointer at sixty-two files is
+not one — a model told to read sixty-two files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
@@ -106,7 +106,7 @@ Each `cycle-{name}.md` defines:
 | `discover-plan-thresholds.txt` | Discovery plan scoring thresholds |
 | `code-quality-baseline.txt` | Findings accepted as the starting state, so a new one stands out |
 | `acceptance-target.txt` | Where `/acceptance` exercises the released delivery |
-| `domain-routing.txt` | Which repositories exist here and who owns each — **the project's**, derived from disk |
+| `.squad/domain-routing.txt` | Which repositories exist here and who owns each — **the project's**, derived from disk. Not under `rules/`: it lives in the write root, which is where `squad.paths.write_routing_table` puts it and where `detect_domains.py --write` writes. The kit stopped shipping a placeholder under `rules/` on 2026-09-21, having recreated one on every reinstall for three weeks after the destination moved |
 | `auxiliary-skills.txt` | Skills bound to no cycle, so the orphan sweep does not report them |
 | `auxiliary-cycles.txt` | Cycles the project built alongside the kit's chain, so `check_squad_map` does not ask the kit's map to place them. Its sibling above, for the index one level up |
 | `retired-permissions.txt` | Permissions withdrawn, kept so a reinstall does not reintroduce them |

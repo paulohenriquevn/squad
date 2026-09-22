@@ -1,4 +1,5 @@
 # Cycle: DISCOVER
+<!-- rule-id: SQ-CYC-07 -->
 
 Source of Truth for the discovery cycle. Skills consume this; do not duplicate content into SKILL.md.
 

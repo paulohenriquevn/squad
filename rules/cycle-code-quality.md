@@ -1,4 +1,5 @@
 # Cycle: CODE-QUALITY
+<!-- rule-id: SQ-CYC-05 -->
 
 Source of Truth for the post-implementation code-quality audit. Wired between `/implement` and `/review`.
 

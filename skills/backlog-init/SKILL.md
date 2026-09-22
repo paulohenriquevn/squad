@@ -132,7 +132,7 @@ python3 "$ECO/skills/backlog-init/scripts/detect_domains.py" --root . \
   --write
 ```
 
-**Skipping this leaves routing FATAL, and the failure does not look like a missing step.** `route_domain.py` reads `rules/domain-routing.txt` (falling back to `rules/cycle-backlog.md`) and nothing else. A table written anywhere else — including into `BACKLOG.md`, which earlier versions of this skill prescribed — is a table nothing reads.
+**Skipping this leaves routing FATAL, and the failure does not look like a missing step.** `route_domain.py` reads the table `squad.paths.routing_table` resolves — `.squad/domain-routing.txt`, then the pre-2026-09-11 locations under `rules/` — falling back to `rules/cycle-backlog.md`, and nothing else. A table written anywhere else — including into `BACKLOG.md`, which earlier versions of this skill prescribed — is a table nothing reads.
 
 Measured across five consumers on 2026-08-27: four had the routing file at its empty placeholder and a real, human-checked table in `BACKLOG.md` (one of them with fourteen path-addressed entries). `route_domain` exited 2 FATAL in four of four, over **165 registered items**. Every one of those registries was built by following this skill exactly.
 
@@ -150,7 +150,7 @@ Structure, in this order:
 
 1. **Header** — what the registry is, and the one-line rule that governs it: *ids are monotonic and never renumbered*.
 2. **How an item gets here** — the two producers (`/backlog-item` human, `/discover-execute --sweep` measured), pointing at `cycle-backlog.md` for the schema rather than restating it. The registry is data; the contract lives in the rule.
-3. **Where routing lives** — one line pointing at `rules/domain-routing.txt`, plus the exclusions and their reasons. Do **not** copy the table itself here. `mechanisms/cycle/route_domain.py`'s own header states why — *"One table, one truth: a copy in code drifts from the rule the moment…"* — and a copy in the registry drifts the same way. Measured: the consumers that followed the older wording ended up with the real table in `BACKLOG.md`, where nothing reads it, and FATAL routing; the one consumer that refused to duplicate ended up with neither table, and FATAL routing. Obeying and disobeying reached the same place, which is the signal that the instruction was the defect.
+3. **Where routing lives** — one line pointing at `.squad/domain-routing.txt`, plus the exclusions and their reasons. Do **not** copy the table itself here. `mechanisms/cycle/route_domain.py`'s own header states why — *"One table, one truth: a copy in code drifts from the rule the moment…"* — and a copy in the registry drifts the same way. Measured: the consumers that followed the older wording ended up with the real table in `BACKLOG.md`, where nothing reads it, and FATAL routing; the one consumer that refused to duplicate ended up with neither table, and FATAL routing. Obeying and disobeying reached the same place, which is the signal that the instruction was the defect.
 4. **`## Index`** — the three-bucket summary (`cycle-backlog.md § The index that opens the
    registry`). Do **not** hand-write it; run it, even on an empty registry:
 

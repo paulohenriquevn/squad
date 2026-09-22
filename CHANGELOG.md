@@ -8,6 +8,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The git guard told a citation apart from an invocation, and each round of that fix
+  opened bypasses of the rule it protects.** `hooks/validate-command.py` was refusing
+  prose that merely NAMED a forbidden command — `echo "…git checkout main"`, a heredoc
+  carrying the phrase, a `grep` searching for it — and correcting that in the direction
+  being complained about turned seven false blocks into zero and, across four rounds,
+  opened six bypasses, then three, then five. Every one was found by running the same
+  payloads in BOTH directions. The guard now reads the command POSITION rather than the
+  text: a quoted name (`"git" checkout main`) executes and is blocked, the
+  same name inside an `echo` is a citation and stays quoted, and a wrapper (`xargs`,
+  `env`) holds the command position open across its own flags rather than merely the next
+  token — which is why `xargs git checkout` blocked while `xargs -I{} git checkout {}`
+  did not. `tests/hooks/test_citing_a_command_is_not_running_it.py` pins both directions.
+  The lesson generalised into `rules/testing.md`: when you are FIXING, the lens you skip
+  is the one you just moved.
+
 - **The panel premise gate answered a wrong path with a verdict about the roster.**
   `check_panel_capability.py` returned `VIOLATED` whenever the roster could not be read,
   on the argument — correct for the DEFAULT path — that a project with no declaration
@@ -55,6 +70,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **A rule can now be cited by something a rename cannot break.** A rule's only handle
+  was its path, and paths move: 1209 citations of the form `rules/<name>.md` inside this
+  kit, and on one consumer's registry 33 of 109 backlog items citing a path in here —
+  including items about that project's own product. Of the 6 dead pointers a freshness
+  check found in that registry, 5 were paths that had moved. `squad/rules.py` gives every
+  rule a stable id (`SQ-ERR-01`) that survives any rename, and
+  `mechanisms/gates/check_rule_identity.py` holds the three properties a citable id needs:
+  every rule declares one, ids are unique, and a retired id is never reused — a reused id
+  makes an old citation resolve to the wrong rule, which is worse than a dead one. The
+  shape is ESLint's, for its three stated reasons: portability across versions, freedom to
+  reorganise internals without breaking consumers, and one namespace for core and plugin
+  rules alike.
+
+- **Evidence age is reported and a dead pointer fails.**
+  `mechanisms/gates/check_evidence_freshness.py` separates two things a single "staleness"
+  number conflates. OLD is not a defect — a thirty-day-old measurement of something nobody
+  has touched is still true, and failing on age trains people to re-measure on a calendar
+  rather than on a reason. WRONG is: evidence citing a path that no longer resolves leaves
+  the next reader unable to tell whether the finding moved or was never real.
+
+- **A wired hook that points at nothing is now caught.**
+  `mechanisms/gates/check_wired_hooks.py` checks that every hook an install wires in
+  `settings.json` resolves to a file that is there. `hooks/validate-command.sh` left this
+  kit in `260892f` when the hooks became Python, and an install predating that commit kept
+  the shell copy wired. Measured against the live `.py`: the retired shell hook diverges in
+  2 of 36 payloads and BOTH divergences are permissive — it allows `git stash` (forbidden
+  while worktrees exist) and `--force-with-lease` on `workspace`. The upgrade left a gate
+  running that the kit had already replaced, with the replacement's stricter rules not in
+  force, and nothing said so because nothing looked.
+
 - **Commissioned audits now carry a cost ceiling.** `select_auditors.py` built
   `/{plugin} {target} --output-dir … [scope]` and stopped, so every auditor ran at its own
   default — 60 global iterations for the `always` one, 80 for most, 200 for
@@ -68,6 +113,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   declared.
 
 ### Changed
+
+- **The kit stopped shipping a `rules/domain-routing.txt` placeholder it had already
+  moved.** The routing table lives in the write root — where `squad.paths.write_routing_table`
+  puts it and where `detect_domains.py --write` writes it — and the kit went on recreating
+  a placeholder under `rules/` on every reinstall for three weeks after the destination
+  moved. `rules/README.md` names the real location now, and its own file count follows.
 
 - **The read-only study zone moved into the write root: `study-material/` →
   `.squad/study-material/`.** `rules/reference-provenance.md` guards third-party material

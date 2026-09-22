@@ -1,4 +1,5 @@
 # Cycle: BRAINSTORM
+<!-- rule-id: SQ-CYC-04 -->
 
 Source of Truth for the product-alignment cycle. Skills consume this; do not duplicate content into SKILL.md.
 

@@ -1,4 +1,5 @@
 # Cycle: ACCEPTANCE (end-user validation of the released delivery)
+<!-- rule-id: SQ-CYC-02 -->
 
 Source of Truth for the phase that runs **after** `cycle-release` and answers the only question the rest of the pipeline never asks: does the thing that shipped actually work for the person it was built for?
 

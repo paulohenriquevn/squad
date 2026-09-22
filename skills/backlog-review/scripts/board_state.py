@@ -1216,9 +1216,12 @@ def _wip(events: list[dict], now: datetime) -> dict:
     # board at "1 in flight" while no item was being worked at all.
     abandoned = []
     for key, opened in sorted(opened_by.items()):
-        age_hours = (now - opened["at"]).total_seconds() / 3600
-        if age_hours <= ABANDON_AFTER_HOURS:
+        # `_abandoned`, not a second age computation. This pass and `_phases_running`
+        # both decide "is this start still work", and computing it twice is how the
+        # headline and the notices panel came to disagree about B-184.
+        if not _abandoned(opened["at"], now):
             continue
+        age_hours = (now - opened["at"]).total_seconds() / 3600
         abandoned.append({"slug": opened["slug"], "cycle": opened["cycle"],
                           "hours": round(age_hours, 1)})
         # Withdraw its +1 so neither `current` nor `peak` carries it. Removing the span
@@ -1378,14 +1381,46 @@ def _fan_out_by_plan(events: list[dict], plans: dict[str, str]) -> list[dict]:
     return out
 
 
-def _phases_running(events: list[dict]) -> dict[str, dict]:
+def _abandoned(since, now: datetime) -> bool:
+    """Whether a start that old has stopped being evidence of work.
+
+    One predicate, used by everything that has to make this call. `_wip` computed the
+    same age inline and `_working_item` never computed it at all — which is how the two
+    came to disagree about B-184 on one screen.
+
+    An unparseable or absent stamp is NOT abandoned: the window is a claim about
+    elapsed time, and without a time there is nothing to elapse. Guessing `True` would
+    silently drop real work whose timestamp a producer wrote badly.
+    """
+    started = _parse_stamp(since)
+    if started is None:
+        return False
+    return (now - started).total_seconds() / 3600 > ABANDON_AFTER_HOURS
+
+
+def _phases_running(events: list[dict], now: datetime | None = None) -> dict[str, dict]:
     """Which item is inside which phase right now, from the event stream.
 
     Extracted from `build_state`, which measured cyclomatic complexity 41 across 206
     lines. Pure code movement: the block below is the block that was there, reading the
     same stream. What changed is that each pass declares what it reads and what it
     produces, instead of leaving both in a shared scope.
+
+    ## The window is applied HERE, and that placement is the fix
+
+    A start with no end is a fact about the STREAM; calling it running is a claim about
+    the WORK. Two defences against that claim already existed and both sat in consumers:
+    the orphan-close below, and `ABANDON_AFTER_HOURS` inside `_wip`. Neither covered
+    `_working_item`, and on 2026-09-21 a consumer's board headlined `WORKING B-184` over
+    a start that had died 20 hours and 26 events earlier — while its own notices panel
+    said the same start was "not counted as work in flight".
+
+    Eleven readers consume `running_phase`: two here and nine in `board.html`. Any of
+    them could have been the fourth to miss the lesson. So a start past the window is
+    not reported as running to ANY of them — the field is built without it, and no
+    consumer can disagree about a value none of them is given.
     """
+    now = now or datetime.now(timezone.utc)
     running: dict[str, dict] = {}
     for event in events:
         slug = item_id_of(event.get("slug") or "")
@@ -1418,6 +1453,11 @@ def _phases_running(events: list[dict]) -> dict[str, dict]:
             # not evidence the item moved on, and clearing on it would hide work actually
             # in flight. Later-or-equal is the line, and the chain order is what decides.
             running.pop(slug, None)
+    # Past the window, a start is not work. `_wip` reports it under `abandoned` so the
+    # reader's next move — close it, or emit the end it owes — still has the slug.
+    for slug in [s for s, open_phase in running.items()
+                 if _abandoned(open_phase.get("since"), now)]:
+        running.pop(slug, None)
 
     # Last finished phase per item, from the stream.
     return running

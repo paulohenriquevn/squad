@@ -1,4 +1,5 @@
 # Public Copy
+<!-- rule-id: SQ-PUB-01 -->
 
 Source of Truth for voice/tone in README, marketing, and external-facing docs. Enforced by `hooks/public-copy-lint.py` (advisory, warn-first).
 

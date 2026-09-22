@@ -1,4 +1,5 @@
 # Current constraint — a lens, not a gate
+<!-- rule-id: SQ-LAD-01 -->
 
 What currently limits the ecosystem's ability to ship value. Declared by a human, dated, with a review date.
 

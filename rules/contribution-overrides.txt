@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-03
 # THIS PROJECT's contribution conventions, overriding the kit's defaults.
 #
 # `rules/contribution-conventions.md` is the kit's contract and a reinstall overwrites

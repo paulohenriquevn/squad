@@ -158,8 +158,14 @@ def violation(target: Path, layout: Layout) -> str | None:
     return (
         f"BOUNDARY VIOLATION: {rel} belongs to the installed Squad kit, which is "
         f"read-only here. A fix written inside an installed kit protects exactly "
-        f"one machine and is erased by the next install. Send it to the kit's own "
-        f"repository instead. Project-owned paths under the same tree stay "
-        f"writable: rules/*.txt (config), agents/ (your domain specialists), "
-        f"records/ (cycle output) and settings.json."
+        f"one machine and is erased by the next install.\n\n"
+        f"WHERE IT GOES: open an issue on the kit's repository. `mechanisms/fleet/"
+        f"kit_issues.py` is the registry that reads them, and an issue travels "
+        f"without anyone joining a working tree — which `git-safety.md` forbids a "
+        f"second agent from doing, and which is why 'send it upstream' is not the "
+        f"same instruction as 'go and commit there'. Include what you measured and "
+        f"where, so the fix does not start by re-measuring.\n\n"
+        f"Project-owned paths under the same tree stay writable: rules/*.txt "
+        f"(config), agents/ (your domain specialists), records/ (cycle output) and "
+        f"settings.json."
     )

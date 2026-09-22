@@ -273,6 +273,40 @@ def _preflight(call, git, report: "Report") -> bool:
         report.lines.append(f"nothing to promote — origin/{TARGET} already has this branch")
         return True
 
+    # ── the count is local; the PR is about the remote ───────────────────────
+    #
+    # Everything above counts what THIS CHECKOUT has. A pull request carries what the
+    # REMOTE has, and nothing here compared the two — so the tool could print "33
+    # commit(s) ahead" and GitHub answer "No commits between develop and workspace",
+    # one state described from opposite sides by two sentences that cannot both be true.
+    # Routed by a consumer session on 2026-09-21, after living exactly that.
+    #
+    # Asked as `origin/<source>..HEAD` rather than by parsing `status -sb`: the porcelain
+    # line is localised and its shape has changed between git versions, and this reads a
+    # count the way every other check in this file does.
+    unpushed = call(git, ["rev-list", "--count", f"origin/{SOURCE}..HEAD"])
+    if unpushed is None or unpushed[0] != 0:
+        # No upstream yet is not the same as unpushed commits, and neither is a fetch
+        # that failed. Unmeasured, because opening the PR anyway is how the
+        # contradiction above got printed in the first place.
+        report.exit_code = UNMEASURED
+        report.lines.append(
+            f"could not compare HEAD with origin/{SOURCE}, so whether the remote has "
+            f"this work is unknown — `git fetch origin {SOURCE}` and re-run"
+        )
+        return True
+
+    held = unpushed[1].strip()
+    if held not in ("", "0"):
+        report.exit_code = REFUSED
+        report.lines.append(
+            f"{held} commit(s) are on this checkout and not on origin/{SOURCE}. A pull "
+            f"request carries what the remote has, so these would not travel — and the "
+            f"{count} counted above describe a branch GitHub cannot see. "
+            f"Run `git push origin {SOURCE}` first."
+        )
+        return True
+
     report.lines.append(f"{count} commit(s) ahead of origin/{TARGET}")
     return False
 

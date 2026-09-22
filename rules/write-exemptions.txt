@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-09
 # Files the Squad produces OUTSIDE `<project>/.squad/`, and what forces each one.
 #
 # THE RULE THIS FILE IS AN EXCEPTION TO

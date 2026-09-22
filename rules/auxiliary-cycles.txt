@@ -1,3 +1,4 @@
+# rule-id: SQ-CYC-01
 # CONSUMER PROJECT cycles that run alongside the kit's chain.
 #
 # This file arrives empty on purpose. `rules/squad-map.md` is the KIT's 360º view of

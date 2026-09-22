@@ -28,6 +28,7 @@ import fnmatch
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -302,11 +303,248 @@ def _targets(unquoted: str, branch: str) -> bool:
 _GIT_VERB_QUOTED = re.compile(r"""(^|[^\w.])(git\s+)(['"])([a-z][\w-]*)\3""")
 
 
+#: The command NAME in quotes. `"git" checkout main` is the simplest real invocation
+#: after the bare line, and it never blocked: `_runs_git` answers True — the lexer strips
+#: quotes and the discriminant is right — and then every pattern below looks for
+#: `git\s+checkout` in text that reads `"git" checkout` and misses by two characters.
+#:
+#: Pre-existing, and found only when somebody tested the TRIVIAL case. The exotic ones
+#: had been swept three times over.
+#:
+#: Only in COMMAND POSITION: start of string, or after a separator. A quoted `git`
+#: inside `echo "'git' checkout main is forbidden"` is a citation and stays quoted, so
+#: the mention keeps reading as a mention.
+_GIT_NAME_QUOTED = re.compile(r"""(^|[;&|(){}]\s*|^\s*)(['"])(git)\2(?=\s)""")
+
+
 def unquote_git_verb(command: str) -> str:
-    return _GIT_VERB_QUOTED.sub(r"\1\2\4", command)
+    return _GIT_VERB_QUOTED.sub(r"\1\2\4", _GIT_NAME_QUOTED.sub(r"\1\3", command))
+
+
+#: Commands that EXECUTE the rest of the line. A wrapper does not occupy the command
+#: position — it holds it open, and it holds it open across its OWN flags and arguments,
+#: not merely across the next token.
+#:
+#: That distinction is the whole rule, and it arrived as a contrast rather than a case:
+#: `xargs git checkout` blocked while `xargs -I{} git checkout {}` did not, so the
+#: wrapper was never the thing closing the position — the flag between the wrapper and
+#: `git` was. Same shape in `timeout 5 git …` (the `5`) and `env -i git …` (the `-i`),
+#: while `env GIT_DIR=x git …` and `nohup git … &` blocked because there the command
+#: comes immediately after. One rule replaces the special case each of those would need.
+_WRAPPERS = frozenset({
+    "env", "sudo", "time", "timeout", "nohup", "nice", "ionice", "stdbuf", "setsid",
+    "xargs", "watch", "command", "exec", "builtin", "doas", "find", "parallel",
+})
+
+#: Wrappers that open the command position after a MARKER rather than after a run of
+#: flags. `find … -exec git checkout main \;` and `parallel git checkout ::: main`
+#: execute the rest of the line exactly as `xargs` does; what differs is where the
+#: command starts. Without this, skipping "flags and values" walks straight past
+#: `-exec` and lands on `git` with the position already closed.
+#: `parallel` is deliberately NOT here, and the asymmetry is the reason: its command
+#: comes BEFORE the marker (`parallel git checkout ::: main`) while `find`'s comes
+#: after (`find . -exec git checkout main \;`). Treating them alike skipped past the
+#: command in one to reach the arguments of the other. `parallel` is an ordinary
+#: wrapper — the position opens straight after its flags.
+_COMMAND_MARKERS = {"find": ("-exec", "-execdir", "-ok", "-okdir")}
+
+#: Shell keywords that open a command position without being one.
+_KEYWORDS = frozenset({"then", "else", "do", "!", "{", "("})
+
+#: Where one command ends and the next begins. A `git` token after any of these opens a
+#: new command; anywhere else it is an argument to the command already running.
+#:
+#: `(` and `{` are here too: a subshell or a group opens a command position, and
+#: `(git checkout main)` is as much an invocation as the bare line.
+_SEPARATORS = frozenset({"|", "||", "&&", ";", ";;", "&", "(", ")", "{", "}", "\n"})
+
+#: Commands that take SHELL as an argument rather than a path. `sh -c "git …"` is the
+#: heredoc rule with the argument in place of the body, and leaving it out meant
+#: `bash <<EOF` blocked while `bash -c` passed — one fact with two answers.
+_SHELL_FLAG = frozenset({"-c"})
+
+#: `eval "git checkout"` takes SHELL as an argument rather than wrapping a command, so
+#: its arguments are read as command text rather than skipped.
+_EVALUATORS = frozenset({"eval"})
+
+
+#: Commands whose heredoc body IS shell and must keep being read as such.
+_INTERPRETERS = frozenset({"bash", "sh", "zsh", "dash", "ksh", "python", "python3"})
+
+#: `<<EOF`, `<<-EOF`, `<<'EOF'`, `<<"EOF"` — the delimiter, however it is written.
+_HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][\w-]*)\1")
+
+
+def _split_heredocs(command: str) -> tuple[str, list[str], bool]:
+    r"""`(shell, bodies_that_are_shell, readable)`.
+
+    A heredoc body is DATA, not shell. A markdown table written into a document arrives
+    as `cat > d.md <<EOF` / `| forbidden | git checkout main |` / `EOF`; the `|` are
+    table cells and `shlex` reads them as pipes, so `git` lands in command position and
+    a document ABOUT the rule is refused as a violation of it.
+
+    Two bodies are NOT data and are returned to be read as shell in their own right:
+
+      - one fed to an interpreter — `bash <<EOF` really does execute what follows, and
+        treating it as data would hand anyone a two-line bypass of every guard here;
+      - none at all, when the terminator never arrives: the body swallows the rest of
+        the command, nothing after it can be read, and `readable=False` says so.
+    """
+    lines = command.splitlines()
+    shell: list[str] = []
+    bodies: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        shell.append(line)
+        match = _HEREDOC_RE.search(line)
+        index += 1
+        if not match:
+            continue
+        first = line.strip().split()
+        base = first[0].rsplit("/", 1)[-1] if first else ""
+        delimiter = match.group(2)
+        body: list[str] = []
+        while index < len(lines) and lines[index].strip() != delimiter:
+            body.append(lines[index])
+            index += 1
+        if index >= len(lines):
+            # No terminator. What the body swallowed cannot be read, so nothing here
+            # may be cleared.
+            return "\n".join(shell), bodies, False
+        shell.append(lines[index])  # the terminator; the body it closed is dropped
+        index += 1
+        if base in _INTERPRETERS:
+            bodies.append("\n".join(body))
+    return "\n".join(shell), bodies, True
+
+
+def _runs_git(command: str) -> bool:
+    r"""Whether this shell text actually INVOKES git, rather than mentioning it.
+
+    WHY POSITION AND NOT A PATTERN. A consumer measured four payloads on this tree:
+    `git checkout main` (runs git), and `echo "…git checkout main"`, a heredoc carrying
+    the phrase, and `grep -n "git checkout main" rules/git-safety.md` — none of which run
+    any git. All four were refused. The discriminant was not quoting but whether an
+    argument followed, so `echo "…git checkout"` passed and the same line with one more
+    word did not.
+
+    The cost is not the refusal. Every rule file, ADR and record in this ecosystem that
+    names a forbidden command becomes unwritable by heredoc, which is how documents are
+    written here — and the workaround is to reshape the command until the guard goes
+    quiet. A guard that teaches evasion has inverted its purpose, and the evasion
+    transfers to the case that is real.
+
+    A LOOSER PATTERN WAS NEVER THE ANSWER: letting the real command through is the
+    expensive failure. What separates the four is whether `git` sits in COMMAND
+    POSITION. `shlex` answers that exactly, and where it cannot answer — an unbalanced
+    quote — this returns True, so an unparseable command stays refused. Fail-closed by
+    construction, not by hope.
+    """
+    shell, interpreted, readable = _split_heredocs(command)
+    if not readable:
+        return True
+    # A body fed to an interpreter is a command in its own right, and is read as one.
+    if any(_runs_git(body) for body in interpreted):
+        return True
+    try:
+        tokens = _shell_tokens(shell)
+    except ValueError:
+        # Unbalanced quoting. The text cannot be read, so it cannot be cleared.
+        return True
+
+    expecting_command = True
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        index += 1
+        if token in _SEPARATORS:
+            expecting_command = True
+            continue
+        if not expecting_command:
+            continue
+        if token in _KEYWORDS or "=" in token.split("/")[0]:
+            # A keyword, or a `VAR=value` assignment: the command is still ahead.
+            continue
+        base = token.rsplit("/", 1)[-1]
+        if base == "git":
+            return True
+        if base in _EVALUATORS:
+            # `eval "git checkout main"`: the ARGUMENT is shell, and the quotes are gone
+            # by the time the lexer is done — so each following token is read as its own
+            # command text.
+            while index < len(tokens) and tokens[index] not in _SEPARATORS:
+                if _runs_git(tokens[index]):
+                    return True
+                index += 1
+            continue
+        if base in _WRAPPERS:
+            markers = _COMMAND_MARKERS.get(base)
+            if markers:
+                # The command starts after the marker, and everything before it is the
+                # wrapper's own expression — `find . -name x -exec …` has a bare `.`
+                # and a bare `x` that the flag-skipping below would stop on.
+                while index < len(tokens) and tokens[index] not in markers:
+                    if tokens[index] in _SEPARATORS:
+                        break
+                    index += 1
+                if index < len(tokens) and tokens[index] in markers:
+                    index += 1
+                continue
+            # Skip the wrapper's own flags and their values, then leave the position
+            # open for whatever it wraps. `-I{}`, `-n1`, `--signal=KILL`, a bare `5`
+            # for `timeout`, `-i` for `env` — none of them is the command.
+            while index < len(tokens):
+                nxt = tokens[index]
+                if nxt in _SEPARATORS:
+                    break
+                if nxt.startswith("-") or nxt.isdigit() or "=" in nxt.split("/")[0]:
+                    index += 1
+                    continue
+                break
+            continue
+        if base in _INTERPRETERS:
+            # `sh -c "git checkout main"` — the argument after `-c` is shell, read as
+            # its own command, exactly as a heredoc body fed to the same interpreter is.
+            while index < len(tokens) and tokens[index].startswith("-"):
+                flag = tokens[index]
+                index += 1
+                if flag in _SHELL_FLAG and index < len(tokens):
+                    if _runs_git(tokens[index]):
+                        return True
+                    index += 1
+            continue
+        # Anything else occupies the command position, so every `git` after it is that
+        # command's argument — including the ones inside a heredoc it is fed.
+        expecting_command = False
+    return False
+
+
+def _shell_tokens(text: str) -> list[str]:
+    r"""Tokens with shell OPERATORS separated out, which `shlex.split` does not do.
+
+    `shlex.split("echo hi; git checkout main")` returns `hi;` as one token and drops the
+    newline in `echo ok\ngit checkout main` entirely — so a separator list never matched
+    and only the FIRST command position in a string was ever found. Measured by the
+    consumer that reported the false positives, in the other direction: six real
+    invocations passed, every one of them `git` in a command position that was not the
+    first.
+
+    `punctuation_chars=True` is what makes `;`, `|`, `&&`, `(` and `)` their own tokens.
+    Newlines are turned into `;` first, because the lexer treats them as plain
+    whitespace and a line break ends a command exactly as a semicolon does.
+    """
+    lexer = shlex.shlex(text.replace("\n", " ; "), posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    return list(lexer)
 
 
 def check_git(command: str) -> str | None:
+    # Asked FIRST, because everything below reads the text for git verbs and a citation
+    # carries the same words as an invocation. See `_runs_git` for the measurement.
+    if not _runs_git(command):
+        return None
+
     cmd = unquote_git_verb(strip_git_globals(unquote_git_verb(command)))
 
     if re.search(r"git\s+checkout(\s|$)", cmd):
@@ -664,6 +902,54 @@ def _names_a_path(token: str, project_dir: Path) -> bool:
         return False
 
 
+#: Commands whose first non-flag argument is a PATTERN rather than a path.
+_SEARCHERS = frozenset({"grep", "egrep", "fgrep", "rg", "ag", "ack"})
+
+#: Flags of those commands that take a value, so the value is not mistaken for the
+#: pattern. `-e` is the interesting one: it names the pattern explicitly.
+_SEARCH_FLAGS_WITH_VALUE = frozenset({"-e", "--regexp", "--include", "--exclude",
+                                      "--exclude-dir", "-f", "--file", "-m",
+                                      "--max-count", "-A", "-B", "-C", "-g", "-t"})
+
+
+def _search_patterns(command: str) -> set[str]:
+    """Tokens that are a search PATTERN, in any search invoked by this command.
+
+    Returned as a set of bare tokens rather than positions, because the caller
+    re-tokenises with its own regex and cannot be handed indices. A pattern that happens
+    to equal a real path in the same command is therefore not exempted — which is the
+    safe direction, and `test_a_pattern_and_a_credential_target_together_is_refused`
+    pins it.
+    """
+    patterns: set[str] = set()
+    try:
+        tokens = shlex.split(command, comments=False)
+    except ValueError:
+        return patterns
+
+    index = 0
+    while index < len(tokens):
+        base = tokens[index].rsplit("/", 1)[-1]
+        if base not in _SEARCHERS:
+            index += 1
+            continue
+        index += 1
+        while index < len(tokens):
+            token = tokens[index]
+            if token in _SEARCH_FLAGS_WITH_VALUE:
+                if token in ("-e", "--regexp") and index + 1 < len(tokens):
+                    patterns.add(tokens[index + 1])
+                index += 2
+                continue
+            if token.startswith("-") and len(token) > 1:
+                index += 1
+                continue
+            patterns.add(token)  # the first bare argument: the pattern
+            break
+        index += 1
+    return patterns
+
+
 def check_credential_read(command: str, project_dir: Path) -> str | None:
     """Refuse a shell command that reads a path `settings.json` denies to `Read`.
 
@@ -686,7 +972,28 @@ def check_credential_read(command: str, project_dir: Path) -> str | None:
     if not globs or not _READERS_RE.search(command):
         return None
 
+    # The scan runs over the command with the SEARCH PATTERNS removed. Comparing tokens
+    # against the patterns directly does not work: this regex splits
+    # `import\.meta\.env` into `import`, `.meta` and `.env`, and none of the pieces
+    # equals the whole pattern. Removing the pattern text and asking whether the token
+    # still appears answers the real question — is this path named ANYWHERE other than
+    # inside the expression being searched for.
+    outside = command
+    for pattern in _search_patterns(command):
+        outside = outside.replace(pattern, " ", 1)
+
     for token in re.findall(r"[\w./~@+-]+", command):
+        if token not in outside:
+            # The PATTERN of a search is not a path being read. A consumer measured
+            # `grep -rnE "import\.meta\.env" packages/` refused with "`.env` matches
+            # `.env`, which settings.json refuses to Read" — no file was opened; the
+            # literal sat inside the expression being searched FOR. That refusal is
+            # worse than a plain false block, because it accuses the operator of going
+            # after a credential.
+            #
+            # Only the pattern is exempt. Every other argument is still checked, so
+            # `grep -rn ".env" .env` still refuses on the target.
+            continue
         if not _names_a_path(token, project_dir):
             continue
         name = token.rsplit("/", 1)[-1]

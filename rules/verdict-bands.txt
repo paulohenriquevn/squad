@@ -1,3 +1,4 @@
+# rule-id: SQ-VRD-03
 # Which band each verdict is in — one table, one owner
 #
 # WHY THIS FILE EXISTS

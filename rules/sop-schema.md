@@ -1,4 +1,5 @@
 # SOP schema — the shape of an operating procedure
+<!-- rule-id: SQ-SCH-01 -->
 
 **Mechanised by:** `mechanisms/gates/check_sop_structure.py` (shape and review date) · `mechanisms/gates/check_sop_run.py` (the run record accounts for the procedure)
 

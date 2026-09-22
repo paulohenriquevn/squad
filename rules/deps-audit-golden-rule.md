@@ -1,4 +1,5 @@
 # Deps-Audit Golden Rule
+<!-- rule-id: SQ-GLD-02 -->
 
 Locked unbreakable contract that `/deps-audit` reads to score findings and gate `/plan-confidence`. Mirrors the honesty-gate/code-quality golden-rule pattern: locked sections require an ADR to change; per-project sections are tuned in `deps-audit-allowlist.txt`.
 

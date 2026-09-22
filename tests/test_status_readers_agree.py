@@ -48,6 +48,10 @@ READERS = {
     # waiting on got an answer. It gates on status now (REQUIRES_STATUS), so it
     # decides, so it is pinned like the rest.
     "mechanisms/fleet/pipeline_orchestrator.py": "decides which status a finished stage may write",
+    # Ported from a consumer session 2026-09-21. It fails only for items about to be
+    # planned against, so the status is the whole scope of its refusal: a settled item's
+    # pointers are history and may name a tree that has since moved.
+    "mechanisms/gates/check_evidence_freshness.py": "decides whose dead pointers fail",
 }
 
 

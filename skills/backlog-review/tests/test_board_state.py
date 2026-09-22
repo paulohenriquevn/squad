@@ -33,9 +33,9 @@ def _by_id(state: dict) -> dict:
     return {i["id"]: i for i in state["items"]}
 
 
-def _end(cycle: str, slug: str, verdict: str = "PASS") -> dict:
+def _end(cycle: str, slug: str, verdict: str = "PASS", hours_ago: float = 0.4) -> dict:
     return {"type": "cycle:phase:end", "cycle": cycle, "slug": slug,
-            "verdict": verdict, "timestamp": "2026-08-31T10:00:00Z"}
+            "verdict": verdict, "timestamp": _ago(hours_ago)}
 
 
 # ── position without a stream ─────────────────────────────────────────────────
@@ -344,9 +344,24 @@ def test_a_board_without_a_backlog_still_reports_the_lead(tmp_path: Path) -> Non
 # verdict of a phase already over, and nothing on the page said anything was running.
 
 
-def _start(cycle: str, slug: str) -> dict:
+def _ago(hours: float) -> str:
+    """A stamp relative to NOW, never a frozen date.
+
+    These helpers carried `2026-08-31T13:00:00Z`, and a fixed past date is the wrong
+    instrument for a question about the present: as of 2026-09-21 that start was three
+    weeks old and the tests asserted the board still called it running. They passed only
+    because nothing consulted the clock — and the defect they were therefore unable to
+    catch is the one this file's siblings record, a consumer headlining `WORKING B-184`
+    over a start that had died 20 hours earlier.
+    """
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat().replace(
+        "+00:00", "Z")
+
+
+def _start(cycle: str, slug: str, hours_ago: float = 0.5) -> dict:
     return {"type": "cycle:phase:start", "cycle": cycle, "slug": slug,
-            "timestamp": "2026-08-31T13:00:00Z"}
+            "timestamp": _ago(hours_ago)}
 
 
 def test_a_started_phase_with_no_end_is_running(tmp_path: Path) -> None:

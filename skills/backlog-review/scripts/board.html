@@ -165,6 +165,41 @@ h1 {
 .tally.is-shipped b { color: var(--shipped); }
 .tally.is-killed  b { color: var(--killed); }
 
+/* The notices panel. Collapsed it costs one line; open it is capped and scrolls, so
+   it can never take the screen from the columns again. */
+.notices {
+  margin: 0 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raise, transparent);
+}
+.notices > summary {
+  cursor: pointer;
+  padding: 7px 11px;
+  font-size: 12px;
+  color: var(--ink-2);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.notices > summary::-webkit-details-marker { display: none; }
+.notices > summary::before {
+  content: "▸";
+  color: var(--ink-3);
+  transition: transform .12s ease;
+}
+.notices[open] > summary::before { transform: rotate(90deg); }
+.notices > summary b { color: var(--impeded); font-weight: 600; }
+.notices > summary:focus-visible { outline: 2px solid var(--moving); outline-offset: -2px; }
+.notices-body {
+  /* A THIRD of the viewport, never more. The number is the point: whatever the panel
+     holds, two thirds of the screen stay with the board. */
+  max-height: 33vh;
+  overflow-y: auto;
+  padding: 0 11px 4px;
+}
+
 .notice {
   margin: 0 0 12px;
   padding: 8px 11px;
@@ -1229,6 +1264,12 @@ function renderRail(lead) {
 
 let LAST_STATE = null;
 let SCOPE = "all";
+//: Whether the notices panel is expanded. Remembered, because a reader who opened it
+//: to work through the list does not want it shut on every SSE re-render — and the
+//: page re-renders whenever the stream moves.
+let NOTICES_OPEN = (() => {
+  try { return localStorage.getItem("board.notices") === "1"; } catch (_) { return false; }
+})();
 let QUERY = "";
 let DOMAIN = "";
 let TAB = "cycle";
@@ -1656,7 +1697,29 @@ function render(state) {
       ${e.events} event(s)${verdict}. The stream records this and no item claims it;
       name the item in the plan body, or file one.</p>`);
   }
-  el("notice").innerHTML = notices.join("");
+  // The notices are COLLAPSED by default, and that is a layout decision with a
+  // measurement behind it. Rendered open, ten of them occupied 761px of an 876px
+  // viewport and left the columns — the thing the board exists to show — with 17
+  // pixels. A board whose content gets 2% of the screen is a board nobody reads.
+  //
+  // Collapsed, not removed: each one names work the stream could not place, and the
+  // reader's next move needs the slug. The count stays visible so a page with eight
+  // problems never looks like a page with none.
+  const noticeBox = el("notice");
+  if (!notices.length) {
+    noticeBox.innerHTML = "";
+  } else {
+    const open = NOTICES_OPEN ? " open" : "";
+    noticeBox.innerHTML =
+      `<details class="notices"${open}><summary><b>${notices.length}</b> ` +
+      `thing${notices.length === 1 ? "" : "s"} the stream carries that this board ` +
+      `cannot place</summary><div class="notices-body">${notices.join("")}</div></details>`;
+    const det = noticeBox.querySelector("details");
+    det.addEventListener("toggle", () => {
+      NOTICES_OPEN = det.open;
+      try { localStorage.setItem("board.notices", det.open ? "1" : "0"); } catch (_) {}
+    });
+  }
 
   const shown = all.filter(matches);
   // Narrowing is stated. A board that quietly drops 140 items reads as a board with

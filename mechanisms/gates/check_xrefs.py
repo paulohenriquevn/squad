@@ -64,6 +64,8 @@ from ecosystem_utils import find_ecosystem_dir as _find_ecosystem_dir_impl  # no
 from squad.markdown import prose_only  # noqa: E402 — post-bootstrap import
 from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
+    LEGACY_ROUTING_ROOTS,
+    ROUTING_TABLE,
     is_cycle_generated_skill,
     wiki_dir,
 )
@@ -749,6 +751,20 @@ def _check_referenced_rules_exist(ctx: "_Xrefs") -> list[dict[str, Any]]:
     ctx.existing_rule_files = ({p.name for p in ctx.rules_dir.glob("*")}
                                if ctx.rules_dir.exists() else set())
 
+        #: Rule-shaped filenames a document may name without the file existing.
+    #:
+    #: `domain-routing.txt` lived under `rules/` until `squad.paths` moved the write
+    #: destination to the project's write root. The prose that explains the move names
+    #: the old path, and so do the fallback readers that keep a pre-move install
+    #: working — both history, neither a live pointer. Demanding the old path exist
+    #: forces the kit to keep SHIPPING a file nothing writes to, which is exactly what
+    #: it was still doing three weeks later.
+    #:
+    #: Derived from `squad.paths`, which owns where data lives and therefore owns which
+    #: places are former. A hand-kept second list here is the drift this kit keeps
+    #: finding in itself.
+    _RETIRED_RULE_PATHS = frozenset({ROUTING_TABLE}) if LEGACY_ROUTING_ROOTS else frozenset()
+
     def _scan_for_rule_refs(path: Path) -> None:
         try:
             content = path.read_text(encoding="utf-8-sig")
@@ -757,6 +773,17 @@ def _check_referenced_rules_exist(ctx: "_Xrefs") -> list[dict[str, Any]]:
         for m in RULES_REF_RE.finditer(content):
             rule_name = m.group(1)
             if rule_name in ctx.existing_rule_files:
+                continue
+            if rule_name in _RETIRED_RULE_PATHS:
+                # A file that MOVED is still named in the prose that explains the move,
+                # and in the fallback readers that keep an old install working. Both are
+                # history, not a live pointer, and demanding the old path exist forces
+                # the kit to keep shipping a file nothing writes to — which is how
+                # `rules/domain-routing.txt` was still travelling to every consumer
+                # three weeks after `squad.paths` stopped writing there.
+                #
+                # The list is not this gate's to invent: `squad.paths` owns where data
+                # lives, so it owns which of those places are retired.
                 continue
             findings.append({
                 "severity": "FAIL",

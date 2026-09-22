@@ -1,3 +1,4 @@
+# rule-id: SQ-VRD-02
 # CONSUMER PROJECT verdict classifications.
 #
 # This file arrives empty on purpose. `verdict-bands.txt` beside it is the KIT's

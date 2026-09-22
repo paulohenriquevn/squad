@@ -1,3 +1,4 @@
+# rule-id: SQ-CFG-05
 # Decision delegation — what the sponsor handed to the system, and what stayed
 #
 # A backlog item whose `blocked_by` names no other item is AWAITING_HUMAN: the

@@ -1,4 +1,5 @@
 # Contribution conventions
+<!-- rule-id: SQ-CNV-01 -->
 
 What a commit, a pull request, an issue and a name have to carry. **The kit's contract**
 — a consumer overrides it in `rules/contribution-overrides.txt` without editing this

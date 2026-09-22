@@ -170,6 +170,20 @@ def check_routing(project: Path) -> Check:
     """Without a routing row, gate G1 refuses every item at intake."""
     table = routing_table(project)
     if table is None:
+        if is_the_kit_itself(project):
+            # The same fact the empty-table branch below already knew, arriving through
+            # the other door. A table with no rows and no table at all are both "this
+            # tree has no consumer's repositories to route", and this branch called the
+            # second one a FAILURE while the first was correctly `not measurable`.
+            #
+            # It only started firing on 2026-09-21, when the kit stopped shipping a
+            # placeholder under `rules/` — the file had been standing in for the
+            # distinction, which is why the gap went unseen.
+            return Check("domain routing", None,
+                         "no routing table, and this is the kit — the table describes "
+                         "a consumer's repositories and is written into the project's "
+                         "write root by `/backlog-init`. Not measurable here, and not "
+                         "a failure of this tree.")
         return Check("domain routing", False,
                      "no domain-routing.txt anywhere — gate G1 refuses every item "
                      "with `unroutable_repo`, so nothing can be filed",

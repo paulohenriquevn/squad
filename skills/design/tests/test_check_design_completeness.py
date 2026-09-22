@@ -408,7 +408,15 @@ def test_the_design_panel_spans_two_model_families_or_says_why_not() -> None:
              if ln.startswith("reviewer") and "design" in ln.split("|")[0]]
 
     assert len(seats) == 3, seats
-    families = {ln.split("|")[3].strip() for ln in seats}
+    # Column 3 is the PROVIDER (`builtin` for every seat); the family comes from the
+    # MODEL in column 2, and `review_panel.family_of` is what derives it. Reading
+    # column 3 made every roster look like one family — including a roster that spans
+    # two — so the waiver branch below fired for a panel that never needed it.
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "mechanisms" / "cycle"))
+    from review_panel import family_of
+
+    families = {family_of(ln.split("|")[2].strip()) for ln in seats}
     if len(families) >= 2:
         return
 

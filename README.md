@@ -189,7 +189,11 @@ rots once per copy, one agent per role is too coarse to hold "this RDS instance
 is a protected unit".
 
 Routing is deterministic (`mechanisms/cycle/route_domain.py`) and reads its table from
-`rules/domain-routing.txt` — the file the project owns and the installer preserves.
+`.squad/domain-routing.txt` — the project's write root, which the project owns and the
+installer never overwrites. An install made before 2026-09-11 keeps its table under
+`rules/`, and `squad.paths.routing_table` still reads there so an old consumer is not
+stranded; `write_routing_table` names the current destination and nothing writes to the
+old one.
 The INVARIANTS that table must satisfy stay in `rules/cycle-backlog.md`, which is the
 kit's contract: one table, one truth, and the rule that governs it kept where a
 consumer cannot edit it. A domain naming a specialist

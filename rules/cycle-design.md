@@ -1,4 +1,5 @@
 # Cycle: DESIGN
+<!-- rule-id: SQ-CYC-06 -->
 
 Draw the system before any item is filed against it.
 

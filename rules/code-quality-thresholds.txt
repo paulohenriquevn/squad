@@ -1,3 +1,4 @@
+# rule-id: SQ-THR-02
 # Code-quality thresholds — per-project overrides for detector floors + behavioral knobs.
 #
 # Authoritative source: rules/code-quality-golden-rule.md § 6 (Per-project tuning).

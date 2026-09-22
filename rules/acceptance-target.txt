@@ -1,3 +1,4 @@
+# rule-id: SQ-TGT-01
 # How the RELEASED delivery of this project is reached — PER-PROJECT, edit this.
 #
 # cycle-acceptance exercises the delivery as its user meets it. It cannot invent

@@ -1,4 +1,5 @@
 # Cycle Rule Schema
+<!-- rule-id: SQ-CYC-16 -->
 
 Canonical schema for every `rules/cycle-*.md` file. Defines required vs optional sections, the canonical vocabulary for verdicts and completion promises, and the rationale for why each cycle has a vocabulary of its own.
 

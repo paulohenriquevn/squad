@@ -1,4 +1,5 @@
 # Cycle: REVIEW
+<!-- rule-id: SQ-CYC-15 -->
 
 Source of Truth for the pre-merge review cycle.
 

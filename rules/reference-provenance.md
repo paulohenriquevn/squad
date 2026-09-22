@@ -1,4 +1,5 @@
 # Reference Provenance
+<!-- rule-id: SQ-PRV-01 -->
 
 Source of Truth for how third-party study material is kept OUT of this project.
 `.squad/study-material/` holds material we depend on and study — tool documentation,
