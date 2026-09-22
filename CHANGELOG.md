@@ -40,7 +40,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 - **The release mechanism could not express the shape its own consumers release in.**
   `promote_unreleased.py --version` took one semver and refused
-  `create-theokit 3.0.2, @theokit/http 2.3.0, theokit 0.69.0`, while the three sections
+  `create-toolkit 3.0.2, @acme/http 2.3.0, acme-core 0.69.0`, while the three sections
   below the one being written in that CHANGELOG were multi-package headings of exactly that
   form. So the script could not perform the promotion `cycle-release.md` prescribes for the
   common case, and the promotion was done by hand — the heading read off the file rather

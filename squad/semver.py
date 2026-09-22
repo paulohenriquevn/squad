@@ -90,7 +90,7 @@ def parse_release(line: str) -> list[tuple[str | None, Version]] | None:
     A monorepo cuts several packages at once, and Keep-a-Changelog has no opinion about
     it — the heading is free text between brackets. Measured 2026-09-22: the promotion
     mechanism took ONE semver, while the three sections below the one being written read
-    `## [create-theokit 3.0.1, @theokit/http 2.2.0, theokit 0.68.0]` and two more like it.
+    `## [create-toolkit 3.0.1, @acme/http 2.2.0, acme-core 0.68.0]` and two more like it.
     The mechanism could not perform the promotion its own cycle rule prescribes, for the
     shape that repository releases in most of the time.
 

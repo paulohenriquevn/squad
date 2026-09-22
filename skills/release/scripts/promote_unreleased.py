@@ -45,7 +45,7 @@ def main() -> int:
     # the permanent record, and the reader was then told "version section [1.2.0] not
     # found" — pointing at their argument instead of at the malformed heading three
     # commits back. This is the last writer before the record hardens.
-    # ONE version, or several — `theokit 0.69.0, @theokit/http 2.3.0`. A monorepo cuts
+    # ONE version, or several — `acme-core 0.69.0, @acme/http 2.3.0`. A monorepo cuts
     # packages together and Keep-a-Changelog has no opinion about the text between the
     # brackets; this took a single semver and refused the shape its own consumers release
     # in most of the time, so the promotion was performed by hand. Every component is still

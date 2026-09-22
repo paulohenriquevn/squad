@@ -61,6 +61,7 @@ These dimensions return empty `reasons` in M2 output. The composite formula reno
 A plan is INVALID and CANNOT score above 49 when any of these fire:
 
 - **Coverage Matrix < 100%** (gaps not mapped to tasks) — capped at 49 (M2 enforced). Stable identifier: `coverage_lt_100`.
+- **Coverage Matrix unreadable** (the table's header names no task column this parser knows) — capped at 49, the same INVALID consequence, under a stated cause. Stable identifier: `coverage_matrix_unreadable`. Never fires beside `coverage_lt_100`: two caps for one cause reads as two problems, and `coverage_lt_100` on a table nobody read is a true statement about a false premise. The `Task(s)` column is found by header NAME — `Task(s)` and `Closed by` are both recognised — so this fires only when neither is present.
 - **Fabricated citation** (file/symbol in `Evidence:` doesn't exist in repo) — capped at 49 (M3 future). Stable identifier: `fabricated_citation`.
 - **An applicable `*-patterns` skill neither cited nor ADR-overridden.** Stable identifier: `patterns_skill_ignored`.
 - **A dependency audit that found something insecure.** Stable identifier: `deps_audit_insecure`.

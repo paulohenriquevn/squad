@@ -1,13 +1,13 @@
 """`--version` took one semver, and a monorepo cuts three packages at once.
 
 Measured 2026-09-22 promoting a release that published three packages together.
-`promote_unreleased.py --version 'create-theokit 3.0.2, @theokit/http 2.3.0, theokit
+`promote_unreleased.py --version 'create-toolkit 3.0.2, @acme/http 2.3.0, acme-core
 0.69.0'` refused with *not a semver version ... Expected MAJOR.MINOR.PATCH*, while the
 three sections below the one being written read:
 
-    ## [create-theokit 3.0.1, @theokit/http 2.2.0, theokit 0.68.0] - 2026-09-21
-    ## [theokit 0.67.0] - 2026-09-18
-    ## [@theokit/agents 15.0.0, @theokit/presenter 0.10.0, theokit 0.66.1] - 2026-09-18
+    ## [create-toolkit 3.0.1, @acme/http 2.2.0, acme-core 0.68.0] - 2026-09-21
+    ## [acme-core 0.67.0] - 2026-09-18
+    ## [@acme/agents 15.0.0, @acme/presenter 0.10.0, acme-core 0.66.1] - 2026-09-18
 
 So the mechanism could not perform the promotion its own cycle rule prescribes
 (`cycle-release.md` — "The CHANGELOG moves once, at the final") for the shape that
@@ -39,13 +39,13 @@ def test_a_bare_semver_is_one_unnamed_component() -> None:
 
 
 def test_three_packages_parse_in_the_order_written() -> None:
-    parsed = parse_release("create-theokit 3.0.2, @theokit/http 2.3.0, theokit 0.69.0")
+    parsed = parse_release("create-toolkit 3.0.2, @acme/http 2.3.0, acme-core 0.69.0")
 
     assert parsed is not None
     assert [(n, str(v)) for n, v in parsed] == [
-        ("create-theokit", "3.0.2"),
-        ("@theokit/http", "2.3.0"),
-        ("theokit", "0.69.0"),
+        ("create-toolkit", "3.0.2"),
+        ("@acme/http", "2.3.0"),
+        ("acme-core", "0.69.0"),
     ]
 
 
@@ -55,16 +55,16 @@ def test_one_bad_component_refuses_the_whole_line() -> None:
     That heading is never edited again, and the reader who later cannot find the section
     is told their argument is wrong rather than that the record is.
     """
-    assert parse_release("theokit 0.69.0, @theokit/http 2.3.O") is None
+    assert parse_release("acme-core 0.69.0, @acme/http 2.3.O") is None
 
 
 def test_a_leading_v_is_refused_here_as_everywhere() -> None:
-    assert parse_release("theokit v0.69.0") is None
+    assert parse_release("acme-core v0.69.0") is None
     assert parse_release("v1.2.0") is None
 
 
 def test_a_component_with_no_version_is_refused() -> None:
-    assert parse_release("theokit, @theokit/http 2.3.0") is None
+    assert parse_release("acme-core, @acme/http 2.3.0") is None
 
 
 def test_empty_is_refused_rather_than_read_as_zero_packages() -> None:
@@ -78,7 +78,7 @@ def test_a_prerelease_component_is_parsed_and_left_for_the_caller_to_refuse() ->
     Putting it here would stop `render_release_notes.py`, which legitimately reads an rc
     heading, from using the same reader.
     """
-    parsed = parse_release("theokit 1.2.0-rc.1")
+    parsed = parse_release("acme-core 1.2.0-rc.1")
 
     assert parsed is not None
     assert parsed[0][1].is_prerelease
@@ -98,7 +98,7 @@ CHANGELOG = """# Changelog
 
 - a thing (#1)
 
-## [theokit 0.67.0] - 2026-09-18
+## [acme-core 0.67.0] - 2026-09-18
 
 ### Fixed
 
@@ -118,7 +118,7 @@ def _promote(tmp_path: Path, version: str) -> tuple[int, str, str]:
 
 
 def test_a_multi_package_promotion_writes_the_heading_it_was_given(tmp_path: Path) -> None:
-    line = "create-theokit 3.0.2, @theokit/http 2.3.0, theokit 0.69.0"
+    line = "create-toolkit 3.0.2, @acme/http 2.3.0, acme-core 0.69.0"
 
     code, err, body = _promote(tmp_path, line)
 
@@ -135,7 +135,7 @@ def test_a_single_package_promotion_is_unchanged(tmp_path: Path) -> None:
 
 
 def test_one_bad_component_refuses_and_leaves_the_file_alone(tmp_path: Path) -> None:
-    code, err, body = _promote(tmp_path, "theokit 0.69.0, @theokit/http 2.3.O")
+    code, err, body = _promote(tmp_path, "acme-core 0.69.0, @acme/http 2.3.O")
 
     assert code == 2
     assert "not a release line this kit cuts" in err
@@ -144,7 +144,7 @@ def test_one_bad_component_refuses_and_leaves_the_file_alone(tmp_path: Path) -> 
 
 def test_a_prerelease_in_any_component_refuses_the_line(tmp_path: Path) -> None:
     """Promoting at rc empties [Unreleased] for every package in the heading."""
-    code, err, body = _promote(tmp_path, "theokit 0.69.0, @theokit/http 2.3.0-rc.1")
+    code, err, body = _promote(tmp_path, "acme-core 0.69.0, @acme/http 2.3.0-rc.1")
 
     assert code == 2
     assert "refusing to promote under a pre-release" in err

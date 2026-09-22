@@ -39,7 +39,7 @@ def _section(*markers: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-PEER = "peer/theokit (re-ran check_wired_hooks against this install: 8 of 17 wired .sh)"
+PEER = "peer/consumer-session (re-ran check_wired_hooks against this install: 8 of 17 wired .sh)"
 
 
 def test_a_peer_is_recognised_and_is_not_a_human() -> None:
@@ -64,14 +64,14 @@ def test_a_peer_must_say_what_it_verified() -> None:
     ran against. A peer is another agent with no contract binding it to this document,
     so the measurement beside the name is the entire value of the signature.
     """
-    signoff = read(_section("peer/theokit"))
+    signoff = read(_section("peer/consumer-session"))
 
-    assert signoff.unqualified_peers == ["peer/theokit"]
+    assert signoff.unqualified_peers == ["peer/consumer-session"]
     assert signoff.peer_signers == []
 
 
 def test_a_parenthetical_of_nothing_does_not_qualify() -> None:
-    for empty in ("peer/theokit ()", "peer/theokit (   )", "peer/theokit (ran it)"):
+    for empty in ("peer/consumer-session ()", "peer/consumer-session (   )", "peer/consumer-session (ran it)"):
         signoff = read(_section(empty))
         assert signoff.unqualified_peers == [empty], empty
 
