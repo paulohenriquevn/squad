@@ -106,6 +106,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The system map could draw a piece nobody declared, and the design gate said nothing.**
+  `check_design_completeness` computed coverage one way — every `PIECE-N` in
+  `technical-pieces.md` must appear in the map — and never read the map back. A map naming
+  `PIECE-99` against a list that declares only `PIECE-1` passed in silence. The two
+  readings mean different things: a piece missing from the map is work the drawing forgot;
+  **a piece in the map that nobody declared is the map drawing something no one decided**,
+  or a piece list that lost an entry. `cycle-design` exists to settle the shape before any
+  item is filed against it, so both answers are worth having then. Matched with the same
+  whole-id rule the existing direction uses, for the same measured reason — `PIECE-1` is a
+  substring of `PIECE-10`, and a substring test here would call `PIECE-10` declared on the
+  strength of `PIECE-1`. **Third instance of one class found in one day** — an identifier
+  counted rather than resolved — after the Coverage Matrix counting a row without opening
+  the task it named, and a review finding carrying a path nobody opened.
+
 - **A review finding pointed at a path nobody could open, and the report said nothing.**
   `consolidate_findings` carried each finding's `file`, deduped on it, rendered it and
   computed the verdict from the set — without ever opening it. Probed 2026-09-22: one

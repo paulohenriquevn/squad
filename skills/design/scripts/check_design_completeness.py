@@ -109,6 +109,11 @@ PLACEHOLDER_RE = re.compile(r"\b(?:TBD|TODO|FIXME|XXX|LOREM)\b|\?\?\?", re.IGNOR
 #: eleven pieces and a map naming only PIECE-10 and PIECE-11 — "11 declared, 3 covered".
 #: It fails only in the permissive direction, and it fires on any product with ten or
 #: more pieces.
+#: Every `PIECE-N` a body NAMES, for the reverse of `_mentions`. The negative lookahead
+#: is the same guard: `PIECE-1` must not be harvested out of `PIECE-10`.
+PIECE_IN_TEXT_RE = re.compile(r"\b(PIECE-\d+)\b(?!-?\d)")
+
+
 def _mentions(piece_id: str, body: str) -> bool:
     return re.search(rf"\b{re.escape(piece_id)}\b(?!-?\d)", body) is not None
 
@@ -147,6 +152,10 @@ class Report:
     absent_optional: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     pieces: list[str] = field(default_factory=list)
+    #: Named by the map and declared by nobody. Its own field, because "the map forgot
+    #: a piece" and "the map invented one" are different findings and one number out of
+    #: two questions is the class this fix belongs to.
+    undeclared: list[str] = field(default_factory=list)
     uncovered: list[str] = field(default_factory=list)
     signers: list[str] = field(default_factory=list)
     unticked: int = -1
@@ -317,6 +326,27 @@ def check(project: Path) -> Report:
         map_body = _read_or_empty(design / "system-map.md")
         if rep.pieces and map_body:
             rep.uncovered = [p for p in rep.pieces if not _mentions(p, map_body)]
+            # THE OTHER DIRECTION, which was not computed at all. A map may name a piece
+            # `technical-pieces.md` never declared, and the two readings mean different
+            # things: a piece missing from the map is work the drawing forgot, while a
+            # piece in the map that nobody declared is the map drawing something no one
+            # decided — or a piece list that lost an entry. This cycle exists to settle
+            # the shape before any item is filed against it, so both answers are worth
+            # having then.
+            #
+            # Matched with the same whole-id rule `_mentions` uses, for the same measured
+            # reason: `PIECE-1` is a substring of `PIECE-10`, and a substring test here
+            # would call `PIECE-10` declared on the strength of `PIECE-1`.
+            declared = set(rep.pieces)
+            rep.undeclared = sorted(
+                {pid for pid in PIECE_IN_TEXT_RE.findall(map_body)} - declared,
+                key=lambda pid: int(pid.split("-")[1]))
+            for piece in rep.undeclared:
+                rep.findings.append(Finding(
+                    "piece_not_declared", "major", piece,
+                    f"drawn in the system map and declared in no {PIECES_DOC}. Either "
+                    "the map is drawing a responsibility nobody decided, or the piece "
+                    "list lost an entry — and the map is not the place that decides"))
             for piece in rep.uncovered:
                 rep.findings.append(Finding(
                     "piece_not_in_map", "major", piece,
