@@ -8,6 +8,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The panel premise gate answered a wrong path with a verdict about the roster.**
+  `check_panel_capability.py` returned `VIOLATED` whenever the roster could not be read,
+  on the argument — correct for the DEFAULT path — that a project with no declaration
+  cannot form a panel. With `--panel` given by the caller, the same branch printed
+  `PREMISE VIOLATED — no valid review panel can be formed from rules/review-panel.txt`
+  for a file it had never opened. Measured 2026-09-21: `--panel discover` (the phase name,
+  where a path belongs) reported the premise violated for all three gated phases while the
+  roster on disk in fact HOLDS, and the reader acted on it. A roster the caller named and
+  that is absent establishes nothing about the project's panel, so it is now `UNCHECKED`
+  (exit 2) and the default path keeps `VIOLATED` with its argument intact — the split
+  `check_auditor_coverage.py` already makes on its own side, under the same sentence: an
+  inability to measure must not become a passing measurement, and must not become a
+  failing one either.
+
+- **The panel waiver outlived the obstacle it named, and the roster contradicted the
+  cycle rules it serves.** `rules/review-panel.txt` seated three Anthropic reviewers per
+  gated phase under `single_family_panel = accepted`, whose reason named codex CLI 0.120.0
+  refusing every model the account exposes. Measured 2026-09-21: the installed CLI is
+  **0.154.0**, and `codex exec "Reply with exactly: SEAT_OK"` PRINTS `SEAT_OK` on
+  `gpt-5.5`. The obstacle was gone and the waiver was not — so `cycle-discover.md` and
+  `cycle-plan.md`, which both already name `judge-codex:*` as the orthogonal chair, were
+  describing a seat the roster did not hold. One `argus-pattern-analyst` row per phase now
+  names the judge-codex seat and both waiver keys are deleted; `check_panel_capability.py`
+  reports `9 seats across anthropic, openai` and stops printing the single-family warning,
+  and `convene_panel.py` resolves the seat to family `openai` in all three phases. The
+  design seat is `plan-judge` because judge-codex supplies no design-judge — an
+  approximation the roster states rather than glosses. `tests/test_a_single_family_panel_is_declared_not_assumed.py`
+  asserted the waiver unconditionally, so it failed on a roster that had just got better;
+  it now checks both directions — one family requires the declaration, two or more require
+  its absence — which is the side that was missing and the side the defect was on.
+
 - **The panel waiver named a reason that was false on this machine, and nothing re-read
   it.** `rules/review-panel.txt` declared `single_family_reason = no non-Anthropic
   provider is configured for this project` while `codex` sat on PATH at `/usr/bin/codex`,

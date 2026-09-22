@@ -149,6 +149,7 @@ def check_panel_capability(
     then every item in that phase would halt on an `access` impediment for a cause
     knowable before the first was selected, which is the entire point of asking here.
     """
+    named_by_caller = panel_path is not None
     path = panel_path or default_panel_path()
     resolve = which or shutil.which
     agents = agents_dir(project or repo_root())
@@ -158,7 +159,19 @@ def check_panel_capability(
     except OSError:
         # A project with no panel declaration cannot form a panel. Determinable,
         # therefore a fact rather than a failure to look.
-        return PanelCapability.VIOLATED
+        #
+        # That argument holds for the DEFAULT path and only there. When the CALLER
+        # named the roster, an unreadable file says nothing about the project's panel
+        # — it says the gate was pointed somewhere else, and the two were collapsed
+        # until 2026-09-21. Measured that day: `--panel discover` (a phase name where a
+        # path belongs) printed PREMISE VIOLATED, naming `rules/review-panel.txt` as
+        # the file that cannot form a panel while never having opened it. The roster
+        # it accused HOLDS. `check_auditor_coverage.py` already refuses this shape on
+        # its own side — "the gate was pointed at the wrong tree — it has NOT
+        # established that no audit is required" — and the sentence governs both: an
+        # inability to measure must not become a passing measurement, and it must not
+        # become a failing one either.
+        return PanelCapability.UNCHECKED if named_by_caller else PanelCapability.VIOLATED
 
     try:
         gated = parse_panel_phases(text)
@@ -251,18 +264,23 @@ _MESSAGES = {
         "VIOLATED: `rules/review-panel.txt` is fine and this machine is missing a tool."
     ),
     PanelCapability.UNCHECKED: (
-        "NOT CHECKED — rules/review-panel.txt exists and does not parse.\n"
+        "NOT CHECKED — the roster could not be read: it does not parse, or the "
+        "path this gate was given is not there.\n"
         "\n"
-        "This is not a pass. A reviewer row that announces a reviewer without "
-        "describing one would silently shrink the panel, so it is refused rather "
-        "than skipped."
+        "This is not a pass, and it is not a VIOLATED either. A reviewer row that "
+        "announces a reviewer without describing one would silently shrink the "
+        "panel, so it is refused rather than skipped — and a roster the caller "
+        "named and that is absent establishes nothing about the project's panel, "
+        "so it must not be reported as one that cannot be formed."
     ),
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Check that a review panel can be formed.")
-    ap.add_argument("--panel", type=Path, default=None)
+    ap.add_argument("--panel", type=Path, default=None,
+                    help="PATH to the roster file, not a phase name "
+                         "(default: rules/review-panel.txt)")
     # `--root`, per the contract in `_contract.py`: a caller that does not know
     # which gate it is talking to passes this and it works. This gate resolved the
     # tree implicitly from the working directory, so it could not be pointed at one.

@@ -220,10 +220,22 @@ def test_builtin_reviewers_need_no_binary(tmp_path: Path) -> None:
     assert _check(tmp_path, body) is PanelCapability.HOLDS
 
 
-def test_a_missing_declaration_is_violated_not_unchecked(tmp_path: Path) -> None:
-    """Absence is determinable, so it is a fact rather than a failure to look."""
-    result = check_panel_capability(tmp_path / "nope.txt", which=_on_path("codex"),
-                                    project=_project(tmp_path))
+def test_a_missing_declaration_is_violated_not_unchecked(
+        tmp_path: Path, monkeypatch) -> None:
+    """Absence is determinable, so it is a fact rather than a failure to look.
+
+    The absence has to be at the DEFAULT path for that to be the fact it names. This
+    passed `tmp_path / "nope.txt"` until 2026-09-21, using an explicit path purely as
+    the instrument for "this project has no declaration" — and the instrument became
+    load-bearing when the gate learned to tell a roster the CALLER named from the one
+    it resolves itself. Same intention, an instrument that still matches it.
+    """
+    import check_panel_capability as cpc
+
+    monkeypatch.setattr(cpc, "default_panel_path", lambda: tmp_path / "nope.txt")
+
+    result = cpc.check_panel_capability(None, which=_on_path("codex"),
+                                        project=_project(tmp_path))
 
     assert result is PanelCapability.VIOLATED
 
@@ -327,3 +339,38 @@ def test_the_unreachable_verdict_keeps_the_reason_each_seat_gave(tmp_path) -> No
         assert all(reason for _phase, _agent, reason in seats), (
             "a seat was recorded with no reason")
         assert len(seats) > 1 or len(seats) == 1, seats
+
+
+# ---------------------------------------------------------------------------
+# A roster the CALLER named and that is not there tested nothing.
+#
+# `check_panel_capability` returns VIOLATED when the roster cannot be read, and the
+# module docstring argues for it: "a project that never configured a panel cannot form
+# one, and that is a fact". That argument holds for the DEFAULT path and only there.
+#
+# When the caller passes `--panel` explicitly, an unreadable file says nothing about the
+# project's panel — it says the gate was pointed somewhere else. The two were collapsed,
+# and the output named `rules/review-panel.txt` as the file that "cannot form a panel"
+# while never having opened it. Measured 2026-09-21: `--panel discover` (the phase name,
+# where a path was expected) printed PREMISE VIOLATED for a roster that in fact HOLDS,
+# and the reader concluded the panel was broken.
+#
+# This gate's own sibling already refuses that shape — `check_auditor_coverage.py` exits
+# 2 with "the gate was pointed at the wrong tree — it has NOT established that no audit
+# is required". The governing sentence is the same on both sides: an inability to measure
+# must not become a passing measurement, and it must not become a failing one either.
+# ---------------------------------------------------------------------------
+
+def test_an_explicitly_named_roster_that_is_absent_is_unchecked(tmp_path) -> None:
+    import check_panel_capability as cpc
+
+    absent = tmp_path / "nowhere" / "review-panel.txt"
+
+    result = cpc.check_panel_capability(absent, project=tmp_path)
+
+    assert result is cpc.PanelCapability.UNCHECKED, (
+        "the caller named a roster that is not there; nothing about the project's panel "
+        "was established, and reporting VIOLATED sends the operator to rewrite a roster "
+        "that may be perfectly fine")
+    assert result.exit_code == 2
+

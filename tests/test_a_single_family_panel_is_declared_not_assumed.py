@@ -38,19 +38,51 @@ sys.path.insert(0, str(REPO))
 ROSTER = REPO / "rules" / "review-panel.txt"
 
 
-def test_the_roster_declares_the_waiver_with_a_reason() -> None:
+def _roster_families() -> set[str]:
+    """The model families the roster actually seats, read from the roster itself."""
+    from review_panel import family_of, parse_roster
+
+    return {family_of(seat.model) for seat in parse_roster(ROSTER.read_text(encoding="utf-8"))}
+
+
+def test_the_waiver_is_present_exactly_when_the_roster_needs_it() -> None:
+    """Both directions. A missing waiver hides a weaker panel; a stale one hides a stronger.
+
+    This asserted the waiver UNCONDITIONALLY until 2026-09-21, which made it a test of
+    one day's roster rather than of the rule. The roster changed that day — the codex
+    CLI was upgraded, `codex exec` answered on gpt-5.5, and one seat per phase became
+    `judge-codex:*` — and the test failed for a roster that had just got BETTER. A test
+    that reddens on an improvement is a test people delete.
+
+    The rule it was reaching for has two sides, and only one was written:
+
+      one family  -> the waiver must be declared, with a reason
+      two or more -> the waiver must be gone
+
+    The second side is the defect that was actually found on disk: the keys outlived
+    the fact they named, and nothing could tell.
+    """
     text = ROSTER.read_text(encoding="utf-8")
     data = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+    declared = [ln for ln in data if ln.startswith("single_family_panel")]
+    reasons = [ln for ln in data if ln.startswith("single_family_reason")]
 
-    assert any(ln.startswith("single_family_panel") for ln in data), (
+    if _roster_families() - {"anthropic"}:
+        assert not declared and not reasons, (
+            "the roster spans more than one family, so the waiver is obsolete — and an "
+            "obsolete waiver makes a two-family APPROVED read as the weaker one-family "
+            "claim, which is the guarantee this panel exists to give")
+        return
+
+    assert declared, (
         "every seat is Anthropic, so the cross-family rule is waived — and a waiver "
         "nobody declared is indistinguishable from a roster somebody got wrong")
-    assert any(ln.startswith("single_family_reason") for ln in data), (
+    assert reasons, (
         "an exemption with no reason is an escape hatch, not a record")
 
 
-def test_the_capability_gate_accepts_the_declared_waiver() -> None:
-    """HOLDS, and the line saying so carries why it holds."""
+def test_the_capability_gate_reports_the_family_span_it_found() -> None:
+    """HOLDS either way — and the line saying so matches the roster on disk."""
     import subprocess
 
     proc = subprocess.run(
@@ -58,6 +90,13 @@ def test_the_capability_gate_accepts_the_declared_waiver() -> None:
         capture_output=True, text=True, cwd=REPO)
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    if _roster_families() - {"anthropic"}:
+        assert "SINGLE FAMILY, BY DECLARATION" not in proc.stdout, (
+            "the roster spans two families, so the gate must not warn about one — a "
+            "warning that survives the condition it describes trains readers to skip it")
+        return
+
     assert "SINGLE FAMILY, BY DECLARATION" in proc.stdout, (
         "the gate must say the panel is single-family BY DECLARATION, not pass silently")
 
