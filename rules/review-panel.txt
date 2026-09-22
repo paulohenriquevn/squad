@@ -107,6 +107,36 @@
 # is the right check for a seat that IS a binary; it is a weaker one for a seat that is a
 # plugin reached through a binary, so prefer naming the agent.
 
+# A SEAT YOU HOST YOURSELF COSTS MORE THAN A ROW
+# ----------------------------------------------
+# The diversity rule above needs a family outside the kit's own, and when a hosted one
+# is unreachable — credits out, network down, provider blocked — the reachable answer is
+# a model served locally. `ollama` is the usual one. Changing this table to name it is
+# one line; what that line implies is a LISTENING SERVER on the machine for as long as
+# the panel runs, and that is not confined to the panel.
+#
+# Measured 2026-09-20 in a consumer, by causing it. The three outside seats were pointed
+# at a local `llama3.2` and `ollama serve` was started on 11434. A unit test in that
+# project mounts an `ollama/...` provider and documents, in its own comment, that nothing
+# is listening in CI so the call fails fast and the SDK reports it. With something
+# listening the call CONNECTED and hung, and the test timed out at 30 s: 1 failed of
+# 8107 with the port open, 3 of 3 passing with it closed. Proved both ways, not argued.
+#
+# The cost landed somewhere nobody would look for it — that run's `/implement` validation
+# reported `coverage` FAIL, and the failure was the panel's server, not the codebase.
+#
+# So, before pointing a seat at something you host:
+#
+#   * the port is part of the change. Anything in the project that probes that port,
+#     and every test that relies on it being CLOSED, now behaves differently.
+#   * start it for the panel and stop it after. A server left listening makes the next
+#     suite run mean something other than what it meant yesterday.
+#   * a suite that fails only while the panel's server is up is not a flaky suite. It is
+#     this, and the fastest way to tell is to re-run it with the port closed.
+#
+# None of this makes a local seat wrong. It makes it a change to the machine rather than
+# a change to a table, and the difference is invisible from this file alone.
+
 reviewer = discover | nemesis-claim-auditor      | claude-opus-5   | builtin
 reviewer = discover | leonardo-researcher        | claude-sonnet-5 | builtin
 reviewer = discover | judge-codex:discover-judge | gpt-5.5         | builtin

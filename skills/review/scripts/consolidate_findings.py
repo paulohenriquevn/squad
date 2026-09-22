@@ -408,6 +408,7 @@ def _render_markdown(
     total_findings: int,
     closed: list[dict[str, Any]] | None = None,
     contamination: dict[str, Any] | None = None,
+    reviewer_trees: dict[str, Any] | None = None,
     unreadable: list[str] | None = None,
 ) -> str:
     md = [
@@ -479,6 +480,33 @@ def _render_markdown(
             "miss code that was there. Re-derive any citation before acting on it."),
             "",
         ]
+
+    if reviewer_trees and (reviewer_trees["stale"] or reviewer_trees["unresolved"]):
+        # Beside the contamination block and above the findings, for the same reason: a
+        # reader who learns this in a footer has already believed what is above it.
+        md += [
+            "## \u26a0 A reviewer read a tree that does not contain the change under review",
+            "",
+            (f"The commits under review are at `{reviewer_trees['recorded_head'][:12]}`. "
+             "Each reviewer declares the tree it actually read; these did not contain it, "
+             "or could not be identified. Findings from them may be about code that is not "
+             "the code under review."),
+            "",
+            "| Reviewer | Declared tree | State |",
+            "|---|---|---|",
+        ]
+        for row in reviewer_trees["stale"]:
+            md.append(f"| `{row['agent']}` | `{str(row['declared'])[:12]}` | does not "
+                      "contain the change |")
+        for agent in reviewer_trees["unresolved"]:
+            md.append(f"| `{agent}` | — | declared a head this repository cannot resolve |")
+        md.append("")
+        if reviewer_trees["undeclared"]:
+            md += [
+                ("Declared nothing, so nothing is claimed either way about the tree they "
+                 "read: " + ", ".join(f"`{a}`" for a in reviewer_trees["undeclared"]) + "."),
+                "",
+            ]
 
     md.append("## Findings summary by severity")
     md.append("")
@@ -643,6 +671,14 @@ def capture_tree_state(repo_root: Path, exclude: Path | None = None) -> dict[str
         "status_digest": hashlib.sha256(
             _porcelain_excluding(porcelain, exclude, repo_root).encode("utf-8"),
         ).hexdigest(),
+        # WHOSE tree. The two fields above are a fact about the tree this function was
+        # called on, and for a while the agent prompts read them as a fact about the tree
+        # the reviewers ran in. They are the same tree only when nobody isolates — and
+        # isolation is what those same prompts ask for. Measured 2026-09-20: this recorded
+        # the shared checkout at `a84eda52a` while five reviewers ran in worktrees at
+        # `0051d2f6b`, a tree that does NOT contain the change under review.
+        "recorded_by": "spawner",
+        "recorded_in": str(repo_root.resolve()),
     }
 
 
@@ -689,6 +725,96 @@ def check_tree_contamination(repo_root: Path, findings_dir: Path) -> dict[str, A
         "recorded": recorded,
         "observed": now,
     }
+
+
+_HEAD_ABSENT = object()
+
+
+def _declared_head(path: Path) -> Any:
+    """The `tree_head:` a reviewer wrote, `_HEAD_ABSENT` when the key is not there.
+
+    Read with the same tolerant parser the findings themselves use: a reviewer whose file
+    does not parse is already reported as unreadable, and that is a different finding from
+    one about which tree it read.
+
+    The value is returned RAW, including when YAML did not give back a string. An
+    unquoted `tree_head: 0051247` is an integer by the time it arrives here, and its
+    leading zeros are gone — so it cannot be resolved and, worse, a coerced `str()` of it
+    would be a DIFFERENT sha that might resolve. Absent and unusable are separate answers
+    and the caller keeps them separate.
+    """
+    data = _read_findings_file(path)
+    if not isinstance(data, dict) or "tree_head" not in data:
+        return _HEAD_ABSENT
+    head = data["tree_head"]
+    if isinstance(head, str) and head.strip():
+        return head.strip()
+    return head
+
+
+def check_reviewer_trees(repo_root: Path, findings_dir: Path) -> dict[str, Any] | None:
+    """Which reviewers read a tree that does NOT contain the change under review.
+
+    `check_tree_contamination` asks whether the SPAWNER's tree moved. This asks the
+    question the agent prompts were advertising and nothing answered: whether each
+    reviewer's own tree contained the commits being reviewed. The kit does not create the
+    worktrees and cannot choose where an agent runs, so the reviewer declares its head and
+    this compares.
+
+    Containment, not equality — `merge-base --is-ancestor`. A reviewer one commit ahead
+    still read the change; demanding an identical SHA would report the isolation working
+    as a defect.
+
+    Three outcomes, kept apart because collapsing them is the original defect in miniature:
+      stale       the tree demonstrably lacks the recorded head
+      undeclared  no `tree_head:` — every file written before the templates asked for it
+      unresolved  a head git cannot resolve here, which proves nothing either way
+
+    None when there is nothing to say: no recorded state, no findings, or every reviewer
+    accounted for and none of the three.
+    """
+    state_path = findings_dir / TREE_STATE_FILENAME
+    if not state_path.is_file():
+        return None
+    try:
+        recorded = json.loads(state_path.read_text(encoding="utf-8")).get("head")
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not recorded:
+        return None
+
+    stale: list[dict[str, str]] = []
+    undeclared: list[str] = []
+    unresolved: list[str] = []
+    candidates = sorted(
+        set(findings_dir.glob("*.yml")) | set(findings_dir.glob("*.yaml"))
+    )
+    for path in candidates:
+        data = _read_findings_file(path)
+        agent = path.stem
+        if isinstance(data, dict) and isinstance(data.get("agent"), str):
+            agent = data["agent"]
+        head = _declared_head(path)
+        if head is _HEAD_ABSENT:
+            undeclared.append(agent)
+            continue
+        if not isinstance(head, str):
+            # Declared, and unusable: see `_declared_head`. Reporting it as undeclared
+            # would hide that the reviewer answered; reporting it as stale would assert
+            # something about a tree nobody can identify.
+            unresolved.append(agent)
+            continue
+        if _git(repo_root, "cat-file", "-e", f"{head}^{{commit}}") is None:
+            unresolved.append(agent)
+            continue
+        if _git(repo_root, "merge-base", "--is-ancestor", recorded, head) is None:
+            stale.append({"agent": agent, "declared": head, "under_review": recorded})
+
+    if not (stale or undeclared or unresolved):
+        return None
+    return {"recorded_head": recorded, "stale": stale,
+            "undeclared": sorted(undeclared), "unresolved": sorted(unresolved)}
+
 
 
 def _collect_findings(args, slug: str) -> tuple[list[dict], list[str], list[str], list[str]]:
@@ -929,6 +1055,7 @@ def main() -> int:
     verdict = _classify_verdict(open_findings, args.edge_case_coverage_ratio, unregistered_high)
 
     contamination = check_tree_contamination(args.repo_root, args.findings_dir)
+    reviewer_trees = check_reviewer_trees(args.repo_root, args.findings_dir)
 
     # Write the markdown report
     md_content = _render_markdown(
@@ -941,6 +1068,7 @@ def main() -> int:
         total_findings=len(deduped),
         closed=closed,
         contamination=contamination,
+        reviewer_trees=reviewer_trees,
         unreadable=unreadable,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -960,6 +1088,10 @@ def main() -> int:
         # a downstream gate reads the JSON. A review of a tree that moved mid-run is not
         # invalid on its face, but a reader who does not know it moved cannot weigh it.
         **({"tree_contaminated": True, "tree_contamination": contamination} if contamination else {}),
+        # A reviewer that read a tree without the change under review is detectable from
+        # the JSON alone, which is what a downstream gate reads. Comparing two SHAs by eye
+        # is what the two reviewers who caught this did, and it is not a mechanism.
+        **({"reviewer_trees": reviewer_trees} if reviewer_trees else {}),
         **({"unreadable": unreadable} if unreadable else {}),
         **({"skipped": skipped} if skipped else {}),
         "total_findings": len(deduped),

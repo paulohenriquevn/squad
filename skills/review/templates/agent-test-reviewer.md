@@ -34,8 +34,25 @@ zero production call sites" — against a symbol with two.
   and remove it when you are done (`git worktree remove /tmp/review-$$`).
 - Scratch files go under `/tmp`, never under the repository.
 
-The consolidator records the tree state when you are spawned and compares it afterwards. A tree that
-moved is reported at the top of the review, above every finding in it.
+The consolidator records the state of the tree **the spawner ran in** when you are spawned, and
+compares it afterwards. A tree that moved is reported at the top of the review, above every finding
+in it. That is a fact about the spawner's checkout and NOT about yours — if you are isolated, as the
+line above asks you to be, they are different trees.
+
+**So declare the tree you actually read.** Put its HEAD at the top of your findings file, quoted:
+
+```yaml
+agent: test-reviewer
+tree_head: "<the output of `git rev-parse HEAD` in the tree you read>"
+findings:
+  - ...
+```
+
+The consolidator checks that your tree CONTAINS the commits under review and reports any reviewer
+whose does not. Measured on a real review: five reviewers ran in a worktree that did not contain the
+change, two noticed and re-derived their findings against the right ref, three did not, and nothing
+downstream could tell them apart. Quote the value — an unquoted sha of only digits loses its leading
+zeros to YAML and is reported as unusable.
 
 ## Pre-read (mandatory)
 

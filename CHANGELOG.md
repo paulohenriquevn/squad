@@ -8,6 +8,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The review recorded the tree the SPAWNER ran in and the agent prompts called it the
+  reviewers'.** `capture_tree_state` writes HEAD and a status digest and said nothing about
+  whose tree they belong to, while five reviewer templates told each agent *"the consolidator
+  records the tree state when you are spawned and compares it afterwards"* — so a clean
+  comparison read as evidence the reviewers saw the change. It is evidence about a tree none
+  of them opened. Measured 2026-09-20: the record held the shared checkout at `a84eda52a`
+  while every spawned reviewer ran in a worktree at `0051d2f6b`, which
+  `git merge-base --is-ancestor` says does NOT contain the change under review. Two of five
+  noticed the code looked pre-change and re-derived their findings against the right ref;
+  neither was told to, and nothing downstream could tell them from the three who did not.
+  `.tree-state` now carries `recorded_by` and `recorded_in`; each reviewer declares the
+  `tree_head` it actually read; and `check_reviewer_trees` reports — in the markdown above the
+  findings and in the JSON a gate reads — every reviewer whose tree lacks the change. Stale,
+  undeclared and unresolved are three answers, not one: an unquoted sha of only digits loses
+  its leading zeros to YAML and is reported as unusable rather than as either (#148).
+
+- **A locally-hosted panel seat is a change to the machine, and the table it is written in
+  could not say so.** `rules/review-panel.txt` now records what pointing a seat at a
+  self-hosted model implies. Measured in a consumer 2026-09-20: three outside seats moved to
+  a local `llama3.2`, `ollama serve` began listening on 11434, and a unit test that mounts an
+  `ollama/` provider — documenting in its own comment that nothing listens in CI, so the call
+  fails fast — instead CONNECTED and hung to a 30 s timeout. 1 failed of 8107 with the port
+  open, 3 of 3 with it closed. That run's `/implement` validation reported `coverage` FAIL,
+  and the failure was the panel's server rather than the codebase (#147).
+
 - **A panel recorded which document it voted on and never which version of it, and the
   class of records nobody could verify was still growing.**
   `check_panel_approval._artifact_drifted` compares `artifact_sha256` against the bytes on
