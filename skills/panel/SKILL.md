@@ -76,6 +76,30 @@ python3 "$ECO/mechanisms/cycle/review_panel.py" --record .squad/records/panels/{
 `APPROVED` needs 2 of 3 **and** approvals spanning two model families. Two reviewers from
 the same family agreeing is the correlated failure the outside seat is bought to catch.
 
+### 6 · Revise and re-score, when a seat RETURNED
+
+A `return` is `NEEDS_REVISION`, not a verdict the document is stuck with. Correct the
+artifact, then re-cast that seat's vote with `--supersede`:
+
+```bash
+python3 "$ECO/mechanisms/cycle/cast_vote.py" --slug {slug} --phase {phase} \
+    --reviewer {the seat that returned} --model {model} --verdict approve \
+    --reason "{what you corrected, and what you re-read it against}" --supersede
+```
+
+What it does, and why each half matters:
+
+| | |
+|---|---|
+| Archives the verdicts on the previous text into `rounds[]`, with the hash of that text | A panel that hides having returned a document once destroys the record that the correction happened. `/review` refuses the same loss by marking a fixed BLOCKER CLOSED rather than deleting it |
+| Carries the other seats' votes, marked `carried_from_round` | A reviewer who approved does not re-approve corrections they never objected to — but a tally must not read three seats agreeing about one document when they agreed about two |
+| Rebinds `artifact_sha256` to the corrected text | The live record is about the live document; the superseded round keeps its own hash |
+| Refuses when the artifact has NOT changed | Otherwise the flag is the duplicate refusal with an extra argument, and a verdict somebody dislikes can be overwritten by re-casting it |
+
+Four rounds of one PLAN panel were run this way by hand before the flag existed, archived
+as `<slug>-plan.roundN.json` files a previous session named. A convention that lives only
+in filenames somebody chose is one the next session re-derives.
+
 ## What this cannot establish, and says so
 
 **That a model was called.** The record is written by the session that was meant to
@@ -96,7 +120,9 @@ which evidence. Nothing confronts that claim with the evidence.
 - **Reading an abstention as agreement.** It is counted as an incomplete panel. A
   reviewer that could not audit did not approve.
 - **Re-running `convene_panel.py --write` after votes exist.** It rewrites the
-  assignment; votes already cast then reference a roster that changed.
+  assignment; votes already cast then reference a roster that changed. To re-score a
+  document that was RETURNED and corrected, use `cast_vote.py --supersede` (step 6) —
+  that is the supported path, and it keeps the returned verdict readable.
 
 ## Related
 

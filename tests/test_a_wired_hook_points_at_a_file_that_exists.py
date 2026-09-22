@@ -90,6 +90,32 @@ def test_this_kit_wires_nothing_that_is_gone() -> None:
     assert report.exit_code() in (0, 2), report.problems
 
 
+def test_this_kit_ships_no_shell_hook_a_python_one_supersedes() -> None:
+    """The source half of the same defect: a consumer can only wire what the kit ships.
+
+    `check_wired_hooks` catches the pair in an INSTALL, which is where it was measured —
+    but an install inherits its hooks from here. The two enforcers that disagreed about
+    the trunk (#154) were `validate-command.sh` and `validate-command.py`, and the shell
+    one left in `260892f`; nothing since then has pinned that it stays gone. Re-adding a
+    `.sh` beside a `.py` would reintroduce the divergence at the source, and every
+    install afterwards would carry it while this kit's own gate ran clean.
+
+    Asserted as "no pair", not "no shell hook at all": a lone shell hook is a deliberate
+    choice the gate also declines to report, and this test must not be stricter than the
+    gate it protects.
+    """
+    hooks = REPO / "hooks"
+    paired = sorted(
+        f.name for f in hooks.glob("*.sh") if f.with_suffix(".py").exists()
+    )
+
+    assert paired == [], (
+        f"{paired} ship beside a `.py` sibling that supersedes them; a consumer that "
+        "wires both runs both, and the retired one enforces the rules it had when it "
+        "was retired"
+    )
+
+
 # ── presence is not currency ─────────────────────────────────────────────────
 #
 # Measured on a real install, 2026-09-22, by the session that owns it: NINE hooks wired

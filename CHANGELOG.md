@@ -8,6 +8,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A panel recorded which document it voted on and never which version of it, and the
+  class of records nobody could verify was still growing.**
+  `check_panel_approval._artifact_drifted` compares `artifact_sha256` against the bytes on
+  disk and treats its absence as *cannot verify* rather than as drift — a deliberate
+  allowance for records written before the field existed. Nothing wrote the field:
+  `convene_panel.py` never mentioned it and `cast_vote.py` copied `artifact` out of the
+  assignment without hashing it, so the only place it existed was prose in two SKILL files
+  telling an agent to hand-write the record. Measured 2026-09-20: a record written at 13:09
+  approved a plan last edited at 20:04 the same day, and the gate printed `panel APPROVED`
+  with nothing a reader could act on. `cast_vote.py` now hashes the artifact when it creates
+  the record — once, because the hash belongs to the panel and not to a seat — and writes no
+  key at all when the path is empty or the file is absent, because a record that looks bound
+  and binds to nothing is worse than one that admits it cannot be checked (#145).
+
+- **A reviewer who returned a document was frozen at the verdict it earned before the fix.**
+  `cycle-plan.md` describes the loop — return, revise, re-score — and no mechanism completed
+  it: `cast_vote.py` refused a second vote from one seat, and the only other route was
+  re-running `convene_panel.py --write`, which `skills/panel/SKILL.md` lists as an
+  anti-pattern in its own words. Re-voting happened anyway, by hand, surviving only as
+  `<slug>-plan.roundN.json` filenames a previous session chose. `cast_vote.py --supersede`
+  makes it a supported path: the verdicts on the previous text are archived into `rounds[]`
+  with the hash of that text, the other seats' votes are carried and MARKED
+  `carried_from_round` so a tally cannot read three seats agreeing about one document when
+  they agreed about two, and the flag is refused when the artifact has not changed —
+  otherwise it is the duplicate refusal with an extra argument. The shape is `/review`'s: a
+  fixed BLOCKER is marked CLOSED keeping its severity, never deleted (#144).
+
 - **A skip outlived the defect it waited on, and the test went green through the branch
   that says the work is unfinished.** `tests/test_kit_manifest.py` guarded its `legacy_gone`
   assertion with a conditional `pytest.xfail` while the kit still shipped an empty
