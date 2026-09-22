@@ -287,6 +287,9 @@ _INVALID_CAPS: frozenset[str] = frozenset({
     # is missing from this set scores the plan down without declaring the verdict, which
     # is the half-applied state a reader cannot tell from a passing one.
     "coverage_matrix_unreadable",
+    # Same consequence, third cause: the matrix parsed, the ratio is 1.0, and a row points
+    # at a criterion no task declares.
+    "matrix_cites_undeclared_criterion",
     "fabricated_citation",
     "patterns_skill_ignored",
     "deps_audit_insecure",
@@ -308,6 +311,11 @@ def _detect_hard_caps(
     Caps are STRICTLY enforced (no soft-cap variants, no '--skip-checks' flag).
     """
     triggered: list[tuple[str, int]] = []
+    if cov.criteria_not_declared:
+        # A row citing a criterion nobody declares is a gap the matrix only LOOKS like it
+        # closed. Reported under its own id rather than folded into `coverage_lt_100`,
+        # which would say the ratio is short when the ratio is 1.0 and the row is hollow.
+        triggered.append(("matrix_cites_undeclared_criterion", 49))
     if not cov.header_recognised:
         # The verdict is the same — a plan whose coverage cannot be assessed does not
         # enter `/implement`, and L5 is fail-closed. The REASON is what changes.

@@ -224,6 +224,52 @@ if [ "$_state_before" != "$_state_after" ]; then
     trailer+=("$(printf 'TREE_MOVED\t%s\t%s' "$_state_before" "$_state_after")")
 fi
 
+# THE RUN LEAVES A RECORD, because printing is not remembering.
+#
+# This script printed its verdict and exited. Nothing on disk said the suite had ever
+# run, on which commit, or with what result — so the only way to answer "is it green?"
+# was to run it again, for fifteen minutes. Measured 2026-09-22: one session ran it four
+# times in one day to answer that question, and two of the four answered about a tree
+# that had moved.
+#
+# Written even on failure, and even when the tree moved: a record that only exists for
+# clean runs answers "was it ever green" and never "what happened last time", and the
+# second question is the one asked at 2am.
+_record_dir="$(python3 - <<'PYEOF' 2>/dev/null
+import sys
+from pathlib import Path
+for up in Path.cwd().resolve().parents:
+    if (up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(up)); break
+else:
+    sys.path.insert(0, str(Path.cwd()))
+try:
+    from squad.paths import write_records_dir
+    print(write_records_dir(Path.cwd(), "verification"))
+except Exception:
+    pass
+PYEOF
+)"
+if [ -n "$_record_dir" ]; then
+    mkdir -p "$_record_dir" 2>/dev/null && {
+        _passed=0; _failed=0
+        for _t in "${trailer[@]}"; do
+            case "$_t" in
+                SUITE*) _p=$(printf '%s' "$_t" | cut -f4); _f=$(printf '%s' "$_t" | cut -f5)
+                        [ "$_p" != "-" ] && _passed=$((_passed + _p))
+                        [ "$_f" != "-" ] && _failed=$((_failed + _f)) ;;
+            esac
+        done
+        printf '{"at":"%s","head":"%s","suites":%d,"failed_suites":%d,"passed":%d,"failed":%d,"tree_moved":%s,"tree":"%s"}\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "${_state_before%% *}" \
+            "${#SUITES[@]}" "${#failures[@]}" "$_passed" "$_failed" \
+            "$([ "$_state_before" != "$_state_after" ] && echo true || echo false)" \
+            "$_kit_dir" > "$_record_dir/last-run.json"
+        echo "record: $_record_dir/last-run.json"
+    }
+fi
+
 echo
 printf '%s\n' "${trailer[@]}"
 echo

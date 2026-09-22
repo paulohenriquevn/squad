@@ -106,6 +106,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The Coverage Matrix gate counted a row and never opened the task it named.** It checked
+  the TASK relation in both directions — a row naming no task is unmapped, a task no row
+  names is an orphan — and checked the rest of the row in neither. A row reading
+  `| G1 | something | T1.1 | AC-999 |` counted as mapped with `AC-999` declared nowhere in
+  the plan, and the report came back `coverage_ratio: 1.0, is_complete: True`. Reported
+  2026-09-22 with the consequence measured rather than imagined: a reviewer found `AC-004`
+  orphaned — the row said `T2.1` and `T2.1`'s block declared something else — and a
+  hand-written three-line cross-check then found **five more** the gate was approving as
+  complete. The orphaned criterion was the one that would have caught the plan's shape
+  defect, so **the gate that exists to prove coverage approved away the gap that mattered.**
+  Both directions are now reported and kept apart: a row citing what no task declares caps
+  under `matrix_cites_undeclared_criterion`, and a task declaring what no row cites is
+  reported without capping — the matrix maps gaps to tasks, and a task may promise more
+  than a gap asked. Identifiers are read from the WHOLE row rather than one column, because
+  a plan may name its fourth column `Resolution` or `Criterion` and a row cites what it
+  cites either way.
+
 - **The rule that refuses flow metrics listed four absences, and three had stopped being
   true.** `current-constraint.md` declined to gate on flow with a good argument — *a hard
   gate against data that does not exist is answered by assertion* — and backed it with a

@@ -101,6 +101,12 @@ class CoverageReport:
     #: that reason and the report said `gaps: 0`. Unreadable and empty are two answers.
     header: tuple[str, ...] = field(default_factory=tuple)
     header_recognised: bool = True
+    #: A row cites a criterion the task it names does not declare. Two directions, two
+    #: fields: this one is a row pointing at nothing, the one below is work a task
+    #: promises that no gap asked for. One number out of two questions would be the
+    #: defect this file has already paid for once.
+    criteria_not_declared: tuple[str, ...] = field(default_factory=tuple)
+    criteria_not_cited: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _read_plan(plan_path: Path) -> str:
@@ -131,6 +137,46 @@ def _is_data_row(stripped: str) -> bool:
     return not bool(re.match(r"^[\s\-:|]+$", inner))
 
 
+#: A criterion identifier, as every plan in this kit writes one. Uppercase-prefixed and
+#: numbered, so it cannot be confused with prose in the same cell — the template's fourth
+#: column is `Resolution`, and a row saying "built in T1.1" cites no criterion at all.
+CRITERION_ID_RE = re.compile(r"\b([A-Z]{2,6}-\d{1,4})\b")
+
+#: The block a task uses to DECLARE what it will satisfy.
+CRITERIA_BLOCK_RE = re.compile(
+    r"^####\s+Acceptance Criteria\s*$(.*?)(?=^#{1,4}\s|\Z)",
+    re.MULTILINE | re.DOTALL)
+
+
+def _task_criteria(content: str) -> dict[str, set[str]]:
+    """Which criterion ids each `### T{N}.{M}` declares in its own block.
+
+    The matrix's TASK relation was checked in both directions — a row naming no task is
+    unmapped, a task no row names is an orphan — and the rest of the row was checked in
+    neither. A row reading `| G1 | something | T1.1 | AC-999 |` counted as mapped with
+    `AC-999` declared nowhere, and the report came back `is_complete: True`.
+
+    Measured 2026-09-22 by the session that hit it: a reviewer found `AC-004` orphaned —
+    the row said `T2.1`, and `T2.1`'s block declared something else — and a hand-written
+    three-line cross-check then found five more the gate was approving. The orphaned
+    criterion was the one that would have caught the plan's shape defect, so the gate
+    that exists to prove coverage approved away the gap that mattered.
+    """
+    out: dict[str, set[str]] = {}
+    headings = list(TASK_HEADER_RE.finditer(content))
+    for i, match in enumerate(headings):
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(content)
+        body = content[match.start():end]
+        task_id = TASK_ID_RE.search(match.group(0))
+        if task_id is None:
+            continue
+        declared: set[str] = set()
+        for block in CRITERIA_BLOCK_RE.finditer(body):
+            declared.update(CRITERION_ID_RE.findall(block.group(1)))
+        out[task_id.group(0)] = declared
+    return out
+
+
 def _cells(stripped: str) -> list[str]:
     return [c.strip() for c in stripped[1:-1].split("|")]
 
@@ -153,8 +199,8 @@ def _column_index(header: tuple[str, ...], names: tuple[str, ...]) -> int | None
 
 def _parse_matrix_rows(
     section: str, header: tuple[str, ...],
-) -> tuple[list[tuple[str, str, str]], bool]:
-    """Rows as (gap_id, gap_desc, task_col), and whether the header was recognised.
+) -> tuple[list[tuple[str, str, str, str]], bool]:
+    """Rows as (gap_id, gap_desc, task_col, whole_row), and whether the header parsed.
 
     BY NAME, not by position. The previous reader took the task from `cells[2:]` and
     skipped any row with fewer than four cells, which meant a plan that wrote two columns
@@ -181,7 +227,7 @@ def _parse_matrix_rows(
         )
     numbered = bool(header) and header[0].strip() == "#"
 
-    rows: list[tuple[str, str, str]] = []
+    rows: list[tuple[str, str, str, str]] = []
     for line in section.splitlines():
         stripped = line.strip()
         if not _is_data_row(stripped):
@@ -191,7 +237,12 @@ def _parse_matrix_rows(
             continue
         gap_desc = cells[gap_idx] if gap_idx < len(cells) else ""
         gap_id = cells[0] if numbered else gap_desc
-        rows.append((gap_id, gap_desc, cells[task_idx]))
+        # The WHOLE row travels with the parsed columns. A criterion id can sit in any
+        # cell — the template names the fourth `Resolution`, plans in the wild have named
+        # it `Criterion`, and a row cites what it cites regardless of which column it
+        # chose. Reading one column for identifiers would make the cross-check depend on
+        # a header name, which is the dependency this parser was just freed from.
+        rows.append((gap_id, gap_desc, cells[task_idx], stripped))
     return rows, True
 
 
@@ -271,7 +322,7 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
     # citation is a dead pointer, which is what this kit refuses everywhere else.
     has_final_phase = bool(FINAL_PHASE_SECTION_RE.search(content))
 
-    for gap_id, gap_desc, task_col in rows:
+    for gap_id, gap_desc, task_col, _row in rows:
         task_refs = TASK_ID_RE.findall(task_col)
         if task_refs:
             mapped_gaps += 1
@@ -285,6 +336,24 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
             unmapped.append(f"#{gap_id}: {gap_desc}")
 
     orphans = _find_orphan_references(content, matrix_task_ids)
+
+    # THE REST OF THE ROW, checked in both directions. `rows` carries the task column as
+    # written, so the criterion ids a row CITES come from the same text the task id came
+    # from — no second parse, no second chance to disagree with the first.
+    declared_by = _task_criteria(content)
+    cited_by_task: dict[str, set[str]] = {}
+    not_declared: list[str] = []
+    for gap_id, _desc, task_col, whole_row in rows:
+        cited = set(CRITERION_ID_RE.findall(whole_row)) - set(TASK_ID_RE.findall(whole_row))
+        for task in TASK_ID_RE.findall(task_col):
+            cited_by_task.setdefault(task, set()).update(cited)
+            for criterion in sorted(cited - declared_by.get(task, set())):
+                not_declared.append(f"{gap_id} cites {criterion}, which {task} does not declare")
+    not_cited = [
+        f"{task} declares {criterion}, which no matrix row cites"
+        for task, declared in sorted(declared_by.items())
+        for criterion in sorted(declared - cited_by_task.get(task, set()))
+    ]
 
     # Effective coverage = (mapped + deferred) / total
     effective_covered = mapped_gaps + deferred_gaps
@@ -300,8 +369,12 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
     # row scored better on coverage than one whose rows were readable and partly
     # unmapped. A heading with nothing under it is not a plan with no gaps; it is a
     # plan whose gaps nobody could read.
+    # A row pointing at a criterion nobody declares is a gap the matrix only LOOKS like
+    # it closed, so it blocks. The reverse — a task promising more than the gap asked —
+    # is reported and does NOT block: the matrix maps gaps to tasks, and a task is free
+    # to carry a criterion no gap indexed.
     is_complete = (coverage_ratio >= 1.0 and not orphans and total_gaps > 0
-                   and header_recognised)
+                   and header_recognised and not not_declared)
 
     return CoverageReport(
         total_gaps=total_gaps,
@@ -313,4 +386,6 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
         is_complete=is_complete,
         header=header,
         header_recognised=header_recognised,
+        criteria_not_declared=tuple(not_declared),
+        criteria_not_cited=tuple(not_cited),
     )
