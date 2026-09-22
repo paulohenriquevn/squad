@@ -283,6 +283,10 @@ CAP_WITH_CAVEATS = 70
 
 _INVALID_CAPS: frozenset[str] = frozenset({
     "coverage_lt_100",
+    # Same consequence as the line above, different cause. A cap that forces INVALID and
+    # is missing from this set scores the plan down without declaring the verdict, which
+    # is the half-applied state a reader cannot tell from a passing one.
+    "coverage_matrix_unreadable",
     "fabricated_citation",
     "patterns_skill_ignored",
     "deps_audit_insecure",
@@ -304,7 +308,14 @@ def _detect_hard_caps(
     Caps are STRICTLY enforced (no soft-cap variants, no '--skip-checks' flag).
     """
     triggered: list[tuple[str, int]] = []
-    if not cov.is_complete:
+    if not cov.header_recognised:
+        # The verdict is the same — a plan whose coverage cannot be assessed does not
+        # enter `/implement`, and L5 is fail-closed. The REASON is what changes.
+        # `coverage_lt_100` on a table nobody read is a true statement about a false
+        # premise, and it sends the author hunting for a missing row instead of at the
+        # header. Not both: two caps for one cause reads as two problems.
+        triggered.append(("coverage_matrix_unreadable", 49))
+    elif not cov.is_complete:
         triggered.append(("coverage_lt_100", 49))
     if adr.total_adrs > 0 and adr.completeness_ratio < 1.0:
         triggered.append(("adr_without_alternatives", CAP_WITH_CAVEATS))

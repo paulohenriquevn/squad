@@ -8,6 +8,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A requirement closed by the Final Phase was unexpressible, so eleven rows read as
+  requirements nothing closes.** `TASK_ID_RE` is `T<n>.<n>` and no plan gives its Final
+  Phase a task id — the heading is `## Final Phase: Integration Validation`, an H2 rather
+  than a task — so a matrix row citing `Final Phase` matched nothing. Measured 2026-09-21,
+  once readable matrices made them visible: 19 rows closed nothing and 11 had this
+  structural cause. One plan closes NFR-002 by name in its Final Phase acceptance criteria
+  while its matrix row could only say `Final Phase`. **The decision, with the option that
+  was refused:** the Final Phase does not get a task id; the parser accepts it by name.
+  An id would have made it a task to `check_tdd_in_bugfix.py`, which demands a RED-test
+  shape per bugfix task, and to `check_concurrency_tests.py`, which reads the same shape —
+  propagating a requirement through three gates to fix a citation in one, and forcing a RED
+  test onto a phase that validates work already done. The citation is checked rather than
+  merely recognised: a row may cite the Final Phase only if the plan has one, since a
+  section nobody wrote is the dead pointer this kit refuses everywhere else.
+  `plan-template.md` now states what the Task column accepts, so a bare em-dash and prose
+  like *already shipped* are visibly not closures (#150).
+
+- **A Coverage Matrix the parser could not read reported as a matrix with no rows, and
+  nine plans of twelve were INVALID for it.** `_parse_matrix_rows` took the task from
+  `cells[2:]` by POSITION and dropped any row with fewer than four cells. The template
+  declares four columns, so a plan that wrote two parsed to nothing — and
+  `CoverageReport(total_gaps=0, mapped_gaps=0)` is byte-identical to what an empty matrix
+  produces. `coverage_lt_100` then fired at cap 49 and the plan came back INVALID, with
+  nothing anywhere saying the table had not been read. Measured 2026-09-20 across twelve
+  plans on disk: seven wrote two columns, two more wrote `Requirement | Closed by |
+  Verified by` with the task in `cells[1]`, and only two scored SHIPPABLE. The parser now
+  finds the task column BY HEADER NAME, accepting the template's `Task(s)` and the
+  `Closed by` that plans in the wild wrote, and an unrecognised header caps under its own
+  id — `coverage_matrix_unreadable`, same INVALID consequence, stated cause. Chosen over
+  refusing a non-conforming header at authoring time, which would help the next plan and
+  none of the nine (#155).
+
 - **The review recorded the tree the SPAWNER ran in and the agent prompts called it the
   reviewers'.** `capture_tree_state` writes HEAD and a status digest and said nothing about
   whose tree they belong to, while five reviewer templates told each agent *"the consolidator

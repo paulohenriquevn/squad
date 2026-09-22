@@ -28,6 +28,19 @@ from squad.markdown import (  # noqa: E402 — post-bootstrap import
 TASK_ID_RE = re.compile(r"T\d+\.\d+")
 TASK_HEADER_RE = re.compile(r"^###\s+T\d+\.\d+", re.MULTILINE)
 COVERAGE_HEADER_RE = re.compile(r"^##\s+Coverage Matrix\s*$", re.MULTILINE)
+#: The Final Phase closes requirements that no numbered task does — it validates the whole
+#: of the work end to end, and five plans cite it in the Task column by name. It has no
+#: `T<n>.<n>` id in any plan, so those rows counted as requirements nothing closed: eleven
+#: of nineteen such rows had this cause rather than an authoring one.
+#:
+#: THE NAME IS ACCEPTED; NO ID IS CREATED. Giving the Final Phase a task id would make it a
+#: task to every other reader of that pattern — `check_tdd_in_bugfix.py` matches
+#: `### T<n>.<n>` headings and demands a RED-test shape per bugfix task,
+#: `check_concurrency_tests.py` reads the same shape. Forcing a RED test onto a phase that
+#: validates work already done satisfies a regex and describes nothing. One id would have
+#: propagated a requirement through three gates to fix a citation in one.
+FINAL_PHASE_CITATION_RE = re.compile(r"final\s+phase", re.IGNORECASE)
+FINAL_PHASE_SECTION_RE = re.compile(r"^##\s+Final Phase\b", re.IGNORECASE | re.MULTILINE)
 NEXT_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
 #: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined
 #: their own, in two forms that do not mask the same input: five saw only backtick
@@ -37,6 +50,18 @@ NEXT_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
 FENCED_CODE_RE = _FENCED_CODE_OWNER
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 
+
+#: The header names that mean "which task closes this". The template declares
+#: `Task(s)`; `Closed by` is what plans in the wild wrote instead. Matched
+#: case-insensitively after stripping, and deliberately a SHORT list: every name added
+#: here is a shape the template does not declare, and the point is to read the plans that
+#: exist, not to make the template optional.
+TASK_COLUMN_HEADERS = ("task(s)", "tasks", "task", "closed by", "closed-by")
+
+#: The column that identifies WHICH gap a row is about. Everything that is neither this
+#: nor the task column is extra and ignored — `Resolution`, `Verified by`, `Severidade`.
+GAP_COLUMN_HEADERS = ("gap / requirement", "gap/requirement", "gap", "requirement",
+                      "requirements", "gap / req")
 
 OUT_OF_SCOPE_PATTERNS = (
     "out-of-scope",
@@ -69,6 +94,13 @@ class CoverageReport:
     orphan_tasks: tuple[str, ...] = field(default_factory=tuple)
     coverage_ratio: float = 0.0
     is_complete: bool = False
+    #: The header cells as written, and whether a task column was found among them.
+    #: `_parse_matrix_rows` used to read `cells[2:]` by POSITION and drop any row with
+    #: fewer than four cells, so a two-column matrix produced zero rows — which is
+    #: byte-identical to a matrix nobody wrote. Nine plans of twelve were INVALID for
+    #: that reason and the report said `gaps: 0`. Unreadable and empty are two answers.
+    header: tuple[str, ...] = field(default_factory=tuple)
+    header_recognised: bool = True
 
 
 def _read_plan(plan_path: Path) -> str:
@@ -99,42 +131,68 @@ def _is_data_row(stripped: str) -> bool:
     return not bool(re.match(r"^[\s\-:|]+$", inner))
 
 
-def _pick_task_column(cells: list[str]) -> str:
-    """Priority order for selecting which cell is 'task column' in flexible-width rows.
+def _cells(stripped: str) -> list[str]:
+    return [c.strip() for c in stripped[1:-1].split("|")]
 
-    1) First cell containing T-id pattern → real task ref.
-    2) First cell with out-of-scope marker → deferral signal.
-    3) First cell empty / dash / 'N/A' → unmapped signal.
-    4) Fallback to cells[2].
+
+def _parse_header(section: str) -> tuple[str, ...]:
+    """The first table row in the section — the header, by markdown's own rule."""
+    for line in section.splitlines():
+        stripped = line.strip()
+        if _is_data_row(stripped):
+            return tuple(_cells(stripped))
+    return ()
+
+
+def _column_index(header: tuple[str, ...], names: tuple[str, ...]) -> int | None:
+    for i, cell in enumerate(header):
+        if cell.lower().strip() in names:
+            return i
+    return None
+
+
+def _parse_matrix_rows(
+    section: str, header: tuple[str, ...],
+) -> tuple[list[tuple[str, str, str]], bool]:
+    """Rows as (gap_id, gap_desc, task_col), and whether the header was recognised.
+
+    BY NAME, not by position. The previous reader took the task from `cells[2:]` and
+    skipped any row with fewer than four cells, which meant a plan that wrote two columns
+    parsed to nothing and reported as a plan with no gaps. Measured across twelve plans:
+    seven wrote two columns, two wrote `Requirement | Closed by | Verified by` with the
+    task in `cells[1]`, and all nine came back INVALID under `coverage_lt_100` — a true
+    statement about a table nobody had read.
+
+    Reading by name was chosen over refusing a non-conforming header at authoring time.
+    A refusal helps the next plan and none of the nine; those would all still be INVALID,
+    for a reason still unstated. The template remains the declared shape — what changed is
+    that the parser stopped depending on column POSITION to find a column it can name.
     """
-    for cell in cells[2:]:
-        if TASK_ID_RE.search(cell):
-            return cell
-    for cell in cells[2:]:
-        if _is_out_of_scope_marker(cell):
-            return cell
-    for cell in cells[2:]:
-        if cell.lower().strip() in ("", "—", "-", "n/a"):
-            return cell
-    return cells[2]
+    task_idx = _column_index(header, TASK_COLUMN_HEADERS)
+    if task_idx is None:
+        return [], False
+    gap_idx = _column_index(header, GAP_COLUMN_HEADERS)
+    if gap_idx is None:
+        # No named gap column: the first cell that is neither the counter nor the task.
+        gap_idx = next(
+            (i for i in range(len(header))
+             if i != task_idx and header[i].strip() != "#"),
+            0,
+        )
+    numbered = bool(header) and header[0].strip() == "#"
 
-
-def _parse_matrix_rows(section: str) -> list[tuple[str, str, str]]:
-    """Parse table rows. Returns list of (gap_id, gap_desc, task_col).
-
-    Real plans use varying column counts (e.g., adding 'Severidade', 'Status').
-    Flexible-width: scan all cells from index 2 for the task column.
-    """
     rows: list[tuple[str, str, str]] = []
     for line in section.splitlines():
         stripped = line.strip()
         if not _is_data_row(stripped):
             continue
-        cells = [c.strip() for c in stripped[1:-1].split("|")]
-        if len(cells) < 4 or cells[0].strip() == "#":
+        cells = _cells(stripped)
+        if tuple(cells) == header or len(cells) <= task_idx:
             continue
-        rows.append((cells[0], cells[1], _pick_task_column(cells)))
-    return rows
+        gap_desc = cells[gap_idx] if gap_idx < len(cells) else ""
+        gap_id = cells[0] if numbered else gap_desc
+        rows.append((gap_id, gap_desc, cells[task_idx]))
+    return rows, True
 
 
 def _strip_code(content: str) -> str:
@@ -199,7 +257,8 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
     """
     content = _read_plan(plan_path)
     section = _extract_coverage_section(content)
-    rows = _parse_matrix_rows(section)
+    header = _parse_header(section)
+    rows, header_recognised = _parse_matrix_rows(section, header)
 
     total_gaps = len(rows)
     mapped_gaps = 0
@@ -207,11 +266,18 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
     unmapped: list[str] = []
     matrix_task_ids: set[str] = set()
 
+    # Checked once, not per row: whether the plan HAS the section its rows cite. A row may
+    # close a requirement against the Final Phase only if there is one — otherwise the
+    # citation is a dead pointer, which is what this kit refuses everywhere else.
+    has_final_phase = bool(FINAL_PHASE_SECTION_RE.search(content))
+
     for gap_id, gap_desc, task_col in rows:
         task_refs = TASK_ID_RE.findall(task_col)
         if task_refs:
             mapped_gaps += 1
             matrix_task_ids.update(task_refs)
+        elif has_final_phase and FINAL_PHASE_CITATION_RE.search(task_col):
+            mapped_gaps += 1
         elif _is_out_of_scope_marker(task_col):
             # v1.1+ #2 fix: explicit deferral, not a miss
             deferred_gaps += 1
@@ -234,7 +300,8 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
     # row scored better on coverage than one whose rows were readable and partly
     # unmapped. A heading with nothing under it is not a plan with no gaps; it is a
     # plan whose gaps nobody could read.
-    is_complete = coverage_ratio >= 1.0 and not orphans and total_gaps > 0
+    is_complete = (coverage_ratio >= 1.0 and not orphans and total_gaps > 0
+                   and header_recognised)
 
     return CoverageReport(
         total_gaps=total_gaps,
@@ -244,4 +311,6 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
         orphan_tasks=tuple(orphans),
         coverage_ratio=coverage_ratio,
         is_complete=is_complete,
+        header=header,
+        header_recognised=header_recognised,
     )
