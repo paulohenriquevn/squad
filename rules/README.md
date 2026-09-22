@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at sixty-two files is
-not one — a model told to read sixty-two files before an architectural decision
+That makes the pointer the whole interface, and a pointer at sixty-three files is
+not one — a model told to read sixty-three files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
@@ -111,6 +111,7 @@ Each `cycle-{name}.md` defines:
 | `auxiliary-cycles.txt` | Cycles the project built alongside the kit's chain, so `check_squad_map` does not ask the kit's map to place them. Its sibling above, for the index one level up |
 | `retired-permissions.txt` | Permissions withdrawn, kept so a reinstall does not reintroduce them |
 | `notifications.txt` | Where the kit sends what a person must see |
+| `session-injection.txt` | How much the kit says unprompted — `quiet = true` holds the session-start summary, the parsimony ladder and the advisory half of Stop. It cannot reach `PreToolUse` or a Stop BLOCKER: a guard a config can silence is a guard that gets silenced by somebody who only wanted less text, so the two are kept apart by construction and the guards do not import the reader at all |
 | `skills/_kit-rules/review-model-routing.txt` | Agent model routing for review — **not here**: kit-owned, replaced on update |
 
 ## Other Rules
