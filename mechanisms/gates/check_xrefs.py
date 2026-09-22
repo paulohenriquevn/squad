@@ -353,8 +353,7 @@ def broken_markdown_links(ecosystem_dir: Path) -> list[tuple[str, str]]:
         # moved, so walking it reports broken cross-references in files nothing reads and
         # nobody can fix — and under `--strict` that failed the post-install validation of
         # a perfectly good install. A backup of an old ecosystem is not this ecosystem.
-        if any(part in rel for part in (".git/", "study-material/", "__pycache__/",
-                                        ".install-backups/", ".patch-backups/")):
+        if is_excluded_tree(md.relative_to(ecosystem_dir)):
             continue
         try:
             text = md.read_text(encoding="utf-8", errors="replace")
@@ -416,6 +415,39 @@ def _headings(path: Path) -> set[str]:
     return {h.strip().lower() for h in _HEADING_RE.findall(text)}
 
 
+#: Directories that are IN the tree and are not OF it.
+#:
+#: `.install-backups/` and `.patch-backups/` hold the PREVIOUS install, snapshotted by
+#: `install.sh --force` before it replaced anything. Their links point at a tree that has
+#: since moved, so walking them reports broken cross-references in files nothing reads and
+#: nobody can fix — and under `--strict` that failed the post-install validation of a
+#: perfectly good install. A backup of an old ecosystem is not this ecosystem.
+#:
+#: That argument was written once, above the markdown-link walk, and applied there alone.
+#: Two other passes searched the whole tree: `_resolve_cited_doc` below, and the
+#: `bare_rule_name_resolves` check. Measured 2026-09-22 against a real install —
+#:
+#:     rules/README.md cites `domain-routing.txt` as if it were in rules/;
+#:     the file is in .install-backups/20260829T121853/rules/
+#:
+#: — which is the worse of the two possible answers. The file is gone, and the message
+#: says it is misfiled, sending the reader into a snapshot.
+EXCLUDED_TREES = (".git", "study-material", "__pycache__",
+                  ".install-backups", ".patch-backups")
+
+
+def is_excluded_tree(relative: Path) -> bool:
+    """Does this path lie inside a directory that is in the tree but not of it?
+
+    Compared PART BY PART, never as a substring. A file whose own NAME contains one of
+    these words — a rule named `{something}-backups.md`, say — is a document ABOUT
+    backups rather than a backup, and a substring test would silently stop checking it.
+    The braces are this checker's own placeholder form (`:728`), used here so the
+    example does not read as a citation to the pass three functions below.
+    """
+    return any(part in EXCLUDED_TREES for part in relative.parts)
+
+
 def _resolve_cited_doc(name: str, citing: Path, ecosystem_dir: Path) -> Path | None:
     """The document a `§` citation points at, or None when it is not unambiguous.
 
@@ -429,7 +461,8 @@ def _resolve_cited_doc(name: str, citing: Path, ecosystem_dir: Path) -> Path | N
                       ecosystem_dir / "rules" / leaf, citing.parent / leaf):
         if candidate.is_file():
             return candidate
-    matches = [m for m in ecosystem_dir.rglob(leaf) if m.is_file()]
+    matches = [m for m in ecosystem_dir.rglob(leaf)
+               if m.is_file() and not is_excluded_tree(m.relative_to(ecosystem_dir))]
     return matches[0] if len(matches) == 1 else None
 
 
@@ -1058,7 +1091,8 @@ def _check_bare_filenames_are_here(ctx: "_Xrefs") -> list[dict[str, Any]]:
                 if re.search(rf"[A-Za-z0-9_/-]+/{re.escape(name)}", body):
                     continue
                 elsewhere = [p for p in ctx.ecosystem_dir.rglob(name)
-                             if p.is_file() and "__pycache__" not in p.parts]
+                             if p.is_file()
+                             and not is_excluded_tree(p.relative_to(ctx.ecosystem_dir))]
                 if not elsewhere and not is_inventory:
                     continue
                 # Same split as Check 8, for the reason measured there: a consumer may

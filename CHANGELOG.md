@@ -85,6 +85,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **`check_xrefs` resolved a citation against `.install-backups/` and named the backup as
+  the file's location.** The markdown-link walk already skipped that directory, with the
+  reason written above the line: *a backup of an old ecosystem is not this ecosystem*. Two
+  other passes in the same file searched the whole tree and did not apply it —
+  `_resolve_cited_doc` and the `bare_rule_name_resolves` check. Measured 2026-09-22 against
+  a real install by the session that maintains it: *"rules/README.md cites
+  `domain-routing.txt` as if it were in rules/; the file is in
+  `.install-backups/20260829T121853/rules/`"*. That is the worse of the two possible
+  answers — the file is gone, and the message says it is misfiled, sending the reader into
+  a snapshot of a tree that has since moved. One predicate, `is_excluded_tree`, now serves
+  all three, compared PART BY PART rather than as a substring so a document *about* backups
+  is not mistaken for one. Applying it surfaced a citation in this repository that had only
+  ever "resolved" by finding a file in an excluded tree.
+
 - **The slice runner could not say whether the tree stood still while it ran.** Measured
   2026-09-22 in this repository: a run was started, three modules were edited during it, and
   the root bundle came back `1 failed`. The sentence was true and was about a state that
