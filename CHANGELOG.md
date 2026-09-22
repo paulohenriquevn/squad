@@ -106,6 +106,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The rule that refuses flow metrics listed four absences, and three had stopped being
+  true.** `current-constraint.md` declined to gate on flow with a good argument — *a hard
+  gate against data that does not exist is answered by assertion* — and backed it with a
+  blanket claim: *"we do not currently instrument flow across the ecosystem. There is no
+  per-stage lead time, no wait time, no WIP series, no cumulative flow diagram."* By
+  2026-09-22 the board computed throughput, WIP and item lead time. The sentence outlived
+  the fact that justified it. **A stale refusal is worse than a missing metric**, because
+  the refusal is what somebody reads before deciding not to measure — a reader acting on
+  that paragraph would have rebuilt three measures the system already had. The rule now
+  carries a table: what is computed, what is derivable with no substrate yet (per-stage
+  timing, where `cycle_events` already emits start and end with slug and timestamp and the
+  stream is empty only because no chain has finished here), and what is genuinely absent.
+  **The five DORA metrics are refused specifically rather than by blanket** — four measure a
+  DEPLOYMENT and this system does not deploy, it cuts a tag a consumer installs; the fifth
+  needs commit → production and `git tag` returns zero here. Each carries what would change
+  its answer. Decided and closed as #163.
+
 - **`install_ahead: 3` printed beside `kit_ahead: 38`, and only one of them was a
   deadline.** `check_install_drift` rendered all four classes as `<class>: <count>` plus a
   file list, and the summary gave `DIVERGED` its consequence — *a copy in either direction
