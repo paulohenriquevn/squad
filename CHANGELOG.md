@@ -22,6 +22,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`rules/session-injection.txt` — a project can ask the kit to speak less, and cannot ask
+  a guard to stop refusing.** The kit injects three times per turn on its own initiative:
+  1835 bytes of chain summary at session start, 1249 of parsimony ladder in front of every
+  prompt, and 602 of advisory Stop warnings at the end — measured in a consumer 2026-09-18.
+  The ladder's docstring argues the injection must be unconditional, *"a rule read at session
+  start is a rule forgotten by the fortieth prompt"*, and that is right for a session writing
+  code and wrong for one that is not: asking what time it is got the ladder in front of it,
+  and **a rule injected into a turn it has nothing to do with is not a rule being remembered,
+  it is a rule being spent**. `squad/injection.py` answers the question once for all three
+  hooks. What it cannot reach is by CONSTRUCTION, not by comment: `validate-command` and
+  `boundary-check` do not import it and a test refuses one that does, because a guard a
+  config can silence is a guard that gets silenced by somebody who only wanted less text;
+  and `Stop`'s suppression happens at the REPORT, never at the checks, so blockers still
+  block and `--json` still carries everything found. `SQUAD_QUIET` overrides the file for one
+  session in BOTH directions — turning it back on matters as much as turning it off. Absent,
+  unreadable or undecidable text means SPEAKING: a parse failure that quieted the kit would
+  remove the doctrine and the report that something is wrong at once. **Designed, measured
+  and built inside a consumer's installed `.claude/`**, where the next `install.sh --force`
+  would have erased it; found by reading `check_install_drift`'s `install_ahead: 3`, filed as
+  #164, adopted with the sponsor's decision (#164).
+
 
 - **`docs/wiki/decisions/a-step-that-cannot-fail-loudly-did-not-run.md`** — the defect class
   behind five measurements taken on one day across three sessions: a step that silently does

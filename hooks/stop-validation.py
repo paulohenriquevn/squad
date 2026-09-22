@@ -45,6 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import StopContext, create_context
+from squad.injection import is_quiet
 from squad.layout import resolve
 from squad.public_copy import is_public
 from squad.public_copy import warnings as public_copy_warnings
@@ -474,6 +475,17 @@ def _gate_public_copy(files: list[str], root: Path, kit: bool, warnings: list[st
             warnings.append(f"{name}: {claim} ({kit}/rules/public-copy.md)")
 
 
+def _kit_dir_for_quiet() -> Path | None:
+    """Where to look for the volume setting, or `None` when there is no kit.
+
+    Resolved separately from the validation's own root: this hook grades the PROJECT's
+    diff and the setting belongs to the kit installed in it, and in a plugin install
+    those are one directory apart.
+    """
+    layout = resolve(warn=False)
+    return layout.kit_dir if layout is not None else None
+
+
 def main() -> None:
     c = create_context(StopContext)
     # Already refused once on this stop attempt. Report, do not refuse again.
@@ -511,6 +523,17 @@ def main() -> None:
     _gate_changelog(files, root, sources, gate, warnings)
     _gate_secrets(files, gate)
     _gate_public_copy(files, root, kit, warnings)
+
+    # The advisory half is the noise a project can ask not to hear; the blocking half
+    # below is a gate and is never reachable from here. `squad/injection.py` carries why
+    # the two are separated by construction rather than by a comment: a guard a config
+    # can silence is a guard that gets silenced by somebody who only wanted less text.
+    #
+    # Suppression happens at the REPORT and not at the checks, so `--json` and every
+    # caller reading structured output still receive what was found. A volume control
+    # that stopped MEASURING would be a kill switch wearing the quieter name.
+    if warnings and is_quiet(_kit_dir_for_quiet()):
+        warnings = []
 
     # ── report ───────────────────────────────────────────────────────────────
     if blockers:
