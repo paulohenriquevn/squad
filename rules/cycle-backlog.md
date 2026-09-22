@@ -83,7 +83,26 @@ the autonomy conditional on somebody being awake.
 person deciding what a person asked for is the case the gate was built for.
 
 **`approved_by` is the field that keeps the two apart**, for the same reason
-`signed-by: human/…` and `signed-by: judge/…` are different claims in a brief:
+`signed-by: human/…`, `signed-by: peer/…` and `signed-by: judge/…` are three different
+claims in a brief:
+
+| `signed-by` | Means | Accountable by |
+|---|---|---|
+| `human/<name>` | a person read it and committed to it | being a person |
+| `peer/<session> (what it verified)` | ANOTHER session measured something about it independently | the measurement named in the parentheses |
+| `judge/<name>` | a judge ran its contract over it | the contract it ran |
+
+**A peer signature must say what it verified, and is refused without it.** A person is
+accountable by being a person and a judge is named by the contract it ran against; a peer
+is another agent with no contract binding it to this document, so the measurement beside
+the name is the entire value of the signature. `squad/signoff.py` reports an unqualified
+peer separately rather than dropping it — a correctable mistake a reader cannot correct if
+they never see it.
+
+**A peer is not a human and does not become one.** `human_signed` stays false while a peer
+signer is present, because the weakest signer decides. Decided 2026-09-22, after three
+sessions spent a day measuring defects in each other's work with nowhere to record that it
+had happened.
 
 | `approved_by` | Means |
 |---|---|

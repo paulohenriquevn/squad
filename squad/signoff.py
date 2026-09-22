@@ -53,6 +53,25 @@ UNTICKED_RE = re.compile(r"^\s*-\s*\[\s*\]\s+\S", re.MULTILINE)
 #: `daedalus-tech-lead` agreed a system design.
 HUMAN_PREFIX = "human/"
 
+#: The prefix another SESSION signs under — a second agent that independently measured
+#: something about this document. Added 2026-09-22, after three sessions spent a day
+#: finding defects in each other's work with no way to record that it had happened: a
+#: gate exercised only where its defect cannot occur, a waiver whose reason had never
+#: been measured, a status file that outlived the run that wrote it. All of it reached
+#: the record as issue comments and nothing else.
+#:
+#: A peer is NOT a human and never becomes one. What makes the category worth having is
+#: the clause it must carry, below.
+PEER_PREFIX = "peer/"
+
+#: What the peer VERIFIED, in parentheses after the name, at least four words. A person
+#: is accountable by being a person; a judge is named by the contract it ran against. A
+#: peer is another agent with no contract binding it to this document, so the measurement
+#: beside the name is the entire value of the signature — without it the marker says
+#: "somebody else looked", which is a rubber stamp with provenance.
+PEER_CLAIM_RE = re.compile(r"\((\s*\S+(?:\s+\S+){3,}\s*)\)\s*$")
+MIN_PEER_CLAIM_WORDS = 4
+
 
 def is_human(signer: str) -> bool:
     """A NAMED human is still a human — `score_alignment.py`'s rule, stated once.
@@ -62,6 +81,23 @@ def is_human(signer: str) -> bool:
     WHO they are, so the prefix keeps both the route and the meaning.
     """
     return bool(signer) and (signer == "human" or signer.startswith(HUMAN_PREFIX))
+
+
+def is_peer(signer: str) -> bool:
+    """Signed by another session. Says nothing yet about whether the signature QUALIFIES."""
+    return bool(signer) and signer.startswith(PEER_PREFIX)
+
+
+def peer_claim(signer: str) -> str | None:
+    """What this peer says it verified, or None when it did not say.
+
+    The clause is read from the END of the marker so a package name or a route with its
+    own parentheses earlier in the line cannot be mistaken for it.
+    """
+    if not is_peer(signer):
+        return None
+    match = PEER_CLAIM_RE.search(signer.strip())
+    return match.group(1).strip() if match else None
 
 
 @dataclass(frozen=True)
@@ -81,6 +117,17 @@ class SignOff:
         """Every signer is a person. The WEAKEST signer decides, so one human tick
         cannot launder an agent's beside it."""
         return bool(self.signers) and all(is_human(s) for s in self.signers)
+
+    @property
+    def peer_signers(self) -> list[str]:
+        """Peer signatures that SAID what they verified. The others are not signatures."""
+        return [s for s in self.signers if peer_claim(s) is not None]
+
+    @property
+    def unqualified_peers(self) -> list[str]:
+        """Named rather than silently dropped: a peer that signed without saying what it
+        checked is a correctable mistake, and a reader who sees nothing cannot correct it."""
+        return [s for s in self.signers if is_peer(s) and peer_claim(s) is None]
 
     @property
     def non_human_signers(self) -> list[str]:

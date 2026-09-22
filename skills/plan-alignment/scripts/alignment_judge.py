@@ -103,6 +103,15 @@ def _refuse_a_human_claim(judge: str) -> None:
             f"`signed_by_is_human` would count it as a person's sign-off while the "
             f"note this function writes says 'not by a person'. A person signs with "
             f"`sign_document.py --as <name>`.")
+    if cleaned.startswith("peer/"):
+        # Same refusal, one category over. `peer/` means ANOTHER SESSION independently
+        # measured something about this document; a judge running its own contract over
+        # it did not become another session by spelling itself one. The distinction is
+        # the only thing a peer signature is worth.
+        raise ValueError(
+            f"`{cleaned}` claims to be a peer session, and this is the judge. A peer "
+            f"signature says another session verified something independently; running "
+            f"this contract is not that. Sign as `judge/<name>`.")
 
 
 def sign(brief_path: Path, judge: str, reason: str, model: str | None = None) -> str:

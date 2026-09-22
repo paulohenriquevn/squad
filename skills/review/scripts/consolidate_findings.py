@@ -309,6 +309,14 @@ _CONTAINERS = {DATA_DIRNAME} | {
 }
 
 
+def _is_system_temp_root(candidate: Path) -> bool:
+    """Delegated to `cycle_events`, which owns the list. Two spellings would diverge."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "mechanisms" / "cycle"))
+    from cycle_events import _is_system_temp_root as _owner
+
+    return _owner(candidate)
+
+
 def _project_root_for(findings_dir: Path) -> Path:
     """Walk up from the findings directory to the root carrying the records.
 
@@ -336,6 +344,13 @@ def _project_root_for(findings_dir: Path) -> Path:
         # `.claude/records` from inside `.claude`, so a plugin install stopped on the
         # kit's own directory instead of the project holding it.
         if candidate.name in _CONTAINERS:
+            continue
+        # The same rule `cycle_events.project_root_for` applies, and for the same reason:
+        # a `.squad` forgotten in `/tmp` makes every throwaway run one shared project. The
+        # two walks answer the same question about the same tree, so a guard on one of
+        # them is a guard on half the paths — which is how this kit's defects usually
+        # survive a fix.
+        if _is_system_temp_root(candidate):
             continue
         if records_dir(candidate) is not None:
             return candidate

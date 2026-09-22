@@ -432,6 +432,26 @@ def main(argv: list[str] | None = None) -> int:
             print(f"BROKEN ROUTE: `{repo}` routes to domain `{domain}`, whose specialist is")
             print(f"{'  ' + agent if agent else '  not declared at all'} — and that file is not on disk.")
             print("The table names an owner who does not exist. Fix the table or write the specialist.")
+            # A FRESH CLONE REACHES HERE ON PURPOSE, and the sponsor decided 2026-09-22
+            # that this is the correct behaviour rather than a defect to design around.
+            # The routing TABLE is versioned (`.squad/domain-routing.txt`) and travels;
+            # the specialists are not, because `.claude/` is never versioned and a
+            # specialist has to live at `.claude/agents/<name>.md` to BE one — Claude Code
+            # resolves agents by directory, so the same file elsewhere is a document.
+            #
+            # The two alternatives were weighed and declined: versioning `.claude/agents/`
+            # alone makes one subdirectory an exception nobody downstream can explain, and
+            # having the installer generate the specialists makes the kit author content
+            # that is the project's, overwriting a hand-edited specialist on every
+            # install. Exiting 3, loudly, beats routing to a file that is not there.
+            if resolved is not None and not resolved.parent.is_dir():
+                print()
+                print(f"This checkout has no `{resolved.parent}` at all, which is what "
+                      "a fresh clone looks like:")
+                print("  `.claude/` is not versioned, so the specialists do not travel "
+                      "with the repository.")
+                print("  Run `/backlog-init` to derive the table, then write the "
+                      "specialist files it names.")
             # Say what goes in the file. The kit deliberately does NOT generate
             # it — `agents/README.md` requires build commands *that were
             # checked*, and its closing line notes that a derived skeleton

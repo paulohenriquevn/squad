@@ -106,6 +106,36 @@ def resolve_events_path(project_root: Path) -> Path:
     return write_records_dir(project_root) / EVENTS_FILENAME
 
 
+#: Directories that hold every throwaway tree on the machine. One `.squad` forgotten in
+#: one of them turns every test, smoke run and hand-made `mktemp -d` into one shared
+#: project — and nothing reports it, because recording somewhere IS the success path.
+#:
+#: `/tmp` and `/var/tmp` are named literally because that is where residue accumulates;
+#: `tempfile.gettempdir()` covers a consumer whose `TMPDIR` points elsewhere, and is read
+#: at call time rather than at import so a test can move it.
+_NAMED_TEMP_ROOTS = ("/tmp", "/var/tmp")
+
+
+def _is_system_temp_root(candidate: Path) -> bool:
+    """Is this the system temp directory ITSELF, rather than something inside it?
+
+    The distinction is the whole of the rule. `pytest`'s `tmp_path` lives UNDER the temp
+    directory and the install suite builds real projects there, so refusing everything
+    below it would refuse those. `/tmp/.squad` is somebody's leftover;
+    `/tmp/pytest-of-x/test_y0/.squad` is a fixture.
+    """
+    import tempfile
+
+    roots = [*_NAMED_TEMP_ROOTS, tempfile.gettempdir()]
+    for root in roots:
+        try:
+            if candidate.resolve() == Path(root).resolve():
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def project_root_for(work_path: Path) -> Path:
     """The project a phase acted on, derived from the work it touched.
 
@@ -131,6 +161,13 @@ def project_root_for(work_path: Path) -> Path:
         work_path = work_path.parent
     candidates = [work_path, *work_path.parents]
     for candidate in candidates:
+        # The system temp directory is never a project, whatever is sitting in it. Walking
+        # PAST it rather than stopping is deliberate: nothing above `/tmp` qualifies
+        # either, so the loop falls through and the caller gets `work_path` — the
+        # throwaway tree records inside itself, which is what the docstring above promises
+        # for a bare tmpdir and what a stray `.squad` had quietly taken away.
+        if _is_system_temp_root(candidate):
+            continue
         # The write root first, then the legacy ones a project may not have migrated.
         # This walks UP looking for a project, so it must recognise both — a consumer
         # mid-migration is still one project, not none.

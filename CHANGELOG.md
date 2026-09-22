@@ -6,7 +6,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+
+- **`peer/<session> (what it verified)` — a third kind of signature, for a review that
+  came from another session.** `squad/signoff.py` knew `human/…`, which an allowlist
+  accepts as a person, and everything else, which is an agent. Three sessions worked this
+  kit together on 2026-09-22 and each measured real defects in the others' work — a gate
+  exercised only where its defect cannot occur, a waiver whose reason had never been
+  measured, a status file that outlived the run that wrote it — and none of it could be
+  signed. It reached the record as issue comments and nothing else. **A peer signature is
+  refused unless it says what it verified**, in parentheses and at least four words: a
+  person is accountable by being a person and a judge is named by the contract it ran
+  against, but a peer is another agent with no contract binding it to this document, so
+  the measurement beside the name is the entire value of the signature. It is NOT a human
+  signature — `human_signed` stays false with a peer signer present, the weakest signer
+  decides — and `alignment_judge` refuses to sign as one, the same refusal it already
+  makes for `human/`.
+
 ### Fixed
+
+- **A `.squad` forgotten in `/tmp` made `/tmp` a project, and every throwaway run under it
+  recorded there.** `project_root_for` walks up from the work it touched looking for a
+  directory that owns a write root, and `/tmp` holds the throwaway tree of every test,
+  smoke run and hand-made `mktemp -d` on the machine. One leftover turns all of them into
+  one shared project, and nothing reports it because recording somewhere IS the success
+  path. The system temp directory is now never accepted as a root — `/tmp`, `/var/tmp` and
+  whatever `TMPDIR` names — while everything UNDER it still resolves normally, because
+  `pytest`'s `tmp_path` lives there and the install suite builds real projects in it.
+  `/tmp/.squad` is somebody's leftover; `/tmp/pytest-of-x/test_y0/.squad` is a fixture.
+  Applied to both walks, `cycle_events.project_root_for` and
+  `consolidate_findings._project_root_for`: they answer the same question about the same
+  tree, and a guard on one of them is a guard on half the paths.
 
 - **The release mechanism could not express the shape its own consumers release in.**
   `promote_unreleased.py --version` took one semver and refused
