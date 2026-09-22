@@ -65,19 +65,26 @@ class WiredHooksReport:
     settings: str = ""
     wired: int = 0
     missing: list[str] = field(default_factory=list)
+    superseded: list[str] = field(default_factory=list)
     unreadable: str = ""
 
     @property
     def problems(self) -> list[str]:
-        return [f"{event}: `{cmd}` names `{target}`, which is not there — this hook "
-                f"does not run, and a gate that does not run reads from outside "
-                f"exactly like one that passes"
-                for event, cmd, target in (m.split("\x1f") for m in self.missing)]
+        out = [f"{event}: `{cmd}` names `{target}`, which is not there — this hook "
+               f"does not run, and a gate that does not run reads from outside "
+               f"exactly like one that passes"
+               for event, cmd, target in (m.split("\x1f") for m in self.missing)]
+        out += [f"{event}: `{shell}` is wired beside `{python}`, which supersedes it. "
+                f"Both run. A retired hook is not dormant — it enforces the rules it "
+                f"had when it was retired, and those are the ones that were wrong. "
+                f"Unwire the `.sh` line in settings.json"
+                for event, shell, python in (s.split("\x1f") for s in self.superseded)]
+        return out
 
     def exit_code(self) -> int:
         if self.unreadable or not self.settings:
             return UNMEASURABLE
-        return FOUND if self.missing else OK
+        return FOUND if (self.missing or self.superseded) else OK
 
 
 def _script_tokens(command: str) -> list[str]:
@@ -120,6 +127,23 @@ def check_wired_hooks(eco: Path) -> WiredHooksReport:
                     target = _resolve(token, Path(eco))
                     if not target.exists():
                         report.missing.append(f"{event}\x1f{command}\x1f{token}")
+                    elif target.suffix == ".sh":
+                        # PRESENCE IS NOT CURRENCY. The `.sh` exists, so the check above
+                        # clears it — and a retired shell hook wired beside the Python
+                        # one that replaced it is exactly the defect this gate was
+                        # written for. Measured on a real install 2026-09-22: NINE such
+                        # pairs, reported as `HOLDS: all 18 wired hook(s) point at a
+                        # file that exists`.
+                        #
+                        # A `.py` sibling is the decidable signal: the kit replaced its
+                        # shell hooks with Python ones in `260892f`, so a `.sh` with a
+                        # `.py` of the same stem beside it is a leftover. A lone `.sh`
+                        # is a project's own hook and is nobody's leftover — reporting
+                        # it would make this noise.
+                        replacement = target.with_suffix(".py")
+                        if replacement.exists():
+                            report.superseded.append(
+                                f"{event}\x1f{target.name}\x1f{replacement.name}")
     return report
 
 
@@ -134,7 +158,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json:
         print(json.dumps({"settings": report.settings, "wired": report.wired,
-                          "problems": report.problems, "exit_code": code}, indent=2))
+                          "problems": report.problems, "superseded": len(report.superseded),
+                          "exit_code": code}, indent=2))
         return code
 
     if code == UNMEASURABLE:
@@ -143,13 +168,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"UNCHECKED: {why}, so no hook was examined and nothing was swept.",
               file=sys.stderr)
         return code
-    if report.missing:
-        print(f"FAILS: {len(report.missing)} wired hook(s) point at a file that is gone")
+    if report.problems:
+        print(f"FAILS: {len(report.problems)} problem(s) in {report.wired} wired hook(s)")
         for problem in report.problems:
             print(f"  - {problem}")
         return code
 
-    print(f"HOLDS: all {report.wired} wired hook(s) point at a file that exists.")
+    print(f"HOLDS: all {report.wired} wired hook(s) point at a file that exists, and "
+          f"none is a retired shell hook wired beside the Python one that replaced it.")
     return code
 
 

@@ -8,6 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A skip outlived the defect it waited on, and the test went green through the branch
+  that says the work is unfinished.** `tests/test_kit_manifest.py` guarded its `legacy_gone`
+  assertion with a conditional `pytest.xfail` while the kit still shipped an empty
+  `rules/domain-routing.txt` for `install.sh` to copy. When that file was deleted and the
+  installer stopped recreating the retired path, the condition became false, the branch stopped
+  being taken, and the assertion started passing — with no signal that the thing it was waiting
+  for had landed. A skip whose condition has become false does not announce itself; it simply
+  stops being exercised. The assertion is now unconditional and the comment records what the
+  scaffolding was for (#157).
+
 - **The git guard told a citation apart from an invocation, and each round of that fix
   opened bypasses of the rule it protects.** `hooks/validate-command.py` was refusing
   prose that merely NAMED a forbidden command — `echo "…git checkout main"`, a heredoc

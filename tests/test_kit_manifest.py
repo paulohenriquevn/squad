@@ -256,22 +256,19 @@ def test_merge_migrates_the_derived_routing_table_instead_of_losing_it(tmp_path:
     migrated = _owner_destination(target).read_text(encoding="utf-8")
     assert "meu-dominio" in migrated, "the consumer's derived table was lost in the move"
     assert "meu-repo" in migrated
-    # B-233 — the assertion that is NOT yet true, kept where it will be seen rather than
-    # deleted. `install.sh` copies `rules/*` wholesale and the kit still ships an empty
-    # `rules/domain-routing.txt`, so every install recreates the path the write-root rule
-    # retired. Skipping it was measured on 2026-09-21 and makes the installer exit 1 —
-    # `rules_reference_resolves` fails four times over, because nineteen kit files still name
-    # that path — so the skip waits on the migration B-233 owns.
+    # The legacy path must be ABSENT after the migration: a consumer that still has both
+    # files routes correctly by accident — `.squad/` is read first — until somebody removes
+    # the newer one, and nothing reports the copy that is about to be read.
     #
-    # `strict=True`: when B-233 lands this must FAIL as an unexpected pass, which is what stops
-    # a tracked RED from quietly becoming a lie about what is still broken.
-    import pytest
-
-    legacy_gone = not (rules / "domain-routing.txt").exists()
-    if not legacy_gone:
-        pytest.xfail("B-233: the kit still ships rules/domain-routing.txt and install.sh "
-                     "copies rules/* wholesale")
-    assert legacy_gone
+    # This line carried a conditional `pytest.xfail` from 2026-09-21 to 2026-09-22, back when
+    # the kit still shipped an empty `rules/domain-routing.txt` that `install.sh` copied with
+    # the rest of `rules/*`. The skip outlived the defect: the file was deleted, the installer
+    # stopped recreating it, and the test went green through the branch that says it is still
+    # broken. A skip whose condition has become false does not announce itself — it just stops
+    # being exercised — so what is pinned now is the assertion, unconditionally.
+    assert not (rules / "domain-routing.txt").exists(), (
+        "the retired path was recreated by the install"
+    )
 
     body = (rules / "cycle-backlog.md").read_text(encoding="utf-8")
     assert "## Hard gates" in body, "the rest of the rule must arrive updated from the kit"

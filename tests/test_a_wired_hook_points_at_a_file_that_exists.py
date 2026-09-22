@@ -88,3 +88,68 @@ def test_this_kit_wires_nothing_that_is_gone() -> None:
     report = check_wired_hooks(REPO)
 
     assert report.exit_code() in (0, 2), report.problems
+
+
+# ── presence is not currency ─────────────────────────────────────────────────
+#
+# Measured on a real install, 2026-09-22, by the session that owns it: NINE hooks wired
+# as BOTH `.sh` and `.py` at once — validate-command, boundary-check, post-edit-check,
+# english-only-check, precompact-preserve, stop-validation and three more. The gate
+# answered `HOLDS: all 18 wired hook(s) point at a file that exists`, exit 0.
+#
+# It was right about its title and wrong about its purpose. The `.sh` DOES exist, so it
+# does point at a file that is there — and the defect the docstring describes, a retired
+# hook still wired beside its replacement, sailed through under a HOLDS.
+#
+# The same session was blocked three times that day by those hooks, once by the retired
+# `.sh` specifically: both were live and both were firing.
+#
+# AND THE COVERAGE WAS NEVER MEASURED. This gate passed in the kit (9 hooks, all `.py`)
+# and in a fresh install (no `.sh` at all). Neither has the defect. A gate exercised only
+# where its defect cannot occur is a gate whose coverage nobody checked — which is the
+# thing this kit says about tests and had not said about itself.
+
+
+def _both_wired(tmp_path: Path) -> Path:
+    eco = tmp_path / ".claude"
+    (eco / "hooks").mkdir(parents=True)
+    for name in ("validate-command.py", "validate-command.sh"):
+        (eco / "hooks" / name).write_text("#\n", encoding="utf-8")
+    (eco / "settings.json").write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"matcher": "Bash", "hooks": [
+            {"type": "command", "command": "python3 $CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.py"},
+            {"type": "command", "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/validate-command.sh"},
+        ]}]}}), encoding="utf-8")
+    return eco
+
+
+def test_a_retired_hook_wired_beside_its_replacement_is_reported(tmp_path: Path) -> None:
+    """Both files exist. That is exactly why presence cannot answer this."""
+    report = check_wired_hooks(_both_wired(tmp_path))
+
+    assert report.exit_code() == 1, "nine of these passed as HOLDS on a real install"
+    assert any("supersedes" in p for p in report.problems), report.problems
+
+
+def test_the_report_names_which_one_to_unwire(tmp_path: Path) -> None:
+    """The reader's next move is to remove one line from settings.json, and which line
+    it is must not be left as an exercise."""
+    report = check_wired_hooks(_both_wired(tmp_path))
+
+    blob = " ".join(report.problems)
+    assert "validate-command.sh" in blob, blob
+    assert "validate-command.py" in blob, blob
+
+
+def test_a_lone_shell_hook_is_not_a_finding(tmp_path: Path) -> None:
+    """A project's OWN shell hook has no `.py` beside it and is nobody's leftover.
+    Reporting it would make the gate noise, and noise is what gets a gate switched off."""
+    eco = tmp_path / ".claude"
+    (eco / "hooks").mkdir(parents=True)
+    (eco / "hooks" / "my-own-thing.sh").write_text("#\n", encoding="utf-8")
+    (eco / "settings.json").write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"matcher": "Bash", "hooks": [{"type": "command",
+         "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/my-own-thing.sh"}]}]}}),
+        encoding="utf-8")
+
+    assert check_wired_hooks(eco).exit_code() == 0

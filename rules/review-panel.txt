@@ -121,7 +121,7 @@ reviewer = plan     | judge-codex:plan-judge     | gpt-5.5         | builtin
 # deterministically adds cost and no information.
 reviewer = design   | vera-technical-arbiter     | claude-opus-5   | builtin
 reviewer = design   | nemesis-claim-auditor      | claude-sonnet-5 | builtin
-reviewer = design   | judge-codex:plan-judge     | gpt-5.5         | builtin
+reviewer = design   | judge-codex:design-judge   | gpt-5.5         | builtin
 
 # THE WAIVER WAS REMOVED, AND THIS IS WHAT REPLACED IT
 #
@@ -156,16 +156,25 @@ reviewer = design   | judge-codex:plan-judge     | gpt-5.5         | builtin
 #   convene_panel.py --phase {discover,plan,design}            -> assigned,
 #       the judge-codex seat resolving to family `openai` in all three
 #
-# WHY `plan-judge` SITS ON DESIGN, STATED RATHER THAN GLOSSED
-# ----------------------------------------------------------
-# judge-codex supplies discover-judge, plan-judge, implementation-judge and final-judge.
-# It supplies NO design-judge, so the design seat is an approximation and this line is
-# the place that admits it. `plan-judge` audits a planning artifact against a golden
-# rule, which is the nearest thing to auditing a drawing set against
-# `design-golden-rule.md`; `final-judge` is review-of-review over a consolidated report
-# and is further away. The honest fix is a design-judge in the plugin — until it
-# exists, the seat is orthogonal by FAMILY, which is what the rule asks for, while
-# being generic in LENS, which it is not.
+# THE DESIGN SEAT IS NO LONGER AN APPROXIMATION
+# ---------------------------------------------
+# It was `judge-codex:plan-judge` until 2026-09-22, and this block admitted why: the
+# plugin supplied discover-judge, plan-judge, implementation-judge and final-judge and
+# NO design-judge, so the nearest available lens audited a planning artifact where a
+# drawing set was meant to be audited. Orthogonal by FAMILY, which the rule asks for,
+# and generic in LENS, which it does not.
+#
+# `judge-codex` 0.3.0 supplies `design-judge`, and the seat names it. What the plugin
+# built is the lens that was missing: it reads the five drawings in `.squad/wiki/design/`
+# AS A SET — a contradiction between two of them is invisible to a reader holding one —
+# and audits against the three questions in `design-golden-rule.md`. Its output schema
+# carries `scope`: which drawings were read, and whether there was code on disk to check
+# them against. That field matters because the golden rule makes the scope DERIVED, so a
+# reader has to know which audit is being held.
+#
+# THE APPROXIMATION IS RECORDED RATHER THAN DELETED. A seat that was generic in lens for
+# some weeks produced panel records in that period, and a reader meeting one of them
+# needs this paragraph to know what it was worth.
 #
 # WHAT THIS STILL DOES NOT PROVE. `check_panel_capability` probes the binary, never the
 # model behind it. The `codex exec` above is what closes that gap, and it was run by

@@ -254,6 +254,22 @@ def _agents_dir(project: Path) -> Path | None:
     return None
 
 
+#: Refusals that mean "this document is not waiting for anyone", as opposed to "this
+#: signer may not be the one". `author_signing_own_work` is the second kind: the document
+#: IS waiting, just not for that person, so it stays on the list.
+_NOT_WAITING = frozenset({"nothing_to_tick", "already_signed"})
+
+
+def _signable(doc: "Document") -> bool:
+    """Whether this document is waiting for SOMEBODY's signature.
+
+    Asked of `check`, with a signer no authorship can match, so the answer is about the
+    document rather than about who is holding it.
+    """
+    refusal = check(doc, "\x00nobody")
+    return refusal is None or refusal.code not in _NOT_WAITING
+
+
 def waiting(project: Path) -> list[Path]:
     """Documents with an unticked sign-off box, wherever the kit keeps them."""
     roots = [d for d in (wiki_dir(project, "product"), wiki_dir(project, "design"),
@@ -273,7 +289,19 @@ def waiting(project: Path) -> list[Path]:
                 # is waiting quietly shorter than the truth.
                 unreadable.append(str(exc))
                 continue
-            if doc is not None and not doc.already_signed:
+            # ASKED, not restated. `waiting` listed `not already_signed` while `check`
+            # also refuses `nothing_to_tick` — a document with no unticked box AND no
+            # `signed-by:` marker fell between them: listed as waiting, then refused as
+            # unsignable. Measured on a consumer 2026-09-22: `--list` reported 33
+            # waiting and 30 of them could not be signed at all. The honest number was 3.
+            #
+            # That shape is not rare — it is what a brief signed under delegation looks
+            # like. And a queue that is ninety percent impossible teaches its reader the
+            # output is noise, which is where the three real signatures get lost.
+            #
+            # `signable_reason` is the one predicate now. A third reader of "can this be
+            # signed" is how the gap reopens.
+            if doc is not None and _signable(doc):
                 found.append(path)
     if unreadable:
         print(f"{len(unreadable)} document(s) could not be read and are NOT in this list:",

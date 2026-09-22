@@ -157,6 +157,80 @@ def validate_with_plugin(install_path: Path, report: Path) -> tuple[bool, str]:
     return False, f"the plugin's own checker rejected the report: {detail[:400]}"
 
 
+#: The contract the plugin side emits, negotiated 2026-09-22. Version bumps when the
+#: SHAPE changes; a reader that meets an unknown one refuses rather than taking the
+#: fields it recognises, because reading part of an unknown shape is guessing at the rest.
+VERDICT_FILE = "verdict.json"
+VERDICT_SCHEMA = 1
+
+
+def read_verdict(output_dir: Path) -> dict:
+    """What the plugin says its verdict is, and whether this gate may act on it.
+
+    THE DISTINCTION THIS EXISTS FOR. The plugins session measured all seventeen: five
+    compute the verdict in a script, twelve derive it in the agent from a declared query
+    over persisted findings. **None asserts one freehand** — that correction came from
+    the measurement and neither of us had assumed it. What differs is who runs the
+    derivation, and the two carry different guarantees:
+
+        source: computed          a script produced it. Gateable.
+        source: derived-by-agent  a model produced it, following the rule in its `.md`.
+                                  Carried and reported, never gated on — the treatment
+                                  `severity_signal` already has, for the same reason.
+
+    `computed` WITHOUT `by` IS DEMOTED. The plugin CLI has no `--by` flag by design, so
+    the field comes from whatever executed; a `computed` with no `by` is
+    indistinguishable from one typed by a model that read the contract, which is the
+    confusion `source` exists to end.
+
+    AN ABSENT FILE IS `verdict_not_exposed`, never "no findings". Sixteen of seventeen
+    plugins are in that state today. That is the same distinction this gate already
+    draws between `not_installed` and `no_report`: did not happen, versus happened and
+    passed.
+
+    WHAT THIS DOES NOT CLAIM. `computed` proves a script produced the token. It does not
+    prove the script is right — correctness stays with the plugin, where
+    `verify_report_format.py` says it stays. Written down because a gate of this kit was
+    overread exactly that way on the same day.
+    """
+    path = Path(output_dir) / VERDICT_FILE
+    if not path.is_file():
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"no {VERDICT_FILE} beside the report; this plugin exposes no "
+                          f"decidable verdict, which is not the same as reporting none"}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"{VERDICT_FILE} could not be read: {error}"}
+    if not isinstance(payload, dict):
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"{VERDICT_FILE} is not an object"}
+    if payload.get("schema") != VERDICT_SCHEMA:
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"{VERDICT_FILE} declares schema {payload.get('schema')!r} and "
+                          f"this gate reads {VERDICT_SCHEMA}; reading the fields it "
+                          f"recognises would be guessing at the rest"}
+
+    source = payload.get("source")
+    verdict = payload.get("verdict")
+    if not verdict or source not in ("computed", "derived-by-agent"):
+        return {"state": "verdict_not_exposed", "gateable": False, "verdict": None,
+                "detail": f"{VERDICT_FILE} names source {source!r} and verdict "
+                          f"{verdict!r}; both are required"}
+
+    by = payload.get("by")
+    if source == "computed" and not by:
+        return {"state": "derived-by-agent", "gateable": False, "verdict": verdict,
+                "blocking_count": payload.get("blocking_count"),
+                "detail": "declares `computed` and names no `by`, so the stronger "
+                          "guarantee is not demonstrated and this reads as the weaker one"}
+
+    return {"state": source, "gateable": source == "computed", "verdict": verdict,
+            "by": by, "blocking_count": payload.get("blocking_count"),
+            "detail": f"{source}" + (f" by {by}" if by else "")}
+
+
 def find_report(project: Path, output_dir: str, glob: str,
                 *, commissioned_at: float | None = None) -> Path | None:
     """The audit report for this run, or None.
@@ -323,10 +397,24 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
             # reader acts on it, never used to pass or fail this gate.
             severity_signal=[s for s, has in sev.items() if has],
         )
+        # The decidable verdict, when the plugin exposes one. Read from a file beside
+        # the report rather than parsed out of it: this gate has never parsed another
+        # project's markdown for a decision, and the contract exists so it never has to.
+        entry["verdict_record"] = read_verdict(project / req["output_dir"])
         if not ok:
             entry["state"] = "malformed"
             failing.append(name)
         else:
+            # `covered` answers "the audit ran and its report is well-formed", and that
+            # stays true whether or not a decidable verdict came with it. The verdict is
+            # a SEPARATE fact and lives in `verdict_record`.
+            #
+            # An earlier draft of this overwrote `state` with `verdict_not_exposed` and
+            # a sibling test refused it within the minute — correctly. Sixteen of the
+            # seventeen plugins expose no verdict today and every one of them covers its
+            # audit; folding the two would have turned a real coverage report into a
+            # failure, which is the same collapse of two facts into one field that this
+            # gate's own `not_installed` / `no_report` split exists to avoid.
             entry["state"] = "covered"
         results.append(entry)
 
