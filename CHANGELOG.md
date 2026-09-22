@@ -6,7 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Changed
+
+- **A commissioned audit now says which directory its commands run from.**
+  `select_auditors.py` emits an absolute `--output-dir` under the project's write root,
+  and every `loop-*` plugin confines `--output-dir` under its own working directory (a
+  path-traversal fix). Both halves are right; the join holds only at the project root,
+  and neither side said so — `skills/review/SKILL.md` said "run each command exactly as
+  printed", and the plugin's refusal names the FLAG (`--output-dir is unsafe`) rather
+  than the directory the reader is standing in. Acting on that reading means moving the
+  output directory, which is the one thing that must not move: `check_auditor_coverage`
+  looks for the report exactly where the assignment put it. The assignment now carries
+  `run_from` in its JSON and a `run from:` line in its printed form, and the skill says
+  move the caller, never the `--output-dir`.
+
 ### Added
+
 
 - **`docs/wiki/decisions/a-step-that-cannot-fail-loudly-did-not-run.md`** — the defect class
   behind five measurements taken on one day across three sessions: a step that silently does

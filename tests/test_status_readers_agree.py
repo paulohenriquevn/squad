@@ -290,6 +290,19 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         "tests/test_pipeline_does_not_approve.py",
         # Names statuses only in a comment about queue order.
         "mechanisms/fleet/squad_lead.py",
+        # Fixtures for SELECT's obligation band. It names `triaged` and `raw` to build
+        # the two cases the band must NOT disturb — status still ranks before age inside
+        # it — never to decide what either one means. The meaning is `_RANK`, read from
+        # `SELECTABLE`, which is pinned above.
+        "skills/backlog-review/tests/test_an_incident_does_not_wait_for_its_turn_by_age.py",
+        # Fixtures for the lead-time p50. It names `shipped` and `killed` to build the
+        # delivered and the abandoned case, because `_delivery` counts them apart; the
+        # meaning of both comes from that function, which `test_board_state.py` pins.
+        "skills/backlog-review/tests/test_the_board_computes_lead_time_from_the_date_it_already_had.py",
+        # A killed item's lineage, read forward. It names `killed` and `shipped` because
+        # `LINEAGE_EDGES` maps each field to the status it implies — the map is the
+        # decider and lives in `check_backlog_structure.py`.
+        "skills/backlog-review/tests/test_a_killed_item_says_where_it_went.py",
         # Tests OF the readers. They assert on statuses, they do not route on
         # them, and enumerating them here would pin the pins.
         "skills/backlog-review/tests/test_backlog_index.py",

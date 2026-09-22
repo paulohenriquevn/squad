@@ -12,8 +12,9 @@ looks like progress.
 MEASURED, not imagined: this session left twenty issues open on purpose on 2026-09-22.
 The project rule separates *the fix is merged* from *the fix is installable* and closes
 only on the second, because closing at merge tells whoever is blocked that the problem is
-gone while `install.sh` still carries it. The consequence, written down the same day: an
-issue open and unlabelled *"é indistinguível de issue parada para quem olha a lista"*.
+gone while `install.sh` still carries it. The consequence, noticed the same day: an issue
+that is open and unlabelled cannot be told from one nobody has started — not by a reader
+scanning the list, and not by the fleet reading it through this module.
 
 The label is the state. `in-develop` is the name the project rule already prescribes, and
 the fleet reads it rather than guessing from the body.
