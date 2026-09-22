@@ -70,6 +70,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The freshness gate was declared in two rules and run by nothing, and it answered to the
+  wrong flag.** Four of this repository's own meta-gates caught it in the full suite:
+  `check_plugin_freshness` took `--project` where the contract in `mechanisms/gates/_contract.py`
+  says `--root`, it was absent from the roster that sweeps gates by that flag, and
+  `test_something_runs_this_gate` reported it as *executed by nothing — not the CI, not a
+  hook, not verify_ecosystem, not any script*. Being declared in `cycle-review.md` and
+  `mechanisms/README.md` is being DESCRIBED, not being run. It now answers `--root` with
+  `--project` surviving as its own alias, and `select_auditors.py` asks it at commission
+  time, which is the moment before any audit runs. **The premise was also stated wrongly and
+  is corrected:** the first draft said "asked once before the first item". Measured the same
+  afternoon — 7 of 7 aligned, and the same 7 stale sixty minutes later, because the session
+  maintaining those plugins had been committing. Drift is not an incident that happened once;
+  it is the normal state of any plugin under active development. It ADVISES rather than
+  blocks: which revision a consumer installed is theirs, and refusing the audit over it would
+  stop a review for something the reviewer cannot fix from there. One unrelated failure in
+  the same run: the recovery procedure added to `records-location.md` spelled an invocation
+  that resolves in only one of the two install layouts.
+
 - **The freshness gate resolved the home directory itself, and the installer's post-install
   validation failed on it.** `check_produced_files` reads the code for a module that
   CONSTRUCTS a destination under `$HOME` and requires it to be declared in `HOME_WRITERS`

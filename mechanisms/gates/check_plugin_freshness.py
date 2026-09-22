@@ -22,9 +22,16 @@ joint wrong, and nothing positioned to look at the joint.
 
 ## A premise, asked once
 
-In the sense `check_merge_autonomy.py` uses: before the first item rather than per-item,
-because discovering it per-audit costs the run — the audit completes, the report is
-written, and only the missing field says something was wrong.
+In the sense `check_merge_autonomy.py` uses — before the work rather than during it,
+because discovering this per-audit costs the run: the audit completes, the report is
+written, and only a missing field says anything was wrong.
+
+NOT once per session, though, and the first draft of this file said so. Measured the same
+afternoon it was written: 7 of 7 commissioned plugins read `aligned`, and sixty minutes
+later the same 7 read `stale`, because the session maintaining them had been committing.
+Drift is not an incident that happened once — it is the normal state of any plugin under
+active development. So `select_auditors.py` asks it at COMMISSION time, which is still
+before any audit runs.
 
 ## Three answers, kept apart
 
@@ -62,6 +69,7 @@ sys.path.insert(0, str(_HERE.parent / "conventions"))
 
 from installed_plugins import load as load_plugins  # noqa: E402
 from installed_plugins import marketplace_source  # noqa: E402
+from _contract import add_root  # noqa: E402
 from select_auditors import parse_registry, registry_path  # noqa: E402
 
 
@@ -161,12 +169,15 @@ def _render(code: int, report: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--project", type=Path, default=Path("."))
+    # `--root` is the contract every gate answers to (`_contract.add_root`); `--project`
+    # survives as this gate's own alias, writing to the same destination, so the spelling
+    # in an existing invocation keeps working.
+    add_root(ap, aliases=("--project",))
     ap.add_argument("--config-dir", type=Path, default=None)
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
-    code, report = check(project=args.project.resolve(), config_dir=args.config_dir)
+    code, report = check(project=args.root.resolve(), config_dir=args.config_dir)
     if args.json:
         print(json.dumps(report, indent=2))
     else:

@@ -331,6 +331,23 @@ def main(argv: list[str] | None = None) -> int:
                           diff_base=args.diff_base, pr=args.pr, commits=args.commits,
                           target=args.target, config_dir=args.config_dir)
 
+    # FRESHNESS, asked here because this is the moment before any audit runs. An audit
+    # commissioned against a plugin whose install is behind its source runs code that
+    # predates the contract it is audited against — measured 2026-09-22, 17 of 18 installs
+    # behind, and the same 7 went from aligned to stale in sixty minutes because the
+    # session maintaining them was committing. It ADVISES rather than blocks: which
+    # revision a consumer chose to install is theirs, and a gate that refuses the audit
+    # over it would stop a review for something the reviewer cannot fix from here.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "gates"))
+    try:
+        from check_plugin_freshness import check as check_freshness
+
+        _, freshness = check_freshness(project=args.project, config_dir=args.config_dir)
+    except Exception as exc:  # noqa: BLE001 — a premise that cannot be read is reported
+        freshness = {"state": "unmeasured", "detail": f"{type(exc).__name__}: {exc}"}
+    if freshness.get("stale") or freshness.get("state") == "unmeasured":
+        result["plugin_freshness"] = freshness
+
     if args.write and result["status"] in ("selected", "not_installed"):
         out = assignment_path(args.project, args.slug)
         out.parent.mkdir(parents=True, exist_ok=True)

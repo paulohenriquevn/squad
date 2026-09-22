@@ -190,7 +190,7 @@ without its block is a number, not an item.
 **2. Get the next id from the allocator, never from the file.**
 
 ```bash
-python3 mechanisms/cycle/next_backlog_id.py BACKLOG.md
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/next_backlog_id.py" BACKLOG.md
 ```
 
 It reads the blocks present, recovers from the registry's git history every id that ever
