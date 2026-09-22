@@ -58,6 +58,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The freshness gate resolved the home directory itself, and the installer's post-install
+  validation failed on it.** `check_produced_files` reads the code for a module that
+  CONSTRUCTS a destination under `$HOME` and requires it to be declared in `HOME_WRITERS`
+  with a reason; `check_plugin_freshness.py` shipped with two such calls and no declaration.
+  `verify_ecosystem` then failed inside `install.sh`, and **29 of 36 install tests failed
+  with symptoms that named the installer** — not one of them said *an undeclared home
+  writer*, which is why the first hypothesis was a stray untracked file at the root. Fixed
+  at the root rather than by widening the exemption: both manifests are now read by
+  `mechanisms/conventions/installed_plugins.py`, which already owns `~/.claude/plugins/`
+  and already carries that exemption under the reason *reading the user's own configuration
+  is not a write*. `Plugin` gained `commit` — the `gitCommitSha`, and the only field that
+  says which revision is actually RUNNING, since `install_path` points into a cache — plus
+  `marketplace`; `marketplace_source()` reads `known_marketplaces.json`. A second module
+  needing the same exemption for the same reason is a second place to get the path wrong.
+
 - **A `.squad` forgotten in `/tmp` made `/tmp` a project, and every throwaway run under it
   recorded there.** `project_root_for` walks up from the work it touched looking for a
   directory that owns a write root, and `/tmp` holds the throwaway tree of every test,
