@@ -54,6 +54,16 @@ class Plugin:
     qualified: str     #: `name@marketplace`, as the manifest keys it
     version: str
     install_path: Path
+    #: The revision the INSTALLED copy was built from, as Claude Code recorded it, or
+    #: None when the manifest entry carries none. `install_path` points into a CACHE, so
+    #: this is the only field that says WHICH revision is actually running —
+    #: `check_plugin_freshness.py` compares it against the source repository's HEAD.
+    commit: str | None = None
+
+    @property
+    def marketplace(self) -> str:
+        """The half of `qualified` after `@` — the key `known_marketplaces.json` uses."""
+        return self.qualified.split("@", 1)[-1]
 
     @property
     def agents_dir(self) -> Path:
@@ -97,7 +107,8 @@ def load(config_dir: Path | None = None) -> dict[str, Plugin]:
         bare = qualified.split("@", 1)[0]
         plugin = Plugin(name=bare, qualified=qualified,
                         version=entry.get("version", "unknown"),
-                        install_path=Path(install))
+                        install_path=Path(install),
+                        commit=entry.get("gitCommitSha") or None)
         out.setdefault(bare, plugin)
         out[qualified] = plugin
     return out
@@ -155,3 +166,26 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def marketplace_source(marketplace: str, config_dir: Path | None = None) -> dict:
+    """Where a marketplace's plugins come FROM, per `known_marketplaces.json`.
+
+    It lives here rather than in its caller for the reason the exemption in
+    `check_produced_files.HOME_WRITERS` already states about this module: reading the
+    user's own configuration under `~/.claude/plugins/` is this module's job, and a second
+    spelling of that path in a gate would be a second place to get it wrong — and a second
+    module needing the same exemption for the same reason.
+
+    An empty dict when the file cannot be read or the marketplace is unknown. A caller
+    that cannot tell WHERE a plugin came from must report that it could not tell, never
+    assume a default.
+    """
+    path = manifest_path(config_dir).with_name("known_marketplaces.json")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    entry = data.get(marketplace) if isinstance(data, dict) else None
+    source = (entry or {}).get("source") if isinstance(entry, dict) else None
+    return source if isinstance(source, dict) else {}

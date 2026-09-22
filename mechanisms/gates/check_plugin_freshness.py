@@ -61,17 +61,8 @@ sys.path.insert(0, str(_HERE.parent / "cycle"))
 sys.path.insert(0, str(_HERE.parent / "conventions"))
 
 from installed_plugins import load as load_plugins  # noqa: E402
+from installed_plugins import marketplace_source  # noqa: E402
 from select_auditors import parse_registry, registry_path  # noqa: E402
-
-
-def _marketplaces(config_dir: Path | None) -> dict:
-    base = Path(config_dir) if config_dir else Path.home() / ".claude"
-    path = base / "plugins" / "known_marketplaces.json"
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def _head(repo: Path) -> str | None:
@@ -82,17 +73,6 @@ def _head(repo: Path) -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return proc.stdout.strip() if proc.returncode == 0 else None
-
-
-def _installed_sha(config_dir: Path | None, qualified: str) -> str | None:
-    base = Path(config_dir) if config_dir else Path.home() / ".claude"
-    path = base / "plugins" / "installed_plugins.json"
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    entries = (data.get("plugins") or {}).get(qualified) or []
-    return (entries[0].get("gitCommitSha") or None) if entries else None
 
 
 def check(*, project: Path, config_dir: Path | None = None) -> tuple[int, dict]:
@@ -110,7 +90,6 @@ def check(*, project: Path, config_dir: Path | None = None) -> tuple[int, dict]:
 
     wanted = sorted({a.plugin for a in auditors})
     plugins = load_plugins(config_dir)
-    markets = _marketplaces(config_dir)
 
     aligned: list[str] = []
     stale: list[dict] = []
@@ -123,14 +102,19 @@ def check(*, project: Path, config_dir: Path | None = None) -> tuple[int, dict]:
                                  "not installed on this machine, so there is no "
                                  "snapshot to compare — see select_auditors exit 3"})
             continue
-        marketplace = plugin.qualified.split("@", 1)[-1]
-        source = (markets.get(marketplace) or {}).get("source") or {}
+        # BOTH manifests are read by `installed_plugins`, which owns `~/.claude/plugins/`.
+        # Spelling either path here would be a second place to get it wrong, and a second
+        # module needing `check_produced_files.HOME_WRITERS` to exempt it for the same
+        # reason the first one already carries. Measured the hard way: the first cut of
+        # this gate resolved the home directory itself, and 29 install tests failed with
+        # symptoms that named the installer.
+        source = marketplace_source(plugin.marketplace, config_dir)
         if source.get("source") != "directory" or not source.get("path"):
             unverifiable.append({"plugin": name, "why":
                                  f"installed from `{source.get('source', 'an unknown source')}`, "
                                  "which is not a local directory this machine can diff against"})
             continue
-        installed = _installed_sha(config_dir, plugin.qualified)
+        installed = plugin.commit
         if not installed:
             unverifiable.append({"plugin": name, "why":
                                  "the install manifest records no `gitCommitSha`, so "

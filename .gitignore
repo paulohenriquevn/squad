@@ -147,3 +147,10 @@ agents/*.md
 
 # Output of the loop-code-review plugin — a tool artifact, never the project.
 code-review-output/
+
+# Personal working documents. `ANALISE.md` is a session analysis written FOR the
+# maintainer, in the language he reads — which is the one language rule this repository
+# does not apply to prose only he sees. Versioning it would put pt-BR in a tree whose
+# contract is English, and `check_english_only.py` scans TRACKED files, so tracking it is
+# also what would make that gate start failing. The same reason `BACKLOG.md` never travels.
+ANALISE.md
