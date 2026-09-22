@@ -8,6 +8,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The release mechanism could not express the shape its own consumers release in.**
+  `promote_unreleased.py --version` took one semver and refused
+  `create-theokit 3.0.2, @theokit/http 2.3.0, theokit 0.69.0`, while the three sections
+  below the one being written in that CHANGELOG were multi-package headings of exactly that
+  form. So the script could not perform the promotion `cycle-release.md` prescribes for the
+  common case, and the promotion was done by hand — the heading read off the file rather
+  than invented, which is the only reason it stayed consistent. `squad.semver.parse_release`
+  now reads a release line as one bare version or several `<package> <version>` components.
+  Every component is validated and one bad component refuses the whole line: partial
+  acceptance writes a typo into a heading nobody edits again, and `render_release_notes.py`
+  looks the section up by exact string. A pre-release in ANY component refuses the line,
+  because promoting at rc empties `[Unreleased]` for every package in the heading (#151).
+
+- **A reviewer's brief forbade the write it also required.** The same template said *"never
+  in the shared tree"*, *"scratch files go under /tmp, never under the repository"*, and
+  *"save to `{FINDINGS_DIR}`"* — an absolute path in the shared checkout. A reviewer reading
+  all three had no legal way to deliver its findings, and one of them staged in `/tmp` and
+  copied; the one that does not improvise loses its file at the last step, after the whole
+  review has run, and an absent findings file is indistinguishable from a reviewer that
+  found nothing. The five templates now name the findings file as the one expected write
+  into the shared tree. The boundary half of that report did NOT reproduce on re-measurement
+  — `is_project_owned` asks what the install manifest claims rather than what sits under
+  `.claude/`, so an agent worktree was already the project's; a test now pins that, since
+  correct-but-unasserted behaviour is what a later tightening removes silently (#149).
+
 - **A requirement closed by the Final Phase was unexpressible, so eleven rows read as
   requirements nothing closes.** `TASK_ID_RE` is `T<n>.<n>` and no plan gives its Final
   Phase a task id — the heading is `## Final Phase: Integration Validation`, an H2 rather

@@ -30,7 +30,7 @@ for _up in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_up))
         break
 # Below the bootstrap: `squad` is importable only after sys.path is extended.
-from squad.semver import parse as _parse_version  # noqa: E402 — post-bootstrap import
+from squad.semver import parse_release as _parse_release  # noqa: E402 — post-bootstrap import
 
 
 def main() -> int:
@@ -45,10 +45,17 @@ def main() -> int:
     # the permanent record, and the reader was then told "version section [1.2.0] not
     # found" — pointing at their argument instead of at the malformed heading three
     # commits back. This is the last writer before the record hardens.
-    version = _parse_version(args.version)
-    if version is None or args.version.startswith("v"):
-        print(f"not a version this kit cuts: {args.version!r}. Expected MAJOR.MINOR.PATCH, "
-              f"optionally -rc.N, and no leading 'v'.", file=sys.stderr)
+    # ONE version, or several — `theokit 0.69.0, @theokit/http 2.3.0`. A monorepo cuts
+    # packages together and Keep-a-Changelog has no opinion about the text between the
+    # brackets; this took a single semver and refused the shape its own consumers release
+    # in most of the time, so the promotion was performed by hand. Every component is still
+    # validated, and one bad component refuses the whole line: partial acceptance writes a
+    # typo into a heading nobody edits again.
+    components = _parse_release(args.version)
+    if components is None:
+        print(f"not a release line this kit cuts: {args.version!r}. Expected "
+              f"MAJOR.MINOR.PATCH, optionally -rc.N, no leading 'v' — or several as "
+              f"'<package> <version>' separated by commas.", file=sys.stderr)
         return 2
 
     # `cycle-release.md § The CHANGELOG moves once, at the final` has always said an rc
@@ -57,7 +64,9 @@ def main() -> int:
     # `-rc.2` and the final have nothing to publish, and the entries end up filed under
     # a version that was still a candidate. The section is the milestone's changelog and
     # it moves ONCE.
-    if version.is_prerelease:
+    # Per component: a line is a pre-release if ANY package in it is. Promoting at rc
+    # empties `[Unreleased]` for every package in the heading, not only the candidate one.
+    if any(version.is_prerelease for _, version in components):
         print(f"refusing to promote under a pre-release: {args.version}. An rc reads "
               f"[Unreleased] for its notes and LEAVES IT IN PLACE; only the final cut "
               f"promotes it (rules/cycle-release.md § The CHANGELOG moves once, at the "
