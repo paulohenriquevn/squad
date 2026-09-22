@@ -22,6 +22,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`docs/wiki/decisions/a-reference-is-checked-in-one-direction.md`** — the class behind
+  four cross-reference defects found in one sweep on 2026-09-22, in four different slices.
+  A reference has two sides and one author, who writes the check holding one side in mind;
+  the other question is not wrong, it is ABSENT, and absence has no failing test. It is
+  worse than a missing check: a gate that covers one direction **reports a verdict**, and
+  the verdict is read as covering the topic because its name says so — `is_complete: True`
+  over a matrix whose rows point at nothing is not silence, it is an assertion somebody
+  acts on. The record carries the two questions that find the missing half before shipping,
+  the reason the two directions must stay separate findings, and the guard all four fixes
+  needed: when the target document is unreadable, report nothing rather than reporting
+  everything as unresolved.
+
 - **`rules/session-injection.txt` — a project can ask the kit to speak less, and cannot ask
   a guard to stop refusing.** The kit injects three times per turn on its own initiative:
   1835 bytes of chain summary at session start, 1249 of parsimony ladder in front of every
