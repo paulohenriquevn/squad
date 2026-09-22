@@ -307,14 +307,43 @@ def live_blockers(item: Item, statuses: dict[str, str]) -> list[str] | None:
     return [] if carries_prose(raw) else None
 
 
+#: The `source` values that put an item in the obligation band. ONE today, and the
+#: narrowness is the point: `live-incident` already means "something is wrong in the
+#: running system NOW", and it is the only obligation the registry can MEASURE.
+#:
+#: A security finding, a legal obligation and an SLA breach belong here by every argument
+#: below, and there is no field that identifies them — so they are not in the band, and
+#: this comment says so rather than letting the name imply a coverage the schema cannot
+#: support. When a field exists, the set widens and this comment changes with it.
+OBLIGATION_SOURCES = frozenset({"live-incident"})
+
+
+def is_obligation(item: Item) -> bool:
+    """Is this item costing while it waits, rather than merely waiting?"""
+    return item.fields.get("source", "").strip() in OBLIGATION_SOURCES
+
+
 def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[Item]:
-    """The chain's order: what unblocks a halt first, then triaged before raw, then
-    oldest first.
+    """The chain's order: an obligation first, then what unblocks a halt, then triaged
+    before raw, then oldest first.
 
     Age normally decides, and it still decides among equals. But an item that some
     halted item's BLOCKED report names as its cause is not an equal: finishing it
     turns a stopped item back into a moving one, and every hour it waits is an hour
     the halted item also waits.
+
+    ABOVE BOTH: an obligation. `source: live-incident` means something is wrong in the
+    running system now, and the cost of waiting does not depend on the item's age — it
+    depends on the incident's. Until 2026-09-22 such an item entered the queue by number
+    and sat behind everything filed before it.
+
+    The two upper bands never competed before this one existed, so nothing is reversed.
+    Between them: an unblocking item turns a stopped item into a moving one; an incident
+    is burning while it waits. The one already burning goes first.
+
+    The band changes WHO is compared, never HOW. Inside it, status still ranks before age
+    — a `raw` incident is one nobody has measured, and putting the chain on evidence that
+    is `none-yet` is the state G5 exists to hold.
 
     Measured on 2026-08-31: B-033 halted on three named causes — B-168, B-169, B-170,
     all triaged — and by age alone the queue would have reached them after twenty
@@ -323,7 +352,8 @@ def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[It
     This is ORDER, not eligibility. An unblocking item that is itself blocked or
     halted is still held by the rules that hold it; it never gets in ahead of them.
     """
-    return sorted(items, key=lambda i: (i.item_id not in unblocking,
+    return sorted(items, key=lambda i: (not is_obligation(i),
+                                        i.item_id not in unblocking,
                                         _RANK.get(i.fields.get("status", ""), 99),
                                         _number(i)))
 

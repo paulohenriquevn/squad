@@ -164,7 +164,7 @@ dod:
 | `domain` | yes | routes to the specialist; must be a registered domain (G1) |
 | `repo` | yes | must exist in the umbrella inventory (G1) |
 | `suggested_mode` | yes | **a suggestion, not a decision** — DISCOVER may reclassify |
-| `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` \| `external-blocker` — the last one is not work, see § An impediment nobody here can clear |
+| `source` | yes | `human` \| `discover-review` \| `discover-live-test` \| `discover-bug` \| `discover-evolve` \| `live-incident` \| `external-blocker` — the last one is not work, see § An impediment nobody here can clear **`live-incident` also puts the item in SELECT's obligation band** (`select_backlog_item.is_obligation`): it is ordered ahead of everything else because it is costing while it waits, not merely waiting. That band covers this value and nothing else — a security finding or a legal obligation belongs there by the same argument and the registry has no field that identifies one, so the claim stops where the schema does |
 | `evidence` | yes | `none-yet` at intake; a pointer once DISCOVER measures |
 | `why_now` | yes | what changed **in our system**; subject to G5 |
 | `approved_by` | when `status` is `approved` or past it | `human/<name>` or `system/autonomous-sweep`. Who made the commitment. A bare `approved` with no attribution predates this field; it is not evidence that a person decided |

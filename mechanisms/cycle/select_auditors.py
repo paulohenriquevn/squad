@@ -293,6 +293,18 @@ def select(
         "status": "selected", "slug": slug, "domains": sorted(set(domains)),
         "scope": scope, "required": rows, "max_iterations": ceiling,
         "missing_plugins": missing,
+        # The commands carry an ABSOLUTE `--output-dir` under this project's write
+        # root, because that is where `check_auditor_coverage.py` will look. Every
+        # plugin confines `--output-dir` under its OWN working directory — a
+        # path-traversal fix in `scripts/lib/path_safety.py` — so an absolute path is
+        # refused unless the command runs from here.
+        #
+        # Both halves are right and the join only holds at this directory. Measured
+        # 2026-09-22: neither side said so, and the plugin's refusal names the flag
+        # (`--output-dir is unsafe`) rather than the directory the reader is standing
+        # in — which sends them to change the output path, the one thing that must not
+        # change, since this kit derived it and will look for the report there.
+        "run_from": str(project),
         "derived_by": "rules/review-auditors.txt — widening is allowed, narrowing is not",
     }
     if missing:
@@ -363,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(result['required'])} auditor(s) required for {args.slug} "
               f"[{', '.join(result['domains']) or 'no domain'}]")
         print(f"scope: {result['scope']['kind']} — {result['scope']['detail']}")
+        print(f"run from: {result['run_from']} — each plugin confines --output-dir "
+              f"under its own working directory, so these commands are refused "
+              f"anywhere else. Move the caller, never the --output-dir")
         for r in result["required"]:
             mark = "•" if r["installed"] else "✗"
             print(f"  {mark} {r['plugin']:<24} {r['diff_mode']:<16} {r['command']}")

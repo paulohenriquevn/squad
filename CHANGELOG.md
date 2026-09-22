@@ -70,6 +70,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A production incident entered the queue by age, behind everything filed before it.**
+  `select_backlog_item.rank()` ordered on *(does not unblock a halt, status, item number)*.
+  Age deciding among equals is right — it is the one signal an agent that wants to proceed
+  cannot inflate — but some items are not equals for a reason unrelated to when they were
+  filed. `source: live-incident` was already in the schema and already meant *something is
+  wrong in the running system NOW*; it now opens an obligation band ahead of everything
+  else, because the cost of waiting depends on the incident's age rather than the item's.
+  Above the unblocking rule, and nothing is reversed: the two bands never competed before
+  this one existed, and between them the one already burning goes first. **The band covers
+  `live-incident` and nothing else** — a security finding or a legal obligation belongs
+  there by the same argument, the registry has no field that identifies one, and the claim
+  stops where the schema does. Inside the band, status still ranks before age: a `raw`
+  incident is one nobody measured, and putting the chain on `evidence: none-yet` is the
+  state G5 exists to hold.
+
+- **A killed item could not name what replaced it.** `supersedes` and `regression_of` are
+  written on the NEW item and validated in that direction, so a reader arriving at the dead
+  one found `status: killed`, a `kill_reason`, and no way to discover that the question had
+  been re-asked and answered. The registry held the answer — every edge is in the same file
+  — and nothing exposed it. `lineage_successors()` computes the reverse edges and
+  `check_backlog_structure` reports them, DERIVED and stored nowhere, like `blocked`: a
+  second copy of an edge the file already carries drifts the moment somebody edits one of
+  them. An id nothing replaced is absent from the map rather than present with an empty
+  list.
+
 - **The freshness gate was declared in two rules and run by nothing, and it answered to the
   wrong flag.** Four of this repository's own meta-gates caught it in the full suite:
   `check_plugin_freshness` took `--project` where the contract in `mechanisms/gates/_contract.py`

@@ -133,9 +133,18 @@ assignment will say so in writing.
   BLOCKER finding in Step 4 with its own remediation; do not work around it.
 - **`none_declared`** — this project requires no independent audit. Nothing to run.
 
-Run each command the assignment prints, exactly as printed. The `--output-dir` is where
+Run each command the assignment prints, exactly as printed, **from the directory the
+assignment's `run from:` line names** — the project root. The `--output-dir` is where
 Step 4 looks, and the `--diff-base` is what keeps the audit about this change; each
 plugin applies its own declared `diff_mode` to that base.
+
+The working directory is a premise, not a detail. Every plugin confines `--output-dir`
+under its own CWD (a path-traversal fix), and the assignment emits an absolute path
+under this project's write root, so the command is refused anywhere else. Its refusal
+names the flag — `--output-dir is unsafe (escapes current directory)` — and acting on
+that reading means moving the output directory, which is the one thing that must not
+move: Step 4 looks for the report exactly where the assignment put it. **Move the
+caller, never the `--output-dir`.**
 
 **Do not paraphrase an auditor's findings into your own.** They travel as that
 plugin's report, with its `## Verdict` quoted and its `## What Was NOT Analyzed`

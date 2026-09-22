@@ -798,6 +798,36 @@ def _check_impediment_edges(items: list[Item]) -> list[Finding]:
     return findings
 
 
+def lineage_successors(items: list[Item]) -> dict[str, list[str]]:
+    """Which items replaced each one — the lineage edges read the other way round.
+
+    `supersedes` and `regression_of` are written on the NEW item and validated in that
+    direction: the target must exist and must be terminal. A reader who arrives at the
+    DEAD item finds `status: killed`, a `kill_reason`, and no way to discover that the
+    question was re-asked and answered. The registry holds the answer — every edge is in
+    the same file — and nothing exposed it.
+
+    DERIVED, NEVER STORED. A `superseded_by` field on the killed item would be a second
+    copy of an edge the file already carries, and two copies of one fact drift the moment
+    somebody edits one of them. `supersedes` stays the single authority.
+
+    An id that appears in no edge is ABSENT from the map rather than present with an empty
+    list: "nothing replaced this" and "this is here because the map covers everything" are
+    different answers, and only one of them is about the item.
+    """
+    successors: dict[str, list[str]] = {}
+    for item in items:
+        for field_name in LINEAGE_EDGES:
+            raw = item.fields.get(field_name, "").strip()
+            if not raw or raw.lower() in _NO_IMPEDIMENT:
+                continue
+            for target in _ID_IN_TEXT_RE.findall(raw):
+                if target == item.item_id:
+                    continue  # its own ancestor — already a `lineage_missing` finding
+                successors.setdefault(target, []).append(item.item_id)
+    return {k: sorted(set(v)) for k, v in successors.items()}
+
+
 def _check_lineage_edges(items: list[Item]) -> list[Finding]:
     """Every `supersedes` / `regression_of` edge, and the status it implies.
 
@@ -996,6 +1026,11 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
         # nowhere, which is what stops it from going stale: an item whose blockers
         # all shipped stops being blocked without anyone remembering to edit it.
         "items_by_effective_state": _effective_counts(items),
+        # Which items replaced each terminal one, DERIVED like `blocked` above and for
+        # the same reason. The edges live on the new items; a reader arriving at the dead
+        # one had no way to follow them. Absent when no item was ever replaced, so an
+        # empty registry and a registry with no lineage read the same as they are.
+        **({"lineage_successors": _successors} if (_successors := lineage_successors(items)) else {}),
         "routing_table_read": known_repos is not None,
         "findings": [f.__dict__ for f in findings],
         "severity_counts": counts,
