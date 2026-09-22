@@ -53,7 +53,7 @@ def test_resolve_unit_payload_fetches_issue_metadata() -> None:
 
 
 def test_fleet_lander_branch_regex_defined() -> None:
-    """fleet_lander._LANE_BRANCH regex must be ^fix/kit\d+(?:-|$).
+    r"""fleet_lander._LANE_BRANCH regex must be ^fix/kit\d+(?:-|$).
 
     This is the pattern that dispatch payload branch names must match.
     """

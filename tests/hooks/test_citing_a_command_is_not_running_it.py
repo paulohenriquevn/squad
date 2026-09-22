@@ -252,7 +252,7 @@ def test_a_wrapper_that_marks_its_command_instead_of_flagging_it(command: str) -
     f'"git" "{CHECKOUT}" main',
 ])
 def test_a_quoted_command_name_is_the_same_command(command: str) -> None:
-    """The simplest real invocation after the bare line, and it never blocked.
+    r"""The simplest real invocation after the bare line, and it never blocked.
 
     PRE-EXISTING, not a regression: it passed before any of this session's work. Anyone
     pasting a command out of a README with quotes stepped over the guard without

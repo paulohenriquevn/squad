@@ -40,7 +40,7 @@ def test_workflow_uses_pipeline_and_agent() -> None:
 
 
 def test_workflow_respects_args_unit_branch_naming() -> None:
-    """Workflow receives args.unit with a pre-computed branch name and must use it verbatim.
+    r"""Workflow receives args.unit with a pre-computed branch name and must use it verbatim.
 
     The branch name comes from fleet_router.py and must match fleet_lander.py's
     regex: ^fix/kit\d+(?:-|$). This test documents the contract.
