@@ -106,6 +106,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The product chain was checked forwards and never backwards, so a goal nothing serves
+  reached DESIGN.** `score_product_alignment` resolves both citations that point UP the
+  chain — a `REQ-N` whose `serves:` names no declared objective, a `PIECE-N` whose
+  `realises:` names no declared requirement — and asked nowhere whether every objective is
+  SERVED and every requirement REALISED. Probed 2026-09-22 with two objectives and one
+  requirement serving only `OBJ-1`: no cap, no dangling entry, nothing. The gap is caught
+  eventually — `check_objective_coverage` exits 1 on an objective no ITEM serves — but that
+  is at `/backlog-approve`, after DESIGN drew a system without the goal in it and BACKLOG
+  filed items against that system. `check_merge_autonomy`'s argument applies verbatim:
+  discovering it per-item costs the run, announcing it here costs one criterion. Guarded on
+  the documents being readable, because reporting every objective as unserved when the TRD
+  is missing turns an inability to measure into a measurement. **Fourth instance of one
+  class in one day** — an identifier counted rather than resolved, or resolved in one
+  direction only.
+
 - **The system map could draw a piece nobody declared, and the design gate said nothing.**
   `check_design_completeness` computed coverage one way — every `PIECE-N` in
   `technical-pieces.md` must appear in the map — and never read the map back. A map naming

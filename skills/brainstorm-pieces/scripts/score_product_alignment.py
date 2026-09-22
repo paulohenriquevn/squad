@@ -170,6 +170,14 @@ class Criterion:
 @dataclass
 class Report:
     criteria: list[Criterion] = field(default_factory=list)
+    #: The coverage direction, kept as four fields rather than two booleans: a citation
+    #: pointing at nothing and a goal nothing points at are different findings, and which
+    #: ids are on each side is what a reader acts on.
+    objectives_declared: set = field(default_factory=set)
+    objectives_served: set = field(default_factory=set)
+    objectives_unserved: list = field(default_factory=list)
+    requirements_realised: set = field(default_factory=set)
+    requirements_unrealised: list = field(default_factory=list)
     #: Structural. No edit to the artifact that carries them can fix these — a document
     #: that is not there, a citation whose referent does not exist. Verdict INVALID.
     hard_caps: list[str] = field(default_factory=list)
@@ -298,6 +306,7 @@ def _gate_objectives(rep: Report, texts: dict[str, str]) -> set[str]:
     # ---- objectives: 4 criteria (G-B2) --------------------------------------
     objectives = _blocks(texts[OBJECTIVES], OBJ_RE)
     obj_ids = {oid for oid, _, _ in objectives}
+    rep.objectives_declared = set(obj_ids)
     rep.criteria.append(Criterion(
         "obj_present", OBJECTIVES, 2 if objectives else 0, f"{len(objectives)} objective(s)"))
 
@@ -354,6 +363,8 @@ def _gate_trd(rep: Report, texts: dict[str, str], obj_ids: set[str]) -> tuple[li
         for ref in re.findall(r"OBJ-\d+", raw):
             if ref not in obj_ids:
                 rep.dangling.append(f"{rid} serves {ref}, which {OBJECTIVES} does not define")
+            else:
+                rep.objectives_served.add(ref)
     rep.criteria.append(Criterion(
         "req_cites_resolve", TRD, 0 if rep.dangling else 2,
         f"{len(rep.dangling)} dangling citation(s)"))
@@ -390,6 +401,8 @@ def _gate_pieces(rep: Report, texts: dict[str, str], reqs: list, req_ids: set[st
         for ref in re.findall(r"REQ-\d+", raw):
             if ref not in req_ids:
                 rep.dangling.append(f"{pid} realises {ref}, which {TRD} does not define")
+            else:
+                rep.requirements_realised.add(ref)
     rep.criteria.append(Criterion(
         "piece_cites_resolve", PIECES, 2 if len(rep.dangling) == before else 0,
         f"{len(rep.dangling) - before} dangling citation(s)"))
@@ -401,6 +414,28 @@ def _gate_pieces(rep: Report, texts: dict[str, str], reqs: list, req_ids: set[st
         rep.floor_caps.append("requirement_serving_no_objective")
     if pieces and len(p_with) != len(pieces):
         rep.floor_caps.append("piece_realising_no_requirement")
+
+    # THE COVERAGE DIRECTION, which this phase asked nowhere. The two caps above resolve
+    # citations pointing UP the chain — a `serves:` or a `realises:` naming nothing. Whether
+    # every objective is served, and every requirement realised, was asked by no criterion
+    # here.
+    #
+    # It IS asked eventually: `check_objective_coverage` exits 1 on an objective no ITEM
+    # serves. That is at `/backlog-approve`, after DESIGN drew a system without the goal in
+    # it and BACKLOG filed items against that system. The argument `check_merge_autonomy`
+    # makes applies verbatim — discovering it per-item costs the run, announcing it here
+    # costs one criterion.
+    #
+    # Guarded on the documents being READABLE, because reporting every objective as
+    # unserved when the TRD is missing turns an inability to measure into a measurement.
+    if rep.objectives_declared and texts.get(TRD, "").strip():
+        rep.objectives_unserved = sorted(rep.objectives_declared - rep.objectives_served)
+        if rep.objectives_unserved:
+            rep.floor_caps.append("objective_served_by_no_requirement")
+    if req_ids and texts.get(PIECES, "").strip():
+        rep.requirements_unrealised = sorted(req_ids - rep.requirements_realised)
+        if rep.requirements_unrealised:
+            rep.floor_caps.append("requirement_realised_by_no_piece")
 
     if rep.dangling:
         # Same rule the kit applies to a `file:line`: a pointer with no referent
