@@ -146,6 +146,11 @@ prose. It prints the three counts, so the id it hands you is auditable rather th
 With no history it falls back to the present blocks and says `history unavailable`, which is a
 different claim from `0 recovered`.
 
+**If this checkout has no `BACKLOG.md` at all** — a fresh clone, or a second worktree — that is a
+normal state, not a failure, and `rules/records-location.md § A checkout with no registry` is the
+procedure. The short of it: do not reconstruct the file from citations, take the id from the
+allocator above, and read G2's `not_searched` line rather than its empty `candidates`.
+
 ```
 Existing items: 27 (18 shipped, 4 planned, 3 triaged, 2 killed)
 Next free id:   B-028

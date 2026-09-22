@@ -169,6 +169,47 @@ and `CHANGELOG.md` (`human`).
 `detect_domains.py --write` no longer accepts the old one by default, and a test refuses
 any document that teaches the old path.
 
+## A checkout with no registry
+
+`BACKLOG.md` is unversioned (`rules/write-exemptions.txt`, class `human`), so this is a
+state a checkout reaches normally rather than a failure: a fresh clone has no registry,
+and a second worktree on the same machine has none either. **The policy stays unversioned
+— an item that answers "the registry is invisible" by versioning it has answered a
+different question.** What follows is how to work under it.
+
+Measured in a consumer 2026-09-21: 93 blocks present against 195 distinct `B-NNN` cited
+across the tree — **138 ids spent with no block to show for them**. Of three worktrees on
+that machine, one held the file; the other two had none. A session in one of those two
+registered a finding as `B-016`, an id already spent, in good faith: it could not see a
+single one.
+
+**1. Do not reconstruct the file.** A registry rebuilt from citations looks complete and
+is not, which is the state above. The blocks are gone; only the ids survive, and an id
+without its block is a number, not an item.
+
+**2. Get the next id from the allocator, never from the file.**
+
+```bash
+python3 mechanisms/cycle/next_backlog_id.py BACKLOG.md
+```
+
+It reads the blocks present, recovers from the registry's git history every id that ever
+HAD a block, and rejects ids that never did — a template placeholder, a test fixture, an
+example in prose all look identical to a grep. With no history it falls back to the
+present blocks and prints `history unavailable`, which is a different claim from
+`0 recovered` and must not be read as one.
+
+**3. Expect the dedup pass to be partial, and read what it says.**
+`skills/backlog-item/scripts/check_intake_gates.py` reports `searched_blocks` alongside a
+`not_searched` line. An id cited elsewhere but carrying no block is unreachable to G2, so
+`candidates: []` over a partial registry means "none among the blocks I could open" — not
+"no duplicate exists". A clean result over an incomplete corpus reads identically to a
+clean result over a complete one unless the gate says which it had.
+
+**4. A new item in an empty checkout is legitimate.** It gets an id no one has spent, and
+the work is recorded. What is NOT legitimate is treating the absence as evidence that
+nothing was filed before.
+
 ## What this does NOT reach — named, so the claim stops outrunning it
 
 - **Coverage is 18 mechanisms.** 49 files in the kit write to disk. The gate prints the

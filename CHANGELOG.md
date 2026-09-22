@@ -8,6 +8,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **A written way back for a checkout that has no registry.** `BACKLOG.md` is unversioned
+  by policy, so a fresh clone and a second worktree both reach that state normally — and
+  nothing said what to do in it. Measured in a consumer 2026-09-21: 93 blocks present
+  against 195 distinct `B-NNN` cited across the tree, 138 ids spent with no block; of three
+  worktrees on that machine one held the file and two had none, and a session in one of the
+  two registered `B-016` in good faith over an id already spent. `records-location.md §
+  A checkout with no registry` now carries the procedure, in the rule that creates the
+  situation rather than in a skill the reader would have to know to open. Four steps, and
+  the first is **do not reconstruct the file**: a registry rebuilt from citations looks
+  complete and is not, which is the state being described. The policy is restated as
+  standing, so the section cannot be read as an argument for versioning the registry (#162).
+
 - **`peer/<session> (what it verified)` — a third kind of signature, for a review that
   came from another session.** `squad/signoff.py` knew `human/…`, which an allowlist
   accepts as a person, and everything else, which is an agent. Three sessions worked this
