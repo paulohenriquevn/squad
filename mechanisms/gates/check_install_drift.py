@@ -430,10 +430,33 @@ def main(argv: list[str] | None = None) -> int:
             print("    no files — everything here came from the kit")
         return 0
 
+    #: What each class COSTS, printed beside its count. All four used to render as
+    #: `<class>: <count>` and a file list, so `install_ahead: 3` sat next to
+    #: `kit_ahead: 38` and a reader compared magnitudes — two sizes of one thing.
+    #:
+    #: They are not one thing. `install.sh --force` snapshots `.claude/` into
+    #: `.install-backups/` and replaces it, so INSTALL_AHEAD is the ONLY class whose
+    #: lines are gone after an upgrade. KIT_AHEAD is pure gain, IDENTICAL is nothing,
+    #: and DIVERGED at least survives on both sides until somebody chooses.
+    #:
+    #: Measured 2026-09-22 on a real consumer: `install_ahead: 3` — three hooks carrying
+    #: the wiring for a 94-line module the kit does not have. The number printed on every
+    #: run, was read twice that day by the session maintaining the kit, and nobody opened
+    #: the files. A count in the same voice as a count that loses nothing reads as
+    #: inventory.
+    _COST = {
+        Drift.INSTALL_AHEAD: ("lines only this install has — ERASED by the next "
+                              "`install.sh --force`, which is true of no other class "
+                              "here. Harvest upstream before upgrading"),
+        Drift.DIVERGED: ("both sides hold unique lines — a copy in either direction "
+                         "deletes the other's fix"),
+        Drift.STALE: "the kit moved on and this copy did not",
+        Drift.KIT_AHEAD: "the kit holds lines this install lacks — an upgrade adds them",
+    }
     for verdict in (Drift.DIVERGED, Drift.INSTALL_AHEAD, Drift.STALE, Drift.KIT_AHEAD):
         files = report.by_class[verdict]
         if files:
-            print(f"{verdict.value}: {len(files)}")
+            print(f"{verdict.value}: {len(files)} — {_COST[verdict]}")
             for rel in files:
                 print(f"    {rel}")
     if report.unharvested_files:
@@ -456,8 +479,12 @@ def main(argv: list[str] | None = None) -> int:
                        "unique lines, and a copy in either direction deletes the "
                        "other's fix")
         if report.counts.get(Drift.INSTALL_AHEAD):
+            # DIVERGED's entry above names what it COSTS. This one named only what it
+            # IS, and the cost is the reason to act: these lines are the only ones the
+            # upgrade takes away.
             why.append(f"{report.counts[Drift.INSTALL_AHEAD]} INSTALL_AHEAD — the "
-                       "install holds lines the kit does not")
+                       "install holds lines the kit does not, and they are erased by "
+                       "the next install")
         if report.unharvested_files:
             why.append(f"{len(report.unharvested_files)} install-only file(s) in a "
                        "directory the kit has — yours, or work to harvest")

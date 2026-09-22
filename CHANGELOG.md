@@ -85,6 +85,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **`install_ahead: 3` printed beside `kit_ahead: 38`, and only one of them was a
+  deadline.** `check_install_drift` rendered all four classes as `<class>: <count>` plus a
+  file list, and the summary gave `DIVERGED` its consequence — *a copy in either direction
+  deletes the other's fix* — while `INSTALL_AHEAD` got only the fact: *the install holds
+  lines the kit does not*. True, and it omits what matters. `install.sh --force` snapshots
+  `.claude/` into `.install-backups/` and replaces it, so INSTALL_AHEAD is **the only class
+  whose lines are gone after an upgrade**: KIT_AHEAD is pure gain, IDENTICAL is nothing, and
+  DIVERGED at least survives on both sides until somebody chooses. Measured 2026-09-22 on a
+  real consumer: `install_ahead: 3` — three hooks carrying the wiring for a 94-line module
+  the kit does not have at all (#164). The number printed on every run, was read twice that
+  day by the session maintaining the kit, and nobody opened the files. Each class now
+  carries what it COSTS beside its count, because a count in the same voice as a count that
+  loses nothing reads as inventory.
+
 - **`check_xrefs` resolved a citation against `.install-backups/` and named the backup as
   the file's location.** The markdown-link walk already skipped that directory, with the
   reason written above the line: *a backup of an old ecosystem is not this ecosystem*. Two
