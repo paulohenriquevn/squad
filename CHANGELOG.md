@@ -8,6 +8,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`docs/wiki/decisions/a-step-that-cannot-fail-loudly-did-not-run.md`** — the defect class
+  behind five measurements taken on one day across three sessions: a step that silently does
+  nothing inside a procedure that reports success. An anchored insertion whose anchor had
+  moved (twice here, three times in a sibling repository), a pytest run that never collected
+  because its exit code belonged to `tail`, a hook measurement that resolved no layout and so
+  refused nothing, and a quoted error message that closed a shell string and truncated the
+  program reading it. None is a bug in the tool: each is the documented behaviour of the
+  thing being used, and the defect is a caller that cannot tell that behaviour apart from the
+  one it wanted. The record names the two defences that are not the same defence — assert the
+  precondition, and have something downstream that fails — and the cheap test: *if this did
+  nothing at all, what would be different?*
+
 - **`check_plugin_freshness.py` — a premise the kit depended on and never checked: is the
   plugin it audits WITH the one that was committed?** Claude Code installs a plugin into
   `~/.claude/plugins/cache/…` and records the `gitCommitSha` it was built from;
