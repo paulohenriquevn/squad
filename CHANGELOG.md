@@ -85,6 +85,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The slice runner could not say whether the tree stood still while it ran.** Measured
+  2026-09-22 in this repository: a run was started, three modules were edited during it, and
+  the root bundle came back `1 failed`. The sentence was true and was about a state that
+  never existed on disk as a whole — every other suite passed, because none of them reads
+  the files that were being edited. `/review` already refuses that shape for its reviewers,
+  recording HEAD and a status digest when the agents are spawned and reporting a moved tree
+  above every finding; the runner those same sessions use to check their own work did not,
+  so the one place a person looks before reporting a result was the one place that could not
+  tell them the result was unattributable. It now captures HEAD plus a
+  `--untracked-files=all` digest before the fan-out and again after, emits a `TREE_MOVED`
+  trailer line for `sq test` to read, and prints the notice ABOVE the verdict. **It does not
+  change the exit code:** a moved tree is not wrong on its face, it is unattributable, and
+  that judgement belongs to the caller — failing here would turn every legitimate concurrent
+  edit into a red suite, and staying silent is what produced the measurement above.
+
 - **The board reported `lead_time_p50_hours: None` with a comment saying the item carries
   no entry date. It carries one.** `check_backlog_structure._parse_items` reads
   `Registrado|registered YYYY-MM-DD` into `Item.registered_on`, and `board_state` imports

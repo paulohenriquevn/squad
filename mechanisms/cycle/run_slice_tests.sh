@@ -121,6 +121,26 @@ run_suite() {
 }
 export -f run_suite
 
+# WHICH TREE, and whether it stayed still.
+#
+# The banner below says WHERE these suites ran. It could not say whether the files moved
+# WHILE they ran, and a suite that read a tree changing under it reports about no tree at
+# all. Measured 2026-09-22 in this repository: a run started, three modules were edited
+# during it, and the root bundle came back `1 failed` — a true sentence about a state that
+# never existed on disk as a whole. `/review` already refuses that shape for its reviewers
+# (`consolidate_findings.check_tree_contamination`); the runner those same sessions use to
+# check their work did not.
+#
+# `--untracked-files=all` for the reason that function states: with the default, git
+# collapses an entirely-untracked directory into one line, so a new file and a probe
+# beside it share a line and excluding one hides the other.
+_tree_state() {
+    printf '%s %s' \
+        "$(git rev-parse HEAD 2>/dev/null || echo 'no-head')" \
+        "$(git status --porcelain --untracked-files=all 2>/dev/null | sha256sum | cut -d' ' -f1)"
+}
+_state_before="$(_tree_state)"
+
 # `-P $JOBS` with one index per suite: the index is what allows the output order
 # to be reconstructed afterwards, since completion order is arbitrary.
 for i in "${!SUITES[@]}"; do
@@ -199,10 +219,29 @@ case "$_kit_dir" in
     *) _tree="the kit's own repository at $_kit_dir" ;;
 esac
 
+_state_after="$(_tree_state)"
+if [ "$_state_before" != "$_state_after" ]; then
+    trailer+=("$(printf 'TREE_MOVED\t%s\t%s' "$_state_before" "$_state_after")")
+fi
+
 echo
 printf '%s\n' "${trailer[@]}"
 echo
 echo "TREE: $_tree"
+if [ "$_state_before" != "$_state_after" ]; then
+    # ABOVE the verdict, for the reason the review report puts contamination above its
+    # findings: a reader who learns this afterwards has already believed what came first.
+    #
+    # It does NOT change the exit code. A run over a tree that moved is not wrong on its
+    # face — it is unattributable, which is a judgement its caller makes with the
+    # `TREE_MOVED` line above. Failing here would turn every legitimate concurrent edit
+    # into a red suite; passing silently is what produced the measurement in the comment
+    # at the top of this file.
+    echo "TREE MOVED DURING THE RUN — HEAD or the working tree changed between the first"
+    echo "  suite starting and the last one finishing. Whatever follows is a result about"
+    echo "  no single state of this repository. Re-run against a still tree before acting"
+    echo "  on it, and before reporting it to anyone."
+fi
 if [ "${#failures[@]}" -eq 0 ]; then
     echo "ALL SUITES GREEN"
     exit 0
