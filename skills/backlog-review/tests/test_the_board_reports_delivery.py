@@ -60,7 +60,12 @@ def test_nothing_shipped_reports_none_not_zero(tmp_path: Path) -> None:
 
     assert d["shipped"] == 0
     assert d["throughput_per_day"] is None, d
-    assert d["lead_time_p50_hours"] is None, d
+    # Renamed from `lead_time_p50_hours` on 2026-09-22, when the field stopped being a
+    # declared None and started being computed from `registered_on` — which the registry
+    # had carried all along and `_board_items` was discarding. Days, because the start is
+    # a DATE; the assertion is the same one: nothing measured is None, never zero.
+    assert d["lead_time_p50_days"] is None, d
+    assert d["lead_time_measured_over"] == 0, d
 
 
 def test_shipped_items_are_counted(tmp_path: Path) -> None:

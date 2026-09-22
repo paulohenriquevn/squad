@@ -1089,17 +1089,54 @@ def _delivery(items: list[dict], events: list[dict], now: datetime) -> dict:
     if shipped and window_days and window_days > 0:
         throughput = round(len(shipped) / window_days, 2)
 
+    # LEAD TIME, from the date the registry already carried. `registered_on` is a DATE —
+    # midnight — and the end is a real timestamp, so the arithmetic is exact and the INPUT
+    # is not: every figure carries ±1 day from the start side. Days rather than hours for
+    # that reason, and NOT rounded to whole days, which would hide the arithmetic without
+    # removing the uncertainty.
+    #
+    # The end is the item's last recorded event, because half a measurement is not one —
+    # an item with an entry date and no event on the stream is not measured rather than
+    # measured as zero. `killed` is excluded for the reason it is excluded above: nobody
+    # received anything, and timing how long the system took to abandon something is not
+    # delivery.
+    last_event: dict[str, datetime] = {}
+    for e in events:
+        slug = str(e.get("slug") or "")
+        stamp = _parse_stamp(e.get("timestamp"))
+        if slug and stamp and (slug not in last_event or stamp > last_event[slug]):
+            last_event[slug] = stamp
+    spans: list[float] = []
+    for i in shipped:
+        raw = i.get("registered_on")
+        end = last_event.get(str(i.get("id") or ""))
+        if not raw or end is None:
+            continue
+        try:
+            start = datetime.fromisoformat(str(raw)).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        spans.append(round((end - start).total_seconds() / 86400, 2))
+    spans.sort()
+    p50 = None
+    if spans:
+        mid = len(spans) // 2
+        p50 = spans[mid] if len(spans) % 2 else round((spans[mid - 1] + spans[mid]) / 2, 2)
+
     return {
         "shipped": len(shipped),
         "killed": len(killed),
+        #: Days, not hours — see the note above. None while nothing could be measured,
+        #: which is a different fact from a lead time of zero.
+        "lead_time_p50_days": p50,
+        #: The subset the p50 is over. Most items predate the registration line, so a
+        #: median over "the ones that had a date" is a median over a subset, and a number
+        #: that travels without its coverage is read as a number about everything.
+        "lead_time_measured_over": len(spans),
+        "lead_time_terminal_total": len(shipped),
         #: None while nothing has shipped — see the docstring. Never rendered as 0.
         "throughput_per_day": throughput,
         "window_days": round(window_days, 1) if window_days else None,
-        #: Registry entry to terminal. Not computable from the registry alone: an item
-        #: carries no entry timestamp, so this stays None until the stream carries one.
-        #: Declared rather than omitted — a field missing from the payload reads as a
-        #: field nobody thought of.
-        "lead_time_p50_hours": None,
     }
 
 
@@ -1559,6 +1596,11 @@ def _board_items(items: list, statuses: dict, running: dict, reached: dict,
     for item in items:
         iid = item.item_id
         status = item.fields.get("status", "")
+        # `_parse_items` already reads `Registrado|registered YYYY-MM-DD` into this, and
+        # this function dropped it — so `_delivery` measured lead time against a field it
+        # could not see and reported None with a comment saying the item had no entry
+        # date. It had one, two calls up.
+        registered_on = item.registered_on.isoformat() if item.registered_on else None
         raw_block = item.fields.get("blocked_by", "")
         blockers = parse_blocked_by(raw_block)
         live = [b for b in blockers if statuses.get(b, "") in OPEN_STATUS]
@@ -1605,6 +1647,7 @@ def _board_items(items: list, statuses: dict, running: dict, reached: dict,
 
         out_items.append({
             "id": iid,
+            "registered_on": registered_on,
             # The phase being worked on NOW, if any.
             "running_phase": (in_flight or {}).get("phase"),
             "running_since": (in_flight or {}).get("since"),

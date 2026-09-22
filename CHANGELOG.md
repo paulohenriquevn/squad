@@ -70,6 +70,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The board reported `lead_time_p50_hours: None` with a comment saying the item carries
+  no entry date. It carries one.** `check_backlog_structure._parse_items` reads
+  `Registrado|registered YYYY-MM-DD` into `Item.registered_on`, and `board_state` imports
+  that exact parser — but `_board_items` dropped the field when building the dicts
+  `_delivery` measures, so the fact existed two calls upstream and was discarded on the way
+  down. The comment was right about `_delivery`'s INPUTS and wrong about the item, and a
+  reader of that line concluded the registry had no entry timestamp and that adding one was
+  a schema change. It is now `lead_time_p50_days`, computed: **days** because
+  `registered_on` is a DATE, so the arithmetic is exact and the input is not — every figure
+  carries ±1 day from the start side, and rounding to whole days would hide the arithmetic
+  without removing the uncertainty. The p50 travels with `lead_time_measured_over` and
+  `lead_time_terminal_total`, because most items predate the registration line and a median
+  over the ones that had a date is a median over a subset.
+
+- **A fixed-and-merged issue looked exactly like one nobody had touched.** `kit_issues.load()`
+  lists open issues and filters those a person must decide; everything else goes to a lane as
+  work. An issue whose fix is written, reviewed and merged — open only until the release that
+  makes it installable — is open, unlabelled for a person, and indistinguishable from
+  untouched. A lane given one spends an agent re-solving a solved problem and writes a report
+  that looks like progress. `AWAITING_RELEASE` reads the `in-develop` label the project rule
+  already prescribes, and `holding_reason` reports *waiting for a person* and *waiting for a
+  release* apart: collapsing them would tell a reader that twenty issues need their attention
+  when none of them does. Measured against the twenty this repository is holding in exactly
+  that state (#163 is the fifth gap of the same review, filed rather than fixed).
+
 - **A production incident entered the queue by age, behind everything filed before it.**
   `select_backlog_item.rank()` ordered on *(does not unblock a halt, status, item number)*.
   Age deciding among equals is right — it is the one signal an agent that wants to proceed
