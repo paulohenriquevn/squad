@@ -22,6 +22,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`docs/wiki/decisions/the-system-already-said-it.md`** — the fourth class recorded on
+  2026-09-22/23, and the only one whose subject is the investigator rather than a mechanism.
+  Three cases across two sessions in one day: a sidecar lock reported as an escape while
+  `write-exemptions.txt` already declared `.*.lock` with its reason; two pull requests opened
+  by hand and reported as a defect while the workflow announced the behaviour with a
+  `::notice` the log filter excluded; four required formats learned one gate refusal at a
+  time while the template documented all four. **This is not *measure the premise*** — there
+  was no claim to verify, the system had already written the answer in the file whose job is
+  to hold it, and the remedy is opening that file rather than constructing a measurement. The
+  record carries the generalised move that came out of the second case — read the STRUCTURE
+  before the text, since `gh run view --json jobs` answers *which branch ran* where a
+  severity grep cannot — and the question that costs seconds: *which file's job is it to
+  answer this, and have I opened it?*
+
 - **`check_verification_freshness.py` — when did this tree last verify itself, and does the
   answer still apply?** `run_slice_tests.sh` printed its verdict and exited, so the only way
   to answer *is it green?* was to run it again for fifteen minutes. Measured 2026-09-22: one
