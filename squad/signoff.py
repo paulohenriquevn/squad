@@ -151,3 +151,103 @@ def read(body: str) -> SignOff:
     return SignOff(signers=SIGNED_BY_RE.findall(body),
                    ticked=len(TICKED_RE.findall(body)),
                    unticked=len(UNTICKED_RE.findall(body)))
+
+#: A box's opening line. The TEXT is deliberately not captured here: a box's text may run
+#: over several lines, and a signature marker's natural home is a line of its own once the
+#: `(verified: …)` clause is long. `score_alignment.py` kept its own `^…$` reader under
+#: `re.MULTILINE` and so captured one line, which made a marker on the next line invisible
+#: and fell back to `"human"` — reporting an AGENT's sign-off as a PERSON's (#174). Measured:
+#: the same marker, same judge, on the box line gives `judge/alignment-judge`; one line down
+#: it gave `human`.
+_BOX_OPEN_RE = re.compile(r"^(?P<indent>[ \t]*)-\s*\[(?P<mark>[ xX])\]\s*(?P<head>.*)$")
+
+
+@dataclass(frozen=True)
+class Box:
+    """One reviewer checkbox, with every line of its text and the signer it names."""
+
+    mark: str
+    text: str
+    signer: str | None
+
+    @property
+    def ticked(self) -> bool:
+        return self.mark in ("x", "X")
+
+
+def boxes(body: str) -> tuple[Box, ...]:
+    """Every checkbox in `body`, each carrying its CONTINUATION LINES.
+
+    A continuation is any non-blank line that does not open a box and is not a heading. That
+    is looser than markdown's own list rules on purpose: this reads a reviewer's sign-off,
+    where the failure to avoid is losing a marker somebody wrote, and a line wrongly attached
+    to the box above can only ever ATTRIBUTE a signature that is present — never invent one,
+    because `SIGNED_BY_RE` has to match for anything to be attributed at all.
+
+    A heading closes the section: a marker under `## Next thing` belongs to no box here.
+    """
+    found: list[Box] = []
+    pending: list[str] | None = None
+    mark = ""
+    for line in body.splitlines():
+        opening = _BOX_OPEN_RE.match(line)
+        if opening:
+            if pending is not None:
+                found.append(_seal(mark, pending))
+            mark, pending = opening.group("mark"), [opening.group("head")]
+            continue
+        if pending is None:
+            continue
+        if not line.strip() or line.lstrip().startswith("#"):
+            found.append(_seal(mark, pending))
+            pending = None
+            continue
+        pending.append(line.strip())
+    if pending is not None:
+        found.append(_seal(mark, pending))
+    return tuple(found)
+
+
+def _seal(mark: str, lines: list[str]) -> Box:
+    text = "\n".join(lines).strip()
+    match = SIGNED_BY_RE.search(text)
+    return Box(mark=mark, text=text, signer=match.group(1) if match else None)
+
+
+@dataclass(frozen=True)
+class Attribution:
+    """Who signed a sign-off section, and how much of that was ASSUMED.
+
+    `signed_by` follows the weakest-wins rule: any non-human signer in the set makes the whole
+    set that signer's, because a mixed set is only as trustworthy as its weakest signature.
+
+    `unattributed` is the count of ticks carrying no marker. Those resolve to `"human"` by
+    contract — a person editing the file by hand ticks without writing one, and that default
+    is documented rather than accidental. The count exists because the default is an
+    ASSUMPTION, and a mechanism that assumes must not assume silently: a report saying
+    "signed by human" over four bare ticks looks identical to one over four signed ticks.
+    """
+
+    pending: tuple[str, ...] = ()
+    box_count: int = 0
+    signed_by: str | None = None
+    unattributed: int = 0
+
+
+def attribute(body: str) -> Attribution:
+    """The one reader for `(pending, box_count, signed_by, unattributed)`."""
+    parsed = boxes(body)
+    pending = tuple(b.text for b in parsed if not b.ticked)
+    ticked = [b for b in parsed if b.ticked]
+    if not ticked or pending:
+        return Attribution(pending, len(parsed), None, sum(1 for b in ticked if not b.signer))
+
+    signers = {b.signer or "human" for b in ticked}
+    if len(signers) == 1:
+        signed_by = signers.pop()
+    else:
+        non_human = sorted(s for s in signers if not is_human(s))
+        signed_by = non_human[0] if non_human else sorted(signers)[0]
+    return Attribution(pending, len(parsed), signed_by,
+                       sum(1 for b in ticked if not b.signer))
+

@@ -129,25 +129,60 @@ CONCURRENCY_SIGNALS = (
 )
 
 def _accepted_signals() -> str:
-    """The signals this module matches, rendered for a person to read.
+    """The signals that make this subsection PASS, rendered for a person to read.
 
-    DERIVED from `CONCURRENCY_SIGNALS`, never restated. The refusal used to carry a
-    hand-written parenthetical naming six — "(race/loom/concurrent/parallel/
-    atomic-counter/cancellation)" — while the matcher held thirty-nine. The two could
-    drift, and a reader who grepped `^ACCEPTABLE` in this file to find the real list was
-    right to: measured over one 20-hour session, that grep and its siblings were 9% of
-    every command run.
+    DERIVED from `RACE_TEST_SIGNALS` plus `ESCAPE_MARKERS` — the two things the decider at
+    `_race_aware` actually accepts — and never restated.
 
-    Thirty-nine short tokens fit in a message. Fifty-five raw regexes would not, which is
-    why this strips the regex syntax rather than printing the constant.
+    It derived from `CONCURRENCY_SIGNALS` until 2026-09-23, which is the list that DETECTS
+    whether a task involves concurrency at all (`mutex`, `SharedArrayBuffer`). A reader who
+    added a printed token failed again, because acceptance is decided elsewhere (#175). The
+    two lists share no purpose: 39 detect, 14 accept.
+
+    The irony is worth keeping. The hand-written parenthetical this function replaced named
+    six — "(race/loom/concurrent/parallel/atomic-counter/cancellation)" — and **every one of
+    those six is a `RACE_TEST_SIGNALS` member**. The frozen prose was naming the RIGHT list;
+    the fix that removed the risk of drift pointed the renderer at the wrong constant, and
+    said in this very docstring that it now derived rather than restated. A mechanism built to
+    stop a message from lying made it lie a different way.
+
+    Which is why `test_the_refusal_names_the_list_that_decides.py` does not assert WHICH
+    constant is read. It asserts that every printed token is accepted by the decider, and
+    fails whichever constant a later edit points this at.
+
+    The escape is printed alongside, because there are two ways to pass and a message naming
+    one hides the other: a task with no concurrency passes by saying so.
     """
-    words = set()
-    for pattern in CONCURRENCY_SIGNALS:
-        word = (pattern.replace(r"\b", "").replace(r"\s*", "")
-                .replace(r"\(", "").replace("\\", "").strip())
-        if word:
-            words.add(word)
-    return " · ".join(sorted(words))
+    return " · ".join(sorted({_readable(p) for p in RACE_TEST_SIGNALS + ESCAPE_MARKERS}
+                             - {""}))
+
+
+#: Regex syntax to human text, longest key first so `\s+` is spent before `\s`.
+#:
+#: The first version of this stripper was written for `CONCURRENCY_SIGNALS`, whose members are
+#: nearly all bare `\bword\b`. Pointed at the list that actually decides, it printed
+#: `cancellations+propagat`, `Atomics.w+` and `none[—-–]+single[- ]threaded)` — tokens no reader
+#: can copy into a document. A message naming the right list in an unusable form is not a fix.
+_UNESCAPE = (
+    (r"\s+", " "), (r"\s*", " "), (r"\w+", "<name>"), (r"\b", ""),
+    (r"[- ]", "-"), (r"[—\-–]+", "—"), (r"\(", "("), (r"\)", ")"), (r"\.", "."),
+)
+
+
+def _readable(pattern: str) -> str:
+    """One regex rendered as the text a reader would type.
+
+    An unbalanced `)` survives from `ESCAPE_MARKERS`, whose pattern opens with an escaped
+    paren and closes with a literal one; the pairing is restored rather than stripped, because
+    the escape must be printed EXACTLY as it has to be written to work.
+    """
+    text = pattern
+    for needle, replacement in _UNESCAPE:
+        text = text.replace(needle, replacement)
+    text = text.replace("\\", "").strip()
+    if text.endswith(")") and "(" not in text:
+        text = "(" + text
+    return " ".join(text.split())
 
 
 
@@ -155,7 +190,11 @@ def _accepted_signals() -> str:
 # `#### Concurrency tests` subsection MUST contain to pass.
 RACE_TEST_SIGNALS = (
     r"\bgo test -race\b",
-    r"\b--race\b",
+    # No leading `\b`: a boundary cannot hold between a space (or the string start) and a
+    # hyphen, both non-word. `\b--race\b` matched only `x--race` and never the real form
+    # `cargo test --race` — a pattern in the ACCEPTANCE list that could not accept the thing
+    # it names. Found by the test asserting every printed token is accepted (#175).
+    r"--race\b",
     r"\bloom::",
     r"\bloom\s+test\b",
     r"\bpytest-asyncio\b",

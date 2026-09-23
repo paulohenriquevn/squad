@@ -271,6 +271,9 @@ class AlignmentReport:
     #: the verdict needs the weakest link, not the majority — the same reason a
     #: partially reviewed brief counts as unreviewed.
     signed_by: str | None = None
+    #: Ticks carrying no `signed-by` marker. They resolve to `"human"` by contract, and the
+    #: count is what tells a reader the value was ASSUMED rather than read (#174).
+    unattributed_ticks: int = 0
 
     #: Acceptance criteria whose command can pass because its SUBJECT is absent.
     #: Advisory, and scored nowhere: the rubric measures shape and this is about
@@ -887,7 +890,7 @@ def _score_criteria(body: str, brief_path: Path) -> tuple[list[Criterion], list[
 
 
 def _read_signoff(body: str) -> tuple[tuple[str, ...], int, str | None]:
-    """`(pending, box_count, signed_by)` from the reviewer's half of the brief."""
+    """`(pending, box_count, signed_by, unattributed)` from the reviewer's half."""
     # ── the reviewer's half ────────────────────────────────────────────────
     # Generated unchecked by the agent that wrote the brief; ticked by a reviewer who
     # is NOT that agent — a person, or `alignment_judge.py` when none is coming
@@ -896,21 +899,19 @@ def _read_signoff(body: str) -> tuple[tuple[str, ...], int, str | None]:
     # dishonest rather than merely lazy. Adopted from spec-kit, whose checklist carries
     # the same instruction to its own /implement.
     signoff = _section(body, "Reviewer sign-off", "Reviewer signoff", "Sign-off")
-    boxes = _CHECKBOX_RE.findall(signoff or "")
-    pending = tuple(text for mark, text in boxes if mark == " ")
-
-    ticked = [text for mark, text in boxes if mark in ("x", "X")]
-    signers = {(_SIGNED_BY_RE.search(t).group(1) if _SIGNED_BY_RE.search(t) else "human")
-               for t in ticked}
-    if not ticked or pending:
-        signed_by = None
-    elif len(signers) == 1:
-        signed_by = signers.pop()
-    else:
-        # Weakest wins: any agent signature makes the whole set an agent's.
-        non_human = sorted(s for s in signers
-                           if s != "human" and not s.startswith("human/"))
-        signed_by = non_human[0] if non_human else sorted(signers)[0]
+    # `squad.signoff` declares itself the one reader, and this held a SECOND one beside it —
+    # `_CHECKBOX_RE`, anchored `^…$` under MULTILINE, capturing a box's FIRST line only. A
+    # `<!-- signed-by: … -->` on a continuation line fell outside the captured text and the
+    # `else "human"` fallback fired, reporting an AGENT's sign-off as a PERSON's (#174).
+    # Measured: same marker, same judge, on the box line -> `judge/alignment-judge`; one line
+    # down -> `human`. The shared reader never had the bug, because `read()` searches the whole
+    # body; the duplication is what carried it. Two readers of one question is the
+    # multiplication `check_install_drift._is_project_owned` refuses to add to in its comment.
+    attribution = _shared_signoff.attribute(signoff or "")
+    pending = attribution.pending
+    signed_by = attribution.signed_by
+    unattributed = attribution.unattributed
+    boxes = [None] * attribution.box_count
 
     # kit#14. The marker counts when it is USED, not when it is mentioned. A brief
     # explains to its reviewer how to declare a split — "mark this brief
@@ -921,7 +922,7 @@ def _read_signoff(body: str) -> tuple[tuple[str, ...], int, str | None]:
     # A declaration stands on its own line. A mention sits inside a sentence, a
     # list item or a code span. Same distinction kit#17 needed, and the same root:
     # a marker matched anywhere, with no notion of mentioned versus used.
-    return pending, len(boxes), signed_by
+    return pending, len(boxes), signed_by, unattributed
 
 
 def _read_declarations(body: str):
@@ -963,7 +964,7 @@ def score_alignment(brief_path: Path, depth: str = "FULL") -> AlignmentReport:
     criteria, ac = _score_criteria(body, brief_path)
     if depth.upper() == "LOCAL":
         criteria = [c for c in criteria if c.key not in _local_drops()]
-    pending, box_count, signed_by = _read_signoff(body)
+    pending, box_count, signed_by, unattributed = _read_signoff(body)
     split, withdrawn, restored = _read_declarations(body)
 
     judgement = (
@@ -974,6 +975,7 @@ def score_alignment(brief_path: Path, depth: str = "FULL") -> AlignmentReport:
     declarations = _declarations_only(body)
     return AlignmentReport(
         tuple(criteria), judgement, pending, box_count, signed_by,
+        unattributed_ticks=unattributed,
         vacuous_criteria=_vacuous_criteria(ac),
         needs_split=bool(split),
         split_reason=(split.group(1) or "").strip() if split else "",
@@ -1092,6 +1094,13 @@ def main(argv: list[str] | None = None) -> int:
         note = "" if report.signed_by_is_human else "  ← an AGENT signed, not a person"
         print(f"Reviewer sign-off: all {report.reviewer_items_total} items ticked "
               f"by `{who}`.{note}")
+        # `human` on a bare tick is a CONTRACT, not a reading — a person editing the file
+        # ticks without writing a marker. The count is printed because a mechanism that
+        # assumes must not assume silently: "signed by human" over four bare ticks looked
+        # identical to the same line over four signed ones (#174).
+        if report.unattributed_ticks:
+            print(f"  {report.unattributed_ticks} of {report.reviewer_items_total} carried no "
+                  f"`signed-by` marker and are counted as `human` by contract, not read.")
     elif report.reviewer_items_total:
         print(f"Reviewer sign-off: {len(report.pending_review)} of "
               f"{report.reviewer_items_total} still unticked —")

@@ -8,6 +8,52 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A signature marker on a box's continuation line was invisible, and the tick read as a
+  PERSON's (#174).** `score_alignment.py` paired each box's mark to its text with its own
+  `_CHECKBOX_RE`, anchored `^…$` under `re.MULTILINE`, capturing ONE line. A
+  `<!-- signed-by: … -->` on the next line fell outside the captured text and the `else
+  "human"` fallback fired. Measured here: same marker, same judge — on the `- [x]` line
+  `judge/alignment-judge`; one line down, `human`. Box authors wrap long text and the natural
+  home for a long `(verified: …)` clause is a line of its own, so **the failing shape is the
+  one a careful reviewer produces**.
+
+  **The root cause is the duplicate reader.** `squad/signoff.py` declares itself the one reader
+  and its `read()` searches the whole body, so it never had this bug; `score_alignment.py` kept
+  a second, line-wise one beside it. `attribute()` now lives in the shared module — boxes with
+  their continuation lines, weakest-wins in one place — and the duplicate is gone. **The
+  `"human"` default is NOT changed**: it is deliberate and documented, and changing it would
+  oblige every human to write `human/<name>` or be blocked, which is a contract decision. What
+  ships instead is the count — the report now says how many ticks carried no marker, because a
+  mechanism that assumes must not assume silently.
+
+- **The concurrency refusal printed the list that DETECTS concurrency, not the one that
+  ACCEPTS a test (#175).** A reader who copied a printed token failed again: the message
+  rendered `CONCURRENCY_SIGNALS` (39 tokens — `mutex`, `SharedArrayBuffer`) while acceptance is
+  decided by `RACE_TEST_SIGNALS` (14 — `go test -race`, `loom::`, `pytest-asyncio`). Same class
+  as `rules/code-quality-allowlist.txt` (#343), where following the documentation produced a
+  worse outcome than adding nothing.
+
+  **The irony is kept in the docstring.** `_accepted_signals()` exists to stop exactly this, and
+  the hand-written parenthetical it replaced — "(race/loom/concurrent/parallel/atomic-counter/
+  cancellation)" — names six tokens that are **all `RACE_TEST_SIGNALS` members**. The frozen
+  prose was naming the RIGHT list; the fix that removed the drift risk pointed the renderer at
+  the wrong constant while asserting, in that same docstring, that it now derived rather than
+  restated.
+
+  **Two further defects surfaced by writing the class-closing test**, which asserts that every
+  printed token is accepted by the decider — an invariant that holds whichever constant a later
+  edit points the renderer at. First: `\b--race\b` **could never match**, because a word
+  boundary cannot hold between a space and a hyphen; it accepted only `x--race` and never
+  `cargo test --race`, so the acceptance list held a pattern that could not accept the thing it
+  named. Second: the regex stripper, written for `\bword\b`, rendered the real list as
+  `cancellations+propagat` and `none[—-–]+single[- ]threaded)` — tokens nobody can copy. A
+  message naming the right list in an unusable form is not a fix.
+
+  A pre-existing test **encoded the defect**: `test_the_concurrency_refusal_lists_every_accepted_signal`
+  required the message to derive from `CONCURRENCY_SIGNALS` and be long. Its purpose was right —
+  a frozen parenthetical is how a message drifts from code — and its yardstick was the same wrong
+  constant. Corrected rather than deleted, for the third time this day (see #169's two).
+
 - **`install.sh` accepted an install as a place to install, and `--remove-withdrawn` could
   not run without a full reinstall.** Two defects of the same operation, both measured by
   making them: passing a consumer's `.claude` as the target built `.claude/.claude` with

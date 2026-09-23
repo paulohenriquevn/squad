@@ -65,8 +65,24 @@ def test_a_missing_section_refusal_lists_every_missing_one(tmp_path: Path) -> No
 
 
 def test_the_concurrency_refusal_lists_every_accepted_signal() -> None:
-    """The refusal carried a parenthetical that stopped at six signals and the module
-    holds many more, so the session grepped `^ACCEPTABLE` to see the rest."""
+    """The refusal must RENDER the list that decides, whole, rather than freeze a parenthetical.
+
+    Its yardstick was `CONCURRENCY_SIGNALS` until 2026-09-23 — and that is the list which
+    DETECTS whether a task involves concurrency (`mutex`, `SharedArrayBuffer`), not the one
+    which ACCEPTS a subsection (`go test -race`, `loom::`). So this test required the message
+    to be long and derived from the wrong constant, and passed while a reader who copied a
+    printed token failed again (#175).
+
+    The purpose was right: a frozen parenthetical naming six while the matcher held more is
+    how a message drifts from the code. The measure was wrong, and it is now the deciding
+    list plus its escape, because there are two ways to pass and a message naming one hides
+    the other.
+
+    Third test this day found encoding the defect it was written near — see
+    `test_blocks_out_of_sequence_are_not_a_finding` and
+    `test_a_reused_id_is_refused_and_mere_sequence_is_not` (#169). Corrected rather than
+    deleted: deleting it would remove the only guard against the parenthetical coming back.
+    """
     script = _ROOT / "skills" / "plan-confidence" / "scripts" / "check_concurrency_tests.py"
     source = script.read_text(encoding="utf-8")
 
@@ -74,7 +90,7 @@ def test_the_concurrency_refusal_lists_every_accepted_signal() -> None:
     assert refusal, "the refusal moved; this test needs re-pointing"
 
     window = source[source.index(refusal[0]):][:800]
-    assert "_accepted_signals()" in window or "CONCURRENCY_SIGNALS" in window, (
+    assert "_accepted_signals()" in window, (
         "the refusal spells its accepted signals as a frozen parenthetical instead of "
         "rendering the list the module actually matches against — so the two drift, and "
         "the reader greps for the real one")
@@ -86,8 +102,13 @@ def test_the_concurrency_refusal_lists_every_accepted_signal() -> None:
     sys.modules["_cc"] = mod
     spec.loader.exec_module(mod)
     rendered = mod._accepted_signals()
-    assert len(rendered.split(" · ")) >= len(mod.CONCURRENCY_SIGNALS) // 2, (
-        "the rendered list is far shorter than the matcher's — it is not derived from it")
+    tokens = [t.strip() for t in rendered.split(" · ") if t.strip()]
+    deciding = len(mod.RACE_TEST_SIGNALS) + len(mod.ESCAPE_MARKERS)
+    assert len(tokens) == deciding, (
+        f"the message renders {len(tokens)} token(s) and the decider consults {deciding}. "
+        f"Whole, or a reader fixes what it named and meets what it did not:\n{rendered}")
+    # And derived, not a literal that happens to be the same length today.
+    assert "RACE_TEST_SIGNALS" in source and "_accepted_signals" in source
 
 
 def test_the_scenario_class_refusal_names_the_four() -> None:
