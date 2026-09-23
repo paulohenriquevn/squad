@@ -450,8 +450,15 @@ def main(argv: list[str] | None = None) -> int:
                               "here. Harvest upstream before upgrading"),
         Drift.DIVERGED: ("both sides hold unique lines — a copy in either direction "
                          "deletes the other's fix"),
-        Drift.STALE: "the kit moved on and this copy did not",
-        Drift.KIT_AHEAD: "the kit holds lines this install lacks — an upgrade adds them",
+        # These two are the only classes where this install holds NO line the kit lacks,
+        # which is the whole reason `--apply-upstream` accepts them and refuses the two
+        # above. Naming the command here and nowhere else is deliberate: it was reachable
+        # only by replacing the whole tree, and a reader who saw the count had no smaller
+        # answer than reinstalling everything.
+        Drift.STALE: ("the kit moved on and this copy did not — one file at a time with "
+                      "`install.sh <target> --apply-upstream <path>`"),
+        Drift.KIT_AHEAD: ("the kit holds lines this install lacks — an upgrade adds them, "
+                          "as does `install.sh <target> --apply-upstream <path>` per file"),
     }
     for verdict in (Drift.DIVERGED, Drift.INSTALL_AHEAD, Drift.STALE, Drift.KIT_AHEAD):
         files = report.by_class[verdict]

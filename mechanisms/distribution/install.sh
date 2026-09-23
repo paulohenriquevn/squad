@@ -5,6 +5,7 @@
 #
 # Usage:
 #   bash mechanisms/distribution/install.sh <target-project-dir> [--force | --merge]
+#   bash mechanisms/distribution/install.sh <target-project-dir> --apply-upstream <path> [--from <kit-dir>]
 #
 # What it does:
 #   1. Validates target is a directory, and refuses the machine-wide roots — $HOME,
@@ -19,6 +20,13 @@
 #               --force until 2026-09-17, while the parser had accepted --merge since
 #               it was added — an operator reading the usage line could not discover
 #               the one flag that does not clobber.
+#      --apply-upstream <path>
+#               takes the kit's version of ONE file and installs nothing else. It
+#               refuses every file this install holds unique lines in — DIVERGED and
+#               INSTALL_AHEAD alike — so it can only ever delete a line the kit still
+#               ships. See the block guarding it below for why the refusal, not the
+#               copy, is the point. --from names the kit to take the file FROM; the
+#               classifier always comes from this script's own tree.
 #   3. Copies skills/, rules/, hooks/, commands/, mechanisms/, squad/, plugin.json,
 #      HOW-TO-USE.md into target/.claude/.
 #   4. settings.json: MERGED by key ownership when the target already has one —
@@ -72,14 +80,31 @@ fi
 TARGET="$1"
 FORCE=0
 MERGE=0
+APPLY_UPSTREAM=""
+APPLY_FROM=""
+_expect=""
 for arg in "${@:2}"; do
+  if [ -n "$_expect" ]; then
+    case "$_expect" in
+      apply) APPLY_UPSTREAM="$arg" ;;
+      from)  APPLY_FROM="$arg" ;;
+    esac
+    _expect=""
+    continue
+  fi
   case "$arg" in
     --force) FORCE=1 ;;
     --merge) MERGE=1 ;;
+    --apply-upstream) _expect="apply" ;;
+    --from) _expect="from" ;;
     "") ;;
-    *) echo "ERROR: unknown flag ${arg}. Expected --force or --merge." >&2; exit 2 ;;
+    *) echo "ERROR: unknown flag ${arg}. Expected --force, --merge, --apply-upstream <path> or --from <kit-dir>." >&2; exit 2 ;;
   esac
 done
+if [ -n "$_expect" ]; then
+  echo "ERROR: --${_expect/apply/apply-upstream} needs a value." >&2
+  exit 2
+fi
 
 if [ ! -d "$TARGET" ]; then
   echo "ERROR: target is not a directory: $TARGET" >&2
@@ -88,6 +113,127 @@ fi
 
 TARGET="$(cd "$TARGET" && pwd)"
 ECO="$TARGET/.claude"
+
+# ── --apply-upstream: ONE file, and only where nothing can be lost ────────────
+#
+# The kit had two modes and both replace everything, while `boundary-check` refuses
+# editing a kit file inside an install — correctly, for a fix somebody WROTE there:
+# it protects one machine and the next install erases it. Neither answers the other
+# case: a file that differs because the KIT moved and this install did not.
+#
+# READ THIS FIRST IF YOU CAME HERE TO FIX A DRIFTED INSTALL. Six mechanisms were measured
+# individually across two sessions on 2026-09-23 — score_alignment, promote_to_develop,
+# check_spec_smells, stop-validation, validate-command, and the boundary guard's treatment
+# of a read. All six classify DIVERGED. **This mode resolves none of them.** It is not the
+# answer to the drift that motivated it; it is the answer to the cheap half beside it.
+#
+# Measured the same day across four consumers (stepguard, gitsafety, hodor, talkex — the
+# same distribution in all four): 400 files differ, and they split into
+#     diverged 349 · install_ahead 1 · stale 10 · kit_ahead 40
+# This mode applies to the last two — 50 files — and refuses the other 350.
+#
+# Both halves of that measurement come from a peer session running the checker against its
+# own install; the six-of-six count is theirs. Two of the six had already produced a wrong
+# diagnosis before measurement caught them, and a third was about to become a filed item —
+# a stale install does not merely lag, it ANSWERS, and a stale answer is indistinguishable
+# from a current one until something contradicts it. Three in six producing false
+# conclusions is the number worth putting in front of whoever decides that reading 138
+# diffs by hand is worth the afternoon.
+#
+# THE REFUSAL IS THE DESIGN, and it costs real coverage: of the 349 diverged, 22 differ by
+# four lines or fewer and 83 by ten or fewer, and this refuses every one of them. That is
+# the intended price. *Is this my work or my lag* is precisely the judgement
+# `check_install_drift` states, in its own output, that it cannot make: "yours, or work to
+# harvest — this check cannot tell". A small diff is not evidence of which one it is; the
+# 2-line diff in `skills/code-quality/scripts/detectors/_mutation.py` looks exactly like a
+# 2-line local fix. A command that appears to settle that question would be used on the
+# cases where it does not, and the cost of being wrong is somebody's fix deleted silently.
+#
+# An earlier draft of this comment claimed the mode covered "67 files differing by one or
+# two lines". That number came from counting differing LINES and never resolving the
+# CLASS — the same defect this kit records under "an identifier counted rather than
+# resolved". Those files are diverged, and this refuses them.
+#
+# What it covers is the case with nothing to lose on either side: the install holds no line
+# the kit lacks, so taking the kit's version deletes nothing. Everything else keeps the
+# answer it has today — open an issue, or reinstall deliberately.
+if [ -n "$APPLY_UPSTREAM" ]; then
+  _src_root="${APPLY_FROM:-$SRC_DIR}"
+  _rel="$APPLY_UPSTREAM"
+
+  # `..` is how a per-file copy becomes a write anywhere. Asked of realpath rather than
+  # matched as a string: `a/../../b` normalises to something no pattern for ".." catches.
+  #
+  # BOTH sides are resolved. Comparing a resolved destination against an unresolved $ECO
+  # refuses every install whose .claude is a symlink — a legitimate layout — with a message
+  # about escaping that names a path the operator never wrote. Fail-closed on the wrong
+  # question is still the wrong answer.
+  _eco_real="$(realpath -m "$ECO")"
+  _dest="$(realpath -m "$ECO/$_rel")"
+  case "$_dest" in
+    "$_eco_real"/*) ;;
+    *) echo "ERROR: $_rel resolves outside the install ($_dest). Nothing was written." >&2
+       exit 2 ;;
+  esac
+
+  # `rules/*.txt`, `agents/`, `records/`, `settings.json` are the PROJECT's, and the kit's
+  # copy of them is a template. Overwriting one is what `--merge` exists to avoid, so this
+  # mode refuses rather than quietly doing what the other mode refuses on purpose.
+  if python3 - "$_rel" <<'PYEOF'
+import re, sys
+PROJECT_OWNED = (r"^rules/[^/]+\.txt$", r"^agents/", r"^records/", r"^settings\.json$",
+                 r"^\.kit-manifest\.txt$", r"^\.install-backups/")
+sys.exit(0 if any(re.search(p, sys.argv[1]) for p in PROJECT_OWNED) else 1)
+PYEOF
+  then
+    echo "REFUSED: $_rel is the project's, not the kit's. The kit ships a template for it" >&2
+    echo "  and --merge preserves yours on purpose. Nothing was written." >&2
+    exit 2
+  fi
+
+  if [ ! -f "$_src_root/$_rel" ]; then
+    echo "ERROR: the kit does not ship $_rel (looked in $_src_root)." >&2
+    echo "  There is no upstream version to take, and writing one would delete yours." >&2
+    exit 2
+  fi
+  if [ ! -f "$ECO/$_rel" ]; then
+    echo "ERROR: $_rel is not in this install. Use --merge to add what the kit ships." >&2
+    exit 2
+  fi
+
+  # The classifier comes from THIS installer's own tree, never from --from. The source of
+  # the content and the authority on what the difference means are two different things,
+  # and an old --from tree may predate the classifier — or not ship it at all.
+  _verdict="$(SQ_A="$ECO/$_rel" SQ_B="$_src_root/$_rel" SQ_GATES="$SCRIPT_DIR/../gates" python3 -c '
+import os, sys
+from pathlib import Path
+sys.path.insert(0, os.environ["SQ_GATES"])
+from check_install_drift import classify_file
+print(classify_file(Path(os.environ["SQ_A"]), Path(os.environ["SQ_B"])).value)
+')" || _verdict=""
+
+  case "$_verdict" in
+    identical)
+      echo "IDENTICAL: $_rel already matches the kit. Nothing was written." ;;
+    kit_ahead|stale)
+      cp "$_src_root/$_rel" "$ECO/$_rel"
+      echo "APPLIED: $_rel took the kit's version ($_verdict — this install held no line the kit lacks)." ;;
+    diverged)
+      echo "REFUSED: $_rel is DIVERGED — both sides hold unique lines, and this cannot tell" >&2
+      echo "  your work from your lag. Copying would delete a fix without a trace." >&2
+      echo "  Read the diff, and send anything of yours upstream as an issue." >&2
+      exit 1 ;;
+    install_ahead)
+      echo "REFUSED: $_rel is INSTALL_AHEAD — it holds lines the kit does not, and those are" >&2
+      echo "  the only ones an upgrade deletes. Harvest them upstream first." >&2
+      exit 1 ;;
+    *)
+      echo "ERROR: could not classify $_rel (got '$_verdict'). Nothing was written." >&2
+      exit 2 ;;
+  esac
+  exit 0
+fi
+
 
 if [ "$TARGET" = "$SRC_DIR" ]; then
   echo "ERROR: target is the source repo itself. install.sh is for installing the ecosystem INTO another project." >&2

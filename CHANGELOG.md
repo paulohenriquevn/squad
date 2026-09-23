@@ -38,6 +38,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`install.sh --apply-upstream <path>` — a consumer could ignore a kit fix or reinstall 400
+  files, and there was nothing in between.** Both existing modes replace the whole kit, and
+  `boundary-check` refuses editing a kit file inside an install — right for a fix somebody
+  WROTE there, since it protects one machine and the next install erases it. Neither answers
+  the other case: a file that differs because the KIT moved and this install did not.
+  Measured 2026-09-23 across four consumers with identical distributions — 400 files differ,
+  splitting into `diverged 349 · install_ahead 1 · stale 10 · kit_ahead 40`. The new mode
+  takes the kit's version of ONE file and **refuses every file this install holds unique
+  lines in**, so it applies to 50 and refuses 350. **Six mechanisms were measured
+  individually and all six classify `diverged` — the mode resolves none of them.** It is
+  not the answer to the drift that motivated it; it is the answer to the cheap half beside
+  it, and the file says so in its first paragraph so nobody arrives expecting otherwise. **The refusal is the design and it costs
+  real coverage**: 22 of the 349 diverged differ by four lines or fewer, 83 by ten or fewer,
+  and this refuses all of them, because *is this my work or my lag* is exactly the judgement
+  `check_install_drift` prints that it cannot make — a small diff is not evidence of the
+  answer, and a command that looked like it settled the question would be used where it does
+  not. `check_install_drift` now names the command on the two classes it accepts and on
+  neither of the two it refuses. The rationale first written here claimed the mode covered
+  "67 files differing by one or two lines"; that number counted differing LINES and never
+  resolved the CLASS, and the files it named are diverged. Corrected before merge, in the
+  code as well as here.
+
 - **`docs/wiki/decisions/the-system-already-said-it.md`** — the fourth class recorded on
   2026-09-22/23, and the only one whose subject is the investigator rather than a mechanism.
   Three cases across two sessions in one day: a sidecar lock reported as an escape while
