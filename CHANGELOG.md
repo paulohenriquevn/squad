@@ -134,6 +134,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A rule asserted a third party's defect in the present tense, three days after it was
+  fixed.** `cycle-judge-codex.md` described the judge plugin hard-coding
+  `knowledge-base/…` paths, with *measured on a consumer 2026-09-18* further down — and the
+  plugin resolved that on 2026-09-22 (`85e55b5`). A reader took the date as *when the defect
+  was found* rather than as *how far this sentence is still true*, believed it correctly,
+  and recommended a fix for something already fixed. **A stale mechanism that answers is
+  worse than an absent one; a stale document that asserts is worse than both, because
+  nothing in it fails.** Verified by reading the installed plugin rather than by taking the
+  report: `codex-companion-judge.mjs:39` carries the current root first and accepts both
+  `-opportunity.md` and `-blueprint.md` rather than choosing. The passage is now past tense
+  with the commit named, and the reasoning is kept — deleting it would erase why the seam
+  exists. A sweep for other present-tense claims about third parties in `rules/*.md` found
+  none.
+
 - **A commit scope could name two areas and not one path.** `HEADER_RE` accepted
   comma-separated kebab-case segments — added because a change touching two areas had three
   bad options, *name one and be incomplete, invent a portmanteau nobody greps for, or drop

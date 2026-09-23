@@ -88,8 +88,23 @@ The plugin's per-stage hard caps mirror the canonical golden rules. **None of th
 
 ## Where the artifacts are, and why the plugin has to ask
 
-The contract mismatch recorded above is one face of a wider one, measured on a
-consumer 2026-09-18: the plugin hard-codes
+**FIXED IN THE PLUGIN ON 2026-09-22 (`85e55b5`), and this section is the record of
+what it was.** It was written in the present tense with the measurement date further
+down, so a reader took the date as *when the defect was found* rather than as *how
+far this sentence is still true*. It was believed, correctly, for three days after
+it stopped being so — and a stale MECHANISM that answers is worse than an absent
+one, while a stale DOCUMENT that asserts is worse than both, because nothing in it
+fails. Verified here by reading the installed plugin rather than by taking the
+report: `scripts/codex-companion-judge.mjs:39` now carries
+`RECORD_ROOTS = [".squad/records", ".claude/records", "records",
+".claude/knowledge-base", "knowledge-base"]` — the current root first, the old one
+last — and `:discover` accepts BOTH names rather than choosing, `-opportunity.md`
+and `-blueprint.md` alike.
+
+What follows is the state until that commit, kept because the reasoning is what
+makes the fix legible and because deleting it would erase why the seam exists.
+
+Measured on a consumer 2026-09-18: the plugin hard-coded
 `knowledge-base/discoveries/blueprints/<slug>-blueprint.md` for `:discover`, and
 the analogous `knowledge-base/...` path for its other three stages. This kit
 writes `.squad/records/discoveries/opportunities/<slug>-opportunity.md`.
@@ -97,7 +112,7 @@ writes `.squad/records/discoveries/opportunities/<slug>-opportunity.md`.
 Two independent renames are stacked in that one string. `records-location.md`
 moved the root in 2026-08, keeping `knowledge-base` only as the **last** read-only
 fallback for an unmigrated project. `cycle-discover.md` renamed blueprint to
-opportunity, deliberately. Neither reached the plugin, so every seat of every
+opportunity, deliberately. Neither had reached the plugin, so every seat of every
 panel answered "artifact not found", every panel came back incomplete, and the
 contract reads an incomplete panel as abstention and never as agreement — so no
 item could leave DISCOVER, PLAN or DESIGN.
