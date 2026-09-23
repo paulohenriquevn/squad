@@ -22,6 +22,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`check_verification_freshness.py` — when did this tree last verify itself, and does the
+  answer still apply?** `run_slice_tests.sh` printed its verdict and exited, so the only way
+  to answer *is it green?* was to run it again for fifteen minutes. Measured 2026-09-22: one
+  session ran it four times in one day to answer that question, and two of the four answered
+  about a tree that had moved underneath them. The runner now writes
+  `.squad/records/verification/last-run.json` — what ran, on which commit, with what result,
+  and whether the tree moved — and this gate reads it **in milliseconds rather than fifteen
+  minutes**, which is the property that made the question go unasked. Six states, and two of
+  them are the reason it exists: `never` is NOT `failing` — a fresh clone has not verified
+  itself and is not broken, and collapsing them would fire on every checkout, which is a
+  signal that always fires. `unattributable` is the runner saying its own result was about no
+  single state of the repository, and reading that as green would launder exactly what the
+  flag prevents. It ADVISES inside `promote_to_develop.py`, at the last moment before work
+  leaves the branch it was written on, and refuses nothing: promoting unverified work is a
+  legitimate call the caller makes, and what the gate refuses is silence about it.
+
 - **`docs/wiki/decisions/a-reference-is-checked-in-one-direction.md`** — the class behind
   four cross-reference defects found in one sweep on 2026-09-22, in four different slices.
   A reference has two sides and one author, who writes the check holding one side in mind;

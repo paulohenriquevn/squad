@@ -308,6 +308,28 @@ def _preflight(call, git, report: "Report") -> bool:
         return True
 
     report.lines.append(f"{count} commit(s) ahead of origin/{TARGET}")
+
+    # WAS THIS TREE VERIFIED, and does the answer still apply? Asked here because this is
+    # the last moment before work leaves the branch it was written on, and because the
+    # answer is a file read rather than a fifteen-minute suite — the property that made
+    # the question go unasked. Measured 2026-09-22: one session ran the suite four times
+    # in a day to answer it, and two of the four answered about a tree that had moved.
+    #
+    # It ADVISES and does not refuse. Whether to promote unverified work is the caller's
+    # call — a documentation-only branch is a real case — and a promotion that blocked on
+    # a record nobody had written yet would fail every consumer that has not run the suite
+    # since this record existed. What it refuses is silence: `stale` and `unattributable`
+    # both mean the green a reader remembers is about a different tree.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "gates"))
+    try:
+        from check_verification_freshness import check as _verification
+
+        _code, _v = _verification(root)
+        if _v.get("state") != "verified":
+            report.lines.append(f"verification: {_v['state'].upper()} — {_v['detail']}")
+    except Exception as exc:  # noqa: BLE001 — a premise we cannot read is reported, not hidden
+        report.lines.append(f"verification: UNCHECKED — {type(exc).__name__}: {exc}")
+
     return False
 
 
