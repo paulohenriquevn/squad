@@ -8,6 +8,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **`install.sh` accepted an install as a place to install, and `--remove-withdrawn` could
+  not run without a full reinstall.** Two defects of the same operation, both measured by
+  making them: passing a consumer's `.claude` as the target built `.claude/.claude` with
+  **917 files** — a complete second copy one level down — plus a records scaffold beside it,
+  with nothing warning. The litter was the smaller half. **Every other flag then acted on the
+  wrong tree**: `--remove-withdrawn` ran against the nested install, found none of the eight
+  withdrawn skills there, and reported nothing, while the real install one level up kept all
+  eight. A destructive flag that silently does nothing is what makes an operator believe the
+  work is done.
+
+  The refusal reads `squad.layout.has_kit` — the same predicate `resolve()` uses to decide a
+  directory IS an install — rather than the basename `.claude`: a consumer may install into a
+  differently-named directory, and a name check would miss exactly those while refusing an
+  empty directory that happens to be called `.claude`. It names the directory to use instead.
+  `test_install_refuses_an_unconfined_root.py` already refuses `$HOME`, the config dir and
+  `/`, whose blast radius is the machine; this is the complement, whose blast radius is a
+  duplicate.
+
+  And `--remove-withdrawn` now removes and STOPS. It was reachable only through a full
+  install, so the narrow, destructive, explicitly-authorised action could not be taken without
+  the broad one nobody asked for — authorising the deletion of eight retired skills is not
+  authorising every kit file to be replaced. Measured consequence: given that choice, the
+  operator deleted the directories by hand, which is the mechanism being routed around. The
+  standalone path also drops the test from 47.79s to 6.46s, because it installs nothing.
+
 - **`--apply-upstream` called `classify_file` with two of its four arguments, so it refused
   exactly the files the checker had just declared applicable.** The promotion from `DIVERGED`
   to `STALE` runs only when given `kit_root` AND `rel`

@@ -6,9 +6,16 @@
 # Usage:
 #   bash mechanisms/distribution/install.sh <target-project-dir> [--force | --merge]
 #   bash mechanisms/distribution/install.sh <target-project-dir> --apply-upstream <path> [--from <kit-dir>]
+#   bash mechanisms/distribution/install.sh <target-project-dir> --remove-withdrawn
+#
+#   <target-project-dir> is the PROJECT, never its `.claude`. Passing the latter built a
+#   second copy one level down and pointed every flag at it; that is refused now.
 #
 # What it does:
-#   1. Validates target is a directory, and refuses the machine-wide roots — $HOME,
+#   1. Validates target is a directory, refuses a target that IS an install of this kit
+#      (`squad.layout.has_kit` — passing a `.claude` produced `.claude/.claude`, 917 files,
+#      and `--remove-withdrawn` then silently acted on the empty nested tree), and refuses
+#      the machine-wide roots — $HOME,
 #      $CLAUDE_CONFIG_DIR and its parent, and /. Everything under <target>/.claude/ is
 #      replaced, so a mistyped argument there rewrites the configuration of every
 #      project on the machine.
@@ -20,6 +27,12 @@
 #               --force until 2026-09-17, while the parser had accepted --merge since
 #               it was added — an operator reading the usage line could not discover
 #               the one flag that does not clobber.
+#      --remove-withdrawn
+#               deletes the paths `mechanisms/distribution/withdrawn.txt` NAMES, and nothing
+#               else — never by absence, which is how a project's own work would go. On its
+#               own it removes and STOPS, installing nothing: authorising the deletion of
+#               eight retired skills is not authorising every kit file to be replaced.
+#               Combined with --force or --merge it does both in one pass.
 #      --apply-upstream <path>
 #               takes the kit's version of ONE file and installs nothing else. It
 #               refuses every file this install holds unique lines in — DIVERGED and
@@ -114,6 +127,43 @@ if [ ! -d "$TARGET" ]; then
 fi
 
 TARGET="$(cd "$TARGET" && pwd)"
+
+# ── the target is a PROJECT, and an install is not one ────────────────────────
+#
+# `install.sh <project>` creates `<project>/.claude`. Given a `.claude`, it built
+# `<project>/.claude/.claude` — 917 files, a complete second copy one level down, plus a
+# records scaffold beside it, with nothing warning. Measured 2026-09-23.
+#
+# The litter is the smaller half. Every other flag then operates on the wrong tree:
+# `--remove-withdrawn` ran against the nested install, found none of the eight withdrawn
+# skills there, and reported nothing — while the real install one level up kept all eight.
+# A destructive flag that silently does nothing is what makes an operator believe the work
+# is done.
+#
+# `test_install_refuses_an_unconfined_root.py` already refuses $HOME, the config dir and /,
+# whose blast radius is the machine. This is the complement, whose blast radius is a
+# duplicate, and which nothing named.
+#
+# The predicate is `squad.layout.has_kit` — the same one `resolve()` uses to decide that a
+# directory IS an install — rather than the basename `.claude`. A consumer may install into
+# a differently-named directory, and a check keyed on the name would miss exactly those
+# while refusing an empty directory that happens to be called `.claude`.
+if SQ_T="$TARGET" SQ_KIT="$SCRIPT_DIR/../.." python3 -c '
+import os, sys
+from pathlib import Path
+sys.path.insert(0, os.environ["SQ_KIT"])
+from squad.layout import has_kit
+sys.exit(0 if has_kit(Path(os.environ["SQ_T"])) else 1)
+'; then
+  echo "ERROR: ${TARGET} is already an install of this kit, not a project." >&2
+  echo "  Installing here would create ${TARGET}/.claude — a second copy one level down —" >&2
+  echo "  and every flag would then act on the wrong tree." >&2
+  echo "" >&2
+  echo "  Pass the PROJECT directory instead:" >&2
+  echo "      bash ${BASH_SOURCE[0]} $(dirname "$TARGET") ${*:2}" >&2
+  exit 2
+fi
+
 ECO="$TARGET/.claude"
 
 # ── --apply-upstream: ONE file, and only where nothing can be lost ────────────
@@ -309,6 +359,22 @@ if [ -f "$_withdrawn_list" ] && [ -d "$ECO" ]; then
     echo "    These are the kit's, not yours, and nothing else will tell you."
     echo "    Re-run with --remove-withdrawn to delete exactly the names listed above."
     echo ""
+  fi
+  if [ "$_found" = 0 ] && [ "$REMOVE_WITHDRAWN" = 1 ]; then
+    echo "==> No withdrawn name from withdrawn.txt is present here. Nothing to remove."
+  fi
+
+  # `--remove-withdrawn` on its own removes and STOPS. It was reachable only through a full
+  # install, so the narrow, destructive, explicitly-authorised action could not be taken
+  # without the broad one nobody asked for — authorising the deletion of eight retired skills
+  # is not authorising every kit file to be replaced. Measured the same day: the only way to
+  # run it was `--merge --remove-withdrawn`, and the operator who wanted just the deletion
+  # deleted the directories by hand instead, which is the mechanism being routed around.
+  #
+  # Combining it with --force or --merge still works and still installs, for the upgrade that
+  # wants both in one pass.
+  if [ "$REMOVE_WITHDRAWN" = 1 ] && [ "$FORCE" = 0 ] && [ "$MERGE" = 0 ]; then
+    exit 0
   fi
 fi
 
