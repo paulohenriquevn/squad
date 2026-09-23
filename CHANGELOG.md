@@ -201,6 +201,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **The upgrade path is walked by a consumer, and coverage is asserted at the granularity that
+  failed.** Six defects were filed on 2026-09-23 and the suite found ONE; five were reported by
+  a consumer running the kit against a real install. `test_clean_install.py` already installs
+  into a temp project and runs the gates from inside it — twelve tests, real install — and none
+  of the five was reachable from it, because **a fresh install has no lag**. That is the state
+  every expensive defect needed: a body that is an older kit revision (#173), a skill the kit
+  once shipped (#171), a file with real git history (the two-argument `classify_file` call), a
+  target that already IS an install.
+
+  `tests/test_the_upgrade_path_is_exercised_by_a_consumer.py` materialises an older revision
+  with `git worktree`, installs THAT into a temp project, then asks the current kit about it.
+  A real worktree and a real install on purpose: a fixture that fabricated "an old install" by
+  editing files would test the fabrication — the byte/character defect only appears against
+  git's own `cat-file --batch` output. **Proven to detect, not merely to pass**: with #173's
+  defect restored by mutation it fails with `diverged: 12` where a consumer that wrote nothing
+  must report `0`.
+
+  `tests/test_every_verdict_the_installer_can_reach_has_a_test.py` requires every `case` arm of
+  the per-file mode to be exercised, and every `Drift` member to have an arm. **Flag-level
+  coverage would not have caught the defect it closes**: `--apply-upstream` WAS tested, and one
+  OUTCOME of it — `stale`, the one that mattered — was not. Also proven by mutation: an arm
+  named `quarantined` that no test mentions fails the check. The arms are read out of the
+  installer rather than restated, so a second list cannot drift from the first.
+
+- **`docs/wiki/decisions/a-suite-measures-what-its-author-imagined.md`** — the fifth recorded
+  class, and the only one whose subject is the suite. Three measurements from one day where a
+  mechanism reported green about something it never examined: `check_english_only` saying
+  `clean — 1153 tracked file(s)` about an untracked file, a history reader returning 7 contents
+  for 14 revisions, a flag tested while one of its outcomes was not. It also states what it
+  does NOT fix — the most effective detector that day was a second session disagreeing with a
+  measurement, which is not a mechanism and does not generalise to working alone.
+
 - **`install.sh --apply-upstream <path>` — a consumer could ignore a kit fix or reinstall 400
   files, and there was nothing in between.** Both existing modes replace the whole kit, and
   `boundary-check` refuses editing a kit file inside an install — right for a fix somebody
