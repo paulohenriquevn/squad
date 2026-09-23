@@ -163,7 +163,7 @@ README.md
 
 ## Global Definition of Done
 
-- [ ] All phases done
-- [ ] Tests passing
+- [ ] `grep -c '^- \[ \]' PLAN.md` prints 0 — every phase checkbox is ticked
+- [ ] `cargo test --all` exits 0 with 0 failures
 - [ ] cargo clippy passes (lint, complexity ≤ 10)
 - [ ] All files ≤ 500 LoC

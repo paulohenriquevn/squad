@@ -8,6 +8,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The template prescribed headings its own checkers could not find, and the measurability
+  detector could not read the notation this kit writes (#186).** Four defects in the space
+  between `plan-write`'s template and `plan-confidence`'s gates. A consumer measured the visible
+  end: `total_criteria 0` beside the hard cap `vague_acceptance_criteria`, which sends an author
+  to rewrite criteria that are precise — and reported finding **six** exact literals by trial and
+  error in one day.
+
+  `#### DoD (Definition of Done)` (`:269`) and `## Global Definition of Done` (`:339`) matched
+  nothing, and `Global DoD` — an alternative the pattern itself listed — was unreachable at its
+  natural level, because `####?` is three or four `#` while a document section is `##`.
+  `check_baseline_context` required four subsections the template **deliberately removed** on
+  2026-09-22 (*"Cite the discovery, do not restate it"* — 135 lines median here against 503 in
+  the opportunity, the same state written twice), while its docstring cited that template as the
+  source of them; it was last touched four days earlier and contains no occurrence of
+  `citation`. And `MEASURABLE_PATTERNS` read `[<>]=?` but not `≤`, required `exit ` so `exits 0`
+  was missed, and had no unit for `LoC`.
+
+  **Three attempted fixes were refuted by measurement before the fourth held.** Widening the
+  header pattern made the kit's own `good-plan.md` fire the cap. Not grading DoD bullets —
+  refuted, `test_dod_section_also_scanned` defends grading them and is right. Rewriting the
+  fixture — refuted, three of four rejected bullets were detector misses. Fixing only the
+  detector — refuted, the ratio reached 0.77 and `All phases done` / `Tests passing` remained.
+  **Both sides had a defect**, and they had never been graded because
+  `## Global Definition of Done` could not be matched. After both: `0.69 → 0.92`, cap cleared.
+
+  **The mechanism closes the class rather than the four instances.**
+  `test_the_template_satisfies_its_own_checkers.py` feeds the template to its three checkers, so
+  a heading changing on one side without the other fails there instead of in somebody's plan — it
+  found all four at once, including the two nobody reported. It strips the template's ```markdown
+  fences first, because a template's examples must not be read as content and the checkers strip
+  fenced code: the fixture models an author who FOLLOWED the template rather than the template as
+  a document. A lint tool was offered instead; the parsimony ladder puts a lint tool at rung six
+  and the two files agreeing at rung one.
+
 - **The alignment report now shows which trees the acceptance criteria name (#177).** A brief
   can score 34/34 `AWAITING_REVIEW` while every path its criteria name lives in a different git
   repository. Two gates, each correct in its own scope, and the space between them:

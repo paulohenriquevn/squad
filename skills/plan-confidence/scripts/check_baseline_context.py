@@ -66,6 +66,16 @@ PLACEHOLDER_FRAGMENTS = (
     "<symbol-1>",
 )
 
+#: What a citation of the discovery looks like: the opportunity document named, with at least
+#: one `§` section of it. `plan-template.md` prescribes
+#: `Baseline established by \`{ITEM}-opportunity.md\` § Current state, § Evidence.`
+#:
+#: The `§` is required. Naming the file alone says a document exists; naming its sections says
+#: which established state this plan is standing on, and that is the half a reader needs in
+#: order to check the citation rather than trust it.
+_CITES_DISCOVERY_RE = re.compile(
+    r"-opportunity\.md`?[^\n]*§", re.IGNORECASE)
+
 REQUIRED_SUBSECTIONS = (
     "Files that will be touched",
     "Current callers / dependents",
@@ -211,6 +221,31 @@ def check_baseline_context(plan_path: Path) -> BaselineContextReport:
 
     missing: list[str] = []
     reasons: list[str] = []
+
+    # A CITATION satisfies this section, and the four subsections are the older form.
+    #
+    # `plan-template.md` was rewritten on 2026-09-22 to say, with a measurement behind it,
+    # "Cite the discovery, do not restate it": 135 lines median here against 503 in the
+    # opportunity that precedes it, the same state written twice by two agents, and half the
+    # defects found across two days were two documents of one item contradicting each other.
+    #
+    # This checker was last touched 2026-09-18 and still required the four subsections — while
+    # its own docstring cites the template as the source of them. So a plan written from the
+    # kit's own template failed the kit's own gate for omitting sections the template had
+    # deliberately removed, and the docstring pointed at a file that no longer contained what
+    # it cited. Measured 2026-09-23: the template has four `###` headings and none of them is
+    # one of these.
+    #
+    # BOTH forms are accepted rather than swapping one for the other. A plan carrying the
+    # subsections established the same state, redundantly but honestly, and failing it now
+    # would break every plan written before the template changed.
+    if _CITES_DISCOVERY_RE.search(section):
+        return BaselineContextReport(
+            section_present=True,
+            missing_subsections=(),
+            is_complete=True,
+            reasons=("baseline cited from the discovery, per plan-template.md § Baseline Context",),
+        )
 
     files_sub = _extract_subsection(section, "Files that will be touched")
     callers_sub = _extract_subsection(section, "Current callers / dependents")

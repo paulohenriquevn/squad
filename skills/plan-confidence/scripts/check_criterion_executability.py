@@ -41,8 +41,26 @@ from pathlib import Path
 
 # Section headers we scan for criteria. Plans use either "Acceptance Criteria"
 # or "Definition of Done" or both; we treat their bullets equivalently.
+#: `DoD` is accepted as well as the spelled-out form, and the level runs `##`..`####`.
+#:
+#: Measured 2026-09-23. `plan-template.md` prescribes `#### DoD (Definition of Done)` (:269) and
+#: `## Global Definition of Done` (:339), and the pattern matched NEITHER — so every DoD bullet
+#: in a plan written from the kit's own template was invisible to the kit's own checker. Worse,
+#: `Global DoD` — an alternative this pattern itself lists — could only match as
+#: `### Global DoD`, because `####?` is three or four `#` while a document section is `##`. No
+#: author writes a top-level section at `###`, so the listed alternative was unreachable.
+#:
+#: A consumer measured the consequence: `total_criteria 0` with the hard cap
+#: `vague_acceptance_criteria`, which sent the author to rewrite criteria that were precise.
+#: Widening here rather than rewriting the template's headings, because it is kinder to the
+#: plans that already exist.
+#:
+#: A trailing parenthetical is allowed — `#### DoD (Definition of Done)` is one heading, not a
+#: heading plus a mistake.
 SECTION_HEADER_RE = re.compile(
-    r"^####?\s+(Acceptance\s+Criteria|Definition\s+of\s+Done|Global\s+DoD)\s*$",
+    r"^#{2,4}\s+(?:Global\s+)?"
+    r"(Acceptance\s+Criteria|DoD|Definition\s+of\s+Done)"
+    r"(?:\s*\([^)\n]*\))?\s*$",
     re.MULTILINE | re.IGNORECASE,
 )
 NEXT_HEADER_RE = re.compile(r"^#{1,4}\s+\S", re.MULTILINE)
@@ -75,10 +93,18 @@ VAGUE_VERB_PATTERNS = (
 # Tokens that indicate a MEASURABLE objective.
 # Numbers, comparison operators, units, boolean shapes, file/command refs.
 MEASURABLE_PATTERNS = (
-    r"\b\d+(?:\.\d+)?\s*(?:ms|s|µs|us|ns|MB|GB|KB|%|req/s|rps|qps|fps|px)\b",  # number + unit
+    # `LoC` and `lines` are units this kit writes constantly — "≤ 500 LoC", "≤ 40 added
+    # lines" — and were absent, so a criterion stating a line budget read as unmeasurable.
+    r"\b\d+(?:\.\d+)?\s*(?:ms|s|µs|us|ns|MB|GB|KB|%|req/s|rps|qps|fps|px|LoC|loc|lines?)\b",
     r"\b(?:P50|P95|P99|p50|p95|p99)\b",                                         # percentile names
-    r"[<>]=?\s*\d",                                                             # comparison operators
-    r"\bexit\s+(?:code\s+)?[01]\b",                                             # exit code semantics
+    # `≤` and `≥` as well as the ASCII forms. Measured 2026-09-23: this read only `[<>]=?` while
+    # `plan-template.md` and every golden rule in the kit write `≤ 60 lines`, `≤ 500 LoC`,
+    # `complexity ≤ 10`. The detector could not read the notation its own documents use, so the
+    # kit's `good-plan.md` fixture scored `acceptable_ratio 0.69` on criteria that state numbers.
+    r"[<>≤≥]=?\s*\d",                                                           # comparison operators
+    # `exits` as well as `exit`: a criterion reads "the command exits 0", and requiring the bare
+    # stem missed the inflection every author writes.
+    r"\bexits?\s+(?:code\s+)?[01]\b",                                          # exit code semantics
     r"\breturn(?:s)?\s+(?:true|false|0|1|null|None|nil)\b",                     # boolean/sentinel return
     r"\bequals?\s+\S",                                                          # equality assertion
     r"\bcontains?\s+\S",                                                        # containment assertion
@@ -169,9 +195,18 @@ def _has_oracle(text: str) -> bool:
 def _extract_criteria(content: str) -> list[str]:
     """Pull bullets out of every Acceptance Criteria / DoD section.
 
-    A criterion is one bullet line under one of the target headers. Sections
-    end at the next header of any level. We accept H3 / H4 to handle both
-    plan-level and task-level criteria.
+    A criterion is one bullet line under one of the target headers. Sections end at the next
+    header of any level, and H2..H4 are accepted so both plan-level and task-level criteria are
+    seen. DoD bullets ARE graded, and `test_dod_section_also_scanned` defends that: a vague DoD
+    bullet is as harmful as a vague acceptance criterion, and *"Improve testing"* is exactly what
+    this gate exists to catch.
+
+    Recorded because it was nearly changed. Widening `SECTION_HEADER_RE` on 2026-09-23 so a
+    plan's `#### DoD` was finally seen made the kit's own `good-plan.md` fixture fire
+    `vague_acceptance_criteria`, and the first response was to stop grading DoD bullets.
+    Measuring the fixture settled it the other way: its Global DoD carried *"All phases done"*
+    and *"Tests passing"*, which are vague by any reading. The gate was right and the fixture was
+    not — it had only ever passed because `####?` could not match `## Global Definition of Done`.
     """
     criteria: list[str] = []
     for section_match in SECTION_HEADER_RE.finditer(content):
