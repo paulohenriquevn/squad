@@ -8,6 +8,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Changed
 
+- **`rules/testing.md § 4.1` gains the sharper case: the rule you just wrote does not apply
+  to you automatically.** The section already said a builder cannot see the boundary they
+  moved. Three measurements on 2026-09-22/23, across two sessions, say something worse —
+  the knowledge was not merely present, it was FRESH. A session held an item out of
+  `shipped` for four minutes between tag and registry, wrote in three places that
+  integration is not availability, and hours later marked its own item `shipped` on a commit
+  still only on its disk. A session built `TREE_MOVED`, told a peer that swapping a kit
+  mid-run produces a verdict about no tree, then committed twice during its own run. A
+  session wrote that unverifiable is not verified, then ran its own checker against a peer's
+  files and reported the result as the peer's state. **The switch is from verifying somebody
+  else's work to verifying your own**: outward the rule is a lens you hold up, inward it is
+  something you already believe you satisfy, and *I just thought about this* reads as *I have
+  handled this*. Recorded as an extension rather than a fifth decision document, because the
+  section it belongs to already exists — and because a kit whose additions outrun its
+  removals 12:1 should consolidate where it can.
+
 - **A commissioned audit now says which directory its commands run from.**
   `select_auditors.py` emits an absolute `--output-dir` under the project's write root,
   and every `loop-*` plugin confines `--output-dir` under its own working directory (a

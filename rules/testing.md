@@ -86,6 +86,31 @@ after it, in the same command, or the fix ships with a hole the author cannot se
 The corollary is about review, not testing: external verification is worth more than
 rereading your own work, and the reason is structural rather than a matter of diligence.
 
+### And the rule you just wrote does not apply to you automatically
+
+The section above says the builder cannot see the boundary they moved. There is a sharper
+version, measured three times on 2026-09-22/23 across two sessions, and it is worse because
+the knowledge was not merely present — it was *fresh*.
+
+| The rule, written | The same rule, broken |
+|---|---|
+| a session held an item out of `shipped` for the four minutes between the tag and the registry, and wrote in three places that integration is not availability | hours later it marked its own item `shipped` on a commit that was still only on its disk |
+| a session built `TREE_MOVED` so a suite run would declare when the tree changed under it, and told a peer that swapping a kit mid-run produces a verdict about no tree | it then committed twice during its own full run, and read `43 failed` about a state that never existed on disk |
+| a session wrote that unverifiable is not verified, and that a measurement must say which tree it is about | it then ran its own checker against a peer's files and reported the result as the state of the peer's system |
+
+The common moment is not carelessness and not forgetting. It is the switch from verifying
+somebody else's work to verifying your own: outward, the rule is a lens you hold up;
+inward, it is a thing you already believe you satisfy. Nothing in writing a rule installs
+the habit of applying it, and writing it recently makes the belief stronger rather than
+weaker — *I just thought about this* reads as *I have handled this*.
+
+**So the check is mechanical or it does not happen.** In all three cases the answer existed
+and cost seconds: `git status --porcelain` before starting the run, `git log origin/…` before
+marking the status, naming which tree a measurement was taken on. None of the three needed
+judgement; each needed a step nobody had made unskippable. The second of them is now
+`TREE_MOVED` in `run_slice_tests.sh`, which is why that one cannot recur silently — and the
+other two are still disciplines, which is to say still open.
+
 ## § 5 — Test pairing convention
 
 The default convention assumed by stop-validation.py:
