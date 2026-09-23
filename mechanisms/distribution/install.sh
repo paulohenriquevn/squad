@@ -227,12 +227,16 @@ if [ -n "$APPLY_UPSTREAM" ]; then
   # `rules/*.txt`, `agents/`, `records/`, `settings.json` are the PROJECT's, and the kit's
   # copy of them is a template. Overwriting one is what `--merge` exists to avoid, so this
   # mode refuses rather than quietly doing what the other mode refuses on purpose.
-  if python3 - "$_rel" <<'PYEOF'
-import re, sys
-PROJECT_OWNED = (r"^rules/[^/]+\.txt$", r"^agents/", r"^records/", r"^settings\.json$",
-                 r"^\.kit-manifest\.txt$", r"^\.install-backups/")
-sys.exit(0 if any(re.search(p, sys.argv[1]) for p in PROJECT_OWNED) else 1)
-PYEOF
+  # IMPORTED, not copied. The first draft of this block restated `PROJECT_OWNED` inline,
+  # which made it the fourth reader of "whose file is this" — the exact multiplication
+  # `check_install_drift._is_project_owned` refuses to add to in its own comment, and the
+  # thing `check_write_containment` refuses for data roots. One declaration or they drift.
+  if SQ_REL="$_rel" SQ_KIT="$SCRIPT_DIR/../.." python3 -c '
+import os, sys
+sys.path.insert(0, os.environ["SQ_KIT"])
+from squad.boundaries import PROJECT_OWNED
+sys.exit(0 if any(p.search(os.environ["SQ_REL"]) for p in PROJECT_OWNED) else 1)
+'
   then
     echo "REFUSED: $_rel is the project's, not the kit's. The kit ships a template for it" >&2
     echo "  and --merge preserves yours on purpose. Nothing was written." >&2

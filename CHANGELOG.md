@@ -8,6 +8,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A size in BYTES was spent slicing a string of CHARACTERS, and it made 350 recoverable
+  files unreachable (#173).** `_blobs_from_batch` ran `git cat-file --batch` with
+  `text=True` and advanced by the declared `size` over the DECODED stream. Every non-ASCII
+  character left the cursor short by the difference, and this kit's prose is written with
+  em-dashes and accents. Measured on `hooks/validate-command.py`: **59104 bytes against
+  58717 characters — 387 lost per revision from 197 non-ASCII characters**;
+  `git rev-list --all` names 14 commits for that path and the reader returned 7 contents,
+  none of them the one a real install holds.
+
+  **The consequence ran all the way to the upgrade path.** `classify_file` downgrades to
+  `STALE` when the install's body appears in history, so a body the parser never produced
+  could not match — and the file was reported `DIVERGED`, which `--apply-upstream` refuses by
+  design. Measured before and after, on two consumers:
+
+  | consumer | before | after |
+  |---|---|---|
+  | one with 400 differing files | `diverged 350 · stale 10` | **`diverged 0 · stale 361`** |
+  | one installed today | `diverged 9 · stale 0` | **`diverged 0 · stale 9`** |
+
+  Every one of the 350 is now applicable, and by PROOF rather than inference: the body is
+  byte-identical to a revision this kit shipped.
+
+  **Two conclusions of the same day were wrong because of it.** A line-level history
+  criterion was proposed and then measured against the case it was never tested on — a
+  consumer who re-adds a line the kit deliberately deleted — where it does not merely miss
+  the case but REMOVES a protection the tool already has (`install_ahead` refuses it
+  correctly). And "provenance only serves future installs" was refuted by a peer session
+  measuring its own install: `# kit-commit` present, resolving and clean, with 8 of its 9
+  differing files byte-identical to that commit. Both detours ended at the parser: the
+  mechanism to answer this existed and was broken by a unit.
+
+  Also fixed here: `--apply-upstream` restated `PROJECT_OWNED` inline, making it the fourth
+  reader of "whose file is this" — the multiplication `check_install_drift._is_project_owned`
+  refuses to add to in its own comment. It imports the declaration now.
+
 - **A write verb inside a QUOTED STRING refused a read-only command — all ten were reachable
   (#168).** `check_kit_boundary` searched `WRITE_VERB_RE` over the raw segment, and
   `segments()` splits on `;`, `&&` and `|` with no notion of quoting, so

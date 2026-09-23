@@ -132,7 +132,10 @@ def _historical_contents(kit_root: Path, rel: str) -> set[str] | None:
     try:
         batch = subprocess.run(
             ["git", "-C", str(kit_root), "cat-file", "--batch"],
-            input=request, capture_output=True, text=True, timeout=120, check=False)
+            # BYTES, not text: `--batch` declares each blob's size in bytes, and
+            # `_blobs_from_batch` spends that number slicing. Decoding first made the two
+            # units disagree on every non-ASCII character.
+            input=request.encode("utf-8"), capture_output=True, timeout=120, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         print(f"check_install_drift: could not read the blobs of {rel}: {exc}. "
               f"Staleness NOT determined.", file=sys.stderr)
@@ -141,29 +144,45 @@ def _historical_contents(kit_root: Path, rel: str) -> set[str] | None:
     return _blobs_from_batch(batch.stdout)
 
 
-def _blobs_from_batch(stream: str) -> set[str]:
-    """The contents in a `git cat-file --batch` answer.
+def _blobs_from_batch(stream: bytes) -> set[str]:
+    """The contents in a `git cat-file --batch` answer. BYTES in, text out.
 
     Each object arrives as `<sha> <type> <size>\n<size bytes>\n`; a missing one as
     `<name> missing\n`. Parsed by the declared size rather than by scanning for the next
     header, because a blob may contain a line that looks exactly like one.
+
+    The stream is bytes because `size` is a count of BYTES. This ran with `text=True` and
+    advanced by `size` over the DECODED string until 2026-09-23, so every non-ASCII
+    character left the cursor short by the difference — and this kit's prose is written with
+    em-dashes and accents. Measured on `hooks/validate-command.py`: 59104 bytes against
+    58717 characters, 387 lost per revision; `git rev-list --all` names 14 commits for that
+    path and this returned 7 contents, none of them the one a real install holds.
+
+    The consequence ran all the way up. `classify_file` downgrades to STALE when the
+    install's body appears here, so a body this never produced could not match, and the file
+    was reported DIVERGED — which `--apply-upstream` refuses. 350 of 350 diverged files in
+    one consumer, every one merely older, all unreachable from a size in bytes spent on
+    characters.
     """
     contents: set[str] = set()
     at = 0
     while at < len(stream):
-        end_of_header = stream.find("\n", at)
+        end_of_header = stream.find(b"\n", at)
         if end_of_header == -1:
             break
         header = stream[at:end_of_header]
         at = end_of_header + 1
         parts = header.split()
-        if len(parts) != 3 or parts[1] != "blob":
+        if len(parts) != 3 or parts[1] != b"blob":
             continue  # `missing`, or an object that is not a blob
         try:
             size = int(parts[2])
         except ValueError:
             continue
-        contents.add(stream[at:at + size])
+        try:
+            contents.add(stream[at:at + size].decode("utf-8"))
+        except UnicodeDecodeError:
+            pass  # a binary blob has no text body to compare against
         at += size + 1  # the trailing newline git adds after the payload
     return contents
 
