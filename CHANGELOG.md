@@ -8,6 +8,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The alignment report now shows which trees the acceptance criteria name (#177).** A brief
+  can score 34/34 `AWAITING_REVIEW` while every path its criteria name lives in a different git
+  repository. Two gates, each correct in its own scope, and the space between them:
+  `route_domain.py` checks the DECLARED `repo:` and never these paths, and this scorer grades a
+  criterion executable when it names something that RUNS rather than something that EXISTS —
+  deliberate, because a plan describes files not yet created. `grep -rln 'criteria'
+  mechanisms/gates/*.py` returns nothing: no gate reads criteria at all. A consumer paid hours
+  of brief and plan for work its registry cannot execute.
+
+  **It SHOWS and does not judge.** Not a comparison — the scorer receives only the brief and has
+  no access to the item's `repo:`, which lives in `BACKLOG.md`. Not a gate — a criterion
+  legitimately names a config at an umbrella root or a shared test, and
+  `code-quality-golden-rule.md § 4.1` is the argument that a check firing on ordinary work is one
+  somebody switches off. So no new blocking surface, no new gate in the chain, no contract
+  change, and nothing new asked of the caller.
+
+  **Three granularity rules, the first two refuted by running them on the brief that motivated
+  the issue** — an item filed as `repo: packages/theo` whose criteria name `packages/ui`.
+  Reporting the first segment printed `packages (12)`, identical for both, so the reader saw
+  nothing. Reporting two segments only when the group agreed printed `packages (12)` as well,
+  because those criteria name BOTH and disagreement collapsed exactly where the answer was. The
+  rule that works reports two segments when the second names a DIRECTORY and one when it names a
+  file, so the real brief now reads **`packages/ui (11) · packages/theo (1)`** while
+  `tests/test_a.py` and `scripts/probe.mjs` still read `tests` and `scripts`.
+
+  A first draft also printed the line inside the sign-off branch, where it would appear only
+  after a brief was fully signed — which is after the plan is written, and arriving before it is
+  the whole value.
+
 - **`_preflight` called `_verification(root)` and took no `root`, so the verification-freshness
   check had never run once (#176).** No module-level `root` existed either, making the
   `NameError` unconditional in every tree since it was wired in. `promote()` had the value and

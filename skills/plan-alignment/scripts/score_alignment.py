@@ -279,6 +279,8 @@ class AlignmentReport:
     #: Advisory, and scored nowhere: the rubric measures shape and this is about
     #: meaning, so a false positive here must not cost an item a point.
     vacuous_criteria: tuple[str, ...] = ()
+    #: `(tree, count)` for the top-level trees the acceptance criteria name (#177).
+    criteria_trees: tuple[tuple[str, int], ...] = ()
     #: Set when a reviewer marked the brief `<!-- verdict: NEEDS_SPLIT -->`.
     needs_split: bool = False
     split_reason: str = ""
@@ -483,6 +485,81 @@ def _vacuous_criteria(bullets: list[str]) -> tuple[str, ...]:
         b.strip()[:120] for b in bullets
         if (_NEGATED_TEST_RE.search(b) or _COUNTS_TO_ZERO_RE.search(b))
         and not (_PRESENCE_RE.search(b) and not _COUNTS_TO_ZERO_RE.search(b)))
+
+
+#: A path-shaped token inside a criterion: at least one `/`, and a segment vocabulary narrow
+#: enough that a flag is not one. `--cov=mechanisms` has no slash; `-k name/other` is excluded
+#: by requiring the token not to start with `-`.
+_PATH_TOKEN_RE = re.compile(r"(?<![\w/.-])((?:[\w.@+-]+/)+[\w.@+-]+)")
+
+#: Tokens that look like paths and name no tree in any repository.
+_NOT_A_TREE = frozenset({"https:", "http:", "file:", "no:cacheprovider", "usr", "tmp", "dev"})
+
+
+def _criteria_trees(bullets: list[str]) -> tuple[tuple[str, int], ...]:
+    """Top-level trees the acceptance criteria name, with counts, most-named first.
+
+    SHOWS, never judges (#177). A brief scored 34/34 on a consumer while all 14 paths its
+    criteria named lived in a sibling git checkout: `route_domain.py` checks the DECLARED
+    `repo:` and not these, and this scorer grades a criterion executable when it names
+    something that RUNS rather than something that EXISTS — correctly, because a plan
+    describes files not yet created.
+
+    Not a comparison: the scorer receives only the brief and has no access to the item's
+    `repo:`, which lives in `BACKLOG.md`. Not a gate either: a criterion legitimately names a
+    config at an umbrella root or a shared test, and `code-quality-golden-rule.md § 4.1` is
+    the argument — a check that fires on ordinary work is one somebody switches off.
+
+    What a reader gets is the sentence that was missing. Filing an item against
+    `packages/theo` and seeing `packages/ui (14)` answers it before the plan is written.
+    """
+    # DEEPEST COMMON PREFIX per first segment, not the first segment alone.
+    #
+    # Measured on the brief that motivated this: reporting the first segment printed
+    # `packages (12)` for criteria naming `packages/ui/...` on an item filed as
+    # `packages/theo` — the same top level, so a reader saw nothing wrong and the line failed
+    # on the exact case it was built for. In a monorepo the first segment is a container, and
+    # the container is never the distinguishing part.
+    #
+    # So: group by first segment, and go one level deeper when every token in the group agrees
+    # there. `packages/ui/...` twelve times reports `packages/ui`; `tests/test_a.py` and
+    # `tests/test_b.py` disagree at the second segment and report `tests`.
+    groups: dict[str, list[list[str]]] = {}
+    for bullet in bullets:
+        seen: set[str] = set()
+        for match in _PATH_TOKEN_RE.finditer(bullet):
+            token = match.group(1)
+            parts = token.split("/")
+            head = parts[0]
+            if not head or head in _NOT_A_TREE or head.startswith("-"):
+                continue
+            if head in seen:
+                continue
+            seen.add(head)
+            groups.setdefault(head, []).append(parts)
+
+    # TWO segments whenever the second names a directory, one when it names a file.
+    #
+    # Two earlier rules were each refuted by running them on the brief that motivated this:
+    #
+    #   first segment only          -> `packages (12)` for criteria naming `packages/ui` on an
+    #                                  item filed as `packages/theo`. Same top level, so the
+    #                                  reader saw nothing. Failed on its own motivating case.
+    #   two segments only when the  -> still `packages (12)`, because those criteria name BOTH
+    #   group agrees                   `packages/ui` and `packages/theo`, and disagreement
+    #                                  collapsed exactly where the answer was.
+    #
+    # The distinguishing part is the package, and the discriminator is whether the second
+    # segment is a directory: `packages/ui/tests/a.ts` gives `packages/ui`, while
+    # `tests/test_a.py` and `scripts/probe.mjs` give `tests` and `scripts` rather than naming
+    # every file. So the two packages now appear side by side and the mismatch is the line.
+    counts: dict[str, int] = {}
+    for head, paths in groups.items():
+        for parts in paths:
+            second = parts[1] if len(parts) > 1 else ""
+            label = f"{head}/{second}" if second and "." not in second else head
+            counts[label] = counts.get(label, 0) + 1
+    return tuple(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
 def _without_section(body: str, *headings: str) -> str:
@@ -977,6 +1054,7 @@ def score_alignment(brief_path: Path, depth: str = "FULL") -> AlignmentReport:
         tuple(criteria), judgement, pending, box_count, signed_by,
         unattributed_ticks=unattributed,
         vacuous_criteria=_vacuous_criteria(ac),
+        criteria_trees=_criteria_trees(ac),
         needs_split=bool(split),
         split_reason=(split.group(1) or "").strip() if split else "",
         sign_off_withdrawn=bool(withdrawn) and not restored,
@@ -1087,6 +1165,15 @@ def main(argv: list[str] | None = None) -> int:
               "nothing downstream can act on it. Mark it "
               "`<!-- sign-off: WITHDRAWN: <why> -->` or reword it:")
         print(f"  {report.unmarked_withdrawal_prose}")
+
+    if report.criteria_trees:
+        rendered = " · ".join(f"{tree} ({count})" for tree, count in report.criteria_trees)
+        print()
+        print(f"  criteria name paths under: {rendered}")
+        # Printed OUTSIDE the sign-off branch on purpose. A first draft put it there and it
+        # only appeared once a brief was fully signed — which is after the plan is written,
+        # and the whole value of the line is arriving before it. A BLOCKED brief is exactly
+        # when an author still decides where the work lives.
 
     print()
     if report.reviewer_signed_off:
