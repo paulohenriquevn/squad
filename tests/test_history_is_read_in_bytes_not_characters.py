@@ -38,7 +38,7 @@ def _kit_with_accents(tmp_path: Path) -> tuple[Path, str]:
                                     capture_output=True, text=True)
     run("config", "user.email", "t@t"); run("config", "user.name", "t")
 
-    old = "# A regra — medida, não suposta\nalpha\nbeta\n" + ("# ação — evidência\n" * 40)
+    old = "# the rule — measured, not assumed\nalpha\nbeta\n" + ("# façade — naïve · Größe\n" * 40)
     (kit / "rules" / "r.md").write_text(old, encoding="utf-8")
     run("add", "-A"); run("commit", "-qm", "v1")
     (kit / "rules" / "r.md").write_text(old + "gamma-new\n", encoding="utf-8")

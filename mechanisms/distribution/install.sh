@@ -159,52 +159,6 @@ ECO="$TARGET/.claude"
 # What it covers is the case with nothing to lose on either side: the install holds no line
 # the kit lacks, so taking the kit's version deletes nothing. Everything else keeps the
 # answer it has today — open an issue, or reinstall deliberately.
-# ── what this kit SHIPPED and later WITHDREW ─────────────────────────────────
-#
-# A withdrawal reaches nobody. The skills branch below preserves any directory the source
-# kit does not ship — right for a project's own skill, and exactly wrong for one this kit
-# RETIRED, which is indistinguishable from it on disk. So retiring a skill removed it here
-# and removed nothing anywhere, and the next install copied the old copy aside and restored
-# it. Measured on one consumer: 30 skills present and absent from the kit, 103 of the 111
-# files `check_install_drift` calls "consumer-local" belonging to them, 0 of the 30 named in
-# `.kit-manifest.txt` — whose header says "Anything not here is the project's", false for
-# every one of them because the manifest is regenerated and the withdrawing install erased
-# the only record that the kit ever shipped them.
-#
-# They are not inert. A stale `shared-understanding` cites `rules/alignment-threshold.md`,
-# which moved to `skills/_kit-rules/`, and breaks `check_xrefs` for the WHOLE install; its
-# `score_alignment.py` predates `--depth` and produced a BLOCKED verdict on an item the
-# current copy scores ALIGNED at 92%.
-#
-# BY NAME, NEVER BY ABSENCE. Absence is how a project's own skill gets deleted, so only a
-# name in `withdrawn.txt` is ever called a withdrawal. Reported always; removed only under
-# `--remove-withdrawn`, because a consumer may have kept a retired skill deliberately.
-_withdrawn_list="$SCRIPT_DIR/withdrawn.txt"
-if [ -f "$_withdrawn_list" ] && [ -d "$ECO" ]; then
-  _found=0
-  while IFS='|' read -r _rel _when _successor _record; do
-    _rel="$(echo "$_rel" | tr -d '[:space:]')"
-    case "$_rel" in ""|\#*) continue ;; esac
-    [ -e "$ECO/$_rel" ] || continue
-    if [ "$_found" = 0 ]; then
-      echo ""
-      echo "==> WITHDRAWN by the kit, still present here:"
-      _found=1
-    fi
-    printf '    %-28s withdrawn %s · successor %s · see %s\n' \
-      "$_rel" "$(echo "$_when" | xargs)" "$(echo "$_successor" | xargs)" "$(echo "$_record" | xargs)"
-    if [ "$REMOVE_WITHDRAWN" = 1 ]; then
-      rm -rf "${ECO:?}/$_rel"
-      echo "        removed (--remove-withdrawn)"
-    fi
-  done < "$_withdrawn_list"
-  if [ "$_found" = 1 ] && [ "$REMOVE_WITHDRAWN" = 0 ]; then
-    echo "    These are the kit's, not yours, and nothing else will tell you."
-    echo "    Re-run with --remove-withdrawn to delete exactly the names listed above."
-    echo ""
-  fi
-fi
-
 if [ -n "$APPLY_UPSTREAM" ]; then
   _src_root="${APPLY_FROM:-$SRC_DIR}"
   _rel="$APPLY_UPSTREAM"
@@ -256,12 +210,26 @@ sys.exit(0 if any(p.search(os.environ["SQ_REL"]) for p in PROJECT_OWNED) else 1)
   # The classifier comes from THIS installer's own tree, never from --from. The source of
   # the content and the authority on what the difference means are two different things,
   # and an old --from tree may predate the classifier — or not ship it at all.
-  _verdict="$(SQ_A="$ECO/$_rel" SQ_B="$_src_root/$_rel" SQ_GATES="$SCRIPT_DIR/../gates" python3 -c '
+  # FOUR arguments, not two. `classify_file` promotes DIVERGED to STALE only when given
+  # `kit_root` AND `rel` — `rel` also enables its ownership guard — so a two-argument call
+  # can never return STALE and never consults ownership. The scan passes both and saw
+  # `stale: 9`; this passed neither and refused the same nine as DIVERGED. One reader,
+  # called with less context than it needs, which is the inverse of the duplication the
+  # `PROJECT_OWNED` import above removes and just as capable of two answers.
+  #
+  # `kit_root` is the CONTENT source when that is a git checkout, because the history that
+  # explains this install is the history of the kit it came from; it falls back to this
+  # script's own tree, which is also where the classifier is imported from.
+  _hist_root="$_src_root"
+  git -C "$_hist_root" rev-parse --git-dir >/dev/null 2>&1 || _hist_root="$SRC_DIR"
+  _verdict="$(SQ_A="$ECO/$_rel" SQ_B="$_src_root/$_rel" SQ_REL="$_rel" \
+              SQ_HIST="$_hist_root" SQ_GATES="$SCRIPT_DIR/../gates" python3 -c '
 import os, sys
 from pathlib import Path
 sys.path.insert(0, os.environ["SQ_GATES"])
 from check_install_drift import classify_file
-print(classify_file(Path(os.environ["SQ_A"]), Path(os.environ["SQ_B"])).value)
+print(classify_file(Path(os.environ["SQ_A"]), Path(os.environ["SQ_B"]),
+                    Path(os.environ["SQ_HIST"]), os.environ["SQ_REL"]).value)
 ')" || _verdict=""
 
   case "$_verdict" in
@@ -275,6 +243,14 @@ print(classify_file(Path(os.environ["SQ_A"]), Path(os.environ["SQ_B"])).value)
       echo "  your work from your lag. Copying would delete a fix without a trace." >&2
       echo "  Read the diff, and send anything of yours upstream as an issue." >&2
       exit 1 ;;
+    yours)
+      # Reachable only if `squad.boundaries` and `check_install_drift._is_project_owned`
+      # disagree — they do, for `agents/`, and that disagreement is a contract question
+      # the drift gate documents and declines to settle. The guard above catches the
+      # boundaries answer first; this is the other reader saying the same thing, and it
+      # refuses rather than falling into "could not classify".
+      echo "REFUSED: $_rel is the project's by the drift gate's reading. Nothing was written." >&2
+      exit 2 ;;
     install_ahead)
       echo "REFUSED: $_rel is INSTALL_AHEAD — it holds lines the kit does not, and those are" >&2
       echo "  the only ones an upgrade deletes. Harvest them upstream first." >&2
@@ -285,6 +261,57 @@ print(classify_file(Path(os.environ["SQ_A"]), Path(os.environ["SQ_B"])).value)
   esac
   exit 0
 fi
+
+# Placed AFTER the per-file mode on purpose. Printed before it, these eight lines led
+# every single-file invocation — 176 lines of unrelated repetition in a loop of 22, which
+# is how a report teaches people to skip it. A withdrawal is news about the whole install,
+# so it belongs to the operation that touches the whole install.
+# ── what this kit SHIPPED and later WITHDREW ─────────────────────────────────
+#
+# A withdrawal reaches nobody. The skills branch below preserves any directory the source
+# kit does not ship — right for a project's own skill, and exactly wrong for one this kit
+# RETIRED, which is indistinguishable from it on disk. So retiring a skill removed it here
+# and removed nothing anywhere, and the next install copied the old copy aside and restored
+# it. Measured on one consumer: 30 skills present and absent from the kit, 103 of the 111
+# files `check_install_drift` calls "consumer-local" belonging to them, 0 of the 30 named in
+# `.kit-manifest.txt` — whose header says "Anything not here is the project's", false for
+# every one of them because the manifest is regenerated and the withdrawing install erased
+# the only record that the kit ever shipped them.
+#
+# They are not inert. A stale `shared-understanding` cites `rules/alignment-threshold.md`,
+# which moved to `skills/_kit-rules/`, and breaks `check_xrefs` for the WHOLE install; its
+# `score_alignment.py` predates `--depth` and produced a BLOCKED verdict on an item the
+# current copy scores ALIGNED at 92%.
+#
+# BY NAME, NEVER BY ABSENCE. Absence is how a project's own skill gets deleted, so only a
+# name in `withdrawn.txt` is ever called a withdrawal. Reported always; removed only under
+# `--remove-withdrawn`, because a consumer may have kept a retired skill deliberately.
+_withdrawn_list="$SCRIPT_DIR/withdrawn.txt"
+if [ -f "$_withdrawn_list" ] && [ -d "$ECO" ]; then
+  _found=0
+  while IFS='|' read -r _rel _when _successor _record; do
+    _rel="$(echo "$_rel" | tr -d '[:space:]')"
+    case "$_rel" in ""|\#*) continue ;; esac
+    [ -e "$ECO/$_rel" ] || continue
+    if [ "$_found" = 0 ]; then
+      echo ""
+      echo "==> WITHDRAWN by the kit, still present here:"
+      _found=1
+    fi
+    printf '    %-28s withdrawn %s · successor %s · see %s\n' \
+      "$_rel" "$(echo "$_when" | xargs)" "$(echo "$_successor" | xargs)" "$(echo "$_record" | xargs)"
+    if [ "$REMOVE_WITHDRAWN" = 1 ]; then
+      rm -rf "${ECO:?}/$_rel"
+      echo "        removed (--remove-withdrawn)"
+    fi
+  done < "$_withdrawn_list"
+  if [ "$_found" = 1 ] && [ "$REMOVE_WITHDRAWN" = 0 ]; then
+    echo "    These are the kit's, not yours, and nothing else will tell you."
+    echo "    Re-run with --remove-withdrawn to delete exactly the names listed above."
+    echo ""
+  fi
+fi
+
 
 
 if [ "$TARGET" = "$SRC_DIR" ]; then

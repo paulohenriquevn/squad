@@ -8,6 +8,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **`--apply-upstream` called `classify_file` with two of its four arguments, so it refused
+  exactly the files the checker had just declared applicable.** The promotion from `DIVERGED`
+  to `STALE` runs only when given `kit_root` AND `rel`
+  (`check_install_drift.py:233`), and `rel` is also what enables that function's ownership
+  guard. The scan passes both and reported `stale: 9`; this passed neither and refused the
+  same nine as `DIVERGED`. **One reader, called with less context than it needs to answer** —
+  the inverse of the duplication the `PROJECT_OWNED` import removed in the same file, and
+  just as capable of two answers to one question. Reported by a consumer that checked
+  MEMBERSHIP of the stale list rather than its count, then could not act on it; verified here
+  against a copy of that install, where both files now apply as `stale` and `agents/README.md`
+  is refused by the ownership guard rather than misclassified.
+
+  Two smaller defects of the same change closed with it. `classify_file` can now return
+  `YOURS`, which fell into the "could not classify" branch — right refusal, wrong reason;
+  it has its own branch. And the withdrawal report from #171 printed on EVERY per-file
+  invocation: eight lines before a one-line result, 176 lines of repetition in a loop of 22,
+  which is how a report teaches people to skip it. A withdrawal is news about the whole
+  install, so it now prints only for the operation that touches the whole install.
+
 - **A size in BYTES was spent slicing a string of CHARACTERS, and it made 350 recoverable
   files unreachable (#173).** `_blobs_from_batch` ran `git cat-file --batch` with
   `text=True` and advanced by the declared `size` over the DECODED stream. Every non-ASCII

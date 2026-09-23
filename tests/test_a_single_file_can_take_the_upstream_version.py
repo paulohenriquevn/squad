@@ -152,3 +152,51 @@ def test_an_install_whose_claude_is_a_symlink_is_still_writable(tmp_path: Path) 
     escape = _apply(proj, kit, "../../etc/passwd")
     assert escape.returncode == 2
     assert "outside the install" in escape.stdout + escape.stderr
+
+
+def _kit_with_history(tmp_path: Path) -> Path:
+    """A kit whose git history holds the revision the consumer is stuck on."""
+    kit = tmp_path / "kitrepo"
+    (kit / "mechanisms" / "cycle").mkdir(parents=True)
+    for tree in ("skills", "rules", "hooks"):
+        (kit / tree).mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
+                                    capture_output=True, text=True)
+    run("config", "user.email", "t@t"); run("config", "user.name", "t")
+    old = "# the rule — measured, not assumed · naïve\nalpha\nbeta\n"
+    (kit / REL).write_text(old, encoding="utf-8")
+    run("add", "-A"); run("commit", "-qm", "v1")
+    (kit / REL).write_text("# the rule — measured, not assumed · naïve\nalpha\nBETA-rewritten\ngamma\n",
+                           encoding="utf-8")
+    run("add", "-A"); run("commit", "-qm", "v2 rewrites and appends")
+    return kit
+
+
+def test_a_stale_file_is_applied_not_refused(tmp_path: Path) -> None:
+    """The scan says STALE and this refused it as DIVERGED — same function, two callers.
+
+    `classify_file` promotes DIVERGED to STALE only when given `kit_root` AND `rel`; the
+    scan passes both, and this passed neither, so the promotion could not run and the
+    tool refused exactly the files the checker had just declared applicable. Reported by
+    a consumer that verified MEMBERSHIP of the stale list rather than its count, then
+    could not act on it.
+
+    `rel` is also what enables the project-owned guard inside `classify_file`, so that
+    call was not consulting ownership either.
+    """
+    kit = _kit_with_history(tmp_path)
+    consumer = tmp_path / "consumer"
+    (consumer / ".claude" / Path(REL).parent).mkdir(parents=True)
+    for tree in ("skills", "rules", "hooks"):
+        (consumer / ".claude" / tree).mkdir(parents=True, exist_ok=True)
+    # Byte-identical to v1: proven lag, nothing of the consumer's in it.
+    (consumer / ".claude" / REL).write_text("# the rule — measured, not assumed · naïve\nalpha\nbeta\n",
+                                            encoding="utf-8")
+
+    out = _apply(consumer, kit, REL)
+
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "stale" in (out.stdout + out.stderr).lower(), out.stdout + out.stderr
+    assert (consumer / ".claude" / REL).read_text(encoding="utf-8") == (
+        kit / REL).read_text(encoding="utf-8")
