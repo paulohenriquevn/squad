@@ -108,8 +108,18 @@ def _count_table_data_rows(section: str) -> int:
 
 
 def _count_question_bullets(section: str) -> int:
-    """Count `- Q\\d` style bullets OR `- ...` non-empty bullets in Unresolved Questions."""
-    return len(re.findall(r"^\s*[-*]\s+(Q\d+|[A-Z])", section, re.MULTILINE))
+    """Count `- Q\\d` style bullets OR `- ...` non-empty bullets in Unresolved Questions.
+
+    `\\**` before the capital: a bullet opening in bold was not counted, and bold is the form
+    the rest of `plan-template.md` uses. Reported 2026-09-23 with the literal line —
+    `- **Does \\`scripts/lib/\\` want a barrel?** No, and not until a second module lands there.`
+    — which produced `unresolved_entries: 0` beside two bullets plainly present.
+
+    It loosens nothing. What the pattern requires is that a bullet CARRY something, not that it
+    start with a particular character: `- *emphasis* then text` and a bullet of only spaces are
+    still not counted, because the capital or `Q\\d` is still required after the markers.
+    """
+    return len(re.findall(r"^\s*[-*]\s+\**(Q\d+|[A-Z])", section, re.MULTILINE))
 
 
 def _count_placeholder_hits(text: str) -> int:

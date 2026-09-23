@@ -65,6 +65,7 @@ _DESIGN = f"{WIKI}/design"
 _PRODUCT = f"{WIKI}/product"
 _DISCOVERIES = f"{RECORDS}/discoveries/opportunities"
 _PLANS = f"{RECORDS}/plans"
+_ALIGNMENT = f"{RECORDS}/alignment"
 
 PHASE_SOURCES: dict[str, dict[str, object]] = {
     "design": {
@@ -82,6 +83,21 @@ PHASE_SOURCES: dict[str, dict[str, object]] = {
         "artifacts": (f"{_PLANS}/{{slug}}-plan.md",),
         "contract": "rules/plan-confidence-golden-rule.md",
         "also_read": (),
+    },
+    # One seat, and the contract is the threshold rule rather than a golden rule, because that
+    # is where the sign-off's terms are written: what each checkbox asks, and that the author
+    # never signs. Added 2026-09-23 with the `alignment` seat — declaring the phase in
+    # `panel_phases` without an entry here made `test_every_panel_phase_has_a_contract` fail,
+    # which is the check doing its job: a panel with no contract grades against taste.
+    #
+    # The walkthrough is an artifact and not an `also_read`. A reviewer who reads only the brief
+    # can confirm a document is internally consistent and nothing else; the flows are where a
+    # scenario class either exists or does not, and the sign-off asks about exactly that.
+    "alignment": {
+        "artifacts": (f"{_ALIGNMENT}/{{slug}}-alignment.md",
+                      f"{_ALIGNMENT}/{{slug}}-walkthrough.html"),
+        "contract": "skills/_kit-rules/alignment-threshold.md",
+        "also_read": (f"{_DISCOVERIES}/{{slug}}-opportunity.md",),
     },
 }
 

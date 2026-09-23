@@ -50,6 +50,7 @@ from convene_panel import agents_dir, repo_root, resolve_seat
 from review_panel import (
     HOME_FAMILY,
     PANEL_SIZE,
+    panel_size_for,
     Seat,
     parse_panel_phases,
     single_family_waived,
@@ -190,11 +191,26 @@ def check_panel_capability(
     # and one that was meant to be read the same on disk, and only one is a decision.
     waived, _reason = single_family_waived(text)
 
-    for seats in by_phase.values():
-        if len(seats) != PANEL_SIZE:
+    for _phase, seats in by_phase.items():
+        if len(seats) != panel_size_for(_phase):
             return PanelCapability.VIOLATED
+        # The family rule guards a MAJORITY, and a single seat has none.
+        #
+        # Its reason is that correlated models are fooled together: "a plausible fabrication that
+        # survives one tends to survive its siblings". That is an argument about two of three
+        # agreeing, and it does not reach a phase with one reviewer, where the guarantee that
+        # matters is a different one — NOT THE AUTHOR — and is enforced immediately above.
+        #
+        # Measured 2026-09-23, because the opposite claim was available and had to be tested: two
+        # same-family sessions reviewing each other's work that day refuted three claims between
+        # them, and one of those refutations found a root cause neither had seen. Same-family
+        # review is not empty review; it is correlated VOTING that the rule exists to prevent.
+        #
+        # A single-seat phase that COULD be filled from another family still should be, and the
+        # signature vocabulary keeps the distinction visible either way: `judge/…` and `human/…`
+        # are different claims to any reader, and `score_alignment` reports the weakest of a set.
         families = {s.family for s in seats}
-        if not (families - {HOME_FAMILY, "unknown"}) and not waived:
+        if not (families - {HOME_FAMILY, "unknown"}) and not waived and len(seats) > 1:
             return PanelCapability.VIOLATED
 
     # Reachability is checked LAST and reported separately, because it is the only

@@ -8,6 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **`check_drawbacks_section` did not count a bullet opening in bold**, which is the form the
+  rest of `plan-template.md` uses. `^\s*[-*]\s+(Q\d+|[A-Z])` missed
+  `- **Does \`scripts/lib/\` want a barrel?** …` and reported `unresolved_entries: 0` beside two
+  bullets plainly present — the sixth literal a consumer found by trial and error in one day. The
+  added `\**` loosens nothing: `- *emphasis* then text` and a bullet of only spaces are still not
+  counted, because what the pattern requires is that a bullet CARRY something.
+
 - **The template prescribed headings its own checkers could not find, and the measurability
   detector could not read the notation this kit writes (#186).** Four defects in the space
   between `plan-write`'s template and `plan-confidence`'s gates. A consumer measured the visible
@@ -340,6 +347,45 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   where they claim to, and that mere sequence is not a finding.
 
 ### Added
+
+- **The alignment sign-off has a convened reviewer.** `skills/plan-alignment/SKILL.md` stated the
+  contract — *"a second agent that read the EVIDENCE, not only the brief, and could refuse"* — and
+  `alignment_judge.py` says of itself that *"it takes its verdict on the command line. It does not
+  read the evidence itself."* It is a RECORDER. **Nothing convened the agent whose verdict it
+  records**: `rules/review-panel.txt` declared `discover`, `plan` and `design` and no
+  `alignment`, and the skill's only instruction was the recording command with
+  `--model "<the model doing the judging>"` — a blank an author fills about their own brief, which
+  the skill's own table values at nothing.
+
+  Measured on a consumer: four briefs at 34/34 `AWAITING_REVIEW`, and the practical path to a
+  signature was messaging another session, which depends on one being alive and idle. One item
+  took five rounds that way, and those rounds found **fourteen real defects** — the rigour was
+  never the problem, the waiting was.
+
+  **One seat, not three.** `PANEL_SIZE` is now `panel_size_for(phase)`: a panel VOTES and the
+  2-of-3 majority is its property, while an alignment sign-off is four checkboxes ticked by one
+  reviewer who is not the author. A majority has no meaning over that. `nemesis-claim-auditor`
+  holds the seat, by its own description — *"takes a verdict, a metric or a report and confronts
+  it with the evidence"*; `vera-technical-arbiter` excludes itself in writing, *"never decides
+  whether a stage passed"*.
+
+  **The outside-family rule now applies to phases with a majority.** Its reason is that
+  correlated models are fooled together — *"a plausible fabrication that survives one tends to
+  survive its siblings"* — which is an argument about two of three agreeing, and does not reach a
+  phase with one reviewer, where the guarantee that matters is NOT THE AUTHOR and is enforced one
+  line above. The contrary claim was tested before the rule was narrowed: on 2026-09-23 two
+  same-family sessions reviewing each other refuted three claims between them, and one refutation
+  found a root cause neither had seen. Same-family review is not empty review; correlated VOTING
+  is what the rule prevents.
+
+  **The kit's own check caught the missing half.** Declaring the phase in `panel_phases` without
+  an entry in `PHASE_SOURCES` failed `test_every_panel_phase_has_a_contract`, whose neighbour
+  states why — *"a panel with no golden rule grades against taste, and three reviewers grading
+  against taste disagree for reasons nobody can adjudicate."* The phase's contract is
+  `alignment-threshold.md`, where the sign-off's terms already live rather than a golden rule
+  invented for the occasion, and the **walkthrough is an artifact rather than an `also_read`**: a
+  reviewer who reads only the brief can confirm a document is internally consistent and nothing
+  else, and the flows are where a scenario class either exists or does not.
 
 - **The upgrade path is walked by a consumer, and coverage is asserted at the granularity that
   failed.** Six defects were filed on 2026-09-23 and the suite found ONE; five were reported by

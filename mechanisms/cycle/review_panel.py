@@ -57,6 +57,25 @@ from pathlib import Path
 #: Odd on purpose: a tie is not a state this mechanism should ever have to name.
 PANEL_SIZE = 3
 
+#: How many seats a phase declares. Three where the verdict is a MAJORITY — the 2-of-3 is the
+#: property, and a panel that shrank to one would lose it. One for `alignment`, because the
+#: alignment sign-off is not a vote: four checkboxes are ticked by a single reviewer who is not
+#: the author, and `score_alignment` reports the weakest signer of the set. A majority has no
+#: meaning over that, and requiring three reviewers to tick one checklist would ask a project for
+#: reviewers the mechanism cannot use.
+#:
+#: Added 2026-09-23. Until then `rules/review-panel.txt` named no `alignment` phase at all, so
+#: nothing convened the reviewer the sign-off contract requires — `alignment_judge.py` records a
+#: verdict and says of itself that *"it does not read the evidence"*, and the agent that does was
+#: summoned by hand. A consumer's practical path became messaging another session, which depends
+#: on one being alive and idle; one item took five rounds that way.
+PANEL_SIZE_BY_PHASE = {"alignment": 1}
+
+
+def panel_size_for(phase: str) -> int:
+    """Seats this phase declares. `PANEL_SIZE` unless the phase says otherwise."""
+    return PANEL_SIZE_BY_PHASE.get(phase.lower(), PANEL_SIZE)
+
 #: How many approvals carry a document. Simple majority of a full panel.
 MAJORITY = 2
 

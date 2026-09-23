@@ -71,6 +71,7 @@ from installed_plugins import resolve as resolve_plugin  # noqa: E402 (post-boot
 from review_panel import (  # noqa: E402 — post-bootstrap import
     HOME_FAMILY,
     PANEL_SIZE,
+    panel_size_for,
     Seat,
     parse_panel_phases,
     seats_for,
@@ -193,7 +194,7 @@ def convene(
         return OK, {"status": "not_gated", "phase": phase,
                     "detail": f"no panel gates `{phase}`; it advances on its own verdict"}
 
-    if len(seats) != PANEL_SIZE:
+    if len(seats) != panel_size_for(phase):
         return INVALID, {
             "status": "invalid",
             "detail": f"`{phase}` declares {len(seats)} seats, not {PANEL_SIZE}. The "
@@ -208,8 +209,23 @@ def convene(
                       "author approving their own work is not a review",
         }
 
+    # The family rule guards a MAJORITY, and a single seat has none.
+    #
+    # Its reason is that correlated models are fooled together: "a plausible fabrication that
+    # survives one tends to survive its siblings". That is an argument about two of three
+    # agreeing, and it does not reach a phase with one reviewer, where the guarantee that
+    # matters is a different one — NOT THE AUTHOR — and is enforced immediately above.
+    #
+    # Measured 2026-09-23, because the opposite claim was available and had to be tested: two
+    # same-family sessions reviewing each other's work that day refuted three claims between
+    # them, and one of those refutations found a root cause neither had seen. Same-family
+    # review is not empty review; it is correlated VOTING that the rule exists to prevent.
+    #
+    # A single-seat phase that COULD be filled from another family still should be, and the
+    # signature vocabulary keeps the distinction visible either way: `judge/…` and `human/…`
+    # are different claims to any reader, and `score_alignment` reports the weakest of a set.
     families = {s.family for s in seats}
-    if not (families - {HOME_FAMILY, "unknown"}):
+    if not (families - {HOME_FAMILY, "unknown"}) and len(seats) > 1:
         return INVALID, {
             "status": "invalid",
             "detail": f"every seat on the `{phase}` panel is {HOME_FAMILY} or an "

@@ -70,16 +70,47 @@ unattributed tick does not launder the rest, and `ALIGNED` by a judge and
 **Invoke the judge when no reviewer is coming** — the unattended loop, a fleet
 session, any run where waiting means the item never moves:
 
+**Two steps, and the first is the one that judges.** `alignment_judge.py` RECORDS a
+verdict; it says so of itself — *"it takes its verdict on the command line. It does
+not read the evidence itself."* Running it with a verdict you reached about your own
+brief is the author signing their own form, which the table above values at nothing.
+
+**Step 1 — convene the reviewer, and hand it the evidence.**
+
+```bash
+python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/convene_panel.py" \
+  --slug {slug} --phase alignment --json
+```
+
+One seat, not three: this sign-off is four checkboxes ticked by somebody who is not
+the author, and a majority has no meaning over that. The seat names the agent — the
+kit seats `nemesis-claim-auditor`, whose job is the one this needs: take a claim and
+confront it with the evidence.
+
+Spawn that agent and give it the brief AND the evidence the brief cites — the
+discovery, the files, the measurements. It must read what the brief claims to rest
+on, because a reviewer who reads only the brief can confirm that a document is
+internally consistent and nothing else. Ask it for a verdict and the reason.
+
+**Step 2 — record what it decided**, with its model, not yours:
+
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/skills/plan-alignment/scripts/alignment_judge.py" \
   .squad/records/alignment/{slug}-alignment.md \
-  --model "<the model doing the judging>" \
-  --verdict signed --reason "<what the evidence showed>"
+  --model "<the model that reached the verdict>" \
+  --verdict signed --reason "<what THAT agent found in the evidence>"
 ```
 
 It must be able to REFUSE, and refusing must cost the same as signing. A judge
 that has never refused is a judge nobody has tested — pass `--verdict refused`
 and the reason is written into the brief, where the next run reads it.
+
+**A peer session is the other way, and it is not a lesser one.** `peer/<session>
+(verified: …)` is a recognised signature when another agent independently measured
+something about this document. It costs a round trip and depends on a session being
+alive; convening the seat does not. Measured 2026-09-23: one item took five rounds
+of peer messaging, and those rounds found fourteen real defects — the rigour was
+never the problem, the waiting was.
 
 ## Step 0 — Classify the path, out loud
 

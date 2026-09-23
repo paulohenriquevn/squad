@@ -149,6 +149,11 @@ reviewer = plan     | judge-codex:plan-judge     | gpt-5.5         | builtin
 # CODE-QUALITY and RELEASE are deliberately absent: both already derive their
 # verdict from a script, and a panel voting on a decision already made
 # deterministically adds cost and no information.
+# The alignment sign-off is ONE reviewer, not a panel: four checkboxes ticked by somebody
+# who is not the author. `nemesis-claim-auditor` is seated because its job is the one the
+# contract names — it takes a claim and confronts it with the evidence, and can refuse.
+reviewer = alignment | nemesis-claim-auditor | claude-opus-5 | builtin
+
 reviewer = design   | vera-technical-arbiter     | claude-opus-5   | builtin
 reviewer = design   | nemesis-claim-auditor      | claude-sonnet-5 | builtin
 reviewer = design   | judge-codex:design-judge   | gpt-5.5         | builtin
@@ -212,4 +217,8 @@ reviewer = design   | judge-codex:design-judge   | gpt-5.5         | builtin
 # CLI change would read as reachable here and terminate on dispatch, which is the
 # failure the gate's own output describes. Re-run step 2 when a panel seat dies.
 
-panel_phases = discover, plan, design
+# `alignment` gates the brief's sign-off, and is the one phase whose panel is a single
+# seat: four checkboxes ticked by somebody who is not the author, where a majority has no
+# meaning. Added 2026-09-23 — until then nothing convened that reviewer, so an author
+# either signed their own form or waited for a peer session to be alive.
+panel_phases = discover, plan, design, alignment
