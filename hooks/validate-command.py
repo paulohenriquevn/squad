@@ -602,6 +602,31 @@ def check_git(command: str) -> str | None:
                 "reach a clean tree: copy the files aside with 'cp', or commit them "
                 "on your own branch, then 'git restore'.")
 
+    # B-264 — the commit is where the shared stack is actually touched, and the only
+    # place this guard can say so.
+    #
+    # `working_trees()` above refuses a PERSON typing the command under several
+    # worktrees. It cannot see `.githooks/pre-commit`, which invokes lint-staged,
+    # which pushes to `refs/stash` on EVERY commit. Measured 2026-09-23: two orphaned
+    # `lint-staged automatic backup` entries sat on the stack, so the cleanup had
+    # already failed twice and nobody noticed. The kit refused the safe case and
+    # permitted the dangerous one in silence.
+    #
+    # A WARNING and never a refusal, for the reason `.githooks/pre-commit` gives for
+    # not forbidding partial staging: "a gate that forbade it would trade a rare
+    # silent loss for a constant obstruction". A fleet that uses worktrees by design
+    # commits under them all day; refusing that is how a guard gets switched off.
+    #
+    # Printed to stderr with exit 0 — the contract for "say something, allow it".
+    if re.search(r"git\s+commit\b", unquoted) and working_trees(command) > 1:
+        print("NOTE: this repository has more than one working tree, and they SHARE one "
+              "stash stack. A pre-commit hook that stashes (lint-staged does, on every "
+              "run) pushes to `refs/stash`, which `git worktree` does NOT isolate — a "
+              "pop returns the top entry whichever tree pushed it. Check `git stash "
+              "list` if a commit here behaves oddly; orphaned backups have been "
+              "observed. Not a refusal: committing under worktrees is ordinary.",
+              file=sys.stderr)
+
     # The `-C` that decides WHICH repository is asked has to be the one carried by
     # the segment being judged. `_git_prefix` read the first one anywhere in the
     # command, so `git -C /tmp status && git commit -m x` asked /tmp which branch it

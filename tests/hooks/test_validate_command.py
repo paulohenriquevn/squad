@@ -352,3 +352,54 @@ def test_a_heredoc_fed_to_a_shell_is_still_inspected(tmp_path):
 
     command = "bash <<'SH'\ngit stash\nSH"
     assert _run(root, command) == 2
+
+
+# ── B-264: the hook that writes to the shared stack is invisible to this guard ─
+# `working_trees()` refuses a PERSON typing the command under several worktrees.
+# It cannot see `.githooks/pre-commit`, which invokes lint-staged, which pushes to
+# `refs/stash` on EVERY commit — measured 2026-09-23: two orphaned backup entries
+# sat on the stack, so the cleanup had already failed twice unnoticed.
+#
+# So the kit refuses the safe case and permits the dangerous one in silence. The
+# commit itself IS a command this guard sees, which is where the asymmetry closes.
+#
+# A WARNING and never a refusal: refusing commits under several worktrees is the
+# constant obstruction `.githooks/pre-commit` declined in its own docblock, and it
+# would fire on every commit in a fleet that uses worktrees by design.
+
+
+def test_committing_with_several_worktrees_warns_about_the_shared_stack(tmp_path):
+    """The commit is allowed, and the stack it will touch is named."""
+    root = _repo_on(tmp_path, "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    hook = _hook()
+    cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
+    payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+               "tool_input": {"command": "git commit -m 'work'"}}
+    done = subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
+                          text=True, cwd=root)
+
+    assert done.returncode == 0, "a commit must not be refused over this"
+    assert "stash" in (done.stdout + done.stderr).lower(), (
+        "committing under several worktrees said nothing about the shared stack. "
+        "lint-staged pushes to it on every commit and this guard is the only thing "
+        "that sees the commit at all."
+    )
+
+
+def test_committing_with_one_worktree_stays_silent(tmp_path):
+    """One tree, nobody to swap with — a warning there is noise that trains people to ignore it."""
+    root = _repo_on(tmp_path, "workspace")
+
+    hook = _hook()
+    cmd = ["bash", str(hook)] if hook.suffix == ".sh" else [sys.executable, str(hook)]
+    payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+               "tool_input": {"command": "git commit -m 'work'"}}
+    done = subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
+                          text=True, cwd=root)
+
+    assert done.returncode == 0
+    assert "stash" not in (done.stdout + done.stderr).lower(), (
+        "a single-worktree commit was warned about a stack nobody else touches"
+    )
