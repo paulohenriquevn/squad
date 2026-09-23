@@ -296,3 +296,59 @@ def test_a_cd_earlier_in_the_chain_is_part_of_the_deletion(tmp_path: Path) -> No
     assert _run(root, "cd build && rm -rf *") == 0, \
         "a project-relative cd is not a system root"
     assert _run(root, "cd /etc && ls -la") == 0, "reading there is not deleting there"
+
+
+# ── B-264: a document that QUOTES the command is not an invocation of it ──────
+# The guard already knows this for quoted text — `_QUOTED.sub("", cmd)` strips it,
+# with the comment "nor one that merely mentions the stash". A heredoc body is not
+# quoted, so the same sentence inside one still reads as a command.
+#
+# Measured 2026-09-23: writing the alignment brief FOR this very item was refused,
+# because the prose describing the defect contains the command that causes it. The
+# guard cannot see the hook that really runs it, and does see a sentence about it —
+# both halves of one mismatch between what it inspects and what it means to catch.
+
+
+def test_a_heredoc_body_that_mentions_the_stash_is_not_an_invocation(tmp_path):
+    """Writing prose about the shared stack must not read as touching it."""
+    root = _repo_on(tmp_path, "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    command = (
+        "cat > notes.md <<'DOC'\n"
+        "The pre-commit hook runs git stash in a repository with three worktrees.\n"
+        "DOC"
+    )
+    assert _run(root, command) == 0
+
+
+def test_a_real_invocation_beside_a_heredoc_is_still_refused(tmp_path):
+    """The guard that stops matching prose must not stop matching commands.
+
+    Without this, the fix for the case above is indistinguishable from deleting the
+    guard: a test that only asserts the false positive is gone passes just as well
+    when the check was removed entirely.
+    """
+    root = _repo_on(tmp_path, "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    command = (
+        "cat > notes.md <<'DOC'\n"
+        "harmless prose\n"
+        "DOC\n"
+        "git stash"
+    )
+    assert _run(root, command) == 2
+
+
+def test_a_heredoc_fed_to_a_shell_is_still_inspected(tmp_path):
+    """`bash <<EOF` EXECUTES its body, so that body is commands and not data.
+
+    This is why the fix cannot simply strip every heredoc: the interpreter case is
+    exactly where the text IS an invocation.
+    """
+    root = _repo_on(tmp_path, "workspace")
+    _second_worktree(root, tmp_path / "lane")
+
+    command = "bash <<'SH'\ngit stash\nSH"
+    assert _run(root, command) == 2
