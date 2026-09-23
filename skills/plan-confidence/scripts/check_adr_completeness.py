@@ -27,7 +27,21 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-ADR_HEADER_RE = re.compile(r"^###\s+(D\d+)\s*[—\-–:]", re.MULTILINE)
+#: Both spellings, because this kit writes both and matched only one.
+#:
+#: `plan-template.md` prescribes `D1, D2, …` and this matched that. The rest of the kit writes
+#: `ADR-N` — `rules/cycle-code-quality.md`, `rules/cycle-rule-schema.md`, `docs/ADR/0025-…` — and
+#: authors followed the majority. Measured 2026-09-23 across one consumer's plans: `### ADR-N`
+#: ninety-six times against `### D1` five.
+#:
+#: What that cost is the whole point. `plan-confidence-golden-rule.md:42` declares
+#: *"ADR without alternatives in Rationale → score ≤ 70"*, and with no ADR matched the cap has no
+#: subject: a plan with one ADR rejecting nothing reported `total_adrs=0,
+#: completeness_ratio=1.0` — a gate reporting itself applied while applying nothing.
+#:
+#: Found by the ORTHOGONAL seat of a plan panel: the reviewer outside the kit's model family
+#: approved the artifact and brought back a defect of the kit that neither same-family seat saw.
+ADR_HEADER_RE = re.compile(r"^###\s+(ADR-\d+|D\d+)\s*[—\-–:]", re.MULTILINE)
 ADRS_SECTION_RE = re.compile(r"^##\s+ADRs?\s*$", re.MULTILINE)
 NEXT_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
 

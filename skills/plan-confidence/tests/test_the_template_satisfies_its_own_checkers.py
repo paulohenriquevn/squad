@@ -113,3 +113,63 @@ def test_the_drawbacks_checker_accepts_the_templates_bullets(filled: Path) -> No
 def _headings(path: Path) -> list[str]:
     return [ln.rstrip() for ln in path.read_text(encoding="utf-8").splitlines()
             if ln.startswith("#")]
+
+# ── every checker is exercised here, or declared as not being ────────────────
+#
+# This file named THREE checkers and the skill ships SEVENTEEN. Naming three is the same shape as
+# the frozen parenthetical that named six signals while the matcher held thirty-nine (#175): the
+# list looks like coverage and is a sample.
+#
+# It cost an instance the same day. `check_adr_completeness` matched `### D1` while every plan
+# writes `### ADR-N`, so the cap guarding ADRs had no subject — a gate reporting itself applied
+# while applying nothing. Had this file enumerated the directory, that would have surfaced in the
+# run that found the two DoD headings.
+#
+# So the list below is DERIVED from disk, and a checker that this file does not exercise must be
+# named in `_NOT_EXERCISED` with the reason. Adding a checker forces the decision rather than
+# inheriting silence — the `test_every_gate_is_reachable` idiom, pointed at this file.
+_SCRIPTS = _ROOT / "skills" / "plan-confidence" / "scripts"
+
+#: Checkers this file does not run against the template, each with why. A template is a form:
+#: some checkers need an artifact the form cannot contain.
+_NOT_EXERCISED = {
+    "check_alignment_gate": "reads the alignment brief, not the plan",
+    "check_architecture_compliance": "reads the repository's modules, not a document",
+    "check_coverage_matrix": "needs task ids that only a written plan has",
+    "check_deps_audit": "needs a dependency audit record",
+    "check_evidence_citations": "resolves file:line against a real tree",
+    "check_failure_scenarios": "fires only when the plan declares external I/O",
+    "check_impediment_agrees": "reads the backlog item, not the plan",
+    "check_patterns_consumption": "needs the project's *-patterns skills on disk",
+    "check_spec_smells": "reads a spec, not a plan template",
+    "check_symbol_naming": "reads code identifiers",
+    "check_task_interfaces": "needs task blocks a form does not carry",
+    "check_tdd_in_bugfix": "fires only on a bugfix task",
+    "check_concurrency_tests": "fires only when the plan text signals concurrency",
+    "check_adr_completeness": "the template's ADR section is illustrative prose, "
+                              "and `test_an_adr_is_seen_however_the_kit_spells_it` "
+                              "covers the pattern directly",
+}
+
+
+def test_every_checker_is_exercised_or_declared() -> None:
+    on_disk = {p.stem for p in _SCRIPTS.glob("check_*.py")}
+    assert len(on_disk) > 3, f"only {len(on_disk)} checkers found; this test lost its subject"
+
+    source = Path(__file__).read_text(encoding="utf-8")
+    exercised = {name for name in on_disk if f"from {name} import" in source}
+    unaccounted = on_disk - exercised - set(_NOT_EXERCISED)
+
+    assert unaccounted == set(), (
+        f"these checkers are neither exercised against the template nor declared in "
+        f"`_NOT_EXERCISED` with a reason: {sorted(unaccounted)}. A list that names some is a "
+        f"sample wearing coverage.")
+
+
+def test_no_declared_exclusion_names_a_checker_that_left() -> None:
+    """The other direction: an exclusion for a deleted checker is a rule that stopped applying."""
+    on_disk = {p.stem for p in _SCRIPTS.glob("check_*.py")}
+    stale = set(_NOT_EXERCISED) - on_disk
+
+    assert stale == set(), f"declared as not exercised and no longer on disk: {sorted(stale)}"
+

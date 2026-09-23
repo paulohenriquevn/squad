@@ -8,6 +8,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **`check_adr_completeness` saw no ADR, so the cap guarding them had no subject.**
+  `ADR_HEADER_RE` matched `^###\s+(D\d+)`, which the plan template does prescribe — and the rest
+  of the kit writes `ADR-N`: `rules/cycle-code-quality.md`, `rules/cycle-rule-schema.md`,
+  `docs/ADR/0025-…`. Authors followed the majority. **Measured across one consumer's plans:
+  `### ADR-N` ninety-six times against `### D1` five.** So the kit taught one spelling everywhere
+  and matched the other, which makes accepting both the fix rather than calling it a deviation.
+
+  The cost, proven rather than argued. `plan-confidence-golden-rule.md:42` declares *"ADR without
+  alternatives in Rationale → score ≤ 70"*, and with no ADR matched the cap has no subject: a
+  plan with one ADR rejecting nothing reported `total_adrs=0, completeness_ratio=1.0`. **A gate
+  reporting itself applied while applying nothing** — the second instance in one day, after the
+  template prescribing DoD headings the criteria checker could not match (#186).
+
+  Found by the **orthogonal seat** of a plan panel: the reviewer from outside the kit's model
+  family approved the artifact and brought back a defect of the kit that neither same-family seat
+  saw — while both same-family seats returned the plan for arithmetic errors the orthogonal one
+  did not catch. Each caught what the other missed, which is the argument for
+  `panel_size_for`'s narrowing of the family rule, measured from the other side.
+
+- **`test_the_template_satisfies_its_own_checkers` named THREE checkers and the skill ships
+  SEVENTEEN.** Same shape as the frozen parenthetical naming six signals while the matcher held
+  thirty-nine (#175): a list that names some is a sample wearing coverage. It cost an instance the
+  same day — had the file enumerated the directory, the ADR defect above would have surfaced in
+  the run that found the two DoD headings. The list is now **derived from disk**, and a checker
+  this file does not exercise must be named in `_NOT_EXERCISED` with its reason — thirteen are,
+  each with one (*"reads the repository's modules, not a document"*, *"fires only on a bugfix
+  task"*). Both directions: an exclusion naming a checker that left also fails, because that is a
+  rule which quietly stopped applying. Proven by mutation — a `check_quarantine_probe.py` with no
+  declaration fails the check by name.
+
 - **`check_drawbacks_section` did not count a bullet opening in bold**, which is the form the
   rest of `plan-template.md` uses. `^\s*[-*]\s+(Q\d+|[A-Z])` missed
   `- **Does \`scripts/lib/\` want a barrel?** …` and reported `unresolved_entries: 0` beside two
