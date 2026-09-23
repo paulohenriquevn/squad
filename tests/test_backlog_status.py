@@ -395,3 +395,76 @@ def test_an_id_and_a_reason_coexist_in_one_value():
     raw = blocked_by_raw(content[start:end])
     assert parse_blocked_by(raw) == ["B-002"]
     assert "ratify" in raw
+
+
+class TestUnpushedCommits:
+    """`shipped` claims the work is AVAILABLE, so the writer looks at whether it left this disk.
+
+    Asserted over the RETURN VALUE, never the message — the module docstring above says why.
+
+    ## The measurement behind it (2026-09-23)
+
+    A session marked an item `shipped` while the commit closing its last Definition-of-done
+    bullet was still local. The same session had spent the day enforcing that distinction on
+    other items and had written it down three times that morning. `rules/testing.md § 4.1`
+    records why writing a rule makes breaking it MORE likely rather than less: for someone
+    else's work it is a lens you raise; for your own it is something you already believe you
+    satisfy.
+    """
+
+    @staticmethod
+    def _git(cwd, *args):
+        import subprocess
+
+        return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=False)
+
+    def test_a_directory_that_is_not_a_repository_is_not_measured(self, tmp_path):
+        # `None` rather than 0: an unanswerable question reported as a zero is the exact failure
+        # this check exists to prevent, one layer up.
+        from backlog_status import _unpushed_commits
+
+        assert _unpushed_commits(tmp_path / "BACKLOG.md") is None
+
+    def test_a_repository_with_no_upstream_is_not_measured(self, tmp_path):
+        # A branch with no upstream cannot be ahead OF anything. Saying "0 unpushed" there would
+        # be a claim about a remote that was never consulted.
+        from backlog_status import _unpushed_commits
+
+        self._git(tmp_path, "init", "-q")
+        self._git(tmp_path, "config", "user.email", "t@t.test")
+        self._git(tmp_path, "config", "user.name", "t")
+        (tmp_path / "BACKLOG.md").write_text("## B-001 — x\n\nstatus: raw\n")
+        self._git(tmp_path, "add", "-A")
+        self._git(tmp_path, "commit", "-q", "-m", "first")
+
+        assert _unpushed_commits(tmp_path / "BACKLOG.md") is None
+
+    def test_commits_beyond_the_upstream_are_counted(self, tmp_path):
+        # The case that happened. A clone with an upstream, two commits made after it, and the
+        # count has to be 2 — not 0, which is what "I already handled this" feels like.
+        from backlog_status import _unpushed_commits
+
+        origin = tmp_path / "origin"
+        origin.mkdir()
+        self._git(origin, "init", "-q", "--bare")
+
+        work = tmp_path / "work"
+        work.mkdir()
+        self._git(work, "init", "-q")
+        self._git(work, "config", "user.email", "t@t.test")
+        self._git(work, "config", "user.name", "t")
+        (work / "BACKLOG.md").write_text("## B-001 — x\n\nstatus: raw\n")
+        self._git(work, "add", "-A")
+        self._git(work, "commit", "-q", "-m", "first")
+        self._git(work, "remote", "add", "origin", str(origin))
+        branch = self._git(work, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        self._git(work, "push", "-q", "-u", "origin", branch)
+
+        assert _unpushed_commits(work / "BACKLOG.md") == 0
+
+        for n in ("second", "third"):
+            (work / f"{n}.txt").write_text(n)
+            self._git(work, "add", "-A")
+            self._git(work, "commit", "-q", "-m", n)
+
+        assert _unpushed_commits(work / "BACKLOG.md") == 2

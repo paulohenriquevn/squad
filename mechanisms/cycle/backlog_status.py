@@ -550,6 +550,46 @@ def _find_cycle(edges: dict[str, list[str]], start: str) -> list[str] | None:
     return None
 
 
+
+def _unpushed_commits(backlog: Path) -> int | None:
+    """How many commits the working branch holds that its upstream does not.
+
+    `None` when the question cannot be answered here — no git, no repository, no upstream
+    configured — because an unanswerable question must not be reported as a zero.
+
+    ## Why this exists, measured 2026-09-23
+
+    A session marked an item `shipped` while the commit closing its last Definition-of-done
+    bullet was still on local disk: not on the remote, not on the integration branch, not on
+    the trunk. The same session had spent the day enforcing exactly that distinction on other
+    items — holding one out of `shipped` for the four minutes between its tag being cut and the
+    package registering on npm — and had written in three places that integration is not
+    availability.
+
+    So this is not a rule nobody knew. It is a rule its own author had written that morning, and
+    `rules/testing.md § 4.1` records why that makes it MORE likely to be broken rather than less:
+    for someone else's work a rule is a lens you raise; for your own it is something you already
+    believe you satisfy, and having just thought about it reads as having already handled it.
+
+    Which is why this is code and not a reminder. The check costs one `git rev-list` and answers
+    in the one place where the claim is made.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(backlog.parent), "rev-list", "--count", "@{u}..HEAD"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return None
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Move a BACKLOG.md item, or record an impediment.")
     parser.add_argument("backlog", type=Path)
@@ -617,6 +657,23 @@ def _apply_under_lock(args: argparse.Namespace) -> int:
         return 0
 
     shared_file.write_atomic(args.backlog, updated)
+
+    # `shipped` is the one status that claims something about the WORLD rather than about the
+    # registry, so it is the one worth confronting with the world. Reported and never refused:
+    # this script cannot know which commit closes which item, so a refusal here would fire on
+    # anyone holding unrelated local work — and a gate that fires on ordinary work is a gate
+    # somebody disables. The honest middle is the one `promote_to_develop.py` already takes for
+    # review drift: say what was found, and say plainly that nothing here checked the rest.
+    if args.to == "shipped":
+        ahead = _unpushed_commits(args.backlog)
+        if ahead is None:
+            print("  unpushed commits: NOT MEASURED — no upstream, no repository, or no git here.")
+        elif ahead > 0:
+            print(f"  WARNING: {ahead} commit(s) on this branch are not on its upstream. "
+                  f"`shipped` claims the work is AVAILABLE, not merely written — "
+                  f"cycle-maintenance.md separates integration from availability. "
+                  f"If any of those commits closes this item, the claim is early.")
+
     print(f"OK: {action}")
     return 0
 
