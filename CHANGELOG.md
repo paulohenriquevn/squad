@@ -118,6 +118,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **One installed auditor was neither commissioned nor mentioned, so nobody had weighed it.**
+  `rules/review-auditors.txt` is careful about what it leaves out: `loop-project-purge` and
+  `loop-pentest-audit` are refused with a reason, seven more carry a collective one — *no
+  domain here derives them from a change* — and two carry their own. Measured 2026-09-22:
+  seventeen `loop-*` plugins installed, seven commissioned, ten idle, and nine of the ten
+  reasoned. `loop-system-cartography` appeared in no rule in this kit at all. That is not a
+  mapping somebody rejected; it is a capability nobody weighed — and because the file is
+  otherwise a record of decisions, **a reader counting the reasons concludes every absence
+  was chosen.** Its reason is now written (it maps a system rather than auditing a change,
+  and the question belongs to `cycle-design`), and
+  `tests/test_every_installed_auditor_was_decided_about.py` fails on the next plugin that
+  arrives undecided. The control test refuses the degenerate pass: a file that mentions every
+  plugin and commissions none would satisfy a mention check and answer nothing.
+
 - **The product chain was checked forwards and never backwards, so a goal nothing serves
   reached DESIGN.** `score_product_alignment` resolves both citations that point UP the
   chain — a `REQ-N` whose `serves:` names no declared objective, a `PIECE-N` whose
