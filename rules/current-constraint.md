@@ -14,7 +14,7 @@ A maintenance squad's characteristic failure is **local optimization**: shipping
 The reason is measurement. A hard gate asking *"does this touch the constraint?"* against data that does not exist would be answered by assertion — and an assertion dressed as a measurement is precisely what gate G5 of `cycle-backlog.md` exists to refuse. Building it into this corner would reproduce, one file over, the defect the system was designed to prevent.
 
 **WHICH data exists, named rather than waved at.** Until 2026-09-22 this paragraph said *"we do not currently instrument flow across the ecosystem"* and listed four absences. Three of the four had stopped being true, and the sentence outlived them — a declared absence surviving the fact that justified it, which is the class
-[`a-claim-about-now-is-not-a-fact-that-survives.md`](../docs/wiki/decisions/a-claim-about-now-is-not-a-fact-that-survives.md) records. A blanket refusal is worse than a missing metric, because the refusal is what somebody reads before deciding not to measure.
+[`docs/wiki/decisions/a-claim-about-now-is-not-a-fact-that-survives.md`](https://github.com/paulohenriquevn/squad/blob/main/docs/wiki/decisions/a-claim-about-now-is-not-a-fact-that-survives.md) records. A blanket refusal is worse than a missing metric, because the refusal is what somebody reads before deciding not to measure.
 
 | Measure | State | Where |
 |---|---|---|

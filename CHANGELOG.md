@@ -118,6 +118,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A rule linked to `../docs/` and broke the post-install validation of every consumer.**
+  `docs/wiki/` is the kit's authored knowledge and `install.sh` does not copy it — a
+  deliberate placement, since `rules/README.md` places a file by who OWNS it and a consumer
+  owns none of that. A relative link added to `current-constraint.md` resolved HERE
+  (`rules/../docs/wiki/…` is `docs/wiki/…`) and resolved to `.claude/docs/` in an install,
+  where nothing writes. `check_xrefs --strict` passed in this repository, `install.sh`
+  exited 1 in a consumer, and **43 tests failed from one link**, all of them in the install
+  suite. The sibling rules already had the convention — `cycle-release.md` and
+  `autonomy-envelope.md` cite the wiki by absolute URL — and it was not followed. This is
+  the shape `run_slice_tests.sh` names in its own banner: *red in an install and green
+  upstream is a different finding from red everywhere*, and the kit's own checkout cannot
+  see it by construction.
+  `tests/test_a_rule_links_to_the_wiki_the_way_a_consumer_can_follow.py` reads the trees
+  that travel **from `install.sh` itself** rather than listing them, because a second copy
+  of what travels is a second thing to keep in step — which is this whole class of defect.
+
 - **One installed auditor was neither commissioned nor mentioned, so nobody had weighed it.**
   `rules/review-auditors.txt` is careful about what it leaves out: `loop-project-purge` and
   `loop-pentest-audit` are refused with a reason, seven more carry a collective one — *no
