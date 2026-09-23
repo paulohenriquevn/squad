@@ -134,6 +134,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A commit scope could name two areas and not one path.** `HEADER_RE` accepted
+  comma-separated kebab-case segments — added because a change touching two areas had three
+  bad options, *name one and be incomplete, invent a portmanteau nobody greps for, or drop
+  the scope* — and refused a `/`. Measured 2026-09-23 on a consumer: five commits scoped
+  `infra/tests`, a directory and its tests, reported as `header_shape` and reachable by **no
+  override**, because `commit_scopes` is consulted only after the pattern matches. The three
+  options left were the same three the comma fix already rejected, and `infra-tests` is the
+  portmanteau: the hyphen stops matching the path it names. The segment rule did not loosen
+  — each part is still lowercase kebab-case, and `infra//tests`, `infra/` and `Infra/tests`
+  still fail; a scope may now be several parts separated by `/`, the way the comma made it
+  several separated by `,`. The two compose.
+
 - **A rule linked to `../docs/` and broke the post-install validation of every consumer.**
   `docs/wiki/` is the kit's authored knowledge and `install.sh` does not copy it — a
   deliberate placement, since `rules/README.md` places a file by who OWNS it and a consumer

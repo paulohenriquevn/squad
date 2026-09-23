@@ -246,3 +246,45 @@ def test_a_declared_scope_list_is_checked_segment_by_segment() -> None:
 
     assert _codes("fix(gates,board): both declared" + BODY, conv) == set()
     assert "unknown_scope" in _codes("fix(gates,ghost): one is not" + BODY, conv)
+
+
+# ── a scope may name a PATH, not only a name ─────────────────────────────────
+#
+# The comma was added to this pattern because a change touching two areas had three bad
+# options — name one and be incomplete, invent a portmanteau nobody greps for, or drop
+# the scope — and all three lose what the field exists to carry. That argument was written
+# into the file and applies unchanged to a slash.
+#
+# Measured 2026-09-23 on a consumer: five commits scoped `infra/tests`, refused as
+# `header_shape` and reachable by NO override — `commit_scopes` is consulted only after
+# HEADER_RE matches, so a project cannot declare its way out. Renaming it `infra-tests` is
+# the portmanteau the comma fix already rejected: the scope names a directory and its
+# tests, and the hyphen stops matching the path it names.
+
+def test_a_scope_may_name_a_path() -> None:
+    from check_contribution_conventions import HEADER_RE
+
+    m = HEADER_RE.match("docs(infra/tests): state the fail-closed chart contract")
+
+    assert m is not None, "a scope naming a directory and its tests is refused"
+    assert m.group("scope") == "infra/tests"
+
+
+def test_a_path_scope_composes_with_the_comma() -> None:
+    """The two extensions are independent and a change may need both."""
+    from check_contribution_conventions import HEADER_RE
+
+    m = HEADER_RE.match("fix(infra/tests,gates): x")
+
+    assert m is not None
+    assert m.group("scope") == "infra/tests,gates"
+
+
+def test_the_segment_rule_did_not_otherwise_loosen() -> None:
+    """THE CONTROL. Each segment is still lowercase kebab-case; there may now be a slash
+    BETWEEN segments, which is not the same as allowing anything."""
+    from check_contribution_conventions import HEADER_RE
+
+    for bad in ("docs(Infra/tests): x", "docs(infra/): x", "docs(/tests): x",
+                "docs(infra//tests): x", "docs(infra tests): x"):
+        assert HEADER_RE.match(bad) is None, f"{bad} should not parse"

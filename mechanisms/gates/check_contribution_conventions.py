@@ -85,7 +85,18 @@ COAUTHOR_RE = re.compile(r"^\s*co[-_ ]?authored[-_ ]?by\s*:", re.IGNORECASE | re
 #: or drop the scope. All three lose what the field exists to carry. Each segment is
 #: still lowercase kebab-case, so the rule about a scope did not loosen; there may now
 #: be more than one of them.
-_SCOPE_SEGMENT = r"[a-z0-9][a-z0-9-]*"
+#: A SEGMENT MAY ALSO NAME A PATH. The argument above is the whole of this one: measured
+#: 2026-09-23 on a consumer, five commits scoped `infra/tests` — a directory and its tests
+#: — were refused as `header_shape`, and reachable by no override, because `commit_scopes`
+#: is consulted only after this pattern matches. The three options left were the same
+#: three: name `infra` and be incomplete, write `infra-tests` and invent a portmanteau
+#: that stops matching the path it names, or drop the scope.
+#:
+#: The segment rule did NOT loosen. Each part is still lowercase kebab-case; what changed
+#: is that a scope may be several of them separated by `/`, the way the comma made it
+#: several separated by `,`. `infra//tests`, `infra/` and `Infra/tests` still fail.
+_SCOPE_PART = r"[a-z0-9][a-z0-9-]*"
+_SCOPE_SEGMENT = rf"{_SCOPE_PART}(?:/{_SCOPE_PART})*"
 HEADER_RE = re.compile(
     rf"^(?P<type>[a-z]+)"
     rf"(?:\((?P<scope>{_SCOPE_SEGMENT}(?:,{_SCOPE_SEGMENT})*)\))?"
