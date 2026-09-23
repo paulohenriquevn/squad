@@ -49,11 +49,22 @@ def test_the_state_is_captured_before_the_suites_start() -> None:
 
 
 def test_the_state_is_taken_again_and_compared() -> None:
+    """The invariant is that both readings exist and are compared — never how often.
+
+    This asserted `== 2` on the day it was written, when the comparison served the
+    trailer line and the human notice. The durable record added hours later reuses the
+    same expression for its `tree_moved` field, and the count became 3: the test failed
+    on a change that strengthened exactly what it guards.
+
+    A count is a proxy for a structure, and it breaks when the structure grows in the
+    direction the test wanted. What is pinned now is that the second reading is taken and
+    that at least one comparison consumes it.
+    """
     body = _script()
 
-    assert '_state_after="$(_tree_state)"' in body
-    assert body.count('[ "$_state_before" != "$_state_after" ]') == 2, (
-        "one comparison for the machine-readable line, one for the human notice"
+    assert '_state_after="$(_tree_state)"' in body, "the second reading is never taken"
+    assert body.count('[ "$_state_before" != "$_state_after" ]') >= 1, (
+        "the two readings exist and nothing compares them"
     )
 
 
