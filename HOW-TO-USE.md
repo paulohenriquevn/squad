@@ -148,6 +148,81 @@ Chains plan → implement → code-quality → review → release, pausing at ea
 
 **Mode is reclassifiable.** `suggested_mode` is the filer's guess. If measurement shows a different shape, switch and record why.
 
+## `sq` — one entry point for the artifacts
+
+Measured 2026-09-23: **143 scripts** under `skills/*/scripts` and **38 gates** under
+`mechanisms/gates`, each with its own flags. The count is not the cost. The cost is that a
+contract — the exact heading a checker looks for — lives only inside that checker's source, so
+an author learns it one failed run at a time. A consumer found **six exact heading literals by
+trial and error in a single day**, and every one of those six turned out to be a defect on the
+kit's side.
+
+`sq` exists so the seventh is a question you ask instead of a run you fail.
+
+```bash
+SQ='python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/sq.py"'
+
+$SQ contract plan          # what the checkers for a plan require
+$SQ check <path>           # run every checker that applies to it
+$SQ show <path>            # the same, read as state
+$SQ new alignment my-slug  # scaffold from the template
+```
+
+The prefix is what every other instruction in this kit uses, and for a measured reason:
+`.claude/skills` exists in an install and not in the kit's own checkout, so a bare
+`mechanisms/sq.py` resolves in one layout and not the other. `tests/test_skill_invocations_resolve_in_both_layouts.py`
+refused the first draft of this section for exactly that, which is the check earning its keep on
+the document that introduces a new command.
+
+For the short spelling, alias it in your own shell — the kit installs nothing outside
+`.claude/`, on purpose:
+
+```bash
+alias sq='python3 "$([ -d .claude/mechanisms ] && echo .claude || echo .)/mechanisms/sq.py"'
+```
+
+### `contract` is the one that saves the day
+
+```
+$ $SQ contract plan
+plan — written to <records>/plans/, named `<slug>-plan.md`
+  template: skills/plan-write/templates/plan-template.md
+
+  check_criterion_executability requires: (SECTION_HEADER_RE)
+      ^#{2,4}\s+(?:Global\s+)?(Acceptance\s+Criteria|DoD|Definition\s+of\s+Done)…
+  check_baseline_context requires: (REQUIRED_SUBSECTIONS)
+      Architecture boundaries affected
+      Current callers / dependents
+      Domain glossary
+      Files that will be touched
+
+  These apply and DO NOT DECLARE what they require, so this cannot print it:
+      check_drawbacks_section
+      check_adr_completeness
+```
+
+**It derives, it never restates.** The requirements come from the constants each checker
+exposes, not from a table inside `sq` — a table would be one more place the headings drift, and
+this kit has a day's worth of measurements on what that costs.
+
+**It names its own blind spot.** Four of seventeen checkers declare what they require; the rest
+are printed as not declaring it. Printing nothing would read as *nothing required*, which is
+exactly how six literals came to be found by trial and error.
+
+### `check` never guesses a kind
+
+The kind is read from the file name — `-plan.md`, `-alignment.md`, `-opportunity.md`,
+`-measurement-plan.md` — and a name that announces none is refused:
+
+```
+$ $SQ check CHANGELOG.md
+cannot tell the kind of `CHANGELOG.md`. A kind is read from the file name, never guessed —
+guessing is how a report says something confident about the wrong contract.
+```
+
+Exit codes: `0` the verb answered · `1` the artifact has findings · `2` the request could not be
+served.
+
 ## Where things live
 
 | Path | What |

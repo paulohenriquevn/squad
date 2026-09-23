@@ -378,6 +378,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`sq` — one entry point for this cycle's artifacts.** Measured 2026-09-23: **143 scripts**
+  under `skills/*/scripts` and **38 gates** under `mechanisms/gates`, each with its own flags, and
+  no CLI. The count is not the cost. The cost is that a contract — the exact heading a checker
+  looks for — lives only inside that checker's source, so an author learns it one failed run at a
+  time. A consumer found **six exact heading literals by trial and error in one day**, and every
+  one of the six turned out to be a defect on the kit's side (#186 and its siblings). `sq` exists
+  so the seventh is a question somebody asks instead of a run they fail.
+
+  Four verbs: `contract <kind>` prints what the checkers require, `check <path>` runs every
+  checker that applies, `show <path>` reads the same as state, `new <kind> <slug>` scaffolds from
+  the template.
+
+  **The constraint that shaped every one of them: derive, never restate.** `KINDS` is the single
+  declaration of kind → template, directory, checkers. Requirements come from the constants each
+  checker exposes, not from a table inside `sq` — a table would be one more place the headings
+  drift, and this day is a record of what that costs. The per-checker summary is derived from the
+  report's own dataclass fields, after a hand-written attribute list printed `DrawbacksReport` and
+  nothing else for a report carrying ten fields.
+
+  **It names its own blind spot.** Four of seventeen checkers declare what they require; the rest
+  are printed as NOT declaring it, because printing nothing would read as *nothing required* —
+  which is precisely how six literals came to be found by trial and error. And `check` never
+  guesses a kind: it is read from the file name, and a name announcing none is refused, because
+  guessing is how a report says something confident about the wrong contract.
+
+  `tests/test_sq_knows_every_artifact_the_kit_templates.py` keeps the registry honest in both
+  directions — every shipped template is a known kind or declared as not-an-artifact with a
+  reason (it found **24** unclassified on the first run), and a pattern that excludes nothing
+  fails as a rule that quietly stopped applying. Verb coverage is read from the parser: a verb
+  offered and not invoked by a test fails, whatever it is called.
+
+  **Three defects of my own, each caught by a mechanism rather than by reading.**
+  `check_write_containment` refused a hardcoded `".squad/records"` — in the module whose whole
+  docstring argues *derive, never restate*, which is the defect arriving through the door it was
+  written to guard. A direct question found that two of the four verbs had no test at all, and
+  `new` — the only verb that WRITES — was one of them, while `--help` listing all four had been
+  standing in for coverage of the menu rather than of the verb. And
+  `test_no_shipped_instruction_assumes_a_layout` refused six lines of the new `HOW-TO-USE.md`
+  section for spelling `python3 mechanisms/sq.py`, which resolves in the kit's checkout and not in
+  an install.
+
 - **The alignment sign-off has a convened reviewer.** `skills/plan-alignment/SKILL.md` stated the
   contract — *"a second agent that read the EVIDENCE, not only the brief, and could refuse"* — and
   `alignment_judge.py` says of itself that *"it takes its verdict on the command line. It does not
