@@ -171,7 +171,7 @@ BRANCH_DELETE_PATTERNS = (
 #: their target directly; the verbs take theirs as operands. Not exhaustive and
 #: cannot be — the same honest limit `check_credential_read` states.
 WRITE_VERB_RE = re.compile(
-    r"(^|\s|;|&&|\|\||\||\()\s*(sudo\s+)?"
+    r"(^|\s|;|&&|\|\||\||\(|`)\s*(sudo\s+)?"
     r"(sed\s+-i\S*|rm|mv|cp|tee|truncate|chmod|chown|install|dd|touch)(\s|$)")
 REDIRECT_TARGET_RE = re.compile(r">{1,2}\s*(?P<target>[^\s&>|;]+)")
 
@@ -819,6 +819,78 @@ def check_commit_message(command: str) -> str | None:
     return None
 
 
+def _mask_inert_quotes(segment: str) -> str:
+    r"""Blank quoted text, keeping command substitutions readable. Length-preserving.
+
+    `WRITE_VERB_RE` was searched over the raw segment and `segments()` has no notion of
+    quoting, so all ten verbs were reachable from inside a string that only gets echoed:
+    `echo "no install agora: .claude/x"` was refused and `echo "algo aqui: .claude/x"` was
+    not — one word apart, neither writing anything (#168). Same class as the heredoc false
+    positive `_split_heredocs` closed, and with no write SHAPE at all to excuse it.
+
+    A `'…'` span is inert. A `"…"` span is inert EXCEPT for `$(…)` and backticks, whose
+    contents are command position — blanking a double-quoted span wholesale would make
+    `echo "$(rm .claude/x)"` a two-character bypass of the entire boundary.
+
+    Offsets are preserved so a caller can find a construct here and slice the ORIGINAL at
+    the same index. That is what the redirect scan does: a `>` inside quotes is not a
+    redirect, but the TARGET of a real redirect may legitimately be quoted.
+
+    An unbalanced quote returns the segment untouched, so an unparseable command is scanned
+    whole and stays refused. Fail-closed by construction.
+    """
+    out: list[str] = []
+    index, length = 0, len(segment)
+    quote = ""
+    depth = 0          # $( ) nesting inside the current double-quoted span
+    backtick = False
+    while index < length:
+        char = segment[index]
+        if not quote:
+            if char in ("'", '"'):
+                quote = char
+                out.append(" ")
+            else:
+                out.append(char)
+            index += 1
+            continue
+        if quote == "'":
+            out.append(" ")
+            if char == "'":
+                quote = ""
+            index += 1
+            continue
+        live = depth > 0 or backtick
+        if char == "\\" and index + 1 < length:
+            out.append(segment[index] if live else " ")
+            out.append(segment[index + 1] if live else " ")
+            index += 2
+            continue
+        if char == "$" and index + 1 < length and segment[index + 1] == "(":
+            depth += 1
+            out.append("$(")
+            index += 2
+            continue
+        if char == ")" and depth > 0:
+            depth -= 1
+            out.append(")")
+            index += 1
+            continue
+        if char == "`":
+            backtick = not backtick
+            out.append("`")
+            index += 1
+            continue
+        if char == '"' and not live:
+            quote = ""
+            out.append(" ")
+            index += 1
+            continue
+        out.append(char if live else " ")
+        index += 1
+    return segment if quote else "".join(out)
+
+
 def check_kit_boundary(command: str, project_dir: Path) -> str | None:
     """Refuse a shell write into the installed kit — the same line `Edit` holds.
 
@@ -843,7 +915,11 @@ def check_kit_boundary(command: str, project_dir: Path) -> str | None:
 
     for segment in segments(command, with_pipe=True):
         targets: list[str] = []
-        if WRITE_VERB_RE.search(segment):
+        # Masked for DETECTION, original for EXTRACTION. A verb in a quoted string is text
+        # (#168); a path in a quoted string is still the path a real verb writes to, so
+        # `rm ".claude/x"` must keep resolving. Masking both would lose the second.
+        masked = _mask_inert_quotes(segment)
+        if WRITE_VERB_RE.search(masked):
             # Absolute, `./`-prefixed AND bare-relative. The first two were the whole
             # pattern, so `sed -i s/a/b/ .claude/rules/architecture.md` — the ordinary
             # way anyone types it — was never collected and therefore never examined,
@@ -851,9 +927,17 @@ def check_kit_boundary(command: str, project_dir: Path) -> str | None:
             # 2026-09-17. A bare token with no `/` cannot name a path inside the kit,
             # so requiring one keeps flags and sed expressions out of the candidate
             # list without narrowing what the guard can see.
+            # A quote, a backtick or `(` may sit directly before the path — `rm ".claude/x"`
+            # was NOT refused while the bare spelling was, because `(?<!\S)` rejected any
+            # non-space neighbour. And `)`, quotes and backticks terminate it: `$(rm p)`
+            # yielded `p)` and named a path with a paren in the refusal.
             targets += re.findall(
-                r"(?<!\S)((?:/|\.{1,2}/)?[\w.@+-]+(?:/[^\s;&|>]*)+)", segment)
-        targets += [m.group("target") for m in REDIRECT_TARGET_RE.finditer(segment)]
+                r"(?<![^\s\"'`(])((?:/|\.{1,2}/)?[\w.@+-]+(?:/[^\s;&|>)\"'`]*)+)", segment)
+        # `>` inside quotes is not a redirect. Offsets survive masking, so the position is
+        # decided on the masked text and the target read from the original.
+        live = {m.start() for m in re.finditer(r">", masked)}
+        targets += [m.group("target") for m in REDIRECT_TARGET_RE.finditer(segment)
+                    if m.start() in live]
         for token in targets:
             reason = violation(Path(token.strip("'\"")), layout)
             if reason:

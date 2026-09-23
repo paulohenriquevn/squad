@@ -6,6 +6,60 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Fixed
+
+- **A write verb inside a QUOTED STRING refused a read-only command — all ten were reachable
+  (#168).** `check_kit_boundary` searched `WRITE_VERB_RE` over the raw segment, and
+  `segments()` splits on `;`, `&&` and `|` with no notion of quoting, so
+  `echo "no install agora: .claude/rules/architecture.md"` was refused and
+  `echo "algo aqui: …"` was not — one Portuguese word apart, neither writing anything. Same
+  class as the heredoc false positive `_split_heredocs` closed, and worse in one respect: a
+  heredoc at least has the SHAPE of a write. Reported by a peer session that re-did the
+  blocked read through Python and finished the work unchanged — **the block bought nothing at
+  the price of a detour**, which is how an operator learns to route around a guard. Neither
+  hypothesis raised was right: `$(grep …)` in a string passed and `--install` as a flag
+  passed; it was the bare word. Fixed with `_mask_inert_quotes`, which is length-preserving
+  and keeps `$(…)` and backticks readable — blanking a double-quoted span wholesale would
+  have made `echo "$(rm .claude/x)"` a two-character bypass of the entire boundary. Masked
+  for DETECTION, original for EXTRACTION, so `rm ".claude/x"` still resolves. **Two holes
+  that predate the report closed with it**: `rm ".claude/x"` was never refused, because
+  `(?<!\S)` rejected the quote as a neighbour, and neither was a backtick substitution,
+  because `` ` `` was not in the verb's prefix class. `)`, quotes and backticks now terminate
+  an extracted path, so a refusal no longer names `…run_slice_tests.sh)`.
+
+- **A withdrawn kit file reached nobody, and a reinstall put it back (#171).** `install.sh`
+  preserves any skill directory the source kit does not ship — right for a project's own
+  skill, exactly wrong for one the kit RETIRED, and indistinguishable from it on disk.
+  Measured on one consumer: 30 skills present and absent from the kit, **103 of the 111 files
+  `check_install_drift` labelled "consumer-local" belonging to them**, and **0 of the 30 named
+  in `.kit-manifest.txt`**, whose header states "Anything not here is the project's" — false
+  for every one, and false BECAUSE the manifest is regenerated: the install that withdrew a
+  skill erased the only record that the kit ever shipped it. Not inert: a stale
+  `shared-understanding` cites a rule that moved and breaks `check_xrefs` for the whole
+  install, and its pre-`--depth` `score_alignment.py` produced a BLOCKED verdict on an item
+  the current copy scores ALIGNED at 92%. **By name, never by absence** —
+  `mechanisms/distribution/withdrawn.txt` travels with the kit and is the only list
+  `--remove-withdrawn` may delete by, because absence is how a project's own work would be
+  deleted. Reported by default; a test asserts no entry names a skill still shipping, which
+  would turn the list into a weapon. `check_install_drift` reports them as their own class:
+  `consumer-local 111 → 84` on the consumer measured.
+
+- **`skills/backlog-item/SKILL.md` taught that the routing table lives in `cycle-backlog.md`,
+  which has been the LAST of five fallbacks since 2026-09-11 (#172).** It also claimed "one
+  table and one truth" while `route_domain.py` resolves by precedence over five locations.
+  The sibling skill has it right and warns about this exact failure; `route_domain.py`'s own
+  docstring records the same drift happening to itself. Third instance, so the fix is a test
+  that reads `_TABLE_LOCATIONS` from the source and fails when a document names a location
+  the resolver does not read first — a table written to a shadowed location works until
+  somebody adds a file ahead of it, and then stops with nothing saying why.
+
+- **`test_cli_a_real_audit_names_what_it_could_not_measure` pinned the whole soft-cap list, so
+  it failed on any machine without `knip` (#170).** Any missing optional auditor added its own
+  `auditor_unavailable_*` entry and broke a test that is not about it — permanently red here,
+  taking the whole `skills/code-quality/tests` suite with it. The test's own name says it
+  reports what it could not measure, so an extra entry is the system under test working. Now
+  membership, matching the `>=` assertion directly above it.
+
 ### Changed
 
 - **`rules/testing.md § 4.1` gains the sharper case: the rule you just wrote does not apply

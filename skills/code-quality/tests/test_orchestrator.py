@@ -234,7 +234,14 @@ def test_cli_a_real_audit_names_what_it_could_not_measure(tmp_path: Path, capsys
         "d3_orphan_export_skipped",
         "d4_mutation",
     }
-    assert data["soft_caps_triggered"] == ["soft_cap_mutation_unconfigured_typescript"], (
+    # Membership, not identity. This pinned the WHOLE list until 2026-09-23, so any optional
+    # auditor missing from the machine added its own `auditor_unavailable_*` entry and failed
+    # the test for a reason it is not about — `auditor_unavailable_knip` on a box without
+    # knip, permanently red, taking the whole suite with it (#170). The test's own name is
+    # `..._names_what_it_could_not_measure`, so an extra "could not measure" entry is the
+    # system doing the thing under test. The assertion below it already uses `>=` on a set;
+    # this line was simply missed.
+    assert "soft_cap_mutation_unconfigured_typescript" in data["soft_caps_triggered"], (
         "the soft cap must name the action for whoever reads the report — configure the runner"
     )
 

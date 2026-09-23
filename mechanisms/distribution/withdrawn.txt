@@ -1,0 +1,34 @@
+# What this kit SHIPPED and later WITHDREW — read by install.sh, never by absence.
+#
+# A withdrawal is invisible to a consumer. `install.sh` preserves any skill directory the
+# source kit does not ship, and the rule in its own comment is right for the case it was
+# written for: "whatever the SOURCE kit does not ship is the project's, whatever its shape."
+# A withdrawn skill and a project's own skill are indistinguishable on disk —
+# `check_install_drift` says so in its own output: "yours, or work to harvest — this check
+# cannot tell". So a retirement removes the file here and removes nothing anywhere, and the
+# next install copies the old copy back out of the way and restores it.
+#
+# Measured on a consumer 2026-09-23: eight withdrawn skills still installed, every one of
+# them with its retirement written in prose in a document this kit ships, and nothing
+# reading that prose. They are not inert — the stale `shared-understanding` breaks
+# `check_xrefs` for the WHOLE install (it cites `rules/alignment-threshold.md`, which moved
+# to `skills/_kit-rules/`), and its `score_alignment.py`, which predates `--depth`, produced
+# a BLOCKED verdict on an item the current copy scores ALIGNED at 92%. A stale install does
+# not merely lag; it ANSWERS.
+#
+# REMOVAL IS BY NAME ON THIS LIST AND NEVER BY ABSENCE. Absence is how a project's own skill
+# would get deleted, and deleting somebody's work is the one outcome no convenience is worth.
+# `install.sh` REPORTS these by default and removes them only under `--remove-withdrawn`.
+#
+# Format: NAME | WITHDRAWN-IN | SUCCESSOR-OR-NONE | the kit document that records it
+# `tests/test_a_withdrawn_name_is_one_the_kit_no_longer_ships.py` asserts every NAME here is
+# absent from `skills/`, so an entry can never name a skill that is still shipping.
+
+skills/grill-me             | 2026-08-31 | plan-alignment    | rules/cycle-plan.md
+skills/session-goal         | 77501b0    | none              | rules/records-location.md
+skills/sop-author           | 2026-09    | none              | rules/sop-schema.md
+skills/sop-review           | 2026-09    | none              | rules/sop-schema.md
+skills/sop-run              | 2026-09    | none              | rules/sop-schema.md
+skills/shared-understanding | 2026-09    | plan-alignment    | skills/plan-alignment/SKILL.md
+skills/to-plan              | 2026-09    | plan-write        | skills/plan-write/SKILL.md
+skills/edge-case-plan       | 2026-09    | plan-edge-cases   | skills/plan-edge-cases/SKILL.md

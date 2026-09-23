@@ -80,6 +80,7 @@ fi
 TARGET="$1"
 FORCE=0
 MERGE=0
+REMOVE_WITHDRAWN=0
 APPLY_UPSTREAM=""
 APPLY_FROM=""
 _expect=""
@@ -95,10 +96,11 @@ for arg in "${@:2}"; do
   case "$arg" in
     --force) FORCE=1 ;;
     --merge) MERGE=1 ;;
+    --remove-withdrawn) REMOVE_WITHDRAWN=1 ;;
     --apply-upstream) _expect="apply" ;;
     --from) _expect="from" ;;
     "") ;;
-    *) echo "ERROR: unknown flag ${arg}. Expected --force, --merge, --apply-upstream <path> or --from <kit-dir>." >&2; exit 2 ;;
+    *) echo "ERROR: unknown flag ${arg}. Expected --force, --merge, --remove-withdrawn, --apply-upstream <path> or --from <kit-dir>." >&2; exit 2 ;;
   esac
 done
 if [ -n "$_expect" ]; then
@@ -157,6 +159,52 @@ ECO="$TARGET/.claude"
 # What it covers is the case with nothing to lose on either side: the install holds no line
 # the kit lacks, so taking the kit's version deletes nothing. Everything else keeps the
 # answer it has today — open an issue, or reinstall deliberately.
+# ── what this kit SHIPPED and later WITHDREW ─────────────────────────────────
+#
+# A withdrawal reaches nobody. The skills branch below preserves any directory the source
+# kit does not ship — right for a project's own skill, and exactly wrong for one this kit
+# RETIRED, which is indistinguishable from it on disk. So retiring a skill removed it here
+# and removed nothing anywhere, and the next install copied the old copy aside and restored
+# it. Measured on one consumer: 30 skills present and absent from the kit, 103 of the 111
+# files `check_install_drift` calls "consumer-local" belonging to them, 0 of the 30 named in
+# `.kit-manifest.txt` — whose header says "Anything not here is the project's", false for
+# every one of them because the manifest is regenerated and the withdrawing install erased
+# the only record that the kit ever shipped them.
+#
+# They are not inert. A stale `shared-understanding` cites `rules/alignment-threshold.md`,
+# which moved to `skills/_kit-rules/`, and breaks `check_xrefs` for the WHOLE install; its
+# `score_alignment.py` predates `--depth` and produced a BLOCKED verdict on an item the
+# current copy scores ALIGNED at 92%.
+#
+# BY NAME, NEVER BY ABSENCE. Absence is how a project's own skill gets deleted, so only a
+# name in `withdrawn.txt` is ever called a withdrawal. Reported always; removed only under
+# `--remove-withdrawn`, because a consumer may have kept a retired skill deliberately.
+_withdrawn_list="$SCRIPT_DIR/withdrawn.txt"
+if [ -f "$_withdrawn_list" ] && [ -d "$ECO" ]; then
+  _found=0
+  while IFS='|' read -r _rel _when _successor _record; do
+    _rel="$(echo "$_rel" | tr -d '[:space:]')"
+    case "$_rel" in ""|\#*) continue ;; esac
+    [ -e "$ECO/$_rel" ] || continue
+    if [ "$_found" = 0 ]; then
+      echo ""
+      echo "==> WITHDRAWN by the kit, still present here:"
+      _found=1
+    fi
+    printf '    %-28s withdrawn %s · successor %s · see %s\n' \
+      "$_rel" "$(echo "$_when" | xargs)" "$(echo "$_successor" | xargs)" "$(echo "$_record" | xargs)"
+    if [ "$REMOVE_WITHDRAWN" = 1 ]; then
+      rm -rf "${ECO:?}/$_rel"
+      echo "        removed (--remove-withdrawn)"
+    fi
+  done < "$_withdrawn_list"
+  if [ "$_found" = 1 ] && [ "$REMOVE_WITHDRAWN" = 0 ]; then
+    echo "    These are the kit's, not yours, and nothing else will tell you."
+    echo "    Re-run with --remove-withdrawn to delete exactly the names listed above."
+    echo ""
+  fi
+fi
+
 if [ -n "$APPLY_UPSTREAM" ]; then
   _src_root="${APPLY_FROM:-$SRC_DIR}"
   _rel="$APPLY_UPSTREAM"

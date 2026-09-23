@@ -112,7 +112,7 @@ python3 "$ECO/skills/backlog-item/scripts/check_intake_gates.py" \
 
 One script, both mechanizable gates:
 
-- **G1** delegates to `mechanisms/cycle/route_domain.py` — the routing table is parsed from `rules/cycle-backlog.md`, so there is one table and one truth. Exit `1` = the repo is not in it, verdict `ITEM_REJECTED`.
+- **G1** delegates to `mechanisms/cycle/route_domain.py`, which resolves the routing table by PRECEDENCE, not from one file: `.squad/domain-routing.txt` first, then the pre-2026-09-11 locations under `rules/` and `.claude/rules/`, and `cycle-backlog.md` last of all. `squad.paths.routing_table` is the authority on the name; `_TABLE_LOCATIONS` on the order. This line named `cycle-backlog.md` as the single source until 2026-09-23 (#172), which was wrong twice: the table moved out of that file, and it is read LAST — so a table written there is shadowed by any of the three ahead of it, or works by accident until someone adds one. Exit `1` = the repo is not in the winning table, verdict `ITEM_REJECTED`.
 - **G2** searches `BACKLOG.md` for every term **plus the repo name** (always added — the repo is the term that collides most across a registry spanning 21 of them) and returns each matching block with its status and the action the rule prescribes for it. Exit `3` = candidates found.
 
 Running it IS the evidence that G2 happened; the old instruction was a `grep` whose execution nobody could verify afterwards. Then read every `B-NNN` block it returned — a keyword hit is a candidate, not a verdict.

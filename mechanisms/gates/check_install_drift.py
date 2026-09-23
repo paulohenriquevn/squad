@@ -319,6 +319,7 @@ class DriftReport:
     only_in_install: list[str] = field(default_factory=list)
     only_in_kit: list[str] = field(default_factory=list)
     _kit_dirs: frozenset[str] = frozenset()
+    withdrawn_prefixes: tuple[str, ...] = ()
 
     @property
     def unharvested_files(self) -> list[str]:
@@ -351,7 +352,26 @@ class DriftReport:
         had nowhere to be read. `--consumer-local` is where it is read now.
         """
         unharvested = set(self.unharvested_files)
-        return [rel for rel in self.only_in_install if rel not in unharvested]
+        return [rel for rel in self.only_in_install
+                if rel not in unharvested and not self._is_withdrawn(rel)]
+
+    def _is_withdrawn(self, rel: str) -> bool:
+        return any(rel == w or rel.startswith(w.rstrip("/") + "/")
+                   for w in self.withdrawn_prefixes)
+
+    @property
+    def withdrawn_files(self) -> list[str]:
+        """Install-only files the kit DECLARES it withdrew — not the project's work.
+
+        Counted as `consumer-local` until 2026-09-23, and that label asserts something
+        false about them: it reads "files this install holds and the kit does not ship",
+        which is true, next to a heading a reader takes to mean "yours". Measured on one
+        consumer — 103 of 111 so-called consumer-local files belonged to eight skills this
+        kit retired, every retirement written in prose in a document the kit ships and read
+        by nothing (#171). A number that is 93% one thing and labelled the other is worse
+        than no number.
+        """
+        return [rel for rel in self.only_in_install if self._is_withdrawn(rel)]
 
     @property
     def needs_attention(self) -> bool:
@@ -361,6 +381,25 @@ class DriftReport:
             or self.counts.get(Drift.DIVERGED)
             or self.unharvested_files
         )
+
+
+def _withdrawn_prefixes(kit_root: Path) -> tuple[str, ...]:
+    """Paths this kit SHIPPED and later WITHDREW, from the list that travels with it.
+
+    Read BY NAME. Absence is not evidence of anything — that is the whole reason the list
+    exists, and treating absence as withdrawal is how a project's own work gets called the
+    kit's and then deleted.
+    """
+    listing = kit_root / "mechanisms" / "distribution" / "withdrawn.txt"
+    if not listing.is_file():
+        return ()
+    names = []
+    for line in listing.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "|" not in line:
+            continue
+        names.append(line.split("|", 1)[0].strip())
+    return tuple(n for n in names if n)
 
 
 def scan(install_root: Path, kit_root: Path) -> DriftReport:
@@ -384,6 +423,7 @@ def scan(install_root: Path, kit_root: Path) -> DriftReport:
         only_in_install=sorted(set(install) - set(resolved_kit)),
         only_in_kit=sorted(set(resolved_kit) - set(install)),
         _kit_dirs=frozenset(str(Path(rel).parent) for rel in resolved_kit),
+        withdrawn_prefixes=_withdrawn_prefixes(kit_root),
     )
     for rel in sorted(set(install) & set(resolved_kit)):
         verdict = classify_file(install[rel], resolved_kit[rel], kit_root, rel)
@@ -469,6 +509,12 @@ def main(argv: list[str] | None = None) -> int:
     if report.unharvested_files:
         print(f"install-only, in a directory the kit has (yours, or work to harvest — this check cannot tell): {len(report.unharvested_files)}")
         for rel in report.unharvested_files:
+            print(f"    {rel}")
+    if report.withdrawn_files:
+        print(f"withdrawn by the kit, still installed: {len(report.withdrawn_files)}"
+              f"   (declared in mechanisms/distribution/withdrawn.txt — the kit's, not yours;"
+              f" `install.sh <target> --remove-withdrawn` deletes exactly these)")
+        for rel in report.withdrawn_files:
             print(f"    {rel}")
     consumer_local = len(report.consumer_local_files)
     print(f"identical: {report.counts[Drift.IDENTICAL]}   only_in_kit: {len(report.only_in_kit)}"
