@@ -127,10 +127,22 @@ def test_a_content_blocker_alone_does_not_stop_the_registry(tmp_path: Path) -> N
     _, out = _select(path)
     assert out["verdict"] == "ITEM_SELECTED", out["verdict"]
     assert out["item_id"] == "B-001", out["item_id"]
-def test_a_reused_id_is_refused_for_the_same_reason_as_a_duplicate(tmp_path: Path) -> None:
-    """`renumbered` is identity too — the checker says so in its own words:
-    "a reused id makes every earlier reference ambiguous"."""
-    path = _registry(tmp_path, _block("B-005"), _block("B-002", title="Out of sequence"))
-    _, out = _select(path)
+def test_a_reused_id_is_refused_and_mere_sequence_is_not(tmp_path: Path) -> None:
+    """Both halves, because until #169 this test had the first name and the second fixture.
+
+    It was called `..._a_reused_id_...` and passed `B-005` then `B-002` — two distinct ids,
+    nothing reused — so what it actually pinned was that DESCENDING ORDER stops the
+    selector. A real consumer's maintenance loop stopped on exactly that, on a 131-item
+    registry, the hour its selector caught up with the checker.
+    """
+    a, b = tmp_path / "reused", tmp_path / "descending"
+    a.mkdir(); b.mkdir()
+    reused = _registry(a, _block("B-002"), _block("B-002", title="Same id twice"))
+    _, out = _select(reused)
     assert out["verdict"] == "BACKLOG_INVALID", out["verdict"]
-    assert "renumbered" in out["reason"], out["reason"]
+    assert "duplicate_id" in out["reason"], out["reason"]
+
+    descending = _registry(b, _block("B-005"), _block("B-002", title="Out of sequence"))
+    _, out = _select(descending)
+    assert out["verdict"] == "ITEM_SELECTED", out["verdict"]
+    assert out["item_id"] == "B-002", out["item_id"]

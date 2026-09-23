@@ -36,6 +36,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   `run_from` in its JSON and a `run from:` line in its printed form, and the skill says
   move the caller, never the `--output-dir`.
 
+### Removed
+
+- **`renumbered` — a finding that read the order blocks sit in a file and stopped the whole
+  machine over it (#169).** It tested `numeric_ids != sorted(numeric_ids)`, where the list
+  is the order ids APPEARED IN THE FILE, and it sat in `IDENTITY_CHECKS` — so a registry
+  listing newest first, a legitimate and common layout, reported `INVALID` and
+  `select_backlog_item.py` refused to hand out **any** item. Measured at 40 and 131 items;
+  the same ids ascending were `SHIPPABLE_WITH_CAVEATS` / `ITEM_SELECTED`. **It could not
+  have worked**: renumbering is a claim about two points in time and a checker sees one
+  snapshot, so sortedness was a proxy for a property nothing here can observe. The
+  observable half — no id appears twice — is `duplicate_id` and always was, and
+  `rules/cycle-backlog.md` justifies the rule by what it protects ("a killed item keeps its
+  number so the audit trail survives"), which is about values assigned over time and which
+  a descending layout satisfies completely. The contract, `README.md`, `SKILL.md` and the
+  selector's docstring now say the layout is the reader's to choose.
+
+  **Found from the outside, and the timing is the lesson.** A peer session reported the
+  finding firing on its 131-item registry, then reported that its selector did NOT stop —
+  and was right to push back on a severity claim it could not reproduce. Its selector was
+  an older generation without the `IDENTITY_CHECKS` refusal. One hour later it upgraded and
+  measured the stoppage on the same registry: `grep -c IDENTITY_CHECKS` went 0 → 3 and the
+  selector went `ITEM_SELECTED` → `BACKLOG_INVALID`. *Does not reproduce here* meant **not
+  yet**, and every install still on the older selector was carrying a latent total halt.
+
+  Two tests encoded the defect and had to be rewritten rather than deleted, because both
+  were named for uniqueness and written for ordering: `test_non_monotonic_ids_are_a_blocker`
+  and `test_a_reused_id_is_refused_for_the_same_reason_as_a_duplicate` each passed `B-005`
+  then `B-002` — two DISTINCT ids — while their names said "reused". They now assert reuse
+  where they claim to, and that mere sequence is not a finding.
+
 ### Added
 
 - **`install.sh --apply-upstream <path>` — a consumer could ignore a kit fix or reinstall 400

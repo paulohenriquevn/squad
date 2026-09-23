@@ -24,8 +24,10 @@ kit, and it was invisible to `check_gate_mechanisms.py` because that sweep reads
 ## Age is the id
 
 The ranking says "oldest first". This reads the id, not the date: ids are monotonic
-and never reused (the contract says so and `check_backlog_structure.py` enforces it
-as `renumbered`), so a lower number was registered earlier. Measured in one real
+and never reused (the contract says so, and `check_backlog_structure.py` enforces the
+observable half as `duplicate_id` — the order BLOCKS sit in the file is not evidence of
+anything, which is why the check that read it was removed in #169), so a lower number was
+registered earlier. Measured in one real
 registry: 166 items, 52 carrying a registration date — 31%. Ordering by the date
 would leave two thirds of the backlog with no key at all, and would be a second
 source for a fact the id already carries.

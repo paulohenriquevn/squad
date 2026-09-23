@@ -128,7 +128,7 @@ the number is in front of whoever starts the next run.
 
 ## Item schema
 
-Every item is one `## B-NNN` block. Ids are monotonic, never reused, never renumbered — a killed item keeps its number so the audit trail survives.
+Every item is one `## B-NNN` block. Ids are monotonic, never reused, never renumbered — a killed item keeps its number so the audit trail survives. **The order the blocks sit in the file is not part of this**: newest-first and oldest-first both satisfy it, because the rule is about the values assigned over time. A checker sees one snapshot and cannot observe renumbering at all, so what is enforced is the observable half — no id appears twice (`duplicate_id`).
 
 **The header, exactly.** `## B-NNN — Title`, where the separator may be an em dash, an
 en dash or a plain hyphen — all three are accepted, because six readers each carried

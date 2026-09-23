@@ -371,7 +371,7 @@ Each refuses the shortcut its field is prone to. `arch-check` will not call a bo
 - **A pointer resolves, line included.** Otherwise the artifact is INVALID.
 - **Killing an item is success.** The cycle can say no, with a `kill_reason` naming what was measured.
 - **`unknown` is a complete answer** — for the constraint corner, and only there. We do not instrument flow, so demanding a constraint claim would be answered by assertion.
-- **Ids are never reused or renumbered.** A killed `B-007` stays `B-007` forever; the number is the audit trail.
+- **Ids are never reused or renumbered.** A killed `B-007` stays `B-007` forever; the number is the audit trail. The order blocks appear in the file is yours to choose — the rule is about the values, not the layout.
 - **Measuring is reading.** Discover produces a document, never a patch.
 - **Nothing between DISCOVER and ACCEPTANCE waits for a person.** A phase may stop; it may not hold the session. The item returns to the registry — behind a wall only when its impediment is material (a machine, a credential, elapsed time), which nobody's authority supplies.
 - **Verdicts are derived from findings**, never asserted.

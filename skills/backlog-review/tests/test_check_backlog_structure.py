@@ -147,11 +147,18 @@ def test_duplicate_id_is_a_blocker(tmp_path: Path) -> None:
     assert report["verdict"] == "INVALID"
 
 
-def test_non_monotonic_ids_are_a_blocker(tmp_path: Path) -> None:
-    """A reused or reordered id makes every earlier reference ambiguous."""
+def test_blocks_out_of_sequence_are_not_a_finding(tmp_path: Path) -> None:
+    """This asserted `renumbered` on two DISTINCT ids until #169.
+
+    The name said "reused"; the fixture was `B-005` then `B-002` — two different ids in
+    descending order, nothing reused. The check behind it read the order blocks sit in the
+    file, which is a layout choice, and being in `IDENTITY_CHECKS` it stopped the selector
+    from handing out any work at all. Renumbering is a claim about two points in time and a
+    checker sees one snapshot; the observable half is `duplicate_id`, tested below.
+    """
     report = check_backlog(write_backlog(tmp_path, item_block("B-005"), item_block("B-002", "Outro")))
-    assert "renumbered" in _checks(report)
-    assert report["verdict"] == "INVALID"
+    assert "renumbered" not in _checks(report)
+    assert report["verdict"] != "INVALID"
 
 
 def test_triaged_without_evidence_is_a_blocker(tmp_path: Path) -> None:

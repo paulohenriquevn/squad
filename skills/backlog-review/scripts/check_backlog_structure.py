@@ -31,7 +31,6 @@ What it checks instead — the ways a maintenance registry actually rots:
     unroutable_repo_closed  same, on a shipped or killed one — history, not an impediment
     broken_route            domain exists but its specialist file does not
     invalid_mode            suggested_mode outside the four
-    renumbered              ids not monotonic — a reused id destroys traceability
     blocker_missing         blocked_by points at an id no block defines
     blocker_cycle           a ring of impediments — every item waits, none can ship
     self_block              an item declaring itself its own blocker
@@ -128,7 +127,24 @@ REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4
 #: Declared HERE rather than in the selector: a second list of what counts as
 #: identity is a second place the classification drifts, and a check added later
 #: would join one of them.
-IDENTITY_CHECKS = frozenset({"duplicate_id", "renumbered"})
+#: `renumbered` was here until 2026-09-23 and is gone entirely (#169). It tested
+#: `numeric_ids != sorted(numeric_ids)`, where the list is the order the ids APPEARED IN
+#: THE FILE — so a registry listing newest first, a legitimate layout, reported INVALID,
+#: and membership in this set made `select_backlog_item.py` refuse to hand out ANY item.
+#: A consumer's maintenance loop stopped entirely on a layout choice; measured at 40 and
+#: 131 items, and reproduced in an install the hour its selector caught up with this file.
+#:
+#: It could not have worked. Renumbering is a claim about TWO points in time and this check
+#: sees one snapshot, so sortedness was a proxy for a property nothing here can observe.
+#: `rules/cycle-backlog.md` justifies the rule by what it protects — "a killed item keeps
+#: its number so the audit trail survives" — and that is about the values assigned over
+#: time, which a descending layout satisfies completely. The observable half, that no id
+#: appears twice, is `duplicate_id` and always was.
+#:
+#: This is the second time the docstring below was written about a real incident and the
+#: same shape reappeared beside it. A gate that blocks the machine over its own purpose is
+#: a gate people learn to route around.
+IDENTITY_CHECKS = frozenset({"duplicate_id"})
 
 REQUIRED_FIELDS = ("domain", "repo", "suggested_mode", "source", "evidence", "why_now", "status")
 
@@ -966,17 +982,12 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
                     f"domain `{domain}` routes to `{agent}`, which is not on disk"))
 
 
-    # The per-item half. `numeric_ids` comes back because the monotonicity check below
-    # reads the order the ids appeared in.
-    item_findings, numeric_ids = _check_each_item(
+    # The per-item half. `numeric_ids` is no longer read here — see the note on
+    # `IDENTITY_CHECKS` for why the check that consumed it was removed (#169).
+    item_findings, _numeric_ids = _check_each_item(
         items, known_repos, today, objectives_declared=_objectives_declared(project_root))
     findings.extend(item_findings)
 
-
-    if numeric_ids and numeric_ids != sorted(numeric_ids):
-        findings.append(Finding("renumbered", "deterministic", "blocker", "-",
-            "ids are not monotonic. Ids are never reused and never reordered — a reused "
-            "id makes every earlier reference ambiguous."))
 
     open_items = [i for i in items if i.fields.get("status") in OPEN_STATUS]
     for idx, a in enumerate(open_items):

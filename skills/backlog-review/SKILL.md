@@ -2,7 +2,7 @@
 name: backlog-review
 version: 0.1.0
 requires: []
-description: Report what has rotted in BACKLOG.md — duplicate or renumbered ids, triaged items with no evidence, raw items that were measured and never advanced, killed items with no reason, repos that route to nobody, vague or missing DoD, stale items, probable duplicates. Use this whenever someone asks whether the backlog is trustworthy or messy, before running the maintenance loop, after a sweep registers a batch of findings, or periodically — a registry nobody reviews is a registry nobody trusts. Read-only.
+description: Report what has rotted in BACKLOG.md — duplicate ids, triaged items with no evidence, raw items that were measured and never advanced, killed items with no reason, repos that route to nobody, vague or missing DoD, stale items, probable duplicates. Use this whenever someone asks whether the backlog is trustworthy or messy, before running the maintenance loop, after a sweep registers a batch of findings, or periodically — a registry nobody reviews is a registry nobody trusts. Read-only.
 user-invocable: true
 allowed-tools: Read Glob Grep Bash
 argument-hint: "[path to BACKLOG.md]"
@@ -78,7 +78,6 @@ they read, and moving them would separate them from the parser they share.
 | Check | Severity | Why it matters |
 |---|---|---|
 | `duplicate_id` | blocker | Two blocks sharing a `B-NNN` destroy the audit trail |
-| `renumbered` | blocker | Ids are never reused or reordered; a reused id makes every earlier reference ambiguous |
 | `illegal_status` | blocker | A status outside the declared set means the loop cannot route the item |
 | `triaged_without_evidence` | blocker | Triaged means measured. Without evidence the status is a claim nobody made |
 | `unroutable_repo` | blocker | A repo in no domain routes to nobody (gate G1). **Open items only** — G1 is about work that cannot proceed |
