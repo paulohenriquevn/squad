@@ -162,20 +162,39 @@ for i in "${!SUITES[@]}"; do
     rc="$(cat "$LOG_DIR/$i.rc" 2>/dev/null || echo "2")"
     echo "::group::pytest $path"
     cat "$out" 2>/dev/null
-    if [ "$rc" = "0" ]; then
+    # Absent rather than zero when pytest did not say: a 0 that means "not reported"
+    # and a 0 that means "none" are different facts, and summing them silently is how
+    # a total becomes fiction.
+    passed="$(grep -oE '[0-9]+ passed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    failed="$(grep -oE '[0-9]+ failed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    skipped="$(grep -oE '[0-9]+ skipped' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+    collected="$(grep -oE 'collected [0-9]+' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
+
+    # EMPTY is not PASS. pytest exits 0 when it runs NOTHING — a `-k` that matches no name
+    # deselects everything, a path typo collects nothing, a wrong project selector selects
+    # nothing, and all three exit 0. Measured here: `pytest tests/ -k <no-match>` prints
+    # "3141 deselected / 0 selected" and exits 0. A consumer was misled by this twice in one
+    # day and named it as one of four complaints about the kit.
+    #
+    # The principle was already written four lines above and applied only to the TRAILER:
+    # a 0 that means "not reported" and a 0 that means "none" are different facts. The
+    # verdict never consulted them.
+    #
+    # Failing is safe: across the 31 slices the smallest legitimately runs 11 tests, so no
+    # slice here is expected to run zero. `skipped` is counted separately, so a slice that is
+    # skipped in full is not called empty.
+    _ran=$(( ${passed:-0} + ${failed:-0} + ${skipped:-0} ))
+    if [ "$rc" = "0" ] && [ "$_ran" = "0" ]; then
+        echo "EMPTY $path — pytest exited 0 having run NO test. A filter that matches nothing,"
+        echo "      a path that collects nothing and a selector that selects nothing all do this."
+        failures+=("$path (ran nothing)")
+    elif [ "$rc" = "0" ]; then
         echo "PASS  $path"
     else
         echo "FAIL  $path"
         failures+=("$path")
     fi
     echo "::endgroup::"
-
-    # Absent rather than zero when pytest did not say: a 0 that means "not reported"
-    # and a 0 that means "none" are different facts, and summing them silently is how
-    # a total becomes fiction.
-    passed="$(grep -oE '[0-9]+ passed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
-    failed="$(grep -oE '[0-9]+ failed' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
-    collected="$(grep -oE 'collected [0-9]+' "$out" 2>/dev/null | tail -1 | grep -oE '[0-9]+' || true)"
     trailer+=("$(printf 'SUITE\t%s\t%s\t%s\t%s\t%s' \
         "$path" "$rc" "${passed:--}" "${failed:--}" "${collected:--}")")
 done

@@ -197,7 +197,7 @@ def _refuse_on_review_drift(root: Path, report: "Report") -> bool:
     return False
 
 
-def _preflight(call, git, report: "Report") -> bool:
+def _preflight(call, git, report: "Report", root: Path) -> bool:
     """Branch, working tree and commits-ahead. Returns True when the caller must stop.
 
     Extracted from `promote`, which measured cyclomatic complexity 35 across 210 lines.
@@ -328,7 +328,19 @@ def _preflight(call, git, report: "Report") -> bool:
         if _v.get("state") != "verified":
             report.lines.append(f"verification: {_v['state'].upper()} — {_v['detail']}")
     except Exception as exc:  # noqa: BLE001 — a premise we cannot read is reported, not hidden
-        report.lines.append(f"verification: UNCHECKED — {type(exc).__name__}: {exc}")
+        # TWO facts, and they printed identically until 2026-09-23. `UNCHECKED` is what a
+        # consumer sees when no record exists — expected, harmless, common. This branch also
+        # fired for `NameError: name 'root' is not defined`, because `_preflight` took no
+        # `root` and none existed at module level: the check had never run ONCE in any tree
+        # since it was wired in (#176). The fail-safe worked and concealed the defect at the
+        # same time, because a broken mechanism reported in the vocabulary of a normal state.
+        #
+        # So a failure of the MECHANISM is now named as one. `BROKEN` cannot be mistaken for a
+        # tree that simply has no record yet.
+        report.lines.append(
+            f"verification: BROKEN — the freshness check itself raised "
+            f"{type(exc).__name__}: {exc}. This is a defect in the promoter, not a state of "
+            f"this repository.")
 
     return False
 
@@ -352,7 +364,7 @@ def promote(
             report.lines.append(f"could not run {argv[0] if argv else '?'}: {exc}")
             return None
 
-    if _preflight(call, git, report):
+    if _preflight(call, git, report, root):
         return report
 
     if _refuse_on_review_drift(root, report):

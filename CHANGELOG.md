@@ -8,6 +8,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **`_preflight` called `_verification(root)` and took no `root`, so the verification-freshness
+  check had never run once (#176).** No module-level `root` existed either, making the
+  `NameError` unconditional in every tree since it was wired in. `promote()` had the value and
+  did not pass it.
+
+  **It stayed invisible because the fail-safe worked.** The `except Exception` above the call
+  was deliberate — *"a premise we cannot read is reported, not hidden"* — but what it PRINTED,
+  `UNCHECKED`, is exactly what a consumer sees when no verification record exists yet: an
+  expected, harmless state. Twelve lines above, a comment carefully explains that `stale` and
+  `unattributable` both mean the green a reader remembers is about a different tree — and the
+  check producing those states had never run. **The shape, named so it can be looked for: a
+  fail-safe that reports into the same vocabulary as a legitimate state converts a defect into
+  an expected condition.** Not the recorded class *a step that cannot fail loudly did not run* —
+  this step DID fail loudly, into a channel where that is indistinguishable from normal. The two
+  are now separate: `BROKEN` says in words that it is a defect in the promoter and not a state
+  of the repository. Origin: `_preflight`'s docblock says *"Pure code movement"*, which is the
+  claim that made nobody look.
+
+- **A slice that ran ZERO tests read `PASS`, because pytest exits 0 when it runs nothing.**
+  Measured here: `pytest tests/ -k <no-match>` prints `3141 deselected / 0 selected` and exits
+  `0`. A filter matching no name, a path collecting nothing and a selector selecting nothing all
+  do this, and `run_slice_tests.sh` judged from the exit code alone. A consumer named it as one
+  of four complaints about the kit, having been misled by it twice in one day.
+
+  **The principle was already written four lines above and applied only to the trailer**: *"a 0
+  that means 'not reported' and a 0 that means 'none' are different facts, and summing them
+  silently is how a total becomes fiction."* The verdict never consulted them. A slice that ran
+  nothing now reads `EMPTY` and fails the run. Failing is safe, measured: across the 31 slices
+  the smallest legitimately runs 11 tests, and `skipped` is counted separately so a fully
+  skipped slice is not called empty.
+
 - **A signature marker on a box's continuation line was invisible, and the tick read as a
   PERSON's (#174).** `score_alignment.py` paired each box's mark to its text with its own
   `_CHECKBOX_RE`, anchored `^…$` under `re.MULTILINE`, capturing ONE line. A
