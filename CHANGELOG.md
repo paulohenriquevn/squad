@@ -499,6 +499,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Added
 
+- **`docs/wiki/decisions/the-sweep-inherits-the-scope-of-the-fix.md`** — the sixth recorded class,
+  and the first about the REMEDIATION step rather than about a check. After a defect is fixed, the
+  search for others is scoped to the shape of the one just fixed, and a sibling arriving through a
+  different mechanism is outside that scope by construction — surviving in the one place nobody
+  will look again, because the ground was just declared searched.
+
+  Five measurements from two sessions in one day, four of them self-implicating. A test proved the
+  consumer and not the producer, was fixed, and **the test written for that fix repeated the shape
+  one level up**. A byte parser was fixed and its two-argument call site was not. An extension was
+  corrected in one criterion while two more of the same shape failed on the working directory. And
+  **one class was fixed twice in one day, in two files, without either being recognised as the
+  other**: a slice that ran zero tests reading `PASS` in the morning, a criterion asserting
+  `prints 0` reading red in the evening — both *the passing value is producible by an empty
+  result*, and the second arrived from a consumer hours after the first was fixed.
+
+  The fifth implicates the record that preceded it: `a-reference-is-checked-in-one-direction` was
+  written from a sweep of identifier vocabularies, which is why it found four of that kind and
+  missed `check_adr_completeness`, where the same shape arrived through a spelling.
+
+  It states what it does not fix: in none of the five was the corrector the author's own second
+  look. What it offers is the question — **what else could produce this outcome**, rather than
+  where else does this pattern appear, because the sibling shares the failure and differs in the
+  route.
+
 - **`sq` — one entry point for this cycle's artifacts.** Measured 2026-09-23: **143 scripts**
   under `skills/*/scripts` and **38 gates** under `mechanisms/gates`, each with its own flags, and
   no CLI. The count is not the cost. The cost is that a contract — the exact heading a checker
