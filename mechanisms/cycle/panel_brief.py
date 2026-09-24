@@ -206,9 +206,20 @@ def _kit_root_note(contract: Path) -> str:
     """Where this project keeps the kit, so a reviewer can resolve a `rules/...` citation.
 
     Every rule file, every skill and every plan in this ecosystem cites `rules/<name>.md` —
-    the kit's own convention, and `check_evidence_citations.py` knows the prefix. A
-    reviewer handed the plan and nothing else does not, and an EXTERNAL seat has no other
-    way to learn it.
+    the kit's own convention. A reviewer handed the plan and nothing else does not, and an
+    EXTERNAL seat has no other way to learn it.
+
+    This said `check_evidence_citations.py` "knows the prefix" and told reviewers to run
+    it. Both halves were false, and each was falsifiable from the file itself: it has no
+    `__main__` — it is a library `run_structural.py` imports, so running it prints nothing
+    and exits 0 — and its own comment says it "Excludes paths containing slashes ... v0.1
+    keeps the regex conservative", which is the prefix form it was said to know.
+
+    Five readers followed the instruction and read that exit 0 as a pass: a peer session
+    four times, and the `vera-technical-arbiter` seat once, which recorded
+    "check_evidence_citations exits 0" inside a vote. None of them was careless — the
+    instruction was categorical. A brief contradicting, with authority, a limit a detector
+    states about itself is worse than the narrow detector: the detector is honest.
 
     Measured 2026-09-18: the `openai` seat of a PLAN panel returned a plan on exactly this
     — "those paths do not resolve, while only `.claude/rules/...` exists" — while the kit's
@@ -231,8 +242,14 @@ def _kit_root_note(contract: Path) -> str:
         f"  The kit is installed at `{root}`. A citation written `rules/<name>.md` — the\n"
         f"  convention every rule file and every plan here uses — resolves to\n"
         f"  `{root}/rules/<name>.md`. That is not a broken path.\n"
-        f"  `skills/plan-confidence/scripts/check_evidence_citations.py` decides the question\n"
-        f"  mechanically; run it before returning a plan on an unresolved citation.\n"
+        f"  What decides it mechanically is the scorer, which runs the citation detector\n"
+        f"  for you: `python3 skills/plan-confidence/scripts/run_structural.py <plan>`.\n"
+        f"  Read `sub_reports.evidence_citations` in its JSON.\n"
+        f"  One limit that detector declares about itself, so you do not read silence as\n"
+        f"  clean: it does not look at citations written with a directory prefix. A plan\n"
+        f"  citing `rules/<name>.md` may show zero citations found. That is the detector's\n"
+        f"  scope, not a verdict on the path — resolve the path yourself against the root\n"
+        f"  named above before returning a plan on it.\n"
     )
 
 

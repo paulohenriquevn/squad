@@ -189,11 +189,18 @@ _report_companions() {
     echo "  with this file cannot be read. Silence here would mean \"none\"; it means nobody asked."
     return 0
   fi
+  local _new=0
   while IFS= read -r _mate; do
     [ -n "$_mate" ] || continue
     [ "$_mate" = "$_rel" ] && continue
     [ -f "$_src_root/$_mate" ] || continue
-    if [ ! -e "$ECO/$_mate" ] || ! cmp -s "$_src_root/$_mate" "$ECO/$_mate"; then
+    if [ ! -e "$ECO/$_mate" ]; then
+      [ "$_n" -eq 0 ] && echo "  COMPANIONS — changed with it upstream and still differ here:"
+      _n=$((_n + 1)); _new=$((_new + 1))
+      # This mode REFUSES a path the install does not hold, so listing it beside
+      # "apply each on its own" would send the reader into that refusal.
+      echo "    $_mate  (NEW — this install does not hold it)"
+    elif ! cmp -s "$_src_root/$_mate" "$ECO/$_mate"; then
       [ "$_n" -eq 0 ] && echo "  COMPANIONS — changed with it upstream and still differ here:"
       _n=$((_n + 1))
       echo "    $_mate"
@@ -206,6 +213,11 @@ EOF
   else
     echo "  Apply each on its own: this tool judges one file at a time, and one of these"
     echo "  may be DIVERGED, where copying would delete your work."
+    if [ "$_new" -gt 0 ]; then
+      echo "  The NEW ones this mode cannot bring — it writes only over a file already"
+      echo "  here — so they need --merge. A test among them is why \"the guard has a"
+      echo "  test\" and \"the test runs here\" are different claims."
+    fi
   fi
 }
 

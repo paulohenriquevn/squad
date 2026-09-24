@@ -99,3 +99,32 @@ def test_a_kit_without_history_says_it_could_not_check(tmp_path: Path) -> None:
     out = proc.stdout + proc.stderr
     assert "APPLIED" in out, out
     assert "companion" in out.lower(), f"no statement about companions at all:\n{out}"
+
+
+def test_a_companion_the_install_lacks_is_marked_as_new(tmp_path: Path) -> None:
+    """`--apply-upstream` refuses a file the install does not hold, so listing one
+    beside "apply each on its own" sends the reader into a refusal.
+
+    Reported by the same consumer: the guard's own test file was a companion, the
+    install did not hold it, and `--apply-upstream` answered `is not in this install.
+    Use --merge`. They chose not to run a wide operation mid-session, so the guard they
+    verified is covered by a test that does not run there. "The guard has a test" and
+    "the test runs here" are different claims, and the listing must not blur them.
+    """
+    kit = _kit(tmp_path)
+    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
+                                    capture_output=True, text=True)
+    newcomer = "tests/brand_new.py"
+    (kit / "tests").mkdir(parents=True, exist_ok=True)
+    (kit / newcomer).write_text("def test_x():\n    assert True\n", encoding="utf-8")
+    (kit / REL).write_text("alpha\nbeta\ngamma\n", encoding="utf-8")
+    run("add", "-A"); run("commit", "-qm", "v3 adds a file and touches the applied one")
+
+    consumer = _consumer(tmp_path, kit, mate_current=True)
+    proc = _apply(consumer, kit, REL)
+    out = proc.stdout + proc.stderr
+    assert "APPLIED" in out, out
+    assert newcomer in out, f"a companion the install lacks was not named:\n{out}"
+    assert "--merge" in out, (
+        "a new file cannot be applied by this mode and the output does not say which "
+        f"one can:\n{out}")
