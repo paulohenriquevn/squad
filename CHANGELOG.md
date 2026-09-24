@@ -8,6 +8,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A dimension with no subject was reported as a positive signal at full weight.**
+  `check_adr_completeness` returns `completeness_ratio=1.0` for zero ADRs — deliberate, and
+  `plan-template.md` says so: a plan with one way to do a thing has no decision to record. The
+  ratio is right; using it as a SIGN was not. `run_structural` read it twice — `adr_score = 20.0 *
+  ratio` and `sign = "positive" if ratio >= 1.0` — so an empty set contributed a perfect dimension
+  score AND read as evidence. The same shape sat on the other 20-point dimension: a plan with no
+  bug-fix task scored 20/20 for TDD.
+
+  Both now read `NOT MEASURED` with sign `neutral`, a value the `Reason` contract already declared
+  and used elsewhere. **The score is deliberately unchanged**, and
+  `test_the_score_is_unchanged_by_this` pins it: the weights are `rubric-v1.md`'s and the 90%
+  threshold is calibrated against that formula, so redistributing 20 points when a dimension is
+  unexercised would recalibrate every verdict in the kit silently — a rubric decision, not a defect
+  fix. The argument for saying it out loud is `check_install_drift`'s about its own counts: *"a 0
+  that means 'not reported' and a 0 that means 'none' are different facts, and summing them
+  silently is how a total becomes fiction."*
+
 - **An output-valued criterion was judged by its exit code, so `grep -c` printing `0` read red in
   both states (#188).** `_decide` returned before the output was ever compared — `if
   result.exit_code != 0: return False` sat above the `print:<value>` branch — and this ecosystem

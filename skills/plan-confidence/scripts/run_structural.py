@@ -249,10 +249,36 @@ def _compute_completeness(cov: CoverageReport, adr: ADRReport, tdd: TDDReport) -
     reasons: list[Reason] = []
     sign_cov = "positive" if cov.is_complete else "negative"
     reasons.append(Reason(sign=sign_cov, label=f"Coverage Matrix {'100%' if cov.is_complete else f'{cov.coverage_ratio:.0%}'}", weight=coverage_score))
-    sign_adr = "positive" if adr.completeness_ratio >= 1.0 else "negative"
-    reasons.append(Reason(sign=sign_adr, label=f"ADR alternatives ({adr.with_alternatives}/{adr.total_adrs})", weight=adr_score))
-    sign_tdd = "positive" if tdd.coverage_ratio >= 1.0 else "negative"
-    reasons.append(Reason(sign=sign_tdd, label=f"TDD in bug-fix ({tdd.with_tdd}/{tdd.total_bugfix_tasks})", weight=tdd_score))
+    # A DIMENSION WITH NO SUBJECT IS NEITHER POSITIVE NOR NEGATIVE.
+    #
+    # Both of these read a ratio that is 1.0 by construction when there is nothing to measure —
+    # `check_adr_completeness` returns 1.0 for zero ADRs, deliberately, and `plan-template.md`
+    # says a plan with one way to do a thing has no decision to record. The ratio is right; using
+    # it as a SIGN was not: a plan with no ADR reported a positive signal at full weight, and so
+    # did a plan with no bug-fix task. Reported by a consumer measuring `total_adrs: 0,
+    # completeness_ratio: 1.0` beside a perfect dimension score (#187).
+    #
+    # The SCORE is deliberately unchanged. The weights are `rubric-v1.md`'s and the 90% threshold
+    # is calibrated against this formula; redistributing 20 points when a dimension is unexercised
+    # would recalibrate every verdict in the kit silently, which is a rubric decision rather than
+    # a defect fix. `test_the_score_is_unchanged_by_this` pins that on purpose.
+    #
+    # The argument for saying it out loud is `check_install_drift`'s, about its own counts: "a 0
+    # that means 'not reported' and a 0 that means 'none' are different facts, and summing them
+    # silently is how a total becomes fiction."
+    if adr.total_adrs == 0:
+        sign_adr, label_adr = "neutral", "ADR alternatives — NOT MEASURED (no ADRs in this plan)"
+    else:
+        sign_adr = "positive" if adr.completeness_ratio >= 1.0 else "negative"
+        label_adr = f"ADR alternatives ({adr.with_alternatives}/{adr.total_adrs})"
+    reasons.append(Reason(sign=sign_adr, label=label_adr, weight=adr_score))
+
+    if tdd.total_bugfix_tasks == 0:
+        sign_tdd, label_tdd = "neutral", "TDD in bug-fix — NOT MEASURED (no bug-fix task)"
+    else:
+        sign_tdd = "positive" if tdd.coverage_ratio >= 1.0 else "negative"
+        label_tdd = f"TDD in bug-fix ({tdd.with_tdd}/{tdd.total_bugfix_tasks})"
+    reasons.append(Reason(sign=sign_tdd, label=label_tdd, weight=tdd_score))
 
     return completeness, reasons
 
