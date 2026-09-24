@@ -279,6 +279,10 @@ def wiring_summary(project_root: Path, slug: str) -> dict[str, Any]:
         "symbols_resolved": recheck.symbols_resolved,
         "pillar_a_fails": recheck.pillar_a_fails,
         "pillar_a_fail_symbols": list(recheck.fail_symbols),
+        #: Named, because a reader of `symbols_resolved` cannot otherwise tell a complete check
+        #: from a partial one. A consumer measured 17 resolved out of 28 with the other 11
+        #: appearing nowhere, and the four exports under review were among them (#190).
+        "symbols_unresolved": list(recheck.unresolved_symbols),
     }
 
     if recheck.pillar_a_fails > 0:
@@ -936,6 +940,10 @@ def main() -> int:
                 md += "- Verification: independent recheck of `check_wiring.py`\n"
                 md += f"- Symbols derived from diff: {c.get('symbols_derived')}\n"
                 md += f"- Symbols independently resolved: {c.get('symbols_resolved')}\n"
+                _unresolved = c.get("symbols_unresolved") or []
+                if _unresolved:
+                    md += (f"- Symbols the checker could NOT locate ({len(_unresolved)}), so "
+                           f"nothing above covers them: {', '.join(_unresolved)}\n")
                 md += f"- Pillar (a) fails (uncalled symbols): {c.get('pillar_a_fails')}\n"
                 if c.get("pillar_a_fail_symbols"):
                     md += f"- Failing symbols: {', '.join(c['pillar_a_fail_symbols'])}\n"

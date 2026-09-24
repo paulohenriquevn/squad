@@ -8,6 +8,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A symbol the wiring checker could not LOCATE was discarded silently, so a summary read PASS
+  over it (#190).** `wiring_recheck`'s own docstring states the obligation it made impossible —
+  *"the former is an unresolved symbol the caller should report as inconclusive, never as PASS"* —
+  and the loop did `continue`, with `PillarARecheck` carrying no field for them. The caller was
+  given an obligation and no way to meet it. The count was derivable as `checked - resolved`; the
+  IDENTITIES were not, and the identities are the finding.
+
+  Measured on a consumer: `symbols_resolved: 17, pillar_a_fails: 0, status: PASS`, where the 17
+  were local variables — `s` with 513 callers, `runs` with 196, `body` with 173 — plus `byName`, a
+  variable **that very diff deleted**, resolving with 5. The four exports of the file under review
+  were among the **11 discarded**, because that module lives in `scripts/`, outside
+  `PRODUCTION_DIR_NAMES`. Run directly against one of those exports the same checker returns HALT:
+  two gates over one subject disagreeing, and the aggregate was the one reporting green.
+
+  **The tuple is the symptom and was deliberately not widened.** `check_wiring.py:203-208` already
+  records why: *"a repo that keeps its source at the root would report every symbol as unwired."*
+  Widening is a guess about other people's layouts and enumerating directory names is a list that
+  goes short again; naming the unresolved generalises to any layout. **And a partial resolution is
+  deliberately still PASS** — a derived or dynamic name legitimately does not resolve, and a gate
+  that fires on ordinary work is one somebody switches off (`§ 4.1`). What the docstring asks is
+  that the SYMBOLS be inconclusive, not the summary. The all-unresolved case was already honest:
+  both callers return `N/A` at zero resolved.
+
+  Both callers now print them, because the field existing is not the fix — the caller printing it
+  is. `test_every_symbol_is_accounted_for` holds the arithmetic: resolved + unresolved == checked,
+  since a symbol that goes nowhere is exactly how 17 came to look like a measurement over 28.
+
 - **A BLOCKED report from the PLAN phase halted nothing, and it was the second omission in the
   same literal set (#189).** `squad_boss.HALT_DIRS` maps a phase's output directory to its phase and
   `plans` was absent, while `rules/cycle-phases.txt` declares `plan` and two contracts assert the

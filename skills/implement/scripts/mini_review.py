@@ -127,11 +127,20 @@ def _aggregate_wiring(progress_path: Path, phase: str, repo_root: Path) -> dict[
         for sym in recheck.fail_symbols
     ]
 
+    # PASS over a PARTIAL resolution says which symbols it did not cover. The field existing is
+    # not the fix — the caller printing it is. `symbols_resolved: 17` read as a measurement over a
+    # set of 28 because the other 11 appeared nowhere (#190).
+    #
+    # The status is NOT downgraded when some are unresolved: a derived or dynamic symbol name
+    # legitimately does not resolve, and a gate that fires on ordinary work is one somebody
+    # switches off (`code-quality-golden-rule.md § 4.1`). The all-unresolved case is already
+    # handled above, honestly, as N/A.
     return {
         "status": "FAIL" if recheck.pillar_a_fails > 0 else "PASS",
         "derivation": derivation,
         "symbols_checked": recheck.symbols_checked,
         "symbols_resolved": recheck.symbols_resolved,
+        "symbols_unresolved": list(recheck.unresolved_symbols),
         "pillar_a_fails": recheck.pillar_a_fails,
         "findings": findings,
     }
