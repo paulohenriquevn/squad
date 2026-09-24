@@ -245,11 +245,9 @@ def _kit_root_note(contract: Path) -> str:
         f"  What decides it mechanically is the scorer, which runs the citation detector\n"
         f"  for you: `python3 skills/plan-confidence/scripts/run_structural.py <plan>`.\n"
         f"  Read `sub_reports.evidence_citations` in its JSON.\n"
-        f"  One limit that detector declares about itself, so you do not read silence as\n"
-        f"  clean: it does not look at citations written with a directory prefix. A plan\n"
-        f"  citing `rules/<name>.md` may show zero citations found. That is the detector's\n"
-        f"  scope, not a verdict on the path — resolve the path yourself against the root\n"
-        f"  named above before returning a plan on it.\n"
+        f"  It reads the prefixed form. It did not until 2026-09-24, and a plan citing\n"
+        f"  `rules/<name>.md` could show zero citations found — so if you are reading an\n"
+        f"  older report, zero there means unexamined and not clean.\n"
     )
 
 

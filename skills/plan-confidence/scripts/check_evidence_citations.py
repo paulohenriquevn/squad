@@ -48,13 +48,35 @@ from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap impor
 
 UNBREAKABLE_RULE_MAX = 13
 
-# Rule refs: `architecture.md` or `architecture.md §1` or `architecture.md §"Some Title"`.
-# Excludes paths containing slashes (e.g. `records/foo.md`) because the resolver below
-# walks the project root; v0.1 keeps the regex conservative. Backtick is explicitly excluded
-# from the section token so that ``architecture.md §1`` strips properly when inline code
-# normalizes to whitespace mid-match.
+# Rule refs: `architecture.md`, `rules/architecture.md`, either with `§1` or
+# `§"Some Title"`. Backtick is explicitly excluded from the section token so that
+# ``architecture.md §1`` strips properly when inline code normalizes to whitespace
+# mid-match.
+#
+# The leading directory segments are read, and for a long time they were not. This said
+# so — "Excludes paths containing slashes … v0.1 keeps the regex conservative" — honest
+# about its scope, and the scope was the wrong one: `rules/<name>.md` is how every rule
+# file and every plan in this kit cites, so the `fabricated_citation` hard cap could not
+# fire on the dominant spelling. Measured by a consumer against 34 plans with the prefix
+# read: four cite a path that does not resolve, three of them one-line repoints to a
+# document that moved.
+#
+# THE LOOKBEHIND IS UNCHANGED, and that is the fix rather than an omission from it. It
+# excludes `-` as well as `/`, so deleting the slash alone would let
+# a nested path whose second-to-last segment ends in `-rules` match as if it named a
+# file directly under the rules directory, and
+# the kit would report its own correct citations as broken. Keeping `/` in the lookbehind
+# is what forbids a match STARTING mid-path; the prefix group is what consumes the path
+# from its beginning. A segment may open with `_` because `_kit-rules` does.
+#
+# `.` joined the lookbehind with the prefix group, and had to. Reading paths made
+# `https://github.com/<owner>/<repo>/blob/main/docs/wiki/decisions/<name>.md` match from
+# `com/...`, because the character before `com` is a dot and nothing forbade it — so every
+# URL to a markdown file in this repository's own rules became an unresolved citation. A
+# citation at the start of a sentence is unaffected: the space after the period is what the
+# lookbehind sees.
 _RULE_REF_RE = re.compile(
-    r"(?<![A-Za-z0-9_/-])([a-z][a-z0-9_-]*\.md)"
+    r"(?<![A-Za-z0-9_./-])((?:[a-z_][a-z0-9_.-]*/)*[a-z][a-z0-9_-]*\.md)"
     r"(?:\s*§\s*(?:\"([^\"]+)\"|([^\s,.;)\"`]+)))?"
 )
 
@@ -235,6 +257,13 @@ def _resolve_rule_file(filename: str, project_root: Path) -> Path | None:
         project_root / "rules" / filename,
         project_root / ".claude" / "rules" / filename,
         write_records_dir(project_root) / filename,
+        write_records_dir(project_root).parent / filename,
+        # The DATA root, one level above `records/`. The cycle's own rules cite artifacts
+        # by a path relative to it — `wiki/product/objectives.md`, per
+        # `rules/cycle-brainstorm.md` — and nothing looked there. It did not matter while
+        # a slashed path never matched at all; reading prefixes made it the difference
+        # between a citation this detector resolves and a hard cap it raises on a file the
+        # cycle wrote exactly where it was told to.
         project_root / filename,  # e.g. CHANGELOG.md, CLAUDE.md
     ]
     for c in candidates:

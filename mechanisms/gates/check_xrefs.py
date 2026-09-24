@@ -259,14 +259,6 @@ SKILLS_REF_RE = re.compile(
 
 
 
-#: A path under `skills/` cited in prose or code. The extension anchors the end so
-#: a sentence following the reference is not swallowed into the path.
-SKILLS_REF_RE = re.compile(
-    r"(?<![A-Za-z0-9_/-])(?:\.claude/)?skills/([A-Za-z0-9_][A-Za-z0-9._/-]*\.(?:md|txt|py|sh|json))"
-)
-
-
-
 
 def _find_ecosystem_dir(start: Path) -> Path | None:
     """Locate the ecosystem directory (delegates to shared module)."""
