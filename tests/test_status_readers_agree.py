@@ -295,6 +295,11 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # it — never to decide what either one means. The meaning is `_RANK`, read from
         # `SELECTABLE`, which is pinned above.
         "skills/backlog-review/tests/test_an_incident_does_not_wait_for_its_turn_by_age.py",
+        # Fixtures for the `subject` routing gate. It names `shipped` and `killed` to build
+        # the closed cases the finding must NOT fire on — routing is a question about work
+        # that can still move — and never to decide what either one means. The meaning is
+        # `OPEN_STATUS`, read from the contract and pinned above.
+        "skills/backlog-review/tests/test_an_item_about_the_kit_belongs_to_the_kits_registry.py",
         # Fixtures for the lead-time p50. It names `shipped` and `killed` to build the
         # delivered and the abandoned case, because `_delivery` counts them apart; the
         # meaning of both comes from that function, which `test_board_state.py` pins.

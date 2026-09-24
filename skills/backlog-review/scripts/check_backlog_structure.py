@@ -21,6 +21,9 @@ What it checks instead — the ways a maintenance registry actually rots:
     missing_field           a required field absent
     approval_unattributed   approved or past it with no approved_by
     objective_link_missing  objectives are declared and the item names none
+    illegal_subject         a subject outside the declared set
+    subject_belongs_to_the_kit  a consumer's registry holding an item about the kit
+    subject_may_belong_to_the_kit  same, suspected from evidence paths — ADVISORY
     illegal_status          a status outside the declared set
     killed_without_reason   killed with no kill_reason (gate G-K, after the fact)
     checkbox_contradicts_status  the heading's `[x]`/`[ ]` disagrees with `status:`
@@ -69,6 +72,7 @@ for _up in Path(__file__).resolve().parents:
 # Below the bootstrap, like every loose script in this kit: `squad` is importable
 # only after sys.path is extended, which is what E402 cannot see here.
 from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
+from squad.layout import has_kit as _has_kit  # noqa: E402 — post-bootstrap import
 
 #: Statuses from which an item does not move again.
 TERMINAL_STATUSES = frozenset({"shipped", "killed"})
@@ -147,6 +151,45 @@ REGISTERED_RE = re.compile(r"Registrado\s+(\d{4}-\d{2}-\d{2})|registered\s+(\d{4
 IDENTITY_CHECKS = frozenset({"duplicate_id"})
 
 REQUIRED_FIELDS = ("domain", "repo", "suggested_mode", "source", "evidence", "why_now", "status")
+
+#: Which system the item CHANGES, which is a different question from what kind of work it
+#: is. Optional: 159 items predate it on the registry that motivated it, and a required
+#: field that fires on every existing block is a gate somebody switches off.
+SUBJECTS = ("product", "kit")
+
+#: Evidence paths that only the kit has. Used ONLY for the advisory finding — the author's
+#: own `subject:` always wins, in both directions.
+_KIT_EVIDENCE_RE = re.compile(
+    r"\.claude/|(?:^|[\s`(])mechanisms/|(?:^|[\s`(])skills/[a-z0-9-]+/scripts/"
+    r"|(?:^|[\s`(])rules/[a-z0-9-]+\.(?:md|txt)|check_[a-z_]+\.py"
+    r"|run_structural|score_alignment|panel_brief|select_backlog_item")
+
+#: Paths a consumer project has and the kit does not.
+_PRODUCT_EVIDENCE_RE = re.compile(
+    r"(?:^|[\s`(])packages/|(?:^|[\s`(])apps/|(?:^|[\s`(])src/|\.tsx?\b|\.mjs\b"
+    r"|pnpm|npm run|cargo|go\.mod")
+
+
+def _evidence_points_at_the_kit(item) -> bool:
+    """Does this item's evidence name kit paths and no product ones?
+
+    A heuristic, and reported as one. Measured 2026-09-24 against a hand-read of a
+    consumer's 27 open items: it agreed on 13 and three were genuinely arguable — a
+    consumer's own CI tooling reads like the kit's. That error rate is why the finding it
+    feeds is advisory and never a failure.
+    """
+    # `evidence` ONLY. `why_now` says what CHANGED, and an item that cites a kit rule to
+    # justify product work is a well-argued item, not a misrouted one — which makes it the
+    # worst possible population to fire on. Reported by a consumer whose own scanner marked
+    # three product items as kit-subject for exactly that, and which had to read `evidence:`
+    # on 22 items by hand to separate the SUBJECT from the CITATION.
+    #
+    # With `why_now` in the corpus this flagged two shapes that are false: an item whose
+    # evidence quotes a symptom rather than a `file:line`, so the product veto never fires,
+    # and whose `why_now` names a rule or a gate.
+    text = item.fields.get("evidence", "")
+    return bool(_KIT_EVIDENCE_RE.search(text)) and not _PRODUCT_EVIDENCE_RE.search(text)
+
 
 #: Statuses at or past the commitment. `rules/cycle-backlog.md` requires `approved_by`
 #: from here on: "`human/<name>` or `system/autonomous-sweep`. Who made the commitment.
@@ -531,7 +574,8 @@ def _effective_counts(items: list[Item]) -> dict[str, int]:
 
 def _check_each_item(items: list[Item], known_repos: set[str] | None,
                      today: date,
-                     objectives_declared: bool = False) -> tuple[list[Finding], list[int]]:
+                     objectives_declared: bool = False,
+                     registry_is_the_kit: bool = False) -> tuple[list[Finding], list[int]]:
     """Every per-item check, in the order the registry's own contract lists them.
 
     Extracted from `check_backlog`, which measured cyclomatic complexity 82 across 297
@@ -580,6 +624,40 @@ def _check_each_item(items: list[Item], known_repos: set[str] | None,
                 "and the registry cannot say who — `human/<name>` if a person decided, "
                 "`system/autonomous-sweep` if the loop filed it under a standing "
                 "authorisation. The two are not worth the same"))
+
+        # WHERE the item belongs, which is a routing question and not a quality one. The
+        # rule is the owner's, decided 2026-09-22 on a consumer registry: an item whose
+        # subject is the installed kit does not belong there. The argument travels with
+        # it — a consumer's `.claude/` is not versioned, so a fix written there protects
+        # one machine and the next install overwrites it. The item cannot close where it
+        # was filed, and it sat in the queue competing on age with work that could.
+        subject = item.fields.get("subject", "").strip()
+        # Only while the item can still move. A shipped or killed block cannot be filed
+        # anywhere else, so naming its routing asks for work nobody can do — the same line
+        # this gate already draws between `unroutable_repo` and `unroutable_repo_closed`.
+        # Measured when this first ran against the registry that motivated it: 33 advisory
+        # findings over 159 items against 13 counted by hand over the 27 open ones, and the
+        # whole difference was history.
+        item_can_still_move = status_now in OPEN_STATUS
+        if subject and subject not in SUBJECTS:
+            findings.append(Finding("illegal_subject", "deterministic", "major", iid,
+                f"`subject: {subject}` is outside {' | '.join(SUBJECTS)}. A typo that is "
+                "ignored is a routing decision the author believes they declared"))
+        elif subject == "kit" and not registry_is_the_kit and item_can_still_move:
+            findings.append(Finding("subject_belongs_to_the_kit", "deterministic", "blocker", iid,
+                "this item changes the installed kit, and this registry belongs to a "
+                "project that consumes it. It cannot close here: the kit under `.claude/` "
+                "is not versioned, so a fix written there protects one machine and the "
+                "next install overwrites it. File it in the kit's own tracker, and kill "
+                "this one with a `kill_reason` naming where it went"))
+        elif (not subject and not registry_is_the_kit and item_can_still_move
+                and _evidence_points_at_the_kit(item)):
+            findings.append(Finding("subject_may_belong_to_the_kit", "deterministic", "minor", iid,
+                "the evidence names kit paths and no product ones, so this may be an item "
+                "about the installed kit sitting in a consumer's registry. ADVISORY and "
+                "never a failure — the detector is a path heuristic that was arguable on "
+                "three of thirteen when it was measured. Declare `subject:` either way and "
+                "this stops guessing"))
 
         if (objectives_declared and not is_stub
                 and not item.fields.get("traces_to", "").strip()):
@@ -985,7 +1063,12 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
     # The per-item half. `numeric_ids` is no longer read here — see the note on
     # `IDENTITY_CHECKS` for why the check that consumed it was removed (#169).
     item_findings, _numeric_ids = _check_each_item(
-        items, known_repos, today, objectives_declared=_objectives_declared(project_root))
+        items, known_repos, today,
+        objectives_declared=_objectives_declared(project_root),
+        # True when the registry belongs to the kit itself, where an item about the
+        # kit IS the product. `has_kit` is the one predicate that separates the two
+        # cases, and it separates them on what is on disk rather than on a name.
+        registry_is_the_kit=_has_kit(project_root))
     findings.extend(item_findings)
 
 
