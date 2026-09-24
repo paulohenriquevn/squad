@@ -122,6 +122,11 @@ class AlignmentGateReport:
     soft_floor: int | None = None
     brief_path: str | None = None
     machine_ratio: float | None = None
+    #: Why the item's depth could not be derived, or empty when it was. Carried on the
+    #: report rather than printed at the call site, because the JSON consumer needs the
+    #: same distinction as the terminal one — a score against an unconfirmed rubric is
+    #: not the same fact as a score against the right one.
+    depth_unmeasured: str = ""
 
     @property
     def is_clean(self) -> bool:
@@ -168,23 +173,43 @@ def _registry_exists(plan_path: Path) -> bool:
 
 
 
-def _depth_for(plan_path: Path, item: str | None) -> str:
-    """The alignment depth for this ITEM, from the module that decides depth.
+def _depth_for(plan_path: Path, item: str | None) -> tuple[str, str]:
+    """The alignment depth for this ITEM, and why it could not be derived when it could not.
 
     Returns `FULL` when the item is unknown or the classifier cannot answer. FULL is the
     safe direction: it asks for more, and a brief that clears the full rubric clears the
     local one too. The reverse default would let an unclassifiable item be graded on the
-    shallow rubric, which is the escape hatch `alignment-threshold.md` refuses.
+    shallow rubric, which is the escape hatch `alignment-threshold.md` refuses. THAT DOES
+    NOT MOVE.
+
+    What moved is the second half of the tuple. This returned `.depth` alone and dropped
+    the two fields the classifier carries for exactly this question — `measurable` and
+    `why_unmeasurable` — so a plan graded at FULL because the registry could not be found
+    read identically to one graded at FULL because the item needs it.
+
+    Measured by the consumer that reported it, from inside a worktree the registry is not
+    in: the gate printed `BLOCKED — close these first: nfr_measurable, flows,
+    scenario_classes, system_diagram`. From where the registry is, the same item is LOCAL
+    and the same brief scores 92% — and four of those four criteria are four of the five
+    artifacts LOCAL removes, whose absence is the whole point of LOCAL existing. A lane read
+    that message, concluded the `--depth` flag did not exist and that every LOCAL item in
+    every consumer was unbuildable, and stopped. The flag exists and this gate uses it.
+
+    Same rule `check_plugin_freshness` keeps between `unverifiable` and `aligned`, and the
+    one this repository added between a killed test run and a failing one on the same day.
     """
     if not item:
-        return "FULL"
+        return "FULL", "the plan cites no item, so there is nothing to classify"
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "plan-alignment/scripts"))
         from classify_alignment_depth import classify
 
-        return classify(_project_root(plan_path), item).depth
-    except Exception:  # noqa: BLE001 — an unclassifiable item is scored at FULL
-        return "FULL"
+        verdict = classify(_project_root(plan_path), item)
+        if not verdict.measurable:
+            return verdict.depth, verdict.why_unmeasurable or "the classifier could not say why"
+        return verdict.depth, ""
+    except Exception as exc:  # noqa: BLE001 — an unclassifiable item is scored at FULL
+        return "FULL", f"the classifier raised {exc.__class__.__name__}"
 
 
 def _project_root(plan_path: Path) -> Path:
@@ -260,7 +285,8 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
         # 70.6% against a 90% floor, because five criteria grade the sections LOCAL
         # removes. Fixing the scorer alone would have left this gate scoring the old way
         # — the half-applied shape this kit has now measured three times.
-        report = score_alignment(brief, _depth_for(plan_path, cited))
+        depth, depth_unmeasured = _depth_for(plan_path, cited)
+        report = score_alignment(brief, depth)
     except Exception as exc:  # noqa: BLE001 — any failure here is "not measured"
         return AlignmentGateReport(
             applies=True, verdict="UNREADABLE",
@@ -286,7 +312,8 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
             reason=(f"the reviewer withdrew their sign-off{because}. The ticked boxes "
                     f"below it record a review that no longer stands — re-review, do not "
                     f"re-tick."),
-            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio,
+            depth_unmeasured=depth_unmeasured)
 
     if report.unmarked_withdrawal_prose:
         return AlignmentGateReport(
@@ -296,7 +323,8 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
                     f"`<!-- sign-off: WITHDRAWN: reason -->` if the warrant is withdrawn, "
                     f"or reword the line if it is not. The gate declines to certify a "
                     f"warrant whose state it cannot read — it does not guess either way."),
-            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio,
+            depth_unmeasured=depth_unmeasured)
 
     if report.needs_split:
         because = f" ({report.split_reason})" if report.split_reason else ""
@@ -304,7 +332,8 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
             applies=True, verdict="NEEDS_SPLIT",
             reason=(f"the reviewer marked this brief NEEDS_SPLIT{because}. "
                     f"Do not close gaps — split the item, and align each piece on its own."),
-            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio,
+            depth_unmeasured=depth_unmeasured)
 
     if not report.meets_machine_threshold:
         gaps = ", ".join(c.key for c in report.gaps[:4])
@@ -313,7 +342,8 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
             reason=(f"alignment scores {ratio:.0%}, below the 90% threshold. "
                     f"Close these first: {gaps}. "
                     f"Return to /plan-alignment and re-score after each pass."),
-            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio,
+            depth_unmeasured=depth_unmeasured)
 
     if not report.reviewer_signed_off:
         pending = len(report.pending_review) or report.reviewer_items_total or "all"
@@ -323,7 +353,8 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
                     f"({pending} item(s) unticked in `## Reviewer sign-off`). "
                     f"AWAITING_REVIEW is not a pass, and the agent may never tick a "
                     f"box — ask the reviewer."),
-            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio)
+            hard_cap=HARD_CAP, brief_path=str(brief), machine_ratio=ratio,
+            depth_unmeasured=depth_unmeasured)
 
     restored = ""
     if report.sign_off_restored:
@@ -335,7 +366,8 @@ def check_alignment_gate(plan_path: Path) -> AlignmentGateReport:
         applies=True, verdict="ALIGNED",
         reason=(f"aligned at {ratio:.0%} with {report.reviewer_items_total} "
                 f"reviewer item(s) ticked{restored}"),
-        brief_path=str(brief), machine_ratio=ratio)
+        brief_path=str(brief), machine_ratio=ratio,
+            depth_unmeasured=depth_unmeasured)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -356,12 +388,19 @@ def main(argv: list[str] | None = None) -> int:
             "reason": report.reason, "hard_cap": report.hard_cap,
             "soft_floor": report.soft_floor, "brief_path": report.brief_path,
             "machine_ratio": report.machine_ratio,
+            "depth_unmeasured": report.depth_unmeasured,
         }, indent=2, ensure_ascii=False))
         return 0 if report.is_clean else 1
 
     tag = {"ALIGNED": "✓", None: "~"}.get(report.verdict, "✗")
     print(f"{tag} alignment gate: {report.verdict or 'NOT APPLICABLE'}")
     print(f"  {report.reason}")
+    # BEFORE the cap, because it changes what the cap means. A reader told to close four
+    # criteria needs to know whether those four belong to this item's rubric at all.
+    if report.depth_unmeasured:
+        print(f"\n  NOT MEASURED — the item's depth could not be derived "
+              f"({report.depth_unmeasured}), so the FULL rubric was applied. The score "
+              f"above grades a rubric that may not be this item's.")
     if report.hard_cap:
         print(f"\n  HARD CAP {report.hard_cap} — this plan cannot enter /implement.")
         print("  There is no --skip and no dismissing ADR. An escape hatch on this")
