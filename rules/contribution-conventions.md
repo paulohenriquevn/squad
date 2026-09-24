@@ -161,3 +161,24 @@ not in this file.
 **Two things cannot be overridden**, and the gate refuses an override that tries:
 the co-authorship refusal, and the secrets rule for issues. Everything else is the
 kit's default and the project's decision.
+
+### Declaring a violation nobody is allowed to fix
+
+`pushed_exemptions = <sha> <reason>` waives one finding, and the key is repeatable.
+
+It exists for the case the rest of this file cannot resolve: a commit already on the
+upstream whose header or body breaks a rule. An amend cannot reach it, only a force-push
+would, and force-pushing a shared branch is forbidden here — so the finding is real and
+no permitted action clears it. The standalone audit is meant to grade history, so
+narrowing its range would answer a different question, and weakening its assertion would
+stop it grading anything.
+
+**The safety property is what makes this safe to have:** the exemption is honoured only
+while the commit is reachable from the upstream. Declared for a commit an amend can still
+reach, the gate reports `exemption_is_fixable` and **keeps the original finding** — so
+this can record a rule that was broken and can never excuse breaking one.
+
+A reason is mandatory. A bare sha records that somebody waived a finding, not why, and
+the reason is the only part a later reader can weigh. Waived findings are printed under
+`DECLARED` on every run: an exemption nobody can see is indistinguishable from a rule
+nobody checks.

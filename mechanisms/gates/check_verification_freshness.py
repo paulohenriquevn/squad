@@ -23,6 +23,7 @@ is the property that made the question go unasked in the first place. This opens
     verified        the record names HEAD and nothing failed
     stale           the record is real and names a commit this tree has moved past
     failing         the record names HEAD and something failed
+    interrupted     suites ended without reporting a failing test — a stopped run
     unattributable  the runner itself said the tree moved during that run
     never           no record — the suite has not run here since this gate existed
     unreadable      a record that cannot be parsed
@@ -31,13 +32,20 @@ is the property that made the question go unasked in the first place. This opens
 whose last run failed is a different fact and a different action. Collapsing them would fire
 on every new checkout, and a signal that always fires is the same as no signal.
 
+`interrupted` is NOT `failing` either, and the distinction was measured on this tree: a
+killed run left `failed_suites: 31, passed: 0, failed: 0`, and reporting that as `failing`
+produced the detail "0 test(s) in 31 suite(s) failed" — self-contradictory, and read as
+total breakage by anyone who does not stop on the zero. A suite counted as failed while
+reporting no failing test did not fail; it did not finish.
+
 `unattributable` exists because `tree_moved` is the runner saying its own result is about no
 single state of the repository. Reading it as green would launder exactly what that flag
 prevents.
 
 Exit codes:
   0 — verified
-  1 — stale, failing, or unattributable: a result that does not apply, or applies and is red
+  1 — stale, failing, interrupted, or unattributable: a result that does not apply, or
+      applies and is red, or is not a result at all
   2 — never or unreadable: not measured, which is neither passing nor failing
 """
 from __future__ import annotations
@@ -103,6 +111,21 @@ def check(root: Path) -> tuple[int, dict]:
         return 1, {**common, "state": "stale", "detail":
                    f"the last run verified {recorded[:12]} and this tree is at "
                    f"{head[:12]}. What it proved is true of a commit that is not this one"}
+    # A suite counted as failed while reporting no failing TEST did not fail — it did
+    # not finish. Measured 2026-09-24 after a full run was killed externally: the record
+    # read `failed_suites: 31, passed: 0, failed: 0`, and this reported `failing` with
+    # the detail "0 test(s) in 31 suite(s) failed" — self-contradictory, and read as
+    # total breakage by anyone who does not stop on the zero.
+    #
+    # Same argument as `unattributable` above: a run that says nothing about a single
+    # state of the repository is not a verdict, and must not wear the vocabulary of the
+    # one state a reader has to act on. Not a pass either — nothing was proved.
+    _dead = int(rec.get("failed_suites") or 0)
+    if _dead and not rec.get("failed"):
+        return 1, {**common, "state": "interrupted", "detail":
+                   f"{_dead} of {rec.get('suites')} suite(s) ended without reporting a "
+                   "single failing test, which is what a stopped run looks like — not a "
+                   "failing one. Nothing was proved about this tree; run the suite again"}
     if rec.get("failed") or rec.get("failed_suites"):
         return 1, {**common, "state": "failing", "detail":
                    f"{rec.get('failed')} test(s) in {rec.get('failed_suites')} suite(s) "

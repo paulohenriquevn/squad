@@ -110,7 +110,8 @@ HEADER_RE = re.compile(
 #: parsed, have validated as known, and have applied to nothing. Which branch is the trunk
 #: matters to `hooks/validate-command.py`, which refuses work on it; that is where such a
 #: key belongs if it is ever wanted.
-KNOWN_KEYS = {"commit_types", "commit_scopes", "subject_max", "body_required"}
+KNOWN_KEYS = {"commit_types", "commit_scopes", "subject_max", "body_required",
+              "pushed_exemptions"}
 #: Keys that would reach a rule the contract says cannot be overridden.
 FORBIDDEN_KEYS = {"allow_coauthor", "coauthor", "allow_secrets", "secrets"}
 
@@ -122,6 +123,11 @@ class Conventions:
     subject_max: int = DEFAULT_SUBJECT_MAX
     body_required: tuple[str, ...] = DEFAULT_BODY_REQUIRED
     source: str = "kit defaults"
+    #: `sha -> reason`, from `pushed_exemptions`. Honoured ONLY for a commit already
+    #: reachable from the upstream — see `check`. A declaration for a commit an amend can
+    #: still reach is a finding, not a pass, because otherwise this is a way to skip the
+    #: rule on the way in rather than a record of a rule that was already broken.
+    exemptions: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass
@@ -144,6 +150,9 @@ class Report:
     #: The range as RESOLVED, so a report never claims to have graded a range the caller
     #: only asked for.
     resolved_range: str = ""
+    #: Findings dropped because a declaration covered them, rendered for the reader. An
+    #: exemption nobody can see is indistinguishable from a rule nobody checks.
+    exempted: tuple[str, ...] = ()
 
 
 def load_conventions(overrides: Path) -> Conventions:
@@ -153,6 +162,7 @@ def load_conventions(overrides: Path) -> Conventions:
         return conv
 
     declared: dict[str, str] = {}
+    exemptions: list[tuple[str, str]] = []
     for lineno, raw in enumerate(overrides.read_text(encoding="utf-8-sig").splitlines(), 1):
         line = raw.split("#", 1)[0].strip()
         if not line:
@@ -172,6 +182,19 @@ def load_conventions(overrides: Path) -> Conventions:
                 f"{overrides}:{lineno}: unknown key `{key}`. Known: "
                 f"{', '.join(sorted(KNOWN_KEYS))}. A typo that is ignored is a "
                 "convention the project thinks it declared and did not")
+        if key == "pushed_exemptions":
+            # Repeatable, unlike every other key: a project can be stuck with more than
+            # one, and `declared[key] = value` would keep the last line and silently
+            # discard the rest — an override the project thinks it declared and did not.
+            sha, _, reason = value.partition(" ")
+            if not reason.strip():
+                raise ValueError(
+                    f"{overrides}:{lineno}: `pushed_exemptions` needs `<sha> <reason>`. A "
+                    "bare sha records that somebody waived a finding, not why, and the "
+                    "reason is the only part a later reader can weigh")
+            exemptions.append((sha.strip(), reason.strip()))
+            declared[key] = value
+            continue
         declared[key] = value
 
     if "commit_types" in declared:
@@ -182,6 +205,7 @@ def load_conventions(overrides: Path) -> Conventions:
         conv.subject_max = int(declared["subject_max"])
     if "body_required" in declared:
         conv.body_required = tuple(t.strip() for t in declared["body_required"].split(",") if t.strip())
+    conv.exemptions = tuple(exemptions)
     if declared:
         conv.source = f"{overrides} ({len(declared)} override(s))"
     return conv
@@ -339,7 +363,50 @@ def check(repo: Path, rev_range: str, message_file: Path | None = None) -> Repor
         rep.findings.extend(check_message(sha, message, rep.conventions))
     pushed = _pushed_shas(repo)
     rep.already_pushed = {sha for sha, _ in commits if sha in pushed}
+    _apply_exemptions(rep)
     return rep
+
+
+def _match(declared: str, sha: str) -> bool:
+    """Either spelling of the same commit — the file may hold a full sha, findings carry
+    an abbreviated one, and refusing to match across lengths would make the declaration
+    depend on how the reader happened to copy it."""
+    a, b = declared.strip().lower(), sha.strip().lower()
+    return bool(a) and bool(b) and (a.startswith(b) or b.startswith(a))
+
+
+def _apply_exemptions(rep: Report) -> None:
+    """Drop what a declaration covers, and REPORT a declaration that covers too much.
+
+    The safety property is the only reason this is safe to have: an exemption holds only
+    for a commit already reachable from the upstream, which is precisely the set no
+    permitted action can change. Applied to a commit an amend could still reach, it would
+    be a way to skip the rule while writing it, so that case yields its own finding AND
+    keeps the original — replacing one with the other would hide the violation behind the
+    complaint about how it was waived.
+    """
+    if not rep.conventions.exemptions:
+        return
+    kept: list[Finding] = []
+    exempted: list[str] = []
+    for finding in rep.findings:
+        covered = next((r for sha, r in rep.conventions.exemptions
+                        if _match(sha, finding.sha)), None)
+        is_pushed = any(_match(finding.sha, p) for p in rep.already_pushed)
+        if covered is not None and is_pushed:
+            exempted.append(f"{finding.sha} {finding.code} — declared: {covered}")
+            continue
+        kept.append(finding)
+    for sha, reason in rep.conventions.exemptions:
+        if not any(_match(sha, p) for p in rep.already_pushed):
+            kept.append(Finding(sha, "exemption_is_fixable",
+                                f"is declared in `pushed_exemptions` ({reason}) and is not "
+                                "on the upstream. An amend still reaches it, so the "
+                                "declaration excuses work somebody can fix — which is the "
+                                "one thing it must never do. Fix the commit or remove the "
+                                "line"))
+    rep.findings = kept
+    rep.exempted = tuple(exempted)
 
 
 NOT_CHECKED = (
@@ -369,6 +436,13 @@ def render(rep: Report) -> str:
     out.append("")
     out.append(f"  {'CLEAN' if not rep.findings else 'VIOLATIONS'} — "
                f"{len(rep.findings)} finding(s) over {rep.commits_checked} commit(s)")
+
+    if rep.exempted:
+        out.append("")
+        out.append(f"  DECLARED — {len(rep.exempted)} finding(s) waived by "
+                   "`pushed_exemptions`, on commits no permitted action can change:")
+        for line in rep.exempted:
+            out.append(f"    {line}")
 
     stuck = sorted({f.sha for f in rep.findings} & rep.already_pushed)
     if stuck:
