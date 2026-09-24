@@ -8,6 +8,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A BLOCKED report from the PLAN phase halted nothing, and it was the second omission in the
+  same literal set (#189).** `squad_boss.HALT_DIRS` maps a phase's output directory to its phase and
+  `plans` was absent, while `rules/cycle-phases.txt` declares `plan` and two contracts assert the
+  halt works — `cycle-plan.md` ("a BLOCKED report blocks downstream") and `cycle-maintenance.md`
+  ("SELECT holds the item until the file is gone"). Both true for the four directories named, false
+  for this one. A consumer proved it with one real file moved between two directories: in `plans/`
+  `halt_reports` did not find it and SELECT re-offered the halted item; in `maintenance-runs/`, same
+  file and same name, it was found and withheld.
+
+  **The set was the defect, not the entry** — `squad_boss` records the first omission in its own
+  comment, `maintenance-runs` missing so that *"a BLOCKED report from the cycle that ORCHESTRATES
+  the queue was invisible to the reader of that queue"*. And there were **two partial, disjoint maps
+  of one relation**: `panel_brief.PHASE_SOURCES` named `design`/`discover`/`plan`/`alignment`,
+  `HALT_DIRS` named `implement`/`review`/`release`/`maintenance`. Neither complete, no overlap, and
+  `plan` in one and missing from the other — which is how this was possible at all.
+
+  The proposed fix was to derive the map from `cycle-phases.txt` crossed with
+  `blocking-verdicts.txt`. **Measured: that cannot produce it** — the phase file declares phases and
+  no directories, and the verdict file is a flat list. So the seven remaining phases are now
+  DECLARED in `PHASES_WITHOUT_A_HALT_REPORT`, each with why, and two tests hold the set: every
+  declared phase is in one list or the other, and the two maps of the relation agree where they
+  meet. `discover` is declared as a **gap rather than mapped** — `cycle-discover.md` promises a
+  BLOCKED report and names no directory, and mapping it from a guess is how this set acquired its
+  first two omissions.
+
 - **The vote-binding fix was verified in its links and not in its chain.** `c96442d` made
   `convene_panel` name the artifact, and the tests that came with it exercised `convene_panel` and
   `_artifact_digest` separately — **neither ran `cast()`**, which is the only thing that writes a

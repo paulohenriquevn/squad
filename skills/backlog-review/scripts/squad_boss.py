@@ -78,10 +78,46 @@ from squad.paths import (  # noqa: E402 — post-bootstrap import
 
 #: Phase output directory -> the phase that writes there. A BLOCKED report is named
 #: `{slug}-BLOCKED.md` and lives beside the phase's other artefacts.
+#: Declared phases that write NO halt report, each with why. Named rather than omitted, because
+#: an omission is indistinguishable from an oversight — and this set has now dropped two phases
+#: that way. `test_the_halt_map_covers_every_phase_that_writes_a_record` requires every phase in
+#: `rules/cycle-phases.txt` to be in one list or the other.
+PHASES_WITHOUT_A_HALT_REPORT = {
+    "brainstorm": "writes the four product documents to wiki/product and halts by an UNSIGNED "
+                  "sign-off rather than by a report file",
+    "design": "writes the five drawings to wiki/design; same signature halt as brainstorm",
+    "backlog": "writes the registry itself — a halted item is `blocked_by` in its own block, "
+               "which `select_backlog_item` already reads",
+    "code-quality": "nested-in implement for the VERDICT; a blocking audit reaches the queue "
+                    "through implement's own report",
+    "acceptance": "halts the MILESTONE rather than an item — `cycle-acceptance.md` writes "
+                  "`BLOCKED — there is nothing released to validate`, which no item's queue "
+                  "position depends on",
+    # DECLARED AS A GAP rather than mapped, because the honest answer is that nobody measured it.
+    # `cycle-discover.md:210` promises "an honest BLOCKED report over a false PASS" for its
+    # halt-loop phases and names no directory for it, and inventing one here would be the opposite
+    # of deriving — the defect this entry sits beside was a literal set somebody extended from
+    # memory. Whoever measures where that report lands moves this line into `HALT_DIRS`.
+    "discover": "declares a BLOCKED report in cycle-discover.md and names no directory for it; "
+                "UNMEASURED, and mapping it from a guess is how this set acquired its first two "
+                "omissions",
+}
+
 HALT_DIRS = {
     "implementations": "implement",
     "reviews": "review",
     "releases": "release",
+    # `plans` was missing, so a BLOCKED report from the PLAN phase halted nothing while two
+    # contracts said it did — `cycle-plan.md` ("a BLOCKED report blocks downstream") and
+    # `cycle-maintenance.md` ("SELECT holds the item until the file is gone"). Both true for the
+    # directories above and false for this one. Measured by a consumer with one real file moved
+    # between two directories: in `plans/` it was not found and SELECT re-offered the halted item;
+    # in `maintenance-runs/` the same file, same name, was found and withheld it (#189).
+    #
+    # SECOND omission in this set — see `maintenance-runs` below — which is why
+    # `tests/test_a_halt_in_any_phase_reaches_the_queue.py` now holds the set against
+    # `rules/cycle-phases.txt` rather than against a reader's memory.
+    "plans": "plan",
     # `cycle-maintenance` declares ITEM_BLOCKED and writes to `maintenance-runs/`,
     # and it was missing here — so a BLOCKED report from the cycle that ORCHESTRATES
     # the queue was invisible to the reader of that queue. A consumer measured it
