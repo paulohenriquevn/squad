@@ -22,11 +22,16 @@ it is *detected*.
 `cycle-backlog.md` declares five statuses. A reader asking "what is pending?" wants three:
 
     open        raw, triaged      registered and measured, but nothing is being built
-    in-flight   planned           a plan exists; work is under way
+    committed   approved·planned  somebody committed to it
     closed      shipped, killed   the chain ended — killed is a SUCCESSFUL ending
 
 `triaged` sits in `open` on purpose. Measurement has run, but no plan exists, so nothing is in
-flight; calling it in-flight would make the in-flight count answer a different question than the
+committed; calling it committed makes this count answer the question people ask of it, which is
+what has been decided rather than what is running. WORK IN FLIGHT IS AN OPEN EVENT and this file
+reads zero events: `board_state._wip` computes it from the stream, and a consumer's panel said six
+items were in flight with zero phases open — five commitments never started and one merged waiting
+for a tag. The word belongs to the reader that has the stream. The other half of the old sentence
+survives below: the
 one people ask of it ("what is someone building right now?").
 """
 from __future__ import annotations
@@ -63,26 +68,26 @@ END = "<!-- BACKLOG-INDEX:END -->"
 #: status -> bucket. Statuses absent here are reported rather than silently bucketed: an unknown
 #: status means the contract changed and this file did not.
 #:
-#: `approved` is in-flight rather than open, and the reason is the line the status
+#: `approved` is COMMITTED rather than open, and the reason is the line the status
 #: was added to draw. The buckets answer "is this being pursued?" — `open` is the
-#: intake pool where nobody has decided yet, `in-flight` is what somebody committed
+#: intake pool where nobody has decided yet, `committed` is what somebody committed
 #: to. An approved item has no plan, so it is tempting to file it with the
 #: hypotheses; but that is exactly the conflation that let a registry hold 174
 #: items and 2 `planned`, and it puts a commitment in the same count as a hunch
 #: nobody has read. The per-row `status` column still shows which of the two
-#: in-flight statuses an item holds, so the grouping loses nothing.
+#: committed statuses an item holds, so the grouping loses nothing.
 BUCKETS: dict[str, str] = {
     "raw": "open",
     "triaged": "open",
-    "approved": "in-flight",
-    "planned": "in-flight",
+    "approved": "committed",
+    "planned": "committed",
     "shipped": "closed",
     "killed": "closed",
 }
-BUCKET_ORDER = ("open", "in-flight", "closed")
+BUCKET_ORDER = ("open", "committed", "closed")
 BUCKET_LABEL = {
     "open": "Open",
-    "in-flight": "In flight",
+    "committed": "Committed",
     "closed": "Closed",
 }
 

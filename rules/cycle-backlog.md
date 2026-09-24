@@ -462,13 +462,29 @@ item — one row each, linked to its own detail block — grouped into three buc
 
 | Bucket | Statuses | The question it answers |
 |---|---|---|
-| **Open** | `raw`, `triaged` | registered, measured or not, but nothing is being built |
-| **In flight** | `planned` | a plan exists; work is under way |
+| **Open** | `raw`, `triaged` | registered, measured or not, and nobody has committed |
+| **Committed** | `approved`, `planned` | somebody committed to it |
 | **Closed** | `shipped`, `killed` | the chain ended — and `killed` is a *successful* ending |
 
-`triaged` sits under **Open** deliberately. Measurement has run, but no plan exists, so nothing is
-in flight; folding it into the in-flight count would make that number answer a different question
-than the one people ask of it.
+`triaged` sits under **Open** deliberately. Measurement has run and nobody has committed, so
+folding it in with the commitments would make that number answer a different question than the one
+people ask of it.
+
+`approved` sits under **Committed**, and this table covered five of the six statuses until
+2026-09-24 — `approved` was in no bucket at all while the generator put it here, with the argument
+that stands: against `raw`, the intake pool where nobody has decided, a commitment does not belong
+in the same count as a hunch nobody has read. The per-row `status` column still shows which of the
+two an item holds.
+
+**The bucket is NOT called "in flight", and that is a rule and not a wording preference.** Work in
+flight is an OPEN EVENT — an item that entered a phase and has not left it — and this index reads
+zero events. `board_state._wip` computes it from the stream and says so in its own docstring: *WIP
+is not a card count*. Measured on a consumer 2026-09-24: an index labelled `In flight (6)` over
+five commitments never started and one item merged waiting for a tag, with zero phases open. Its
+reader asked whether work was happening in a batch, which the label had told them. A bucket fed by
+status cannot know activity, and `cycle-maintenance.md` makes a hard gate out of the phrase — so
+under the old label nobody could tell a violated invariant from a mislabelled bucket without
+opening the generator.
 
 **The index is generated, never written.** `skills/backlog-review/scripts/backlog_index.py --write`
 derives it from the blocks; `--check` exits 1 when it has drifted. `check_backlog_structure.py`

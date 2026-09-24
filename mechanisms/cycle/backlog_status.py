@@ -194,10 +194,19 @@ def parse_blocked_by(raw: str) -> list[str]:
     So the value is prose that MAY contain ids. The ids become verifiable edges; the
     prose stays an impediment that no graph can resolve, which is honest — nothing
     in this repository can tell you whether a sponsor has decided.
+
+    ONE ENTRY PER DISTINCT ID, not per occurrence. This returned `findall` directly, so an
+    author who named the same id three times while explaining it produced three
+    impediments: a consumer's board printed `blocks B-229, B-229, B-229` and the selector
+    printed `B-229 <- B-270, B-270, B-270`, one edge counted three times from both ends.
+    Any count derived from the list was wrong by however many times the id was repeated,
+    which happens most in the items that explain themselves best.
     """
     if not declares_impediment(raw):
         return []
-    return _ID_IN_TEXT_RE.findall(raw)
+    # Distinct, in the order written: `dict.fromkeys` keeps first-seen order, which a `set`
+    # would destroy and which the reader relies on to see the impediment named first.
+    return list(dict.fromkeys(_ID_IN_TEXT_RE.findall(raw)))
 
 
 def blocked_by_of(body: str) -> list[str]:

@@ -312,6 +312,10 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # status still decides INSIDE the band — the band is a band — and never to decide
         # what either one means. `_RANK` is pinned above.
         "skills/backlog-review/tests/test_the_queue_honours_the_open_sprint.py",
+        # Asserts the index's bucket MAP, which is where the statuses come from — it names
+        # all six to prove the grouping did not move when the label did. The meaning of
+        # each one is `BUCKETS`, which `test_backlog_index.py` pins against `LEGAL_STATUS`.
+        "tests/test_in_flight_is_not_derived_from_status.py",
         # Fixtures for the lead-time p50. It names `shipped` and `killed` to build the
         # delivered and the abandoned case, because `_delivery` counts them apart; the
         # meaning of both comes from that function, which `test_board_state.py` pins.

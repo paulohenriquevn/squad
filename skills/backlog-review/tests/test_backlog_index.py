@@ -35,11 +35,18 @@ class TestBuckets:
         summary — counted nowhere, listed nowhere. The registry would under-report itself."""
         assert set(BUCKETS) == LEGAL_STATUS
 
-    def test_triaged_counts_as_open_not_in_flight(self) -> None:
-        """Measurement has run, but no plan exists. `in-flight` answers "what is someone building
-        right now?", and folding `triaged` into it makes that number answer a different question."""
+    def test_triaged_counts_as_open_not_committed(self) -> None:
+        """Measurement has run and nobody has committed, so folding `triaged` in with the
+        commitments makes that number answer a different question.
+
+        The bucket was called `in-flight` until 2026-09-24, and this test's own docstring
+        said it answered *what is someone building right now?* — which a status cannot
+        answer. It reads zero events. The rename is in
+        `tests/test_in_flight_is_not_derived_from_status.py`, with the measurement.
+        """
         assert BUCKETS["triaged"] == "open"
-        assert BUCKETS["planned"] == "in-flight"
+        assert BUCKETS["planned"] == "committed"
+        assert BUCKETS["approved"] == "committed"
 
     def test_killed_counts_as_closed(self) -> None:
         """Killing an item is a successful ending, not a pending one — `cycle-discover.md`."""

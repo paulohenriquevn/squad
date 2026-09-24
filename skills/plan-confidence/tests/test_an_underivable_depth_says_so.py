@@ -84,3 +84,17 @@ def test_the_reader_sees_it_in_the_rendered_output(tmp_path: Path) -> None:
     out = subprocess.run([sys.executable, str(gate), str(plan)],
                          capture_output=True, text=True, check=False)
     assert "NOT MEASURED" in out.stdout, out.stdout
+
+
+def test_the_report_names_the_item_and_the_rubric_it_graded(tmp_path: Path) -> None:
+    """A reader told to close four criteria cannot act without knowing whose rubric named them.
+
+    Requested by the consumer that measured the wrong-item defect: the four criteria this
+    gate named most often were four of the five artifacts the LOCAL rubric removes, so the
+    reader was being sent to write documents their item does not require — and the message
+    never said which item it had graded.
+    """
+    report = check_alignment_gate(_tree(tmp_path, registry=True))
+    assert report.graded_as, "the report does not say what it graded"
+    assert "B-014" in report.graded_as, report.graded_as
+    assert "depth" in report.graded_as, report.graded_as
