@@ -70,6 +70,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from installed_plugins import resolve as resolve_plugin  # noqa: E402 (post-bootstrap)
 from panel_brief import locate as locate_artifact  # noqa: E402 (post-bootstrap)
 from review_panel import (  # noqa: E402 — post-bootstrap import
+    family_of,
     HOME_FAMILY,
     PANEL_SIZE,
     panel_size_for,
@@ -151,22 +152,60 @@ def resolve_seat(seat: Seat, *, agents: Path, which=shutil.which,
     exactly the one the panel could not check, and accepting a seat on the strength of
     its name is what the rest of this mechanism refuses everywhere else.
     """
-    if seat.is_builtin:
-        if ":" in seat.agent:
-            plugin_name, _, agent_name = seat.agent.partition(":")
-            plugin = resolve_plugin(plugin_name, config_dir)
-            if plugin is None:
-                return f"plugin `{plugin_name}` is not installed"
-            if not plugin.has_agent(agent_name):
-                return (f"plugin `{plugin_name}` is installed and supplies no agent "
-                        f"`{agent_name}`")
-            return ""
-        if not (agents / f"{seat.agent}.md").is_file():
-            return f"no agent `{seat.agent}` in {agents}"
-        return ""
-    if which(seat.invocation) is None:
+    # A `plugin:agent` seat is verified against the plugin whether or not it is
+    # `builtin`: the agent supplying the prompt and the route reaching it are two
+    # claims, and a seat reached through a tool still names an agent that must exist.
+    # This was nested under `is_builtin`, so moving a seat onto its documented route
+    # silently retired the check that its agent was installed at all.
+    if ":" in seat.agent:
+        plugin_name, _, agent_name = seat.agent.partition(":")
+        plugin = resolve_plugin(plugin_name, config_dir)
+        if plugin is None:
+            return f"plugin `{plugin_name}` is not installed"
+        if not plugin.has_agent(agent_name):
+            return (f"plugin `{plugin_name}` is installed and supplies no agent "
+                    f"`{agent_name}`")
+    elif seat.is_builtin and not (agents / f"{seat.agent}.md").is_file():
+        return f"no agent `{seat.agent}` in {agents}"
+    if not seat.is_builtin and which(seat.invocation) is None:
         return f"`{seat.invocation}` is not on PATH"
     return ""
+
+
+def seat_family(seat: Seat, *, config_dir: Path | None = None) -> tuple[str, str]:
+    """The family that will ANSWER for this seat, and where that was established.
+
+    `rules/review-panel.txt` declares a model per seat, and for a `builtin` seat that
+    string is a claim about a Claude sub-agent whose own frontmatter `model:` decides
+    which model runs. Two statements about one thing, and nothing compared them.
+
+    Measured 2026-09-24 against installed `judge-codex` 0.3.3: the roster declared
+    `gpt-5.5` for `judge-codex:plan-judge` and that agent declares `model: sonnet`.
+    Version 0.1.0 declared `model: gpt-5-codex`; 0.2.0 changed it and the roster never
+    heard. The panel's one outside-family seat was an Anthropic sub-agent, which is the
+    whole of what the family rule exists to prevent.
+
+    `resolve_seat` above already resolves the plugin and asserts the agent file exists.
+    It stopped one line short of reading the file it had just located.
+
+    Confined to `builtin` seats on purpose. A seat reached through an executable is
+    decided at run time — `judge-codex`'s companion script runs `codex exec` and falls
+    back to `claude --model sonnet` when Codex is unavailable — and no static read can
+    say which answered. For those the roster stands, and it stands as a DECLARATION:
+    the run-time question is a different finding and belongs to whatever records what
+    actually ran.
+    """
+    declared = family_of(seat.model)
+    if not seat.is_builtin or ":" not in seat.agent:
+        return declared, f"roster (`{seat.model}`)"
+    plugin_name, _, agent_name = seat.agent.partition(":")
+    plugin = resolve_plugin(plugin_name, config_dir)
+    if plugin is None:
+        return declared, f"roster (`{seat.model}`) — plugin `{plugin_name}` not installed"
+    model = plugin.agent_model(agent_name)
+    if model is None:
+        return declared, f"roster (`{seat.model}`) — `{seat.agent}` declares no model"
+    return family_of(model), f"`{seat.agent}` frontmatter (`{model}`)"
 
 
 def convene(

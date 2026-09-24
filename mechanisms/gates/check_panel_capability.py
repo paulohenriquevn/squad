@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "cycle"))
-from convene_panel import agents_dir, repo_root, resolve_seat
+from convene_panel import agents_dir, repo_root, resolve_seat, seat_family
 from review_panel import (
     HOME_FAMILY,
     PANEL_SIZE,
@@ -209,7 +209,11 @@ def check_panel_capability(
         # A single-seat phase that COULD be filled from another family still should be, and the
         # signature vocabulary keeps the distinction visible either way: `judge/…` and `human/…`
         # are different claims to any reader, and `score_alignment` reports the weakest of a set.
-        families = {s.family for s in seats}
+        # The family a seat WILL RUN, not the one its roster row names. For a `builtin`
+        # seat the roster's model is a claim about a Claude sub-agent, and the agent's
+        # own frontmatter is what selects the model — see `seat_family`. This gate
+        # asserted diversity on the unread string for as long as it existed.
+        families = {seat_family(s, config_dir=config_dir)[0] for s in seats}
         if not (families - {HOME_FAMILY, "unknown"}) and not waived and len(seats) > 1:
             return PanelCapability.VIOLATED
 
@@ -356,6 +360,13 @@ def main(argv: list[str] | None = None) -> int:
         message += "\n\nWhich seats, and why:\n" + "\n".join(
             f"  {phase}/{agent}: {reason}" for phase, agent, reason in unfillable_seats())
 
+    # Resolved once per seat, here, because `main` has no `config_dir` of its own:
+    # the check takes one for testability and defaults to this machine's. Calling
+    # `seat_family` inline in the payload read a name that does not exist in this
+    # scope, and the gate died with a NameError under `--json` — the shape the
+    # report is meant to prevent, in the reporter.
+    verified = {id(s): seat_family(s) for s in seats}
+
     if args.json:
         print(json.dumps({
             "result": result.value,
@@ -363,8 +374,15 @@ def main(argv: list[str] | None = None) -> int:
                                  for p, a, r in unfillable_seats()],
             "panel_phases": gated,
             "seats": [{"phase": s.phase, "agent": s.agent, "model": s.model,
-                       "family": s.family, "via": s.invocation} for s in seats],
-            "families": sorted({s.family for s in seats}),
+                       # The verified family and where it was established — the same
+                       # answer the verdict above was computed from. Reporting the
+                       # roster's string beside a verdict derived from the frontmatter
+                       # is two readers of one table, which is the defect this gate
+                       # was built to stop happening elsewhere.
+                       "family": verified[id(s)][0],
+                       "family_source": verified[id(s)][1],
+                       "via": s.invocation} for s in seats],
+            "families": sorted({fam for fam, _src in verified.values()}),
             "message": message,
         }, indent=2))
     else:

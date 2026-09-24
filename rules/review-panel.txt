@@ -137,13 +137,48 @@
 # None of this makes a local seat wrong. It makes it a change to the machine rather than
 # a change to a table, and the difference is invisible from this file alone.
 
+# Why the three judge-codex seats say `codex` and not `builtin`
+#
+# They said `builtin` until 2026-09-24, and that made the outside-family seat of every
+# gated phase a Claude sub-agent. Measured that day against the version the plugin
+# manifest resolves to, `judge-codex` 0.3.3:
+#
+#   roster                          gpt-5.5            (openai)
+#   agents/plan-judge.md            model: sonnet      (anthropic)
+#   all 8 judge agents              model: sonnet
+#
+# `builtin` means this session SPAWNS the agent, and a spawned sub-agent runs the model
+# its own frontmatter names. So `gpt-5.5` described nothing that would run, and the
+# family rule — one seat outside this kit's own, because correlated models are fooled
+# together — was satisfied by a string nobody read back. Version 0.1.0 of the plugin
+# declared `model: gpt-5-codex`; 0.2.0 changed it to `sonnet` and this file never heard.
+#
+# The Codex route is real and is the one the plugin documents: its agent files say the
+# companion script hands them the artifact, and `scripts/codex-companion-judge.mjs` runs
+# `codex exec`. Nothing in this kit executes a seat — `invocation` is compared to
+# `builtin`, passed to `shutil.which`, and printed in the brief — so this field tells
+# the CONVENING session which route to take. For these seats that is `/judge-codex:<stage>`,
+# which runs the companion script.
+#
+# Two things the route does not promise, both deliberate:
+#   - The companion script falls back to `claude --model sonnet` when Codex is
+#     unavailable (credits, login, rate limit). A run that fell back produced no
+#     outside-family vote, and nothing here can know that in advance. `check_panel_
+#     capability` says the same about the binary it probes: present is not reachable.
+#   - `cast_vote --model` is supplied by the caller. A model's self-report is not
+#     evidence of which model answered, and validating it would only move the fiction.
+#
+# `convene_panel.seat_family` reads the frontmatter for `builtin` seats and lets the
+# roster stand for routed ones, because a routed seat is decided at run time. Changing
+# a seat back to `builtin` re-opens the hole, and the gate will say so.
+
 reviewer = discover | nemesis-claim-auditor      | claude-opus-5   | builtin
 reviewer = discover | leonardo-researcher        | claude-sonnet-5 | builtin
-reviewer = discover | judge-codex:discover-judge | gpt-5.5         | builtin
+reviewer = discover | judge-codex:discover-judge | gpt-5.5         | codex
 
 reviewer = plan     | vera-technical-arbiter     | claude-opus-5   | builtin
 reviewer = plan     | nemesis-claim-auditor      | claude-sonnet-5 | builtin
-reviewer = plan     | judge-codex:plan-judge     | gpt-5.5         | builtin
+reviewer = plan     | judge-codex:plan-judge     | gpt-5.5         | codex
 
 # The phases a panel gates. A phase not listed here advances on its own verdict.
 # CODE-QUALITY and RELEASE are deliberately absent: both already derive their
@@ -156,7 +191,7 @@ reviewer = alignment | nemesis-claim-auditor | claude-opus-5 | builtin
 
 reviewer = design   | vera-technical-arbiter     | claude-opus-5   | builtin
 reviewer = design   | nemesis-claim-auditor      | claude-sonnet-5 | builtin
-reviewer = design   | judge-codex:design-judge   | gpt-5.5         | builtin
+reviewer = design   | judge-codex:design-judge   | gpt-5.5         | codex
 
 # THE WAIVER WAS REMOVED, AND THIS IS WHAT REPLACED IT
 #

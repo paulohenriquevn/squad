@@ -77,6 +77,35 @@ class Plugin:
     def has_agent(self, agent: str) -> bool:
         return (self.agents_dir / f"{agent}.md").is_file()
 
+    def agent_model(self, agent: str) -> str | None:
+        """The `model:` this agent's frontmatter declares, or None if it declares none.
+
+        This is the model a `builtin` seat actually runs on: naming a `plugin:agent`
+        spawns the sub-agent, and the frontmatter is what selects its model. A roster
+        that declares a different one is describing something else.
+
+        None is NOT a disagreement. An agent with no `model:` inherits the caller's,
+        which no static read can name, so the only honest answer is that nothing was
+        said. Returning a default here would manufacture the contradiction the caller
+        is asking about.
+
+        Only the frontmatter block is read — a `model:` line in the prose below it is
+        documentation, not configuration.
+        """
+        path = self.agents_dir / f"{agent}.md"
+        if not path.is_file():
+            return None
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if not lines or lines[0].strip() != "---":
+            return None
+        for line in lines[1:]:
+            if line.strip() == "---":
+                return None
+            key, sep, value = line.partition(":")
+            if sep and key.strip() == "model":
+                return value.strip() or None
+        return None
+
 
 def load(config_dir: Path | None = None) -> dict[str, Plugin]:
     """Every installed plugin, keyed by bare name.

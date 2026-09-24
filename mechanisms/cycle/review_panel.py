@@ -86,8 +86,20 @@ MIN_REASON_WORDS = 15
 #: Model prefixes to families. Matching is by prefix because versions move and a
 #: table pinned to exact ids goes stale silently — which for THIS table would mean
 #: quietly failing to notice that three reviewers share a family.
+#:
+#: The bare aliases `sonnet`, `opus` and `haiku` are here because a plugin agent's
+#: frontmatter is written in Claude Code's vocabulary, not in full model ids, and
+#: `seat_family` reads that frontmatter. Without them the answer for a sonnet
+#: sub-agent was `unknown` — safe, since unknown counts toward nothing, but a worse
+#: answer than the one available: we know which family `sonnet` is.
+#:
+#: `inherit` is deliberately absent. It names no model — it defers to the caller's —
+#: so it must fall through to `unknown` rather than be guessed at.
 _FAMILIES: tuple[tuple[str, str], ...] = (
     ("claude", "anthropic"),
+    ("sonnet", "anthropic"),
+    ("opus", "anthropic"),
+    ("haiku", "anthropic"),
     ("gpt", "openai"),
     ("o1", "openai"),
     ("o3", "openai"),
