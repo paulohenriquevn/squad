@@ -86,6 +86,13 @@ class ADRReport:
     #: Decisions that never say what being wrong would cost. Reported by
     #: `run_structural.py` under `sub_reports.adr_completeness`; it was collected
     #: and dropped for as long as this field had no reader.
+    #:
+    #: REPORT-ONLY — it caps nothing, and deliberately so. `rules/plan-confidence-
+    #: golden-rule.md` is the only place a cap is declared, and its table has a row
+    #: for `adr_without_alternatives` and none for this. On a consumer registry of
+    #: 34 plans measured 2026-09-23, all but one were missing it on at least one
+    #: decision, so a cap here would fire on ordinary work — the shape a gate earns
+    #: by being switched off. Read the list; do not build a threshold on it.
     missing_cost_if_wrong: tuple[str, ...] = ()
 
 

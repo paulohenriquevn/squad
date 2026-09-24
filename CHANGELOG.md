@@ -490,6 +490,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   membership, matching the `>=` assertion directly above it.
 
 ### Changed
+- **`missing_cost_if_wrong` now says in its own docstring that it caps nothing.** The field is reported under `sub_reports.adr_completeness` and no cap in the golden-rule table refers to it, but nothing said so at the point a reader meets it — and the CHANGELOG argues hard for the signal's value, which invites the next reader to build a threshold on it. On a consumer registry of 34 plans measured 2026-09-23, all but one plan was missing the field on at least one decision: a cap here would fire on ordinary work, which is how a gate earns being switched off. The comment now states report-only, the reason, and the measurement's date and origin. (#192)
 
 - **`rules/testing.md § 4.1` gains the sharper case: the rule you just wrote does not apply
   to you automatically.** The section already said a builder cannot see the boundary they
@@ -550,6 +551,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   where they claim to, and that mere sequence is not a finding.
 
 ### Added
+- **A cap the golden rule declares is now proven to be one the scorer can emit.** `rules/plan-confidence-golden-rule.md` is the authority on which caps exist, and its table names eight stable ids. The only guard that read a document back, `test_documented_identifiers_are_the_emitted_ones`, reads `SKILL.md § Hard Caps` — which names two of those eight. The other six were declared and unchecked, and a declared cap nothing can emit is the failure this kit keeps meeting: the rule reads as enforced, the id never reaches `hard_caps_triggered`, and a consumer filtering for it matches nothing — which reads as "the cap never fired". Measured at the time of writing: eight declared, zero unemittable, so the test is a guard rather than a fix. It carries a companion assertion so that a row losing its `Stable id:` marker fails loudly instead of emptying the set and passing vacuously. (#192)
 
 - **`docs/wiki/decisions/the-sweep-inherits-the-scope-of-the-fix.md`** — the sixth recorded class,
   and the first about the REMEDIATION step rather than about a check. After a defect is fixed, the
