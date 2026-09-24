@@ -52,6 +52,10 @@ READERS = {
     # planned against, so the status is the whole scope of its refusal: a settled item's
     # pointers are history and may name a tree that has since moved.
     "mechanisms/gates/check_evidence_freshness.py": "decides whose dead pointers fail",
+    # Decides which statuses let a sprint CLOSE. A status added to the contract that
+    # means "the registry is finished with this item" has to reach `TERMINAL_STATUSES`,
+    # or a block will refuse to close over an item that is in fact done.
+    "squad/sprint.py": "decides which statuses are terminal for a sprint",
 }
 
 
@@ -300,6 +304,14 @@ def test_no_unenumerated_reader_decides_on_a_status() -> None:
         # that can still move — and never to decide what either one means. The meaning is
         # `OPEN_STATUS`, read from the contract and pinned above.
         "skills/backlog-review/tests/test_an_item_about_the_kit_belongs_to_the_kits_registry.py",
+        # Fixtures for the sprint. They name `shipped` and `killed` to build the terminal
+        # and the still-moving case the close must tell apart; the meaning of both comes
+        # from `TERMINAL_STATUSES`, which is pinned above.
+        "tests/test_a_sprint_is_a_block_with_a_goal_and_a_close.py",
+        # Fixtures for the sprint band in `rank()`. It names `raw` and `triaged` to prove
+        # status still decides INSIDE the band — the band is a band — and never to decide
+        # what either one means. `_RANK` is pinned above.
+        "skills/backlog-review/tests/test_the_queue_honours_the_open_sprint.py",
         # Fixtures for the lead-time p50. It names `shipped` and `killed` to build the
         # delivered and the abandoned case, because `_delivery` counts them apart; the
         # meaning of both comes from that function, which `test_board_state.py` pins.

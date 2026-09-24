@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at sixty-three files is
-not one — a model told to read sixty-three files before an architectural decision
+That makes the pointer the whole interface, and a pointer at sixty-four files is
+not one — a model told to read sixty-four files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 
@@ -123,6 +123,7 @@ Each `cycle-{name}.md` defines:
 | `cycle-phases.txt` | The chain itself, declared once and machine-readable |
 | `blocking-verdicts.txt` | Verdicts that stop an item where it is — one definition, two readers |
 | `autonomy-envelope.md` | What runs unattended, and the floors that make it defensible |
+| `sprint.md` | The declared block of work: a goal, what it admitted, and a close recording what each admitted item came to. A unit of FOCUS — it does not gate release, and it builds no WIP limit, replenishment or blocked-item disposition, because the fleet and `halt_disposition.py` already are those |
 | `decision-delegation.txt` | What a consumer may delegate, and what delegation can never authorize |
 | `write-exemptions.txt` | The files the Squad produces OUTSIDE `<project>/.squad/`, each with a class (`platform` / `tool` / `human`) and what forces it. **The kit's**: the classes are about Claude Code's own discovery rules and about conventions older than this kit, not about one project. `check_produced_files.py` refuses a row missing either field — "we made an exception" and "the platform gave us no choice" are different claims, and only the second survives review |
 | `verdict-bands.txt` | Which band each verdict is in — clean, caveats, redo, structural, orthogonal. **The kit's**, like the phase chain and the blocking list: it classifies the verdicts the kit's own cycles emit, and a frozen copy means an unclassified verdict that silently disables the drift check. Where a band is COMPUTED; `cycle-rule-schema.md` is where it is argued |

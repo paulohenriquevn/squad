@@ -236,6 +236,22 @@ def assignment_log_path(project_root: Path | str) -> Path:
     return data_root(project_root) / "assignments.jsonl"
 
 
+#: The active sprint's record. One name, one place, for the same reason as the plan
+#: pointer: a second spelling of a data-root path is a second answer to where state lives.
+SPRINT_RECORD = "sprint.md"
+
+
+def sprint_record(project_root: Path | str) -> Path:
+    """The file naming the active block of work, its goal, and what it admitted.
+
+    Directly under the data root rather than in `records/`, because it is what one
+    session leaves for the next rather than a dated artifact — the same argument
+    `write_state_dir` makes. It becomes a record only when it CLOSES, and the closing
+    verdicts are what make it worth keeping.
+    """
+    return data_root(project_root) / SPRINT_RECORD
+
+
 def active_plan_pointer(project_root: Path | str) -> Path:
     """The file naming which plan is active. One name, one place."""
     return data_root(project_root) / ACTIVE_PLAN

@@ -325,7 +325,8 @@ def is_obligation(item: Item) -> bool:
     return item.fields.get("source", "").strip() in OBLIGATION_SOURCES
 
 
-def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[Item]:
+def rank(items: list[Item], unblocking: frozenset[str] = frozenset(),
+         project_root: Path | str | None = None) -> list[Item]:
     """The chain's order: an obligation first, then what unblocks a halt, then triaged
     before raw, then oldest first.
 
@@ -354,10 +355,39 @@ def rank(items: list[Item], unblocking: frozenset[str] = frozenset()) -> list[It
     This is ORDER, not eligibility. An unblocking item that is itself blocked or
     halted is still held by the rules that hold it; it never gets in ahead of them.
     """
+    # THE SPRINT'S BAND sits third, and the position is the design. It sorts after the two
+    # things that already outrank everything — an obligation, which is costing while it
+    # waits, and an item some halt names as its cause — and before status. Focus does not
+    # outrank a live incident: the incident costs now, the sprint says what matters
+    # generally.
+    #
+    # `project_root=None` returns a flat band for every item, so every existing caller gets
+    # exactly the order it got before. No sprint means no focus to honour, not a
+    # fabricated one.
+    band = _sprint_band(project_root)
     return sorted(items, key=lambda i: (not is_obligation(i),
                                         i.item_id not in unblocking,
+                                        band(i.item_id),
                                         _RANK.get(i.fields.get("status", ""), 99),
                                         _number(i)))
+
+
+def _sprint_band(project_root: Path | str | None):
+    """The band function, resolved ONCE per ranking rather than per item.
+
+    `rank_band` reads the record from disk, and a sort key is called O(n log n) times — so
+    calling it inside the key would read one small file a few hundred times to answer a
+    question whose answer cannot change during the sort.
+    """
+    if project_root is None:
+        return lambda _item_id: 0
+    from squad.sprint import load as _load_sprint
+
+    sprint = _load_sprint(project_root)
+    if sprint is None or not sprint.is_open:
+        return lambda _item_id: 0
+    admitted = frozenset(sprint.admitted)
+    return lambda item_id: 0 if item_id in admitted else 1
 
 
 def _read_queue(text: str, halted: set[str], unblocking: set[str]) -> tuple:
