@@ -363,7 +363,11 @@ def check(repo: Path, rev_range: str, message_file: Path | None = None) -> Repor
         rep.findings.extend(check_message(sha, message, rep.conventions))
     pushed = _pushed_shas(repo)
     rep.already_pushed = {sha for sha, _ in commits if sha in pushed}
-    _apply_exemptions(rep)
+    # The FULL pushed set, not the range-scoped one. `already_pushed` answers a different
+    # question — which of the findings in front of this author an amend can reach — and
+    # under `--introduced` on a synced branch it is empty, so using it here made every
+    # exemption read as covering fixable work.
+    _apply_exemptions(rep, pushed)
     return rep
 
 
@@ -375,7 +379,7 @@ def _match(declared: str, sha: str) -> bool:
     return bool(a) and bool(b) and (a.startswith(b) or b.startswith(a))
 
 
-def _apply_exemptions(rep: Report) -> None:
+def _apply_exemptions(rep: Report, pushed: set[str]) -> None:
     """Drop what a declaration covers, and REPORT a declaration that covers too much.
 
     The safety property is the only reason this is safe to have: an exemption holds only
@@ -392,13 +396,13 @@ def _apply_exemptions(rep: Report) -> None:
     for finding in rep.findings:
         covered = next((r for sha, r in rep.conventions.exemptions
                         if _match(sha, finding.sha)), None)
-        is_pushed = any(_match(finding.sha, p) for p in rep.already_pushed)
+        is_pushed = any(_match(finding.sha, p) for p in pushed)
         if covered is not None and is_pushed:
             exempted.append(f"{finding.sha} {finding.code} — declared: {covered}")
             continue
         kept.append(finding)
     for sha, reason in rep.conventions.exemptions:
-        if not any(_match(sha, p) for p in rep.already_pushed):
+        if not any(_match(sha, p) for p in pushed):
             kept.append(Finding(sha, "exemption_is_fixable",
                                 f"is declared in `pushed_exemptions` ({reason}) and is not "
                                 "on the upstream. An amend still reaches it, so the "

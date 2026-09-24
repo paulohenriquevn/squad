@@ -95,3 +95,26 @@ def test_an_exemption_without_a_reason_is_refused(tmp_path: Path) -> None:
         assert "reason" in str(exc).lower(), exc
     else:
         raise AssertionError("a sha with no reason was accepted")
+
+
+def test_an_exemption_outside_the_checked_range_is_still_honoured(tmp_path: Path) -> None:
+    """The pushed-ness question is about the repository, not about the range.
+
+    `Report.already_pushed` holds only the shas IN the checked range, by design — it
+    exists to tell an author which of the findings in front of them an amend can reach.
+    Using it to decide whether an exemption is still needed was the wrong set: under
+    `--introduced` on a synced branch the range is empty, so every exemption read as
+    covering a fixable commit and `exemption_is_fixable` fired on all of them.
+
+    Found within a minute of shipping it, by running the other of the two routes. The
+    audit route was green and the pre-push route was red on the same declaration.
+    """
+    repo = _repo(tmp_path, overrides="commit_types = fix\n", subject=_BAD, push=True)
+    sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                         capture_output=True, text=True, check=True).stdout.strip()
+    (repo / "rules" / "contribution-overrides.txt").write_text(
+        _EXEMPT.format(sha=sha), encoding="utf-8")
+    # An empty range: nothing was introduced, so nothing is in `already_pushed`.
+    report = check(repo, "@introduced")
+    assert report.commits_checked == 0, report.commits_checked
+    assert report.findings == [], [f"{f.sha} {f.code}" for f in report.findings]
