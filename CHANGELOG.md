@@ -8,6 +8,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **The vote-binding fix was verified in its links and not in its chain.** `c96442d` made
+  `convene_panel` name the artifact, and the tests that came with it exercised `convene_panel` and
+  `_artifact_digest` separately — **neither ran `cast()`**, which is the only thing that writes a
+  record. So `assignment → record → digest` stayed unverified after the fix, which is the same
+  shape as the defect it closed: `test_a_vote_binds_to_the_text_it_was_cast_on` proved the consumer
+  worked while nothing checked the producer. Corrected one level up and left uncorrected one level
+  above that.
+
+  The chain is measured now, including **the refusal that existed and had never been reachable** —
+  a second verdict on unchanged text. Asserted as the property rather than as *the field is not
+  null*, because naming the field would let the next way of emptying it through; the formulation is
+  a peer's and is better than the one I had.
+
+  A second defect was reported in the same function — that `_open_round` archives the PREVIOUS sha
+  rather than the digest it just computed. **Measured: that is correct.** The archived round carries
+  the sha the round was cast ON, and `panel["artifact_sha256"]` then moves to the current bytes. The
+  hash is written once at record creation, deliberately: *"it belongs to the PANEL and not to a
+  seat — re-hashing on each vote would bind the approval to the text only the last reviewer saw."*
+  What was broken was upstream of all of it.
+
+  And my own end-to-end test **skipped** on its first run, because a bare project has no roster. A
+  skip is not a pass, and a test that skips leaves exactly the gap it was written to close. It
+  builds the roster now and asserts.
+
 - **A matrix mismatch named one end of itself, so the artifact's own explanation of a fix
   re-created what it removed.** `_task_criteria` attributes a criterion only from inside that
   task's own `#### Acceptance Criteria` block — correct, and the reason is good. The trap is a
