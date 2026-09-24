@@ -106,6 +106,9 @@ class CoverageReport:
     #: promises that no gap asked for. One number out of two questions would be the
     #: defect this file has already paid for once.
     criteria_not_declared: tuple[str, ...] = field(default_factory=tuple)
+    #: A criterion bullet in no `####` subsection — invisible to every reader of the
+    #: block, so always a mistake rather than a style choice.
+    criteria_outside_any_subsection: tuple[str, ...] = field(default_factory=tuple)
     criteria_not_cited: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -163,6 +166,17 @@ def _task_criteria(content: str) -> dict[str, set[str]]:
     that exists to prove coverage approved away the gap that mattered.
     """
     out: dict[str, set[str]] = {}
+    #: `task -> criterion -> the line it was read from`. WHERE is what closed a diagnosis that
+    #: three corrections could not: the message said T1.4 does not declare AC-005 and never that
+    #: T1.2 still did, nor from which line. Kept beside the set rather than rebuilt by a second
+    #: pass, so the two cannot disagree about what was read.
+    where: dict[str, dict[str, int]] = {}
+    #: A criterion bullet under a `###` task heading and above its first `####`. It is in no
+    #: subsection, so `CRITERIA_BLOCK_RE` cannot see it and neither can any other consumer of the
+    #: block — which is why it is always a mistake. Measured on a consumer: a criterion MOVED
+    #: between tasks landed exactly here, invisible, while the note explaining the move stayed
+    #: inside the old task's block and was read as that task still declaring it.
+    orphans: list[str] = []
     headings = list(TASK_HEADER_RE.finditer(content))
     for i, match in enumerate(headings):
         end = headings[i + 1].start() if i + 1 < len(headings) else len(content)
@@ -170,10 +184,29 @@ def _task_criteria(content: str) -> dict[str, set[str]]:
         task_id = TASK_ID_RE.search(match.group(0))
         if task_id is None:
             continue
+        task = task_id.group(0)
+        base_line = content[:match.start()].count("\n") + 1
         declared: set[str] = set()
+        seen: dict[str, int] = {}
         for block in CRITERIA_BLOCK_RE.finditer(body):
-            declared.update(CRITERION_ID_RE.findall(block.group(1)))
-        out[task_id.group(0)] = declared
+            block_start = base_line + body[:block.start(1)].count("\n")
+            for line_offset, line in enumerate(block.group(1).splitlines()):
+                for criterion in CRITERION_ID_RE.findall(line):
+                    declared.add(criterion)
+                    seen.setdefault(criterion, block_start + line_offset)
+        first_subsection = body.find("\n#### ")
+        head = body[:first_subsection] if first_subsection != -1 else body
+        for line_offset, line in enumerate(head.splitlines()):
+            if not line.lstrip().startswith(("-", "*")):
+                continue
+            for criterion in CRITERION_ID_RE.findall(line):
+                orphans.append(
+                    f"{task} states {criterion} at line {base_line + line_offset} under its "
+                    f"`###` heading and above any `####` subsection, so nothing reads it")
+        out[task] = declared
+        where[task] = seen
+    _task_criteria.locations = where  # type: ignore[attr-defined]
+    _task_criteria.orphans = tuple(orphans)  # type: ignore[attr-defined]
     return out
 
 
@@ -348,7 +381,19 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
         for task in TASK_ID_RE.findall(task_col):
             cited_by_task.setdefault(task, set()).update(cited)
             for criterion in sorted(cited - declared_by.get(task, set())):
-                not_declared.append(f"{gap_id} cites {criterion}, which {task} does not declare")
+                # BOTH ENDS. Saying only that `task` does not declare it sent an author to
+                # look for an absence; naming the task that DOES declare it, and the line, turns
+                # the search into a jump. Measured on a consumer: three corrections that were
+                # right by eye, and a note explaining one of them re-created what it removed.
+                elsewhere = sorted(
+                    (other, lines[criterion])
+                    for other, lines in getattr(_task_criteria, "locations", {}).items()
+                    if criterion in lines and other != task)
+                also = ("".join(f", and {other} does at line {line}"
+                                for other, line in elsewhere)
+                        or ", and no task declares it")
+                not_declared.append(
+                    f"{gap_id} cites {criterion}, which {task} does not declare{also}")
     not_cited = [
         f"{task} declares {criterion}, which no matrix row cites"
         for task, declared in sorted(declared_by.items())
@@ -387,5 +432,6 @@ def check_coverage_matrix(plan_path: Path) -> CoverageReport:
         header=header,
         header_recognised=header_recognised,
         criteria_not_declared=tuple(not_declared),
+        criteria_outside_any_subsection=getattr(_task_criteria, "orphans", ()),
         criteria_not_cited=tuple(not_cited),
     )

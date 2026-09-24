@@ -8,6 +8,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **A matrix mismatch named one end of itself, so the artifact's own explanation of a fix
+  re-created what it removed.** `_task_criteria` attributes a criterion only from inside that
+  task's own `#### Acceptance Criteria` block — correct, and the reason is good. The trap is a
+  review asking for a criterion to MOVE: the natural edit moves the bullet and leaves a note
+  saying so, and the most useful place for that note is inside the block it is about. The parser
+  then reads the note's `**AC-005**` as the old task still declaring it, while the moved bullet,
+  placed under the new task's `###` heading and above its first `####`, sits in no subsection and
+  is invisible to every reader of the block.
+
+  Measured on a consumer three times in one session: three corrections that were right by eye
+  produced `matrix_cites_undeclared_criterion` + `coverage_lt_100`, and a differential on a scratch
+  copy flipped `is_complete` back to True by reverting one row's task id. A panel seat found it by
+  running the scorer; the other two read the plan text, found the move correct, and closed the
+  objection — a human following the moved bullet DOES find it under the new task.
+
+  **The parser is deliberately not made cleverer about prose**: a checker that tried to tell a
+  declaration from a sentence describing one would be guessing. What changed is the diagnostic. It
+  now reads `G1 cites AC-005, which T1.4 does not declare, and T1.2 does at line 16`, and a
+  criterion in no subsection is reported as such by name and line. The locations are recorded
+  beside the set in the same pass, so the two cannot disagree about what was read.
+
+  Two of my own tests were wrong here. One passed before the fix, asserting "contains a digit" and
+  finding the `1` in the gap id `G1` — satisfied by a coincidence in the text it read. An existing
+  one pinned the message's exact string and broke when the message gained the half that closes the
+  diagnosis; it asserts the content now, because the finding is about the row and the criterion and
+  not about the wording.
+
 - **A dimension with no subject was reported as a positive signal at full weight.**
   `check_adr_completeness` returns `completeness_ratio=1.0` for zero ADRs — deliberate, and
   `plan-template.md` says so: a plan with one way to do a thing has no decision to record. The

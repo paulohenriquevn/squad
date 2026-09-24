@@ -63,9 +63,16 @@ def _plan(tmp_path: Path, cell: str, head: str = HEAD) -> Path:
 def test_a_row_citing_a_criterion_no_task_declares_is_reported(tmp_path: Path) -> None:
     report = check_coverage_matrix(_plan(tmp_path, "AC-999"))
 
-    assert report.criteria_not_declared == ("G1 cites AC-999, which T1.1 does not declare",), (
-        "the row named a criterion that exists nowhere and the gap counted as mapped"
-    )
+    # The CONTENT, not the sentence. This pinned the exact string and broke when the message
+    # gained the half that closes the diagnosis — naming the task that DOES declare the criterion,
+    # with its line. A test that asserts prose fails on a rewording that improved it, and the
+    # finding here is about the row and the criterion, not about the wording.
+    assert len(report.criteria_not_declared) == 1, report.criteria_not_declared
+    said = report.criteria_not_declared[0]
+    for token in ("G1", "AC-999", "T1.1", "does not declare"):
+        assert token in said, f"{token!r} missing from {said!r}"
+    assert "no task declares it" in said, (
+        f"the criterion exists nowhere and the message does not say so: {said!r}")
     assert not report.is_complete, "a matrix citing what no task declares is not complete"
 
 
