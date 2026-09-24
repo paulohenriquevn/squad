@@ -166,6 +166,49 @@ fi
 
 ECO="$TARGET/.claude"
 
+# ── Companions: what moved with this file, and still lags here ────────────────
+#
+# This mode takes ONE file and a fix is rarely one file. Reported by a consumer on
+# 2026-09-24 applying the panel-family fix: `convene_panel.py` arrived, this printed
+# APPLIED, and the first seat that reached a plugin raised `AttributeError: 'Plugin'
+# object has no attribute 'agent_model'` — the companion was in another file. A second
+# companion was missing too and did NOT raise: it returned the fail-safe answer for a
+# model it should now recognise, which is the failure nobody reports.
+#
+# The kit's history answers it. The commit that last touched the applied file names
+# what moved with it; anything in that set still differing here is named. This
+# OVER-reports when a commit carried unrelated work, which is the honest direction:
+# the alternative stays silent about a real break.
+#
+# It never applies them. Each companion is its own judgement — one of them may be
+# DIVERGED, and the whole design of this mode is that it refuses to guess there.
+_report_companions() {
+  local _rel="$1" _sha _mate _n=0
+  if ! _sha="$(git -C "$_src_root" log -1 --format=%H -- "$_rel" 2>/dev/null)" || [ -z "$_sha" ]; then
+    echo "  COMPANIONS: not checked — \`$_src_root\` is not a git checkout, so what moved"
+    echo "  with this file cannot be read. Silence here would mean \"none\"; it means nobody asked."
+    return 0
+  fi
+  while IFS= read -r _mate; do
+    [ -n "$_mate" ] || continue
+    [ "$_mate" = "$_rel" ] && continue
+    [ -f "$_src_root/$_mate" ] || continue
+    if [ ! -e "$ECO/$_mate" ] || ! cmp -s "$_src_root/$_mate" "$ECO/$_mate"; then
+      [ "$_n" -eq 0 ] && echo "  COMPANIONS — changed with it upstream and still differ here:"
+      _n=$((_n + 1))
+      echo "    $_mate"
+    fi
+  done <<EOF
+$(git -C "$_src_root" show --name-only --format= "$_sha" 2>/dev/null)
+EOF
+  if [ "$_n" -eq 0 ]; then
+    echo "  COMPANIONS: none — every file that moved with this one already matches here."
+  else
+    echo "  Apply each on its own: this tool judges one file at a time, and one of these"
+    echo "  may be DIVERGED, where copying would delete your work."
+  fi
+}
+
 # ── --apply-upstream: ONE file, and only where nothing can be lost ────────────
 #
 # The kit had two modes and both replace everything, while `boundary-check` refuses
@@ -287,7 +330,8 @@ print(classify_file(Path(os.environ["SQ_A"]), Path(os.environ["SQ_B"]),
       echo "IDENTICAL: $_rel already matches the kit. Nothing was written." ;;
     kit_ahead|stale)
       cp "$_src_root/$_rel" "$ECO/$_rel"
-      echo "APPLIED: $_rel took the kit's version ($_verdict — this install held no line the kit lacks)." ;;
+      echo "APPLIED: $_rel took the kit's version ($_verdict — this install held no line the kit lacks)."
+      _report_companions "$_rel" ;;
     diverged)
       echo "REFUSED: $_rel is DIVERGED — both sides hold unique lines, and this cannot tell" >&2
       echo "  your work from your lag. Copying would delete a fix without a trace." >&2
