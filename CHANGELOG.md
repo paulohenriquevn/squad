@@ -8,6 +8,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **No panel vote was bound to the artifact it reviewed (#187).** `cast_vote.py` hashes the
+  artifact per round — the mechanism is there and correct — and reads the path from the
+  assignment: `panel.get("artifact", "")`. `convene_panel.py` named no `artifact`, so the key was
+  always absent, the digest always `""`, and every recorded round carried `sha256=None`. Confirmed
+  on a consumer across **all six archived rounds** of one record.
+
+  **The dangerous case is the inverse of the one that was hit.** A plan edited while a seat was
+  still voting, where the seat happened to read the post-edit text and its findings held — by
+  luck. The other direction has no defence: a round approves, an edit lands, and the record still
+  reads `APPROVED` over bytes nobody approved, while `review_panel.py` tallies it 2-of-3 and the
+  phase advances. `check_panel_approval.py` states that a missing record is not an approval, and
+  **an unbound record is weaker than a missing one, because it reads identically to a sound one.**
+
+  `convene_panel` now calls `panel_brief.locate` — the same `PHASE_SOURCES` table `build` reads, so
+  a rename moves one string and this follows. `cast_vote.py` did not change: it was already
+  written for the value.
+
+  **A test about this already existed and passed.**
+  `test_a_vote_binds_to_the_text_it_was_cast_on.py` tests `cast_vote` correctly and **builds its
+  own assignment** carrying `"artifact": artifact` — so it proved the CONSUMER works and said
+  nothing about whether the PRODUCER ever supplies the value. It even blesses the empty case, which
+  is right for `cast_vote` (an honest `""` beats a fabricated digest) and is why nobody asked
+  whether `""` was the only state in practice. Same shape as `--apply-upstream` calling
+  `classify_file` with two of four arguments: the function was tested, the call site was not. The
+  new test runs the real producer, over the phase list read from the roster — `alignment` was added
+  hours earlier and a test naming the three older phases would have passed over it.
+
 - **`check_adr_completeness` saw no ADR, so the cap guarding them had no subject.**
   `ADR_HEADER_RE` matched `^###\s+(D\d+)`, which the plan template does prescribe — and the rest
   of the kit writes `ADR-N`: `rules/cycle-code-quality.md`, `rules/cycle-rule-schema.md`,

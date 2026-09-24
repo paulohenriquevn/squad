@@ -68,6 +68,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from installed_plugins import resolve as resolve_plugin  # noqa: E402 (post-bootstrap)
+from panel_brief import locate as locate_artifact  # noqa: E402 (post-bootstrap)
 from review_panel import (  # noqa: E402 — post-bootstrap import
     HOME_FAMILY,
     PANEL_SIZE,
@@ -248,11 +249,38 @@ def convene(
                       "for halt_disposition.py, NOT a returned document",
         }
 
+    # WHAT they voted on, not only that they voted.
+    #
+    # `cast_vote.py` hashes the artifact per round and reads the path from here —
+    # `panel.get("artifact", "")` — and this record named none, so the digest was always "" and
+    # every archived round carried `sha256=None`. Confirmed on a consumer across all six rounds
+    # of one record (#187).
+    #
+    # The dangerous case is not a plan edited while a seat still votes, where the findings may
+    # hold by luck. It is the inverse: a round approves, an edit lands, and the record still reads
+    # APPROVED over bytes nobody approved — `review_panel.py` tallies it 2-of-3 and the phase
+    # advances. `check_panel_approval.py` states that a missing record is not an approval, and an
+    # UNBOUND record is weaker than a missing one because it reads identically to a sound one.
+    #
+    # `panel_brief.locate` resolves it from `PHASE_SOURCES`, the same table `build` reads, so a
+    # rename moves one string and this follows. Nothing new is asked of the caller.
+    located = locate_artifact(project, slug, phase)
+    artifacts = located.get("artifacts") or []
+    artifact = artifacts[0] if artifacts else ""
+    if artifact:
+        try:
+            artifact = str(Path(artifact).relative_to(project))
+        except ValueError:
+            pass  # outside the project: recorded absolute rather than silently blanked
+
     return OK, {
         "status": "assigned",
         "slug": slug,
         "phase": phase,
         "author": author,
+        #: Relative to the project. `cast_vote` resolves it and hashes the bytes; an absent file
+        #: hashes to "" rather than to an invented digest, which is the honest answer.
+        "artifact": artifact,
         "assigned": [s.agent for s in seats],
         "seats": [
             {"agent": s.agent, "model": s.model, "family": s.family,
