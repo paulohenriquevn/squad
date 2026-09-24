@@ -390,8 +390,23 @@ def _refused_head(part: str) -> str:
         if head.startswith("/") or head.startswith("./"):
             return (f"{head!r} is a binary this will not run unattended — run it "
                     "yourself if you trust it")
-        return f"{head!r} is not on the allowlist of readable commands"
+        # A refusal that names no way forward is one an author routes around, and this one is
+        # reached most often by somebody counting lines. Measured on a three-line file:
+        # `grep -c .` returns 2 when a line is blank (it skips them, which is wrong for a
+        # BUDGET), `wc -l <` returns 2 with no trailing newline (it counts newlines),
+        # `awk "END{print NR}"` is correct and was refused by the tokenizer until 2026-09-23,
+        # and `grep -c ""` is correct and was always accepted while being named nowhere. So the
+        # tool steered authors from a wrong instrument to a slightly-wrong one (#188).
+        return (f"{head!r} is not on the allowlist of readable commands. "
+                f'To count lines, `grep -c ""` is exact — `grep -c .` skips blank lines and '
+                f"`wc -l <` undercounts a file with no trailing newline.")
     return ""
+
+
+#: An interpreter whose quoted argument is a PROGRAM rather than a command list. All three read;
+#: `sed -i` writes and is caught by `_WRITING_FLAGS` against the unmasked span.
+_READONLY_PROGRAM_RE = re.compile(
+    r"\b(awk|sed|jq)\s+(?:-[\w-]+\s+)*(['\"])(?:(?!\2).)*\2", re.DOTALL)
 
 
 def _refused_command(span: str) -> str:
@@ -426,6 +441,21 @@ def _refused_command(span: str) -> str:
         return (f"{redirect.group(0).strip()!r} redirects output to a file; this runs "
                 f"only commands that read")
 
+    # AN INTERPRETER'S PROGRAM IS NOT A LIST OF COMMANDS.
+    #
+    # The split below separates on `{` and `}`, so `awk "END{print NR}"` became
+    # `awk "END` / `print NR` / `"` and `print` landed in head position — refused as an unknown
+    # command. `awk` is read-only and `print` is an awk keyword. The cost was specific: an author
+    # who notices that `grep -c .` skips blank lines (wrong for a line BUDGET) reaches for
+    # `awk "END{print NR}"`, which is correct, and the tool refused it while accepting `wc -l <`,
+    # which undercounts a file with no trailing newline. It steered authors from a wrong
+    # instrument to a slightly-wrong one (#188).
+    #
+    # Masked rather than removed from the separator set: dropping `{`/`}` entirely would leave
+    # `{ rm -rf /; }` with heads `['{', '}']` and `rm` never read — measured, and a security
+    # regression in the file whose job is that boundary. A writing FLAG is still caught, because
+    # `_WRITING_FLAGS` is checked against the original `span` below rather than against this.
+    unwrapped = _READONLY_PROGRAM_RE.sub(r"\1 PROGRAM", unwrapped)
     tokens = re.split(r"[|;&\n(]|\$\(|\)|`|\{|\}", unwrapped)
     for part in tokens:
         refused = _refused_head(part)
@@ -607,11 +637,25 @@ def _decide(result, expected: str) -> tuple[bool | None, str]:
     if said_nothing and result.exit_code == 0:
         return None, ("exit 0 today, and the runner reports it executed nothing — "
                       "the criterion did not measure what it claims to")
-    if result.exit_code != 0:
-        return False, "exits non-zero today"
+    # THE ASSERTION DECIDES, and the exit code is context.
+    #
+    # This returned False on any non-zero exit before the output was ever compared, and this
+    # ecosystem writes `… | grep -c pattern` prints `0` routinely — a form that prints `0` and
+    # exits `1`. So such a criterion read `fails today` in the FIXED state exactly as in the
+    # broken one: not discriminating, stuck. Measured on one consumer plan, this and the awk
+    # tokenizer left six of thirteen criteria unable to flip, while the plan's own central
+    # metric counted `[fails today]` going to zero — unsatisfiable by construction (#188).
+    #
+    # A criterion that states no expected output is still exit-code-only, below. The two are
+    # different measurements, and reading one as the other is this file's own subject.
     if not value:
+        if result.exit_code != 0:
+            return False, "exits non-zero today, and the text states no expected output"
         return None, "exit 0 today, and the text does not state an expected output"
     out = result.stdout.strip()
+    #: Carried into every verdict below, so a reader can see that a command exited non-zero and
+    #: its asserted output held anyway. Hiding it would trade one confusion for another.
+    exit_note = f"exit {result.exit_code}"
     #: A stated BOUND is compared as one. Comparing `prints 4 or more` for equality made a
     #: correct `6` read as a failure — and worse than the false verdict is its direction:
     #: the check reported "discriminates" because the number DIFFERED, not because the
@@ -629,11 +673,12 @@ def _decide(result, expected: str) -> tuple[bool | None, str]:
         ok = {">=": actual >= limit, ">": actual > limit,
               "<=": actual <= limit, "<": actual < limit}[op]
         if ok:
-            return True, f"already prints {actual}, which satisfies {op} {limit}"
-        return False, f"prints {actual} today, needs {op} {limit}"
+            return True, (f"already prints {actual}, which satisfies {op} {limit} "
+                          f"({exit_note})")
+        return False, f"prints {actual} today, needs {op} {limit} ({exit_note})"
     if out == value or out.splitlines()[:1] == [value]:
-        return True, f"already prints {value!r}"
-    return False, f"prints {out[:40]!r}, expects {value!r}"
+        return True, f"already prints {value!r} ({exit_note})"
+    return False, f"prints {out[:40]!r}, expects {value!r} ({exit_note})"
 
 
 def run(brief: Path, repo_root: Path, timeout: float = 60.0) -> Report:

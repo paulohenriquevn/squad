@@ -8,6 +8,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ### Fixed
 
+- **An output-valued criterion was judged by its exit code, so `grep -c` printing `0` read red in
+  both states (#188).** `_decide` returned before the output was ever compared — `if
+  result.exit_code != 0: return False` sat above the `print:<value>` branch — and this ecosystem
+  writes *"`… | grep -c pattern` prints `0`"* routinely, a form that prints `0` and exits `1`. Such
+  a criterion read `[fails today]` in the FIXED state exactly as in the broken one: **not
+  discriminating, stuck.** Measured on one consumer plan, this and the tokenizer below left **six
+  of thirteen criteria unable to flip**, while that plan's central metric — stated four times,
+  including in its Global DoD — was *"`grep -c '[fails today]'` goes from 13 to 0"*. Unsatisfiable
+  by construction, and nothing said so. The exit code now travels in every verdict as context
+  (`already prints '0' (exit 1)`), because hiding it would trade one confusion for another.
+
+- **The tokenizer read `print` inside an `awk` body as a command name.** The split separates on `{`
+  and `}`, so `awk "END{print NR}"` became `awk "END` / `print NR` / `"` and `print` landed in head
+  position — refused as unknown, permanently and lexically, so repointing the criterion at a file
+  that exists changed nothing. **Measured before choosing the fix**: dropping `{`/`}` from the
+  separator set would leave `{ rm -rf /; }` with heads `['{', '}']` and `rm` never read, a security
+  regression in the file whose job is that boundary. So an `awk`/`sed`/`jq` quoted body is masked
+  instead — all three read, and `_WRITING_FLAGS` still checks the unmasked span, so `sed -i`
+  remains caught.
+
+- **The refusal now names the line-count form that works.** Measured on a three-line file:
+  `grep -c .` returns 2 because it skips blank lines (wrong for a BUDGET), `wc -l <` returns 2
+  because it counts newlines, `awk "END{print NR}"` is correct and was refused, and `grep -c ""` is
+  correct and was accepted while being named nowhere. The tool steered authors from a wrong
+  instrument to a slightly-wrong one; the refusal says which to use.
+
 - **No panel vote was bound to the artifact it reviewed (#187).** `cast_vote.py` hashes the
   artifact per round — the mechanism is there and correct — and reads the path from the
   assignment: `panel.get("artifact", "")`. `convene_panel.py` named no `artifact`, so the key was
