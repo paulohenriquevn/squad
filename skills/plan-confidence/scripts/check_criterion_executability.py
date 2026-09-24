@@ -36,6 +36,14 @@ gate in skills/implement/scripts/check_tdd_shape.py.
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path as _Path
+
+sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
+from squad.measurability import (  # noqa: E402 — post-bootstrap import
+    PATTERNS as _SHARED_PATTERNS,
+    is_measurable as _shared_is_measurable,
+)
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -92,24 +100,31 @@ VAGUE_VERB_PATTERNS = (
 
 # Tokens that indicate a MEASURABLE objective.
 # Numbers, comparison operators, units, boolean shapes, file/command refs.
-MEASURABLE_PATTERNS = (
-    # `LoC` and `lines` are units this kit writes constantly — "≤ 500 LoC", "≤ 40 added
-    # lines" — and were absent, so a criterion stating a line budget read as unmeasurable.
-    r"\b\d+(?:\.\d+)?\s*(?:ms|s|µs|us|ns|MB|GB|KB|%|req/s|rps|qps|fps|px|LoC|loc|lines?)\b",
-    r"\b(?:P50|P95|P99|p50|p95|p99)\b",                                         # percentile names
-    # `≤` and `≥` as well as the ASCII forms. Measured 2026-09-23: this read only `[<>]=?` while
-    # `plan-template.md` and every golden rule in the kit write `≤ 60 lines`, `≤ 500 LoC`,
-    # `complexity ≤ 10`. The detector could not read the notation its own documents use, so the
-    # kit's `good-plan.md` fixture scored `acceptable_ratio 0.69` on criteria that state numbers.
-    r"[<>≤≥]=?\s*\d",                                                           # comparison operators
-    # `exits` as well as `exit`: a criterion reads "the command exits 0", and requiring the bare
-    # stem missed the inflection every author writes.
-    r"\bexits?\s+(?:code\s+)?[01]\b",                                          # exit code semantics
+#: Moved to `squad.measurability`, which `plan-alignment` reads too. This list and that
+#: file's regex both answered "is there something here somebody can fail", were written
+#: apart, and had drifted: `the command exits 0` was measurable here and not there. The
+#: kit's rule for its roster applies to this question as well — one parser, because two
+#: readers of one table drift apart silently.
+#: Shapes that make a CRITERION measurable and do not make a REQUIREMENT measurable.
+#:
+#: An acceptance criterion is written to be executed, so `equals <x>`, `contains <x>`,
+#: `returns true` and a backticked command each name something a runner can compare. A
+#: requirement in a plan's NFR section is written to be met, and a backtick around any
+#: word would make every requirement mentioning code measurable — which is why these
+#: did NOT move into `squad.measurability` with the numeric core.
+#:
+#: Kept explicit rather than merged: the two readers ask questions that overlap and are
+#: not the same, and forcing one definition over both would have widened this file's
+#: sibling by accident. The shared half is shared BECAUSE it drifted; this half never
+#: existed in the sibling at all.
+_CRITERION_ASSERTIONS = (
     r"\breturn(?:s)?\s+(?:true|false|0|1|null|None|nil)\b",                     # boolean/sentinel return
     r"\bequals?\s+\S",                                                          # equality assertion
     r"\bcontains?\s+\S",                                                        # containment assertion
     r"`[^`]+`",                                                                 # backtick-quoted code/command
 )
+
+MEASURABLE_PATTERNS = _SHARED_PATTERNS + _CRITERION_ASSERTIONS
 
 # Tokens that indicate an ORACLE — how to know the criterion passed.
 ORACLE_PATTERNS = (
@@ -185,7 +200,7 @@ def _has_observable_verb(text: str) -> bool:
 
 
 def _has_measurable_object(text: str) -> bool:
-    return any(re.search(pattern, text, re.IGNORECASE) for pattern in MEASURABLE_PATTERNS)
+    return any(re.search(p, text, re.IGNORECASE) for p in MEASURABLE_PATTERNS)
 
 
 def _has_oracle(text: str) -> bool:

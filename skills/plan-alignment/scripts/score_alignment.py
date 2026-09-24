@@ -79,6 +79,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from squad import signoff as _shared_signoff
+from squad.measurability import is_measurable as _shared_is_measurable
 from squad.rubric import ALIGNMENT_FLOOR_RATIO
 
 #: The bar, read rather than restated. The reasoning — why 90% of the maximum, and
@@ -88,15 +89,16 @@ from squad.rubric import ALIGNMENT_FLOOR_RATIO
 #: types and nothing would have reported them disagreeing.
 THRESHOLD = ALIGNMENT_FLOOR_RATIO
 
-#: A requirement is measurable when it carries a number and a unit, or an
-#: explicit comparison. "Fast" is a wish; "p95 under 200ms at 1000 rps" is a
-#: requirement somebody can fail.
-_MEASURABLE_RE = re.compile(
-    r"\d+\s*(ms|s|m|h|%|rps|qps|req/s|MB|GB|KB|kb/s|users?|rows?|items?)"
-    r"|[<>≤≥]=?\s*\d"
-    r"|\b(p50|p95|p99|percentile)\b",
-    re.IGNORECASE,
-)
+#: A requirement is measurable when it carries a number and something to count it
+#: against. "Fast" is a wish; "p95 under 200ms at 1000 rps" is a requirement somebody
+#: can fail — and so is "exactly 1 prop", which this file could not read until the
+#: definition moved to `squad.measurability`.
+#:
+#: ONE definition, shared with `plan-confidence`. They had two, and the two disagreed:
+#: measured 2026-09-24, `the command exits 0` was measurable to that reader and not to
+#: this one, because it had been widened by an author who did not know this existed.
+def _is_measurable_requirement(text: str) -> bool:
+    return _shared_is_measurable(text)
 
 #: An acceptance criterion is executable when it names something that runs.
 #:
@@ -707,7 +709,7 @@ def _criterion_nonfunctional_requirements(body: str) -> Criterion:
     """3 — Non-functional requirements, WITH numbers."""
     nfr_section = _section(body, "Non-Functional Requirements", "Non-functional requirements")
     nfr = _bullets(nfr_section)
-    measurable = [b for b in nfr if _MEASURABLE_RE.search(b)]
+    measurable = [b for b in nfr if _is_measurable_requirement(b)]
     return Criterion("nfr_measurable", "Non-functional requirements carry numbers",
         _tri(bool(nfr), bool(nfr) and len(measurable) == len(nfr)),
         f"{len(measurable)}/{len(nfr)} measurable" if nfr
@@ -818,7 +820,7 @@ def _criterion_ambiguity(sections: _Sections) -> Criterion:
     weighted = "\n".join(filter(None, (sections.fr_section, sections.nfr_section, sections.ac_section)))
     hits = sorted({m.group(1).lower() for m in _VAGUE_RE.finditer(weighted)})
     unquantified = [h for h in hits
-                    if not any(_MEASURABLE_RE.search(ln)
+                    if not any(_is_measurable_requirement(ln)
                                for ln in weighted.splitlines()
                                if re.search(rf"\b{re.escape(h)}\b", ln, re.IGNORECASE))]
     return Criterion("no_vague_terms", "No unquantified quality adjective in a requirement",
