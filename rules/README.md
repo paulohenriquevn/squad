@@ -98,6 +98,7 @@ Each `cycle-{name}.md` defines:
 | `code-quality-languages.txt` | Enabled languages per project |
 | `plan-confidence-thresholds.txt` | Plan scoring thresholds |
 | `plan-confidence-allowlist.txt` | Plan findings exemptions |
+| `english-only-allowlist.txt` | Paths that may carry Portuguese (product copy, Portuguese fixtures), each with a reason |
 | `discover-web-allowlist.txt` | Authoritative domains for WebFetch |
 | `deps-audit-allowlist.txt` | Dependency audit exemptions |
 | `discover-opportunity-thresholds.txt` | Opportunity confidence thresholds |

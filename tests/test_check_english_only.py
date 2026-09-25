@@ -12,13 +12,19 @@ a rule half in one language and half in another is a rule whose exact wording
 nobody can grep for. And it spreads: one consumer wrote an entire `BACKLOG.md` in
 Portuguese inside an English-by-policy repository, because nothing said no.
 
-WHY THE DETECTOR IS CONSERVATIVE
---------------------------------
-It matches function words that cannot plausibly appear in English technical
-prose, not every Portuguese word. `para`, `com`, `de` and `mode` are English or
-appear inside identifiers and URLs; a detector that flagged them would fire on
-clean files, and a gate that cries wolf is a gate somebody disables. Precision
-over recall is the correct trade for a gate that must run everywhere.
+WHY THE DETECTOR SCORES INSTEAD OF MATCHING A LIST
+--------------------------------------------------
+It used to match a closed list of spellings that "cannot be English", and a closed
+list over an open vocabulary has no bound on what it misses: `install.sh` carried the
+section header `tabela de roteamento: entregue VAZIA` for four months while the gate
+reported clean over 997 files. The detector now weighs every word on the line for
+Portuguese evidence against English evidence. The precision half of the old promise
+still holds and is tested below: `para`, `de`, `em`, a café in São Paulo, a name with
+an accent — none of them makes an English line Portuguese.
+
+Files that carry Portuguese on purpose — product copy, fixtures of a Portuguese
+detector — are declared by path in the allowlist, with a reason, instead of widening
+or narrowing the detector until they stop firing.
 """
 from __future__ import annotations
 
@@ -126,11 +132,126 @@ def test_a_portuguese_docstring_with_no_accent_is_detected() -> None:
     "# the present value, or the absent one",
 ])
 def test_the_widened_markers_do_not_fire_on_english(line: str) -> None:
-    """A gate that guesses about language is a gate people learn to ignore.
+    """Words that exist in both languages decide nothing on their own.
 
-    A word-frequency heuristic was the other option and was rejected for this reason:
-    every marker added is a spelling that cannot be English.
+    `apply`, `returns`, `present`: the old list carried their Portuguese cousins, and
+    the scorer must not mistake the English spellings for them.
     """
     from check_english_only import scan_text
 
     assert not scan_text(line), f"false positive on: {line}"
+
+
+# ── the detector scores; it does not look words up ──────────────────────────────
+
+
+@pytest.mark.parametrize("line", [
+    # The install.sh shape with words no list ever carried: no accent, no marker.
+    "# --- lista de encaminhamento: publicada VAZIA -----------------",  # english-only: the fixture IS the Portuguese this gate must catch
+    # docs/ADR/0025 carried this one, and the list could not see it either.
+    "**Integração (Fleet Lander)**",  # english-only: the fixture IS the Portuguese this gate must catch
+    # The line the old docstring admitted it missed, verbatim.
+    "exigindo a spec Agent Skills; com o kit instalado",  # english-only: the fixture IS the Portuguese this gate must catch
+    "# Poda durante a travessia: um filtro posterior desce em tudo",  # english-only: the fixture IS the Portuguese this gate must catch
+    "Descrição",  # english-only: the fixture IS the Portuguese this gate must catch
+    "- 9 testes novos (95 nas duas skills).",  # english-only: the fixture IS the Portuguese this gate must catch
+])
+def test_portuguese_no_list_names_is_still_caught(line: str) -> None:
+    """Coverage the closed list could not give: none of these words was on it."""
+    assert find_markers(line), f"missed: {line}"
+
+
+@pytest.mark.parametrize("line", [
+    "We met at a café in São Paulo before the release.",
+    "Deploy to the São Paulo region first, then Rio de Janeiro.",
+    "Offices: Rio de Janeiro, São Paulo",
+    "Maintained by José Antônio and João.",
+    "The façade pattern hides the subsystem; the naïve version leaked it.",
+    "Attach your résumé, not a cliché.",
+    "São Paulo",
+    "café",
+    "Use an em dash, not a hyphen.",
+    "The de facto standard is UTF-8, and para-virtualisation is not the point.",
+    "except ValueError as e:",
+    "The lookup is O(n) at worst; Big O hides the constant.",
+    '    "sort": "o", "go": "o",',
+    "# TODO: a line with a TODO in it is still English",
+])
+def test_english_with_loanwords_and_names_is_not_flagged(line: str) -> None:
+    """A loanword or a name is one word of evidence against a whole English sentence.
+
+    The gate runs in every consumer, and a consumer's README names its city and its
+    authors. A detector that read `São Paulo` as Portuguese prose would be turned off
+    the first week, which is the failure the old list was built to avoid.
+    """
+    assert find_markers(line) == [], f"false positive: {line}"
+
+
+# ── the allowlist: which paths may carry Portuguese at all ──────────────────────
+
+
+def _repo(tmp_path: Path, files: dict[str, str]) -> Path:
+    """A git repository tracking exactly `files`."""
+    import subprocess
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    for rel, text in files.items():
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    return tmp_path
+
+
+_PT_COPY = "Seu pedido foi enviado com sucesso.\n"  # english-only: product copy is the thing the allowlist admits
+
+
+def test_a_path_declared_in_the_allowlist_may_carry_portuguese(tmp_path: Path) -> None:
+    from check_english_only import scan_repository
+
+    root = _repo(tmp_path, {
+        "rules/english-only-allowlist.txt":
+            "web/locales/pt-BR/* | product copy: the storefront ships in Portuguese\n",
+        "web/locales/pt-BR/checkout.txt": _PT_COPY,
+        "src/checkout.py": "# " + _PT_COPY,
+    })
+
+    report = scan_repository(root)
+
+    assert list(report) == ["src/checkout.py"]
+
+
+def test_without_an_allowlist_every_path_must_be_english(tmp_path: Path) -> None:
+    from check_english_only import scan_repository
+
+    root = _repo(tmp_path, {"web/locales/pt-BR/checkout.txt": _PT_COPY})
+
+    assert list(scan_repository(root)) == ["web/locales/pt-BR/checkout.txt"]
+
+
+def test_an_allowlist_row_without_a_reason_is_refused(tmp_path: Path) -> None:
+    """Same contract as the per-line marker: an opt-out that says nothing is refused.
+
+    A bare glob would silently exempt a directory forever, and the next reader could
+    not tell product copy from a lapse somebody hid.
+    """
+    from check_english_only import AllowlistError, scan_repository
+
+    root = _repo(tmp_path, {
+        "rules/english-only-allowlist.txt": "web/locales/pt-BR/*\n",
+        "web/locales/pt-BR/checkout.txt": _PT_COPY,
+    })
+
+    with pytest.raises(AllowlistError, match="english-only-allowlist.txt:1"):
+        scan_repository(root)
+
+
+def test_a_malformed_allowlist_exits_unchecked_rather_than_clean(tmp_path: Path) -> None:
+    from check_english_only import main
+
+    _repo(tmp_path, {
+        "rules/english-only-allowlist.txt": "web/* |   \n",
+        "README.md": "English.\n",
+    })
+
+    assert main(["--root", str(tmp_path)]) == 2

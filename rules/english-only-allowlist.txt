@@ -1,0 +1,39 @@
+# rule-id: SQ-ALW-05
+# Tracked paths that may carry Portuguese. Read by `mechanisms/gates/check_english_only.py`.
+#
+# THE RULE THIS FILE IS AN EXCEPTION TO
+# -------------------------------------
+# `rules/english-only.md` (SQ-LNG-01): every versioned file is English. The checker
+# scores each line for Portuguese evidence instead of matching a closed word list, so
+# it no longer needs to be blind to ordinary Portuguese words to stay quiet on the
+# files that carry them ON PURPOSE. This file is where that purpose is declared.
+#
+# WHAT BELONGS HERE
+# -----------------
+#   - Product copy a project ships in Portuguese: locale files, UI strings.
+#   - Test data that must be Portuguese to exercise what it tests — captured
+#     Portuguese screens, a consumer's registry text, the input of a Portuguese
+#     smell detector.
+#
+# What does NOT belong here: a file with one Portuguese line. Keep that line with a
+# marker on the line itself — `# english-only: <why>` — so the rest of the file is
+# still checked. A path listed here is not read at all.
+#
+# FORMAT
+#   <path-glob> | <why this path carries Portuguese>
+#
+# Paths are relative to the project root and matched with `fnmatch`: `*` crosses `/`,
+# so `web/locales/pt-BR/*` covers everything below it. A row with no reason is
+# refused and the checker exits 2 — an opt-out that says nothing is the silent
+# exception the gate exists to prevent.
+#
+# The rows below are the kit's own. In a consumer, replace them with the project's.
+
+skills/plan-confidence/templates/rubric-v1.md                | the PT-BR spec-smell dictionaries: a detector naming the Portuguese it detects
+skills/plan-confidence/tests/test_smell_pt_br.py             | fixtures of the PT-BR smell detector; the smell cannot be exercised in English
+skills/backlog-review/tests/test_check_backlog_structure.py  | fixtures of Portuguese vague terms and blocked_by prose the structure check reads
+skills/backlog-review/tests/test_select_backlog_item.py      | a consumer's Portuguese blocked_by value, captured verbatim
+tests/test_delegated_decision.py                             | consumers' Portuguese blocked_by prose, the classifier's real input, captured verbatim
+tests/test_apply_delegated_decisions.py                      | consumers' Portuguese blocked_by prose, captured verbatim
+tests/test_blocked_by_readers_agree.py                       | consumers' Portuguese blocked_by prose, captured verbatim
+tests/test_squad_lead.py                                     | captured Portuguese session screens; the lead mirrors the operator's language

@@ -522,6 +522,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
   membership, matching the `>=` assertion directly above it.
 
 ### Changed
+- **`check_english_only` scores each line for Portuguese instead of matching a closed word list, and paths that ship Portuguese on purpose are declared in `rules/english-only-allowlist.txt`.** The old list missed any Portuguese built from words it did not carry (an `install.sh` section header survived four months). Measured on this repository: 130 Portuguese lines found across 43 files the old gate called clean, with no English line flagged; loanwords and names such as "café" or "São Paulo" in an English sentence do not fire. An allowlist row without a reason is refused with exit 2. (#130)
 - **`missing_cost_if_wrong` now says in its own docstring that it caps nothing.** The field is reported under `sub_reports.adr_completeness` and no cap in the golden-rule table refers to it, but nothing said so at the point a reader meets it — and the CHANGELOG argues hard for the signal's value, which invites the next reader to build a threshold on it. On a consumer registry of 34 plans measured 2026-09-23, all but one plan was missing the field on at least one decision: a cap here would fire on ordinary work, which is how a gate earns being switched off. The comment now states report-only, the reason, and the measurement's date and origin. (#192)
 
 - **`rules/testing.md § 4.1` gains the sharper case: the rule you just wrote does not apply
