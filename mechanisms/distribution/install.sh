@@ -393,6 +393,26 @@ fi
 # name in `withdrawn.txt` is ever called a withdrawal. Reported always; removed only under
 # `--remove-withdrawn`, because a consumer may have kept a retired skill deliberately.
 _withdrawn_list="$SCRIPT_DIR/withdrawn.txt"
+
+# The line a preserved path gets. `kept (yours)` is the right label for what the kit never
+# shipped and a false one for a declared withdrawal: `--force` printed it for
+# `rules/cycle-auto-plan.md` right under the report naming that file as the kit's, and it
+# was the last word the operator saw about it. Preserving it is still right — removal is
+# opt-in — so only the label changes.
+announce_kept() {  # $1 = path relative to .claude/
+  local _row
+  if [ -f "$_withdrawn_list" ]; then
+    while IFS='|' read -r _row _; do
+      _row="$(echo "$_row" | tr -d '[:space:]')"
+      if [ "$_row" = "$1" ]; then
+        echo "    kept (WITHDRAWN by the kit, not yours — --remove-withdrawn deletes it): $1"
+        return 0
+      fi
+    done < "$_withdrawn_list"
+  fi
+  echo "    kept (yours): $1"
+}
+
 if [ -f "$_withdrawn_list" ] && [ -d "$ECO" ]; then
   _found=0
   while IFS='|' read -r _rel _when _successor _record; do
@@ -806,7 +826,7 @@ for item in skills rules hooks commands mechanisms squad; do
         for entry in "$OWN_KEEP"/* "$OWN_KEEP"/.[!.]*; do
           [ -e "$entry" ] || continue
           cp -a "$entry" "$ECO/$item/"
-          echo "    kept (yours): $item/$(basename "$entry")"
+          announce_kept "$item/$(basename "$entry")"
         done
       fi
       rm -rf "$OWN_KEEP"
@@ -823,7 +843,7 @@ for item in skills rules hooks commands mechanisms squad; do
       for d in "$SKILLS_KEEP"/* "$SKILLS_KEEP"/.[!.]*; do
         [ -e "$d" ] || continue
         cp -r "$d" "$ECO/skills/"
-        echo "    kept (yours): skills/$(basename "$d")"
+        announce_kept "skills/$(basename "$d")"
       done
       rm -rf "$SKILLS_KEEP"
       SKILLS_KEEP=""
@@ -842,7 +862,7 @@ for item in skills rules hooks commands mechanisms squad; do
         for f in "$CONFIG_KEEP"/*; do
           [ -f "$f" ] || continue
           cp "$f" "$ECO/rules/$(basename "$f")"
-          echo "    kept (yours): rules/$(basename "$f")"
+          announce_kept "rules/$(basename "$f")"
         done
         rm -rf "$CONFIG_KEEP"
       fi
