@@ -90,9 +90,16 @@ If any check fails, refuse with the specific missing piece surfaced honestly. Th
 
 ```bash
 python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/review/scripts/detect_domain.py \
-  --plan .claude/records/plans/{slug}-plan.md \
-  --diff-base main
+  --plan .claude/records/plans/{slug}-plan.md
 ```
+
+No `--diff-base`: the script resolves the integration branch (`git-safety.md` § 1 —
+`develop`, locally or as `origin/develop`) and reports the ref it compared as
+`diff_base`. **That value is the base for every later step** — the auditors in Step 2b
+and the reviewers in Step 3 — so all three read the same revision. Never type `main`
+here: a repository on this kit's flow need not have one, and every plugin refuses a
+ref that does not resolve. A base that does not resolve exits 2 and names the refs it
+tried; that is a stop, not an empty domain list to carry on with.
 
 Output: JSON with detected domains + confidence per domain.
 
@@ -101,7 +108,8 @@ Output: JSON with detected domains + confidence per domain.
   "primary_domain": "memory-layer",
   "secondary_domains": ["pgvector-schema", "llm-extraction"],
   "confidence": {"memory-layer": 0.92, "pgvector-schema": 0.78, "llm-extraction": 0.65},
-  "domain_keywords_matched": ["memory store", "embedding", "Postgres", "pgvector", "remember"]
+  "domain_keywords_matched": ["memory store", "embedding", "Postgres", "pgvector", "remember"],
+  "diff_base": "develop"
 }
 ```
 
@@ -120,7 +128,7 @@ the wrong thing reads as coverage.
 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/select_auditors.py" \
-  --slug {slug} --domains "<primary,secondary from Step 2>" --diff-base main --write
+  --slug {slug} --domains "<primary,secondary from Step 2>" --diff-base "<diff_base from Step 2>" --write
 ```
 
 Name the change the way it is actually named: `--diff-base <ref>`, `--pr <n>` or
@@ -146,6 +154,31 @@ that reading means moving the output directory, which is the one thing that must
 move: Step 4 looks for the report exactly where the assignment put it. **Move the
 caller, never the `--output-dir`.**
 
+**One auditor at a time, in this session, to completion.** Each printed command is
+a halt-loop, not a script: its setup writes `.claude/<name>-loop.local.md`
+(`code-review-loop.local.md` for `loop-code-review`) with `active: true`, and from then
+on that plugin's Stop hook takes over this session until the run ends. That fixes the launch order:
+
+1. **Sequential, never back to back.** Every active loop's Stop hook blocks every Stop
+   and advances its OWN iteration counter on turns spent on the other loops, so N
+   setups launched together share one ceiling — each auditor gets roughly
+   `max_iterations / N` turns of its own, and the audits that hit the cap come back
+   `INCOMPLETE`. No plugin refuses to start while another `loop-*` is active; the order
+   is yours to keep.
+2. **Launch the next only after the previous one finished**: its report exists at
+   `<output_dir>/final_report.md` (the `output_dir` of that row in the assignment), and
+   no `.claude/*-loop.local.md` still says `active: true`. Check both before the
+   next command; if either fails, the previous run has not finished, and a second
+   launch is exactly the shared-ceiling case above.
+3. **Never delegate a loop to a sub-agent.** Stop hooks do not fire inside an Agent
+   sub-agent, so a loop started there runs one turn and stops, and leaves no report.
+4. **Invoke it by the name the assignment prints** — the namespaced skill
+   (`/loop-code-review:loop-code-review …`), which is the name the Skill tool resolves.
+5. **Then resume here.** When the last row's report exists, continue with Step 3 in
+   the same session. The loops do not return to this skill on their own; the
+   assignment file (`.squad/records/audits/{slug}-auditors.json`) is where you pick the
+   list back up, and Step 4 reads the reports from the same `output_dir`s.
+
 **Do not paraphrase an auditor's findings into your own.** They travel as that
 plugin's report, with its `## Verdict` quoted and its `## What Was NOT Analyzed`
 carried — that section is the only thing stopping partial coverage from reading as
@@ -163,10 +196,11 @@ python3 $([ -d .claude/skills ] && echo .claude || echo .)/skills/review/scripts
   --slug {slug} \
   --primary-domain memory-layer \
   --secondary-domains pgvector-schema,llm-extraction \
+  --diff-base "<diff_base from Step 2>" \
   --output-dir .squad/records/reviews/review-{slug}-{YYYY-MM-DD}/
 ```
 
-Both `--slug` and `--primary-domain` are required. `--date` defaults to today UTC; `--diff-base` defaults to `main`.
+Both `--slug` and `--primary-domain` are required. `--date` defaults to today UTC. `--diff-base` takes Step 2's `diff_base`; omitted, it is resolved the same way Step 2 resolves it, and an unresolvable one is refused rather than written into every reviewer's brief.
 
 The script:
 1. Reads templates at `templates/agent-*.md`

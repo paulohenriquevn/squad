@@ -103,7 +103,7 @@ def registry_path(project: Path) -> Path:
     return project / "rules" / "review-auditors.txt"
 
 
-#: What a plugin name may look like. `command_for` builds `/{plugin} {target} …` and
+#: What a plugin name may look like. `command_for` builds `/{plugin}:{plugin} {target} …` and
 #: that string is printed for an agent to run and written into the assignment record,
 #: so anything accepted here ends up in a command. Letters, digits, `-` and `_`, plus
 #: at most one `:` — the separator a namespaced skill uses (`judge-codex:final-judge`).
@@ -214,11 +214,23 @@ def scope_flag(scope: dict) -> str:
     return ""
 
 
+def invocation_name(plugin: str) -> str:
+    """The namespaced command a plugin registers: `<plugin>:<command>`.
+
+    A `loop-*` plugin's command carries its own name (`commands/<plugin>.md`, true for
+    all seventeen installed on 2026-09-25), so the invocation is `plugin:plugin`. The
+    bare `/loop-code-review` this printed is not the name the Skill tool resolves, and
+    `/review` tells the agent to run the command exactly as printed. A row that already
+    names its namespace is taken as written.
+    """
+    return plugin if ":" in plugin else f"{plugin}:{plugin}"
+
+
 def command_for(a: Auditor, *, target: str, scope: dict, project: Path,
                 max_iterations: int | None = None) -> str:
     """The exact invocation, so nobody has to reconstruct it from prose."""
     ceiling = f" --max-iterations {max_iterations}" if max_iterations else ""
-    return (f"/{a.plugin} {target} --output-dir {a.output_dir(project)}"
+    return (f"/{invocation_name(a.plugin)} {target} --output-dir {a.output_dir(project)}"
             f"{scope_flag(scope)}{ceiling}")
 
 
