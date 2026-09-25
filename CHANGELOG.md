@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Each item's independent audit writes to its own directory.** Auditor output moves from `.squad/records/audits/<plugin>/` to `.squad/records/audits/<slug>/<plugin>/`, so one item's audit no longer reuses the previous item's plugin database and report. (#185)
 - **Independent auditors are launched one at a time, by the name that resolves.** /review now states the launch order for the `loop-*` halt-loops (one active at a time, the next only after the previous `final_report.md` exists, never in a sub-agent), and `select_auditors.py` prints the namespaced command (`/loop-code-review:loop-code-review`). A guard refusing a second active loop belongs to the plugins themselves. (#181)
 - **A plugin verdict computed as blocking now blocks the review.** When an auditor's `verdict.json` says a script counted blocking findings, /review gets a BLOCKER; agent-derived verdicts stay a carried signal. (#179)
 - **An auditor stopped on its iteration cap no longer counts as coverage.** A report whose own run says INCOMPLETE is now a distinct state that blocks the review with a finding naming the stop condition, instead of passing because it is well-formed. (#178)

@@ -76,6 +76,7 @@ def test_every_auditor_writes_inside_the_write_root() -> None:
 
     project = Path("/tmp/some-project")
     for auditor in _registry():
-        target = auditor.output_dir(project)
+        target = auditor.output_dir(project, "B-014")
         assert contains(project, target), f"{auditor.plugin} writes to {target}"
         assert auditor.plugin in target.parts, target
+        assert "B-014" in target.parts, f"{target} is shared by every item"

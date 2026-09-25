@@ -30,6 +30,6 @@ def test_a_row_that_already_names_its_namespace_is_not_doubled(tmp_path: Path) -
     auditor = Auditor(domain="always", plugin="judge-codex:final-judge",
                       diff_mode="analysis-scoped")
 
-    command = command_for(auditor, target=".", scope={}, project=tmp_path)
+    command = command_for(auditor, target=".", scope={}, project=tmp_path, slug="B-014")
 
     assert command.startswith("/judge-codex:final-judge . ")

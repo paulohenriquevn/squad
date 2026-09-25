@@ -55,7 +55,8 @@
 #               machine. A mapped plugin that is NOT installed is a coverage gap, not
 #               a silence — `check_auditor_coverage.py` reports it and blocks.
 #               The report's location is NOT declared here. It is derived —
-#               `<project>/.squad/records/audits/<plugin>/` — and passed as
+#               `<project>/.squad/records/audits/<slug>/<plugin>/`, one per item
+#               because the plugins' databases persist across runs — and passed as
 #               `--output-dir`. Each plugin's own default (`security-output/`,
 #               `code-review-output/`) would put a third party's output at the project
 #               root, outside the one write root, on this kit's instruction. A tool the

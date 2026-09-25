@@ -56,7 +56,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from installed_plugins import Plugin
 from installed_plugins import load as load_plugins
 
-from squad.paths import rules_dir, write_records_dir
+from squad.paths import (
+    UnsafeSegment,
+    confined,
+    rules_dir,
+    safe_segment,
+    write_records_dir,
+)
 
 OK, INVALID, UNREADABLE, NOT_INSTALLED = 0, 1, 2, 3
 
@@ -78,15 +84,25 @@ class Auditor:
     diff_mode: str
     report_glob: str = DEFAULT_REPORT_GLOB
 
-    def output_dir(self, project: Path) -> Path:
-        """Where this auditor's report must land.
+    def output_dir(self, project: Path, slug: str) -> Path:
+        """Where this auditor's report for THIS item must land.
 
         DERIVED, not declared. The registry used to carry each plugin's own default
         (`code-review-output/`, `security-output/`), which put a third party's output at
         the project root — outside the one write root, on the kit's own instruction.
         A tool the kit tells where to write is a tool the kit is responsible for.
+
+        KEYED BY ITEM, then plugin. It was `audits/<plugin>`, shared by every item: the
+        plugins' databases are append-only across runs (loop-code-review's `init_db` is
+        ten `CREATE TABLE IF NOT EXISTS` and drops nothing), so the next item's audit
+        reused the previous item's database and findings, and the coverage gate binds a
+        report to its assignment by mtime only. A directory per item removes the shared
+        state instead of trying to detect it. `slug` is refused unless it is one safe
+        path segment, because it becomes part of this path.
         """
-        return write_records_dir(project, "audits") / self.plugin
+        audits = write_records_dir(project, "audits")
+        return confined(audits / safe_segment(slug, what="--slug") / self.plugin,
+                        audits, what="the auditor output directory")
 
 
 def registry_path(project: Path) -> Path:
@@ -226,11 +242,11 @@ def invocation_name(plugin: str) -> str:
     return plugin if ":" in plugin else f"{plugin}:{plugin}"
 
 
-def command_for(a: Auditor, *, target: str, scope: dict, project: Path,
+def command_for(a: Auditor, *, target: str, scope: dict, project: Path, slug: str,
                 max_iterations: int | None = None) -> str:
     """The exact invocation, so nobody has to reconstruct it from prose."""
     ceiling = f" --max-iterations {max_iterations}" if max_iterations else ""
-    return (f"/{invocation_name(a.plugin)} {target} --output-dir {a.output_dir(project)}"
+    return (f"/{invocation_name(a.plugin)} {target} --output-dir {a.output_dir(project, slug)}"
             f"{scope_flag(scope)}{ceiling}")
 
 
@@ -245,6 +261,11 @@ def select(
     target: str = ".",
     config_dir: Path | None = None,
 ) -> tuple[int, dict]:
+    try:
+        safe_segment(slug, what="--slug")
+    except UnsafeSegment as exc:
+        return INVALID, {"status": "invalid", "detail": str(exc)}
+
     named = [n for n, v in (("--diff-base", diff_base), ("--pr", pr),
                             ("--commits", commits)) if v]
     if len(named) > 1:
@@ -281,13 +302,13 @@ def select(
     def row(a: Auditor, p: Plugin | None) -> dict:
         return {
             "plugin": a.plugin, "domain": a.domain, "diff_mode": a.diff_mode,
-            "output_dir": str(a.output_dir(project)),
+            "output_dir": str(a.output_dir(project, slug)),
             "report_glob": a.report_glob,
             "installed": p is not None,
             "install_path": str(p.install_path) if p else None,
             "version": p.version if p else None,
-            "command": command_for(a, target=target, scope=scope_spec,
-                                   project=project, max_iterations=ceiling),
+            "command": command_for(a, target=target, scope=scope_spec, project=project,
+                                   slug=slug, max_iterations=ceiling),
         }
 
     rows = [row(a, installed.get(a.plugin)) for a in required]
