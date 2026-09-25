@@ -249,3 +249,59 @@ def test_a_clean_run_stays_silent(repo: Path, tmp_path: Path) -> None:
     payload = _run(findings, tmp_path / "report.md", repo)
 
     assert "reviewer_trees" not in payload
+
+
+def _consolidate(repo: Path, findings: Path, tmp_path: Path, capsys) -> tuple[int, dict, str]:
+    import consolidate_findings
+
+    argv = ["consolidate_findings.py", "--findings-dir", str(findings),
+            "--output", str(tmp_path / "report.md"), "--slug", "demo",
+            "--repo-root", str(repo)]
+    old, sys.argv = sys.argv, argv
+    try:
+        code = consolidate_findings.main()
+    finally:
+        sys.argv = old
+    captured = capsys.readouterr()
+    return code, json.loads(captured.out), captured.err
+
+
+def test_a_review_whose_reviewer_read_a_stale_tree_is_refused(
+    repo: Path, tmp_path: Path, capsys,
+) -> None:
+    """A reviewer that read a tree without the change reviewed other code. Reporting it
+    above the findings still let the verdict read READY_TO_MERGE, so a reviewer who did
+    not notice would have signed off on code it never opened. Measured on a consumer
+    2026-09-20: every spawned reviewer ran at a commit that did not contain the change,
+    and two of five noticed by comparing SHAs by eye (#148)."""
+    stale = _git(repo, "rev-parse", "HEAD")
+    under_review = _advance(repo, "two\n")
+    findings = tmp_path / "findings"
+    from consolidate_findings import record_tree_state
+    record_tree_state(repo, findings)
+    _findings(findings, "domain-reviewer", head=stale)
+
+    code, summary, err = _consolidate(repo, findings, tmp_path, capsys)
+
+    assert code != 0
+    assert summary["verdict"] == "INVALID"
+    assert "domain-reviewer" in err
+    assert under_review[:12] in err
+
+
+def test_a_reviewer_that_declares_no_tree_does_not_refuse_the_review(
+    repo: Path, tmp_path: Path, capsys,
+) -> None:
+    """Every findings file written before the templates asked for `tree_head` declares
+    nothing. Refusing those would make every historical review unreadable."""
+    findings = tmp_path / "findings"
+    from consolidate_findings import record_tree_state
+    record_tree_state(repo, findings)
+    _findings(findings, "architecture-reviewer", head=None)
+
+    _, summary, err = _consolidate(repo, findings, tmp_path, capsys)
+
+    # The minimal fixture draws other findings (a short roster), so only the refusal
+    # this test is about is asserted absent.
+    assert summary["verdict"] != "INVALID"
+    assert "stale tree" not in err

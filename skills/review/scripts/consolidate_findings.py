@@ -1136,6 +1136,21 @@ def main() -> int:
 
     contamination = check_tree_contamination(args.repo_root, args.findings_dir)
     reviewer_trees = check_reviewer_trees(args.repo_root, args.findings_dir)
+
+    # A reviewer that demonstrably read a tree without the change reviewed other code,
+    # so there is nothing to grade — the same argument as zero readable agents above,
+    # and the same verdict. Reporting it above the findings still let the verdict read
+    # READY_TO_MERGE, and a reviewer who did not notice would have signed off on code
+    # it never opened (#148). Undeclared and unresolved trees are reported, not
+    # refused: every findings file written before `tree_head` existed is undeclared.
+    stale_refusal = None
+    if reviewer_trees and reviewer_trees["stale"]:
+        stale_agents = ", ".join(
+            f"{row['agent']} (read {row['declared'][:12]})" for row in reviewer_trees["stale"])
+        stale_refusal = (f"INVALID: stale tree — {stale_agents} did not contain "
+                         f"{reviewer_trees['recorded_head'][:12]}, the commit under review. "
+                         f"Re-run those reviewers in a tree that contains it.")
+        verdict = "INVALID"
     unresolved = unresolved_pointers(deduped, args.repo_root)
 
     # Write the markdown report
@@ -1207,6 +1222,9 @@ def main() -> int:
         print(f"{verdict}: {len(blockers)} BLOCKER(s), "
               f"{sum(1 for f in open_findings if f['severity'] == 'HIGH')} HIGH — {detail}",
               file=sys.stderr)
+    if stale_refusal:
+        print(stale_refusal, file=sys.stderr)
+        return 1
     if verdict == "NEEDS_FIXES":
         return 1
     if verdict == "NEEDS_DEEPER":
