@@ -12,6 +12,8 @@ unreachable rather than merely old, and it looks current.
 from __future__ import annotations
 
 import sys
+
+import pytest
 from pathlib import Path
 
 _REPO = Path(__file__).parent.parent
@@ -143,3 +145,25 @@ def test_a_clean_project_does_not_gain_the_new_state(tmp_path: Path) -> None:
     (tmp_path / ".claude" / "skills" / "x.md").write_text("a skill\n", encoding="utf-8")
 
     assert not any(r.state == "INSIDE_KIT" for r in check_project(tmp_path))
+
+
+@pytest.mark.parametrize("state_maker", ["nested", "unmigrated"])
+def test_the_ecosystem_verifier_fails_on_every_state_the_gate_fails_on(
+    tmp_path: Path, state_maker: str,
+) -> None:
+    """`verify_ecosystem` kept its own list of failing states, `UNMIGRATED` and `SPLIT`,
+    and every state added to this gate since — `INSIDE_KIT`, `NESTED`, `SHARED`,
+    `COMMITTABLE` — passed the ecosystem check while the gate itself exited 1. One
+    question, two lists, and the second one never heard about the additions."""
+    sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))
+    from verify_ecosystem import check_data_root as verify
+
+    if state_maker == "nested":
+        _file(write_records_dir(tmp_path, "plans"))
+        _file(tmp_path / ".squad" / ".squad" / "records", "cycle-events.jsonl")
+    else:
+        _file(tmp_path / ".claude" / "records" / "plans")
+
+    ok, detail = verify(tmp_path)
+
+    assert not ok, detail

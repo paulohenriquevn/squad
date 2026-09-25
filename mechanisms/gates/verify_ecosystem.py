@@ -296,10 +296,13 @@ def check_data_root(ecosystem_dir: Path) -> tuple[bool, list[str]]:
     rule its consumers read as optional.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from check_data_root import check_project
+    from check_data_root import FAILING_STATES, check_project
 
+    # The gate's own list, not a copy. This read `("UNMIGRATED", "SPLIT")` and every
+    # state the gate learned since — INSIDE_KIT, NESTED, SHARED, COMMITTABLE — passed
+    # here while the gate itself exited 1.
     project = ecosystem_dir.parent if ecosystem_dir.name == ".claude" else ecosystem_dir
-    stale = [r for r in check_project(project) if r.state in ("UNMIGRATED", "SPLIT")]
+    stale = [r for r in check_project(project) if r.state in FAILING_STATES]
     if not stale:
         return True, []
     return False, [f"{r.state} {r.relative} ({r.files} file(s)) — {r.detail}"

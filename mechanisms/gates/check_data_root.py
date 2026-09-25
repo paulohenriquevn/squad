@@ -66,7 +66,7 @@ from squad.boundaries import STUDY_ZONE
 CENTRALISED, UNMIGRATED_CODE, UNCHECKED = 0, 1, 2
 
 #: Findings from loudest to quietest; the overall state is the first one present.
-_SEVERITY = ("COMMITTABLE", "INSIDE_KIT", "NESTED", "SPLIT", "SHARED", "UNMIGRATED")
+FAILING_STATES = ("COMMITTABLE", "INSIDE_KIT", "NESTED", "SPLIT", "SHARED", "UNMIGRATED")
 
 #: States that describe a directory which is not the kit's data. Printed, never the
 #: overall verdict: there is nothing of the kit's in it to move.
@@ -247,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         return UNCHECKED
 
     reports = check_project(root)
-    worst = next((s for s in _SEVERITY if any(r.state == s for r in reports)),
+    worst = next((s for s in FAILING_STATES if any(r.state == s for r in reports)),
                  next(r.state for r in reports if r.state not in _INFORMATIONAL))
 
     if args.json:
