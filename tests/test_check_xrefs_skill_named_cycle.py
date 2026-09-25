@@ -4,7 +4,7 @@
 no) `rules/session-goal.md`. But Check 2 extracted the first `cycle-X` token from
 the whole SKILL.md when there was no `## Cycle contract` section, and concluded
 the
-skill declarava pertencer a um cycle inexistente.
+skill declared membership in a cycle that does not exist.
 
 The practical effect: `commands-help`, whose whole job is to LIST the commands, could
 not mention `/session-goal` without driving the validator to FAIL. The bug stayed

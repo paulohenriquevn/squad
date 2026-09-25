@@ -5,9 +5,9 @@ WHY THIS GATE EXISTS
 `~/.claude/CLAUDE.md` § 5 makes it a rule of the house — quoted verbatim below,
 in the language it is written in:  <!-- english-only: verbatim quotation -->
 *"Escolha sempre o nome  <!-- english-only: verbatim quote of CLAUDE.md -->
-mais específico e descritivo. Melhor um nome longo e claro do que um nome curto
+mais específico e descritivo. Melhor um nome longo e claro do que um nome curto  <!-- english-only: verbatim quote of CLAUDE.md -->
 e problemático."* It names the anti-pattern too — *"Classes 'Manager', 'Helper'
-ou 'Utils' que viram lixeira de métodos sem relação"* — and the same failure
+ou 'Utils' que viram lixeira de métodos sem relação"* — and the same failure  <!-- english-only: verbatim quote of CLAUDE.md -->
 applies to a directory: `lib/` tells the reader nothing except that someone had
 files left over.
 

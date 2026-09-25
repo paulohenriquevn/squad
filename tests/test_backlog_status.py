@@ -314,7 +314,7 @@ from backlog_status import (  # noqa: E402 — imported here, beside the behavio
 
 def test_prose_impediments_yield_no_edges_but_still_block():
     """"awaiting the sponsor's decision" is an impediment with nothing to point at."""
-    raw = "decisão do patrocinador, nomeada no próprio código"
+    raw = "the sponsor's decision, named in the code itself"
     assert parse_blocked_by(raw) == []
     assert declares_impediment(raw) is True
 

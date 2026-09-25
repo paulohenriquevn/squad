@@ -32,7 +32,7 @@ def test_adr_with_trade_off_pattern(tmp_path: Path) -> None:
         tmp_path,
         "# Plan\n\n## ADRs\n\n"
         "### D1 — toy\n"
-        "- Rationale: Trade-off entre simplicidade e performance.\n",
+        "- Rationale: Trade-off between simplicity and performance.\n",
     )
     report = check_adr_completeness(plan)
     assert report.with_alternatives == 1

@@ -138,14 +138,14 @@ _IMPEDIMENT_PATTERNS: list[tuple[DecisionClass, str]] = [
     (DecisionClass.GOVERNANCE, r"bypass(es)?\s+(the\s+)?governance"),
     (DecisionClass.ACCESS, r"provisionamento\s+de\s+/|provisionar\s+/"),
     (DecisionClass.ACCESS, r"provisioning\s+of\s+/|provision\s+the\s+(host|machine|server)"),
-    (DecisionClass.ACCESS, r"unit\s+files\s+systemd|instala[çc][ãa]o\s+de\s+unit\s+files"),
+    (DecisionClass.ACCESS, r"unit\s+files\s+systemd|instala[çc][ãa]o\s+de\s+unit\s+files"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.ACCESS, r"systemd\s+unit\s+files?|installing\s+unit\s+files?"),
-    (DecisionClass.ACCESS, r"n[ãa]o\s+[ée]\s+trabalho\s+de\s+c[óo]digo"),
+    (DecisionClass.ACCESS, r"n[ãa]o\s+[ée]\s+trabalho\s+de\s+c[óo]digo"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.ACCESS, r"not\s+(a\s+)?code\s+work|is\s+not\s+code\s+work"),
     (DecisionClass.ACCESS, r"sibling\s+repo|cross-repo\s+work\s+fora\s+do\s+escopo"),
     (DecisionClass.ACCESS, r"cross-repo\s+work\s+out(side)?\s+of\s+scope"),
     (DecisionClass.ACCESS, r"(no|missing|lacks?)\s+(ssh\s+)?(access|credential|permission)s?\b"),
-    (DecisionClass.ELAPSED, r"acumula[çc][ãa]o\s+de\s+~?\d+\s+dias"),
+    (DecisionClass.ELAPSED, r"acumula[çc][ãa]o\s+de\s+~?\d+\s+dias"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.ELAPSED, r"~?\d+\s+days?\s+of\s+accumulation"),
     (DecisionClass.ELAPSED, r"~?\d+\s+dias\s+de\s+s[ée]rie"),
     (DecisionClass.ELAPSED, r"~?\d+\s+days?\s+of\s+(series|history|data)"),
@@ -154,7 +154,7 @@ _IMPEDIMENT_PATTERNS: list[tuple[DecisionClass, str]] = [
     (DecisionClass.LIVENESS, r"\bLIVE\s+session\b"),
     (DecisionClass.LIVENESS, r"exige\s+o\s+plano\s+de\s+build\s+de\s+p[ée]"),
     (DecisionClass.LIVENESS, r"requires?\s+(a\s+)?(running|standing)\s+(build|system|service)"),
-    (DecisionClass.LIVENESS, r"n[ãa]o\s+[ée]\s+verific[áa]vel\s+desta\s+sess[ãa]o"),
+    (DecisionClass.LIVENESS, r"n[ãa]o\s+[ée]\s+verific[áa]vel\s+desta\s+sess[ãa]o"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.LIVENESS, r"not\s+verifiable\s+from\s+this\s+session"),
 ]
 
@@ -167,9 +167,9 @@ _IMPEDIMENT_PATTERNS: list[tuple[DecisionClass, str]] = [
 _ITEM_ID_RE = re.compile(r"\bB-\d{3,}\b")
 
 _DELEGABLE_PATTERNS: list[tuple[DecisionClass, str]] = [
-    (DecisionClass.BINARY, r"decis[ãa]o\s+bin[áa]ria"),
+    (DecisionClass.BINARY, r"decis[ãa]o\s+bin[áa]ria"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.BINARY, r"binary\s+(decision|choice)"),
-    (DecisionClass.STATUS, r"disposi[çc][ãa]o\s+de\s+status"),
+    (DecisionClass.STATUS, r"disposi[çc][ãa]o\s+de\s+status"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.STATUS, r"status\s+disposition"),
     (DecisionClass.STATUS, r"nenhuma\s+transi[çc][ãa]o\s+can[ôo]nica"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.SCOPE, r"decis[ãa]o\s+de\s+escopo"),
@@ -187,20 +187,20 @@ _DELEGABLE_PATTERNS: list[tuple[DecisionClass, str]] = [
     #: would have to be invented before one could be picked.
     (DecisionClass.OPTION, r"decis[ãa]o\s+entre\s+.{0,120}\bou\b"),
     (DecisionClass.OPTION, r"(decision|choice)\s+between\s+.{0,120}\bor\b"),
-    (DecisionClass.OPTION, r"\b(duas|tr[êe]s|quatro)\s+op[çc][õo]es\b"),
+    (DecisionClass.OPTION, r"\b(duas|tr[êe]s|quatro)\s+op[çc][õo]es\b"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.OPTION, r"\b(two|three|four)\s+options\b"),
     #: The sponsor named himself the decider and then delegated the seat. Both
     #: halves are required: without the delegation file this pattern must not
     #: exist, which is why it cites the rule rather than standing alone.
     (DecisionClass.SPONSOR, r"decis[ãa]o\s+de\s+sponsor"),
     (DecisionClass.SPONSOR, r"sponsor\s+decision"),
-    (DecisionClass.SPONSOR, r"[ée]\s+decis[ãa]o\s+do\s+sponsor"),
+    (DecisionClass.SPONSOR, r"[ée]\s+decis[ãa]o\s+do\s+sponsor"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.SPONSOR, r"is\s+(the\s+)?sponsor's\s+(decision|call)"),
     #: Not a decision in the first place — a measurement somebody has to take,
     #: and taking measurements is what the fleet is for.
-    (DecisionClass.MEASUREMENT, r"re-?medi[çc][ãa]o|re-?medir"),
+    (DecisionClass.MEASUREMENT, r"re-?medi[çc][ãa]o|re-?medir"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.MEASUREMENT, r"re-?measure(ment)?\b"),
-    (DecisionClass.MEASUREMENT, r"confirma[çc][ãa]o\s+de\s+que"),
+    (DecisionClass.MEASUREMENT, r"confirma[çc][ãa]o\s+de\s+que"),  # english-only: the pattern matches Portuguese registry prose
     (DecisionClass.MEASUREMENT, r"confirmation\s+that\b"),
 ]
 

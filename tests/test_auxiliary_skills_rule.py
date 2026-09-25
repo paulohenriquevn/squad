@@ -38,7 +38,7 @@ def _eco(root: Path, *, skills: list[str], declared: list[str] | None) -> Path:
         (eco / "skills" / name / "SKILL.md").write_text(f"# {name}\n", encoding="utf-8")
     if declared is not None:
         (eco / "rules" / "auxiliary-skills.txt").write_text(
-            "# skills deste projeto\n" + "\n".join(declared) + "\n", encoding="utf-8")
+            "# this project's skills\n" + "\n".join(declared) + "\n", encoding="utf-8")
     return eco
 
 

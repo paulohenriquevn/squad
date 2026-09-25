@@ -85,8 +85,7 @@ def test_english_only_is_quiet_about_english(tmp_path: Path) -> None:
 @pytest.mark.parametrize("name", ["diagram.png", "font.woff2", "poetry.lock"])
 def test_english_only_skips_what_is_not_prose(tmp_path: Path, name: str) -> None:
     target = tmp_path / name
-    # english-only: Portuguese on purpose — the point is that it is NOT scanned
-    target.write_text("nao e prosa, e voce sabe disso\n", encoding="utf-8")
+    target.write_text("nao e prosa, e voce sabe disso\n", encoding="utf-8")  # english-only: Portuguese on purpose — the point is that it is NOT scanned
 
     assert _run("english-only-check", _post(str(target))).stdout.strip() == ""
 

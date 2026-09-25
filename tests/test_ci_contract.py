@@ -50,7 +50,7 @@ def _steps() -> list[dict]:
 def _step_running(fragment: str) -> dict:
     matches = [s for s in _steps() if fragment in (s.get("run") or "")]
     assert matches, f"no CI step runs {fragment!r} — the gate left the workflow"
-    assert len(matches) == 1, f"{fragment!r} aparece em {len(matches)} passos; esperado 1"
+    assert len(matches) == 1, f"{fragment!r} appears in {len(matches)} steps; expected 1"
     return matches[0]
 
 

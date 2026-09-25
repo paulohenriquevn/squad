@@ -269,7 +269,7 @@ def test_experimental_marker_preserved(
 def test_routing_rule_with_utf8_bom_parsed_correctly(
     sample_plan: Path, tmp_path: Path
 ) -> None:
-    """EC-3: rule file com BOM parseia primeira entry corretamente."""
+    """EC-3: a rule file with a UTF-8 BOM parses its first entry correctly."""
     rule = tmp_path / "review-model-routing.txt"
     rule.write_bytes(b"\xef\xbb\xbfarchitecture: haiku\ncross-validation: opus\n")
     output_dir = tmp_path / "agents-out"

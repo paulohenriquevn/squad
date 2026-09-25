@@ -93,7 +93,7 @@ Squad runs continuously, 100% autonomously, never requiring human approval for t
 - Intelligent guard: never offers work in-flight
 - Load balancing: lanes are never starved
 
-**Integração (Fleet Lander)**
+**Integration (Fleet Lander)**
 - Tests branch in isolation (suite A)
 - Tests merge in scratch tree (suite B)
 - Refuses with explicit reason or pushes to workspace

@@ -542,7 +542,7 @@ def run_structural(
 
     # L6 architecture compliance soft cap: plans that don't reference any rule
     # in `.claude/rules/` (compliance_score < 0.4) cap at 89 (RESSALVAS max).
-    # This is the user's "TODAS etapas devem estar 100% alinhadas a .claude/rules/"
+    # This is the user's "TODAS etapas devem estar 100% alinhadas a .claude/rules/"  # english-only: verbatim quote of the user's requirement
     # contract — surfaces non-alignment as a visible deduction.
     if compliance.compliance_score < 0.4 and final_score > 89.0:
         final_score = 89.0

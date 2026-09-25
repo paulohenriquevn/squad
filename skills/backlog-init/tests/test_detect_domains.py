@@ -140,13 +140,13 @@ from detect_domains import domains_from_backlog  # noqa: E402 — post-bootstrap
 
 _BACKLOG = """# Backlog
 
-## B-001 — um   [ ]
+## B-001 — one   [ ]
 
 domain: sdk-core
 repo: packages/sdk
 status: triaged
 
-## B-002 — dois   [ ]
+## B-002 — two   [ ]
 
 domain: repo-platform
 repo: adopter-sdk
@@ -158,7 +158,7 @@ domain: sdk-satellites
 repo: packages/sdk-pty
 status: raw
 
-## B-004 — quatro   [ ]
+## B-004 — four   [ ]
 
 domain: sdk-core
 repo: packages/sdk
@@ -219,7 +219,7 @@ status: raw
 # which in an autonomous project means creating the BACKLOG at the umbrella root,
 # OUTSIDE the project. The principle ("one place to look") does not require an
 # umbrella: it requires
-# um registro por escopo governado.
+# one registry per governed scope.
 # ---------------------------------------------------------------------------
 
 from detect_domains import detect_scope  # noqa: E402 — post-bootstrap import

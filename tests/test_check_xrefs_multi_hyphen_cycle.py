@@ -8,10 +8,10 @@ wrote.
 
 Three of the kit's twelve cycle rules are multi-hyphen, so the defect covered a
 quarter of the inventory. It stayed hidden because the two skills citing those
-cycles no `## Cycle contract` mencionavam antes um cycle de nome simples — e
-`_extract_cycle_contract_ref` returns no PRIMEIRO match. `idea-to-release` cita
-`cycle-discover` antes de `cycle-idea-to-release`; a primeira skill a citar um
-multi-hyphen alone is what made the bug appear.
+cycles in their `## Cycle contract` mentioned a single-word cycle first — and
+`_extract_cycle_contract_ref` returns on the FIRST match. `idea-to-release` cites
+`cycle-discover` before `cycle-idea-to-release`; the first skill to cite a
+multi-hyphen cycle alone is what made the bug appear.
 
 The failure mode is the worst kind for a validator: it flags a non-existent file
 while the real file sits right there, and the natural reading — "the validator is
@@ -73,7 +73,7 @@ def test_multi_hyphen_cycle_contract_resolves(tmp_path: Path, cycle: str) -> Non
         f for f in report["findings"] if f["check"] == "skill_cycle_contract_resolves"
     ]
     assert unresolved == [], (
-        f"{cycle} existe em rules/ mas o validador o acusou como absent: {unresolved}"
+        f"{cycle} exists in rules/ but the validator reported it as absent: {unresolved}"
     )
 
 
@@ -92,10 +92,10 @@ def test_multi_hyphen_cycle_is_not_truncated(tmp_path: Path, cycle: str) -> None
         for f in report["findings"]
         if f["check"] == "skill_cycle_contract_resolves"
     ]
-    assert msgs, f"remover rules/{cycle}.md deveria produzir um finding"
+    assert msgs, f"removing rules/{cycle}.md should produce a finding"
     truncated = cycle.rsplit("-", 1)[0]
     assert any(f"{cycle}.md" in m for m in msgs), (
-        f"esperava o nome completo {cycle}.md na mensagem, veio: {msgs}"
+        f"expected the full name {cycle}.md in the message, got: {msgs}"
     )
     assert not any(f"{truncated}.md" in m for m in msgs), (
         f"truncated name {truncated}.md leaked into the message: {msgs}"

@@ -36,7 +36,7 @@ repo: alpha-lens
 status: raw
 why_now: ingest got slow after the last deploy
 
-## B-008 — Explorer de traces com p95 alto   [x]
+## B-008 — Explorer for traces with a high p95   [x]
 
 domain: ingest
 repo: alpha-lens

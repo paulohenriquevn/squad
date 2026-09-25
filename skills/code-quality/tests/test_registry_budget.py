@@ -93,7 +93,7 @@ def test_the_cache_file_is_written_once_not_per_lookup(monkeypatch):
     monkeypatch.setattr(
         _registry,
         "_http_get_json",
-        lambda url, headers=None: pytest.fail("consultou a rede com cache quente"),
+        lambda url, headers=None: pytest.fail("queried the network with a warm cache"),
     )
     assert _registry.package_exists_on_pypi("pkg7") is True
 
@@ -101,7 +101,7 @@ def test_the_cache_file_is_written_once_not_per_lookup(monkeypatch):
 def test_go_proxy_accepts_a_plain_text_200(monkeypatch):
     """`@v/list` answers 200 with plain text, not JSON.
 
-    Exigir JSON ali transformaria toda consulta bem sucedida em ambiguidade — e
+    Requiring JSON there would turn every successful lookup into ambiguity — and
     three in a row would switch D2 off for Go for the rest of the run.
     """
     monkeypatch.setattr(_registry, "_http_get_json", lambda url, headers=None: (None, 200))

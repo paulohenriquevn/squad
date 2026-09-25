@@ -300,7 +300,7 @@ def live_blockers(item: Item, statuses: dict[str, str]) -> list[str] | None:
     # value was nothing BUT item ids. When it states a reason, the ids in it are
     # context and the reason is the barrier.
     #
-    # Measured on a consumer 2026-09-02. B-060 reads "aguardando disposição de
+    # Measured on a consumer 2026-09-02. B-060 reads "aguardando disposição de  # english-only: verbatim quote of B-060's blocked_by in a consumer registry
     # status: ... bala 2 movida para B-061 (shipped) ... Vide report B-060". The
     # parser lifts B-061 and B-060; the self-mention is dropped above; B-061 is
     # shipped, so no open id remains, and the item was returned as NOT BLOCKED and

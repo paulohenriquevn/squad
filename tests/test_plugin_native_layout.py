@@ -139,7 +139,7 @@ def test_native_and_copy_layouts_wire_the_same_events():
     native = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))["hooks"]
     legacy = json.loads(LEGACY_SETTINGS.read_text(encoding="utf-8"))["hooks"]
     assert set(native) == set(legacy), (
-        "eventos divergentes entre hooks.json (nativo) e settings.plugin.json "
+        "events diverge between hooks.json (native) and settings.plugin.json "
         f"(copy): native only={set(native) - set(legacy)}, "
         f"copy only={set(legacy) - set(native)}"
     )

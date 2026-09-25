@@ -84,7 +84,7 @@ class TestStaleness:
     def test_regenerating_twice_is_idempotent(self, tmp_path: Path) -> None:
         """A generator that keeps producing a new answer for unchanged input makes every run a
         diff, and a diff on every run is how people stop reading them."""
-        _, once = _indexed(tmp_path, item_block("B-001"), item_block("B-002", "Outro"))
+        _, once = _indexed(tmp_path, item_block("B-001"), item_block("B-002", "Other"))
         twice = apply_index(once, render_index(once, _parse_items(once)))
         assert twice == once
 

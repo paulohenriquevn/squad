@@ -78,7 +78,7 @@ def test_strict_xrefs_passes_on_a_fresh_install(installed):
 def test_routing_mechanism_reaches_the_consumer(installed):
     """`agents/README.md` describes the routing MECHANISM, not a domain.
 
-    O instalador o copia incondicionalmente e `rules/cycle-maintenance.md` o
+    The installer copies it unconditionally and `rules/cycle-maintenance.md`
     cites it. If it is not versioned, it arrives empty in every consumer.
     """
     target, _ = installed
@@ -115,7 +115,7 @@ def test_no_tool_cache_reaches_the_consumer(versioned_kit, tmp_path):
 
     It installs from a tree that HAS caches — like the maintainer's — and demands
     that none crosses over. Installing from `versioned_kit` would prove nothing:
-    o git nunca carregou um `.pyc`.
+    git never carried a `.pyc`.
     """
     dirty = tmp_path / "dirty-kit"
     subprocess.run(["cp", "-r", str(versioned_kit), str(dirty)], check=True)

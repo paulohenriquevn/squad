@@ -162,7 +162,7 @@ def test_invalid_shingle_size_is_an_invocation_error(tmp_path, bad):
 def test_zone_is_not_enumerated_when_nothing_changed(tmp_path, monkeypatch):
     """A session that wrote nothing does not pay for walking the zone.
 
-    O script roda em TODO Stop, antes do early-exit do hook. `scan` listava a
+    The script runs on EVERY Stop, before the hook's early exit. `scan` listed the
     whole zone BEFORE building the index of changed files — and it is that index
     that decides whether there is any work at all. In a zone with thousands of
     third-party files, a read-only session paid the full walk just to reach

@@ -62,7 +62,7 @@ def test_unicode_in_table(tmp_path: Path) -> None:
         "# Plan\n\n## Coverage Matrix\n\n"
         "| # | Gap | Task(s) | Resolution |\n"
         "|---|-----|---------|------------|\n"
-        "| 1 | gap com acentuação ção ã | T1.1 | ✓ done |\n"
+        "| 1 | gap com acentuação ção ã | T1.1 | ✓ done |\n"  # english-only: the fixture needs Portuguese diacritics to exercise Unicode parsing
         "| 2 | hebrew אבג text | T1.2 | done |\n",
         encoding="utf-8",
     )

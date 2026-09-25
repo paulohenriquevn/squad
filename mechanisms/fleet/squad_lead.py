@@ -152,7 +152,7 @@ def _halted_items(project: Path) -> set[str]:
 FLOW_MARKERS = (
     "blocked_by", "re-select", "re-run the select", "re-rodo o select", "reselect",
     "next item", "próximo item", "proximo item",
-    "record the impediment", "registrar o impedimento", "adicionar blocked_by",
+    "record the impediment", "registrar o impedimento", "adicionar blocked_by",  # english-only: the session prints its menus in the operator's language; the markers must match
     "continue", "continuar", "prosseguir", "skip", "pular",
     # Invoking a cycle command is flow, because the human gates live INSIDE the
     # skills — `/release` waits at its own Step 6, `/idea-to-release` stops at
@@ -185,7 +185,7 @@ CONTENT_MARKERS = (
     # markers must match what it actually prints — a marker list in English alone
     # would classify every Portuguese question as `unknown` and escalate all of them.
     "you take", "você toma", "voce toma", "you decide", "você decide", "voce decide",  # english-only: the session prints its menus in the operator's language; the markers must match
-    "sponsor", "t3", "approve", "aprovar", "aprovação", "aprovacao",
+    "sponsor", "t3", "approve", "aprovar", "aprovação", "aprovacao",  # english-only: the session prints its menus in the operator's language; the markers must match
     "merge", "release", "deploy", "tag", "publish", "publicar",
     "delete", "deletar", "remover", "drop", "revoke", "revogar",
 )

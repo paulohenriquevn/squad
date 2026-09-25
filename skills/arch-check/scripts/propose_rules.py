@@ -648,7 +648,7 @@ def _unit_of_import(import_path: str, module: str, packages: frozenset[str] = fr
 
 def _ts_sources(root: Path) -> list[Path]:
     """Every TypeScript source under `root` that is not test, fixture or vendored."""
-    # Poda durante a travessia: um `rglob("*")` com filtro posterior desce em
+    # Prune during the walk: an `rglob("*")` filtered afterwards descends into
     # all of `node_modules` before discarding it, and in a TypeScript monorepo that
     # is exactly where the files are. Measured 2026-08-26: 326 ms against 0.4 ms on a
     # 56,000-file repository.

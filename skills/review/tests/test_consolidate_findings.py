@@ -659,7 +659,7 @@ def test_a_rename_with_one_end_outside_the_findings_dir_is_reported(tmp_path: Pa
 # ---------------------------------------------------------------------------
 
 def test_without_an_upstream_audit_there_is_no_merge_verdict(tmp_path: Path) -> None:
-    """`cycle-review.md § Pre-conditions` exige o audit; nada o cobrava.
+    """`cycle-review.md § Pre-conditions` requires the audit; nothing enforced it.
 
     `/review` running without `/code-quality` inherits everything the audit would
     have caught — dead code, fabricated symbol, orphan export — and returns

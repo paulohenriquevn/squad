@@ -2,7 +2,7 @@
 
 Two false positives measured 2026-08-20 against `speculative`'s installation:
 
-1. `agents/speculative.md` e os 4 validadores do projeto apareceram como
+1. `agents/speculative.md` and the project's 4 validators showed up as
    `INSTALL_AHEAD` — "work the kit does not have". They are domain specialists:
    they must never travel into the kit (grill, decision 5).
 2. `settings.json` showed up as `DIVERGED`. The two files are identical as JSON —

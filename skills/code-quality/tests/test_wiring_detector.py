@@ -2,13 +2,13 @@
 
 THE DEFECT THIS FIXES
 ---------------------
-`code-quality-golden-rule.md § 5` lista D3 como contrato LOCKED — "ast-grep |
-All enabled | Public exports have at least one importer (soft cap)". Os quatro
-detectores devolviam a mesma string:
+`code-quality-golden-rule.md § 5` lists D3 as a LOCKED contract — "ast-grep |
+All enabled | Public exports have at least one importer (soft cap)". All four
+detectors returned the same string:
 
     return self.unavailable("d3", "orphan_export", "cross-package wiring is not configured")
 
-Como `unavailable()` emite SOFT_CAP, todo audit nascia com um soft cap permanente
+Since `unavailable()` emits SOFT_CAP, every audit was born with a permanent soft cap
 and `PASS` was unreachable by construction — in any project, forever. A gate that
 cannot be satisfied is not a gate: it is a tax `/implement` converts into a WARN
 nobody reads.
@@ -132,13 +132,13 @@ def test_a_project_with_no_declared_surface_reports_info_not_a_verdict(tmp_path:
 
 def test_typescript_barrel_export_with_no_importer_is_an_orphan(tmp_path: Path) -> None:
     _write(tmp_path, "package.json", '{"name": "p", "main": "src/index.ts"}\n')
-    _write(tmp_path, "src/index.ts", "export function orfa(): number {\n  return 1;\n}\n")
+    _write(tmp_path, "src/index.ts", "export function orphan(): number {\n  return 1;\n}\n")
 
     orphans = [f for f in _wiring.detect_orphan_exports("typescript", tmp_path, tmp_path)
                if f.detector == "d3_orphan_export"]
 
     assert len(orphans) == 1
-    assert "orfa" in orphans[0].symbol_or_line
+    assert "orphan" in orphans[0].symbol_or_line
 
 
 def test_typescript_export_consumed_elsewhere_is_not_an_orphan(tmp_path: Path) -> None:
@@ -156,13 +156,13 @@ def test_typescript_export_consumed_elsewhere_is_not_an_orphan(tmp_path: Path) -
 
 def test_rust_pub_in_lib_with_no_consumer_is_an_orphan(tmp_path: Path) -> None:
     _write(tmp_path, "Cargo.toml", '[package]\nname = "p"\n')
-    _write(tmp_path, "src/lib.rs", "pub fn orfa() -> u8 {\n    1\n}\n")
+    _write(tmp_path, "src/lib.rs", "pub fn orphan() -> u8 {\n    1\n}\n")
 
     orphans = [f for f in _wiring.detect_orphan_exports("rust", tmp_path, tmp_path)
                if f.detector == "d3_orphan_export"]
 
     assert len(orphans) == 1
-    assert "orfa" in orphans[0].symbol_or_line
+    assert "orphan" in orphans[0].symbol_or_line
 
 
 def test_go_exported_identifier_with_a_consumer_is_not_an_orphan(tmp_path: Path) -> None:
@@ -196,16 +196,16 @@ def test_an_unknown_language_is_reported_unavailable_not_clean(tmp_path: Path) -
 
 @pytest.mark.parametrize("language", ["python", "typescript", "rust", "go"])
 def test_findings_carry_a_wellformed_allowlist_key(tmp_path: Path, language: str) -> None:
-    """`Finding.__post_init__` exige exatamente 3 pipes; um key malformado aborta
-    o processamento da allowlist inteira com um HARD finding."""
+    """`Finding.__post_init__` requires exactly 3 pipes; a malformed key aborts
+    processing of the whole allowlist with a HARD finding."""
     _write(tmp_path, "package.json", '{"name": "p", "main": "src/index.ts"}\n')
-    _write(tmp_path, "src/index.ts", "export function orfa(): number {\n  return 1;\n}\n")
+    _write(tmp_path, "src/index.ts", "export function orphan(): number {\n  return 1;\n}\n")
     _write(tmp_path, "Cargo.toml", '[package]\nname = "p"\n')
-    _write(tmp_path, "src/lib.rs", "pub fn orfa_rs() -> u8 {\n    1\n}\n")
+    _write(tmp_path, "src/lib.rs", "pub fn orphan_rs() -> u8 {\n    1\n}\n")
     _write(tmp_path, "go.mod", "module example\n")
     _write(tmp_path, "pkg/api.go", "package pkg\n\nfunc Orfa() int {\n\treturn 1\n}\n")
     _write(tmp_path, "pkg/__init__.py", "")
-    _write(tmp_path, "pkg/api.py", '__all__ = ["orfa_py"]\n\n\ndef orfa_py():\n    return 1\n')
+    _write(tmp_path, "pkg/api.py", '__all__ = ["orphan_py"]\n\n\ndef orphan_py():\n    return 1\n')
 
     for finding in _wiring.detect_orphan_exports(language, tmp_path, tmp_path):
         assert finding.allowlist_key.count("|") == 3, finding.allowlist_key

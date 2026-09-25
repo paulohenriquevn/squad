@@ -44,7 +44,7 @@ No new boundary crossings. Stays inside `src/` per `rules/architecture.md`.
 
 ## Objective
 
-Done = passa todos os 4 checks estruturais + os 2 novos (Baseline Context, Drawbacks). Verdict SHIPPABLE.
+Done = passes all 4 structural checks + the 2 new ones (Baseline Context, Drawbacks). Verdict SHIPPABLE.
 
 ## Drawbacks & Risks
 
@@ -61,15 +61,15 @@ Done = passa todos os 4 checks estruturais + os 2 novos (Baseline Context, Drawb
 
 ### D1 — Use Python stdlib only
 
-- **Decision:** Implementar com stdlib + PyYAML.
+- **Decision:** Implement with stdlib + PyYAML.
 - **Rationale:** Alternatives considered: use `pydantic` (rejected — extra dependency); use `regex` lib (rejected — `re` from stdlib is enough). Stdlib is pure YAGNI.
-- **Consequences:** Zero deps adicionais.
+- **Consequences:** Zero additional deps.
 
-### D2 — Determinismo total
+### D2 — Full determinism
 
-- **Decision:** Zero LLM calls em M2.
+- **Decision:** Zero LLM calls in M2.
 - **Rationale:** Rejected alternative: using an LLM for summarization (deferred to M3). Determinism allows strong caching.
-- **Consequences:** Tests podem ser hashable input/output.
+- **Consequences:** Tests reduce to hashable input/output.
 
 ## Dependency Graph
 

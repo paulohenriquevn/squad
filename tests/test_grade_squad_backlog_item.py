@@ -195,7 +195,7 @@ repo: control-plane/dashboard
 evidence: none-yet
 status: raw
 
-## B-033 — API returns 500 em vez de 401   [ ]
+## B-033 — API returns 500 instead of 401   [ ]
 
 domain: control-plane
 repo: control-plane

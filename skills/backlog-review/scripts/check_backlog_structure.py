@@ -326,7 +326,7 @@ VAGUE_TERMS = {
     "improve", "improved", "better", "faster", "fast", "scalable", "robust", "clean",
     "cleanup", "clean up", "optimize", "optimise", "enhance", "polish", "reliable",
     "performant", "best practices", "as needed", "etc", "and so on", "properly",
-    "correctly", "appropriately", "melhorar", "melhor", "mais rápido", "adequado",
+    "correctly", "appropriately", "melhorar", "melhor", "mais rápido", "adequado",  # english-only: the detector must match vague terms in Portuguese DoD bullets
 }
 STALE_RAW_DAYS = 90
 
