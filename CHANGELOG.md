@@ -6,6 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 
 ## [Unreleased]
 
+### Added
+- **The lead asks a typed decision model before it pays for a headless agent.** With `OPENROUTER_API_KEY` set, a menu the doctrine may decide goes first to Jev (`jev-1.13` via OpenRouter), which picks a section of `rules/autonomy-envelope.md` and a menu option from closed lists, at about USD 0.00002 and under a second a call; the lead acts only when both answers reach 0.90 confidence, and otherwise, on a rule that needs text typed, or when the API fails, it asks the agent exactly as before. The screen, the menu, the doctrine and the item's prior rulings are sent to OpenRouter on this path. (#219)
+
 ### Fixed
 - **The README and the Squad map no longer point at files the kit does not have.** The README said the kit ships a domain routing table and listed `rules/domain-routing.txt` in its tree; it ships none, and the table lives at `.squad/domain-routing.txt`. The map called the distribution family `dist/`. (#218)
 - **Every fresh install reported a post-install FAILURE because its empty study zone was not gitignored.** An empty `.squad/study-material/` is now `UNGUARDED`, named but not failing; it becomes `COMMITTABLE`, and fails, once something is cloned there. (#128)

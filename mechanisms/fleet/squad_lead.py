@@ -99,7 +99,15 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
         _sys_bootstrap.path.insert(0, str(_up))
         break
 # Imports below the bootstrap, not at the top: the kit ships as loose scripts.
-from squad.paths import RULE_BASES  # noqa: E402 — post-bootstrap import
+# `decision_model` is a sibling: `python3 mechanisms/fleet/squad_lead.py` puts this
+# directory first on `sys.path`, and the test suite adds it for every fleet module.
+from decision_model import (  # noqa: E402 — post-bootstrap import
+    DecisionModelUnavailable,
+    SystemOneClient,
+    choice,
+)
+
+from squad.paths import RULE_BASES, rules_dir  # noqa: E402 — post-bootstrap import
 
 
 class ClaimsUnreadable(RuntimeError):
@@ -410,6 +418,56 @@ honest answer is that only a person can move this, say exactly which decision an
 which item."""
 
 
+#: Where the doctrine lives, and the heading that opens it. The typed decision model
+#: is offered exactly the `###` sections under this heading, read from disk each time,
+#: so an envelope edited tomorrow is the menu of rules tomorrow.
+_ENVELOPE = "autonomy-envelope.md"
+_DOCTRINE_HEADING = "## The doctrine"
+_FLOOR_HEADING = "## The floor"
+#: The two doctrine sections whose prescribed action is TEXT to type. A decision model
+#: answers with an option and cannot write that text, so on either of these it steps
+#: aside for the agent. Recognised by name: if the envelope stops naming both, the
+#: model is not asked at all, because a match that silently stopped matching would let
+#: it act on a rule that needs text.
+_RULES_THAT_NEED_TEXT = ("The menu does not offer what the doctrine prescribes",
+                         "Nothing here fits")
+#: The confidence BOTH answers must reach before the lead acts on them. A policy set by
+#: the operator on 2026-09-25, not a calibration: no labelled set of doctrine menus
+#: exists yet. Measured the same day on a menu-shaped state: 0.95-0.96 on a clear case.
+DECISION_THRESHOLD = 0.90
+#: How much of the screen above a menu the model reads. The screen is what makes the
+#: rule identifiable: measured on 2026-09-25 with the real envelope, the rule's
+#: confidence on a scope menu was 0.52 from the menu alone and 0.97 with the screen.
+#: Bounded because the model takes 32k tokens of state and a tmux capture has no end.
+_SCREEN_LINES = 80
+_DOCTRINE_QUESTION = ("Which section of the autonomy envelope's doctrine decides the "
+                      "menu in the state? The doctrine and the floor are in the state.")
+_OPTION_QUESTION = ("Which menu option carries out what that section of the doctrine "
+                    "prescribes? Never an option that switches off a gate, merges, or "
+                    "widens an item already executing.")
+
+
+def _envelope_sections(text: str, heading: str) -> tuple[str, dict[str, str]]:
+    """The block under a `## ` heading, and its `### ` sections by name."""
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith(heading)), None)
+    if start is None:
+        return "", {}
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")),
+               len(lines))
+    block = lines[start:end]
+    sections: dict[str, list[str]] = {}
+    current = None
+    for line in block[1:]:
+        if line.startswith("### "):
+            current = line[4:].strip()
+            sections[current] = []
+        elif current is not None:
+            sections[current].append(line)
+    return ("\n".join(block).strip(),
+            {name: " ".join(" ".join(body).split())[:300] for name, body in sections.items()})
+
+
 #: The squad agent this watchdog escalates to. It is the facilitator role —
 #: flow and impediments — and the name must match a file `install.sh` copies,
 #: because `claude -p` resolves it from `.claude/agents/{name}.md` on disk.
@@ -469,6 +527,10 @@ class Lead:
     #: answer. Off by default: a daemon that calls a model unattended is a different
     #: thing from a daemon that reads a screen, and the difference should be chosen.
     agents_when_stuck: bool = False
+    #: A typed decision model asked BEFORE the agent on a doctrine menu. None means the
+    #: agent path alone, exactly as before; `main()` builds one when the key is set.
+    decision_model: "SystemOneClient | None" = None
+    decision_threshold: float = DECISION_THRESHOLD
     #: Measured three times, each one correcting the last guess. A one-word question
     #: in a real project exceeded 0.50 and answered at 2.00; the actual menu
     #: consultation — read the envelope, the registry and the stream, then answer —
@@ -576,6 +638,9 @@ class Lead:
         Returns a `choose` decision when it does, and None when it does not — so the
         caller escalates exactly as before. The refusal moved; it did not disappear.
         """
+        chosen, model_note = self._decide_by_decision_model(screen, options, item)
+        if chosen is not None:
+            return chosen, "answered"
         menu = "\n".join(f"{n}. {text}" for n, text in options)
         answer, note = self.ask_agent(
             SQUAD_FACILITATOR, _MENU_PROMPT.format(menu=menu, history=self._prior_rulings(item)))
@@ -583,7 +648,7 @@ class Lead:
             # Never conflated with "no rule covers it". One is the doctrine speaking and
             # the other is nobody speaking, and a log that renders them identically
             # reports a gap in the envelope that does not exist.
-            return None, note
+            return None, f"{model_note}; {note}" if model_note else note
         picked = _OPTION_RE_ANSWER.search(answer)
         rule = _RULE_RE_ANSWER.search(answer)
         if not picked or not rule:
@@ -623,6 +688,72 @@ class Lead:
                              item, option_number=number, typed=instruction), "answered")
         return (Decision("choose", f"envelope decides it — {rule.group(1)}", text, item,
                          option_number=number), "answered")
+
+    def _doctrine(self) -> tuple[str, str, dict[str, str]] | None:
+        """The envelope's doctrine block, its floor block, and its sections by name.
+
+        The project's installed copy first, the kit's own beside this file second —
+        the same order every other reader of a rule file uses.
+        """
+        candidates = []
+        if self.project is not None and (found := rules_dir(self.project)) is not None:
+            candidates.append(found / _ENVELOPE)
+        candidates.append(Path(__file__).resolve().parents[2] / "rules" / _ENVELOPE)
+        for path in candidates:
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            doctrine, sections = _envelope_sections(text, _DOCTRINE_HEADING)
+            floor, _ = _envelope_sections(text, _FLOOR_HEADING)
+            return (doctrine, floor, sections) if sections else None
+        return None
+
+    def _decide_by_decision_model(self, screen: str, options: list,
+                                  item: str) -> tuple[Decision | None, str]:
+        """Ask the typed model which doctrine section and which option; act only if sure.
+
+        Returns a `choose` decision, or None and why not — every None falls through to
+        the agent, so this can only ever remove a consultation, never add a refusal.
+        """
+        if self.decision_model is None:
+            return None, ""
+        doctrine = self._doctrine()
+        if doctrine is None:
+            return None, "the decision model was not asked: no doctrine section was readable"
+        doctrine_text, floor_text, sections = doctrine
+        missing = [name for name in _RULES_THAT_NEED_TEXT if name not in sections]
+        if missing:
+            return None, (f"the decision model was not asked: the envelope no longer "
+                          f"names {missing}")
+        model = getattr(self.decision_model, "model", "the decision model")
+        # The screen's tail, because a menu alone rarely says which rule applies and the
+        # lines above it do: see `_SCREEN_LINES`.
+        state = {"screen": "\n".join(screen.splitlines()[-_SCREEN_LINES:]),
+                 "menu": "\n".join(f"{n}. {text}" for n, text in options),
+                 "doctrine": doctrine_text, "floor": floor_text,
+                 "prior_rulings": self._prior_rulings(item)}
+        questions = {"rule": choice(_DOCTRINE_QUESTION, sections),
+                     "option": choice(_OPTION_QUESTION, dict(options))}
+        try:
+            answers = self.decision_model.choices(state, questions)
+        except DecisionModelUnavailable as error:
+            return None, str(error)
+        rule, option = answers["rule"], answers["option"]
+        measured = (f"{model}: rule {rule.confidence:.2f}, "
+                    f"option {option.confidence:.2f}")
+        if min(rule.confidence, option.confidence) < self.decision_threshold:
+            return None, f"{measured}, below {self.decision_threshold:.2f}"
+        if rule.choice in _RULES_THAT_NEED_TEXT:
+            return None, f"{measured}; {rule.choice!r} needs text typed, which it cannot"
+        text = dict(options)[option.choice]
+        lowered = text.lower()
+        if any(f in lowered for f in _RELAXING_FLAGS):
+            return None, f"{measured}; it chose an option that switches off a gate"
+        if any(e in lowered for e in _ESCAPE_OPTIONS):
+            return None, f"{measured}; it chose an option that opens a field it cannot fill"
+        return (Decision("choose", f"envelope decides it — {rule.choice} [{measured}]",
+                         text, item, option_number=option.choice), "answered")
 
     def ask_agent(self, agent: str, question: str) -> tuple[str | None, str]:
         """Run one headless session so an agent can answer what this cannot compute.
@@ -1680,11 +1811,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"==> restored {len(fleet.taken)} claim(s) from the log: "
               + ", ".join(f"{s}={i}" for s, i in sorted(fleet.taken.items())),
               file=sys.stderr)
+    # On by default when the key is set, and said so either way: the menu, the doctrine
+    # and the item's prior rulings leave the machine on this path.
+    decision_model = SystemOneClient.from_environment()
+    if decision_model is not None:
+        print(f"==> doctrine menus: {decision_model.model} via OpenRouter first "
+              f"(acts at confidence >= {DECISION_THRESHOLD:.2f}), then the agent",
+              file=sys.stderr)
+    else:
+        print("==> doctrine menus: no OPENROUTER_API_KEY, so the agent path alone",
+              file=sys.stderr)
     leads, markers = [], {}
     for name in names:
         leads.append(Lead(session=name, project=project, max_per_item=args.max_per_item,
                           idle_seconds=args.idle, stalled_seconds=args.stalled,
                           agents_when_stuck=args.agents_when_stuck,
+                          decision_model=decision_model,
                           agent_budget_usd=args.agent_budget_usd,
                           agent_cooldown=args.agent_cooldown, log_path=args.log,
                           fleet=fleet))

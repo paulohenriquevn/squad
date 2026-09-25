@@ -115,6 +115,7 @@ which is why the rule is now computed rather than requested.
 | File | Purpose |
 |---|---|
 | `squad_lead.py` | Keep an executing session moving, without deciding anything for it |
+| `decision_model.py` | A typed decision model (Jev via OpenRouter) asked a closed question: the answer is one of the options the caller declared, or a typed refusal the caller falls back on. `squad_lead.py` asks it which doctrine section and which menu option before it pays for a headless agent |
 | `pipeline_orchestrator.py` | Schedule many backlog items through the cycle, one stage each, concurrently |
 | `pipeline_workflow.js` | The `backlog-pipeline` workflow definition the orchestrator drives |
 | `start_lead_session.sh` | The lead as a named Claude session — addressable by peers, and the only shape that can invoke the pipeline |
