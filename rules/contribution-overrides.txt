@@ -54,3 +54,4 @@ commit_types = fix,feat,docs,test,refactor,chore,perf,build,ci,revert,style,merg
 # covering a commit an amend can still reach, so this can record a rule that was
 # broken and can never excuse breaking one.
 pushed_exemptions = 4b7c6377ec5c7c0febf745db797c761b35eedaba header reads `fix(panel, install)` and the convention says comma-separated with no space; pushed before the finding was read, and this repository forbids force-pushing a shared branch
+pushed_exemptions = 337bd49d62f3eb57fcb9c807650d8806bd8fe73a header reads `fix(backlog, gates)` and the convention says comma-separated with no space; pushed before the finding was read, and this repository forbids force-pushing a shared branch
