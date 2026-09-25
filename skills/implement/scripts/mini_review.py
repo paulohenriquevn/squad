@@ -127,20 +127,37 @@ def _aggregate_wiring(progress_path: Path, phase: str, repo_root: Path) -> dict[
         for sym in recheck.fail_symbols
     ]
 
-    # PASS over a PARTIAL resolution says which symbols it did not cover. The field existing is
-    # not the fix — the caller printing it is. `symbols_resolved: 17` read as a measurement over a
-    # set of 28 because the other 11 appeared nowhere (#190).
+    # A PARTIAL resolution is INCONCLUSIVE, not PASS. Naming the unresolved symbols was the first
+    # half (#190); the status kept reading PASS over them, and the consumer that measured
+    # `symbols_resolved: 17` had the four exports under review among the 11 never located.
     #
-    # The status is NOT downgraded when some are unresolved: a derived or dynamic symbol name
-    # legitimately does not resolve, and a gate that fires on ordinary work is one somebody
-    # switches off (`code-quality-golden-rule.md § 4.1`). The all-unresolved case is already
-    # handled above, honestly, as N/A.
+    # It does not block: a derived or dynamic name legitimately does not resolve, and a gate that
+    # fires on ordinary work is one somebody switches off (`code-quality-golden-rule.md § 4.1`).
+    # So the finding is MEDIUM — carried into the report, never a NEEDS_FIX on its own — and it
+    # names the directories searched, which is the fact a reader needs to tell "a derived name"
+    # from "my source lives where the search does not look".
+    unresolved = list(recheck.unresolved_symbols)
+    if unresolved:
+        findings.append({
+            "severity": "MEDIUM",
+            "code": "wiring_symbols_unresolved",
+            "message": f"{len(unresolved)} of {recheck.symbols_checked} symbol(s) could not be "
+                       f"located under {', '.join(recheck.searched_roots)}, so pillar (a) says "
+                       f"nothing about them: {', '.join(unresolved)}",
+        })
+    if recheck.pillar_a_fails > 0:
+        status = "FAIL"
+    elif unresolved:
+        status = "INCONCLUSIVE"
+    else:
+        status = "PASS"
     return {
-        "status": "FAIL" if recheck.pillar_a_fails > 0 else "PASS",
+        "status": status,
         "derivation": derivation,
         "symbols_checked": recheck.symbols_checked,
         "symbols_resolved": recheck.symbols_resolved,
-        "symbols_unresolved": list(recheck.unresolved_symbols),
+        "symbols_unresolved": unresolved,
+        "searched_roots": list(recheck.searched_roots),
         "pillar_a_fails": recheck.pillar_a_fails,
         "findings": findings,
     }
@@ -235,6 +252,7 @@ def _phase_checkpoint_findings(
     progress_path: Path,
     phase: str,
     repo_root: Path,
+    slug: str,
 ) -> list[dict[str, str]]:
     """Cross-check this phase's tasks against git: a task committed in git but not
     recorded `committed` in the checkpoint is surfaced here, on the phase boundary,
@@ -245,7 +263,7 @@ def _phase_checkpoint_findings(
         return []
     all_ids = plan_task_ids_from_text(plan_path.read_text(encoding="utf-8-sig"))
     phase_ids = [tid for tid in all_ids if tid.startswith(f"T{phase}.")]
-    report = check_checkpoint_consistency(progress, repo_root, phase_ids)
+    report = check_checkpoint_consistency(progress, repo_root, phase_ids, slug=slug)
     return [{"severity": f.severity, "code": f.code, "message": f.message}
             for f in report.findings]
 
@@ -353,6 +371,10 @@ to `/review` (which runs once at the end of all phases).
     md += f"- status: `{wiring.get('status')}`\n"
     md += f"- symbols_checked: {wiring.get('symbols_checked', 'n/a')}\n"
     md += f"- pillar_a_fails: {wiring.get('pillar_a_fails', 'n/a')}\n"
+    if wiring.get("symbols_unresolved"):
+        md += (f"- symbols_unresolved (not located under "
+               f"{', '.join(wiring.get('searched_roots') or [])}): "
+               f"{', '.join(wiring['symbols_unresolved'])}\n")
     if wiring.get("reason"):
         md += f"- reason: {wiring['reason']}\n"
     md += "\n### 4. Delta audit coverage\n\n"
@@ -391,7 +413,7 @@ def run_mini_review(
     delta_coverage = _check_delta_audit_coverage(cohesion.modified_files, project_root)
 
     findings = _collect_all_findings(completeness, cohesion, wiring, delta_coverage)
-    findings.extend(_phase_checkpoint_findings(plan_path, progress_path, phase, project_root))
+    findings.extend(_phase_checkpoint_findings(plan_path, progress_path, phase, project_root, slug))
     verdict, max_severity = _compute_verdict(findings)
 
     output_dir.mkdir(parents=True, exist_ok=True)

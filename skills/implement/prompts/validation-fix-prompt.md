@@ -13,13 +13,14 @@ Implementation tasks already produced commits on the working branch. `/implement
 
 ## Your contract for this iteration
 
-1. **Read** `{VALIDATION_REPORT_JSON_PATH}`. Identify ALL entries in `checks[]` with `status == "FAIL"`. Ignore `WARN`, `PARTIAL`, `SKIP` — they are non-blocking.
+1. **Read** `{VALIDATION_REPORT_JSON_PATH}`. Identify ALL entries in `checks[]` with `status == "FAIL"`. Ignore `WARN`, `PARTIAL`, `SKIP` — they are non-blocking. A `TIMEOUT` check is not a failure to fix: it did not finish inside its budget, and no code change makes it finish — do not edit code or tests over it (see the `NOT_VALIDATED` branch below).
 2. **Fix ONE failing check this iteration** when fixes are independent (smaller diffs are safer). If two FAILs share a root cause (e.g., `npm test` + `coverage` both stem from one untested branch), fix them together.
 3. **Apply the fix protocol** for the targeted check from § Fix protocols below.
 4. **Commit** the fix per § Commit discipline.
 5. **Re-run** `python3 .claude/skills/implement/scripts/run_validation.py {PLAN_SLUG}`.
    - Exit 0 (`overall_status` ∈ {`PASS`, `PARTIAL`}) → emit `<promise>VALIDATION_GATE_PASSED</promise>` at end of response.
    - Exit 1 (`overall_status` == `FAIL`) → STOP your turn. Stop hook restarts you in iteration {ITERATION + 1}.
+   - Exit 1 (`overall_status` == `NOT_VALIDATED`) → no check failed; one or more timed out (`timed_out`). Do NOT emit the promise and do NOT loop on it: HALT with a BLOCKED report (§ When to give up honestly) naming the budget each `TIMEOUT` check names (`validation.timeout_s.<name>` in `rules/code-quality-thresholds.txt`) to a human.
 
 ## Fix protocols per check
 
@@ -118,6 +119,7 @@ HALT and surface a BLOCKED report — do NOT emit `<promise>VALIDATION_GATE_PASS
 - The same check (same `name`) is FAIL for 3 consecutive iterations with no observable progress (compare `stderr_tail` between iterations).
 - A `code_quality` `FAIL_HARD` with `symbol_fabrication_*` or `dead_code_unallowlisted_*` that you genuinely cannot remediate without scope-creeping beyond the plan.
 - A `code_quality` `INVALID` (contract itself broken) — HALT immediately.
+- `overall_status` is `NOT_VALIDATED` — a check hit its time budget (`TIMEOUT`). HALT immediately; the report names the budget key to raise.
 - An external dependency unavailable for fix (e.g., test fixture file deleted, CI tool absent).
 
 In all cases, the response BODY must include:

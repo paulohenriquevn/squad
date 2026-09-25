@@ -38,10 +38,14 @@ _THRESHOLD_KEY = "coverage.min_percent"
 _LINE_RATE_RE = re.compile(r'line-rate="([0-9.]+)"')
 
 
-def resolve_threshold(project_root: Path, cli_value: float | None = None) -> tuple[float, str]:
-    """Return (threshold, source). Source is reported so the number is traceable."""
-    if cli_value is not None:
-        return cli_value, "cli"
+def project_setting(project_root: Path, wanted_key: str) -> list[tuple[str, Path]]:
+    """Every raw value the project's thresholds file sets for `wanted_key`, with its file.
+
+    One reader for the `KEY = VALUE` format, so the coverage floor and the validation
+    budgets (`run_validation.py`) cannot drift into two parsers of one file. Raw strings:
+    each caller owns what a value it cannot parse means.
+    """
+    found: list[tuple[str, Path]] = []
     for relative in _THRESHOLD_FILES:
         path = project_root / relative
         if not path.exists():
@@ -51,12 +55,21 @@ def resolve_threshold(project_root: Path, cli_value: float | None = None) -> tup
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, _, value = line.partition("=")
-            if key.strip() == _THRESHOLD_KEY:
-                try:
-                    number = float(value.strip())
-                except ValueError:
-                    continue
-                return (int(number) if number.is_integer() else number), "project"
+            if key.strip() == wanted_key:
+                found.append((value.strip(), path))
+    return found
+
+
+def resolve_threshold(project_root: Path, cli_value: float | None = None) -> tuple[float, str]:
+    """Return (threshold, source). Source is reported so the number is traceable."""
+    if cli_value is not None:
+        return cli_value, "cli"
+    for value, _path in project_setting(project_root, _THRESHOLD_KEY):
+        try:
+            number = float(value)
+        except ValueError:
+            continue
+        return (int(number) if number.is_integer() else number), "project"
     return DEFAULT_MIN_PERCENT, "default"
 
 

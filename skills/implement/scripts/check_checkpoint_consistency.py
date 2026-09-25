@@ -9,9 +9,10 @@ validates that what is written matches REALITY (the git history), in both direct
   - Forward  (progress → git): every task marked `committed` carries a `commit_sha`
     that actually EXISTS in the repository. Catches a fabricated or stale SHA.
   - Backward (git → progress): every plan task whose id appears in a REAL commit
-    body (the halt-loop's commit convention is `T{N.M}: <ref>` in the message) has a
-    matching `committed` entry in the checkpoint. Catches the exact failure mode of
-    "task finished and committed, but the checkpoint update was skipped".
+    body that also names THIS plan's slug (the halt-loop's commit convention is
+    `Plan: <slug>` and `T{N.M}: <ref>` in the message) has a matching `committed` entry
+    in the checkpoint. Catches the exact failure mode of "task finished and committed,
+    but the checkpoint update was skipped".
 
 The backward check is the deterministic answer to "does the system force the JSON to
 be updated per task?" — no PostToolUse hook forces it at write time, but this gate
@@ -19,9 +20,11 @@ fails loudly if a committed task is missing from the checkpoint, so the omission
 cannot survive to handoff.
 
 Honest limits:
-  - The backward check relies on the commit-message convention (`T{N.M}` in the body).
-    A task committed WITHOUT its id in the message is invisible to it — so this
-    complements, not replaces, the phase-completeness gate.
+  - The backward check relies on the commit-message convention (slug and `T{N.M}` in
+    the body). A task committed WITHOUT them in the message is invisible to it — so this
+    complements, not replaces, the phase-completeness gate. That includes commits written
+    before the halt-loop's template carried the slug: they are not attributed, because a
+    bare task id cannot say which item it belongs to.
   - The git scan is bounded to the most recent commits (default 500) to stay cheap on
     large repos; a task buried deeper than that is not cross-checked.
 
@@ -87,13 +90,24 @@ def _commit_exists(repo_root: Path, sha: str) -> bool:
     return result.returncode == 0
 
 
-def _task_ids_in_git_history(repo_root: Path, candidate_ids: list[str]) -> set[str]:
-    """Of `candidate_ids`, which appear (as whole tokens) in a recent commit body.
+def _task_ids_in_git_history(
+    repo_root: Path, candidate_ids: list[str], slug: str,
+) -> set[str]:
+    """Of `candidate_ids`, which appear (as whole tokens) in a recent commit body that
+    also carries this item's `Plan: <slug>` line.
+
+    A task id alone does not identify an item: ids are per-plan and every plan starts at
+    `T1.1`. Measured in a consumer on 2026-09-24, the last 500 commits carried 57 task-id
+    references with `T2.1` appearing twice — so the bare match read another item's commit
+    as this one's, raising a false HIGH whose only "fix" was to mark a task committed
+    against a commit that does not implement it, and hiding a real
+    `plan_task_absent_from_progress` behind that same foreign commit. The slug is what
+    `rules/cycle-implement.md` asks every commit to reference beside the task id.
 
     One git pass, parsed locally — cheaper and more precise than one `git log --grep`
     per id. Records are NUL-separated (`-z`); each is `<sha>\\x1f<full message>`.
     """
-    if not candidate_ids:
+    if not candidate_ids or not slug:
         return set()
     try:
         result = subprocess.run(
@@ -107,11 +121,18 @@ def _task_ids_in_git_history(repo_root: Path, candidate_ids: list[str]) -> set[s
         return set()
 
     patterns = {tid: re.compile(rf"\b{re.escape(tid)}\b") for tid in candidate_ids}
+    # The slug must stand on its own `Plan:` line, the form the halt-loop's commit template
+    # writes. Anywhere-in-the-message is not enough: the conventional-commit scope is often
+    # the same word (`feat(auth): ...` from item `auth-v2` would claim item `auth`), and a
+    # guess here is exactly the false attribution this filter exists to stop.
+    slug_pattern = re.compile(rf"^\s*Plan:\s*{re.escape(slug)}\s*$", re.MULTILINE | re.IGNORECASE)
     found: set[str] = set()
     for record in result.stdout.split("\x00"):
         if not record.strip():
             continue
         _sha, _sep, body = record.partition("\x1f")
+        if not slug_pattern.search(body):
+            continue
         for tid, pat in patterns.items():
             if tid not in found and pat.search(body):
                 found.add(tid)
@@ -122,7 +143,13 @@ def check_checkpoint_consistency(
     progress: dict,
     repo_root: Path,
     plan_task_ids: list[str],
+    slug: str | None = None,
 ) -> CheckpointConsistencyReport:
+    """`slug` is the item under validation; when omitted, the checkpoint's own `slug` is used.
+    Both callers pass the slug they were invoked with, since the field is optional in the
+    checkpoint schema."""
+    if not slug and isinstance(progress, dict):
+        slug = str(progress.get("slug") or "").strip() or None
     tasks = progress.get("tasks", []) if isinstance(progress, dict) else []
     tasks = [t for t in tasks if isinstance(t, dict)]
     by_id = {t["id"]: t for t in tasks if t.get("id")}
@@ -164,7 +191,15 @@ def check_checkpoint_consistency(
                 f"Task {tid} is 'committed' with no `dod_evidence`. That records a commit, not that "
                 "its acceptance criteria hold — add a pointer to the measurement that closed it."))
 
-    referenced = _task_ids_in_git_history(repo_root, plan_task_ids)
+    referenced = _task_ids_in_git_history(repo_root, plan_task_ids, slug or "")
+    if plan_task_ids and not slug:
+        # Declining to guess must not read as "no commit references it": say the backward
+        # direction did not run, so nobody reads its silence as a pass.
+        findings.append(Finding(
+            "WARN", "commit_attribution_unavailable",
+            "No plan slug from the caller or the checkpoint — commits cannot be attributed to "
+            "this item (a task id alone is shared by every plan), so the git → checkpoint "
+            "direction was not checked. Record `slug` in the checkpoint."))
 
     # Inventory: every task the PLAN declares must be accounted for in the checkpoint.
     #
@@ -221,6 +256,8 @@ def main() -> int:
     parser.add_argument("--progress", type=Path, required=True)
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument("--slug", default=None,
+                        help="plan slug commits must name (default: the checkpoint's `slug`)")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -238,7 +275,7 @@ def main() -> int:
         return 2
 
     plan_ids = plan_task_ids_from_text(args.plan.read_text(encoding="utf-8-sig"))
-    report = check_checkpoint_consistency(progress, args.repo_root, plan_ids)
+    report = check_checkpoint_consistency(progress, args.repo_root, plan_ids, slug=args.slug)
 
     if args.json:
         print(json.dumps({

@@ -216,11 +216,11 @@ def test_e2e_unrecorded_committed_task_triggers_needs_fix(tmp_path: Path) -> Non
     git("config", "user.name", "t")
     (tmp_path / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
     git("add", "src/a.py")
-    git("commit", "-q", "-m", "feat: a\n\nT1.1: foo")
+    git("commit", "-q", "-m", "feat: a\n\nPlan: foo\nT1.1: foo")
     sha1 = git("rev-parse", "HEAD").strip()
     (tmp_path / "src" / "b.py").write_text("y = 2\n", encoding="utf-8")
     git("add", "src/b.py")
-    git("commit", "-q", "-m", "feat: b\n\nT1.2: bar")
+    git("commit", "-q", "-m", "feat: b\n\nPlan: foo\nT1.2: bar")
 
     plan_body = (
         "## Phase 1\n### T1.1 — Foo\n#### Files to edit\n- src/a.py\n"

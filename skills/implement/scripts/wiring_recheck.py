@@ -22,6 +22,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from check_wiring import production_search_roots
+
 _CHECK_WIRING = Path(__file__).parent / "check_wiring.py"
 
 
@@ -44,6 +46,10 @@ class PillarARecheck:
     #: exports the same checker returns HALT: two gates over one subject disagreeing, and the
     #: aggregate was the one reporting green (#190).
     unresolved_symbols: tuple[str, ...] = ()
+    #: The directories the caller search covered, relative to the project root (`.` for the
+    #: whole tree). Reported beside `unresolved_symbols`: "not located" only means something
+    #: next to WHERE it was looked for.
+    searched_roots: tuple[str, ...] = ()
 
 
 def recheck_pillar_a(project_root: Path, symbols: set[str]) -> PillarARecheck:
@@ -54,6 +60,7 @@ def recheck_pillar_a(project_root: Path, symbols: set[str]) -> PillarARecheck:
     """
     if not _CHECK_WIRING.exists():
         return PillarARecheck(len(symbols), 0, 0, (), tuple(sorted(symbols)))
+    searched = _searched_roots(project_root)
 
     resolved = 0
     fails: list[str] = []
@@ -85,6 +92,16 @@ def recheck_pillar_a(project_root: Path, symbols: set[str]) -> PillarARecheck:
         pillar_a_fails=len(fails),
         fail_symbols=tuple(fails),
         unresolved_symbols=tuple(unresolved),
+        searched_roots=searched,
+    )
+
+
+def _searched_roots(project_root: Path) -> tuple[str, ...]:
+    """The scope `check_wiring.py` searches, from the function that decides it — a copy of the
+    rule here would be a second answer to "where are callers looked for"."""
+    return tuple(
+        str(root.relative_to(project_root)) if root != project_root else "."
+        for root in production_search_roots(project_root)
     )
 
 

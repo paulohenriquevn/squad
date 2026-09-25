@@ -24,12 +24,13 @@ right: *"a repo that keeps its source at the root would report every symbol as u
 is a guess about other people's layouts, and enumerating directory names is a list that will be
 short again. Naming the unresolved generalises to any layout.
 
-WHY NOT MAKE A PARTIAL RESOLUTION INCONCLUSIVE. A derived or dynamic symbol name legitimately does
-not resolve, and a gate that fires on ordinary work is one somebody switches off —
-`code-quality-golden-rule.md § 4.1`. The all-unresolved case is ALREADY honest: both callers return
-`N/A` at `symbols_resolved == 0`, with `run_validation` saying why in its own comment, *"so the gate
-never launders an unverified claim."* What was missing is the PARTIAL case, where 17 resolved and 11
-vanished.
+A PARTIAL RESOLUTION IS NOW INCONCLUSIVE. This file first argued against it: a derived or dynamic
+symbol name legitimately does not resolve, and a gate that fires on ordinary work is one somebody
+switches off — `code-quality-golden-rule.md § 4.1`. Both halves hold, and neither required PASS: the
+status is `INCONCLUSIVE`, which does not block (the run reads PARTIAL, the phase boundary files a
+MEDIUM finding) and does not claim what was never measured. The all-unresolved case stays `N/A`.
+`test_a_partial_wiring_resolution_is_inconclusive.py` holds that behaviour; this file holds the
+recording that makes it possible.
 """
 from __future__ import annotations
 

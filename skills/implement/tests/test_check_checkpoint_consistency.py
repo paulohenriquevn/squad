@@ -49,8 +49,8 @@ def test_plan_task_ids_from_text() -> None:
 
 def test_committed_sha_not_in_git_is_high(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
-    progress = {"tasks": [
+    _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nPlan: s\nT1.1: foo")
+    progress = {"slug": "s", "tasks": [
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": "deadbeefdeadbeef"},
     ]}
     report = check_checkpoint_consistency(progress, repo, ["T1.1"])
@@ -66,9 +66,9 @@ def test_task_committed_in_git_but_not_in_progress_is_high(tmp_path: Path) -> No
     """The exact gap: T1.2 was committed (its id is in a real commit body) but the
     halt-loop forgot to record it in the checkpoint."""
     repo = _repo(tmp_path)
-    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
-    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")  # committed in git
-    progress = {"tasks": [
+    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nPlan: s\nT1.1: foo")
+    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nPlan: s\nT1.2: bar")  # committed in git
+    progress = {"slug": "s", "tasks": [
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
              "dod_evidence": "the suite is green"},
         # T1.2 MISSING from the checkpoint
@@ -83,9 +83,9 @@ def test_task_committed_in_git_but_not_in_progress_is_high(tmp_path: Path) -> No
 def test_task_present_but_not_committed_status_is_flagged(tmp_path: Path) -> None:
     """T1.2 has a real commit but the checkpoint still marks it 'green' (stale)."""
     repo = _repo(tmp_path)
-    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
-    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")
-    progress = {"tasks": [
+    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nPlan: s\nT1.1: foo")
+    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nPlan: s\nT1.2: bar")
+    progress = {"slug": "s", "tasks": [
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
              "dod_evidence": "the suite is green"},
         {"id": "T1.2", "phase": "1", "status": "green"},  # stale: committed in git, not here
@@ -99,9 +99,9 @@ def test_task_present_but_not_committed_status_is_flagged(tmp_path: Path) -> Non
 
 def test_consistent_checkpoint_has_no_findings(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
-    sha2 = _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")
-    progress = {"tasks": [
+    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nPlan: s\nT1.1: foo")
+    sha2 = _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nPlan: s\nT1.2: bar")
+    progress = {"slug": "s", "tasks": [
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
              "dod_evidence": "the suite is green"},
         {"id": "T1.2", "phase": "1", "status": "committed", "commit_sha": sha2,
@@ -115,8 +115,8 @@ def test_consistent_checkpoint_has_no_findings(tmp_path: Path) -> None:
 def test_not_yet_committed_task_is_not_flagged(tmp_path: Path) -> None:
     """T1.3 is in the plan but has no commit yet and is pending — that's fine."""
     repo = _repo(tmp_path)
-    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
-    progress = {"tasks": [
+    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nPlan: s\nT1.1: foo")
+    progress = {"slug": "s", "tasks": [
         {"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
              "dod_evidence": "the suite is green"},
         {"id": "T1.3", "phase": "1", "status": "pending"},
@@ -140,7 +140,7 @@ def test_empty_progress_against_a_non_empty_plan_fails(tmp_path: Path) -> None:
     """
     repo = _repo(tmp_path)
     _commit(repo, "README.md", "# hi\n", "docs: init")  # unrelated, no task id
-    report = check_checkpoint_consistency({"tasks": []}, repo, ["T1.1"])
+    report = check_checkpoint_consistency({"slug": "s", "tasks": []}, repo, ["T1.1"])
     assert report.status == "FAIL"
     assert [f.code for f in report.findings] == ["plan_task_absent_from_progress"]
 
@@ -149,7 +149,7 @@ def test_an_empty_plan_still_passes(tmp_path: Path) -> None:
     """The refusal must not swallow the genuinely-empty case: no declared tasks, nothing owed."""
     repo = _repo(tmp_path)
     _commit(repo, "README.md", "# hi\n", "docs: init")
-    assert check_checkpoint_consistency({"tasks": []}, repo, []).status == "PASS"
+    assert check_checkpoint_consistency({"slug": "s", "tasks": []}, repo, []).status == "PASS"
 
 
 def test_a_task_absent_from_the_checkpoint_is_reported_once(tmp_path: Path) -> None:
@@ -160,9 +160,9 @@ def test_a_task_absent_from_the_checkpoint_is_reported_once(tmp_path: Path) -> N
     being read.
     """
     repo = _repo(tmp_path)
-    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
-    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")
-    progress = {"tasks": [{"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
+    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nPlan: s\nT1.1: foo")
+    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nPlan: s\nT1.2: bar")
+    progress = {"slug": "s", "tasks": [{"id": "T1.1", "phase": "1", "status": "committed", "commit_sha": sha1,
              "dod_evidence": "the suite is green"}]}
 
     # T1.2 is in git but not in the checkpoint; T1.3 is in neither.

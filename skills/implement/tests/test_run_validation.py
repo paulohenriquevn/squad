@@ -171,8 +171,8 @@ def test_checkpoint_consistency_gate_catches_unrecorded_task(tmp_path: Path) -> 
     """End-to-end: a task committed in git but missing from the checkpoint fails the
     checkpoint_consistency gate inside run_validation."""
     repo = _init_repo(tmp_path)
-    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nT1.1: foo")
-    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nT1.2: bar")  # committed, but not in checkpoint
+    sha1 = _commit(repo, "src/a.py", "x = 1\n", "feat: a\n\nPlan: ck\nT1.1: foo")
+    _commit(repo, "src/b.py", "y = 2\n", "feat: b\n\nPlan: ck\nT1.2: bar")  # committed, but not in checkpoint
     plan_dir = repo / ".claude" / "records" / "plans"
     plan_dir.mkdir(parents=True, exist_ok=True)
     (plan_dir / "ck-plan.md").write_text(
@@ -206,13 +206,14 @@ def test_malformed_checkpoint_fails_validation(fake_project: Path) -> None:
 
 
 def test_summary_buckets_account_for_every_check(fake_project: Path) -> None:
-    """Regression: pass+fail+skip+warn+partial+n_a must equal total — WARN and
+    """Regression: every status bucket must sum to total — WARN and
     PARTIAL statuses (from the code-quality gate) used to be dropped from the summary."""
     _, data = _run_validation("test-slug", fake_project)
     s = data["summary"]
-    for bucket in ("pass", "fail", "skip", "warn", "partial", "n_a"):
+    buckets = ("pass", "fail", "skip", "warn", "partial", "n_a", "timeout", "inconclusive")
+    for bucket in buckets:
         assert bucket in s, f"summary missing bucket '{bucket}'"
-    assert s["pass"] + s["fail"] + s["skip"] + s["warn"] + s["partial"] + s["n_a"] == s["total"]
+    assert sum(s[bucket] for bucket in buckets) == s["total"]
 
 
 # T2.1 — patterns-consumption advisory (patterns-consumption-gate-plan, ADR D3)

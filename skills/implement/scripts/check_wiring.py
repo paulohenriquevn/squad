@@ -193,6 +193,15 @@ def _grep_symbol(project_root: Path, symbol: str, include_globs: list[str], excl
     ]
 
 
+def production_search_roots(project_root: Path) -> list[Path]:
+    """Where pillar (a) looks for callers: the `PRODUCTION_DIR_NAMES` that exist, else the
+    whole tree. Public so a report can NAME the scope — a consumer whose source lives in
+    `apps/` or `scripts/` otherwise reads "unresolved" with no way to see why."""
+    production_roots = [project_root / name for name in PRODUCTION_DIR_NAMES
+                        if (project_root / name).is_dir()]
+    return production_roots or [project_root]
+
+
 def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, Any]:
     """Find at least 1 production caller (non-test) under src/, lib/, or packages/.
 
@@ -207,10 +216,8 @@ def check_pillar_a_static_caller(project_root: Path, symbol: str) -> dict[str, A
     source. Narrowing unconditionally would be worse than the bug: a repo that keeps
     its source at the root would report every symbol as unwired.
     """
-    production_roots = [project_root / name for name in PRODUCTION_DIR_NAMES
-                        if (project_root / name).is_dir()]
     matches: list[Path] = []
-    for search_root in (production_roots or [project_root]):
+    for search_root in production_search_roots(project_root):
         matches.extend(_grep_symbol(
         search_root,
         symbol,

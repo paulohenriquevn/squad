@@ -72,3 +72,13 @@
 # Floor for TOTAL line coverage, read from the project's coverage report.
 # Unset = 80. The report says which source the number came from (cli/project/default).
 # coverage.min_percent = 80    # NOT READ by any detector
+
+# Validation budgets (/implement final validation — skills/implement/scripts/run_validation.py)
+# Seconds a command may run before it is reported TIMEOUT, which reads NOT_VALIDATED —
+# never PASS and never FAIL. Raise one when a green suite outgrows it. An invalid value
+# exits 2 naming the key rather than falling back.
+# validation.timeout_s.npm_test = 900    # NOT READ by any detector
+# validation.timeout_s.npm_typecheck = 300    # NOT READ by any detector
+# validation.timeout_s.npm_lint = 300    # NOT READ by any detector
+# validation.timeout_s.project_gates = 1800    # NOT READ by any detector
+# validation.timeout_s.test_coverage = 900    # NOT READ by any detector
