@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The code-quality knob audit failed every consumer whose preserved thresholds file predated the kit's.** In a copy install, `rules/code-quality-thresholds.txt` is the project's configuration, so the audit no longer grades it against the kit's scripts: it skips there and names the keys the project's copy leaves unmarked. (#202)
 - **`/discover-execute --sweep` filed its findings as `triaged` while the registry contract files them as `approved`.** The skill now writes `status: approved` with `approved_by: system/autonomous-sweep`, as `rules/cycle-backlog.md` says, and a test holds the two documents to the same answer. (#183)
 - **The comment explaining why a decision that cites an item keeps its class cited an example that did not.** "B-007 decided the threshold" classifies as a dependency; the ordering it described holds, and is now pinned by a test with an example that exercises it. (#140)
 - **A judge given a bare name signed a brief as nobody in particular.** `alignment_judge.py --judge <name>` wrote the name verbatim, so the marker claimed neither `judge/` nor `human/` and a reader searching for `judge/` concluded no judge had signed a brief the scorer called ALIGNED. A bare name is now signed as `judge/<name>`, and any other prefix is refused, as `human/` and `peer/` already were. (#205)

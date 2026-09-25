@@ -119,27 +119,62 @@ def test_recommended_actions_says_so_when_there_is_nothing_to_do() -> None:
 # tuning surface. Twelve are looked up by nothing: the detector they name uses its
 # built-in value, and a project setting one believes it tuned something. Worse than
 # a knob that does not exist, because the belief is the whole cost.
+#
+# The file is the KIT's only in the kit's own tree. `install.sh` replaces `skills/` and
+# preserves `rules/*.txt`, so in a copy install `rules/code-quality-thresholds.txt` is
+# the project's tuning, frozen at whatever the kit shipped when it was first installed.
+# Graded there, these tests failed a consumer for a file it owns against scripts it does
+# not: measured 2026-09-24, byte-identical test file, 13 passed upstream, 1 failed in the
+# consumer, 12 keys listed. In an install the subject does not exist, so the tests skip —
+# the treatment `squad/tests/conftest.py` gives every test whose subject does not install
+# — and the skip names the unmarked keys, because the drift is real, just not the kit's.
 
 
-def test_every_undocumented_knob_is_marked_as_unread() -> None:
-    import re as _re
-
+def _kit_thresholds_rule() -> str:
+    """The thresholds file this tree ships, or a skip when the tree is a copy install."""
     rule = (_ROOT / "rules" / "code-quality-thresholds.txt").read_text(encoding="utf-8")
-    source = "\n".join(
+    # The same signal `run_slice_tests.sh` prints as `TREE: INSTALLED`.
+    if _ROOT.name == ".claude":
+        stale = _unmarked_knobs(rule)
+        pytest.skip(
+            "copy install: rules/code-quality-thresholds.txt is the project's preserved "
+            "configuration, not what the kit ships. Keys it documents that no detector "
+            f"reads and that it does not mark NOT READ: {stale or 'none'}")
+    return rule
+
+
+def _scripts_source() -> str:
+    return "\n".join(
         p.read_text(encoding="utf-8")
         for p in (_ROOT / "skills" / "code-quality" / "scripts").rglob("*.py"))
 
-    documented = sorted(set(_re.findall(
-        r"^#?\s*([a-z0-9_]+\.[a-z0-9_.]+)\s*=", rule, _re.MULTILINE)))
-    assert documented, "no knob found; this test lost its subject"
 
+def _documented_knobs(rule: str) -> list[str]:
+    import re as _re
+
+    return sorted(set(_re.findall(
+        r"^#?\s*([a-z0-9_]+\.[a-z0-9_.]+)\s*=", rule, _re.MULTILINE)))
+
+
+def _unmarked_knobs(rule: str) -> list[str]:
+    import re as _re
+
+    source = _scripts_source()
     unmarked: list[str] = []
-    for key in documented:
+    for key in _documented_knobs(rule):
         read_by_code = f'"{key}"' in source
         marked_unread = f"{key} =" in rule and _re.search(
             rf"^#?\s*{_re.escape(key)}\s*=[^\n]*NOT READ", rule, _re.MULTILINE) is not None
         if not read_by_code and not marked_unread:
             unmarked.append(key)
+    return unmarked
+
+
+def test_every_undocumented_knob_is_marked_as_unread() -> None:
+    rule = _kit_thresholds_rule()
+    assert _documented_knobs(rule), "no knob found; this test lost its subject"
+
+    unmarked = _unmarked_knobs(rule)
 
     assert unmarked == [], (
         "these are documented as tuning knobs, read by no detector, and not marked "
@@ -150,10 +185,8 @@ def test_a_knob_that_is_read_is_not_marked_unread() -> None:
     """The other direction: a working knob labelled dead sends a project elsewhere."""
     import re as _re
 
-    rule = (_ROOT / "rules" / "code-quality-thresholds.txt").read_text(encoding="utf-8")
-    source = "\n".join(
-        p.read_text(encoding="utf-8")
-        for p in (_ROOT / "skills" / "code-quality" / "scripts").rglob("*.py"))
+    rule = _kit_thresholds_rule()
+    source = _scripts_source()
 
     mislabelled = [
         m.group(1) for m in _re.finditer(
