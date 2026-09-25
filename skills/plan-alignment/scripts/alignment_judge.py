@@ -114,8 +114,28 @@ def _refuse_a_human_claim(judge: str) -> None:
             f"this contract is not that. Sign as `judge/<name>`.")
 
 
+def _judge_route(judge: str) -> str:
+    """The name as it will be signed: always under `judge/`.
+
+    A bare name used to be written verbatim, so the marker claimed neither `judge/`
+    nor `human/` and a reader grepping for `judge/` concluded no judge had signed a
+    brief the scorer called ALIGNED (#205). A bare name is unambiguous and gets the
+    prefix; a different prefix names a route this module is not, and is refused like
+    the two above rather than guessed at.
+    """
+    cleaned = judge.strip()
+    _refuse_a_human_claim(cleaned)
+    if cleaned.startswith("judge/"):
+        return cleaned
+    if "/" in cleaned:
+        raise ValueError(
+            f"`{cleaned}` names a route this is not. The judge signs as "
+            f"`judge/<name>`; a bare name is given that prefix.")
+    return f"judge/{cleaned}"
+
+
 def sign(brief_path: Path, judge: str, reason: str, model: str | None = None) -> str:
-    _refuse_a_human_claim(judge)
+    judge = _judge_route(judge)
     text = brief_path.read_text(encoding="utf-8")
     if not _SIGNOFF_RE.search(text):
         raise NotReady("the brief has no `## Reviewer sign-off` section to sign")

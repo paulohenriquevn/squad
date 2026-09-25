@@ -39,8 +39,24 @@ def test_a_judge_claiming_to_be_a_person_is_refused(tmp_path: Path, judge: str) 
         sign(_brief(tmp_path), judge, "a reason", model="a-model")
 
 
-def test_an_ordinary_judge_name_signs(tmp_path: Path) -> None:
-    signed = sign(_brief(tmp_path), "alignment-judge", "a reason", model="a-model")
+def test_a_bare_judge_name_signs_under_the_judge_route(tmp_path: Path) -> None:
+    """A bare name was written verbatim, so the marker claimed neither `judge/` nor
+    `human/` and a reader grepping for `judge/` concluded no judge had signed a brief
+    the scorer called ALIGNED. Measured on a consumer 2026-09-24 with
+    `--judge nemesis-claim-auditor` (#205)."""
+    signed = sign(_brief(tmp_path), "nemesis-claim-auditor", "a reason", model="a-model")
 
-    assert "signed-by: alignment-judge" in signed
+    assert "signed-by: judge/nemesis-claim-auditor" in signed
     assert "not by a person" in signed
+
+
+def test_a_judge_route_is_kept_as_given(tmp_path: Path) -> None:
+    signed = sign(_brief(tmp_path), "judge/alignment-judge", "a reason", model="a-model")
+
+    assert "signed-by: judge/alignment-judge" in signed
+    assert "judge/judge/" not in signed
+
+
+def test_a_route_the_scorer_does_not_know_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="judge/"):
+        sign(_brief(tmp_path), "bot/nemesis", "a reason", model="a-model")
