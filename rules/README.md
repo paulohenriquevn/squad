@@ -44,8 +44,8 @@ The only automatic contact is a pointer injected by
 six rungs are **inlined in that hook** rather than read from
 `parsimony-ladder.md`.
 
-That makes the pointer the whole interface, and a pointer at sixty-four files is
-not one — a model told to read sixty-four files before an architectural decision
+That makes the pointer the whole interface, and a pointer at sixty-five files is
+not one — a model told to read sixty-five files before an architectural decision
 reads none of them. See the doctrine list the hook names.
 `tests/test_rules_readme_claims_recompute.py` recomputes that count.
 

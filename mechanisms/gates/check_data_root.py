@@ -19,7 +19,7 @@ older copy is silently unreachable rather than merely old.
 
 That state is the loudest thing here, exactly as `SPLIT` is in the wiki migration.
 
-  COMMITTABLE   the study zone is not ignored by git: third-party material cloned
+  COMMITTABLE   the study zone holds files and is not ignored by git: third-party material cloned
                 where the rule says to put it is one `git add -A` from the history
   CENTRALISED   nothing is left outside the write root
   UNMIGRATED    a legacy root holds data and the write root does not — readers still
@@ -70,7 +70,7 @@ FAILING_STATES = ("COMMITTABLE", "INSIDE_KIT", "NESTED", "SPLIT", "SHARED", "UNM
 
 #: States that describe a directory which is not the kit's data. Printed, never the
 #: overall verdict: there is nothing of the kit's in it to move.
-_INFORMATIONAL = frozenset({"FOREIGN"})
+_INFORMATIONAL = frozenset({"FOREIGN", "UNGUARDED"})
 
 #: The legacy wiki roots whose location does not vouch for them — the bare `wiki/`
 #: two plugins write their own OKF bundle into by default. `squad.paths.wiki_dir` reads
@@ -211,8 +211,18 @@ def _committable_study_zone(root: Path) -> RootReport | None:
     if ignored.returncode != 1:
         raise RuntimeError(f"git check-ignore could not answer for {root / probe}: "
                            f"exit {ignored.returncode}, {ignored.stderr.strip()!r}")
+    # Failing only once something is there to leak. An empty zone is every fresh
+    # install, and failing it made the post-install validation of every consumer that
+    # had not yet edited its `.gitignore` report FAILURE — measured on this suite
+    # 2026-09-25, 18 install tests red at once. The risk is named either way.
+    files = len(_documents(root / STUDY_ZONE))
+    if not files:
+        return RootReport(
+            STUDY_ZONE, 0, "UNGUARDED",
+            f"git would not ignore {STUDY_ZONE}/ once something is cloned there. Nothing "
+            f"is there yet; add `{DATA_DIRNAME}/` to .gitignore before it is")
     return RootReport(
-        STUDY_ZONE, len(_documents(root / STUDY_ZONE)), "COMMITTABLE",
+        STUDY_ZONE, files, "COMMITTABLE",
         f"git does not ignore {STUDY_ZONE}/, where reference-provenance.md says "
         f"third-party material goes. A clone there is one `git add -A` from this "
         f"history, licence included. Add `{DATA_DIRNAME}/` to .gitignore (or at least "

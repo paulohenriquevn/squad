@@ -36,12 +36,19 @@ def _git_repo(path: Path, gitignore: str | None) -> Path:
     return path
 
 
+def _clone_into_zone(root: Path) -> None:
+    zone = root / ".squad" / "study-material" / "some-lib"
+    zone.mkdir(parents=True)
+    (zone / "LICENSE").write_text("MIT\n", encoding="utf-8")
+
+
 def _states(root: Path) -> dict[str, str]:
     return {r.relative: r.state for r in check_project(root)}
 
 
 def test_a_repository_that_does_not_ignore_the_zone_is_reported(tmp_path: Path) -> None:
     root = _git_repo(tmp_path, gitignore="node_modules/\n")
+    _clone_into_zone(root)
 
     report = {r.relative: r for r in check_project(root)}
 
@@ -51,8 +58,19 @@ def test_a_repository_that_does_not_ignore_the_zone_is_reported(tmp_path: Path) 
 
 def test_the_report_fails_the_gate(tmp_path: Path) -> None:
     root = _git_repo(tmp_path, gitignore=None)
+    _clone_into_zone(root)
 
     assert main(["--root", str(root)]) == 1
+
+
+def test_an_empty_zone_is_named_without_failing_a_fresh_install(tmp_path: Path) -> None:
+    """Every fresh install has an empty zone and a `.gitignore` the consumer has not
+    touched yet. Failing that turned the post-install validation of every new consumer
+    into FAILURE; nothing is exposed until something is cloned there."""
+    root = _git_repo(tmp_path, gitignore=None)
+
+    assert _states(root).get(".squad/study-material") == "UNGUARDED"
+    assert main(["--root", str(root)]) == 0
 
 
 def test_ignoring_the_write_root_is_clean(tmp_path: Path) -> None:

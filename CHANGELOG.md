@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **Every fresh install reported a post-install FAILURE because its empty study zone was not gitignored.** An empty `.squad/study-material/` is now `UNGUARDED`, named but not failing; it becomes `COMMITTABLE`, and fails, once something is cloned there. (#128)
 - **The kit no longer carries Portuguese outside the lines that must.** The new English-only detector found 59 lines in 34 files the old word list called clean; accidental prose, test messages and identifiers were translated, and the lines that quote Portuguese on purpose (registry patterns, a user requirement, a consumer config) are marked with their reason. (#130)
 - **`verify_ecosystem` ignored four of the six states that fail `check_data_root`.** It kept its own list, `UNMIGRATED` and `SPLIT`, so a nested write root, data inside the installed kit, a shared wiki bundle or a committable study zone passed the ecosystem check while the gate itself exited 1. It now reads the gate's own list. (#215, #184, #128)
 - **A plugin's OKF bundle in `wiki/` is no longer read as the project's knowledge.** `loop-system-cartography` and `loop-project-purge` write their bundle to `<project>/wiki/` by default, and the legacy wiki fallback accepted any directory there. A bare `wiki/` is now read only when it has the kit's shape: at least one of its leaves and nothing it never writes. `check_data_root` reports another producer's bundle as FOREIGN, and kit leaves mixed into one as SHARED. (#184)
