@@ -403,7 +403,7 @@ def _source_files(project_root: Path, limit: int = 200) -> list[str]:
     """
     try:
         out = subprocess.run(["git", "ls-files"], cwd=project_root,
-                             capture_output=True, text=True, timeout=30)
+                             capture_output=True, text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return []
     if out.returncode != 0:

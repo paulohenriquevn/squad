@@ -58,8 +58,7 @@ import sys
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from dataclasses import dataclass, field
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
@@ -69,8 +68,11 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from squad.paths import write_wiki_dir  # noqa: E402 — post-bootstrap import
-from squad.signoff import SignOff, is_human, read as read_signoff  # noqa: E402 — post-bootstrap import
 from squad.rubric import ALIGNMENT_FLOOR_PCT  # noqa: E402 — post-bootstrap import
+from squad.signoff import (  # noqa: E402 — post-bootstrap import
+    SignOff,
+    read as read_signoff,
+)
 
 #: Read rather than restated — `squad.rubric` owns the figure and the item-level
 #: scorer reads the same one. G-B4 in `cycle-brainstorm.md` always said this cycle

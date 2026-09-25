@@ -39,8 +39,10 @@ from delegated_decision import (  # noqa: E402 — post-bootstrap
     rewrite_wall,
 )
 
-from squad import shared_file  # noqa: E402 — post-bootstrap import
-from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
+from squad import (  # noqa: E402 — post-bootstrap import
+    backlog as _shared_backlog,
+    shared_file,
+)
 
 #: Imported, not compiled — `squad/backlog.py` owns what an item header is.
 #: Six readers each carried one and they disagreed about the separator.

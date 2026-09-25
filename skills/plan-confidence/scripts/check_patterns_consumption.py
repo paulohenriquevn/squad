@@ -17,8 +17,7 @@ from __future__ import annotations
 import re
 import sys as _sys
 from dataclasses import dataclass, field
-from pathlib import Path
-from pathlib import Path as _P
+from pathlib import Path, Path as _P
 
 for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "markdown.py").is_file():

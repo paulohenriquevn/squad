@@ -360,7 +360,6 @@ def test_an_unreadable_declaration_is_not_an_empty_workspace(
     repository with no workspace — the silent pass this whole change exists to remove. The
     fallback is the pre-2026-09 fixed globs, which is a weaker answer rather than a wrong one.
     """
-    import scripts.detectors.typescript as ts
 
     root = _workspace(tmp_path, ["apps/*/packages/*"], {"packages/near": "@scope/near"})
     changed = root / "packages/app/src/index.ts"

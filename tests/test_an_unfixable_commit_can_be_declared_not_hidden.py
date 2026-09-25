@@ -36,9 +36,11 @@ def _repo(tmp_path: Path, *, overrides: str, subject: str,
     origin, work = tmp_path / "origin.git", tmp_path / "work"
     subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True)
     subprocess.run(["git", "clone", "-q", str(origin), str(work)], check=True)
-    run = lambda *a: subprocess.run(["git", "-C", str(work), *a], check=True,
-                                    capture_output=True, text=True)
-    run("config", "user.email", "t@t"); run("config", "user.name", "t")
+    def run(*a):
+        return subprocess.run(["git", "-C", str(work), *a], check=True,
+                              capture_output=True, text=True)
+    run("config", "user.email", "t@t")
+    run("config", "user.name", "t")
     (work / "rules").mkdir(parents=True, exist_ok=True)
     (work / "rules" / "contribution-overrides.txt").write_text(overrides, encoding="utf-8")
     (work / "a.txt").write_text("a\n", encoding="utf-8")

@@ -50,7 +50,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from squad.paths import DATA_DIRNAME  # noqa: E402 — after the path bootstrap above
+from squad.paths import DATA_DIRNAME
 
 #: A block header. The trailing space matters for the history query — `## B-016 ` cannot match
 #: `## B-0161`, and an id is three digits by convention everywhere this runs.

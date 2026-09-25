@@ -34,8 +34,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 REPO = Path(__file__).resolve().parents[1]
 SCORER = REPO / "skills" / "discover-confidence" / "scripts" / "run_opportunity_score.py"
 FIXTURE = REPO / "skills" / "discover-confidence" / "fixtures" / "good-opportunity.md"
@@ -56,7 +54,7 @@ def _opportunity(tmp_path: Path, corner_one: str) -> Path:
 
 def _score(path: Path) -> dict:
     proc = subprocess.run([sys.executable, str(SCORER), str(path)],
-                          capture_output=True, text=True, cwd=path.parent)
+                          capture_output=True, text=True, cwd=path.parent, check=False)
     return json.loads(proc.stdout)
 
 

@@ -40,12 +40,12 @@ import sys
 from pathlib import Path as _Path
 
 sys.path.insert(0, str(_Path(__file__).resolve().parents[3]))
-from squad.measurability import (  # noqa: E402 — post-bootstrap import
-    PATTERNS as _SHARED_PATTERNS,
-    is_measurable as _shared_is_measurable,
-)
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from squad.measurability import (  # noqa: E402 — post-bootstrap import
+    PATTERNS as _SHARED_PATTERNS,
+)
 
 # Section headers we scan for criteria. Plans use either "Acceptance Criteria"
 # or "Definition of Done" or both; we treat their bullets equivalently.

@@ -29,7 +29,6 @@ distinguished separately: `skipped` is counted and does not read as empty.
 """
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 

@@ -39,8 +39,6 @@ for _rel in ("skills/backlog-review/scripts", "mechanisms/cycle"):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-import pytest  # noqa: E402
-
 from check_backlog_structure import check_backlog  # noqa: E402
 from select_backlog_item import select  # noqa: E402
 

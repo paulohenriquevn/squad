@@ -61,9 +61,9 @@ from squad.allowlist import (  # noqa: E402 — post-bootstrap import
 )
 from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
-    rules_dir,
     LEGACY_RECORDS_ROOTS,
     records_dir,
+    rules_dir,
 )
 
 _VERDICT_RE = re.compile(r"^\*\*Verdict:\*\*\s*(?P<verdict>[A-Z_]+)", re.MULTILINE)

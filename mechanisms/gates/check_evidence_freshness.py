@@ -61,6 +61,7 @@ for _up in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_up))
         break
 from _contract import add_root  # noqa: E402 — sibling module, path set above
+
 from squad.paths import data_root  # noqa: E402 — post-bootstrap import
 
 CITED_PATH = re.compile(

@@ -268,7 +268,7 @@ def main() -> int:
         # depending on where the script was invoked from.
         root = args.evidence_root or args.evidence.resolve().parent
         if not root.is_dir():
-            print(f"NOT_VALIDATED", flush=True)
+            print("NOT_VALIDATED", flush=True)
             print(f"evidence root {root} is not a directory, so no cited path could be "
                   f"checked. An inability to verify evidence is not a verified pass.",
                   file=sys.stderr)

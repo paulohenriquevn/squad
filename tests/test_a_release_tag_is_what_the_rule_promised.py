@@ -44,6 +44,7 @@ def _check(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(GATE), "--root", str(repo), *args],
         capture_output=True, text=True,
+        check=False,
     )
 
 
@@ -98,7 +99,7 @@ def test_the_gate_does_not_demand_a_signature(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     _git(repo, "tag", "-a", "v1.0.0", "-m", "Release v1.0.0")
     verify = subprocess.run(["git", "tag", "--verify", "v1.0.0"],
-                            cwd=repo, capture_output=True, text=True)
+                            cwd=repo, capture_output=True, text=True, check=False)
 
     assert verify.returncode != 0, "premise: an unsigned annotated tag fails --verify"
     assert _check(repo, "--tag", "v1.0.0", "--trunk", "main").returncode == 0, (

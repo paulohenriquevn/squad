@@ -43,12 +43,10 @@ import sys
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from datetime import datetime, timezone
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 from typing import Any
 
-from coverage_gate import evaluate as coverage_evaluate
-from coverage_gate import project_setting
+from coverage_gate import evaluate as coverage_evaluate, project_setting
 from diff_symbols import added_symbols_from_shas, shas_from_progress
 from suite_runners import (
     STATUS_TIMEOUT,

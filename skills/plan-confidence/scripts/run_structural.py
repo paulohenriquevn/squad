@@ -60,7 +60,11 @@ from squad.allowlist import (  # noqa: E402 — post-bootstrap import
     active as _active_entries,
     parse as _parse_allowlist,
 )
-from squad.paths import DATA_DIRNAME, rules_dir, write_records_dir  # noqa: E402 — post-bootstrap import
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    DATA_DIRNAME,
+    rules_dir,
+    write_records_dir,
+)
 
 SKILL_ROOT = Path(__file__).parent.parent
 DEFAULT_RUBRIC = SKILL_ROOT / "templates" / "rubric-v1.md"

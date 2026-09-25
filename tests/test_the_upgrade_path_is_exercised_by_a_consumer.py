@@ -24,8 +24,6 @@ byte/character defect only appears against git's own `cat-file --batch` output, 
 """
 from __future__ import annotations
 
-import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -147,7 +145,7 @@ def test_the_upgrade_path_applies_what_the_scan_calls_applicable(lagging_consume
 def test_the_installer_records_where_it_came_from(lagging_consumer: Path) -> None:
     """Provenance is what makes lag provable rather than inferred; it must be written."""
     manifest = (lagging_consumer / ".claude" / ".kit-manifest.txt").read_text(encoding="utf-8")
-    line = next((l for l in manifest.splitlines() if "kit-commit" in l), "")
+    line = next((row for row in manifest.splitlines() if "kit-commit" in row), "")
     assert line, "the manifest records no kit-commit; a consumer cannot prove what it holds"
     assert "unknown" not in line, line
 
@@ -155,8 +153,8 @@ def test_the_installer_records_where_it_came_from(lagging_consumer: Path) -> Non
 def test_a_withdrawal_declared_by_the_kit_is_named_to_the_consumer(lagging_consumer: Path) -> None:
     """#171. A withdrawal is invisible on disk; only the declared list can surface it."""
     listing = _ROOT / "mechanisms" / "distribution" / "withdrawn.txt"
-    declared = [l.split("|")[0].strip() for l in listing.read_text(encoding="utf-8").splitlines()
-                if l.strip() and not l.startswith("#") and "|" in l]
+    declared = [row.split("|")[0].strip() for row in listing.read_text(encoding="utf-8").splitlines()
+                if row.strip() and not row.startswith("#") and "|" in row]
     present = [d for d in declared if (lagging_consumer / ".claude" / d).exists()]
     if not present:
         pytest.skip("this older revision shipped none of the declared withdrawals")

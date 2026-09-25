@@ -15,8 +15,7 @@ import re
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from dataclasses import dataclass
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():

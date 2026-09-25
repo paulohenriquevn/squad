@@ -30,7 +30,9 @@ for _up in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_up))
         break
 # Below the bootstrap: `squad` is importable only after sys.path is extended.
-from squad.semver import parse_release as _parse_release  # noqa: E402 — post-bootstrap import
+from squad.semver import (  # noqa: E402 — post-bootstrap import
+    parse_release as _parse_release,
+)
 
 
 def main() -> int:

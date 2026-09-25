@@ -23,7 +23,6 @@ the kit lacks, so taking the kit's version deletes nothing.
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -161,15 +160,19 @@ def _kit_with_history(tmp_path: Path) -> Path:
     for tree in ("skills", "rules", "hooks"):
         (kit / tree).mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-q", str(kit)], check=True)
-    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
-                                    capture_output=True, text=True)
-    run("config", "user.email", "t@t"); run("config", "user.name", "t")
+    def run(*a):
+        return subprocess.run(["git", "-C", str(kit), *a], check=True,
+                              capture_output=True, text=True)
+    run("config", "user.email", "t@t")
+    run("config", "user.name", "t")
     old = "# the rule — measured, not assumed · naïve\nalpha\nbeta\n"
     (kit / REL).write_text(old, encoding="utf-8")
-    run("add", "-A"); run("commit", "-qm", "v1")
+    run("add", "-A")
+    run("commit", "-qm", "v1")
     (kit / REL).write_text("# the rule — measured, not assumed · naïve\nalpha\nBETA-rewritten\ngamma\n",
                            encoding="utf-8")
-    run("add", "-A"); run("commit", "-qm", "v2 rewrites and appends")
+    run("add", "-A")
+    run("commit", "-qm", "v2 rewrites and appends")
     return kit
 
 

@@ -14,7 +14,6 @@ import os
 import re
 from pathlib import Path
 
-
 #: Directories a workspace walk never enters. `node_modules` is the one that matters:
 #: `Path.glob("components/**/package.json")` descends it, so every installed dependency would
 #: register as a workspace member and D2 would stop reporting anything as fabricated. Pruning

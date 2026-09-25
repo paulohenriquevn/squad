@@ -43,8 +43,7 @@ import sys
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from datetime import datetime, timezone
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
@@ -54,7 +53,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from squad.paths import write_records_dir  # noqa: E402 — post-bootstrap import
-from squad.roadmap import Status, find as _find_milestone  # noqa: E402 — post-bootstrap import
+from squad.roadmap import (  # noqa: E402 — post-bootstrap import
+    Status,
+    find as _find_milestone,
+)
 
 #: The only verdicts that may close a milestone. `rules/cycle-acceptance.md` § Hard
 #: gates has said so since the flip moved there; until 2026-09-21 this script had never

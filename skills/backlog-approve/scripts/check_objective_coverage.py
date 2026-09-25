@@ -49,8 +49,8 @@ for _up in Path(__file__).resolve().parents:
 # Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
-from squad.paths import DATA_DIRNAME, WIKI  # noqa: E402 — post-bootstrap import
 from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
+from squad.paths import DATA_DIRNAME, WIKI  # noqa: E402 — post-bootstrap import
 
 #: Where `/brainstorm-objectives` writes. Named once here; the message that tells a
 #: reader what is missing quotes this same constant.

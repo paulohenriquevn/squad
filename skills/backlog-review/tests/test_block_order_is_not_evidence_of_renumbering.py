@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from backlog_fixtures import item_block, write_backlog  # noqa: E402
+from backlog_fixtures import item_block, write_backlog
 
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 

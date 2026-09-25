@@ -17,8 +17,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
@@ -38,6 +36,7 @@ def _detect(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(SCRIPTS / "detect_current_version.py"), *args],
         cwd=root, capture_output=True, text=True,
+        check=False,
     )
 
 
@@ -71,11 +70,12 @@ def test_the_series_advances_instead_of_recomputing_rc_1(tmp_path: Path) -> None
         [sys.executable, str(SCRIPTS / "compute_next_version.py"),
          "--current", current, "--bump", "minor", "--mode", "pre"],
         cwd=root, capture_output=True, text=True,
+        check=False,
     )
 
     assert computed.returncode == 0, computed.stderr
     assert computed.stdout.strip() == "0.3.0-rc.3"
-    existing = subprocess.run(["git", "tag"], cwd=root, capture_output=True, text=True)
+    existing = subprocess.run(["git", "tag"], cwd=root, capture_output=True, text=True, check=False)
     assert f"v{computed.stdout.strip()}" not in existing.stdout.split()
 
 

@@ -26,9 +26,9 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(_ROOT))
 
-from squad.sprint import open_sprint  # noqa: E402
-
 from select_backlog_item import Item, rank  # noqa: E402
+
+from squad.sprint import open_sprint  # noqa: E402
 
 
 def _item(item_id: str, *, status: str = "triaged", source: str = "human") -> Item:

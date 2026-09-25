@@ -91,8 +91,10 @@ from citation_drift import (
 )
 from criterion_commands import NAMED_NOT_RUN, RUNNERS
 
-from squad.measurability import EXAMPLES as MEASURABLE_EXAMPLES
-from squad.measurability import is_measurable as _shared_is_measurable
+from squad.measurability import (
+    EXAMPLES as MEASURABLE_EXAMPLES,
+    is_measurable as _shared_is_measurable,
+)
 from squad.rubric import ALIGNMENT_FLOOR_RATIO
 
 #: The bar, read rather than restated. The reasoning — why 90% of the maximum, and

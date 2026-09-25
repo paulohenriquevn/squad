@@ -236,7 +236,7 @@ def knowledge_skill_name(slug: str, role: str) -> str:
     if len(name) <= SKILL_NAME_LIMIT:
         return name
 
-    digest = hashlib.sha1(slug.encode("utf-8")).hexdigest()[:_SLUG_HASH_LEN]
+    digest = hashlib.sha1(slug.encode("utf-8"), usedforsecurity=False).hexdigest()[:_SLUG_HASH_LEN]
     room = SKILL_NAME_LIMIT - len(prefix) - len(suffix) - len(digest) - 1
     kept = slug[:max(room, 0)].rstrip("-")
     if not kept:

@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _contract import add_root  # noqa: E402 — sibling module, path set above
+from _contract import add_root
 
 #: Run a `gh` argv and return (returncode, stdout, stderr). Injected so the logic is
 #: testable without a network, a token, or a repository — the same shape

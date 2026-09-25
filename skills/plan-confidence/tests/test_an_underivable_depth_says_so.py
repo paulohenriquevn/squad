@@ -37,7 +37,6 @@ sys.path.insert(0, str(_ROOT / "skills" / "plan-confidence" / "scripts"))
 sys.path.insert(0, str(_ROOT / "tests"))
 
 from check_alignment_gate import check_alignment_gate  # noqa: E402
-
 from test_check_alignment_gate import _brief, _complete_brief, _plan  # noqa: E402
 
 

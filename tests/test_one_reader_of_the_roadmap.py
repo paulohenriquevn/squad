@@ -49,7 +49,7 @@ def _roadmap(tmp_path: Path, text: str = ROADMAP) -> Path:
 
 def _run(script: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([sys.executable, str(script), *args],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, check=False)
 
 
 def test_every_roadmap_parser_imports_the_shared_reader() -> None:

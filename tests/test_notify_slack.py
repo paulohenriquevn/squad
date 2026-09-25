@@ -141,3 +141,22 @@ def test_the_release_skill_invokes_the_notifier() -> None:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_a_webhook_that_is_not_https_is_refused_before_anything_is_opened(monkeypatch) -> None:
+    """`urlopen` also opens `file:` and custom schemes, so a webhook variable pointing at
+    `file:///etc/passwd` would be read rather than posted to. Refused by scheme, and the
+    reason says which scheme, never the URL — a webhook URL is a credential."""
+    import importlib.util
+    import urllib.request
+
+    spec = importlib.util.spec_from_file_location(
+        "notify_slack", _REPO / "skills" / "release" / "scripts" / "notify_slack.py")
+    notify_slack = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(notify_slack)
+    opened = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: opened.append(a))
+    ok, why = notify_slack.post_to_slack("file:///etc/passwd", "m", "v1.0.0")
+    assert not ok
+    assert "file" in why and "/etc/passwd" not in why
+    assert opened == []

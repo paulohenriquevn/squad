@@ -30,3 +30,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+
+[tool.ruff.lint.isort]
+# Same as the root pyproject: an aliased name stays in the import it belongs to.
+combine-as-imports = true

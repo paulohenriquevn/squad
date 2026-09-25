@@ -50,12 +50,12 @@ from convene_panel import agents_dir, repo_root, resolve_seat, seat_family
 from review_panel import (
     HOME_FAMILY,
     PANEL_SIZE,
-    panel_size_for,
     Seat,
+    panel_size_for,
     parse_panel_phases,
-    single_family_waived,
     parse_roster,
     seats_for,
+    single_family_waived,
 )
 
 #: Resolve an executable name to a path, or None. Injected so the gate is testable

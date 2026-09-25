@@ -43,7 +43,7 @@ def installed(tmp_path_factory) -> Path:
     subprocess.run(["git", "init", "-q", "."], cwd=target, check=True)
     done = subprocess.run(
         ["bash", str(REPO / "mechanisms" / "distribution" / "install.sh"), str(target)],
-        capture_output=True, text=True, timeout=600)
+        capture_output=True, text=True, timeout=600, check=False)
     assert done.returncode == 0, done.stdout + done.stderr
     return target
 

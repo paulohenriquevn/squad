@@ -49,8 +49,10 @@ for _up in Path(__file__).resolve().parents:
         break
 
 # Post-bootstrap, like the loop above requires: the kit ships as loose scripts.
-from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
-from squad import shared_file  # noqa: E402 — post-bootstrap import
+from squad import (  # noqa: E402 — post-bootstrap import
+    backlog as _shared_backlog,
+    shared_file,
+)
 
 LEGAL_STATUS = ("raw", "triaged", "approved", "planned", "shipped", "killed")
 

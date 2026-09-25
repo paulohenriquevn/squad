@@ -136,7 +136,8 @@ def test_a_reused_id_is_refused_and_mere_sequence_is_not(tmp_path: Path) -> None
     registry, the hour its selector caught up with the checker.
     """
     a, b = tmp_path / "reused", tmp_path / "descending"
-    a.mkdir(); b.mkdir()
+    a.mkdir()
+    b.mkdir()
     reused = _registry(a, _block("B-002"), _block("B-002", title="Same id twice"))
     _, out = _select(reused)
     assert out["verdict"] == "BACKLOG_INVALID", out["verdict"]

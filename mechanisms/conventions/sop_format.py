@@ -36,9 +36,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from squad.paths import (
     DURABLE_LEAVES,
     records_dir,
+    resolve_knowledge_dir as _resolve_knowledge_dir,
+    wiki_dir as _wiki_dir,
 )
-from squad.paths import resolve_knowledge_dir as _resolve_knowledge_dir
-from squad.paths import wiki_dir as _wiki_dir
 
 # `__all__` now names what this module IS. It used to declare `KB_DIRS` and `WIKI_DIRS`
 # — re-exports of two `squad.paths` tuples that no Python file anywhere imports — while

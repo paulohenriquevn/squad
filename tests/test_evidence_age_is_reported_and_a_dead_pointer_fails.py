@@ -19,7 +19,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "mechanisms" / "gates"))
 
-from check_evidence_freshness import collect, dead_pointers, latest_date_in, resolution_roots  # noqa: E402
+from check_evidence_freshness import (  # noqa: E402
+    collect,
+    dead_pointers,
+    latest_date_in,
+    resolution_roots,
+)
 
 
 def _registry(tmp_path: Path, body: str) -> Path:

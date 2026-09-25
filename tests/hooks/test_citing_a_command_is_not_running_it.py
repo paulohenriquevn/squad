@@ -52,7 +52,7 @@ def _run(command: str) -> int:
     payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
                "tool_input": {"command": command}}
     done = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload),
-                          capture_output=True, text=True, timeout=60)
+                          capture_output=True, text=True, timeout=60, check=False)
     return done.returncode
 
 

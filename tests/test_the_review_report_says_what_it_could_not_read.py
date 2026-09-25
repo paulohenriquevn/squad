@@ -58,12 +58,12 @@ def _consolidate(tmp_path: Path) -> tuple[dict, str]:
     findings.mkdir()
     (findings / "security-auditor.yaml").write_text(GOOD, encoding="utf-8")
     (findings / "perf-auditor.yaml").write_text(BROKEN, encoding="utf-8")
-    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, capture_output=True, check=False)
     report = tmp_path / "report.md"
     proc = subprocess.run(
         [sys.executable, str(CONSOLIDATE), "--findings-dir", str(findings),
          "--output", str(report), "--slug", "demo", "--repo-root", str(tmp_path)],
-        capture_output=True, text=True)
+        capture_output=True, text=True, check=False)
     return json.loads(proc.stdout[proc.stdout.index("{"):]), report.read_text(encoding="utf-8")
 
 

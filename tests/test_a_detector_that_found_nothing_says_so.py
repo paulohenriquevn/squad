@@ -53,7 +53,7 @@ def _project(tmp_path: Path) -> Path:
     for cmd in (["git", "init", "-q", "."], ["git", "config", "user.email", "t@t"],
                 ["git", "config", "user.name", "t"], ["git", "add", "-A"],
                 ["git", "commit", "-qm", "seed"]):
-        subprocess.run(cmd, cwd=tmp_path, capture_output=True)
+        subprocess.run(cmd, cwd=tmp_path, capture_output=True, check=False)
     return tmp_path
 
 
@@ -61,7 +61,7 @@ def _run(root: Path) -> dict:
     proc = subprocess.run(
         [sys.executable, str(RUNNER), "--repo-root", str(root),
          "--no-audit-write", "--no-network"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, check=False)
     return json.loads(proc.stdout[proc.stdout.index("{"):])
 
 

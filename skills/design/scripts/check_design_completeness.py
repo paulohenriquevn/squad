@@ -63,7 +63,10 @@ for _up in Path(__file__).resolve().parents:
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
 from squad.paths import wiki_dir  # noqa: E402 — post-bootstrap import
-from squad.signoff import SignOff, read as read_signoff  # noqa: E402 — post-bootstrap import
+from squad.signoff import (  # noqa: E402 — post-bootstrap import
+    SignOff,
+    read as read_signoff,
+)
 
 
 #: The drawings, in the order they remove ambiguity. `mermaid` is the kind the block

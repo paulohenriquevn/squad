@@ -17,8 +17,7 @@ from pathlib import Path
 # That is what E402 cannot see here, and why each import below suppresses it.
 from check_coverage_matrix import check_coverage_matrix  # noqa: E402 — post-bootstrap import
 from check_spec_smells import check_spec_smells  # noqa: E402 — post-bootstrap import
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
+from hypothesis import HealthCheck, given, settings, strategies as st
 from run_structural import (  # noqa: E402 — post-bootstrap import
     SOTA_WEIGHTS,
     renormalize_weights,

@@ -54,7 +54,6 @@ is worth having, and is not the same as impossible.
 """
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -76,7 +75,10 @@ for _up in _Path_bootstrap(__file__).resolve().parents:
 # Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
-from squad.boundaries import STUDY_ZONE, study_zone_re  # noqa: E402 — post-bootstrap import
+from squad.boundaries import (  # noqa: E402 — post-bootstrap import
+    STUDY_ZONE,
+    study_zone_re,
+)
 from squad.paths import DATA_DIRNAME, RECORDS  # noqa: E402 — post-bootstrap import
 
 #: `rules/reference-provenance.md` § 1, read from the one module that owns it.

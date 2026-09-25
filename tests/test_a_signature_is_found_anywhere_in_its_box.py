@@ -32,8 +32,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pytest
-
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "skills" / "plan-alignment" / "scripts"))

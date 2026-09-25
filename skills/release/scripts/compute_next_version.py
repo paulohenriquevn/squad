@@ -30,7 +30,11 @@ for _up in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_up))
         break
 # Below the bootstrap: `squad` is importable only after sys.path is extended.
-from squad.semver import RC, SEMVER_RE, Version, parse  # noqa: E402 — post-bootstrap import
+from squad.semver import (  # noqa: E402 — post-bootstrap import
+    RC,
+    Version,
+    parse,
+)
 
 # `RC` and `SEMVER_RE` are re-exported rather than redefined. This script used to own
 # both, and owning them is what let the three readers of a version in this slice drift

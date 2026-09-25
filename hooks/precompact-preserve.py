@@ -29,8 +29,7 @@ from squad.paths import (
     write_records_dir,
     write_state_dir,
 )
-from squad.plan import goal_line
-from squad.plan import resolve as resolve_plan
+from squad.plan import goal_line, resolve as resolve_plan
 
 TAG = "[precompact-preserve]"
 

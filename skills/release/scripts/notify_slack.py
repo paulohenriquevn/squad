@@ -112,6 +112,12 @@ def post_to_slack(webhook_url: str, message: str, version: str) -> tuple[bool, s
     import urllib.error
     import urllib.request
 
+    scheme = webhook_url.split(":", 1)[0].lower()
+    if scheme != "https":
+        # `urlopen` opens `file:` and custom schemes too, so a webhook variable pointing at
+        # a local path would be READ. The URL itself is a credential and is never echoed.
+        return False, f"Slack webhook refused: scheme `{scheme}` is not https"
+
     payload = json.dumps({"text": message})
 
     def _post() -> int:
@@ -127,7 +133,8 @@ def post_to_slack(webhook_url: str, message: str, version: str) -> tuple[bool, s
             headers={"Content-Type": "application/json"},
             method="POST"
         )
-        with urllib.request.urlopen(req, timeout=10) as response:
+        # The scheme was refused above unless https.
+        with urllib.request.urlopen(req, timeout=10) as response:  # nosec B310
             return response.status
 
     try:

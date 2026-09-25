@@ -33,7 +33,13 @@ _ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "skills" / "backlog-review" / "scripts"))
 
-from squad.sprint import SprintInvalid, close, load, open_sprint, rank_band  # noqa: E402
+from squad.sprint import (  # noqa: E402
+    SprintInvalid,
+    close,
+    load,
+    open_sprint,
+    rank_band,
+)
 
 
 def _project(tmp_path: Path) -> Path:

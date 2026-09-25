@@ -71,7 +71,7 @@ def _project(tmp_path: Path, *, with_sources: bool = False,
     for cmd in (["git", "init", "-q", "."], ["git", "config", "user.email", "t@t"],
                 ["git", "config", "user.name", "t"], ["git", "add", "-A"],
                 ["git", "commit", "-qm", "chore: seed"]):
-        subprocess.run(cmd, cwd=tmp_path, capture_output=True)
+        subprocess.run(cmd, cwd=tmp_path, capture_output=True, check=False)
     return tmp_path
 
 
@@ -79,7 +79,7 @@ def _validate(root: Path) -> tuple[dict, int]:
     proc = subprocess.run(
         [sys.executable, str(VALIDATOR), "demo", "--project-root", str(root),
          "--no-write-report", "--no-code-quality"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, check=False)
     return json.loads(proc.stdout[proc.stdout.index("{"):]), proc.returncode
 
 

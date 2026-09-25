@@ -58,9 +58,10 @@ for _up in Path(__file__).resolve().parents:
         _sys.path.insert(0, str(_up))
         break
 # Below the bootstrap: `squad` is importable only after sys.path is extended.
+from pathlib import Path as _P  # noqa: E402 — post-bootstrap import
+from typing import Any  # noqa: E402 — post-bootstrap import
+
 from squad.blocked_marker import is_blocked_at  # noqa: E402 — post-bootstrap import
-from pathlib import Path as _P
-from typing import Any
 
 for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "markdown.py").is_file():

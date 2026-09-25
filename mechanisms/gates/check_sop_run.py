@@ -48,7 +48,8 @@ from sop_format import (
     section,
     split_frontmatter,
 )
-from squad.paths import authored_wiki_dir  # noqa: E402 — post-bootstrap import
+
+from squad.paths import authored_wiki_dir
 
 #: The status vocabulary. A status nobody recognises cannot be counted, and a
 #: record that cannot be counted is prose.

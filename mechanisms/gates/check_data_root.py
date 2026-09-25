@@ -50,6 +50,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from squad.boundaries import STUDY_ZONE
 from squad.paths import (
     DATA_DIRNAME,
     KIT_LOCATED_WIKI_ROOTS,
@@ -61,7 +62,6 @@ from squad.paths import (
     is_kit_wiki,
     kit_wiki_leaves_in,
 )
-from squad.boundaries import STUDY_ZONE
 
 CENTRALISED, UNMIGRATED_CODE, UNCHECKED = 0, 1, 2
 

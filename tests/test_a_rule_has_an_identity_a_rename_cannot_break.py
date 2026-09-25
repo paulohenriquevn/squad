@@ -44,6 +44,7 @@ REPO = Path(__file__).resolve().parents[1]
 RULES = REPO / "rules"
 
 import sys  # noqa: E402
+
 sys.path.insert(0, str(REPO))
 
 from squad.rules import ID_RE, catalogue, resolve  # noqa: E402

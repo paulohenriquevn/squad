@@ -300,14 +300,20 @@ def _resolve_range(repo: Path, rev_range: str) -> str:
 
 
 def _pushed_shas(repo: Path) -> set[str]:
-    """Short shas reachable from the upstream — the commits an amend cannot reach."""
+    """Short shas already on the remote — the commits an amend cannot reach.
+
+    The upstream when there is one. Without it, every remote-tracking branch: CI checks
+    out a detached HEAD, and reading "no upstream" as "nothing is pushed" turned both
+    declared exemptions into `exemption_is_fixable` on the first CI run in eleven days,
+    while the same commits were CLEAN locally. A commit on any `origin/*` changes only
+    by force-push, which is the property an exemption rests on.
+    """
     out = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
         cwd=repo, capture_output=True, text=True, check=False)
     upstream = out.stdout.strip()
-    if out.returncode != 0 or not upstream:
-        return set()
-    log = subprocess.run(["git", "log", "--format=%H", upstream],
+    reachable = [upstream] if out.returncode == 0 and upstream else ["--remotes"]
+    log = subprocess.run(["git", "log", "--format=%H", *reachable],
                          cwd=repo, capture_output=True, text=True, check=False)
     if log.returncode != 0:
         return set()

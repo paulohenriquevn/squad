@@ -57,7 +57,7 @@ def _opportunity(tmp_path: Path, *, mode: str, extra_header: str = "",
 
 def _score(path: Path) -> dict:
     proc = subprocess.run([sys.executable, str(SCORER), str(path), "--no-warn"],
-                          capture_output=True, text=True, cwd=path.parent)
+                          capture_output=True, text=True, cwd=path.parent, check=False)
     return json.loads(proc.stdout[proc.stdout.index("{"):])
 
 

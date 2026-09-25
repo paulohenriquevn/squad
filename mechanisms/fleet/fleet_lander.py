@@ -206,7 +206,8 @@ def land(repo: Path, branch: str, *, apply: bool, timeout: int) -> Verdict:
     # picked the same paths. `git worktree add` then failed for the second, and the
     # failure reads as a missing worktree rather than as a collision. `mkdtemp` makes the
     # clash impossible instead of unlikely.
-    root = Path("/tmp/squad-landing")
+    # A root the shell, JS and Python fleet share by name; per-user roots are #220 (bandit B108).
+    root = Path("/tmp/squad-landing")  # nosec B108
     root.mkdir(parents=True, exist_ok=True)
     safe_branch = branch.replace("/", "-")
     session = Path(tempfile.mkdtemp(prefix=f"{safe_branch}-", dir=str(root)))

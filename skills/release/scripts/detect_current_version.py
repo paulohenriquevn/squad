@@ -38,7 +38,11 @@ for _up in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_up))
         break
 # Below the bootstrap: `squad` is importable only after sys.path is extended.
-from squad.semver import Version, highest, parse as _parse  # noqa: E402 — post-bootstrap import
+from squad.semver import (  # noqa: E402 — post-bootstrap import
+    Version,
+    highest,
+    parse as _parse,
+)
 
 #: How a version this kit cannot order is described to a reader. NOT "not semver":
 #: `0.3.0-beta.1` is valid semver, and saying otherwise sent people looking for a typo

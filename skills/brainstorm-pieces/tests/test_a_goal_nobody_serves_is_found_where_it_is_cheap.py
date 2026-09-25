@@ -32,11 +32,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # The fixtures live beside this file and are the SAME ones the sibling test uses. A second
 # copy of four product documents here would be a second contract to keep in step, and this
 # sweep exists because one contract checked in two places drifts.
-from test_score_product_alignment import (  # noqa: E402
-    OBJECTIVES, PIECES, TRD, _product, _sign,
-)
-
 import score_product_alignment as spa  # noqa: E402
+from test_score_product_alignment import (  # noqa: E402
+    PIECES,
+    TRD,
+    _product,
+    _sign,
+)
 
 
 def _caps(root: Path, **overrides: str) -> list[str]:

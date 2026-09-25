@@ -14,7 +14,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "mechanisms" / "cycle"))
 
-from cycle_events import emit_phase_end, read_events, unchanged_repeats  # noqa: E402 — post-bootstrap import
+from cycle_events import (  # noqa: E402 — post-bootstrap import
+    emit_phase_end,
+    read_events,
+    unchanged_repeats,
+)
 
 _CLI = REPO_ROOT / "mechanisms" / "cycle" / "cycle_events.py"
 

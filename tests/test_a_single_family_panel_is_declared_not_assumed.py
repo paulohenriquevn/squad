@@ -81,13 +81,14 @@ def test_the_waiver_is_present_exactly_when_the_roster_needs_it() -> None:
         "an exemption with no reason is an escape hatch, not a record")
 
 
+@pytest.mark.usefixtures("reachable_review_panel")
 def test_the_capability_gate_reports_the_family_span_it_found() -> None:
     """HOLDS either way — and the line saying so matches the roster on disk."""
     import subprocess
 
     proc = subprocess.run(
         [sys.executable, str(REPO / "mechanisms" / "gates" / "check_panel_capability.py")],
-        capture_output=True, text=True, cwd=REPO)
+        capture_output=True, text=True, cwd=REPO, check=False)
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
@@ -123,7 +124,7 @@ def test_a_single_family_majority_carries_under_the_waiver() -> None:
 
 def test_without_the_waiver_one_family_still_cannot_carry() -> None:
     """The kit keeps the rule. Only a project that declared the waiver escapes it."""
-    from review_panel import Panel, PanelInvalid, PanelOutcome, Vote
+    from review_panel import Panel, PanelInvalid, Vote
 
     panel = Panel(
         slug="b042-demo", phase="plan", artifact="abc123", author="daedalus-tech-lead",

@@ -34,28 +34,35 @@ def _kit_with_accents(tmp_path: Path) -> tuple[Path, str]:
     kit = tmp_path / "kit"
     (kit / "rules").mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(kit)], check=True)
-    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
-                                    capture_output=True, text=True)
-    run("config", "user.email", "t@t"); run("config", "user.name", "t")
+    def run(*a):
+        return subprocess.run(["git", "-C", str(kit), *a], check=True,
+                              capture_output=True, text=True)
+    run("config", "user.email", "t@t")
+    run("config", "user.name", "t")
 
     old = "# the rule — measured, not assumed\nalpha\nbeta\n" + ("# façade — naïve · Größe\n" * 40)
     (kit / "rules" / "r.md").write_text(old, encoding="utf-8")
-    run("add", "-A"); run("commit", "-qm", "v1")
+    run("add", "-A")
+    run("commit", "-qm", "v1")
     (kit / "rules" / "r.md").write_text(old + "gamma-new\n", encoding="utf-8")
-    run("add", "-A"); run("commit", "-qm", "v2 appends")
+    run("add", "-A")
+    run("commit", "-qm", "v2 appends")
     (kit / "rules" / "r.md").write_text(old.replace("beta", "beta-rewritten") + "gamma-new\n",
                                         encoding="utf-8")
-    run("add", "-A"); run("commit", "-qm", "v3 rewrites")
+    run("add", "-A")
+    run("commit", "-qm", "v3 rewrites")
     return kit, old
 
 
 def test_every_revision_is_recovered_from_the_batch(tmp_path: Path) -> None:
-    import importlib, check_install_drift
+    import importlib
+
+    import check_install_drift
     importlib.reload(check_install_drift)
     kit, _old = _kit_with_accents(tmp_path)
 
     revisions = subprocess.run(["git", "-C", str(kit), "rev-list", "--all", "--", "rules/r.md"],
-                               capture_output=True, text=True).stdout.split()
+                               capture_output=True, text=True, check=False).stdout.split()
     history = check_install_drift._historical_contents(kit, "rules/r.md")
 
     assert history is not None
@@ -66,7 +73,9 @@ def test_every_revision_is_recovered_from_the_batch(tmp_path: Path) -> None:
 
 def test_an_older_copy_with_accents_is_stale_not_diverged(tmp_path: Path) -> None:
     """The verdict the parser bug turned into DIVERGED, which --apply-upstream refuses."""
-    import importlib, check_install_drift
+    import importlib
+
+    import check_install_drift
     importlib.reload(check_install_drift)
     kit, old = _kit_with_accents(tmp_path)
     eco = tmp_path / "consumer" / ".claude"

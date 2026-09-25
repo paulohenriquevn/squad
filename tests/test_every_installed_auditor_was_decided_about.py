@@ -22,7 +22,6 @@ the file where the answers live.
 """
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -63,7 +62,7 @@ def test_every_installed_auditor_appears_in_the_registry() -> None:
 def test_the_registry_still_commissions_something() -> None:
     """THE CONTROL. A file that mentions every plugin and maps none would pass the test
     above and answer nothing, which is the failure mode of asserting on mentions."""
-    rows = [l for l in _named_in_registry().splitlines()
-            if l.strip().startswith("auditor")]
+    rows = [row for row in _named_in_registry().splitlines()
+            if row.strip().startswith("auditor")]
 
     assert rows, "no auditor row at all; the registry names plugins and commissions none"

@@ -52,3 +52,7 @@ ignore = ["E501"]  # line-length handled by tool.ruff.line-length
 [tool.coverage.run]
 source = ["scripts"]
 omit = ["tests/*", "fixtures/*"]
+
+[tool.ruff.lint.isort]
+# Same as the root pyproject: an aliased name stays in the import it belongs to.
+combine-as-imports = true

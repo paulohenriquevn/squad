@@ -61,8 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
-from board_issues import digest as issues_digest
-from board_issues import fetch as fetch_issues
+from board_issues import digest as issues_digest, fetch as fetch_issues
 from board_state import build_state, item_detail
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
@@ -408,7 +407,8 @@ def serve(root: Path, port: int, host: str = "127.0.0.1", token: str | None = No
               "(the first read is in flight)", flush=True)
     else:
         print("  tracker: not read (--no-issues)", flush=True)
-    shown = host if host not in ("0.0.0.0", "::") else "<this-host>"
+    # A label, not a bind (bandit B104).
+    shown = host if host not in ("0.0.0.0", "::") else "<this-host>"  # nosec B104
     suffix = f"/?t={token}" if token else "/"
     print(f"  http://{shown}:{port}{suffix}  — Ctrl-C to stop", flush=True)
     if token:

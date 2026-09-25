@@ -7,19 +7,17 @@ D3/D4 report explicit capability caps until their external runners are integrate
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 from pathlib import Path
 
 from scripts import _registry
-
-from ._knip import knip_command, knip_locations
-from ._workspace import declared, find_workspace_roots, manifests_under, read_workspace_declaration
 from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_checked
 
 from . import BaseDetector, _arch
+from ._knip import knip_command, knip_locations
+from ._workspace import declared, find_workspace_roots, manifests_under, read_workspace_declaration
 
 _TS_NODE_BUILTINS = frozenset(
     {

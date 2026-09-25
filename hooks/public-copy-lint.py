@@ -29,8 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from squad import PostToolUseContext, create_context
 from squad.layout import resolve
-from squad.public_copy import is_public
-from squad.public_copy import warnings as lint
+from squad.public_copy import is_public, warnings as lint
 
 
 def main() -> None:

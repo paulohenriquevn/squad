@@ -67,8 +67,10 @@ for _up in Path(__file__).resolve().parents:
 # Imports below the bootstrap, not at the top: the kit ships as loose scripts, so
 # `squad` and its sibling modules are importable only after sys.path is extended.
 # That is what E402 cannot see here, and why each import below suppresses it.
-from check_objective_coverage import OBJECTIVES_REL  # noqa: E402 (post-bootstrap)
-from check_objective_coverage import measure as measure_coverage  # noqa: E402
+from check_objective_coverage import (  # noqa: E402 — post-bootstrap import
+    OBJECTIVES_REL,
+    measure as measure_coverage,
+)
 
 from squad import backlog as _shared_backlog  # noqa: E402 — post-bootstrap import
 from squad.paths import (  # noqa: E402 — post-bootstrap import

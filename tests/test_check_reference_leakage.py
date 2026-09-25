@@ -7,13 +7,13 @@ a false PASS.
 
 import subprocess
 import sys
+import sys as _bootstrap_sys
 from pathlib import Path
 
-import sys as _bootstrap_sys
 _bootstrap_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from squad.boundaries import STUDY_ZONE  # noqa: E402 — post-bootstrap import
-
 import pytest
+
+from squad.boundaries import STUDY_ZONE
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "mechanisms" / "gates" / "check_reference_leakage.py"

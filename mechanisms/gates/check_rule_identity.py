@@ -50,6 +50,7 @@ for _up in Path(__file__).resolve().parents:
         sys.path.insert(0, str(_up))
         break
 from _contract import add_root  # noqa: E402 — sibling module, path set above
+
 from squad.rules import ID_RE, catalogue  # noqa: E402 — post-bootstrap import
 
 OK, FOUND, UNMEASURABLE = 0, 1, 2

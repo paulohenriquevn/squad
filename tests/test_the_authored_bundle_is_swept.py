@@ -49,6 +49,7 @@ def test_the_gate_says_how_many_it_read() -> None:
     done = subprocess.run(
         [sys.executable, str(REPO / "mechanisms" / "gates" / "check_sop_structure.py")],
         cwd=REPO, capture_output=True, text=True,
+        check=False,
     )
 
     assert "SOP" in done.stdout, done.stdout + done.stderr

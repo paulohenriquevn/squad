@@ -160,6 +160,11 @@ jobs:
         python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The same suites as `suites`, so the same history: a shallow clone failed
+          # the withdrawal-history, merge-base and commit-convention tests here on the
+          # first run after CI came back (2026-09-25), all green in `suites`.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}

@@ -63,6 +63,7 @@ def test_the_roster_gates_some_phase() -> None:
     assert _gated_phases(), "no gated phase in the roster; this test lost its subject"
 
 
+@pytest.mark.usefixtures("reachable_review_panel")
 @pytest.mark.parametrize("phase", _gated_phases(), ids=lambda p: p)
 def test_an_assignment_names_the_artifact_it_is_about(phase: str) -> None:
     out = subprocess.run(
@@ -76,6 +77,7 @@ def test_an_assignment_names_the_artifact_it_is_about(phase: str) -> None:
         f"record cannot say what a reviewer voted on. Got keys: {sorted(record)}")
 
 
+@pytest.mark.usefixtures("reachable_review_panel")
 @pytest.mark.parametrize("phase", _gated_phases(), ids=lambda p: p)
 def test_the_named_artifact_is_the_one_the_phase_is_about(phase: str) -> None:
     """Naming A path is not naming THE path. Compared against `panel_brief.locate`."""
@@ -128,6 +130,7 @@ def test_an_absent_artifact_hashes_to_nothing_rather_than_to_a_lie(tmp_path: Pat
 # saw. What was broken was upstream of all of it: the assignment carried no path.
 
 
+@pytest.mark.usefixtures("reachable_review_panel")
 def test_a_first_vote_records_the_digest_through_the_real_path(tmp_path: Path) -> None:
     """End to end: assignment -> `cast()` -> record. No fixture supplies the value."""
     import json as _json

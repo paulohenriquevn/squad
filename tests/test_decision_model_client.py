@@ -105,3 +105,9 @@ def test_no_key_in_the_environment_means_no_client() -> None:
 
 def test_a_key_in_the_environment_builds_a_client() -> None:
     assert SystemOneClient.from_environment({API_KEY_ENV: "sk-or-x"}) is not None
+
+
+def test_an_endpoint_that_is_not_https_is_refused() -> None:
+    """`urlopen` opens `file:` too; the key must never travel to anything but HTTPS."""
+    with pytest.raises(ValueError, match="https"):
+        SystemOneClient("k", endpoint="file:///etc/passwd")

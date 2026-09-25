@@ -47,8 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from squad import StopContext, create_context
 from squad.injection import is_quiet
 from squad.layout import resolve
-from squad.public_copy import is_public
-from squad.public_copy import warnings as public_copy_warnings
+from squad.public_copy import is_public, warnings as public_copy_warnings
 
 WARN_ONLY = os.environ.get("STOP_VALIDATION_WARN_ONLY", "0") == "1"
 

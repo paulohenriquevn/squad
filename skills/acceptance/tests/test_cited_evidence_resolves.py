@@ -38,6 +38,7 @@ def _run(tmp_path: Path, evidence: list[str], *args: str) -> subprocess.Complete
          "--criteria", str(tmp_path / "criteria.json"),
          "--evidence", str(tmp_path / "evidence.json"), *args],
         capture_output=True, text=True, cwd=tmp_path,
+        check=False,
     )
 
 
@@ -109,6 +110,7 @@ def test_a_failed_criterion_is_still_rejected_not_not_validated(tmp_path: Path) 
          "--criteria", str(tmp_path / "criteria.json"),
          "--evidence", str(tmp_path / "evidence.json")],
         capture_output=True, text=True, cwd=tmp_path,
+        check=False,
     )
 
     assert "REJECTED" in result.stdout, result.stdout

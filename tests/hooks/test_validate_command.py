@@ -378,7 +378,7 @@ def test_committing_with_several_worktrees_warns_about_the_shared_stack(tmp_path
     payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
                "tool_input": {"command": "git commit -m 'work'"}}
     done = subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
-                          text=True, cwd=root)
+                          text=True, cwd=root, check=False)
 
     assert done.returncode == 0, "a commit must not be refused over this"
     assert "stash" in (done.stdout + done.stderr).lower(), (
@@ -397,7 +397,7 @@ def test_committing_with_one_worktree_stays_silent(tmp_path):
     payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
                "tool_input": {"command": "git commit -m 'work'"}}
     done = subprocess.run(cmd, input=json.dumps(payload), capture_output=True,
-                          text=True, cwd=root)
+                          text=True, cwd=root, check=False)
 
     assert done.returncode == 0
     assert "stash" not in (done.stdout + done.stderr).lower(), (

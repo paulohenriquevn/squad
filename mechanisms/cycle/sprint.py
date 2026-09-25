@@ -41,8 +41,8 @@ sys.path.insert(0, str(_HERE.parents[2]))
 sys.path.insert(0, str(_HERE.parents[2] / "skills" / "backlog-review" / "scripts"))
 
 from squad.sprint import (  # noqa: E402 — post-bootstrap import
-    SprintInvalid,
     TERMINAL_STATUSES,
+    SprintInvalid,
     admit,
     close,
     load,
@@ -57,7 +57,9 @@ def _terminal_statuses(project_root: Path, ids: tuple[str, ...]) -> dict[str, st
     refuses it by name. Defaulting it to anything would let a sprint close over an item
     that no longer exists, which is the quietest way for work to disappear.
     """
-    from check_backlog_structure import _parse_items  # noqa: PLC0415 — needs the bootstrap
+    from check_backlog_structure import (
+        _parse_items,
+    )
 
     path = project_root / "BACKLOG.md"
     try:

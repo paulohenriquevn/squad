@@ -224,7 +224,7 @@ def test_the_routing_file_a_consumer_is_born_with_parses_to_zero_rows(tmp_path) 
     done = subprocess.run(
         ["bash", str(PROJECT_ROOT / "mechanisms" / "distribution" / "install.sh"),
          str(tmp_path)],
-        capture_output=True, text=True, timeout=600)
+        capture_output=True, text=True, timeout=600, check=False)
     assert done.returncode == 0, done.stdout + done.stderr
 
     sys.path.insert(0, str(PROJECT_ROOT))

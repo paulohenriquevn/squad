@@ -46,7 +46,7 @@ import argparse
 import importlib.util
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 OK, FINDINGS, UNSERVED = 0, 1, 2
@@ -55,7 +55,9 @@ _HERE = Path(__file__).resolve().parent
 _ROOT = _HERE.parent
 
 sys.path.insert(0, str(_ROOT))
-from squad.paths import write_records_dir as _write_records_dir  # noqa: E402 — post-bootstrap
+from squad.paths import (  # noqa: E402 — post-bootstrap import
+    write_records_dir as _write_records_dir,
+)
 
 
 @dataclass(frozen=True)
@@ -339,17 +341,22 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="verb", required=True)
 
     p = sub.add_parser("new", help="scaffold an artifact from its template")
-    p.add_argument("kind"); p.add_argument("slug"); p.add_argument("--into", default="")
+    p.add_argument("kind")
+    p.add_argument("slug")
+    p.add_argument("--into", default="")
     p.set_defaults(func=cmd_new)
 
     p = sub.add_parser("check", help="run every checker that applies to this artifact")
-    p.add_argument("path"); p.set_defaults(func=cmd_check)
+    p.add_argument("path")
+    p.set_defaults(func=cmd_check)
 
     p = sub.add_parser("show", help="the artifact's current state, as its checkers see it")
-    p.add_argument("path"); p.set_defaults(func=cmd_show)
+    p.add_argument("path")
+    p.set_defaults(func=cmd_show)
 
     p = sub.add_parser("contract", help="what the checkers for this kind require")
-    p.add_argument("kind"); p.set_defaults(func=cmd_contract)
+    p.add_argument("kind")
+    p.set_defaults(func=cmd_contract)
 
     args = parser.parse_args(argv)
     return args.func(args)

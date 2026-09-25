@@ -67,9 +67,11 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE.parent / "cycle"))
 sys.path.insert(0, str(_HERE.parent / "conventions"))
 
-from installed_plugins import load as load_plugins  # noqa: E402
-from installed_plugins import marketplace_source  # noqa: E402
 from _contract import add_root  # noqa: E402
+from installed_plugins import (  # noqa: E402 — post-bootstrap import
+    load as load_plugins,
+    marketplace_source,
+)
 from select_auditors import parse_registry, registry_path  # noqa: E402
 
 

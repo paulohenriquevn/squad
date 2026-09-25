@@ -34,18 +34,17 @@ from __future__ import annotations
 import re
 import sys as _sys
 from dataclasses import dataclass, field
-from pathlib import Path
-from pathlib import Path as _P
+from pathlib import Path, Path as _P
 from typing import Any
 
 for _up in _P(__file__).resolve().parents:
     if (_up / "squad" / "markdown.py").is_file():
         _sys.path.insert(0, str(_up))
         break
-from squad.rubric import load_rubric  # noqa: E402 — post-bootstrap import
 from squad.markdown import (  # noqa: E402 — post-bootstrap import
-    FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import
+    FENCED_CODE_RE as _FENCED_CODE_OWNER,
 )
+from squad.rubric import load_rubric  # noqa: E402 — post-bootstrap import
 
 CONTEXT_WINDOW = 20  # chars on each side of a match
 #: The ONE fenced-code regex, from `squad.markdown`. Eleven scripts each defined

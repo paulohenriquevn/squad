@@ -710,7 +710,8 @@ def resolve_unit_payload(unit: Unit, *, repo: str, tracker: str) -> dict:
             "body": body or unit.title,
             "branch": branch,
         },
-        "worktreeRoot": "/tmp/squad-dispatch",
+        # A root the shell, JS and Python fleet share by name; per-user roots are #220 (bandit B108).
+        "worktreeRoot": "/tmp/squad-dispatch",  # nosec B108
     }
 
 
@@ -724,7 +725,8 @@ def _brief_path(assignment: "Assignment", repo: str, *, suffix: str) -> Path:
     about to read. The lane then followed a brief written for somebody else, and nothing
     in either run said so.
     """
-    root = Path("/tmp/squad-router")
+    # A root the shell, JS and Python fleet share by name; per-user roots are #220 (bandit B108).
+    root = Path("/tmp/squad-router")  # nosec B108
     root.mkdir(parents=True, exist_ok=True)
     slug = re.sub(r"[^A-Za-z0-9._-]", "-", assignment.unit.slug)
     fleet = re.sub(r"[^A-Za-z0-9._-]", "-", Path(repo).name or "kit")

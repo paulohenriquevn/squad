@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _contract import add_root  # noqa: E402 — sibling module, path set above
+from _contract import add_root
 
 #: Exit codes, per `_contract.py`.
 OK, FOUND, UNMEASURABLE = 0, 1, 2

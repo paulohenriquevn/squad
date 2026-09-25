@@ -88,7 +88,7 @@ def test_the_generator_derives_the_box_from_the_status(tmp_path: Path) -> None:
     are asked for, because a gate with no way to satisfy it is a gate people disable.
     """
     sys.path.insert(0, str(PROJECT_ROOT / "skills" / "backlog-review" / "scripts"))
-    from backlog_index import derive_checkboxes  # noqa: PLC0415 — post-bootstrap import
+    from backlog_index import derive_checkboxes
 
     content = (
         "# BACKLOG\n\n## Items\n\n"
@@ -111,7 +111,7 @@ def test_the_generator_derives_the_box_from_the_status(tmp_path: Path) -> None:
 def test_deriving_twice_changes_nothing(tmp_path: Path) -> None:
     """Idempotent, so `--write` in a loop cannot walk the file."""
     sys.path.insert(0, str(PROJECT_ROOT / "skills" / "backlog-review" / "scripts"))
-    from backlog_index import derive_checkboxes  # noqa: PLC0415 — post-bootstrap import
+    from backlog_index import derive_checkboxes
 
     content = "# BACKLOG\n\n## Items\n\n## B-001 — t   [ ]\n\nstatus: shipped\n"
     once = derive_checkboxes(content)

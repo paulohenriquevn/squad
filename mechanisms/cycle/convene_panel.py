@@ -49,8 +49,7 @@ import json
 import shutil
 import sys
 import sys as _sys_bootstrap
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
@@ -70,11 +69,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from installed_plugins import resolve as resolve_plugin  # noqa: E402 (post-bootstrap)
 from panel_brief import locate as locate_artifact  # noqa: E402 (post-bootstrap)
 from review_panel import (  # noqa: E402 — post-bootstrap import
-    family_of,
     HOME_FAMILY,
     PANEL_SIZE,
-    panel_size_for,
     Seat,
+    family_of,
+    panel_size_for,
     parse_panel_phases,
     seats_for,
 )

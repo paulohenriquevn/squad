@@ -36,8 +36,7 @@ import sys
 # four different orders, and a reader resolving one order found a directory a writer
 # using another had never filled.
 import sys as _sys_bootstrap
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 from typing import Any
 
 _here = _Path_bootstrap(__file__).resolve()

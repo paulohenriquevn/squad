@@ -58,8 +58,7 @@ import sys
 import sys as _sys_bootstrap
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 
 _here = _Path_bootstrap(__file__).resolve()
 for _up in _here.parents:

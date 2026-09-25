@@ -12,9 +12,9 @@ unreachable rather than merely old, and it looks current.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 _REPO = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO / "mechanisms" / "gates"))

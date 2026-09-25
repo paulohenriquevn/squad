@@ -56,6 +56,7 @@ def _check(project: Path):
     sys.path.insert(0, str(REPO))
     try:
         import importlib
+
         import check_deps_audit
         importlib.reload(check_deps_audit)
         return check_deps_audit.check_deps_audit(
@@ -168,6 +169,7 @@ def _score(project: Path) -> subprocess.CompletedProcess[str]:
          str(project / ".squad" / "records" / "plans" / "followup-note-plan.md"),
          "--structural-only"],
         capture_output=True, text=True, cwd=project,
+        check=False,
     )
 
 

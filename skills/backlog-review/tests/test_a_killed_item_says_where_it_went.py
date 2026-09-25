@@ -27,8 +27,10 @@ from pathlib import Path
 _SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(_SCRIPTS))
 
-from check_backlog_structure import _parse_items as parse_registry  # noqa: E402
-from check_backlog_structure import lineage_successors  # noqa: E402
+from check_backlog_structure import (  # noqa: E402 — post-bootstrap import
+    _parse_items as parse_registry,
+    lineage_successors,
+)
 
 REGISTRY = """# Backlog
 

@@ -34,6 +34,7 @@ def _render(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
         [sys.executable, str(SCRIPTS / "render_release_notes.py"),
          "--changelog", str(changelog), *args],
         capture_output=True, text=True,
+        check=False,
     )
 
 
@@ -86,6 +87,7 @@ def test_empty_notes_are_refused_rather_than_printed(tmp_path: Path) -> None:
         [sys.executable, str(SCRIPTS / "render_release_notes.py"),
          "--changelog", str(changelog), "--version", "0.3.0-rc.1"],
         capture_output=True, text=True,
+        check=False,
     )
 
     assert result.returncode == 1, result.stdout

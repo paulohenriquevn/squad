@@ -114,7 +114,8 @@ def resolve_events_path(project_root: Path) -> Path:
 #: `/tmp` and `/var/tmp` are named literally because that is where residue accumulates;
 #: `tempfile.gettempdir()` covers a consumer whose `TMPDIR` points elsewhere, and is read
 #: at call time rather than at import so a test can move it.
-_NAMED_TEMP_ROOTS = ("/tmp", "/var/tmp")
+# Named to be DETECTED, never written (bandit B108).
+_NAMED_TEMP_ROOTS = ("/tmp", "/var/tmp")  # nosec B108
 
 
 def _is_system_temp_root(candidate: Path) -> bool:

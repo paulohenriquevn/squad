@@ -31,9 +31,8 @@ sys.path.insert(0, str(_ROOT / "skills" / "backlog-review" / "scripts"))
 sys.path.insert(0, str(_ROOT / "mechanisms" / "cycle"))
 sys.path.insert(0, str(_ROOT))
 
-from check_backlog_structure import parse_blocked_by as gate_parse  # noqa: E402
-
 from backlog_status import parse_blocked_by as writer_parse  # noqa: E402
+from check_backlog_structure import parse_blocked_by as gate_parse  # noqa: E402
 
 _REPEATED = "B-270 — B-270 — measured against the bundle; cannot pass until B-270 does."
 _TWO = "B-270 and B-271 both have to land first."

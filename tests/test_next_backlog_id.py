@@ -25,7 +25,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from next_backlog_id import Allocation, next_backlog_id
 
 

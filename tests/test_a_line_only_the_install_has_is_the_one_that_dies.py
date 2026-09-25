@@ -74,8 +74,8 @@ def test_the_two_counts_are_not_printed_in_the_same_voice(tmp_path: Path) -> Non
     out = _run(*_trees(tmp_path))
     lines = out.stdout.splitlines()
 
-    ahead = next(l for l in lines if l.startswith("install_ahead:"))
-    behind = next(l for l in lines if l.startswith("kit_ahead:"))
+    ahead = next(row for row in lines if row.startswith("install_ahead:"))
+    behind = next(row for row in lines if row.startswith("kit_ahead:"))
 
     assert ahead != behind.replace("kit_ahead", "install_ahead"), (
         "the two headings differ only by the class name, so a reader compares magnitudes"

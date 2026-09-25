@@ -48,8 +48,7 @@ import sys
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap
 from datetime import datetime, timezone
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 from typing import Any
 
 import yaml

@@ -33,6 +33,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "mechanisms" / "cycle"))
 
@@ -41,7 +43,7 @@ CONVENE = _ROOT / "mechanisms" / "cycle" / "convene_panel.py"
 
 
 def test_the_roster_declares_an_alignment_seat() -> None:
-    from review_panel import parse_roster, seats_for
+    from review_panel import seats_for
 
     seats = seats_for(ROSTER.read_text(encoding="utf-8"), "alignment")
 
@@ -82,6 +84,7 @@ def test_a_panel_phase_still_needs_three_seats() -> None:
     assert panel_size_for("alignment") == 1
 
 
+@pytest.mark.usefixtures("reachable_review_panel")
 def test_the_capability_gate_accepts_the_roster_as_shipped() -> None:
     gate = _ROOT / "mechanisms" / "gates" / "check_panel_capability.py"
     out = subprocess.run([sys.executable, str(gate), "--panel", str(ROSTER)],

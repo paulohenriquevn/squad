@@ -30,8 +30,10 @@ for _up in _P(__file__).resolve().parents:
 # four different orders, and `check_write_containment.py` refuses a second one.
 import sys as _sys_bootstrap  # noqa: E402 — post-bootstrap import
 from dataclasses import dataclass, field  # noqa: E402 — post-bootstrap import
-from pathlib import Path  # noqa: E402 — post-bootstrap import
-from pathlib import Path as _Path_bootstrap  # noqa: E402 — post-bootstrap import
+from pathlib import (  # noqa: E402 — post-bootstrap import
+    Path,  # noqa: E402 — post-bootstrap import
+    Path as _Path_bootstrap,  # noqa: E402 — post-bootstrap import
+)
 
 from squad.markdown import (  # noqa: E402 — post-bootstrap import
     FENCED_CODE_RE as _FENCED_CODE_OWNER,  # noqa: E402 — post-bootstrap import

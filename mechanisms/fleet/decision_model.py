@@ -70,7 +70,8 @@ def choice(instructions: str, criteria: Mapping[str, str]) -> dict:
 def _urllib_post(url: str, headers: dict, data: bytes, timeout: float) -> tuple[int, str]:
     request = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        # The scheme is refused unless https:// in `SystemOneClient.__init__`.
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
             return response.status, response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as error:
         # An HTTP error status carries the provider's explanation in its body, and
@@ -81,6 +82,9 @@ def _urllib_post(url: str, headers: dict, data: bytes, timeout: float) -> tuple[
 class SystemOneClient:
     def __init__(self, api_key: str, *, model: str = MODEL, endpoint: str = ENDPOINT,
                  timeout: float = 30.0, post: Post | None = None) -> None:
+        if not endpoint.startswith("https://"):
+            # `urlopen` opens `file:` and custom schemes too; the key goes to HTTPS only.
+            raise ValueError(f"the decision endpoint must be https://, got {endpoint.split(':', 1)[0]}:")
         self._api_key = api_key
         self.model = model
         self._endpoint = endpoint

@@ -35,8 +35,7 @@ from pathlib import Path
 _s.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from squad.layout import resolve
 from squad.paths import ATTESTATIONS, write_state_dir
-from squad.plan import attestation
-from squad.plan import resolve as resolve_plan
+from squad.plan import attestation, resolve as resolve_plan
 
 _REPO = Path(__file__).resolve().parents[1]
 _SCRIPT = _REPO / "mechanisms" / "cycle" / "attest_plan.sh"

@@ -288,3 +288,37 @@ def test_the_segment_rule_did_not_otherwise_loosen() -> None:
     for bad in ("docs(Infra/tests): x", "docs(infra/): x", "docs(/tests): x",
                 "docs(infra//tests): x", "docs(infra tests): x"):
         assert HEADER_RE.match(bad) is None, f"{bad} should not parse"
+
+
+def _git(repo: Path, *args: str) -> str:
+    import subprocess
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def test_a_commit_on_a_remote_branch_is_pushed_even_without_an_upstream(tmp_path: Path) -> None:
+    """CI checks out a detached HEAD, which has no `@{upstream}`. Reading that as
+    "nothing is pushed" turned every declared exemption into `exemption_is_fixable` on
+    the first CI run in eleven days, while the same commits were CLEAN locally. A commit
+    reachable from any remote-tracking branch can only change by force-push, which is
+    exactly the property an exemption rests on."""
+    from check_contribution_conventions import _pushed_shas
+    remote, work = tmp_path / "remote.git", tmp_path / "work"
+    _git(tmp_path, "init", "-q", "--bare", str(remote))
+    _git(tmp_path, "init", "-q", str(work))
+    _git(work, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+         "--allow-empty", "-m", "chore: seed")
+    _git(work, "remote", "add", "origin", str(remote))
+    _git(work, "push", "-q", "origin", "HEAD:refs/heads/workspace")
+    _git(work, "fetch", "-q", "origin")
+    sha = _git(work, "rev-parse", "HEAD")
+    _git(work, "switch", "-q", "--detach", sha)
+    assert sha[:9] in _pushed_shas(work)
+
+
+def test_a_commit_on_no_remote_is_not_pushed(tmp_path: Path) -> None:
+    from check_contribution_conventions import _pushed_shas
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+         "--allow-empty", "-m", "chore: seed")
+    assert _pushed_shas(tmp_path) == set()

@@ -71,7 +71,7 @@ def _project(tmp_path: Path, *, with_history: bool) -> Path:
     findings.mkdir()
     (findings / "quiet-auditor.yaml").write_text(
         "agent: quiet-auditor\nfindings: []\n", encoding="utf-8")
-    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, capture_output=True)
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, capture_output=True, check=False)
     return tmp_path
 
 
@@ -85,7 +85,7 @@ def _consolidate(root: Path) -> tuple[dict, str]:
     proc = subprocess.run(
         [sys.executable, str(CONSOLIDATE), "--findings-dir", str(root / "findings"),
          "--output", str(report), "--slug", "b042-demo", "--repo-root", str(root)],
-        capture_output=True, text=True)
+        capture_output=True, text=True, check=False)
     summary = json.loads(proc.stdout[proc.stdout.index("{"):])
     return summary, report.read_text(encoding="utf-8")
 

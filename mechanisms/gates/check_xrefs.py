@@ -40,8 +40,7 @@ import sys
 import sys as _sys_bootstrap
 from collections import defaultdict
 from dataclasses import dataclass
-from pathlib import Path
-from pathlib import Path as _Path_bootstrap
+from pathlib import Path, Path as _Path_bootstrap
 from typing import Any
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
@@ -66,10 +65,10 @@ from squad.paths import (  # noqa: E402 — post-bootstrap import
     DATA_DIRNAME,
     LEGACY_ROUTING_ROOTS,
     ROUTING_TABLE,
+    WIKI as WIKI_FALLBACK,
     is_cycle_generated_skill,
     wiki_dir,
 )
-from squad.paths import WIKI as WIKI_FALLBACK  # noqa: E402 — post-bootstrap import
 
 # Skills documented as "auxiliary" (not bound to any cycle)
 # - ast-grep: structural search utility

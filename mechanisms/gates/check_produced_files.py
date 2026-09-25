@@ -264,7 +264,7 @@ def _snapshot(root: Path) -> dict[str, str]:
         if not path.is_file() or ".git/" in str(path.relative_to(root)) + "/":
             continue
         try:
-            out[str(path.relative_to(root))] = hashlib.md5(path.read_bytes()).hexdigest()
+            out[str(path.relative_to(root))] = hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
         except OSError:
             continue
     return out

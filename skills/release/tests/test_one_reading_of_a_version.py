@@ -35,6 +35,7 @@ def _promote(tmp_path: Path, version: str) -> subprocess.CompletedProcess[str]:
         [sys.executable, str(SCRIPTS / "promote_unreleased.py"),
          "--changelog", str(changelog), "--version", version, "--date", "2026-09-21"],
         capture_output=True, text=True,
+        check=False,
     )
 
 
@@ -81,8 +82,9 @@ def test_compute_and_detect_agree_on_what_a_version_is() -> None:
     """The two ends of the chain must accept the same strings, or one blinds the other."""
     sys.path.insert(0, str(ROOT))
     sys.path.insert(0, str(SCRIPTS))
-    from squad.semver import parse
     import compute_next_version
+
+    from squad.semver import parse
 
     for version in ("0.3.0", "0.3.0-rc.2", "1.0.0-rc.1+build"):
         assert parse(version) is not None

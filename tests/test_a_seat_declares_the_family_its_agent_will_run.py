@@ -142,7 +142,7 @@ def test_the_json_report_carries_the_verified_family() -> None:
 
     gate = _ROOT / "mechanisms" / "gates" / "check_panel_capability.py"
     proc = subprocess.run([sys.executable, str(gate), "--root", str(_ROOT), "--json"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, check=False)
     assert "Traceback" not in proc.stderr, proc.stderr
     payload = json.loads(proc.stdout)
     assert payload["seats"], "a roster with seats reported none"

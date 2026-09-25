@@ -103,6 +103,7 @@ def test_the_criterion_reader_is_broader_and_says_by_how_much() -> None:
     extra set stays a decision somebody made rather than a difference that reappeared.
     """
     from check_criterion_executability import _CRITERION_ASSERTIONS, MEASURABLE_PATTERNS
+
     from squad.measurability import PATTERNS as SHARED
 
     assert MEASURABLE_PATTERNS == SHARED + _CRITERION_ASSERTIONS

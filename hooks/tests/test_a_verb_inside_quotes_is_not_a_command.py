@@ -19,7 +19,6 @@ two-character bypass of the whole boundary. Half this file exists to hold that l
 from __future__ import annotations
 
 import importlib.util
-import tempfile
 from pathlib import Path
 
 import pytest

@@ -33,17 +33,21 @@ def _kit(tmp_path: Path) -> Path:
     for d in ("mechanisms/cycle", "mechanisms/conventions", "skills", "rules", "hooks"):
         (kit / d).mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-q", str(kit)], check=True)
-    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
-                                    capture_output=True, text=True)
-    run("config", "user.email", "t@t"); run("config", "user.name", "t")
+    def run(*a):
+        return subprocess.run(["git", "-C", str(kit), *a], check=True,
+                              capture_output=True, text=True)
+    run("config", "user.email", "t@t")
+    run("config", "user.name", "t")
     (kit / REL).write_text("alpha\n", encoding="utf-8")
     (kit / MATE).write_text("def helper():\n    return 1\n", encoding="utf-8")
-    run("add", "-A"); run("commit", "-qm", "v1")
+    run("add", "-A")
+    run("commit", "-qm", "v1")
     # One commit, two files: the shape of nearly every real fix.
     (kit / REL).write_text("alpha\nbeta\n", encoding="utf-8")
     (kit / MATE).write_text("def helper():\n    return 1\n\n\ndef added():\n    return 2\n",
                             encoding="utf-8")
-    run("add", "-A"); run("commit", "-qm", "v2 touches both")
+    run("add", "-A")
+    run("commit", "-qm", "v2 touches both")
     return kit
 
 
@@ -112,13 +116,15 @@ def test_a_companion_the_install_lacks_is_marked_as_new(tmp_path: Path) -> None:
     "the test runs here" are different claims, and the listing must not blur them.
     """
     kit = _kit(tmp_path)
-    run = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,
-                                    capture_output=True, text=True)
+    def run(*a):
+        return subprocess.run(["git", "-C", str(kit), *a], check=True,
+                              capture_output=True, text=True)
     newcomer = "tests/brand_new.py"
     (kit / "tests").mkdir(parents=True, exist_ok=True)
     (kit / newcomer).write_text("def test_x():\n    assert True\n", encoding="utf-8")
     (kit / REL).write_text("alpha\nbeta\ngamma\n", encoding="utf-8")
-    run("add", "-A"); run("commit", "-qm", "v3 adds a file and touches the applied one")
+    run("add", "-A")
+    run("commit", "-qm", "v3 adds a file and touches the applied one")
 
     consumer = _consumer(tmp_path, kit, mate_current=True)
     proc = _apply(consumer, kit, REL)
