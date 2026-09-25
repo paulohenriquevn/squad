@@ -75,7 +75,7 @@ zeros to YAML and is reported as unusable.
 
 ### 1. Triad re-validation in depth
 
-For each new public export in the diff (`git diff {DIFF_BASE}..HEAD -- 'src/**' --name-only | xargs grep -h '^export'`):
+For each new public export in the diff (`git diff {DIFF_BASE}...HEAD -- 'src/**' --name-only | xargs grep -h '^export'`):
 
 - **Pillar (a) static caller — DEEP check**: not just "≥1 caller" but "is the caller functionally necessary"?
   - Run `grep -rn 'symbolName' src/` to find callers

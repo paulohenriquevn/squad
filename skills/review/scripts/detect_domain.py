@@ -12,7 +12,7 @@ Exit codes:
   1 — no primary domain: either no keyword hits at all, or the hits are spread so
       thinly that no domain reaches 0.20. Both report as "unknown", and the second
       is the common one — a plan touching four areas evenly names none of them.
-  2 — Error (plan not found, etc.)
+  2 — Error (plan not found, or the review base does not resolve to a commit)
 
 The 0.20 floor is the number `main` applies. It read 0.5 here for a long time while
 the code used 0.20, which meant a plan whose top domain held a quarter of the hits
@@ -116,19 +116,73 @@ def _read_plan(plan_path: Path) -> str:
     return plan_path.read_text(encoding="utf-8-sig")
 
 
+# The integration branch `git-safety.md` § 1 declares: `workspace → develop → trunk`.
+# The kit's flow names it, so it is the default base — not `main`, which this kit's own
+# repository does not have. Measured 2026-09-23: `git rev-parse --verify -q main` and
+# `origin/main` both resolve to nothing here, and every auditor refused the ref.
+INTEGRATION_BRANCH = "develop"
+
+
+class ReviewBaseError(RuntimeError):
+    """The base a review diffs against does not resolve to a commit."""
+
+
+def _rev_parses(project_root: Path, ref: str) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(project_root), "rev-parse", "--verify", "-q", f"{ref}^{{commit}}"],
+        capture_output=True, text=True, timeout=15, check=False)
+    return result.returncode == 0
+
+
+def resolve_review_base(project_root: Path, diff_base: str | None = None) -> str:
+    """The ref a review of this project diffs against, or `ReviewBaseError`.
+
+    Resolution mirrors the plugins' `diff_scope._resolve_ref`: the ref as named, then
+    `origin/<ref>`. The label returned is the ref that resolved, so the domains, the
+    reviewers' briefs and the auditors are all handed the SAME revision. A clone that
+    never checked the base out has only the remote ref, and that is the ordinary case
+    in CI, not an edge one.
+
+    With no ref named, the base is the integration branch, and after it whatever
+    `origin/HEAD` points at. A base that does not resolve is an error, never an empty
+    file list: `_git_diff_filenames` used to return `[]` on the same git failure every
+    plugin refused, so the domains came from the plan alone and nothing said so.
+    """
+    candidates = [diff_base] if diff_base else [INTEGRATION_BRANCH]
+    tried: list[str] = []
+    for ref in candidates:
+        for label in (ref, f"origin/{ref}") if not ref.startswith("origin/") else (ref,):
+            tried.append(label)
+            if _rev_parses(project_root, label):
+                return label
+    if not diff_base:
+        head = subprocess.run(
+            ["git", "-C", str(project_root), "symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+            capture_output=True, text=True, timeout=15, check=False)
+        label = head.stdout.strip()
+        if head.returncode == 0 and label:
+            tried.append(label)
+            if _rev_parses(project_root, label):
+                return label
+    raise ReviewBaseError(
+        f"review base {diff_base or INTEGRATION_BRANCH!r} does not resolve to a commit in "
+        f"{project_root}; tried {', '.join(repr(t) for t in tried)}. Fetch the base branch, "
+        f"or name one that is present with --diff-base.")
+
+
 def _git_diff_filenames(project_root: Path, diff_base: str) -> list[str]:
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(project_root), "diff", "--name-only", f"{diff_base}..HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-         check=False)
-        if result.returncode != 0:
-            return []
-        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    except (subprocess.SubprocessError, FileNotFoundError):
-        return []
+    """Files changed since the merge base — the THREE-dot set the plugins audit.
+
+    Two dots also counted every file that landed on the base since the fork, so once
+    the branches diverged the domains were derived from files the change never touched.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(project_root), "diff", "--name-only", f"{diff_base}...HEAD"],
+        capture_output=True, text=True, timeout=15, check=False)
+    if result.returncode != 0:
+        raise ReviewBaseError(
+            f"git diff {diff_base}...HEAD failed in {project_root}: {result.stderr.strip()}")
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
 def _patterns_skills_text(project_root: Path) -> str:
@@ -223,7 +277,9 @@ def rank_domains(hits: dict[str, dict[str, int | list[str]]]) -> tuple[str | Non
 def main() -> int:
     parser = argparse.ArgumentParser(description="Detect primary + secondary domains from a plan + diff.")
     parser.add_argument("--plan", type=Path, required=True, help="Path to plan markdown")
-    parser.add_argument("--diff-base", default="develop", help="Git base ref for diff (default: develop)")
+    parser.add_argument("--diff-base", default=None,
+                        help="Git base ref for the diff (default: the integration branch, "
+                             "resolved locally or on origin; the resolved ref is reported)")
     parser.add_argument("--project-root", type=Path, default=None)
     args = parser.parse_args()
 
@@ -234,7 +290,12 @@ def main() -> int:
         print(json.dumps({"error": str(exc)}), file=sys.stderr)
         return 2
 
-    file_paths = _git_diff_filenames(project_root, args.diff_base)
+    try:
+        diff_base = resolve_review_base(project_root, args.diff_base)
+        file_paths = _git_diff_filenames(project_root, diff_base)
+    except ReviewBaseError as exc:
+        print(json.dumps({"error": str(exc)}), file=sys.stderr)
+        return 2
     patterns_text = _patterns_skills_text(project_root)
 
     full_text = plan_text + "\n" + patterns_text
@@ -254,6 +315,9 @@ def main() -> int:
         "domain_keywords_matched": matched_keywords,
         "total_hits": sum(int(h["hits"]) for h in hits.values()),
         "files_in_diff": len(file_paths),
+        # The ref actually compared. Step 2b and Step 3 pass THIS on, so the auditors
+        # and the reviewers read the revision the domains were derived from.
+        "diff_base": diff_base,
     }
 
     print(json.dumps(output, indent=2))

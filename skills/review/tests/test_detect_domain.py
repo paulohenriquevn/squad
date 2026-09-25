@@ -21,9 +21,26 @@ sys.path.insert(0, str(SCRIPT.parent))
 from detect_domain import count_domain_hits  # noqa: E402 — post-bootstrap import
 
 
+def _repo_with_integration_branch(root: Path) -> Path:
+    """A repository whose `develop` resolves and whose change is empty.
+
+    An unresolvable review base is refused (exit 2), so these plan-only cases need a
+    base that resolves; with no commit on top of it, the plan is the only signal.
+    """
+    repo = root / "repo"
+    if not repo.exists():
+        repo.mkdir()
+        for args in (("init", "-q", "-b", "develop"),
+                     ("-c", "user.email=t@example.com", "-c", "user.name=t",
+                      "commit", "-q", "--allow-empty", "-m", "seed")):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    return repo
+
+
 def _run(plan: Path) -> tuple[int, dict]:
+    repo = _repo_with_integration_branch(plan.parent)
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--plan", str(plan)],
+        [sys.executable, str(SCRIPT), "--plan", str(plan), "--project-root", str(repo)],
         capture_output=True,
         text=True,
      check=False)

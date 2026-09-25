@@ -20,7 +20,16 @@ _SCRIPT = _ROOT / "skills" / "review" / "scripts" / "detect_domain.py"
 def _detect(tmp_path: Path, plan_text: str) -> tuple[dict, int]:
     plan = tmp_path / "a-plan.md"
     plan.write_text(plan_text, encoding="utf-8")
-    done = subprocess.run([sys.executable, str(_SCRIPT), "--plan", str(plan)],
+    # A review base that does not resolve is refused, so the plan sits beside a
+    # repository whose `develop` resolves and carries no change of its own.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for args in (("init", "-q", "-b", "develop"),
+                 ("-c", "user.email=t@example.com", "-c", "user.name=t",
+                  "commit", "-q", "--allow-empty", "-m", "seed")):
+        subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    done = subprocess.run([sys.executable, str(_SCRIPT), "--plan", str(plan),
+                           "--project-root", str(repo)],
                           capture_output=True, text=True, timeout=120, check=False)
     payload = json.loads(done.stdout[done.stdout.index("{"):]) if "{" in done.stdout else {}
     return payload, done.returncode

@@ -65,7 +65,7 @@ zeros to YAML and is reported as unusable.
 
 1. The plan: `{PLAN_PATH}` (focus on TDD sections per task + Acceptance Criteria + Deep Dives that mention edge cases)
 2. The project testing rule: `.claude/rules/testing.md` (TDD discipline, pyramid, AAA format)
-3. The git diff: `git diff {DIFF_BASE}..HEAD -- 'tests/**' '*.test.ts' '*.test.tsx' '*.spec.ts'`
+3. The git diff: `git diff {DIFF_BASE}...HEAD -- 'tests/**' '*.test.ts' '*.test.tsx' '*.spec.ts'`
 4. The wiring check script behavior: `.claude/skills/implement/scripts/check_wiring.py` (pillar b expects tests/integration/ to exercise new symbols)
 
 ## What to review (in this order)

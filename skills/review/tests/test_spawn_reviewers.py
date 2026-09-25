@@ -34,6 +34,17 @@ def _run(
     # of the real .claude/skills/ tree. Tests that want a specific skills-dir can override
     # via extra_args; the explicit --skills-dir there will win the duplicate arg parse.
     default_skills_dir = output_dir.parent / "skills-test-isolation"
+    # The diff base is resolved, never assumed, and an unresolvable one is refused —
+    # so the run gets a repository whose integration branch resolves, instead of
+    # depending on whichever repository the suite happens to run from.
+    base_repo = output_dir.parent / "base-repo"
+    if not base_repo.exists():
+        base_repo.mkdir(parents=True)
+        for git_args in (("init", "-q", "-b", "develop"),
+                         ("-c", "user.email=t@example.com", "-c", "user.name=t",
+                          "commit", "-q", "--allow-empty", "-m", "seed")):
+            subprocess.run(["git", "-C", str(base_repo), *git_args], check=True,
+                           capture_output=True)
     args = [
         sys.executable,
         str(SCRIPT),
@@ -44,6 +55,7 @@ def _run(
         "--output-dir", str(output_dir),
         "--skill-dir", str(skill_dir),
         "--skills-dir", str(default_skills_dir),
+        "--project-root", str(base_repo),
     ]
     if extra_args:
         args.extend(extra_args)
@@ -495,3 +507,81 @@ def test_an_ordinary_domain_is_still_accepted() -> None:
 
     assert spawn_reviewers.safe_name("domain-api-gateway", what="the agent role") \
         == "domain-api-gateway"
+
+
+# ── a generated name the kit's own validator accepts ─────────────────────────
+#
+# `review-` (7) + slug + `-cross-validation-knowledge` (27) leaves 30 characters for the
+# slug under the 64 `quick_validate` enforces, and plan slugs are derived from titles.
+# Measured in a consumer 2026-09-24: 16 generated knowledge skills, 13 rejected, the
+# longest 78 characters — the kit's generator producing what the kit's gate fails.
+
+#: A real slug from that consumer, 44 characters.
+_LONG_SLUG = "the-streamed-document-is-proved-by-execution"
+_NAME_LIMIT = 64
+
+
+def _skill_validator():
+    import importlib.util
+
+    path = (Path(__file__).resolve().parents[2] / "skill-creator" / "scripts"
+            / "quick_validate.py")
+    spec = importlib.util.spec_from_file_location("review_test_quick_validate", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.validate_skill
+
+
+def test_a_long_slug_produces_skills_the_kits_validator_accepts(
+    sample_plan: Path, tmp_path: Path
+) -> None:
+    skills_dir = tmp_path / "skills-out"
+    rc, data = _run(sample_plan, _LONG_SLUG, "pgvector-schema", tmp_path / "agents-out",
+                    extra_args=["--skills-dir", str(skills_dir)])
+    assert rc == 0, data
+
+    generated = sorted(p for p in skills_dir.iterdir() if p.is_dir())
+    assert len(generated) == 5, [p.name for p in generated]
+    validate_skill = _skill_validator()
+    rejected = [(p.name, validate_skill(p)[1]) for p in generated if not validate_skill(p)[0]]
+    assert rejected == [], rejected
+
+
+def test_a_shortened_skill_is_named_as_its_directory(
+    sample_plan: Path, tmp_path: Path
+) -> None:
+    """Discovered under one identity and referenced under the other reads as missing."""
+    skills_dir = tmp_path / "skills-out"
+    rc, data = _run(sample_plan, _LONG_SLUG, "pgvector-schema", tmp_path / "agents-out",
+                    extra_args=["--skills-dir", str(skills_dir)])
+    assert rc == 0, data
+
+    for skill in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
+        assert _parse_frontmatter(skill / "SKILL.md")["name"] == skill.name
+
+
+def test_a_shortened_name_is_stable_and_tells_two_long_slugs_apart() -> None:
+    import spawn_reviewers
+
+    first = spawn_reviewers.knowledge_skill_name(_LONG_SLUG, "cross-validation")
+    again = spawn_reviewers.knowledge_skill_name(_LONG_SLUG, "cross-validation")
+    sibling = spawn_reviewers.knowledge_skill_name(_LONG_SLUG + "-again", "cross-validation")
+
+    assert len(first) <= _NAME_LIMIT
+    assert first == again
+    assert first != sibling
+
+
+def test_a_short_slug_keeps_its_readable_name() -> None:
+    import spawn_reviewers
+
+    assert spawn_reviewers.knowledge_skill_name("test-slug", "tests") \
+        == "review-test-slug-tests-knowledge"
+
+
+def test_a_role_that_cannot_fit_is_refused_by_name() -> None:
+    """No slug is short enough when the role alone overflows; say so, do not truncate it."""
+    import spawn_reviewers
+
+    with pytest.raises(ValueError, match="64"):
+        spawn_reviewers.knowledge_skill_name("s", "domain-" + "x" * 60)

@@ -69,7 +69,7 @@ zeros to YAML and is reported as unusable.
 2. The implementation contract (if exists): `.claude/records/implementations/{SLUG}-implementation.md`
 3. The progress audit (if exists): `.claude/records/implementations/.progress-{SLUG}.json`
 4. The full commit history of the branch: `git log {DIFF_BASE}..HEAD --oneline --stat`
-5. The full diff: `git diff {DIFF_BASE}..HEAD`
+5. The full diff: `git diff {DIFF_BASE}...HEAD`
 
 ## What to verify (one task at a time)
 

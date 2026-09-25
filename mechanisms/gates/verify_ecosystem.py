@@ -759,10 +759,28 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
             encoding="utf-8",
         )
 
+        # The review base is resolved, never assumed, and a base that does not resolve
+        # is refused (exit 2) — right for a real review, wrong for this smoke, which
+        # runs in a scratch directory and in a freshly installed consumer that may have
+        # no `develop` yet. So the smoke brings its own repository whose integration
+        # branch resolves, and names it to both scripts.
+        base_repo = tmp / "base-repo"
+        base_repo.mkdir()
+        for git_args in (("init", "-q", "-b", "develop"),
+                         ("-c", "user.email=smoke@example.com", "-c", "user.name=smoke",
+                          "commit", "-q", "--allow-empty", "-m", "seed")):
+            rg = subprocess.run(["git", "-C", str(base_repo), *git_args],
+                                capture_output=True, text=True, check=False)
+            if rg.returncode != 0:
+                issues.append(f"  git {git_args[0]} for the smoke repository exit "
+                              f"{rg.returncode}: {rg.stderr[:200]}")
+                return False, issues
+
         # 2. detect_domain
         detect = review_skill / "scripts" / "detect_domain.py"
         r1 = subprocess.run(
-            [sys.executable, str(detect), "--plan", str(plan)],
+            [sys.executable, str(detect), "--plan", str(plan),
+             "--project-root", str(base_repo)],
             capture_output=True, text=True,
          check=False)
         if r1.returncode not in (0, 1):
@@ -788,7 +806,8 @@ def check_smoke_chain(ecosystem_dir: Path) -> tuple[bool, list[str]]:
              "--primary-domain", primary if primary != "unknown" else "memory-layer",
              "--output-dir", str(agents_out),
              "--skill-dir", str(review_skill),
-             "--skills-dir", str(tmp_skills)],
+             "--skills-dir", str(tmp_skills),
+             "--project-root", str(base_repo)],
             capture_output=True, text=True,
          check=False)
         if r2.returncode != 0:

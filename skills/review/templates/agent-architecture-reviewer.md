@@ -65,7 +65,7 @@ zeros to YAML and is reported as unusable.
 
 1. The plan: `{PLAN_PATH}`
 2. The project architecture rule: `.claude/rules/architecture.md`
-3. The git diff: `git diff {DIFF_BASE}..HEAD`
+3. The git diff: `git diff {DIFF_BASE}...HEAD`
 4. Any `*-patterns` skills registered (read frontmatter of `.claude/skills/*-patterns/SKILL.md` and Read full if topic matches)
 5. The `cycle-implement.md` Quality rules section (SOLID + Clean Code + DRY + Design Patterns)
 
