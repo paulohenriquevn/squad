@@ -108,8 +108,12 @@ auditor = cli-tooling    | loop-surface-closure    | report-filtered
 # `loop-architecture-review`, `loop-deadcode-audit`, `loop-duplication-audit`,
 # `loop-doc-audit`, `loop-refactor-plan`, `loop-license-audit` and
 # `loop-reference-compare` are absent because no domain here derives them from a
-# change. They are worth running, and the honest place for them is a deliberate sweep
-# rather than a per-item gate whose cost nobody chose.
+# change. They are worth running, and they are not a per-item gate whose cost nobody
+# chose. Nothing in the kit runs them on any other path either, and nothing converts
+# their findings into registry items: a person runs one and files what it found by
+# hand. This file used to name "a deliberate sweep" as their home, and no sweep reads a
+# `loop-*` report — a home that exists only in prose is the unreachable claim this file
+# refuses elsewhere (#183).
 #
 # ONE OF THEM WAS ALSO UNMAPPABLE, AND THAT HAS BEEN FIXED. Measured 2026-09-21:
 # `loop-license-audit` rejected the invocation this file's own contract produces —
@@ -123,11 +127,11 @@ auditor = cli-tooling    | loop-surface-closure    | report-filtered
 # `loop-system-cartography` is absent for a reason of its own: it MAPS a system rather
 # than auditing a change, and its output is an OKF bundle written into the repository. A
 # per-item REVIEW would redraw the whole map on every item — expensive, and the map does
-# not depend on the change. Where it belongs is `cycle-design`, which already owns the
-# question *what is this system and where do its boundaries run*, and whose D1–D5 drawings
-# are the same artifact by another route. Naming it here rather than leaving it out
-# silently, because this file is a record of decisions and an absence with no reason reads
-# as an absence somebody chose.
+# not depend on the change. It is not wired into any other phase either: `cycle-design`
+# asks the same question by another route, and neither its skill nor its gates read the
+# cartography bundle. Naming it here rather than leaving it out silently, because this
+# file is a record of decisions and an absence with no reason reads as an absence
+# somebody chose — and naming a home it does not have would be worse than either (#183).
 #
 # `loop-deadcode-audit` overlaps the D1 detector of `/code-quality`, which already runs
 # vulture / knip / cargo-udeps on the same question. Mapping it here would commission a

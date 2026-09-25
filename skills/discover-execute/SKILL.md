@@ -171,7 +171,7 @@ Report: the opportunity path, iterations used, questions answered / blocked with
 
 ### Step 9 — Sweep mode
 
-`--sweep {domain}` measures a domain with no prior item. Each finding is registered directly in `BACKLOG.md` with `source: discover-{mode}`, its evidence attached, and `status: triaged` — sweep findings skip intake because they arrive with the evidence intake is not allowed to require.
+`--sweep {domain}` measures a domain with no prior item. Each finding is registered directly in `BACKLOG.md` with `source: discover-{mode}`, its evidence attached, `status: approved` and `approved_by: system/autonomous-sweep` — sweep findings skip intake because they arrive with the evidence intake is not allowed to require, and `rules/cycle-backlog.md` files an item the system found as approved when it is filed.
 
 Registration is not optional. A finding that stays in this run's output and never reaches the registry is exactly the orphaned-finding failure the single registry exists to prevent.
 
