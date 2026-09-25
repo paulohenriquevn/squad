@@ -106,6 +106,18 @@ Each decision that IS recorded gets:
 
 `/plan-confidence` caps the score at 70 if any ADR lacks an alternative.
 
+Each one is a `###` heading in the form `check_adr_completeness` reads — `### D<n> — ` or
+`### ADR-<n> — `. Any other heading is not counted as an ADR at all:
+
+```markdown
+### D1 — <the decision, in one line>
+
+**Decision:** <what was decided>
+**Rationale:** <why this approach>
+**Alternatives considered:** <the alternative> — rejected because <reason>
+**Consequences:** <what this enables and what it constrains>
+```
+
 ## Drawbacks & Risks
 
 What does this plan make worse, riskier, or harder to change? Honesty here is the price of admission. **At least 2 entries** — no plan is risk-free.
