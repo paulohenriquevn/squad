@@ -77,3 +77,12 @@ def test_a_scope_decision_in_ordinary_prose_is_recognised() -> None:
 
     assert verdict.delegated, "a scope decision in natural prose was retained"
     assert verdict.klass is DecisionClass.SCOPE
+
+
+def test_a_decision_that_cites_an_item_keeps_its_decision_class() -> None:
+    """The dependency class is tested last so an id inside a decision does not demote
+    it. The comment claiming this cited an example that classified as a dependency,
+    and no test pinned the ordering it described."""
+    verdict = classify_wall("B-007: threshold decision pending")
+
+    assert verdict.klass is DecisionClass.THRESHOLD

@@ -226,8 +226,8 @@ def classify_wall(wall: str) -> WallVerdict:
 
     # Last, and only after every decision pattern has had its turn: a wall naming
     # another item. Tested here rather than first because a wall can cite an item id
-    # while being about something else entirely — "B-007 decided the threshold" is a
-    # threshold decision that happens to mention an id, and the ordering keeps the more
+    # while being about something else entirely — "B-007: threshold decision pending" is
+    # a threshold decision that happens to mention an id, and the ordering keeps the more
     # specific class. The evidence names the blocker, because a disposition that does
     # not say WHICH item to work is not actionable.
     ids = _ITEM_ID_RE.findall(wall)
