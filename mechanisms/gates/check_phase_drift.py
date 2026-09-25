@@ -83,7 +83,7 @@ _BANDS_RULE = "verdict-bands.txt"
 
 
 def load_clean_verdicts(project_root: Path) -> frozenset[str]:
-    """Read the clean band from `rules/verdict-bands.txt`.
+    """Read the clean band from `rules/verdict-bands.txt` and its `.local` sibling.
 
     An absent registry raises, on the same grounds as an absent blocking list: an
     empty set would make every verdict read as not-clean, and the disorder check
@@ -106,9 +106,18 @@ def load_clean_verdicts(project_root: Path) -> frozenset[str]:
     tooling = Path(__file__).resolve().parent.parent / "cycle"
     if str(tooling) not in sys.path:
         sys.path.insert(0, str(tooling))
-    from verdict_bands import clean_verdicts
+    from verdict_bands import _CLEAN_BANDS, clean_verdicts, load_local_bands
 
-    return clean_verdicts(path)
+    # The consumer's own verdicts, from `verdict-bands.local.txt`. The local file was
+    # added so this check could classify every verdict in the stream, and for a while
+    # only `check_verdict_bands` read it: a consumer's own success verdict, banded
+    # `clean` exactly where it was told to band it, still fell to the not-clean default
+    # here, and the disorder check stayed off for it. `load_local_bands` already drops a
+    # row that names a verdict the kit classifies — the kit stays authoritative, and the
+    # clash is `check_verdict_bands`'s to report, not this checker's to act on.
+    local, _clashes = load_local_bands(path)
+    local_clean = {v for v, entry in local.items() if entry.band in _CLEAN_BANDS}
+    return clean_verdicts(path) | local_clean
 
 
 _VERDICTS_RULE = "blocking-verdicts.txt"

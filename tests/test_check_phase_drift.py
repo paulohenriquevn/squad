@@ -513,3 +513,43 @@ def test_nothing_has_started_invoking_it_without_updating_the_rule() -> None:
 
     assert not callers, (
         f"something now invokes the gate; the rule's debt note is stale: {callers}")
+
+
+# ── a consumer's own verdicts, banded in `verdict-bands.local.txt` ──────────
+#
+# `check_verdict_bands` has read the `.local` sibling since the consumer's registry
+# was added, and the reason given for adding it was this checker: it "has to classify
+# every verdict that reaches the event stream". This checker went on reading the kit's
+# file alone, so a consumer's own success verdict — banded `clean` where the kit told it
+# to band it — still fell to the not-clean default, and a step repeated after it read
+# as rework. The disorder check stayed switched off for exactly the verdicts the local
+# file exists to classify.
+
+
+def _with_local_bands(root: Path, rows: str) -> Path:
+    (root / "rules" / "verdict-bands.local.txt").write_text(rows, encoding="utf-8")
+    return root
+
+
+def test_a_step_repeated_after_a_consumer_clean_verdict_is_out_of_order(tmp_path: Path) -> None:
+    root = _with_local_bands(_project(tmp_path),
+                             "ON_TRACK | clean | the consumer's own cycle passed\n")
+    for cycle in ("backlog", "discover", "plan", "implement"):
+        _ran(root, cycle)
+    _ran(root, "code-quality", verdict="ON_TRACK")
+    _ran(root, "implement")
+
+    assert "phase_out_of_order" in _kinds(check_phase_drift(root))
+
+
+def test_a_local_row_cannot_reband_a_verdict_the_kit_classifies(tmp_path: Path) -> None:
+    """The kit stays authoritative: `PASS | redo` locally must not turn a repeated
+    step after PASS into legitimate rework. `check_verdict_bands` reports the clash;
+    this checker must not act on it."""
+    root = _with_local_bands(_project(tmp_path), "PASS | redo | disagreeing with the kit\n")
+    for cycle in ("backlog", "discover", "plan", "implement"):
+        _ran(root, cycle)
+    _ran(root, "code-quality", verdict="PASS")
+    _ran(root, "implement")
+
+    assert "phase_out_of_order" in _kinds(check_phase_drift(root))
