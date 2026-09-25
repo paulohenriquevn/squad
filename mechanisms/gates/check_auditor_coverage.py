@@ -208,10 +208,11 @@ def read_verdict(output_dir: Path) -> dict:
                                   Carried and reported, never gated on — the treatment
                                   `severity_signal` already has, for the same reason.
 
-    `computed` WITHOUT `by` IS DEMOTED. The plugin CLI has no `--by` flag by design, so
-    the field comes from whatever executed; a `computed` with no `by` is
-    indistinguishable from one typed by a model that read the contract, which is the
-    confusion `source` exists to end.
+    `computed` WITHOUT `by` IS DEMOTED. The plugin's `emit_verdict.py` requires `--by`
+    with `--source computed` and refuses the emit without it, so a file carrying
+    `computed` and no `by` was not written by that emitter; it is indistinguishable
+    from one typed by a model that read the contract, which is the confusion `source`
+    exists to end.
 
     AN ABSENT FILE IS `verdict_not_exposed`, never "no findings". Sixteen of seventeen
     plugins are in that state today. That is the same distinction this gate already
@@ -431,6 +432,14 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
         # the report rather than parsed out of it: this gate has never parsed another
         # project's markdown for a decision, and the contract exists so it never has to.
         entry["verdict_record"] = read_verdict(project / req["output_dir"])
+        # A script that COUNTED blocking findings is a decision this gate may act on;
+        # a model's derivation, or a plugin with no notion of blocking (`null`), is
+        # not. Kept beside `state` rather than folded into it: the audit ran and
+        # reported either way, and what it found is a separate fact from that.
+        record = entry["verdict_record"]
+        count = record.get("blocking_count")
+        entry["blocking_verdict"] = bool(
+            record.get("gateable") and isinstance(count, int) and count > 0)
         stopped_on = stopped_before_its_report(text)
         if stopped_on is not None:
             # Checked BEFORE `ok`. A run that stopped on its cap did not happen in the
@@ -544,6 +553,17 @@ def auditor_coverage_findings(project: Path, slug: str,
     for a in result.get("auditors", []):
         state = a.get("state")
         if state == "covered":
+            if a.get("blocking_verdict"):
+                record = a["verdict_record"]
+                out.append(_finding(
+                    f"Audit `{a['plugin']}` computed a blocking verdict",
+                    f"{a.get('report')}: verdict `{record.get('verdict')}` with "
+                    f"{record.get('blocking_count')} blocking finding(s), computed by "
+                    f"`{record.get('by')}` (verdict.json, source: computed).",
+                    f"Resolve the blocking findings in `{a['plugin']}`'s report and "
+                    "re-run the audit. A verdict a script computed is the plugin's own "
+                    "decision; this review cannot pass over it.",
+                ))
             continue
         if state == "not_installed":
             out.append(_finding(
@@ -611,6 +631,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {mark} {a['plugin']:<24} {a['state']}")
         if a.get("verdict"):
             print(f"      verdict: {a['verdict'].splitlines()[0][:100]}")
+        if a.get("blocking_verdict"):
+            rec = a["verdict_record"]
+            print(f"      computed verdict BLOCKS: {rec.get('verdict')} "
+                  f"({rec.get('blocking_count')} blocking, by {rec.get('by')})")
         if a.get("severity_signal"):
             print(f"      severity signal (not a gate): {', '.join(a['severity_signal'])}")
         if a.get("not_analyzed"):

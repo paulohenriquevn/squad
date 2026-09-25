@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **A plugin verdict computed as blocking now blocks the review.** When an auditor's `verdict.json` says a script counted blocking findings, /review gets a BLOCKER; agent-derived verdicts stay a carried signal. (#179)
 - **An auditor stopped on its iteration cap no longer counts as coverage.** A report whose own run says INCOMPLETE is now a distinct state that blocks the review with a finding naming the stop condition, instead of passing because it is well-formed. (#178)
 - **/review generated knowledge skills whose names the kit's own validator rejected.** A name longer than 64 characters now keeps as much of the plan slug as fits plus a stable 8-character hash, the directory and frontmatter name always match, and the shipped-skills test no longer grades a run's generated skills as if the kit shipped them. (#203)
 - **/review diffs against a base that exists, and refuses one that does not.** `detect_domain.py` and `spawn_reviewers.py` resolve the integration branch (`develop`, locally or on origin) instead of assuming `main`, report the ref they used so auditors and reviewers get the same one, and exit 2 on an unresolvable base instead of silently deriving domains from the plan alone; changed files are now the three-dot set the auditors audit. (#180)
