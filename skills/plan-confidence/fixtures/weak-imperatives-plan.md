@@ -22,7 +22,7 @@ This is the objective. That is important. The implementation should work if poss
 ### D1 — Toy
 
 - **Decision:** Toy.
-- **Rationale:** Alternativa rejeitada: doing nothing where feasible.
+- **Rationale:** Rejected alternative: doing nothing where feasible.
 - **Consequences:** As appropriate.
 
 ## Dependency Graph

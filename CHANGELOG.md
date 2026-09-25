@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **`check_adr_completeness` no longer accepts Portuguese phrases as evidence that an ADR weighed an alternative.** `rules/english-only.md` says it reads English only; six Portuguese phrases had survived, so a Portuguese rationale passed the alternatives check while breaking the rule governing the plan. (#216)
 - **A criterion was refused as a write because a file name contained `-i`.** Writing flags are now read as whole tokens of the command they belong to — `sed -i`/`-ni`/`-i.bak`, `sort -o`, `git branch -d` stay refused, while `--ignore-scripts`, `a-cold-invocation.test.ts`, `grep -o` and `ls -d` run. (#165)
 - **The scorer and the executor now agree on which commands a criterion may name.** Both read one list (`criterion_commands.py`): `npx`, `pnpm` and `yarn` count as executable and are run like `npm`, and names are matched as whole tokens, so `go.mod` or `node_modules` no longer count as commands. (#167)
 - **The vacuous-criterion advisory no longer fires on "exit 0".** It now flags a count only when zero is compared to it inside the command (`= 0`, `-eq 0`) or stated by the verb right after it (`prints 0`). (#166)

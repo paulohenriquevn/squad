@@ -46,21 +46,19 @@ ADRS_SECTION_RE = re.compile(r"^##\s+ADRs?\s*$", re.MULTILINE)
 NEXT_H2_RE = re.compile(r"^##\s+", re.MULTILINE)
 
 # Keywords that indicate alternative-consideration in Rationale (v1.1+ #4 fix: expanded).
+#
+# English only. `rules/english-only.md` says this checker reads English, and six
+# Portuguese phrases survived here after that was written, so a Portuguese rationale
+# satisfied the check while breaking the rule governing the plan it sits in (#216).
 ALTERNATIVE_KEYWORDS = (
     # Direct mentions
-    "alternativa",
     "alternatives",
     "alternative",
-    "rejeitada",
     "rejected",
-    "rejeitar",
     # Comparisons
     "instead of",
     "vs.",
     "vs ",
-    "em vez de",
-    "ao invés de",
-    "ao inves de",
     # Trade-off / decision pattern
     "trade-off",
     "tradeoff",
