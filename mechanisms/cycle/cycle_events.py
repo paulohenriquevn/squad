@@ -49,6 +49,7 @@ _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
 
 import argparse
 import contextlib
+import hashlib
 import json
 import math
 import re
@@ -263,14 +264,52 @@ def emit_phase_start(project_root: Path, *, cycle: str, slug: str = "",
 
 
 def emit_phase_end(project_root: Path, *, cycle: str, slug: str = "",
-                   verdict: str | None = None, **extra: Any) -> dict[str, Any] | None:
+                   verdict: str | None = None, artifact: Path | None = None,
+                   **extra: Any) -> dict[str, Any] | None:
     """Record that a cycle phase ended, and what it concluded.
 
     `verdict=None` is written as `null` on purpose. Not every phase computes one,
     and omitting the field would make a verdict-less phase indistinguishable from
     a line whose verdict failed to parse.
+
+    `artifact` is the file the phase judged. Its digest is recorded so a reader can
+    tell a gate rerun on an edited artifact from one rerun on the same bytes — see
+    `unchanged_repeats`.
     """
+    if artifact is not None and Path(artifact).is_file():
+        extra["artifact_sha256"] = hashlib.sha256(Path(artifact).read_bytes()).hexdigest()
     return _emit(project_root, PHASE_END, cycle, slug, verdict=verdict, **extra)
+
+
+#: How many identical verdicts on the same bytes before the CLI says so.
+REPEAT_THRESHOLD = 3
+
+
+def unchanged_repeats(events: list[dict[str, Any]], *, cycle: str, slug: str) -> int:
+    """How many of this phase's latest ends share a verdict AND an artifact digest.
+
+    Measured on a consumer session: four identical gate runs in 36 seconds with no
+    edit between them, and 16 `FAIL_SOFT` for one slug in 12 minutes. Each refusal was
+    honest; nothing said the same bytes had been refused the same way again, which is
+    the point at which rerunning stops being work (#139).
+
+    Only this cycle and slug's ends are compared, newest first; the run stops at the
+    first one that differs. An end with no digest counts as 0: two unknowns are not
+    the same artifact, and calling them equal would report repetition nobody measured.
+    """
+    ends = [e for e in events
+            if e.get("type") == PHASE_END and e.get("cycle") == cycle
+            and str(e.get("slug") or "") == str(slug or "")]
+    if not ends or not ends[-1].get("artifact_sha256"):
+        return 0
+    last = ends[-1]
+    count = 0
+    for event in reversed(ends):
+        if (event.get("verdict") != last.get("verdict")
+                or event.get("artifact_sha256") != last["artifact_sha256"]):
+            break
+        count += 1
+    return count
 
 
 def read_events(project_root: Path) -> list[dict[str, Any]]:
@@ -360,6 +399,9 @@ def main(argv: list[str] | None = None) -> int:
                              "this item and nothing has happened since. For a phase that "
                              "CONCLUDES (implementation complete, plan written, released); "
                              "never for a gate that iterates")
+    parser.add_argument("--artifact", type=Path, default=None,
+                        help="the file this phase judged; its digest lets the stream tell "
+                             "a rerun on an edited artifact from a rerun on the same bytes")
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
 
@@ -474,7 +516,13 @@ def _emit_under_guard(args: argparse.Namespace, root: Path) -> int:
         event = emit_phase_start(root, cycle=args.cycle, slug=args.slug)
     else:
         event = emit_phase_end(root, cycle=args.cycle, slug=args.slug,
-                               verdict=args.verdict)
+                               verdict=args.verdict, artifact=args.artifact)
+        repeats = unchanged_repeats(read_events(root), cycle=args.cycle, slug=args.slug)
+        if event is not None and repeats >= REPEAT_THRESHOLD:
+            print(f"NOTE: `{args.cycle}` ended `{args.verdict}` for {args.slug} "
+                  f"{repeats} times in a row on an unchanged {args.artifact}. Running it "
+                  f"again will answer the same; read what the refusal says it accepts, "
+                  f"or change the artifact.", file=sys.stderr)
 
     if event is None:
         # Fail-open reaches the CLI too: a hook must not turn a write failure

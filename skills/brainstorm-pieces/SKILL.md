@@ -133,8 +133,12 @@ place they come*. Remove this signature and the kit has no human input at all.
 
 ```bash
 python3 "$([ -d .claude/skills ] && echo .claude || echo .)/mechanisms/cycle/cycle_events.py" end \
-    --cycle brainstorm --slug {scope} --verdict {PRODUCT_ALIGNED|AWAITING_REVIEW|NEEDS_REVISION|INVALID}
+    --cycle brainstorm --slug {scope} --verdict {PRODUCT_ALIGNED|AWAITING_REVIEW|NEEDS_REVISION|INVALID} \
+    --artifact {the document you scored}
 ```
+
+`--artifact` records the document's digest, so the third identical verdict on the same
+bytes is said out loud instead of rerun.
 
 Emit `AWAITING_REVIEW` too. `rules/cycle-maintenance.md` is explicit that stopping
 at a human gate is a phase **ending**, not a phase skipping: an item worked and left
