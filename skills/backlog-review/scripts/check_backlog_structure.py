@@ -48,6 +48,7 @@ What it checks instead — the ways a maintenance registry actually rots:
     thin_dod                zero DoD bullets
     stale_raw               raw for longer than the staleness window
     possible_duplicate      two open items whose titles overlap heavily
+    evidence_outside_repo   an open item's evidence cites no path under its `repo:` — ADVISORY
 
 Every finding declares `kind` (deterministic | heuristic). The verdict is DERIVED from
 the findings, never asserted — the same discipline the confidence scorers follow.
@@ -189,6 +190,102 @@ def _evidence_points_at_the_kit(item) -> bool:
     # and whose `why_now` names a rule or a gate.
     text = item.fields.get("evidence", "")
     return bool(_KIT_EVIDENCE_RE.search(text)) and not _PRODUCT_EVIDENCE_RE.search(text)
+
+
+#: A path an `evidence:` value cites: at least one directory, a file with an extension, and
+#: an optional `:line`. The lookbehind refuses a token glued to `/`, `:` or `.`, so a URL's
+#: tail and a `@scope/package` name are not read as paths.
+#:
+#: A BARE filename (`slide-deck.tsx:75`) is not extracted, and that is a declared limit:
+#: resolving one means searching every tree for it, and a name like `index.ts` resolves
+#: everywhere. An item citing only bare names is simply not checked.
+_EVIDENCE_PATH_RE = re.compile(
+    r"(?<![\w@/.:-])((?:\.{0,2}[\w.-]+/)+[\w.\[\]-]+\.[A-Za-z0-9]+)(?::\d+)?")
+
+
+def _cited_paths(item) -> list[str]:
+    return list(dict.fromkeys(_EVIDENCE_PATH_RE.findall(item.fields.get("evidence", ""))))
+
+
+def _repo_dir(repo: str, project_root: Path) -> Path | None:
+    """Where the checkout a `repo:` value names sits, or None when it is not on disk.
+
+    Three layouts, the ones `route_domain` already routes: a child of the registry's root
+    (an umbrella registry, or a monorepo subpath like `packages/sdk`), a sibling of it (a
+    registry inside one repository of several), and the root itself (a registry inside
+    the very repository its items change).
+    """
+    for candidate in (project_root / repo, project_root.parent / repo):
+        if candidate.is_dir():
+            return candidate.resolve()
+    if project_root.name == repo:
+        return project_root.resolve()
+    return None
+
+
+def _hits(path: str, bases: list[Path]) -> set[Path]:
+    """Every place on disk the relative `path` resolves, from any of `bases`."""
+    return {(base / path).resolve() for base in bases if (base / path).exists()}
+
+
+def _owner(hit: Path, repo_dirs: list[Path], project_root: Path) -> str:
+    """The name of the checkout holding `hit`: a routed repo if one does, else the tree."""
+    holding = [d for d in repo_dirs if hit.is_relative_to(d)]
+    if holding:
+        return max(holding, key=lambda d: len(d.parts)).name
+    for base in (project_root.resolve(), project_root.resolve().parent):
+        if hit.is_relative_to(base) and hit != base:
+            return hit.relative_to(base).parts[0]
+    return str(hit.parent)
+
+
+def _check_evidence_against_repo(items: list[Item], project_root: Path,
+                                 known_repos: set[str] | None) -> tuple[list[Finding], list[str]]:
+    """Open items whose evidence cites no path under the repository that routes them.
+
+    The sibling of `subject_may_belong_to_the_kit`, one axis over: that one asks WHOSE
+    codebase, this one asks WHICH repository within it. Measured on a consumer: two items
+    about one component routed to a repository where the component had never existed in any
+    commit; it lived in a sibling absent from the routing table. G1 passed both — the route
+    resolved, so the lane opened in a tree that did not hold the work, and died there.
+
+    Returns the findings and the ids that could not be checked because their `repo:` names
+    no directory on this machine. Those are reported apart, not as findings: a checkout that
+    is not here says nothing about the item, and calling it misrouted would assert what
+    nobody measured.
+    """
+    root = project_root.resolve()
+    bases = [root, root.parent]
+    for parent in (root, root.parent):
+        bases.extend(sorted(c for c in parent.iterdir()
+                            if c.is_dir() and not c.name.startswith(".")))
+    repo_dirs = [d for r in sorted(known_repos or ()) if (d := _repo_dir(r, root))]
+
+    findings: list[Finding] = []
+    unverified: list[str] = []
+    for item in items:
+        repo = item.fields.get("repo", "").strip().strip("`")
+        paths = _cited_paths(item)
+        if item.fields.get("status", "") not in OPEN_STATUS or not repo or not paths:
+            continue
+        home = _repo_dir(repo, root)
+        if home is None:
+            unverified.append(item.item_id)
+            continue
+        hits = set().union(*(_hits(p, [home, *bases]) for p in paths))
+        if any(h.is_relative_to(home) for h in hits):
+            continue
+        owners = sorted({_owner(h, repo_dirs, root) for h in hits})
+        where = (f"They resolve under `{owners[0]}`, so that is probably the repository "
+                 f"the work is in" if len(owners) == 1 else
+                 f"They resolve under {len(owners)} other trees ({', '.join(owners)})"
+                 if owners else "They resolve nowhere on this machine")
+        findings.append(Finding("evidence_outside_repo", "heuristic", "minor", item.item_id,
+            f"`repo: {repo}` routes this item, and none of the {len(paths)} path(s) its "
+            f"evidence cites exists under `{home}`. {where}. A lane opened in `{repo}` "
+            f"would not find the subject. ADVISORY and never a failure — evidence may name "
+            f"another repository while explaining a boundary; correct `repo:` if it is wrong"))
+    return findings, unverified
 
 
 #: Statuses at or past the commitment. `rules/cycle-backlog.md` requires `approved_by`
@@ -1105,6 +1202,9 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
 
     findings.extend(_check_impediment_edges(items))
     findings.extend(_check_lineage_edges(items))
+    evidence_findings, evidence_unverified = _check_evidence_against_repo(
+        items, project_root, known_repos)
+    findings.extend(evidence_findings)
 
     counts = {"blocker": 0, "major": 0, "minor": 0}
     for f in findings:
@@ -1135,6 +1235,10 @@ def check_backlog(backlog_path: Path, today: date | None = None) -> dict[str, An
         # empty registry and a registry with no lineage read the same as they are.
         **({"lineage_successors": _successors} if (_successors := lineage_successors(items)) else {}),
         "routing_table_read": known_repos is not None,
+        # Open items citing paths whose `repo:` names no directory on this machine, so
+        # `evidence_outside_repo` could not ask where their evidence lives. Always
+        # present: an absent key cannot be told from a checker too old to report it.
+        "evidence_repo_unverified": evidence_unverified,
         "findings": [f.__dict__ for f in findings],
         "severity_counts": counts,
         "verdict": verdict,
@@ -1161,6 +1265,10 @@ def main() -> int:
         if not report["routing_table_read"]:
             reason = _routing_gap[-1] if _routing_gap else "no reason recorded"
             print(f"WARN    : repo routing was NOT checked — {reason}")
+        if report["evidence_repo_unverified"]:
+            print("WARN    : evidence was NOT compared with `repo:` for "
+                  f"{', '.join(report['evidence_repo_unverified'])} — the repository is not "
+                  "checked out beside this registry")
         for f in report["findings"]:
             print(f"  [{f['severity'].upper()}/{f['kind'][:4]}] {f['item']} {f['check']}: {f['message']}")
         print(f"\nVerdict : {report['verdict']}  {report['severity_counts']}")

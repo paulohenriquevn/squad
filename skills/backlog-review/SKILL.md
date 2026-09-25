@@ -112,6 +112,7 @@ they read, and moving them would separate them from the parser they share.
 | `vague_dod` | minor | Word-list matching. A bullet carrying a number or a backticked artifact is treated as falsifiable even when it also reads as vague — "p95 below 800ms" is a criterion, and flagging it would train people to ignore the check |
 | `stale_raw` | minor | 90 days is a convention, not a measurement. It asks a question rather than asserting a defect |
 | `possible_duplicate` | minor | Title-word overlap ≥ 0.6 between OPEN items. Closed items are excluded — a shipped item and a new one in the same area is a follow-up, not a duplicate |
+| `evidence_outside_repo` | minor | **ADVISORY and never a failure.** An OPEN item whose `evidence:` cites paths (`dir/file.ext`, not bare filenames) and none of them exists under the checkout its `repo:` names; the sibling repository they do resolve under is named when exactly one does. Fires only when NO cited path is under the item's own repo, because evidence legitimately names another repository while explaining a boundary. A `repo:` with no checkout beside the registry is listed in `evidence_repo_unverified`, never reported as a finding |
 
 Every finding carries `kind: deterministic | heuristic`. A reader must be able to tell "this is certainly wrong" from "someone should look" without knowing the implementation.
 
