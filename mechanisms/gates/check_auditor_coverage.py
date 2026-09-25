@@ -56,8 +56,11 @@ So severity is EXTRACTED, carried, and labelled a signal. This kit's governing
 sentence cuts both ways: an inability to measure must not become a passing
 measurement, and it must not become a failing one either.
 
-What still has teeth is fully decidable: a required audit that left no report, and a
-report the plugin's OWN checker rejects.
+What still has teeth is fully decidable: a required audit that left no report, a
+report the plugin's OWN checker rejects, and a report that says its own run stopped
+before the report phase (`Status: INCOMPLETE`, written by the plugins' shared
+termination guard). The last one is well-formed by design, which is exactly why
+structural validity alone recorded an audit stopped on its iteration cap as covered.
 
 ## What this gate does NOT judge
 
@@ -69,7 +72,7 @@ print a verdict about everything.
 
 Exit codes:
   0  every required audit produced a well-formed report
-  1  a required report is missing or malformed
+  1  a required report is missing, malformed, or says its run stopped INCOMPLETE
   2  the assignment or a checker could not be read; nothing was verified, not a pass
   3  a required plugin is not installed HERE — an `access` impediment
 
@@ -100,9 +103,19 @@ from squad.paths import rules_dir
 
 COVERED, NOT_COVERED, UNCHECKED, NOT_INSTALLED = 0, 1, 2, 3
 
-#: The contract's sentinel for a subsection that found nothing. Matched as a prefix
-#: because plugins append a reason ("_(none — no findings above Low)_").
-_NONE_SENTINEL = "_(none"
+#: The contract's sentinels for a subsection that holds no finding. Matched as a prefix
+#: because plugins append a reason ("_(none — no findings above Low)_"). The second is
+#: the termination guard's: a run stopped on its cap writes "_(not enumerated — run did
+#: not reach the report phase)_" under every severity, and reading that as a finding
+#: labelled a report that enumerated nothing with all five severities.
+_EMPTY_SENTINELS = ("_(none", "_(not enumerated")
+
+#: How the plugins' shared termination guard (`terminal_report.py`, `render_fallback`)
+#: marks a run that stopped before its report phase: `- **Status:** INCOMPLETE` in the
+#: metadata, and a `## Verdict` that opens with the token. Either is enough.
+_STATUS_INCOMPLETE = re.compile(r"^\s*-\s*\*\*Status:\*\*\s*`?INCOMPLETE\b", re.MULTILINE)
+_VERDICT_INCOMPLETE = re.compile(r"^`?INCOMPLETE\b")
+_STOP_CONDITION = re.compile(r"on condition\s+`([^`]+)`")
 
 _H2 = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _H3 = re.compile(r"^###\s+(.+?)\s*$", re.MULTILINE)
@@ -132,8 +145,25 @@ def severity_counts(text: str) -> dict[str, bool]:
     out: dict[str, bool] = {}
     for sev in SEVERITIES:
         sub = section(body, sev, _H3)
-        out[sev] = bool(sub) and not sub.lstrip().startswith(_NONE_SENTINEL)
+        out[sev] = bool(sub) and not sub.lstrip().startswith(_EMPTY_SENTINELS)
     return out
+
+
+def stopped_before_its_report(text: str) -> str | None:
+    """The stop condition when this report says its run did not finish, else None.
+
+    This is the one reading of another tool's markdown this gate makes a decision on,
+    and it is narrow on purpose: the marker is written by ONE shared function, copied
+    bit-for-bit into every plugin and drift-checked there, and it is the report saying
+    about itself that no verdict was computed. Structural validity cannot see it — the
+    fallback is well-formed by design, so an honest "I did not finish" passed as a
+    finished audit. Returns "unknown" when the run says it stopped and not why.
+    """
+    verdict = section(text, "Verdict") or ""
+    if not (_STATUS_INCOMPLETE.search(text) or _VERDICT_INCOMPLETE.match(verdict.lstrip())):
+        return None
+    found = _STOP_CONDITION.search(verdict)
+    return found.group(1) if found else "unknown"
 
 
 def validate_with_plugin(install_path: Path, report: Path) -> tuple[bool, str]:
@@ -401,7 +431,17 @@ def check(slug: str, *, project: Path, config_dir: Path | None = None) -> tuple[
         # the report rather than parsed out of it: this gate has never parsed another
         # project's markdown for a decision, and the contract exists so it never has to.
         entry["verdict_record"] = read_verdict(project / req["output_dir"])
-        if not ok:
+        stopped_on = stopped_before_its_report(text)
+        if stopped_on is not None:
+            # Checked BEFORE `ok`. A run that stopped on its cap did not happen in the
+            # sense that matters, whatever the checker says about its shape: three
+            # plugins reject the fallback today over an unrelated Scoring Card defect,
+            # and the finding then blamed a malformed report. Fixing that plugin-side
+            # must not turn them into `covered`.
+            entry["state"] = "incomplete"
+            entry["stopped_on"] = stopped_on
+            failing.append(name)
+        elif not ok:
             entry["state"] = "malformed"
             failing.append(name)
         else:
@@ -523,6 +563,17 @@ def auditor_coverage_findings(project: Path, slug: str,
                 f"Run the command the assignment prints for `{a['plugin']}`. A "
                 "required audit with no report did not pass — it did not run.",
             ))
+        elif state == "incomplete":
+            out.append(_finding(
+                f"Required audit `{a['plugin']}` stopped before it finished",
+                f"{a.get('report')}: the run stopped on `{a.get('stopped_on')}` and "
+                "its report says INCOMPLETE — no verdict was computed. A well-formed "
+                "report of an unfinished run is not coverage of the change.",
+                "Read that report's `## What Was NOT Analyzed` for what never ran, "
+                "address the stop condition (an iteration cap: re-run with a higher "
+                "`max_iterations`, or narrow the scope), and re-run the audit to "
+                "completion.",
+            ))
         elif state == "malformed":
             out.append(_finding(
                 f"Report from `{a['plugin']}` fails that plugin's own contract",
@@ -555,7 +606,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"auditor coverage: {status.upper()} — {result['detail']}")
     for a in result["auditors"]:
-        mark = {"covered": "✓", "malformed": "✗",
+        mark = {"covered": "✓", "malformed": "✗", "incomplete": "✗",
                 "no_report": "✗", "not_installed": "⊘"}.get(a["state"], "?")
         print(f"  {mark} {a['plugin']:<24} {a['state']}")
         if a.get("verdict"):
