@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -53,6 +52,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from squad.paths import records_dir
+from squad.remotes import owner_repo
 
 Runner = Callable[[list[str]], "tuple[int, str, str]"]
 
@@ -139,18 +139,9 @@ def _owner_repo(call, git) -> str | None:
     result = call(git, ["remote", "get-url", "origin"])
     if result is None or result[0] != 0:
         return None
-    url = result[1].strip()
-    # The host part is everything before the first `/`. If it carries a `:`, the slug
-    # starts after it — that covers `git@host:owner/repo`, `host:owner/repo` (an alias
-    # with the user in ssh config, which is the shape measured on the consumer) and
-    # `ssh://host:22/owner/repo`. An `https://` URL has `:` in the scheme, so the scheme
-    # is stripped first or the parse would start after `//`.
-    stripped = re.sub(r"^[a-z][a-z0-9+.-]*://", "", url, flags=re.IGNORECASE)
-    head, _, rest = stripped.partition("/")
-    tail = (head.split(":", 1)[1] + "/" + rest) if ":" in head else stripped
-    tail = tail.rstrip("/").removesuffix(".git")
-    parts = [p for p in tail.split("/") if p]
-    return "/".join(parts[-2:]) if len(parts) >= 2 else None
+    # The shapes, and why a local path answers None, are in `squad.remotes` — the one
+    # parse this file and the board's issues panel share.
+    return owner_repo(result[1])
 
 
 def _refuse_on_review_drift(root: Path, report: "Report") -> bool:

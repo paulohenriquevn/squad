@@ -10,7 +10,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.detectors.typescript import TypescriptDetector
+
+# Both cases read imports through the TypeScript grammar. Where the grammar package cannot
+# be installed (no wheel past cp312), the detector correctly reports that it parsed
+# nothing, so a skip says that here instead of a failure about workspaces.
+pytest.importorskip("tree_sitter_languages",
+                    reason="the TypeScript grammar package is not installable on this Python")
 
 
 def _workspace(tmp_path: Path) -> Path:

@@ -146,7 +146,12 @@ def test_the_installer_records_where_it_came_from(lagging_consumer: Path) -> Non
     """Provenance is what makes lag provable rather than inferred; it must be written."""
     manifest = (lagging_consumer / ".claude" / ".kit-manifest.txt").read_text(encoding="utf-8")
     line = next((row for row in manifest.splitlines() if "kit-commit" in row), "")
-    assert line, "the manifest records no kit-commit; a consumer cannot prove what it holds"
+    # The header travels with the failure. On 2026-09-25 this failed on all three CI
+    # Pythons and passed locally under 3.10 and 3.11 with git config isolated, and the
+    # bare assertion left nothing to tell which line the old installer wrote instead.
+    head = "\n".join(manifest.splitlines()[:12])
+    assert line, ("the manifest records no kit-commit; a consumer cannot prove what it "
+                  f"holds. Manifest header:\n{head}")
     assert "unknown" not in line, line
 
 

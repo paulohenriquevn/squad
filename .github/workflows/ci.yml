@@ -35,7 +35,9 @@ jobs:
         # ten parser tests ran against an extractor that returns `[]` by design (EC-8)
         # and failed with an error that says nothing about parsing. Installed here so
         # the detector is EXERCISED in CI rather than skipped in it.
-        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff vulture tree-sitter-languages
+        # `tree-sitter<0.22`: tree-sitter-languages 1.10 cannot load a grammar on a newer one,
+        # and it does not say so in its own metadata. See skills/code-quality/pyproject.toml.
+        run: python -m pip install --upgrade pip pytest pytest-cov pyyaml ruff vulture "tree-sitter<0.22" tree-sitter-languages jsonschema hypothesis
 
       # `--strict` is NOT cosmetic: without it a WARN finding is printed and the
       # process exits 0 — the output carries the WARN line and, right below it,
@@ -169,7 +171,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-      - run: python -m pip install --upgrade pip pytest pyyaml
+      # The same analysers as `suites`, or the code-quality slice measures their absence.
+      # tree-sitter-languages ships no wheel past cp312 and has not released since
+      # 2024-02, so on 3.13 it is not installed and the grammar tests skip, saying why.
+      - run: >-
+          python -m pip install --upgrade pip pytest pyyaml vulture jsonschema hypothesis
+          "tree-sitter<0.22; python_version < '3.13'"
+          "tree-sitter-languages; python_version < '3.13'"
       - name: Full compatibility suite
         run: bash mechanisms/cycle/run_slice_tests.sh
 
@@ -228,7 +236,10 @@ jobs:
           cache: 'pip'
 
       - name: Install scanners
-        run: python -m pip install --upgrade pip bandit pip-audit ruff
+        # setuptools too: pip-audit audits the environment it runs in, and the runner's
+        # own setuptools 79.0.1 carried PYSEC-2026-3447 on 2026-09-25 — a finding about
+        # the runner image, not about the kit, which declares no runtime dependency.
+        run: python -m pip install --upgrade pip setuptools bandit pip-audit ruff
 
       - name: Static security review (bandit)
         # `-ll` reports MEDIUM and above. LOW on this codebase is dominated by

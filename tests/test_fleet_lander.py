@@ -187,6 +187,10 @@ def test_each_verdict_is_reported_as_it_lands(capsys) -> None:
 
     fleet_lander.report_each(["fix/kit19-a", "fix/kit20-b"], assess_branch=fake_land,
                              repo=Path("/srv/example/kit"), apply=False, timeout=60)
+    # Without this the test passed for the wrong reason: `report_each` ignored the
+    # injected callable and called the real `land`, which refused the fake repository
+    # and printed — so `fake_land`, and the assertion inside it, never ran.
+    assert seen == ["fix/kit19-a", "fix/kit20-b"], "the injected assessor was not called"
 
 
 def test_the_stream_says_which_branch_it_is_starting(capsys) -> None:

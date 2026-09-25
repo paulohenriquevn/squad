@@ -291,7 +291,7 @@ def report_each(branches: list[str], *,
     for index, branch in enumerate(branches, 1):
         print(f"  [{index}/{len(branches)}] {branch}: two suites, this takes a while…",
               flush=True)
-        verdict = land(repo, branch, apply=apply, timeout=timeout)
+        verdict = assess_branch(repo, branch, apply=apply, timeout=timeout)
         print(("  landed : " if verdict.land else "  refused: ") + verdict.reason,
               flush=True)
         verdicts.append(verdict)

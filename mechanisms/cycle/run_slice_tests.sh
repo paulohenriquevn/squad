@@ -44,6 +44,17 @@ JOBS="${SLICE_TEST_JOBS:-$(_detect_jobs)}"
 LOG_DIR="$(mktemp -d)"
 trap 'rm -rf "$LOG_DIR"' EXIT
 
+# Git reads no config this machine happens to have. The first CI run in eleven days
+# (2026-09-25) failed seven tests that passed here, for two reasons git config hid:
+# annotated tags need an identity the runner does not have, and a global `insteadOf`
+# rewriting HTTPS remotes to SSH made a parser that could not read HTTPS look correct.
+# A suite that depends on its host's git config is measuring the host. The identity is
+# fixed and fake; a test that sets its own with `-c` or repo-local config still wins.
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL="$LOG_DIR/gitconfig"
+printf '[user]\n\tname = squad-tests\n\temail = squad-tests@example.invalid\n' \
+  > "$GIT_CONFIG_GLOBAL"
+
 # Fixed order: root suite first, then the slices in directory order.
 #
 # THE ROOT SUITE IS ALL THREE TESTPATHS, NOT `tests`

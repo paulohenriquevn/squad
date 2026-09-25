@@ -45,8 +45,16 @@ import argparse
 import json
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
+
+for _up in Path(__file__).resolve().parents:
+    if (_up / "squad" / "paths.py").is_file():
+        sys.path.insert(0, str(_up))
+        break
+# Below the bootstrap: `squad` is importable only after sys.path is extended.
+from squad.remotes import owner_repo  # noqa: E402 — post-bootstrap import
 
 #: Stage order, and the label that puts an issue in each. The first entry is the
 #: fallback for an open issue carrying none of the others; the last is every closed
@@ -215,14 +223,9 @@ def _owner_repo_from_remote(project: Path) -> str:
         return ""
     if proc.returncode != 0:
         return ""
-    stripped = re.sub(r"^[a-z][a-z0-9+.-]*://", "", proc.stdout.strip(),
-                      flags=re.IGNORECASE)
-    head, _, rest = stripped.partition("/")
-    owner = head.rpartition(":")[2] if ":" in head else ""
-    name = rest.rpartition("/")[2] if rest else ""
-    if not owner or not name:
-        return ""
-    return f"{owner}/{name[:-4] if name.endswith('.git') else name}"
+    # `squad.remotes` holds the one parse. This file's own copy returned nothing for an
+    # `https://` remote, and its test passed only where git rewrote HTTPS to SSH.
+    return owner_repo(proc.stdout) or ""
 
 
 def _repo_of(project: Path) -> str:
