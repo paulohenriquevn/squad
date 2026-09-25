@@ -38,6 +38,8 @@ In order of severity ceiling; first hit wins (smallest cap is the verdict).
 | Mutation run produced zero mutants | `FAIL_SOFT` (70) | `soft_cap_mutation_no_mutants_{language}` |
 | No declared public surface for D3 to audit | INFO | `d3_no_public_surface` |
 | Auditor unavailable (tool missing for enabled language) | `FAIL_SOFT` (70) | `auditor_unavailable_{tool}` |
+| Auditor declared by the project but not reachable by the detector | `FAIL_SOFT` (70) | `auditor_unresolved_{tool}` |
+| D1 ran only in the workspace member(s) that declare the tool | INFO | `knip_member_scope` |
 | Mutation score 60-79% on declared critical paths | `PASS_WITH_CAVEATS` (89) | `soft_floor_mutation_score_medium_{language}` |
 | Dead internal symbol (private function with no caller) | `PASS_WITH_CAVEATS` (89) | `dead_internal_symbol_{language}` |
 | Unused parameter (often refactor leftover) | `PASS_WITH_CAVEATS` (89) | `unused_parameter_{language}` |

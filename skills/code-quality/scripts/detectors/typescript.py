@@ -14,6 +14,7 @@ from pathlib import Path
 
 from scripts import _registry
 
+from ._knip import knip_command, knip_locations
 from ._workspace import declared, find_workspace_roots, manifests_under, read_workspace_declaration
 from scripts._detector_contract import Finding, safe_parse_json, sanitize_symbol, to_rel_path
 from scripts.check_symbol_fab import extract_checked
@@ -42,34 +43,60 @@ class TypescriptDetector(BaseDetector):
     manifest_marker = "package.json"
 
     def detect_dead_code(self, manifest_dir: Path) -> list[Finding]:
-        """Run knip against `manifest_dir` and parse JSON into Findings.
+        """Run knip where the project declares it and parse its JSON into Findings.
 
         knip emits exit code 0 (no findings) or 1 (findings). Exit code > 1
         signals tool error and is treated as `auditor_unavailable_knip`.
+
+        Where and through what: `_knip.py`. Declared nowhere, knip is tried from the root as
+        before and a failure is `unavailable`. Declared, a failure to even start it is a
+        failure of THIS detector to reach an installed tool, and is reported as D1 not
+        measured under its own key — `auditor_unavailable_knip` would blame the project.
         """
-        cmd = ["npx", "--yes", "knip", "--reporter", "json"]
+        command = [*knip_command(manifest_dir), "--reporter", "json"]
+        locations = knip_locations(manifest_dir)
+        if not locations:
+            findings, failure = self._knip_in(command, manifest_dir, manifest_dir)
+            return [self._auditor_unavailable(failure[0])] if failure else findings
+
+        findings: list[Finding] = []
+        for location in locations:
+            found, failure = self._knip_in(command, location, manifest_dir)
+            if failure is None:
+                findings.extend(found)
+                continue
+            reason, unreachable = failure
+            if not unreachable:
+                return [self._auditor_unavailable(reason)]
+            return [self._knip_unresolved(self._rel(location, manifest_dir), command, reason)]
+        if locations != [manifest_dir]:
+            findings.append(self._knip_scope(
+                [self._rel(location, manifest_dir) for location in locations]))
+        return findings
+
+    def _knip_in(self, command: list[str], cwd: Path, root: Path
+                 ) -> tuple[list[Finding], tuple[str, bool] | None]:
+        """One knip run: its findings, or `(reason, could_not_start)` when it did not run."""
         try:
             result = subprocess.run(
-                cmd,
-                cwd=str(manifest_dir),
+                command,
+                cwd=str(cwd),
                 capture_output=True,
                 text=True,
                 timeout=_KNIP_TIMEOUT_SEC,
                 check=False,
             )
         except FileNotFoundError:
-            return [self._auditor_unavailable("knip not found in PATH (install via npm i -g knip)")]
+            return [], (f"{command[0]} not found in PATH (install knip, e.g. npm i -g knip)", True)
         except subprocess.TimeoutExpired:
-            return [self._auditor_unavailable(f"knip timed out after {_KNIP_TIMEOUT_SEC}s")]
+            return [], (f"knip timed out after {_KNIP_TIMEOUT_SEC}s", False)
         except (subprocess.SubprocessError, OSError) as e:
-            return [self._auditor_unavailable(f"knip invocation failed: {e}")]
+            return [], (f"knip invocation failed: {e}", False)
 
         if result.returncode > 1:
-            return [
-                self._auditor_unavailable(
-                    f"knip exit code {result.returncode}: {result.stderr.strip()[:200]}"
-                )
-            ]
+            # 127 is the shell's "command not found": the runner started, knip did not.
+            return [], (f"knip exit code {result.returncode}: {result.stderr.strip()[:200]}",
+                        result.returncode == 127)
 
         data, parse_finding = safe_parse_json(result.stdout, "knip")
         if parse_finding is not None:
@@ -84,8 +111,13 @@ class TypescriptDetector(BaseDetector):
                     message=f"knip JSON output failed to parse: {parse_finding.message}",
                     allowlist_key="typescript|.|dead_code|auditor_output_malformed_knip",
                 )
-            ]
-        return self._parse_knip_json(data, manifest_dir)
+            ], None
+        prefix = "" if cwd == root else f"{self._rel(cwd, root)}/"
+        return self._parse_knip_json(data, cwd, prefix), None
+
+    @staticmethod
+    def _rel(path: Path, root: Path) -> str:
+        return path.relative_to(root).as_posix() if path != root else "."
 
     def _find_self_package_name(self, changed_files: list[Path]) -> str | None:
         """Walk up from any changed file to find the repo's package.json#name.
@@ -357,39 +389,37 @@ class TypescriptDetector(BaseDetector):
     # internal helpers
     # ------------------------------------------------------------------
 
-    def _parse_knip_json(self, data: dict, repo_root: Path) -> list[Finding]:
+    def _parse_knip_json(self, data: dict, repo_root: Path, prefix: str = "") -> list[Finding]:
+        """`prefix` is the audited member's path from the repository root, so a finding
+        from `packages/ui` names `packages/ui/src/x.ts` and not a `src/x.ts` that is
+        somewhere else — or nowhere — from where the report is read."""
         findings: list[Finding] = []
 
+        def make(file_path: str, message: str, symbol: str) -> Finding:
+            return self._make_finding(file_path, message, symbol, repo_root, prefix)
+
         for file_path in data.get("files", []) or []:
-            findings.append(self._make_finding(file_path, "unimported file", "file", repo_root))
+            findings.append(make(file_path, "unimported file", "file"))
 
         for export in data.get("exports", []) or []:
             file_path = export.get("file", "<unknown>")
             name = export.get("name", "<unknown>")
-            findings.append(
-                self._make_finding(file_path, f"unused export '{name}'", name, repo_root)
-            )
+            findings.append(make(file_path, f"unused export '{name}'", name))
 
         for dep in data.get("dependencies", []) or []:
             name = dep.get("name") if isinstance(dep, dict) else str(dep)
-            findings.append(
-                self._make_finding("package.json", f"unused dependency '{name}'", name, repo_root)
-            )
+            findings.append(make("package.json", f"unused dependency '{name}'", name))
 
         for dep in data.get("devDependencies", []) or []:
             name = dep.get("name") if isinstance(dep, dict) else str(dep)
-            findings.append(
-                self._make_finding(
-                    "package.json", f"unused devDependency '{name}'", name, repo_root
-                )
-            )
+            findings.append(make("package.json", f"unused devDependency '{name}'", name))
 
         return findings
 
     def _make_finding(
-        self, file_path: str, message: str, symbol: str, repo_root: Path
+        self, file_path: str, message: str, symbol: str, repo_root: Path, prefix: str = ""
     ) -> Finding:
-        rel = self._safe_relative(file_path, repo_root)
+        rel = prefix + self._safe_relative(file_path, repo_root)
         sanitized = sanitize_symbol(symbol)
         return Finding(
             detector="d1_dead_code",
@@ -420,6 +450,40 @@ class TypescriptDetector(BaseDetector):
             symbol_or_line="knip",
             message=f"Knip auditor unavailable: {reason}",
             allowlist_key="typescript|.|dead_code|auditor_unavailable_knip",
+        )
+
+    @staticmethod
+    def _knip_unresolved(member: str, command: list[str], reason: str) -> Finding:
+        """Declared by the project, not reachable by the detector: D1 did not measure.
+
+        Still a SOFT_CAP — a dimension nobody measured must not read as a clean one — but
+        under its own key and message, so the report blames the resolution, not the tree.
+        """
+        return Finding(
+            detector="d1_dead_code",
+            language="typescript",
+            severity="SOFT_CAP",
+            file_path=".",
+            symbol_or_line="knip",
+            message=(f"D1 not measured: knip is declared in `{member}` but "
+                     f"`{' '.join(command[:-2])}` could not start it there ({reason}). "
+                     f"The tool is installed; the detector could not reach it."),
+            allowlist_key="typescript|.|dead_code|auditor_unresolved_knip",
+        )
+
+    @staticmethod
+    def _knip_scope(members: list[str]) -> Finding:
+        """Which directories D1 covered, when that is not the whole tree."""
+        return Finding(
+            detector="d1_dead_code",
+            language="typescript",
+            severity="INFO",
+            file_path=".",
+            symbol_or_line="knip",
+            message=(f"D1 scope: knip ran in {', '.join(members)} — the workspace "
+                     f"member(s) that declare it. Nothing outside them was audited for "
+                     f"dead code."),
+            allowlist_key="typescript|.|dead_code|knip_member_scope",
         )
 
     # ── D5 — architecture ───────────────────────────────────────────────────────────────────────

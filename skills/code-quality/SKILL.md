@@ -118,6 +118,8 @@ Per [`code-quality-golden-rule.md § Severity rubric`](../../rules/code-quality-
 | Mutation score < 60% | 70 | `soft_cap_mutation_score_low_{language}` |
 | Mutation score 60-79% | 89 | `soft_floor_mutation_score_medium_{language}` |
 | Auditor unavailable | 70 | `auditor_unavailable_{tool}` |
+| Auditor declared by the project but not reachable by the detector (D1 not measured) | 70 | `auditor_unresolved_{tool}` |
+| D1 ran only in the workspace member(s) that declare the tool | INFO | `knip_member_scope` |
 
 ### Step 5 — Emit JSON + Markdown report
 

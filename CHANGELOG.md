@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **D1 reported knip as unavailable in a pnpm workspace whose member declares it.** The detector now runs knip through the package manager the lockfile names, in the root or in each workspace member that declares it, reports which directories it covered, and reports a declared tool it cannot start as "D1 not measured" under its own key instead of blaming the project. (#213)
 - **The code-quality knob audit failed every consumer whose preserved thresholds file predated the kit's.** In a copy install, `rules/code-quality-thresholds.txt` is the project's configuration, so the audit no longer grades it against the kit's scripts: it skips there and names the keys the project's copy leaves unmarked. (#202)
 - **`/discover-execute --sweep` filed its findings as `triaged` while the registry contract files them as `approved`.** The skill now writes `status: approved` with `approved_by: system/autonomous-sweep`, as `rules/cycle-backlog.md` says, and a test holds the two documents to the same answer. (#183)
 - **The comment explaining why a decision that cites an item keeps its class cited an example that did not.** "B-007 decided the threshold" classifies as a dependency; the ordering it described holds, and is now pinned by a test with an example that exercises it. (#140)
