@@ -121,6 +121,19 @@ def test_data_written_inside_the_installed_kit_is_seen(tmp_path: Path) -> None:
     assert states.get(".claude/.squad") == "INSIDE_KIT", states
 
 
+
+def test_a_write_root_nested_inside_the_write_root_is_seen(tmp_path: Path) -> None:
+    """No migration produces `.squad/.squad/`; only a writer that took the write root for
+    a project does. SPLIT compares the write root with roots BESIDE it, so a copy INSIDE
+    it was invisible here — measured on a consumer 2026-09-25 with 39 events in the
+    nested stream and nothing reporting them.
+    """
+    _file(write_records_dir(tmp_path, "plans"))
+    _file(tmp_path / ".squad" / ".squad" / "records", "cycle-events.jsonl")
+
+    assert _states(tmp_path).get(".squad/.squad") == "NESTED"
+
+
 def test_a_clean_project_does_not_gain_the_new_state(tmp_path: Path) -> None:
     """Widening a scan must not invent findings. A kit tree with no data under it is the
     normal case and stays silent."""

@@ -168,6 +168,13 @@ def project_root_for(work_path: Path) -> Path:
         # for a bare tmpdir and what a stray `.squad` had quietly taken away.
         if _is_system_temp_root(candidate):
             continue
+        # The write root is never a project, whatever is under it. It keeps its trail at
+        # `records/`, which is also a legacy root name, so without this `.squad` passed the
+        # legacy test below and a phase handed a path inside it wrote to `.squad/.squad/`
+        # — a stream no reader resolves. Skipping the whole candidate, not just the legacy
+        # test, because once that nested copy exists the write-root test fires on it too.
+        if candidate.name == DATA_DIRNAME:
+            continue
         # The write root first, then the legacy ones a project may not have migrated.
         # This walks UP looking for a project, so it must recognise both — a consumer
         # mid-migration is still one project, not none.

@@ -335,6 +335,42 @@ def test_a_file_is_resolved_from_its_directory(tmp_path: Path) -> None:
     assert project_root_for(criteria) == tmp_path
 
 
+
+def test_a_path_inside_the_write_root_resolves_to_the_project_that_owns_it(
+    tmp_path: Path,
+) -> None:
+    """The write root keeps its trail at `.squad/records/`, and `records` is also a legacy
+    root name — so `.squad` itself passed the legacy test and was taken for a project.
+
+    Measured on a consumer 2026-09-25: a `review` phase handed its findings directory under
+    `.squad/records/reviews/` wrote its events to `.squad/.squad/records/`, a stream no
+    reader resolves — 39 events there against 763 in the real one. The tree below is
+    clean: the nested directory is the consequence, not the trigger.
+    """
+    from cycle_events import project_root_for
+
+    findings = tmp_path / ".squad" / "records" / "reviews"
+    findings.mkdir(parents=True)
+
+    assert project_root_for(findings) == tmp_path
+
+
+
+def test_a_nested_write_root_already_on_disk_does_not_capture_the_writer(
+    tmp_path: Path,
+) -> None:
+    """The consumer that reported the defect already HAS `.squad/.squad/`. Skipping only
+    the legacy test would leave it writing there forever: the write-root test fires on the
+    nested copy just as well."""
+    from cycle_events import project_root_for
+
+    findings = tmp_path / ".squad" / "records" / "reviews"
+    findings.mkdir(parents=True)
+    (tmp_path / ".squad" / ".squad" / "records").mkdir(parents=True)
+
+    assert project_root_for(findings) == tmp_path
+
+
 # ── the CLI normalises the root, like every Python caller does ────────────────
 #
 # It did not, and the two paths disagreed. Measured on 2026-08-31 in a replica of a

@@ -23,6 +23,9 @@ That state is the loudest thing here, exactly as `SPLIT` is in the wiki migratio
   UNMIGRATED    a legacy root holds data and the write root does not — readers still
                 resolve the old one, and nothing else says so
   SPLIT         both hold data. The old copy is unreachable and looks current
+  NESTED        a write root inside the write root. No migration makes one; a writer
+                that took the write root for a project does
+  INSIDE_KIT    data written into the installed kit, which the next install deletes
   EMPTY         neither holds anything
 
 Exit codes:
@@ -49,6 +52,9 @@ from squad.paths import (
 )
 
 CENTRALISED, UNMIGRATED_CODE, UNCHECKED = 0, 1, 2
+
+#: Findings from loudest to quietest; the overall state is the first one present.
+_SEVERITY = ("INSIDE_KIT", "NESTED", "SPLIT", "UNMIGRATED")
 
 #: Files a directory carries without being "data" — a scaffold nobody filled.
 _IGNORED = frozenset({".gitkeep", ".DS_Store"})
@@ -129,6 +135,19 @@ def check_project(root: Path) -> list[RootReport]:
                 f"write root reports absence. A writer resolved the project as the kit "
                 f"directory it lives in."))
 
+    # A write root nested inside the write root. No migration produces it; a writer that
+    # took `.squad` for a project does. SPLIT compares the write root with roots BESIDE
+    # it, so this copy was invisible here — measured on a consumer 2026-09-25 with 39
+    # cycle events in the nested stream against 763 in the real one, and nothing said so.
+    nested = data_root(root) / DATA_DIRNAME
+    files = len(_documents(nested))
+    if files:
+        reports.append(RootReport(
+            str(nested.relative_to(root)), files, "NESTED",
+            f"{files} file(s) in a write root inside the write root. No migration "
+            f"produces this; a writer resolved {DATA_DIRNAME}/ itself as the project. "
+            f"No reader resolves it, so this copy is unreachable"))
+
     if not reports:
         state = "CENTRALISED" if current_has else "EMPTY"
         detail = ("nothing outside the write root" if current_has
@@ -150,10 +169,8 @@ def main(argv: list[str] | None = None) -> int:
         return UNCHECKED
 
     reports = check_project(root)
-    worst = ("INSIDE_KIT" if any(r.state == "INSIDE_KIT" for r in reports)
-             else "SPLIT") if any(r.state in ("SPLIT", "INSIDE_KIT") for r in reports) else (
-        "UNMIGRATED" if any(r.state == "UNMIGRATED" for r in reports)
-        else reports[0].state)
+    worst = next((s for s in _SEVERITY if any(r.state == s for r in reports)),
+                 reports[0].state)
 
     if args.json:
         print(json.dumps({
