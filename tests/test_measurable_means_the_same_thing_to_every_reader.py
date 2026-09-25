@@ -25,6 +25,7 @@ So the vocabulary to add is declarations and behaviour, not more units of measur
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -115,3 +116,16 @@ def test_the_criterion_reader_is_broader_and_says_by_how_much() -> None:
         assert _has_measurable_object(text), f"criterion reader lost: {text!r}"
         assert not _is_measurable_requirement(text), (
             f"requirement reader gained a shape it never had: {text!r}")
+
+
+def test_every_example_a_refusal_prints_is_itself_measurable() -> None:
+    """A refusal that quotes an example the reader then gets refused for is worse than none.
+
+    One example per pattern, so a pattern with no example — or one whose example stopped
+    matching — fails here rather than in a caller's next run.
+    """
+    from squad import measurability
+
+    assert len(measurability.EXAMPLES) == len(measurability.PATTERNS)
+    for example, pattern in zip(measurability.EXAMPLES, measurability.PATTERNS):
+        assert re.search(pattern, example, re.IGNORECASE), (example, pattern)

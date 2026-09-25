@@ -25,6 +25,15 @@ CORNERS = [
     ("verification", r"##\s+Corner\s+4\s*(?:—|-)\s*Verification"),
 ]
 
+#: The heading each corner is found by, as a refusal prints it (#139). A test holds
+#: every form to its pattern above.
+CORNER_FORMS = {
+    "evidence": "## Corner 1 — Evidence",
+    "constraint": "## Corner 2 — Constraint Relation",
+    "blast_radius": "## Corner 3 — Blast Radius",
+    "verification": "## Corner 4 — Verification",
+}
+
 # `unknown` is a complete answer for the constraint corner ONLY.
 #
 # rules/current-constraint.md declares the constraint a LENS, not a gate: we do not
@@ -96,9 +105,15 @@ def check_corners_populated(opportunity_path: Path) -> dict[str, Any]:
     contributors = [
         f"Corner '{c['corner']}' populated" for c in corners_status if c["populated"]
     ][:3]
+    # Every empty corner, not the first three (#139). There are four, and `[:3]` meant the
+    # fourth surfaced only on the run after the first three were fixed. Each one names the
+    # heading and the floor that would count.
     detractors = [
-        f"Corner '{c['corner']}' empty or missing" for c in corners_status if not c["populated"]
-    ][:3]
+        f"Corner '{c['corner']}' empty or missing — write `{CORNER_FORMS[c['corner']]}` "
+        f"with at least {MIN_CONTENT_CHARS} characters under it"
+        + (" (or `<!-- UNKNOWN: <reason> -->`)" if c["corner"] in UNKNOWN_CORNERS else "")
+        for c in corners_status if not c["populated"]
+    ]
 
     return {
         "corners_populated": populated_count,

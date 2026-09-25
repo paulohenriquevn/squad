@@ -25,9 +25,21 @@ import sys as _sys_bootstrap
 from pathlib import Path as _Path_bootstrap
 
 from _rubric_loader import load_rubric
-from check_corners_populated import check_corners_populated
-from check_evidence_pointers import check_evidence_pointers
-from check_opportunity_completeness import check_opportunity_completeness
+from check_corners_populated import (
+    CORNER_FORMS,
+    MIN_CONTENT_CHARS,
+    UNKNOWN_CORNERS,
+    check_corners_populated,
+)
+from check_evidence_pointers import (
+    CODE_POINTER_FORM,
+    RUNTIME_OBS_FORM,
+    check_evidence_pointers,
+)
+from check_opportunity_completeness import (
+    SECTION_FORMS,
+    check_opportunity_completeness,
+)
 from check_spec_smells import check_spec_smells
 
 for _up in _Path_bootstrap(__file__).resolve().parents:
@@ -143,6 +155,43 @@ def _panel_state(project_root: Path, slug: str) -> dict:
 
     _, result = _panel_check(slug, "discover", project=project_root)
     return result
+
+
+def accepted_shape(cap: str, completeness: dict) -> str:
+    """What would have cleared `cap`, as the literal form the checkers accept (#139).
+
+    Measured over a 20-hour consumer session: `discover-confidence` was read at the source
+    ten times to learn what a refusal wanted, because a cap id like `no_evidence_cited`
+    names the failure and not the pointer shape that would have counted. Built from the
+    checkers' own constants; a test holds each printed example to the pattern that reads it.
+    """
+    if cap.startswith("empty_corner_"):
+        corner = cap.removeprefix("empty_corner_")
+        unknown = (" — or `<!-- UNKNOWN: <reason> -->`, accepted for this corner only"
+                   if corner in UNKNOWN_CORNERS else "")
+        return (f"`{CORNER_FORMS.get(corner, corner)}` with at least {MIN_CONTENT_CHARS} "
+                f"characters of content under it{unknown}")
+    shapes = {
+        "fabricated_evidence": (f"every `{CODE_POINTER_FORM}` pointer resolves to a file "
+                                "with that many lines, or carries "
+                                "`<!-- BLOCKED: <reason> -->` on the same line"),
+        "no_evidence_cited": (f"at least one code pointer `{CODE_POINTER_FORM}` or runtime "
+                              f"observation `{RUNTIME_OBS_FORM}`"),
+        "mandatory_section_missing": "; ".join(
+            f"`{SECTION_FORMS[name]}`"
+            for name in completeness.get("missing_mandatory", ())) or "every mandatory section",
+        "mode_contract_unmet": ("`**Failing test:** path/to/test_file.py::test_name`, naming "
+                                "a test file that exists"),
+        "item_not_registered": ("the `**Item:** B-001` this opportunity declares, present "
+                                "as an item in the project's BACKLOG.md"),
+        "no_adr_on_cross_repo_change": ("a decision recorded as `### D1 — <decision>` "
+                                        "(the blast radius reaches another repository)"),
+        "soft_floor_smell_density_high": ("fewer than 20 spec smells — vague terms and "
+                                          "unquantified claims — across the document"),
+        "soft_floor_evidence_density_low": ("at least 1 code pointer or runtime observation "
+                                            "per 200 words"),
+    }
+    return shapes.get(cap, "")
 
 
 def main() -> int:
@@ -404,6 +453,9 @@ def main() -> int:
             if completeness.get("item_registered")
             else f"{completeness.get('declared_item')} is NOT in the registry"),
         "hard_caps_triggered": hard_caps_triggered,
+        # What would clear each cap above, beside it (#139).
+        "accepted_shapes": {cap: accepted_shape(cap, completeness)
+                            for cap in hard_caps_triggered},
         "final_score_after_caps": round(final_score, 1),
         "panel": panel,
         "panel_gate": panel_gate,

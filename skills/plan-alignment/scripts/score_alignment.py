@@ -79,6 +79,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from squad import signoff as _shared_signoff
+
+# The skill's own siblings, importable after this insert. Beside the `squad` ones below
+# rather than above them, because `from squad import signoff` already ran after an insert.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from citation_drift import (
+    AgedCitation,
+    QuoteCheck,
+    aged_citations,
+    check_quotes,
+)
+from criterion_commands import NAMED_NOT_RUN, RUNNERS
+
+from squad.measurability import EXAMPLES as MEASURABLE_EXAMPLES
 from squad.measurability import is_measurable as _shared_is_measurable
 from squad.rubric import ALIGNMENT_FLOOR_RATIO
 
@@ -118,8 +131,17 @@ def _is_measurable_requirement(text: str) -> bool:
 #: asserting something it did not establish — and it did so beside a placeholder scan
 #: that could not see the notation. Breaking that pair is cheap and removes the case
 #: where three defects agreed with each other.
+#:
+#: The command names come from `criterion_commands`, the list `check_criteria_discriminate`
+#: allowlists from too (#167). This held its own — `npm|pytest|go |…` as SUBSTRINGS — so
+#: `npx` was not executable here while the executor ran it, `pnpm` was executable here
+#: only because it contains `npm` while the executor refused it, and no real command in a
+#: pnpm monorepo satisfied both. Names are matched as whole tokens now: `go.mod`,
+#: `node_modules` and `pnpm-lock.yaml` name files, not the tools.
+_COMMAND_NAMES = "|".join(re.escape(n) for n in (*RUNNERS, *NAMED_NOT_RUN))
 _EXECUTABLE_RE = re.compile(
-    r"`[^`]*(?:npm|pytest|go |cargo|make|curl|grep|python3|bash|node|exit \d)[^`]*`"
+    rf"`[^`]*(?<![\w.-])(?:{_COMMAND_NAMES})(?![\w.-])[^`]*`"
+    r"|`[^`]*exit \d[^`]*`"
     r"|\bexit\s+(?:code\s+)?\d",
     re.IGNORECASE,
 )
@@ -167,6 +189,28 @@ _AC_ID_RE = re.compile(r"\b(AC-\d{3})\b")
 #: The four scenario classes. "Did you think about failure?" stops being a
 #: question somebody remembers to ask and becomes a check that fires.
 _SCENARIO_CLASSES = ("primary", "alternate", "exception", "recovery")
+
+#: The `## <heading>` each criterion reads, keyed by criterion. Lifted out of the calls
+#: that used them (#139) so the refusal can print the headings the READER accepts rather
+#: than a sentence about them — a gate whose refusal says `absent` sends its caller to the
+#: source to learn which of `## Problem`, `## Context` or `## Why now` would have counted.
+#: `_section` matches case-insensitively, so each alias is listed once.
+SECTION_HEADINGS: dict[str, tuple[str, ...]] = {
+    "problem": ("Problem", "Context", "Why now"),
+    "functional_requirements": ("Functional Requirements",),
+    "nfr_measurable": ("Non-Functional Requirements",),
+    "flows": ("Flows", "Flow", "User flows"),
+    "system_diagram": ("System design", "Architecture"),
+    "acceptance_executable": ("Acceptance Criteria",),
+    "dependencies": ("Dependencies", "Depends on"),
+    "out_of_scope": ("Out of scope", "Not in scope", "What this does not do"),
+    "questions_closed": ("Questions answered", "Clarifications", "Open questions", "Grill"),
+    "demonstration": ("Demonstration", "How to demo", "Demo"),
+}
+
+
+def _headings(key: str) -> str:
+    return " or ".join(f"`## {h}`" for h in SECTION_HEADINGS[key])
 
 #: Adjectives that sound like requirements and cannot be failed. Kept to words
 #: that are unambiguously claims about quality — a gate that fires on ordinary
@@ -252,6 +296,45 @@ _WITHDRAWAL_PROSE_RE = re.compile(
     re.IGNORECASE)
 
 
+#: What each criterion ACCEPTS, printed under every gap it refuses (#139). Built from the
+#: constants the criteria read — the headings above, the scenario classes, the command
+#: vocabulary, the id patterns — so the sentence cannot drift from the reader.
+ACCEPTED_SHAPES: dict[str, str] = {
+    "problem": f"{_headings('problem')} with at least 30 words of what was observed here",
+    "functional_requirements": (f"{_headings('functional_requirements')} with at least 2 "
+                                "bullets (`- FR-001 …`)"),
+    "nfr_measurable": (f"{_headings('nfr_measurable')} whose every bullet carries a number: "
+                       + ", ".join(f"`{e}`" for e in MEASURABLE_EXAMPLES)),
+    "flows": (f"{_headings('flows')} holding `### <flow name>` subsections, each stepped "
+              "as `1.`, `2.`, …"),
+    "scenario_classes": ("each of " + ", ".join(f"`[{c}]`" for c in _SCENARIO_CLASSES)
+                         + " under the flows section, as a marker or in a `###` heading"),
+    "system_diagram": (f"a diagram (```` ```mermaid ````, `flowchart`, `graph LR`, `<svg`) "
+                       f"AND {_headings('system_diagram')}"),
+    "interaction_model": ("a `sequenceDiagram` or `classDiagram` naming at least 3 "
+                          "`participant`/`class` entries"),
+    "acceptance_executable": (f"{_headings('acceptance_executable')} whose every bullet "
+                              "carries a backticked command naming one of "
+                              + ", ".join(f"`{n}`" for n in (*RUNNERS, *NAMED_NOT_RUN))
+                              + ", or states `exit <n>`, and no unresolved placeholder"),
+    "stable_ids": ("every requirement and criterion bullet carries its id: `FR-001`, "
+                   "`NFR-001`, `AC-001`"),
+    "traceability": ("every acceptance criterion cites an `FR-###` or `NFR-###`, and every "
+                     "declared requirement is cited by at least one criterion"),
+    "no_vague_terms": ("no quality adjective (`fast`, `robust`, `secure`, …) in a requirement "
+                       "or criterion unless the same line carries a number"),
+    "no_placeholders": ("none of `TBD`, `UNKNOWN`, `TODO`, `FIXME`, `TKTK`, `???`, "
+                        "`to be decided`, `{{SLOT}}` outside the questions section"),
+    "dependencies": (f"{_headings('dependencies')} with bullets, or the word `none`"),
+    "out_of_scope": f"{_headings('out_of_scope')} with at least 1 bullet",
+    "questions_closed": (f"{_headings('questions_closed')} with no `UNKNOWN`, `TBD` or "
+                         "other open answer left"),
+    "demonstration": f"{_headings('demonstration')} with at least 1 bullet",
+    "interactive_artefact": ("a backticked `<name>.html` or a `](<name>.html)` link that "
+                             "exists beside the brief or under the working directory"),
+}
+
+
 @dataclass(frozen=True)
 class Criterion:
     key: str
@@ -298,6 +381,14 @@ class AlignmentReport:
     #: verdict about the prose — the reason the scorer declines to certify, quoted so the
     #: reviewer knows exactly which line to mark.
     unmarked_withdrawal_prose: str = ""
+    #: Every `path:line` — `fragment` citation, checked against what its line says TODAY.
+    #: Advisory and scored nowhere: a refactor that moves a line must not cost a brief a
+    #: point, and one that changes its meaning is for a reviewer to weigh (#127).
+    quote_checks: tuple[QuoteCheck, ...] = ()
+    #: Cited files committed after the brief was written. None when the brief has
+    #: neither a commit nor a `**Date:**` line, so "not measured" never reads as
+    #: "nothing aged".
+    aged_citations: tuple[AgedCitation, ...] | None = ()
 
     @property
     def signed_by_is_human(self) -> bool:
@@ -477,8 +568,19 @@ _PRESENCE_RE = re.compile(
 #: NON-ZERO. A criterion that counts something and asserts the answer is zero passes
 #: exactly when the subject is absent — which is the state this advisory exists to
 #: catch — and it was being exempted by coincidence rather than by design.
+#:
+#: The zero must be the COUNT's zero, in one of two adjacent positions: compared to the
+#: count inside the same command span (`… | wc -l)" = 0`, `-eq 0`), or stated by the verb
+#: that follows the span (`` `grep -c x f` prints 0 ``). This read `[^.]*?` up to any zero
+#: before the next full stop until #166, and that reached across the explanatory clause
+#: every criterion carries — so the `0` it found was usually the one in "exit 0", the
+#: phrase a well-formed criterion uses for its target. Measured on one brief: 15 criteria,
+#: 4 flagged, all four by that path; the same criterion was clean with the words removed.
 _COUNTS_TO_ZERO_RE = re.compile(
-    r"\b(wc\s+-l|grep\s+-c)\b[^.]*?\b(0|zero|none|no\s+\w+)\b", re.IGNORECASE)
+    r"\b(?:wc\s+-l|grep\s+-c)\b[^`]*?(?:==?|-eq|-le)\s*[\"']?0\b"
+    r"|\b(?:wc\s+-l|grep\s+-c)\b[^`]*`\s*(?:prints|outputs|returns|reports|finds|is|equals)"
+    r"\s+`?(?:0|zero|none|no\s+\w+)\b",
+    re.IGNORECASE)
 
 
 def _vacuous_criteria(bullets: list[str]) -> tuple[str, ...]:
@@ -674,15 +776,14 @@ class _Sections:
 
 
 def _read_sections(body: str) -> _Sections:
-    fr_section = _section(body, "Functional Requirements", "Functional requirements")
-    nfr_section = _section(body, "Non-Functional Requirements",
-                           "Non-functional requirements")
-    ac_section = _section(body, "Acceptance Criteria", "Acceptance criteria")
+    fr_section = _section(body, *SECTION_HEADINGS["functional_requirements"])
+    nfr_section = _section(body, *SECTION_HEADINGS["nfr_measurable"])
+    ac_section = _section(body, *SECTION_HEADINGS["acceptance_executable"])
     return _Sections(
         fr_section=fr_section, fr=_bullets(fr_section),
         nfr_section=nfr_section, nfr=_bullets(nfr_section),
         ac_section=ac_section, ac=_bullets(ac_section),
-        flows=_section(body, "Flows", "Flow", "User flows"),
+        flows=_section(body, *SECTION_HEADINGS["flows"]),
         fr_ids=set(_FR_ID_RE.findall(fr_section or "")),
         nfr_ids=set(_NFR_ID_RE.findall(nfr_section or "")),
     )
@@ -690,7 +791,7 @@ def _read_sections(body: str) -> _Sections:
 
 def _criterion_problem(body: str) -> Criterion:
     """1 — The problem, in the system's own terms."""
-    problem = _section(body, "Problem", "Context", "Why now")
+    problem = _section(body, *SECTION_HEADINGS["problem"])
     return Criterion("problem", "The problem is stated as something observed here",
         _tri(bool(problem), bool(problem and len(problem.split()) >= 30)),
         "absent" if not problem else ("too short to have said anything" if len(
@@ -698,7 +799,7 @@ def _criterion_problem(body: str) -> Criterion:
 
 def _criterion_functional_requirements(body: str) -> Criterion:
     """2 — Functional requirements."""
-    fr_section = _section(body, "Functional Requirements", "Functional requirements")
+    fr_section = _section(body, *SECTION_HEADINGS["functional_requirements"])
     fr = _bullets(fr_section)
     return Criterion("functional_requirements", "Functional requirements enumerated",
         _tri(bool(fr), len(fr) >= 2),
@@ -707,7 +808,7 @@ def _criterion_functional_requirements(body: str) -> Criterion:
 
 def _criterion_nonfunctional_requirements(body: str) -> Criterion:
     """3 — Non-functional requirements, WITH numbers."""
-    nfr_section = _section(body, "Non-Functional Requirements", "Non-functional requirements")
+    nfr_section = _section(body, *SECTION_HEADINGS["nfr_measurable"])
     nfr = _bullets(nfr_section)
     measurable = [b for b in nfr if _is_measurable_requirement(b)]
     return Criterion("nfr_measurable", "Non-functional requirements carry numbers",
@@ -717,7 +818,7 @@ def _criterion_nonfunctional_requirements(body: str) -> Criterion:
 
 def _criterion_flows(body: str) -> Criterion:
     """4 — Flows, named and stepped."""
-    flows = _section(body, "Flows", "Flow", "User flows")
+    flows = _section(body, *SECTION_HEADINGS["flows"])
     flow_names = re.findall(r"^###\s+(.+)$", flows or "", re.MULTILINE)
     stepped = bool(flows and re.search(r"^\s*\d+\.", flows, re.MULTILINE))
     return Criterion("flows", "Flows named, each broken into steps",
@@ -738,7 +839,7 @@ def _criterion_scenario_classes(sections: _Sections) -> Criterion:
 def _criterion_system_picture(body: str) -> Criterion:
     """6 — A system-level picture."""
     has_system = bool(re.search(r"```mermaid|<svg|flowchart|C4Context|graph (TB|LR)", body))
-    system_sec = _section(body, "System design", "Architecture", "System Design")
+    system_sec = _section(body, *SECTION_HEADINGS["system_diagram"])
     return Criterion("system_diagram", "A system-level diagram exists",
         _tri(has_system or bool(system_sec), has_system and bool(system_sec)),
         "diagram + section" if (has_system and system_sec)
@@ -755,7 +856,7 @@ def _criterion_interaction(body: str) -> Criterion:
 
 def _criterion_acceptance_criteria(body: str) -> tuple[Criterion, list[str]]:
     """8 — Acceptance criteria that can fail."""
-    ac_section = _section(body, "Acceptance Criteria", "Acceptance criteria")
+    ac_section = _section(body, *SECTION_HEADINGS["acceptance_executable"])
     ac = _bullets(ac_section)
     # A criterion carrying an unresolved placeholder cannot run, whatever command it
     # names. Grading it executable is the scorer asserting something it did not
@@ -865,7 +966,7 @@ def _criterion_self_review(body: str) -> Criterion:
 
 def _criterion_dependencies(body: str) -> Criterion:
     """13 — Dependencies, named or explicitly none."""
-    deps = _section(body, "Dependencies", "Depends on")
+    deps = _section(body, *SECTION_HEADINGS["dependencies"])
     deps_bullets = _bullets(deps)
     explicit_none = bool(deps and re.search(r"\b(none|no dependenc)\b", deps, re.IGNORECASE))
     return Criterion("dependencies", "Dependencies named, or explicitly none",
@@ -874,14 +975,14 @@ def _criterion_dependencies(body: str) -> Criterion:
 
 def _criterion_non_goals(body: str) -> Criterion:
     """14 — What this is NOT. The boundary nobody writes and everybody assumes."""
-    scope_out = _section(body, "Out of scope", "Not in scope", "What this does not do")
+    scope_out = _section(body, *SECTION_HEADINGS["out_of_scope"])
     return Criterion("out_of_scope", "What the item does NOT cover is written down",
         _tri(bool(scope_out), len(_bullets(scope_out)) >= 1),
         "declared" if _bullets(scope_out) else "absent — the boundary is being assumed")
 
 def _criterion_grill_answers(body: str) -> Criterion:
     """15 — The questions the grill asked, and their answers."""
-    grill = _section(body, "Questions answered", "Clarifications", "Open questions", "Grill")
+    grill = _section(body, *SECTION_HEADINGS["questions_closed"])
     return Criterion("questions_closed", "Every question raised was answered",
         _tri(bool(grill), bool(grill) and not _UNRESOLVED_RE.search(grill)),
         "all closed" if (grill and not _UNRESOLVED_RE.search(grill))
@@ -889,7 +990,7 @@ def _criterion_grill_answers(body: str) -> Criterion:
 
 def _criterion_demonstration(body: str) -> Criterion:
     """16 — How it will be demonstrated."""
-    demo = _section(body, "Demonstration", "How to demo", "Demo")
+    demo = _section(body, *SECTION_HEADINGS["demonstration"])
     return Criterion("demonstration", "How the result gets demonstrated is written",
         _tri(bool(demo), len(_bullets(demo)) >= 1),
         "declared" if _bullets(demo) else "absent")
@@ -1066,7 +1167,41 @@ def score_alignment(brief_path: Path, depth: str = "FULL") -> AlignmentReport:
         unmarked_withdrawal_prose=(
             "" if withdrawn or _RESTORED_RE.search(declarations)
             else _unmarked_withdrawal(body)),
+        quote_checks=check_quotes(body, brief_path),
+        aged_citations=aged_citations(body, brief_path),
     )
+
+
+def _print_evidence_drift(report: AlignmentReport) -> None:
+    """Quoted evidence that no longer reads as quoted, and cited files newer than the brief.
+
+    Advisory, printed whatever the verdict and scored nowhere (#127). The reader it serves
+    is the reviewer about to sign: it names the line to open, never a verdict about it.
+    """
+    drifted = [q for q in report.quote_checks if q.state != "matches"]
+    if drifted:
+        print("\nADVISORY — quoted evidence that does not read as the brief quotes it. "
+              "Read these lines before signing; scored nowhere:")
+        for q in drifted:
+            where = f"{q.citation.path}:{q.citation.line}"
+            if q.state == "changed":
+                print(f"  ! {where} no longer contains `{q.citation.fragment}`")
+            elif q.state == "moved":
+                at = f"line {q.found_at}" if q.found_at else "another place in the file"
+                print(f"  ~ {where} — the quote is intact at {at}; "
+                      "only the line number aged")
+            else:
+                print(f"  ? {where} does not resolve from the brief's repository, "
+                      "so its quote was NOT checked")
+    if report.aged_citations is None:
+        print("\n  evidence age not measured: the brief has no commit and no `**Date:**` "
+              "line to date it by")
+    elif report.aged_citations:
+        print("\nADVISORY — cited files committed after the brief. The evidence may have "
+              "aged; read before signing:")
+        for a in report.aged_citations:
+            print(f"  ~ {a.path} (last commit {a.file_committed}; "
+                  f"brief {a.brief_committed})")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1123,10 +1258,23 @@ def main(argv: list[str] | None = None) -> int:
             "reviewer_items_total": report.reviewer_items_total,
             "pending_review": list(report.pending_review),
             "criteria": [
-                {"key": c.key, "label": c.label, "score": c.score, "why": c.why}
+                {"key": c.key, "label": c.label, "score": c.score, "why": c.why,
+                 "accepts": ACCEPTED_SHAPES[c.key]}
                 for c in report.criteria
             ],
             "judgement_items": list(report.judgement_items),
+            "quote_checks": [
+                {"path": q.citation.path, "line": q.citation.line,
+                 "fragment": q.citation.fragment, "state": q.state,
+                 "found_at": q.found_at}
+                for q in report.quote_checks
+            ],
+            # null, not [], when the brief has no commit to date it by.
+            "aged_citations": None if report.aged_citations is None else [
+                {"path": a.path, "file_committed": a.file_committed,
+                 "brief_committed": a.brief_committed}
+                for a in report.aged_citations
+            ],
         }, indent=2, ensure_ascii=False))
         return 0 if ok else 1
 
@@ -1150,10 +1298,15 @@ def main(argv: list[str] | None = None) -> int:
         for bullet in report.vacuous_criteria:
             print(f"  ? {bullet}")
 
+    _print_evidence_drift(report)
+
     if not report.meets_machine_threshold:
         print("\nThis item must NOT be built yet. Close these first:")
         for c in report.gaps:
             print(f"  - {c.label} — {c.why}")
+            # What would pass, printed where the refusal is read (#139). Without it the
+            # next command a caller ran was a grep of this file.
+            print(f"      accepts: {ACCEPTED_SHAPES[c.key]}")
 
     # The warrant's history, on the text path too. A withdrawal the reader cannot see
     # is a withdrawal that reads as a sign-off nobody gave.

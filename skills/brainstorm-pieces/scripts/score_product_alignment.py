@@ -147,6 +147,50 @@ OBJ_RE = re.compile(r"^##\s+(OBJ-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 REQ_RE = re.compile(r"^##\s+(REQ-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 PIECE_RE = re.compile(r"^##\s+(PIECE-\d+)\s*(?:—|-)\s*(.+)$", re.MULTILINE)
 
+#: The block each document is read as, written the way the reader above accepts it. A
+#: test holds each form to its pattern, so the printed example cannot drift from the parse.
+OBJ_FORM = "## OBJ-1 — <objective>"
+REQ_FORM = "## REQ-1 — <requirement>"
+PIECE_FORM = "## PIECE-1 — <piece>"
+
+#: The vision's prose sections, by criterion. Lifted out of `_gate_vision` so the refusal
+#: prints the heading the reader looks for (#139).
+VISION_SECTIONS = (
+    ("vision_user", "Who it is for"),
+    ("vision_problem", "The problem"),
+    ("vision_what", "What it is"),
+)
+NONGOALS_HEADER = "What it is NOT"
+#: The `field:` lines each block is read for.
+METRIC_FIELD, HORIZON_FIELD, SERVES_FIELD, REALISES_FIELD = (
+    "metric", "horizon", "serves", "realises")
+_VISION_MIN_CHARS = 80
+_PLACEHOLDER_SHAPE = ("no `TBD`, `TODO`, `FIXME`, `XXX`, `LOREM`, `???`, `{{…}}` or "
+                      "`<lowercase-token>` left in {doc}")
+
+#: What each criterion ACCEPTS, printed under every one it refuses (#139). Measured over a
+#: 20-hour consumer session: `brainstorm-pieces` was the skill whose source was read most
+#: often to learn the shape it wanted — 11 reads — because `0 objective(s)` names the
+#: count and not the block that would have been counted.
+ACCEPTED_SHAPES: dict[str, str] = {
+    **{key: (f"`## {header}` in {VISION} with at least {_VISION_MIN_CHARS} characters "
+             "under it") for key, header in VISION_SECTIONS},
+    "vision_nongoals": f"`## {NONGOALS_HEADER}` in {VISION} with at least 2 `- ` bullets",
+    "vision_no_placeholder": _PLACEHOLDER_SHAPE.format(doc=VISION),
+    "obj_present": f"at least one `{OBJ_FORM}` block in {OBJECTIVES}",
+    "obj_metric": f"a `{METRIC_FIELD}: <value with a number>` line in every OBJ block",
+    "obj_horizon": f"a `{HORIZON_FIELD}: <when>` line in every OBJ block",
+    "obj_no_placeholder": _PLACEHOLDER_SHAPE.format(doc=OBJECTIVES),
+    "req_present": f"at least one `{REQ_FORM}` block in {TRD}",
+    "req_cites": f"a `{SERVES_FIELD}: OBJ-1` line in every REQ block",
+    "req_cites_resolve": f"every `OBJ-n` a REQ serves is defined in {OBJECTIVES}",
+    "req_no_placeholder": _PLACEHOLDER_SHAPE.format(doc=TRD),
+    "piece_present": f"at least one `{PIECE_FORM}` block in {PIECES}",
+    "piece_cites": f"a `{REALISES_FIELD}: REQ-1` line in every PIECE block",
+    "piece_cites_resolve": f"every `REQ-n` a PIECE realises is defined in {TRD}",
+    "piece_no_placeholder": _PLACEHOLDER_SHAPE.format(doc=PIECES),
+}
+
 #: Who signed and how many boxes carry a mark — read by `squad.signoff`, the one
 #: reader every gate in this kit shares. This file compiled its own pattern and its
 #: own rule until 2026-09-20, and the three copies disagreed: see that module for what
@@ -265,20 +309,16 @@ def _gate_vision(rep: Report, texts: dict[str, str]) -> None:
     """
     # ---- vision: 5 criteria (G-B1) ------------------------------------------
     v = texts[VISION]
-    for key, header in (
-        ("vision_user", "Who it is for"),
-        ("vision_problem", "The problem"),
-        ("vision_what", "What it is"),
-    ):
+    for key, header in VISION_SECTIONS:
         body = _section(v, header).strip()
         rep.criteria.append(Criterion(
-            key, VISION, 2 if len(body) >= 80 else (1 if body else 0),
+            key, VISION, 2 if len(body) >= _VISION_MIN_CHARS else (1 if body else 0),
             f"'{header}' {'present' if body else 'absent'} ({len(body)} chars)"))
 
     # `- ` with nothing after it is the shape the template ships, twice. Counting
     # the bullet rather than what is on it awarded the section to a file nobody
     # had written in.
-    nongoals = [ln for ln in _section(v, "What it is NOT").splitlines()
+    nongoals = [ln for ln in _section(v, NONGOALS_HEADER).splitlines()
                 if ln.strip().startswith("-") and ln.strip().lstrip("-").strip()]
     rep.criteria.append(Criterion(
         "vision_nongoals", VISION, 2 if len(nongoals) >= 2 else (1 if nongoals else 0),
@@ -290,7 +330,7 @@ def _gate_vision(rep: Report, texts: dict[str, str]) -> None:
 
     if not nongoals:
         rep.floor_caps.append("vision_without_non_goal")
-    if not _section(v, "Who it is for").strip():
+    if not _section(v, VISION_SECTIONS[0][1]).strip():
         rep.floor_caps.append("vision_without_named_user")
 
 
@@ -310,8 +350,8 @@ def _gate_objectives(rep: Report, texts: dict[str, str]) -> set[str]:
     rep.criteria.append(Criterion(
         "obj_present", OBJECTIVES, 2 if objectives else 0, f"{len(objectives)} objective(s)"))
 
-    with_metric = [o for o in objectives if _has_number(_field(o[2], "metric"))]
-    with_horizon = [o for o in objectives if _field(o[2], "horizon")]
+    with_metric = [o for o in objectives if _has_number(_field(o[2], METRIC_FIELD))]
+    with_horizon = [o for o in objectives if _field(o[2], HORIZON_FIELD)]
     rep.criteria.append(Criterion(
         "obj_metric", OBJECTIVES,
         2 if objectives and len(with_metric) == len(objectives) else (1 if with_metric else 0),
@@ -348,7 +388,7 @@ def _gate_trd(rep: Report, texts: dict[str, str], obj_ids: set[str]) -> tuple[li
     rep.criteria.append(Criterion(
         "req_present", TRD, 2 if reqs else 0, f"{len(reqs)} requirement(s)"))
 
-    cited = [(rid, _field(body, "serves")) for rid, _, body in reqs]
+    cited = [(rid, _field(body, SERVES_FIELD)) for rid, _, body in reqs]
     # Matched against the ID PATTERN, not against emptiness. `serves: OBJ-<!-- … -->`
     # was non-empty, so it counted as a citation — and matched no `OBJ-\d+`, so it
     # was not dangling either. A requirement escaped G-B3 by being unreadable, which
@@ -388,7 +428,7 @@ def _gate_pieces(rep: Report, texts: dict[str, str], reqs: list, req_ids: set[st
     rep.criteria.append(Criterion(
         "piece_present", PIECES, 2 if pieces else 0, f"{len(pieces)} piece(s)"))
 
-    p_cited = [(pid, _field(body, "realises")) for pid, _, body in pieces]
+    p_cited = [(pid, _field(body, REALISES_FIELD)) for pid, _, body in pieces]
     # Same rule as `serves:` above, and for the same reason.
     p_with = [c for c in p_cited if re.search(r"REQ-\d+", c[1])]
     rep.criteria.append(Criterion(
@@ -582,7 +622,8 @@ def main(argv: list[str] | None = None) -> int:
         "signed_by_is_human": rep.sheet.human_signed,
         "unticked_boxes": rep.unticked,
         "ticked_boxes": rep.ticked,
-        "criteria": [c.__dict__ for c in rep.criteria],
+        "criteria": [{**c.__dict__, "accepts": ACCEPTED_SHAPES[c.key]}
+                     for c in rep.criteria],
         "not_scored": list(NOT_SCORED),
     }
 
@@ -594,6 +635,8 @@ def main(argv: list[str] | None = None) -> int:
     for c in rep.criteria:
         mark = {0: "✗", 1: "~", 2: "✓"}[c.score]
         print(f"  {mark} {c.key:24s} {c.note}")
+        if c.score < 2:
+            print(f"      accepts: {ACCEPTED_SHAPES[c.key]}")
     for cap in rep.hard_caps:
         print(f"  HARD CAP:  {cap}")
     for cap in rep.floor_caps:
@@ -601,7 +644,10 @@ def main(argv: list[str] | None = None) -> int:
     for d in rep.dangling:
         print(f"  DANGLING: {d}")
     if rep.missing_docs:
-        print(f"  MISSING:  {', '.join(rep.missing_docs)}")
+        # WHERE, not only which: the directory is derived from the write root, and a
+        # reader told `objectives.md` is missing still had to find out where it goes.
+        print(f"  MISSING:  {', '.join(rep.missing_docs)} — expected under "
+              f"{write_wiki_dir(args.root, 'product')}")
     # Worded so the two never read the same. "Missing" sends a person to create a
     # file; "empty" sends them to open one they already have, and a reader handed
     # the wrong one of those loses the time it takes to find out.

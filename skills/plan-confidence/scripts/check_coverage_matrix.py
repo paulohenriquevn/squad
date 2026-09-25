@@ -124,7 +124,15 @@ def _extract_coverage_section(content: str) -> str:
     """Extract text between '## Coverage Matrix' and next H2."""
     header_match = COVERAGE_HEADER_RE.search(content)
     if header_match is None:
-        raise ValueError("No '## Coverage Matrix' section found in plan")
+        # The table it wants, not only its title (#139). The column vocabularies are the
+        # ones `_parse_matrix_rows` reads, so the sentence cannot name a header it refuses.
+        raise ValueError(
+            "No '## Coverage Matrix' section found in plan. Expected a table whose header "
+            "row names a gap column (one of "
+            + ", ".join(f"`{h}`" for h in GAP_COLUMN_HEADERS)
+            + ") and a task column (one of "
+            + ", ".join(f"`{h}`" for h in TASK_COLUMN_HEADERS)
+            + "), e.g. `| Gap / Requirement | Task(s) |`")
     start = header_match.end()
     # Find next H2 after our header
     next_h2 = NEXT_H2_RE.search(content, pos=start)

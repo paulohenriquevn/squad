@@ -450,7 +450,7 @@ generated page requires nothing.
 
 | Script | Runs it | What it does |
 |---|---|---|
-| `check_criteria_discriminate.py` | on demand, before implementing | runs each acceptance criterion against the tree as it is and refuses the ones that already pass |
+| `check_criteria_discriminate.py` | on demand, before implementing | runs each acceptance criterion against the tree as it is and refuses the ones that already pass; with `--intended`/`--wrong`/`--baseline`, also against the built state, a wrong build and a reconstruction control |
 
 
 ## Not every item needs the whole document
@@ -516,12 +516,26 @@ A criterion that already passes cannot tell a finished item from an unstarted on
 run refuses those, names the ones it could not run, and marks as **undecidable** — never
 as sound — the ones whose bullet does not state what it expects.
 
-**It checks one of three states, and says so.** The full method needs the intended state
-and a deliberately wrong implementation the criterion must reject; the third is what
-catches a criterion measuring a NAME rather than a behaviour. A reviewer's formulation is
-worth keeping: *the minimal artefact that satisfies a criterion says exactly what it is
-sensitive to.* If an empty function body with the right name turns it green, it measures
-the name.
+**By default it checks one of three states, and says so.** The full method needs the
+intended state and a deliberately wrong implementation the criterion must reject; the
+third is what catches a criterion measuring a NAME rather than a behaviour. A reviewer's
+formulation is worth keeping: *the minimal artefact that satisfies a criterion says
+exactly what it is sensitive to.* If an empty function body with the right name turns it
+green, it measures the name.
+
+Supply the other states as directories — the script reads trees and never builds them:
+
+```bash
+python3 "$ECO/skills/plan-alignment/scripts/check_criteria_discriminate.py" \
+  .squad/records/alignment/B-001-alignment.md --repo-root . \
+  --intended ../wt-built --wrong ../wt-right-name-wrong-body --baseline ../wt-base-rebuilt
+```
+
+Each criterion comes back `discriminates`, `passes_before_work`, `fails_when_built`,
+`non_discriminating` (it passes on a wrong build), `undecidable` or `guard`. `--baseline`
+is the reconstruction control: the current tree rebuilt the way the other states were. If
+it answers differently from `--repo-root`, the run exits 2 — "the change moved this"
+cannot be told from "the rebuild is broken".
 
 **It runs commands out of a document.** With a timeout, in the repository root, opt-in,
 never from a hook or a scorer. Read what you are about to run if the brief did not come

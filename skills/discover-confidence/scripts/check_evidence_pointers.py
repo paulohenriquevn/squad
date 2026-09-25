@@ -54,6 +54,11 @@ RUNTIME_OBS_RE = re.compile(
 )
 WORD_RE = re.compile(r"\b\w+\b")
 
+#: One accepted example of each evidence shape, printed by the refusal that finds none
+#: (#139). A test holds each to its pattern above.
+CODE_POINTER_FORM = "src/module/file.py:42"
+RUNTIME_OBS_FORM = "GET https://host/path -> 200"
+
 
 def _find_project_root(start: Path) -> Path:
     """Walk up from start looking for .claude/ or .git/."""

@@ -46,6 +46,7 @@ from check_spec_smells import SmellReport, check_spec_smells
 from check_symbol_naming import check_symbol_naming
 from check_task_interfaces import check_task_interfaces
 from check_tdd_in_bugfix import TDDReport, check_tdd_in_bugfix
+from plan_cap_shapes import DYNAMIC_CAP_IDS, accepted_shape  # noqa: F401 — re-exported
 
 for _up in Path(__file__).resolve().parents:
     if (_up / "squad" / "paths.py").is_file():
@@ -1140,6 +1141,10 @@ def main(argv: list[str] | None = None) -> int:
         _emit_calibration_warning()
 
     out = asdict(report)
+    # What would clear each cap, beside the cap (#139). The cap id is the diagnosis; this
+    # is the prescription, and without it the next command a caller ran was a grep of the
+    # checker that raised it.
+    out["accepted_shapes"] = {cap: accepted_shape(cap) for cap in report.hard_caps_triggered}
     out["reasons"] = {
         k: [asdict(m) for m in v] for k, v in report.reasons.items()
     }

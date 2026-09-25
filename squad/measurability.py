@@ -84,6 +84,18 @@ PATTERNS: tuple[str, ...] = (
 
 _COMPILED = tuple(re.compile(p, re.IGNORECASE) for p in PATTERNS)
 
+#: One accepted example per pattern above, in the same order — printed by a refusal so its
+#: reader sees what WOULD count instead of opening this file (#139). Each one is held to
+#: `is_measurable` by a test, so an example that stopped counting fails there.
+EXAMPLES: tuple[str, ...] = (
+    "800ms",
+    "p95",
+    "< 200",
+    "exactly 1 prop",
+    "exits 0",
+    "at most 3",
+)
+
 
 def is_measurable(text: str) -> bool:
     """Does this text state something a reader could find false?

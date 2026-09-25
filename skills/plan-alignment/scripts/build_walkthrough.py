@@ -139,7 +139,11 @@ def load_spec(path: Path) -> Spec:
 
     nodes = raw.get("nodes") or {}
     if not nodes:
-        problems.append("no `nodes:` — a walkthrough with no nodes draws nothing")
+        # The shape under the key, not only the key (#139): the node kinds used to appear
+        # only once a node existed with the wrong one.
+        problems.append("no `nodes:` — a walkthrough with no nodes draws nothing. Expected "
+                        "`nodes: {<id>: {label: <text>, kind: "
+                        + "|".join(NODE_KINDS) + "}}`")
     for nid, n in nodes.items():
         if not isinstance(n, dict) or "label" not in n:
             problems.append(f"node `{nid}` has no `label:`")
@@ -164,7 +168,9 @@ def load_spec(path: Path) -> Spec:
         flows[name] = steps
 
     if not flows:
-        problems.append("no `flows:` — nothing to walk through")
+        problems.append("no `flows:` — nothing to walk through. Expected "
+                        "`flows: {<name> [primary]: [{from: <node id>, to: <node id>, "
+                        "label: <text>}]}`")
 
     # Scenario-class coverage is a WARNING here and a scored criterion in
     # score_alignment.py. Refusing to build would stop an author mid-draft, which

@@ -755,6 +755,25 @@ def test_a_criterion_that_counts_a_real_number_is_not_vacuous():
     assert not sa._vacuous_criteria(["`wc -l < out.txt` prints 42"])
 
 
+def test_a_criterion_whose_prose_says_exit_0_is_not_vacuous():
+    """The `0` in "exit 0" is the criterion's target exit code, not a count of zero.
+
+    `[^.]*?` reached from the count across the explanatory clause every criterion carries,
+    so the same healthy criterion was flagged with "exit 0" in its sentence and clean
+    without it. Measured on one brief: 15 criteria, 4 flagged, all four by this path.
+    """
+    assert not sa._vacuous_criteria(
+        ['`test "$(grep -c foo f)" = 4` — exit 0, and exit 1 otherwise'])
+
+
+def test_a_count_compared_to_zero_inside_the_command_is_vacuous():
+    assert sa._vacuous_criteria(['`test "$(grep -c foo f | wc -l)" = 0` — no matches'])
+
+
+def test_a_count_compared_to_zero_with_eq_is_vacuous():
+    assert sa._vacuous_criteria(['`[ "$(grep -c TODO src/a.ts)" -eq 0 ]` exits 0'])
+
+
 def test_a_criterion_with_a_placeholder_is_not_graded_executable(tmp_path):
     """The composition, broken.
 

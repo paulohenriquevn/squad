@@ -35,6 +35,23 @@ MANDATORY_SECTIONS = [
     ("Recommendation", r"^##\s+Recommendation"),
 ]
 
+#: The literal line each mandatory section is found by, as a refusal prints it (#139).
+#: "Missing section: Mode" named the section and not the line — `**Mode:** review`, with
+#: its four accepted values — so the next command a caller ran was a grep of this file.
+#: A test holds every form to its pattern above.
+SECTION_FORMS = {
+    "Header": "# Opportunity: <title>",
+    "Item": "**Item:** B-001",
+    "Repo": "**Repo:** <path of the repository this changes>",
+    "Mode": "**Mode:** review|live-test|bug|evolve",
+    "Context": "## Context",
+    "Corner 1 — Evidence": "## Corner 1 — Evidence",
+    "Corner 2 — Constraint Relation": "## Corner 2 — Constraint Relation",
+    "Corner 3 — Blast Radius": "## Corner 3 — Blast Radius",
+    "Corner 4 — Verification": "## Corner 4 — Verification",
+    "Recommendation": "## Recommendation",
+}
+
 ADR_HEADER_RE = re.compile(r"^###\s+D\d+\s*(?:—|-)", re.MULTILINE)
 
 #: The declared mode, so the mode's own evidence contract can be held to.
@@ -303,7 +320,8 @@ def check_opportunity_completeness(
     # and nothing about the rest, so they fixed three, re-ran, and met the next three —
     # and the session measured at 2026-09-18 went to this file's source to read
     # `MANDATORY_SECTIONS` instead. The document is fixed once when the list is whole.
-    detractors: list[str] = [f"Missing section: {m}" for m in missing]
+    detractors: list[str] = [f"Missing section: {m} — write `{SECTION_FORMS[m]}`"
+                             for m in missing]
     if adr_missing:
         detractors.append(
             f"Blast radius reaches {', '.join(foreign_repos)} but no ADR is recorded"
