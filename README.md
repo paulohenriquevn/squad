@@ -214,9 +214,10 @@ nobody. See [`agents/README.md`](agents/README.md).
 | `CHANGELOG.md`, Keep a Changelog format | The Rule 6 gate activates when the file exists; without it the Stop hook says so rather than passing silently |
 | Go, Python, TypeScript or Rust | Only these have `code-quality` detectors. Other stacks run the rest of the pipeline fine |
 
-**Adopting it in another project is a bootstrap, not just an install.** The kit ships *this*
-ecosystem's domain routing table, and gate G1 refuses every item until you replace it — measured on
-an adopter: 88 items with real `file:line` evidence, all `BLOCKER/unroutable_repo`. After
+**Adopting it in another project is a bootstrap, not just an install.** The kit ships no domain
+routing table, and gate G1 refuses every item until you write one — measured on an adopter that
+inherited another ecosystem's table: 88 items with real `file:line` evidence, all
+`BLOCKER/unroutable_repo`. After
 `mechanisms/distribution/install.sh`, run `detect_domains.py --root . --write` and write the specialist files it
 names. The installer prints the sequence.
 
@@ -299,7 +300,6 @@ squad/
 │   ├── cycle-*.md            ← one per phase; the source of truth for that phase
 │   ├── cycle-phases.txt      ← the chain itself, declared once and machine-readable
 │   ├── records-location.md   ← where output goes, and why the split below exists
-│   ├── domain-routing.txt    ← which repositories exist here, and who owns each
 │   └── live-target.txt       ← declared live environments
 ├── skills/          ← what the agent can DO. One directory per capability
 ├── commands/        ← the slash commands that are not skills

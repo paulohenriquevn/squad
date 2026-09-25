@@ -32,7 +32,7 @@ preserves it, or the next update destroys their configuration in silence.
 **Where the mechanisms are.** Everything that computes a verdict lives under
 `mechanisms/`, in five families: `gates/` measures the kit against its own
 contracts, `cycle/` is the cycle at runtime (routing, the event stream, status
-transitions, attestation), `fleet/` runs many sessions at once, `dist/` gets the
+transitions, attestation), `fleet/` runs many sessions at once, `distribution/` gets the
 kit into a consumer, and `conventions/` holds where things live and what shape
 they have. The import namespace is flat — a family is a directory, not a package
 — and a file there resolves the repository root as `parents[2]`. The directory

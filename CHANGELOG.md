@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and this proj
 ## [Unreleased]
 
 ### Fixed
+- **The README and the Squad map no longer point at files the kit does not have.** The README said the kit ships a domain routing table and listed `rules/domain-routing.txt` in its tree; it ships none, and the table lives at `.squad/domain-routing.txt`. The map called the distribution family `dist/`. (#218)
 - **Every fresh install reported a post-install FAILURE because its empty study zone was not gitignored.** An empty `.squad/study-material/` is now `UNGUARDED`, named but not failing; it becomes `COMMITTABLE`, and fails, once something is cloned there. (#128)
 - **The kit no longer carries Portuguese outside the lines that must.** The new English-only detector found 59 lines in 34 files the old word list called clean; accidental prose, test messages and identifiers were translated, and the lines that quote Portuguese on purpose (registry patterns, a user requirement, a consumer config) are marked with their reason. (#130)
 - **`verify_ecosystem` ignored four of the six states that fail `check_data_root`.** It kept its own list, `UNMIGRATED` and `SPLIT`, so a nested write root, data inside the installed kit, a shared wiki bundle or a committable study zone passed the ecosystem check while the gate itself exited 1. It now reads the gate's own list. (#215, #184, #128)
