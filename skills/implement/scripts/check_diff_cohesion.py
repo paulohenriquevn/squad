@@ -63,8 +63,12 @@ FILES_TO_EDIT_RE = re.compile(
 #:
 #: The path must still be the FIRST thing on the bullet: a sentence that happens to
 #: mention a filename declares nothing.
+#:
+#: `*` opens the tail too, because `plan-write` tells authors to mark a file that does
+#: not exist yet with (NEW) and authors write it bold. `**(NEW)**` parsed as nothing,
+#: which is how a consumer got `declared_files: 0` on three declared phases (#199).
 FILE_LINE_RE = re.compile(
-    r"^[\-*\s]*`?([^\s`]+\.[a-zA-Z0-9]+)`?(?:\s*[—\-:(].*)?\s*$", re.MULTILINE)
+    r"^[\-*\s]*`?([^\s`]+\.[a-zA-Z0-9]+)`?(?:\s*[—\-:(*].*)?\s*$", re.MULTILINE)
 
 # Files that are ALWAYS allowed to be touched (cross-cutting, low risk).
 NON_SOURCE_PATHS = (
