@@ -91,6 +91,13 @@ LEGACY_RECORDS_ROOTS: tuple[str, ...] = (
 )
 LEGACY_WIKI_ROOTS: tuple[str, ...] = (".claude/wiki", "wiki")
 
+#: The legacy wiki roots whose LOCATION is the evidence the kit wrote them. `.claude/`
+#: is the installed kit's own directory and no plugin writes a bundle there by default.
+#: The bare `wiki/` is different: `loop-system-cartography` and `loop-project-purge`
+#: both write their OKF bundle to `<project>/wiki/` by default, so there the directory
+#: has to show the kit's shape before a reader accepts it (`is_kit_wiki`).
+KIT_LOCATED_WIKI_ROOTS: frozenset[str] = frozenset({".claude/wiki"})
+
 #: What the bundle calls a leaf, mapped to where the dated trail used to keep it.
 DURABLE_LEAVES: dict[str, str] = {
     "sops": "sops",
@@ -98,6 +105,18 @@ DURABLE_LEAVES: dict[str, str] = {
     "references": "references",
     "opportunities": "discoveries/opportunities",
 }
+
+#: Every leaf this kit has written into a bundle. Measured over the whole history of
+#: this repository (every added line outside tests naming `wiki/<leaf>`): `product`,
+#: `decisions`, `sops`, `design`, `references`, `opportunities` — and nothing else. A
+#: plugin's bundle is organised by its own concept types (`components/`, `flows/`) or
+#: keeps concepts at its root, which is what lets a reader tell the two apart without a
+#: marker file the kit's legacy bundles never had.
+KIT_WIKI_LEAVES: frozenset[str] = frozenset({*DURABLE_LEAVES, "product", "design"})
+
+#: The files OKF reserves at a bundle root. Every bundle carries them, whoever wrote it,
+#: so they are evidence of nothing.
+_OKF_RESERVED_FILES: frozenset[str] = frozenset({"index.md", "log.md"})
 
 
 def is_cycle_generated_skill(name: str) -> bool:
@@ -370,13 +389,65 @@ def records_dir(project_root: Path | str, leaf: str = "") -> Path | None:
     return _first_existing(root, LEGACY_RECORDS_ROOTS, leaf)
 
 
+def foreign_wiki_entries(directory: Path) -> list[str]:
+    """Top-level entries of a bundle root that this kit never writes, sorted.
+
+    Hidden entries (`.gitkeep`, `.obsidian/`) and the OKF reserved files say nothing
+    about who wrote a bundle, so they are not counted either way.
+    """
+    if not directory.is_dir():
+        return []
+    return sorted(
+        entry.name for entry in directory.iterdir()
+        if not entry.name.startswith(".")
+        and entry.name not in _OKF_RESERVED_FILES
+        and not (entry.is_dir() and entry.name in KIT_WIKI_LEAVES)
+    )
+
+
+def kit_wiki_leaves_in(directory: Path) -> list[str]:
+    """The kit's leaves present at a bundle root, sorted."""
+    if not directory.is_dir():
+        return []
+    return sorted(leaf for leaf in KIT_WIKI_LEAVES if (directory / leaf).is_dir())
+
+
+def is_kit_wiki(directory: Path) -> bool:
+    """Does this bundle root show the shape of one THIS kit wrote?
+
+    At least one of the kit's leaves and nothing the kit never writes. Positive
+    evidence, not the absence of a stranger's: a directory the kit cannot recognise as
+    its own is not read as the project's knowledge, whoever turns out to have made it.
+
+    Measured by reading the defaults of two installed plugins (2026-09-25):
+    `loop-system-cartography` writes `<TARGET>/wiki` with `components/`, `entities/`,
+    `flows/`, `operations/`; `loop-project-purge` writes `wiki/` with concepts at the
+    root. Before this, `wiki_dir()` accepted either as the project's bundle because the
+    directory existed, and `check_data_root` asked the project to migrate it.
+    """
+    return bool(kit_wiki_leaves_in(directory)) and not foreign_wiki_entries(directory)
+
+
 def wiki_dir(project_root: Path | str, leaf: str = "") -> Path | None:
-    """Where this project's durable bundle for `leaf` actually is, or None."""
+    """Where this project's durable bundle for `leaf` actually is, or None.
+
+    The write root first, then the legacy roots — but a legacy root the kit's location
+    does not vouch for is read only when it has the kit's shape (`is_kit_wiki`). A bare
+    `wiki/` holding another producer's bundle is not a fallback, it is somebody else's
+    directory, and answering from it put a plugin's output into the kit's gates.
+    """
     root = Path(project_root)
     current = write_wiki_dir(root, leaf)
     if current.is_dir():
         return current
-    return _first_existing(root, LEGACY_WIKI_ROOTS, leaf)
+    for relative in LEGACY_WIKI_ROOTS:
+        base = root / relative
+        if relative not in KIT_LOCATED_WIKI_ROOTS and not is_kit_wiki(base):
+            continue
+        candidate = base / leaf if leaf else base
+        if candidate.is_dir():
+            return candidate
+    return None
 
 
 #: Where a project keeps documents PEOPLE wrote, versioned with the product. Distinct
