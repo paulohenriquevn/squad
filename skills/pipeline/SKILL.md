@@ -122,6 +122,7 @@ items a stage can act on, and each enters the chain at a DIFFERENT stage:
 | `plan_written` | approved, plan on disk, status never advanced | IMPLEMENT |
 | `approved_implemented` | approved, implementation record on disk | CODE-QUALITY |
 | `in_flight` | planned, work started | wherever its records say it reached |
+| `halted` | a phase stopped and wrote a BLOCKED report | not scheduled — read the report; the item stays out of every key above until the halt is resolved |
 
 Each exists because a scheduler reading only the earlier ones could not see most
 of the registry.

@@ -252,6 +252,13 @@ class Selection:
             "in_flight_implemented": self.in_flight_implemented or [],
             "plan_written": self.plan_written or [],
             "approved_implemented": self.approved_implemented or [],
+            # Always present, and over EVERY open status. It was absent from the JSON
+            # entirely, and computed only over `raw`/`triaged` — while `_read_state`
+            # subtracts a halted item from every approved key. So a halted `approved`
+            # item sat in no key at all, and `/pipeline` Step 0, which schedules from
+            # this JSON, dropped it with nothing saying so: 2 of 9 unblocked items on a
+            # consumer 2026-09-24, while the human output named a third (#209).
+            "halted": self.halted or [],
         }
 
 
@@ -486,7 +493,11 @@ def _read_state(items: list, statuses: dict, halted: set[str], root) -> tuple:
         key=_number)
     # An approved item whose plan is already written is not awaiting a plan. Saying so
     # sent a reader to /plan-write against 34 finished plans on a consumer 2026-09-16.
-    awaiting_plan = [i.item_id for i in approved_open if i.item_id not in plans_on_disk]
+    # Nor is one whose IMPLEMENT record exists: that item is `approved_implemented`, and
+    # `--check` says ITEM_IMPLEMENTED about it. Listing it here too put one item in two
+    # keys, dispatched to two stages, one of them finished.
+    awaiting_plan = [i.item_id for i in approved_open
+                     if i.item_id not in plans_on_disk and i.item_id not in implemented]
     plan_written = [i.item_id for i in approved_open
                     if i.item_id in plans_on_disk and i.item_id not in implemented]
     #: Approved, implemented, and never advanced. Reported apart from `plan_written`
@@ -540,6 +551,12 @@ def select(text: str, requested: str | None = None,
      stopped) = _read_queue(text, halted, unblocking)
     (awaiting_plan, plan_written, approved_implemented, in_flight,
      implemented, plans_on_disk) = _read_state(items, statuses, halted, root)
+    # `stopped` counts only SELECTABLE items, which is what the BACKLOG_BLOCKED reason
+    # below counts. The reported key covers every open item a phase stopped on — see
+    # `as_dict` for what its absence cost.
+    stopped = [i.item_id for i in sorted(items, key=_number)
+               if i.item_id in halted and statuses.get(i.item_id) in OPEN_STATUS]
+    held_selectable = sum(1 for i in stopped if statuses.get(i) in SELECTABLE)
 
     if requested:
         if requested not in by_id:
@@ -561,6 +578,25 @@ def select(text: str, requested: str | None = None,
                              plan_written=plan_written,
                              approved_implemented=approved_implemented)
         status = statuses.get(requested, "")
+        # A halted `approved` item is asked about the halt BEFORE the status table, as
+        # a halted selectable one always was, because the JSON subtracts it from every
+        # approved key and reports it under `halted`. The table answered
+        # ITEM_AWAITING_PLAN — "no plan exists yet" — for an item whose plan was on
+        # disk and whose IMPLEMENT had stopped, so the gate and the selector disagreed
+        # about one item (#209). `planned` stays with the
+        # table: the JSON keeps a halted planned item in `in_flight` on purpose, and
+        # the reason below names the halt so the reader sees both facts.
+        if requested in halted and status in (*SELECTABLE, "approved"):
+            return Selection(
+                "ITEM_HALTED", item_id=requested,
+                reason=(f"{requested} is {status}, but a phase stopped on it and wrote a "
+                        f"BLOCKED report. Starting it again reruns what halted; read the "
+                        f"report first."),
+                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
+                awaiting_plan=awaiting_plan, in_flight=in_flight,
+                in_flight_implemented=[i for i in in_flight if i in implemented],
+                plan_written=plan_written,
+                approved_implemented=approved_implemented)
         if status not in SELECTABLE:
             entry = NOT_SELECTABLE.get(status)
             if entry is None:
@@ -604,21 +640,13 @@ def select(text: str, requested: str | None = None,
                 verdict = "ITEM_PLAN_WRITTEN"
                 next_step = (" The plan exists and nothing advanced the status;"
                              " continue with IMPLEMENT, which writes `planned` itself.")
+            if requested in halted:
+                next_step += (" A phase also stopped on it and wrote a BLOCKED report;"
+                              " read it before continuing.")
             return Selection(verdict, item_id=requested,
                              reason=f"{requested} is {status}, past the point where SELECT hands"
                                     f" out work.{next_step}",
                              walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
-                             awaiting_plan=awaiting_plan, in_flight=in_flight,
-                             in_flight_implemented=[i for i in in_flight if i in implemented],
-                             plan_written=plan_written,
-                             approved_implemented=approved_implemented)
-        if requested in halted:
-            return Selection(
-                "ITEM_HALTED", item_id=requested,
-                reason=(f"{requested} is {status}, but a phase stopped on it and wrote a "
-                        f"BLOCKED report. Starting it again reruns what halted; read the "
-                        f"report first."),
-                walls=walls, queue=queue, halted=stopped, awaiting_human=awaiting,
                              awaiting_plan=awaiting_plan, in_flight=in_flight,
                              in_flight_implemented=[i for i in in_flight if i in implemented],
                              plan_written=plan_written,
@@ -661,8 +689,8 @@ def select(text: str, requested: str | None = None,
                              plan_written=plan_written,
                              approved_implemented=approved_implemented)
 
-    if walls or stopped:
-        held = len(walls) + len(stopped)
+    if walls or held_selectable:
+        held = len(walls) + held_selectable
         # An empty wall list means the impediment names no item — a person's
         # decision, an approval, another repository. That is a different fact from
         # "waits on B-075", and conflating them is what made 14 items look like a
@@ -673,7 +701,7 @@ def select(text: str, requested: str | None = None,
             reason=(f"{held} selectable item(s) remain and every one is held "
                     f"({by_item} by another item, {len(awaiting)} AWAITING_HUMAN — a "
                     f"decision, approval or dependency only a person opens — and "
-                    f"{len(stopped)} by a phase that halted). "
+                    f"{held_selectable} by a phase that halted). "
                     f"This is not an empty backlog — running a sweep would add items "
                     f"beside a wall instead of clearing it."),
             walls=walls, queue=queue, halted=stopped,

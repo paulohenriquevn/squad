@@ -187,8 +187,15 @@ WITHDRAWN_MARKER = ".withdrawn"
 #:
 #: Matching on the FILENAME rather than constructing a slug, because only the phase that
 #: wrote the artefact knows the words after the number.
+#:
+#: And a THIRD spelling, which carries no id in the filename at all: the title slug that
+#: `plan-write` itself prescribes ("slug derived from the plan title"). Such a record
+#: names its item in its own content, and it was keyed by the bare stem — linked to no
+#: item. Measured on a consumer 2026-09-24: `the-nonce-is-minted-and-unreachable-plan.md`,
+#: 67229 bytes, frontmatter `milestone_id: B-270`, and `--check B-270` answered "no plan
+#: exists yet; run /plan-write to produce it" (#209).
 def records_by_item(records: Path, sub: str, suffix: str) -> dict[str, Path]:
-    """`{item_id: path}` for every `*{suffix}` in `records/{sub}`, both spellings."""
+    """`{item_id: path}` for every `*{suffix}` in `records/{sub}`, all three spellings."""
     directory = records / sub
     if not directory.is_dir():
         return {}
@@ -198,12 +205,38 @@ def records_by_item(records: Path, sub: str, suffix: str) -> dict[str, Path]:
         if not name.endswith(suffix):
             continue
         stem = name[: -len(suffix)]
-        item = _item_of(name)
+        item = _item_of(name) or _item_declared_in(entry)
         if item:
             found.setdefault(item, entry)
         elif stem:
             found.setdefault(stem, entry)
     return found
+
+
+def _item_declared_in(record: Path) -> str:
+    """The item a record whose filename names none declares in its content, or ''.
+
+    Through the alignment gate's `_committed_work_id`, not a local reading, because that
+    gate grades the SAME plan against the item this returns: two readings of "which item
+    is this plan for" would let the selector file a plan under one item while the gate
+    grades it against another — the drift `records_by_item` exists to end. Its order is
+    declarations first (frontmatter `milestone_id`), then exactly one id in the body, and
+    otherwise nothing: several candidates and no declaration are not guessed.
+
+    An ImportError propagates. The two skills ship together, and falling back to a local
+    reading whenever the import fails is how the two filename readers above diverged.
+    """
+    gate_scripts = Path(__file__).resolve().parents[2] / "plan-confidence" / "scripts"
+    if str(gate_scripts) not in sys.path:
+        sys.path.insert(0, str(gate_scripts))
+    from check_alignment_gate import _committed_work_id
+
+    try:
+        content = record.read_text(encoding="utf-8", errors="replace")
+    except OSError as error:
+        raise OSError(f"cannot read record {record} to find the item it declares: "
+                      f"{error}") from error
+    return _committed_work_id(content) or ""
 
 
 def halt_reports(project_root: Path) -> dict[str, Path]:
