@@ -658,3 +658,28 @@ def test_a_well_formed_table_still_parses(tmp_path: Path) -> None:
     parsed = parse_routing_table(table)
 
     assert parsed["api"]["repos"] == ["service-a", "service-b"]
+
+
+def test_a_fresh_clone_without_specialists_exits_3_and_says_why(tmp_path, capsys) -> None:
+    """`.claude/` is not versioned, so a fresh clone has the table and none of the
+    specialists it names. Routing to a file that is not there was weighed against
+    exiting loudly, and the decision was the exit (docs/ADR/0026). The explanation is
+    the only thing that tells the reader this is the expected shape of a clone rather
+    than a broken table."""
+    from route_domain import main as route_main
+
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "cycle-backlog.md").write_text(
+        "## Domain routing\n\n"
+        "| Domain | Repos | Specialist |\n|---|---|---|\n"
+        "| `api` | `some-repo` | `agents/api.md` |\n\n"
+        "## Verdicts\n",
+        encoding="utf-8",
+    )
+
+    code = route_main(["some-repo", "--rule", str(tmp_path / "rules" / "cycle-backlog.md")])
+
+    out = capsys.readouterr().out
+    assert code == 3
+    assert "what a fresh clone looks like" in out
+    assert "/backlog-init" in out
