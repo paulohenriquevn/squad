@@ -31,6 +31,10 @@ def test_a_file_that_could_not_be_read_says_the_parse_did_not_happen(tmp_path: P
 
 
 def test_a_file_that_was_read_says_the_parse_happened(tmp_path: Path) -> None:
+    # A parse needs the grammar package, which ships no wheel past cp312. Without it the
+    # extractor correctly answers `parsed=False`, so this case skips rather than fails.
+    pytest.importorskip("tree_sitter_languages",
+                        reason="the grammar package is not installable on this Python")
     src = tmp_path / "mod.py"
     src.write_text("import os\n", encoding="utf-8")
 

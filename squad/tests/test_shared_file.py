@@ -35,6 +35,13 @@ def test_concurrent_read_modify_writes_do_not_lose_an_update(tmp_path: Path) -> 
     for w in workers:
         w.join(timeout=120)
 
+    # A worker that died took its fifty increments with it, which reads as a lost update
+    # when it is not one. Measured 2026-09-25: this failed with 250 once, under a loaded
+    # full-suite run, and 20 contention trials after it did not reproduce — so the two
+    # causes are told apart here instead of guessed at.
+    assert [w.exitcode for w in workers] == [0] * 8, (
+        f"a worker did not finish (exit codes {[w.exitcode for w in workers]}); a timeout "
+        "waiting for the lock is not a lost update")
     assert counter.read_text(encoding="utf-8") == "400"
 
 

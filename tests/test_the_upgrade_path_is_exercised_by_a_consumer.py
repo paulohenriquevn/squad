@@ -72,7 +72,12 @@ def lagging_consumer(old_kit: Path, tmp_path_factory) -> Path:
                           str(project)], capture_output=True, text=True, check=False)
     if not (project / ".claude").is_dir():
         pytest.skip(f"the old installer did not produce an install: {out.stderr[-400:]}")
+    _INSTALL_OUTPUT["stdout"], _INSTALL_OUTPUT["stderr"] = out.stdout, out.stderr
     return project
+
+
+#: What the old installer printed, kept for the one assertion CI alone has failed.
+_INSTALL_OUTPUT: dict[str, str] = {}
 
 
 def _drift(consumer: Path) -> dict[str, int]:
@@ -142,7 +147,7 @@ def test_the_upgrade_path_applies_what_the_scan_calls_applicable(lagging_consume
     assert (lagging_consumer / ".claude" / target).read_bytes() == (_ROOT / target).read_bytes()
 
 
-def test_the_installer_records_where_it_came_from(lagging_consumer: Path) -> None:
+def test_the_installer_records_where_it_came_from(lagging_consumer: Path, old_kit: Path) -> None:
     """Provenance is what makes lag provable rather than inferred; it must be written."""
     manifest = (lagging_consumer / ".claude" / ".kit-manifest.txt").read_text(encoding="utf-8")
     line = next((row for row in manifest.splitlines() if "kit-commit" in row), "")
@@ -150,8 +155,15 @@ def test_the_installer_records_where_it_came_from(lagging_consumer: Path) -> Non
     # Pythons and passed locally under 3.10 and 3.11 with git config isolated, and the
     # bare assertion left nothing to tell which line the old installer wrote instead.
     head = "\n".join(manifest.splitlines()[:12])
+    revision = _git("log", "-1", "--format=%H %ci", cwd=old_kit)
+    blocks = _git("grep", "-c", "kit-commit:", "--", "mechanisms/distribution/install.sh",
+                  cwd=old_kit)
     assert line, ("the manifest records no kit-commit; a consumer cannot prove what it "
-                  f"holds. Manifest header:\n{head}")
+                  f"holds.\nOld kit revision: {revision}\n"
+                  f"`kit-commit:` lines in its install.sh: {blocks or 'none'}\n"
+                  f"Manifest header:\n{head}\n"
+                  f"Installer stdout tail:\n{_INSTALL_OUTPUT.get('stdout', '')[-1500:]}\n"
+                  f"Installer stderr tail:\n{_INSTALL_OUTPUT.get('stderr', '')[-800:]}")
     assert "unknown" not in line, line
 
 
