@@ -118,3 +118,24 @@ def test_a_path_under_the_data_root_resolves(tmp_path: Path) -> None:
     assert [c.raw_text for c in report.unresolved_citations] == [], (
         "a produced artifact was reported as a fabricated citation: "
         + str([c.raw_text for c in report.unresolved_citations]))
+
+
+def test_a_prefixed_rule_resolves_under_the_installed_kit(tmp_path: Path) -> None:
+    """A consumer holds the kit's rules under `.claude/`, not at its own root.
+
+    The resolver tried `.claude` + the rules directory + the citation, so a citation that
+    already carries the directory looked one level too deep, and every plan in a consumer
+    citing a kit rule in the prefixed form took the `fabricated_citation` hard cap.
+    Measured in the theo consumer on 2026-09-26: the slice's own good-plan fixture scored
+    INVALID there and SHIPPABLE here. The citation is assembled from components for the
+    reason `_project` gives.
+    """
+    root = tmp_path / "consumer"
+    (root / ".claude" / "rules").mkdir(parents=True)
+    (root / ".claude" / "rules" / "architecture.md").write_text(
+        "# Architecture\n\n## Boundaries\n\nWhat crosses which line.\n", encoding="utf-8")
+    plan = root / "plan.md"
+    cited = "/".join(("rules", "architecture.md"))
+    plan.write_text(f"As `{cited}` requires.\n", encoding="utf-8")
+    assert _seen(plan, root) >= 1
+    assert _unresolved(plan, root) == []

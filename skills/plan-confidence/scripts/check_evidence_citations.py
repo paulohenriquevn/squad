@@ -258,6 +258,11 @@ def _resolve_rule_file(filename: str, project_root: Path) -> Path | None:
     candidates = [
         project_root / "rules" / filename,
         project_root / ".claude" / "rules" / filename,
+        # The installed kit's root. A citation that already carries its directory —
+        # `rules/<name>.md`, the form the kit's own documents use — resolves here in a
+        # consumer; the line above looked one level too deep for it, and every such plan
+        # took the `fabricated_citation` hard cap (theo, 2026-09-26).
+        project_root / ".claude" / filename,
         write_records_dir(project_root) / filename,
         write_records_dir(project_root).parent / filename,
         # The DATA root, one level above `records/`. The cycle's own rules cite artifacts

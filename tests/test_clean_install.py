@@ -475,29 +475,12 @@ def test_a_project_specialist_survives_a_reinstall(versioned_kit, tmp_path):
 #: `discover-confidence` because the other two did: a conftest resolving the project by
 #: walking up to `.git` (the kit here, the CONSUMER'S project there) and a fixture
 #: writing panel records under that root, into a live registry.
-_SUITES_FROM_THE_INSTALL = ("squad/tests", "skills/discover-confidence/tests")
-
-
-def test_every_installed_slice_collects(installed):
-    """Running two suites from the install left twenty-eight unexercised there, and one
-    of them imported a helper from the kit's ROOT `tests/`, which does not ship. It
-    passed here and failed at collection in a consumer (2026-09-26, `plan-confidence`,
-    `ModuleNotFoundError: test_check_alignment_gate`). Collecting every slice costs
-    seconds and catches the whole class: an import that only resolves inside this repo.
-    """
-    target, proc = installed
-    assert proc.returncode == 0, proc.stderr
-    kit = target / ".claude"
-    broken = []
-    for suite in sorted((kit / "skills").glob("*/tests")):
-        run = subprocess.run(
-            [sys.executable, "-m", "pytest", str(suite.relative_to(kit)), "--collect-only",
-             "-q", "-p", "no:cacheprovider"],
-            cwd=str(kit), capture_output=True, text=True, timeout=300, check=False)
-        if run.returncode != 0:
-            errors = [ln for ln in run.stdout.splitlines() if "Error" in ln][:3]
-            broken.append(f"{suite.relative_to(kit)}: " + " | ".join(errors))
-    assert not broken, "slices that do not even collect from the install:\n" + "\n".join(broken)
+#: Every slice, plus the hook library. It was two suites, and on 2026-09-26 the theo
+#: consumer found two defects in a slice this never ran from an install: a test importing
+#: from the kit's root `tests/` (which does not ship) and a citation resolver that could
+#: not see the installed kit's `rules/` — both green here, red in every consumer. All
+#: thirty slices from an install measured 126 s serially; less than one defect's cost.
+_ALWAYS_FROM_THE_INSTALL = ("squad/tests",)
 
 
 def test_the_suite_passes_from_the_install_too(installed):
@@ -521,7 +504,10 @@ def test_the_suite_passes_from_the_install_too(installed):
     kit = target / ".claude"
 
     failures = []
-    for suite in _SUITES_FROM_THE_INSTALL:
+    suites = [*_ALWAYS_FROM_THE_INSTALL,
+              *(str(d.relative_to(kit)) for d in sorted((kit / "skills").glob("*/tests")))]
+    assert len(suites) > 20, f"the install holds {len(suites)} suites; this measured nothing"
+    for suite in suites:
         if not (kit / suite).is_dir():
             failures.append(f"{suite}: absent from the install")
             continue
